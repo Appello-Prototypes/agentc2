@@ -1,4 +1,5 @@
 export * from "./alert-dialog";
+export * from "./avatar";
 export * from "./badge";
 export * from "./button";
 export * from "./card";
@@ -11,5 +12,3 @@ export * from "./label";
 export * from "./select";
 export * from "./separator";
 export * from "./textarea";
-export * from "./example";
-export * from "./component-example";

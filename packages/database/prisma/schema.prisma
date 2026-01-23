@@ -2,71 +2,71 @@
 // learn more about it in the docs: https://pris.ly/d/prisma-schema
 
 generator client {
-  provider = "prisma-client-js"
+    provider = "prisma-client-js"
 }
 
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+    provider = "mysql"
+    url      = env("DATABASE_URL")
 }
 
 // Better Auth Models
 model User {
-  id            String    @id @default(cuid())
-  name          String
-  email         String    @unique
-  emailVerified Boolean   @default(false)
-  image         String?   @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  sessions      Session[]
-  accounts      Account[]
+    id            String    @id @default(cuid())
+    name          String
+    email         String    @unique
+    emailVerified Boolean   @default(false)
+    image         String?   @db.Text
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+    sessions      Session[]
+    accounts      Account[]
 
-  @@map("user")
+    @@map("user")
 }
 
 model Session {
-  id        String   @id @default(cuid())
-  expiresAt DateTime
-  token     String   @unique @db.VarChar(255)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  ipAddress String?  @db.VarChar(45)
-  userAgent String?  @db.Text
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+    id        String   @id @default(cuid())
+    expiresAt DateTime
+    token     String   @unique @db.VarChar(255)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    ipAddress String?  @db.VarChar(45)
+    userAgent String?  @db.Text
+    userId    String
+    user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@map("session")
+    @@index([userId])
+    @@map("session")
 }
 
 model Account {
-  id                    String    @id @default(cuid())
-  accountId             String
-  providerId            String
-  userId                String
-  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  accessToken           String?   @db.Text
-  refreshToken          String?   @db.Text
-  idToken               String?   @db.Text
-  accessTokenExpiresAt  DateTime?
-  refreshTokenExpiresAt DateTime?
-  scope                 String?   @db.Text
-  password              String?   @db.Text
-  createdAt             DateTime  @default(now())
-  updatedAt             DateTime  @updatedAt
+    id                    String    @id @default(cuid())
+    accountId             String
+    providerId            String
+    userId                String
+    user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+    accessToken           String?   @db.Text
+    refreshToken          String?   @db.Text
+    idToken               String?   @db.Text
+    accessTokenExpiresAt  DateTime?
+    refreshTokenExpiresAt DateTime?
+    scope                 String?   @db.Text
+    password              String?   @db.Text
+    createdAt             DateTime  @default(now())
+    updatedAt             DateTime  @updatedAt
 
-  @@index([userId])
-  @@map("account")
+    @@index([userId])
+    @@map("account")
 }
 
 model Verification {
-  id         String    @id @default(cuid())
-  identifier String
-  value      String    @db.Text
-  expiresAt  DateTime
-  createdAt  DateTime? @default(now())
-  updatedAt  DateTime? @updatedAt
+    id         String    @id @default(cuid())
+    identifier String
+    value      String    @db.Text
+    expiresAt  DateTime
+    createdAt  DateTime? @default(now())
+    updatedAt  DateTime? @updatedAt
 
-  @@map("verification")
+    @@map("verification")
 }

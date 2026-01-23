@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
-import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
+import { Button, Input, Field, FieldError, FieldLabel } from "@/components/ui";
 import Link from "next/link";
 
 export function SignInForm() {

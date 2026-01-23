@@ -1,5 +1,5 @@
 import { SignInForm } from "@/components/auth/sign-in-form";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui";
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";

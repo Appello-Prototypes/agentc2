@@ -37,61 +37,71 @@ appello-monorepo/
 ## Getting Started
 
 1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd ver2
-   ```
+
+    ```bash
+    git clone <repository-url>
+    cd ver2
+    ```
 
 2. **Install dependencies**
-   ```bash
-   bun install
-   ```
+
+    ```bash
+    bun install
+    ```
 
 3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   ```
 
-   Edit `.env` and configure your database credentials and auth secret.
+    ```bash
+    cp .env.example .env
+    ```
+
+    Edit `.env` and configure your database credentials and auth secret.
 
 4. **Start the database**
-   ```bash
-   docker compose up -d
-   ```
+
+    ```bash
+    docker compose up -d
+    ```
 
 5. **Set up the database schema**
-   ```bash
-   bun run db:generate
-   bun run db:push
-   ```
+
+    ```bash
+    bun run db:generate
+    bun run db:push
+    ```
 
 6. **Seed the database (optional)**
-   ```bash
-   bun run db:seed
-   ```
+
+    ```bash
+    bun run db:seed
+    ```
 
 7. **Start the development server**
-   ```bash
-   bun run dev
-   ```
+
+    ```bash
+    bun run dev
+    ```
 
 8. **Open your browser**
 
-   Navigate to [http://localhost:3000](http://localhost:3000)
+    Navigate to [http://localhost:3000](http://localhost:3000)
 
 ## Available Scripts
 
 ### Development
+
 - `bun run dev` - Start all apps in development mode
 - `bun run build` - Build all apps and packages
 - `bun run start` - Start production server (in apps/frontend)
 
 ### Code Quality
+
 - `bun run lint` - Run ESLint across all workspaces
 - `bun run type-check` - Run TypeScript type checking
 - `bun run format` - Format code with Prettier
 
 ### Database
+
 - `bun run db:generate` - Generate Prisma client
 - `bun run db:push` - Push schema changes to database (development)
 - `bun run db:migrate` - Create and run migrations (production)
@@ -99,6 +109,7 @@ appello-monorepo/
 - `bun run db:seed` - Seed the database with initial data
 
 ### Cleanup
+
 - `bun run clean` - Clean build artifacts
 
 ## Environment Variables
@@ -120,6 +131,7 @@ BETTER_AUTH_SECRET="your-secret-key-here"
 ```
 
 **Note**: Generate a secure `BETTER_AUTH_SECRET` using:
+
 ```bash
 openssl rand -base64 32
 ```

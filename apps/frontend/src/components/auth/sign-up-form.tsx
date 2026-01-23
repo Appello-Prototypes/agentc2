@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
-import { Button, Input, Field, FieldError, FieldLabel, FieldDescription } from "@repo/ui";
+import { Button, Input, Field, FieldError, FieldLabel, FieldDescription } from "@/components/ui";
 import Link from "next/link";
 
 export function SignUpForm() {

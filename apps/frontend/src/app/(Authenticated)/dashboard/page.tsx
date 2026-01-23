@@ -1,6 +1,6 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui";
 import { DashboardHeader } from "@/components/dashboard/header";
 import { unauthorized } from "next/navigation";
 

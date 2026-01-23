@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@repo/ui";
+import { Button } from "@/components/ui";
 import { signOut } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 import type { User } from "@/lib/auth";

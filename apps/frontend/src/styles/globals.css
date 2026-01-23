@@ -2,9 +2,6 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-@source "../**/*.{ts,tsx}";
-@source "../../../../packages/ui/src/**/*.{ts,tsx}";
-
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -58,7 +55,7 @@
     --popover: oklch(1 0 0);
     --popover-foreground: oklch(0.141 0.005 285.823);
     --primary: oklch(0.59 0.26 323);
-    --primary-foreground: oklch(0.98 0.02 320);
+    --primary-foreground: color-mix(in oklch, var(--primary) 5%, white);
     --secondary: oklch(0.967 0.001 286.375);
     --secondary-foreground: oklch(0.21 0.006 285.885);
     --muted: oklch(0.967 0.001 286.375);
@@ -69,16 +66,16 @@
     --border: oklch(0.92 0.004 286.32);
     --input: oklch(0.92 0.004 286.32);
     --ring: oklch(0.705 0.015 286.067);
-    --chart-1: oklch(0.83 0.13 321);
-    --chart-2: oklch(0.75 0.21 322);
-    --chart-3: oklch(0.67 0.26 322);
-    --chart-4: oklch(0.59 0.26 323);
-    --chart-5: oklch(0.52 0.23 324);
+    --chart-1: color-mix(in oklch, var(--primary) 40%, white);
+    --chart-2: color-mix(in oklch, var(--primary) 70%, white);
+    --chart-3: color-mix(in oklch, var(--primary) 90%, white);
+    --chart-4: var(--primary);
+    --chart-5: color-mix(in oklch, var(--primary) 85%, black);
     --radius: 0.45rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.141 0.005 285.823);
-    --sidebar-primary: oklch(0.59 0.26 323);
-    --sidebar-primary-foreground: oklch(0.98 0.02 320);
+    --sidebar-primary: var(--primary);
+    --sidebar-primary-foreground: color-mix(in oklch, var(--primary) 5%, white);
     --sidebar-accent: oklch(0.967 0.001 286.375);
     --sidebar-accent-foreground: oklch(0.21 0.006 285.885);
     --sidebar-border: oklch(0.92 0.004 286.32);
@@ -92,8 +89,8 @@
     --card-foreground: oklch(0.985 0 0);
     --popover: oklch(0.21 0.006 285.885);
     --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.67 0.26 322);
-    --primary-foreground: oklch(0.98 0.02 320);
+    /* --primary: oklch(0.67 0.26 322); */
+    --primary-foreground: color-mix(in oklch, var(--primary) 5%, white);
     --secondary: oklch(0.274 0.006 286.033);
     --secondary-foreground: oklch(0.985 0 0);
     --muted: oklch(0.274 0.006 286.033);
@@ -104,15 +101,15 @@
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 15%);
     --ring: oklch(0.552 0.016 285.938);
-    --chart-1: oklch(0.83 0.13 321);
-    --chart-2: oklch(0.75 0.21 322);
-    --chart-3: oklch(0.67 0.26 322);
-    --chart-4: oklch(0.59 0.26 323);
-    --chart-5: oklch(0.52 0.23 324);
+    --chart-1: color-mix(in oklch, var(--primary) 60%, white);
+    --chart-2: color-mix(in oklch, var(--primary) 90%, white);
+    --chart-3: var(--primary);
+    --chart-4: color-mix(in oklch, var(--primary) 85%, black);
+    --chart-5: color-mix(in oklch, var(--primary) 75%, black);
     --sidebar: oklch(0.21 0.006 285.885);
     --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.75 0.21 322);
-    --sidebar-primary-foreground: oklch(0.98 0.02 320);
+    --sidebar-primary: color-mix(in oklch, var(--primary) 90%, white);
+    --sidebar-primary-foreground: color-mix(in oklch, var(--primary) 5%, white);
     --sidebar-accent: oklch(0.274 0.006 286.033);
     --sidebar-accent-foreground: oklch(0.985 0 0);
     --sidebar-border: oklch(1 0 0 / 10%);

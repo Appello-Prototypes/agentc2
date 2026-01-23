@@ -46,6 +46,7 @@ bun run clean              # Clean build artifacts
 ### Running Single Workspace Commands
 
 To run commands in a specific workspace:
+
 ```bash
 cd apps/frontend
 bun run dev                # Run only frontend in dev mode
@@ -58,8 +59,8 @@ bun run build              # Build only frontend
 2. Copy `.env.example` to `.env` and configure database credentials
 3. Generate Prisma client: `bun run db:generate`
 4. Choose your database workflow:
-   - **For rapid development**: `bun run db:push` (syncs schema without migrations)
-   - **For production-ready migrations**: `bun run db:migrate` (creates migration files)
+    - **For rapid development**: `bun run db:push` (syncs schema without migrations)
+    - **For production-ready migrations**: `bun run db:migrate` (creates migration files)
 5. (Optional) Seed database: `bun run db:seed`
 
 **Note**: Migration commands use `DATABASE_URL_MIGRATE` which connects as the root user. This is required because Prisma Migrate needs CREATE DATABASE privileges to create shadow databases for migration validation.
@@ -87,6 +88,7 @@ The frontend uses Next.js **route groups** for organization:
 ### Database Schema
 
 Prisma schema located at `packages/database/prisma/schema.prisma`. Models:
+
 - **User**: Core user data with email/password authentication
 - **Session**: Better Auth session management
 - **Account**: OAuth provider accounts (for future OAuth support)
@@ -113,6 +115,7 @@ The Prisma client is exported from `packages/database/src/index.ts` and used thr
 ### Environment Variables
 
 Required environment variables (see `.env.example`):
+
 - `DATABASE_URL`: MySQL connection string (used by application code)
 - `DATABASE_URL_MIGRATE`: MySQL connection string with root user (used by Prisma Migrate)
 - `MYSQL_ROOT_PASSWORD`: Root password for MySQL (used in DATABASE_URL_MIGRATE)
@@ -128,6 +131,7 @@ Required environment variables (see `.env.example`):
 ### Prettier Configuration
 
 Code formatting is enforced via Prettier with:
+
 - 4 spaces indentation (2 for JSON/YAML)
 - No semicolons for trailing commas
 - Tailwind class sorting plugin enabled
@@ -140,6 +144,7 @@ This project **requires Bun** (v1.3.4+). Do not use npm, yarn, or pnpm as the lo
 ### Turbo Configuration
 
 Build dependencies are configured in `turbo.json`:
+
 - Tasks like `lint` and `type-check` depend on `^build` (dependencies must build first)
 - Database tasks are not cached
 - `dev` task runs persistently without caching
@@ -151,12 +156,14 @@ Build dependencies are configured in `turbo.json`:
 When modifying the Prisma schema, choose between two workflows:
 
 **Quick iteration (db:push):**
+
 1. Edit `packages/database/prisma/schema.prisma`
 2. Run `bun run db:generate` to update the Prisma client
 3. Run `bun run db:push` to sync schema (no migration files created)
 4. Good for rapid prototyping; doesn't preserve migration history
 
 **Production-ready migrations (db:migrate):**
+
 1. Edit `packages/database/prisma/schema.prisma`
 2. Run `bun run db:migrate` to create migration files and apply them
 3. Prisma will prompt for a migration name
@@ -180,11 +187,13 @@ When modifying the Prisma schema, choose between two workflows:
 ## Adding New Features
 
 When adding authenticated features:
+
 1. Create routes in `apps/frontend/src/app/(Authenticated)/`
 2. They will automatically be protected by the middleware
 3. Access user session via Better Auth hooks or API
 
 When adding public features:
+
 1. Create routes in `apps/frontend/src/app/(Public)/`
 2. Or add to `publicRoutes` array in `apps/frontend/src/proxy.ts`
 
