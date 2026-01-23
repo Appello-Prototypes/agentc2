@@ -9,9 +9,9 @@ This is a **Turborepo monorepo** for the Appello application, built with Next.js
 ## Monorepo Structure
 
 - **apps/frontend**: Next.js 16 application with App Router
+  - **src/components/ui**: shadcn UI components
+  - **src/lib**: Utility functions (cn function, auth, etc.)
 - **packages/database**: Prisma schema and client configuration
-- **packages/ui**: Shared UI components (shadcn-based)
-- **packages/lib**: Shared utilities (cn function, etc.)
 - **packages/typescript-config**: Shared TypeScript configurations
 
 ## Development Commands
@@ -99,16 +99,22 @@ The Prisma client is exported from `packages/database/src/index.ts` and used thr
 ### Styling and UI Components
 
 - **Tailwind CSS 4**: Configured at workspace root
-- **shadcn/ui**: Component library in `packages/ui/src/`
+- **shadcn/ui**: Component library in `apps/frontend/src/components/ui/`
+  - Components are imported using `@/components/ui` alias
+  - shadcn configuration in `apps/frontend/components.json`
 - Uses `@base-ui/react` for headless components
 - Theme support via `next-themes` (dark mode configured)
-- Utility function `cn()` from `packages/lib` for className merging
+- Utility function `cn()` located at `apps/frontend/src/lib/utils.ts` for className merging
 
 ### TypeScript Configuration
 
 - Shared configs in `packages/typescript-config`
 - Workspace imports use `workspace:*` protocol
-- Path aliases configured per workspace (e.g., `@/` in frontend)
+- Path aliases configured in frontend (`apps/frontend/tsconfig.json`):
+  - `@/components`: Frontend components directory
+  - `@/lib`: Utility functions and configurations
+  - `@/hooks`: Custom React hooks
+  - `@/styles`: Global styles
 
 ## Important Notes
 
@@ -199,4 +205,20 @@ When adding public features:
 
 ## Component Development
 
-Shared components should be added to `packages/ui/src/` and exported via `packages/ui/src/index.ts`. These components can then be imported in any workspace using `@repo/ui`.
+### shadcn Components
+
+UI components are managed using shadcn and located in `apps/frontend/src/components/ui/`. To add new shadcn components:
+
+1. Use the shadcn CLI from the frontend directory:
+   ```bash
+   cd apps/frontend
+   bunx shadcn@latest add <component-name>
+   ```
+
+2. Components will be automatically added to `src/components/ui/` and can be imported using the `@/components/ui` alias
+
+3. Components are re-exported in `src/components/ui/index.ts` for easier imports
+
+### Custom Components
+
+Custom shared components should be added to `apps/frontend/src/components/` and can be organized into subdirectories as needed. Import them using the `@/components` alias.
