@@ -23,7 +23,6 @@ import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIconProps, HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useSession, signOut } from "@/lib/auth-client";
-import { useTheme } from "next-themes";
 
 type SidebarItem = {
     label: string;
@@ -34,32 +33,28 @@ const sidebarItems: Array<SidebarItem & { children?: Array<SidebarItem> }> = [
     {
         label: "Dashboard",
         icon: SidebarLeftIcon,
-        href: "/dashboard"
+        href: "/dashboard",
+        children: [
+            {
+                label: "Overview",
+                icon: SidebarLeftIcon,
+                href: "/dashboard"
+            },
+            {
+                label: "Sales",
+                icon: SidebarLeftIcon,
+                href: "/dashboard/sales"
+            }
+        ]
     }
 ];
 
 export function AppSidebar() {
     const { data: session } = useSession();
-    const { setTheme } = useTheme();
 
     const handleSignOut = async () => {
         await signOut();
         window.location.href = "/";
-    };
-
-    const getUserInitials = (name?: string, email?: string) => {
-        if (name) {
-            return name
-                .split(" ")
-                .map((n) => n[0])
-                .join("")
-                .toUpperCase()
-                .slice(0, 2);
-        }
-        if (email) {
-            return email.slice(0, 2).toUpperCase();
-        }
-        return "U";
     };
 
     return (
