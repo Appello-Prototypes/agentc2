@@ -9,11 +9,13 @@
     "./client": "./src/index.ts"
   },
   "scripts": {
-    "db:generate": "dotenv -e ../../.env -- prisma generate",
-    "db:push": "dotenv -e ../../.env -- prisma db push",
-    "db:migrate": "dotenv -e ../../.env -- prisma migrate dev",
-    "db:studio": "dotenv -e ../../.env -- prisma studio",
-    "db:seed": "dotenv -e ../../.env -- bun run src/seed.ts"
+    "db:generate": "dotenv -e ../../.env -- bun run --bun prisma generate",
+    "db:push": "dotenv -e ../../.env -- bun run --bun prisma db push",
+    "db:migrate": "dotenv -e ../../.env -- sh -c 'DATABASE_URL=\"$DATABASE_URL_MIGRATE\" bun run --bun prisma migrate dev'",
+    "db:studio": "dotenv -e ../../.env -- bun run --bun prisma studio",
+    "db:seed": "dotenv -e ../../.env -- bun run --bun src/seed.ts",
+    "db:migrate:reset": "dotenv -e ../../.env -- sh -c 'DATABASE_URL=\"$DATABASE_URL_MIGRATE\" bun run --bun prisma migrate reset'",
+    "db:migrate:deploy": "dotenv -e ../../.env -- sh -c 'DATABASE_URL=\"$DATABASE_URL_MIGRATE\" bun run --bun prisma migrate deploy'"
   },
   "dependencies": {
     "@prisma/client": "^6.2.1"
