@@ -3,13 +3,13 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
 export default async function AuthenticatedPage({ children }: { children: React.ReactNode }) {
-  const session = await auth.api.getSession({
-    headers: await headers(),
-  });
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
 
-  if (!session) {
-    redirect("/");
-  }
+    if (!session) {
+        redirect("/");
+    }
 
-  return children;
+    return children;
 }

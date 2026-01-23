@@ -6,9 +6,9 @@ import { resolve } from "path";
 config({ path: resolve(__dirname, "../../.env") });
 
 const nextConfig: NextConfig = {
-  env: {
-    DATABASE_URL: process.env.DATABASE_URL,
-  },
+    env: {
+        DATABASE_URL: process.env.DATABASE_URL
+    }
 };
 
 export default nextConfig;

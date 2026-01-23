@@ -5,31 +5,34 @@ Shared Prisma database package for the Appello monorepo.
 ## Setup
 
 1. Make sure you have a `.env` file in the root with the `DATABASE_URL`:
-   ```
-   DATABASE_URL="mysql://appello_user:appello_password@localhost:3306/appello"
-   ```
+
+    ```
+    DATABASE_URL="mysql://appello_user:appello_password@localhost:3306/appello"
+    ```
 
 2. Start the MySQL database:
-   ```bash
-   docker-compose up -d
-   ```
+
+    ```bash
+    docker-compose up -d
+    ```
 
 3. Generate the Prisma client:
-   ```bash
-   bun run db:generate
-   ```
+
+    ```bash
+    bun run db:generate
+    ```
 
 4. Push the schema to the database:
-   ```bash
-   bun run db:push
-   ```
+    ```bash
+    bun run db:push
+    ```
 
 ## Usage
 
 Import the Prisma client in your apps:
 
 ```typescript
-import { prisma } from '@repo/database';
+import { prisma } from "@repo/database";
 
 const users = await prisma.user.findMany();
 ```
