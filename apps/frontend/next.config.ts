@@ -1,0 +1,14 @@
+import type { NextConfig } from "next";
+import { config } from "dotenv";
+import { resolve } from "path";
+
+// Load environment variables from root .env file
+config({ path: resolve(__dirname, "../../.env") });
+
+const nextConfig: NextConfig = {
+  env: {
+    DATABASE_URL: process.env.DATABASE_URL,
+  },
+};
+
+export default nextConfig;
