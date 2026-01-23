@@ -32,8 +32,10 @@ bun run format             # Format code with Prettier
 
 # Database (Prisma)
 bun run db:generate        # Generate Prisma client
-bun run db:push            # Push schema changes to database
-bun run db:migrate         # Run migrations
+bun run db:push            # Push schema changes to database (development only)
+bun run db:migrate         # Create and apply migrations (uses root credentials)
+bun run db:migrate:reset   # Reset database and apply all migrations (destructive)
+bun run db:migrate:deploy  # Apply migrations in production
 bun run db:studio          # Open Prisma Studio
 bun run db:seed            # Seed the database
 
@@ -55,8 +57,12 @@ bun run build              # Build only frontend
 1. Start MySQL container: `docker compose up -d`
 2. Copy `.env.example` to `.env` and configure database credentials
 3. Generate Prisma client: `bun run db:generate`
-4. Push schema to database: `bun run db:push`
+4. Choose your database workflow:
+   - **For rapid development**: `bun run db:push` (syncs schema without migrations)
+   - **For production-ready migrations**: `bun run db:migrate` (creates migration files)
 5. (Optional) Seed database: `bun run db:seed`
+
+**Note**: Migration commands use `DATABASE_URL_MIGRATE` which connects as the root user. This is required because Prisma Migrate needs CREATE DATABASE privileges to create shadow databases for migration validation.
 
 ## Architecture
 
@@ -107,9 +113,17 @@ The Prisma client is exported from `packages/database/src/index.ts` and used thr
 ### Environment Variables
 
 Required environment variables (see `.env.example`):
-- `DATABASE_URL`: MySQL connection string
+- `DATABASE_URL`: MySQL connection string (used by application code)
+- `DATABASE_URL_MIGRATE`: MySQL connection string with root user (used by Prisma Migrate)
+- `MYSQL_ROOT_PASSWORD`: Root password for MySQL (used in DATABASE_URL_MIGRATE)
+- `MYSQL_DATABASE`: Database name
+- `MYSQL_USER`: Application database user
+- `MYSQL_PASSWORD`: Application database password
+- `MYSQL_PORT`: MySQL port (default: 3306)
 - `BETTER_AUTH_SECRET`: Auth secret key (generate with Better Auth CLI)
 - `NEXT_PUBLIC_APP_URL`: Application URL for callbacks
+
+**Important**: `DATABASE_URL` uses a limited user for application security, while `DATABASE_URL_MIGRATE` uses root for migration operations that require elevated privileges.
 
 ### Prettier Configuration
 
@@ -132,11 +146,36 @@ Build dependencies are configured in `turbo.json`:
 
 ## Database Migrations
 
-When modifying the Prisma schema:
+### Development Workflow
+
+When modifying the Prisma schema, choose between two workflows:
+
+**Quick iteration (db:push):**
 1. Edit `packages/database/prisma/schema.prisma`
 2. Run `bun run db:generate` to update the Prisma client
-3. Run `bun run db:push` for development (schema sync without migrations)
-4. For production: `bun run db:migrate` to create migration files
+3. Run `bun run db:push` to sync schema (no migration files created)
+4. Good for rapid prototyping; doesn't preserve migration history
+
+**Production-ready migrations (db:migrate):**
+1. Edit `packages/database/prisma/schema.prisma`
+2. Run `bun run db:migrate` to create migration files and apply them
+3. Prisma will prompt for a migration name
+4. Migration files are created in `packages/database/prisma/migrations/`
+5. Run `bun run db:generate` to update the Prisma client
+
+### Migration Commands
+
+- `bun run db:migrate`: Create and apply a new migration (uses root credentials)
+- `bun run db:migrate:reset`: Reset database and reapply all migrations (destructive, development only)
+- `bun run db:migrate:deploy`: Apply pending migrations (production use)
+
+### Important Notes
+
+- Migration commands use `DATABASE_URL_MIGRATE` which connects as root user
+- Root access is required for Prisma to create shadow databases during migration validation
+- Application code uses `DATABASE_URL` with limited privileges for security
+- Always commit migration files to version control
+- Never run `db:migrate:reset` on production databases
 
 ## Adding New Features
 
