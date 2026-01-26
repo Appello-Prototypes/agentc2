@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import Link from "next/link";
 
 export default async function AgentHomePage() {
     const session = await auth.api.getSession({
@@ -23,9 +24,9 @@ export default async function AgentHomePage() {
             ) : (
                 <p>
                     Please{" "}
-                    <a href="/" className="text-blue-600">
+                    <Link href="/" className="text-blue-600">
                         sign in
-                    </a>{" "}
+                    </Link>{" "}
                     to continue.
                 </p>
             )}

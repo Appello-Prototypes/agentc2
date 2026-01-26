@@ -2,8 +2,9 @@
 
 import { useSession } from "@/lib/auth-client";
 import { createContext, useContext } from "react";
+import type { Session } from "@/lib/auth";
 
-const SessionContext = createContext<{ session: any | null }>({
+const SessionContext = createContext<{ session: Session | null }>({
     session: null
 });
 

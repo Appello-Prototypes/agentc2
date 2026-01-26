@@ -6,6 +6,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 This is a **Turborepo monorepo** for the Catalyst application, built with Next.js 16 (App Router), React 19, Prisma (MySQL), and Better Auth for authentication. The project uses **Bun** as the package manager and runtime.
 
+## Claude Code Workflow
+
+When working on files in this repository, follow these practices:
+
+### Code Quality
+
+- **Formatting**: After completing work on any file, run `bun run format` to ensure proper Prettier formatting is applied
+- **Linting**: After completing work on any file, run `bun run lint` to catch and fix any linting issues
+- Always ensure code passes both formatting and linting checks before considering the task complete
+
+### Development Server
+
+- **Assume the dev server is running**: Do not ask to start `bun run dev` or `bun run dev:local` - assume the development server is already running during active development sessions
+- **Only ask to start if needed**: If you detect that the development server is not running (e.g., through error messages or explicit user indication), then ask if you should start it
+- The user will start/stop the server as needed for their workflow
+
 ## Monorepo Structure
 
 - **apps/frontend**: Next.js 16 application with App Router
