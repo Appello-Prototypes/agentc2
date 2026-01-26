@@ -1,4 +1,5 @@
 import { AppSidebar } from "@/components/AppSidebar";
+import { CommandPalette } from "@/components/CommandPalette";
 import { SidebarProvider } from "@/components/ui/sidebar";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
@@ -6,6 +7,7 @@ export default function AuthenticatedLayout({ children }: { children: React.Reac
         <SidebarProvider>
             <AppSidebar />
             <main className="flex-1">{children}</main>
+            <CommandPalette />
         </SidebarProvider>
     );
 }
