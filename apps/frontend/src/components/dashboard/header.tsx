@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@/components/ui";
+import { Button } from "@repo/ui";
 import { signOut, type User } from "@repo/auth";
 import { useRouter } from "next/navigation";
 import { ThemeToggle } from "@/components/theme-toggle";

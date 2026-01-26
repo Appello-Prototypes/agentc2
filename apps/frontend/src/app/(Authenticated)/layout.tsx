@@ -1,6 +1,6 @@
 import { AppSidebar } from "@/components/AppSidebar";
 import { CommandPalette } from "@/components/CommandPalette";
-import { SidebarProvider } from "@/components/ui/sidebar";
+import { SidebarProvider } from "@repo/ui";
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
     return (

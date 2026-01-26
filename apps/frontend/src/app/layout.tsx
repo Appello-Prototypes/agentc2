@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "@/styles/globals.css";
 import { SessionProvider } from "@repo/auth/providers";
-import { ThemeProvider } from "@/components/providers/theme-provider";
+import { ThemeProvider } from "@repo/ui";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 

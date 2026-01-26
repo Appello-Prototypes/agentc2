@@ -25,14 +25,20 @@ When working on files in this repository, follow these practices:
 ## Monorepo Structure
 
 - **apps/frontend**: Next.js 16 application with App Router
-    - **src/components/ui**: shadcn UI components
-    - **src/lib**: Utility functions (cn function, auth, etc.)
+    - **src/components**: App-specific components (auth forms, dashboards, etc.)
     - **src/app/(Public)/api/auth**: Better Auth API endpoints
 - **apps/agent**: Next.js 16 agent application with App Router
     - Configured with `basePath: "/agent"` for path-based routing
     - Shares authentication with frontend via cookies
     - **src/app/page.tsx**: Agent home page (served at `/agent`)
+- **packages/auth**: Shared authentication configuration and providers
+    - Server and client auth configurations
+    - SessionProvider component
 - **packages/database**: Prisma schema and client configuration
+- **packages/ui**: Shared UI component library (shadcn/ui)
+    - All shadcn components, utilities, hooks, and styles
+    - Includes Tailwind CSS configuration and dependencies
+    - Consumed by both frontend and agent apps
 - **packages/typescript-config**: Shared TypeScript configurations
 
 ## Development Commands
@@ -59,6 +65,9 @@ bun run db:migrate:reset   # Reset database and apply all migrations (destructiv
 bun run db:migrate:deploy  # Apply migrations in production
 bun run db:studio          # Open Prisma Studio
 bun run db:seed            # Seed the database
+
+# UI Components
+bun run add-shadcn <name>  # Add ShadCN component(s) to shared UI package
 
 # Cleanup
 bun run clean              # Clean build artifacts
@@ -230,7 +239,11 @@ apps/agent/src/app/
 
 The app uses **Better Auth** (v1.4+) with email/password authentication and cross-app session sharing:
 
-- Auth configuration: `apps/frontend/src/lib/auth.ts`
+- **Shared Auth Package**: `packages/auth`
+    - Server config: `packages/auth/src/auth.ts`
+    - Client config: `packages/auth/src/auth-client.ts`
+    - SessionProvider: `packages/auth/src/providers/session-provider.tsx`
+    - Imported in both apps via `@repo/auth`
 - Auth API endpoints: `apps/frontend/src/app/(Public)/api/auth/[...all]/route.ts`
 - Session management via Better Auth with 7-day expiry
 - Middleware proxy pattern in `apps/frontend/src/proxy.ts` handles route protection
@@ -242,6 +255,7 @@ The app uses **Better Auth** (v1.4+) with email/password authentication and cros
 - Frontend hosts the auth API at `/api/auth/*`
 - Agent app uses auth client pointing to `https://catalyst.local/api/auth`
 - Both apps share the same `NEXT_PUBLIC_APP_URL` environment variable
+- Both apps import from `@repo/auth` package
 - Cookies are set on `catalyst.local` domain with path `/`, accessible to both apps
 - Login on frontend → session automatically available on agent app
 
@@ -266,13 +280,44 @@ The Prisma client is exported from `packages/database/src/index.ts` and used thr
 
 ### Styling and UI Components
 
+This project follows the **ShadCN monorepo pattern** with a shared UI package:
+
+- **Shared UI Package**: `packages/ui` - Contains all shadcn/ui components
+    - 23+ UI components (Button, Card, Dialog, Sidebar, etc.)
+    - Utility functions (`cn()` for className merging)
+    - Hooks (`useIsMobile()`)
+    - ThemeProvider component
+    - **Global styles** (`packages/ui/src/styles/globals.css`):
+        - All Tailwind CSS imports and configuration
+        - Complete theme with CSS variables (light/dark modes)
+        - Base layer styles
+        - Imported by both apps to ensure consistent styling
+    - Consumed by both frontend and agent apps via `@repo/ui`
 - **Tailwind CSS 4**: Configured at workspace root
-- **shadcn/ui**: Component library in `apps/frontend/src/components/ui/`
-    - Components are imported using `@/components/ui` alias
-    - shadcn configuration in `apps/frontend/components.json`
-- Uses `@base-ui/react` for headless components
+    - **Shared styles**: All Tailwind imports, theme variables, and base styles are in `packages/ui/src/styles/globals.css`
+    - **App-specific CSS**: Each app imports the shared styles and adds its own `@source` directive
+    - Example in `apps/frontend/src/styles/globals.css`:
+
+        ```css
+        /* Import shared UI styles and theme from packages/ui */
+        @import "../../../../packages/ui/src/styles/globals.css";
+
+        /* Scan frontend app source files for Tailwind classes */
+        @source "../../**/*.{js,ts,jsx,tsx}";
+        ```
+
+    - The shared `packages/ui/src/styles/globals.css` includes:
+        - `@source "../**/*.{js,ts,jsx,tsx}"` to scan UI components
+        - All Tailwind imports (@import "tailwindcss", etc.)
+        - Complete theme configuration (CSS variables, dark mode, base layer)
+
+- **shadcn/ui Configuration**:
+    - Base style: `base-nova`
+    - Icon library: `hugeicons`
+    - Each app has its own `components.json` that points to the shared UI package
+    - Shared package: `packages/ui/components.json`
+- Uses `@base-ui/react` for headless component primitives
 - Theme support via `next-themes` (dark mode configured)
-- Utility function `cn()` located at `apps/frontend/src/lib/utils.ts` for className merging
 
 ### TypeScript Configuration
 
@@ -388,25 +433,241 @@ When adding routes to the agent app:
     - URL: `https://catalyst.local/agent/dashboard`
 4. **Links**: Use Next.js `<Link href="/dashboard">` (basePath is automatic)
 5. **Assets**: All `_next` assets automatically served from `/agent/_next/`
-6. **Auth**: Use `useSession()` from `@/lib/auth-client` - sessions shared automatically
+6. **Auth**: Import from `@repo/auth` - sessions shared automatically
+7. **UI Components**: Import from `@repo/ui` - shares the same component library as frontend
 
 ## Component Development
 
-### shadcn Components
+### ShadCN UI Components in Monorepo
 
-UI components are managed using shadcn and located in `apps/frontend/src/components/ui/`. To add new shadcn components:
+This project follows the **ShadCN monorepo pattern** where all UI components are centralized in a shared package (`packages/ui`). This allows both the frontend and agent apps to use the same component library.
 
-1. Use the shadcn CLI from the frontend directory:
+#### Package Structure
 
-    ```bash
-    cd apps/frontend
-    bunx shadcn@latest add <component-name>
+```
+packages/ui/
+├── components.json          # ShadCN configuration for the UI package
+├── package.json
+├── tsconfig.json
+└── src/
+    ├── index.ts            # Main exports
+    ├── components/         # All ShadCN UI components
+    │   ├── button.tsx
+    │   ├── card.tsx
+    │   ├── dialog.tsx
+    │   ├── sidebar.tsx
+    │   ├── providers/
+    │   │   └── theme-provider.tsx
+    │   └── index.ts        # Component re-exports
+    ├── lib/
+    │   └── utils.ts        # cn() utility
+    ├── hooks/
+    │   └── use-mobile.tsx
+    └── styles/
+        └── globals.css     # Theme CSS variables
+```
+
+#### Adding New ShadCN Components
+
+**IMPORTANT**: ShadCN components should be added to the **shared UI package**, not individual apps.
+
+##### Automated Script (Recommended)
+
+The easiest way to add components is using the automated script from the **root directory**:
+
+```bash
+bun run add-shadcn <component-name> [additional-components...]
+```
+
+**Examples**:
+
+```bash
+bun run add-shadcn accordion
+bun run add-shadcn accordion tabs form
+```
+
+This script automatically handles all steps: adding the component, fixing imports, formatting, and linting.
+
+**Don't forget**: After the script completes, export the component in `packages/ui/src/components/index.ts`.
+
+##### Manual Workflow
+
+If you prefer to run the steps manually:
+
+**Step 1: Navigate to the UI Package**
+
+```bash
+cd packages/ui
+```
+
+##### Step 2: Add Component Using ShadCN CLI
+
+```bash
+bunx --bun shadcn@latest add <component-name>
+```
+
+Examples:
+
+```bash
+bunx --bun shadcn@latest add accordion
+bunx --bun shadcn@latest add tabs
+bunx --bun shadcn@latest add form
+```
+
+The CLI will automatically:
+
+- Install the component in `packages/ui/src/components/`
+- Resolve internal dependencies
+- Generate imports using `@/` aliases (e.g., `import { cn } from "@/lib/utils"`)
+
+##### Step 3: Fix Imports (CRITICAL)
+
+**IMPORTANT**: Immediately run the fix-imports script to convert `@/` alias imports to relative imports:
+
+```bash
+bun run fix-imports
+```
+
+**Why this is necessary**: The ShadCN CLI generates components with `@/` alias imports that would collide with the frontend and agent apps' own `@/` aliases, causing build errors. The fix-imports script converts these to relative imports that work correctly in the monorepo:
+
+- `from "@/lib/utils"` → `from "../lib/utils"`
+- `from "@/components/button"` → `from "./button"`
+- `from "@/hooks/use-mobile"` → `from "../hooks/use-mobile"`
+
+**Complete workflow** (can be run as a one-liner):
+
+```bash
+cd packages/ui && bunx --bun shadcn@latest add <component-name> && bun run fix-imports
+```
+
+##### Step 4: Export the Component
+
+Add the component to `packages/ui/src/components/index.ts`:
+
+```typescript
+export * from "./accordion";
+export * from "./tabs";
+export * from "./form";
+```
+
+##### Step 5: Format and Lint
+
+From the root directory, format and lint the code:
+
+```bash
+cd ../.. && bun run format && bun run lint
+```
+
+##### Step 6: Use in Apps
+
+Import from the shared package in both frontend and agent apps:
+
+```typescript
+// In apps/frontend or apps/agent
+import { Accordion, Tabs, Form } from "@repo/ui";
+```
+
+#### Configuration Notes
+
+- Each workspace has its own `components.json`:
+    - `packages/ui/components.json` - Uses `@/` aliases for ShadCN CLI compatibility
+    - `apps/frontend/components.json` - Points to `@repo/ui`
+    - `apps/agent/components.json` - Points to `@repo/ui`
+- All `components.json` files must have the same:
+    - `style`: `base-nova`
+    - `iconLibrary`: `hugeicons`
+    - `baseColor`: `zinc`
+- The `tailwind.config` field is left empty (Tailwind CSS v4)
+- **Important**: `packages/ui/components.json` does NOT have a `resolvedPaths` field (causes validation errors)
+- **Monorepo Path Alias Issue**: The UI package uses `@/` aliases in `components.json` for ShadCN CLI compatibility, but these must be converted to relative imports using the `fix-imports` script to avoid collisions with app-level `@/` aliases
+
+#### Importing Components
+
+All apps import components from the shared package:
+
+```typescript
+// Import individual components
+import { Button, Card, Dialog } from "@repo/ui";
+
+// Import utilities
+import { cn } from "@repo/ui";
+
+// Import hooks
+import { useIsMobile } from "@repo/ui";
+
+// Import ThemeProvider
+import { ThemeProvider } from "@repo/ui";
+```
+
+#### App-Specific Components
+
+Custom components that are specific to an app (not shared UI primitives) should stay in the app's component directory:
+
+**Frontend-specific components:**
+
+- Location: `apps/frontend/src/components/`
+- Examples: `auth/sign-in-form.tsx`, `dashboard/header.tsx`, `AppSidebar.tsx`
+- Import alias: `@/components`
+
+**Agent-specific components:**
+
+- Location: `apps/agent/src/components/`
+- Import alias: `@/components`
+
+#### When to Add to Shared UI Package
+
+Add to `packages/ui` when:
+
+- It's a primitive ShadCN component (Button, Card, Dialog, etc.)
+- It's a reusable utility or hook used by UI components
+- Both apps need the same component
+
+Keep in app directory when:
+
+- It's business logic specific to that app
+- It contains app-specific routing or state management
+- It's a composed component using multiple UI primitives for a specific feature
+
+### Troubleshooting
+
+**Component imports not working:**
+
+- Run `bun install` from the root to ensure workspace dependencies are linked
+- Verify `@repo/ui` is in the app's `package.json` dependencies
+
+**Error: "Invalid configuration found in components.json":**
+
+- Ensure `packages/ui/components.json` does NOT have a `resolvedPaths` field
+- Verify aliases use `@/` format (e.g., `"utils": "@/lib/utils"`)
+- Check that all required fields are present: `style`, `rsc`, `tsx`, `tailwind`, `iconLibrary`, `aliases`
+
+**Error: "Module not found: Can't resolve '@/components/...' or '@/lib/utils'":**
+
+- You forgot to run `bun run fix-imports` after adding the component
+- Navigate to `packages/ui` and run `bun run fix-imports` now
+- Then rebuild the app
+- This error occurs because the ShadCN CLI generates `@/` alias imports that collide with app-level aliases
+
+**Error: "Validation failed: resolvedPaths: Required,Required,...":**
+
+- Remove the `resolvedPaths` field from `packages/ui/components.json` entirely
+- The newer ShadCN CLI version doesn't work well with this field in monorepos
+
+**ShadCN CLI not finding components:**
+
+- Make sure you're in the correct directory (`packages/ui` or app directory)
+- Verify `components.json` exists in the current directory
+- Check that aliases in `components.json` point to the correct paths
+
+**Tailwind classes not working or missing:**
+
+- Verify that the app's `globals.css` imports the shared UI styles:
+    ```css
+    @import "../../../../packages/ui/src/styles/globals.css";
+    @source "../../**/*.{js,ts,jsx,tsx}";
     ```
-
-2. Components will be automatically added to `src/components/ui/` and can be imported using the `@/components/ui` alias
-
-3. Components are re-exported in `src/components/ui/index.ts` for easier imports
-
-### Custom Components
-
-Custom shared components should be added to `apps/frontend/src/components/` and can be organized into subdirectories as needed. Import them using the `@/components` alias.
+- The `@import` must come **before** the app's `@source` directive
+- Each app's CSS file should be minimal - just import shared styles and scan its own source
+- The shared `packages/ui/src/styles/globals.css` contains all Tailwind configuration
+- Restart the dev server after changing CSS imports or `@source` directives
+- Clear the Next.js build cache if styles still don't appear: `rm -rf apps/[app]/.next`

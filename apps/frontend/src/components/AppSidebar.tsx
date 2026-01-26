@@ -11,14 +11,14 @@ import {
     SidebarInput,
     SidebarMenuButton,
     SidebarMenuItem
-} from "@/components/ui/sidebar";
+} from "@repo/ui";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuSeparator,
     DropdownMenuTrigger
-} from "@/components/ui/dropdown-menu";
+} from "@repo/ui";
 import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIconProps, HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
@@ -30,6 +30,11 @@ type SidebarItem = {
     href: string;
 };
 const sidebarItems: Array<SidebarItem & { children?: Array<SidebarItem> }> = [
+    {
+        label: "Agent",
+        icon: SidebarLeftIcon,
+        href: "/agent"
+    },
     {
         label: "Dashboard",
         icon: SidebarLeftIcon,
@@ -129,13 +134,22 @@ export function AppSidebar() {
 }
 
 const SidebarItemNode = ({ item }: { item: SidebarItem }) => {
+    const isExternalApp = item.href.startsWith("/agent");
+
     return (
         <SidebarMenuItem key={item.href}>
             <SidebarMenuButton>
-                <Link href={item.href} className="flex items-center gap-2">
-                    <HugeiconsIcon icon={item.icon} strokeWidth={2} />
-                    {item.label}
-                </Link>
+                {isExternalApp ? (
+                    <a href={item.href} className="flex items-center gap-2">
+                        <HugeiconsIcon icon={item.icon} strokeWidth={2} />
+                        {item.label}
+                    </a>
+                ) : (
+                    <Link href={item.href} className="flex items-center gap-2">
+                        <HugeiconsIcon icon={item.icon} strokeWidth={2} />
+                        {item.label}
+                    </Link>
+                )}
             </SidebarMenuButton>
         </SidebarMenuItem>
     );

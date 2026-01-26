@@ -23,7 +23,8 @@
     "db:migrate": "turbo db:migrate",
     "db:studio": "turbo db:studio",
     "db:seed": "turbo db:seed",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "add-shadcn": "./scripts/add-shadcn.sh"
   },
   "devDependencies": {
     "prettier": "^3.8.1",

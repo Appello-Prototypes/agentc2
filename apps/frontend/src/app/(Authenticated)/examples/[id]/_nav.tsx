@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "@repo/ui";
 import Link from "next/link";
 
 export default function Nav({ id, currentPath }: { id: string; currentPath: string }) {

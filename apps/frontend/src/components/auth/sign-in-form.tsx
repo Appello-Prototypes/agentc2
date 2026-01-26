@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@repo/auth";
-import { Button, Input, Field, FieldError, FieldLabel } from "@/components/ui";
+import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
 import Link from "next/link";
 
 export function SignInForm() {

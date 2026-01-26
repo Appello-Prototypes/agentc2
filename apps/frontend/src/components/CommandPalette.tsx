@@ -9,7 +9,7 @@ import {
     CommandEmpty,
     CommandGroup,
     CommandItem
-} from "@/components/ui/command";
+} from "@repo/ui";
 import { HugeiconsIcon } from "@hugeicons/react";
 import {
     DashboardSpeed01Icon,

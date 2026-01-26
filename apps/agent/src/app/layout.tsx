@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { SessionProvider } from "@repo/auth/providers";
-import { ThemeProvider } from "@/components/providers/theme-provider";
+import { ThemeProvider } from "@repo/ui";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
