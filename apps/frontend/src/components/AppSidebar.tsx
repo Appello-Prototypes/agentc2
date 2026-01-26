@@ -22,7 +22,7 @@ import {
 import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIconProps, HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { useSession, signOut } from "@/lib/auth-client";
+import { useSession, signOut } from "@repo/auth";
 
 type SidebarItem = {
     label: string;

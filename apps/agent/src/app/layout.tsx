@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { SessionProvider } from "@/components/providers/session-provider";
+import { SessionProvider } from "@repo/auth/providers";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import "@/styles/globals.css";
 

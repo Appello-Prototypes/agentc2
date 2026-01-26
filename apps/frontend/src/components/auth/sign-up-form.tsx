@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { signUp } from "@/lib/auth-client";
+import { signUp } from "@repo/auth";
 import { Button, Input, Field, FieldError, FieldLabel, FieldDescription } from "@/components/ui";
 import Link from "next/link";
 

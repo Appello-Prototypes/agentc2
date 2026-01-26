@@ -1,9 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui";
-import { signOut } from "@/lib/auth-client";
+import { signOut, type User } from "@repo/auth";
 import { useRouter } from "next/navigation";
-import type { User } from "@/lib/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 interface DashboardHeaderProps {
