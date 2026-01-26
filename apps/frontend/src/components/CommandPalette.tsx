@@ -1,31 +1,31 @@
-"use client"
+"use client";
 
-import { useRouter, usePathname } from "next/navigation"
-import { useCommandPalette } from "@/hooks/use-command-palette"
+import { useRouter, usePathname } from "next/navigation";
+import { useCommandPalette } from "@/hooks/use-command-palette";
 import {
     CommandDialog,
     CommandInput,
     CommandList,
     CommandEmpty,
     CommandGroup,
-    CommandItem,
-} from "@/components/ui/command"
-import { HugeiconsIcon } from "@hugeicons/react"
+    CommandItem
+} from "@/components/ui/command";
+import { HugeiconsIcon } from "@hugeicons/react";
 import {
     DashboardSpeed01Icon,
     ShoppingCart01Icon,
     FolderOpenIcon
-} from "@hugeicons/core-free-icons"
+} from "@hugeicons/core-free-icons";
 
 export function CommandPalette() {
-    const router = useRouter()
-    const pathname = usePathname()
-    const { open, setOpen } = useCommandPalette()
+    const router = useRouter();
+    const pathname = usePathname();
+    const { open, setOpen } = useCommandPalette();
 
     const handleNavigate = (path: string) => {
-        router.push(path)
-        setOpen(false)
-    }
+        router.push(path);
+        setOpen(false);
+    };
 
     const commands = [
         {
@@ -45,8 +45,8 @@ export function CommandPalette() {
             icon: FolderOpenIcon,
             onSelect: () => handleNavigate("/examples"),
             path: "/examples"
-        },
-    ]
+        }
+    ];
 
     return (
         <CommandDialog open={open} onOpenChange={setOpen}>
@@ -60,15 +60,12 @@ export function CommandPalette() {
                             onSelect={cmd.onSelect}
                             data-current={pathname === cmd.path}
                         >
-                            <HugeiconsIcon
-                                icon={cmd.icon}
-                                strokeWidth={2}
-                            />
+                            <HugeiconsIcon icon={cmd.icon} strokeWidth={2} />
                             {cmd.label}
                         </CommandItem>
                     ))}
                 </CommandGroup>
             </CommandList>
         </CommandDialog>
-    )
+    );
 }

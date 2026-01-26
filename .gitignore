@@ -54,3 +54,8 @@ packages/**/.next
 # prisma
 .prisma
 packages/database/node_modules/.prisma
+
+# Caddy
+.caddy.pid
+caddy.log
+data/
