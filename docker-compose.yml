@@ -1,7 +1,7 @@
 services:
   mysql:
     image: mysql:8
-    container_name: appello-mysql
+    container_name: catalyst-mysql
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
@@ -17,8 +17,8 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - appello-network
+      - catalyst-network
 
 networks:
-  appello-network:
+  catalyst-network:
     driver: bridge

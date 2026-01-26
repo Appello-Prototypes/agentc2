@@ -1,4 +1,4 @@
-# Appello
+# Catalyst
 
 A modern, full-stack web application built with Next.js 16, React 19, and Prisma, organized as a Turborepo monorepo.
 
@@ -17,7 +17,7 @@ A modern, full-stack web application built with Next.js 16, React 19, and Prisma
 ## Project Structure
 
 ```
-appello-monorepo/
+catalyst-monorepo/
 ├── apps/
 │   └── frontend/          # Next.js application
 ├── packages/
@@ -118,11 +118,11 @@ Create a `.env` file in the root directory with the following variables:
 
 ```env
 # Database
-DATABASE_URL="mysql://appello_user:appello_password@localhost:3306/appello"
+DATABASE_URL="mysql://catalyst_user:catalyst_password@localhost:3306/catalyst"
 MYSQL_ROOT_PASSWORD=root_password
-MYSQL_DATABASE=appello
-MYSQL_USER=appello_user
-MYSQL_PASSWORD=appello_password
+MYSQL_DATABASE=catalyst
+MYSQL_USER=catalyst_user
+MYSQL_PASSWORD=catalyst_password
 MYSQL_PORT=3306
 
 # Authentication

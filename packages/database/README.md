@@ -1,13 +1,13 @@
 # @repo/database
 
-Shared Prisma database package for the Appello monorepo.
+Shared Prisma database package for the Catalyst monorepo.
 
 ## Setup
 
 1. Make sure you have a `.env` file in the root with the `DATABASE_URL`:
 
     ```
-    DATABASE_URL="mysql://appello_user:appello_password@localhost:3306/appello"
+    DATABASE_URL="mysql://catalyst_user:catalyst_password@localhost:3306/catalyst"
     ```
 
 2. Start the MySQL database:
