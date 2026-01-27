@@ -12,7 +12,7 @@
     "./styles/*": "./src/styles/*"
   },
   "scripts": {
-    "fix-imports": "find src/components -name '*.tsx' -type f -exec sed -i '' -e 's|from \"@/lib/utils\"|from \"../lib/utils\"|g' -e 's|from \"@/components/\\([^\"]*\\)\"|from \"./\\1\"|g' -e 's|from \"@/hooks/\\([^\"]*\\)\"|from \"../hooks/\\1\"|g' {} +",
+    "fix-imports": "if [ -d '@/components' ]; then mv @/components/* src/components/ 2>/dev/null || true; rm -rf @; fi && find src/components -name '*.tsx' -type f -exec sed -i '' -e 's|from \"@/lib/utils\"|from \"../lib/utils\"|g' -e 's|from \"@/components/\\([^\"]*\\)\"|from \"./\\1\"|g' -e 's|from \"@/hooks/\\([^\"]*\\)\"|from \"../hooks/\\1\"|g' {} +",
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "storybook:build": "storybook build"

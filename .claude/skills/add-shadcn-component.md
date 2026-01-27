@@ -27,9 +27,105 @@ This script automatically:
 
 1. Navigates to `packages/ui`
 2. Runs the ShadCN CLI
-3. Fixes imports (converts `@/` to relative paths)
-4. Formats and lints the code
-5. Provides a reminder to export the component
+3. Moves files from `@/components/` to `src/components/` (if needed)
+4. Fixes imports (converts `@/` to relative paths)
+5. Formats and lints the code
+6. Provides a reminder to export the component and create stories
+
+**After running the script, you must manually:**
+
+1. Export the component in `packages/ui/src/components/index.ts`
+2. Create a Storybook story file for the component (see "Creating Storybook Stories" section below)
+
+## Creating Storybook Stories
+
+**IMPORTANT**: Every new component MUST have a corresponding Storybook story for documentation and visual testing.
+
+### Story File Template
+
+Create a file named `<component-name>.stories.tsx` in `packages/ui/src/components/`:
+
+```typescript
+import type { Meta, StoryObj } from "@storybook/react";
+import { ComponentName } from "./component-name";
+
+const meta = {
+    title: "Components/ComponentName",
+    component: ComponentName,
+    parameters: {
+        layout: "centered"
+    },
+    tags: ["autodocs"]
+} satisfies Meta<typeof ComponentName>;
+
+export default meta;
+type Story = StoryObj<typeof meta>;
+
+export const Default: Story = {
+    render: () => (
+        <ComponentName>
+            {/* Example usage */}
+        </ComponentName>
+    )
+};
+
+// Add more story variants as needed
+export const Variant: Story = {
+    render: () => (
+        <ComponentName variant="outline">
+            {/* Alternative example */}
+        </ComponentName>
+    )
+};
+```
+
+### Story Guidelines
+
+1. **Default Story**: Always include a `Default` story showing the most common usage
+2. **Variants**: Create stories for each significant variant or prop combination
+3. **Interactive**: Use `args` when the component has simple props that can be controlled
+4. **Complex Examples**: Use `render` for more complex layouts or composed components
+5. **Documentation**: The `autodocs` tag automatically generates documentation from props
+
+### Common Story Patterns
+
+**Simple Component with Args**:
+
+```typescript
+export const Default: Story = {
+    args: {
+        children: "Click me",
+        variant: "default"
+    }
+};
+```
+
+**Complex Component with Render**:
+
+```typescript
+export const WithMultipleParts: Story = {
+    render: () => (
+        <ComponentName>
+            <ComponentPart>Content</ComponentPart>
+            <ComponentPart>More content</ComponentPart>
+        </ComponentName>
+    )
+};
+```
+
+**Multiple Variants Showcase**:
+
+```typescript
+export const AllVariants: Story = {
+    render: () => (
+        <div className="flex gap-4">
+            <ComponentName variant="default">Default</ComponentName>
+            <ComponentName variant="outline">Outline</ComponentName>
+            <ComponentName variant="ghost">Ghost</ComponentName>
+        </div>
+    )
+};
+```
 
 ## Manual Workflow
 
@@ -56,13 +152,17 @@ bunx --bun shadcn@latest add <component-name>
 
 ### Step 3: Fix Imports (CRITICAL)
 
-Immediately run the fix-imports script to convert `@/` imports to relative imports:
+Immediately run the fix-imports script to move files and convert imports:
 
 ```bash
 bun run fix-imports
 ```
 
-**Why this is necessary**: The ShadCN CLI generates components with `@/` alias imports (e.g., `import { cn } from "@/lib/utils"`). These aliases collide with the frontend and agent apps' `@/` aliases, causing build errors. The fix-imports script converts these to relative imports (e.g., `import { cn } from "../lib/utils"`).
+**Why this is necessary**: The ShadCN CLI generates components in the `@/components/` directory with `@/` alias imports (e.g., `import { cn } from "@/lib/utils"`). These aliases collide with the frontend and agent apps' `@/` aliases, causing build errors. The fix-imports script:
+
+1. Moves files from `@/components/` to `src/components/`
+2. Removes the `@/` directory
+3. Converts all `@/` imports to relative imports (e.g., `import { cn } from "../lib/utils"`)
 
 ### Step 4: Export Component
 
@@ -72,7 +172,11 @@ Add the new component to `packages/ui/src/components/index.ts`:
 export * from "./component-name";
 ```
 
-### Step 5: Format and Lint
+### Step 5: Create Storybook Story
+
+Create a story file `packages/ui/src/components/<component-name>.stories.tsx`. See the "Creating Storybook Stories" section above for the template and guidelines.
+
+### Step 6: Format and Lint
 
 Navigate back to root and run formatting and linting:
 
@@ -101,9 +205,11 @@ cd packages/ui && bunx --bun shadcn@latest add <comp1> <comp2> && bun run fix-im
 2. **Monorepo Path Aliases**: The UI package uses `@/` in `components.json` for ShadCN CLI compatibility, but these must be converted to relative imports for the monorepo to work correctly.
 
 3. **What fix-imports does**:
-    - `from "@/lib/utils"` → `from "../lib/utils"`
-    - `from "@/components/button"` → `from "./button"`
-    - `from "@/hooks/use-mobile"` → `from "../hooks/use-mobile"`
+    - Moves files from `@/components/` to `src/components/` (if `@/` directory exists)
+    - Removes the `@/` directory after moving files
+    - Converts imports: `from "@/lib/utils"` → `from "../lib/utils"`
+    - Converts imports: `from "@/components/button"` → `from "./button"`
+    - Converts imports: `from "@/hooks/use-mobile"` → `from "../hooks/use-mobile"`
 
 4. **Component Location**: All components are added to `packages/ui/src/components/` and shared across both frontend and agent apps.
 
@@ -119,7 +225,9 @@ cd packages/ui && bunx --bun shadcn@latest add <comp1> <comp2> && bun run fix-im
 
 **packages/ui/package.json**:
 
-- Contains `fix-imports` script that handles import conversion
+- Contains `fix-imports` script that handles file relocation and import conversion
+- Moves files from `@/components/` to `src/components/` if needed
+- Removes the `@/` directory after moving files
 - Uses sed to find and replace import patterns
 
 **packages/ui/tsconfig.json**:
@@ -136,8 +244,10 @@ cd packages/ui && bunx --bun shadcn@latest add <comp1> <comp2> && bun run fix-im
 
 **Error: "Module not found: Can't resolve '@/components/...'"**
 
-- You forgot to run `bun run fix-imports`
-- Run it now, then rebuild
+- You forgot to run `bun run fix-imports` after adding the component
+- Run it now from `packages/ui` directory: `cd packages/ui && bun run fix-imports`
+- The script will automatically move files from `@/` to `src/components/` and fix imports
+- Then rebuild the app
 
 **Component not found when importing**
 
@@ -167,3 +277,11 @@ The component can now be imported in both frontend and agent apps:
 ```typescript
 import { Accordion, AccordionItem, AccordionTrigger } from "@repo/ui";
 ```
+
+**Verify in Storybook**:
+
+```bash
+bun run storybook
+```
+
+Navigate to `Components/<ComponentName>` to see your new stories and verify the component renders correctly.
