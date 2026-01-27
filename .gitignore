@@ -59,3 +59,7 @@ packages/database/node_modules/.prisma
 .caddy.pid
 caddy.log
 data/
+
+# Storybook
+packages/ui/storybook-static
+storybook-static

@@ -24,7 +24,9 @@
     "db:studio": "turbo db:studio",
     "db:seed": "turbo db:seed",
     "format": "prettier --write .",
-    "add-shadcn": "./scripts/add-shadcn.sh"
+    "add-shadcn": "./scripts/add-shadcn.sh",
+    "storybook": "turbo storybook",
+    "build-storybook": "turbo build-storybook"
   },
   "devDependencies": {
     "prettier": "^3.8.1",

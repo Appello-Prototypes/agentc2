@@ -4,6 +4,7 @@
 
 /* Specify content sources for Tailwind to scan in the UI package */
 @source "../**/*.{js,ts,jsx,tsx}";
+@source "../../.storybook/**/*.{js,ts,jsx,tsx}";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -1,0 +1,112 @@
+import { Meta } from "@storybook/blocks";
+
+<Meta title="Introduction" />
+
+# Catalyst UI Component Library
+
+Welcome to the Catalyst UI component library documentation. This library is built on top of [shadcn/ui](https://ui.shadcn.com/) and provides a comprehensive set of components for building modern web applications.
+
+## Features
+
+- **Built with React 19**: Leveraging the latest React features
+- **Tailwind CSS v4**: Modern utility-first CSS framework
+- **Base UI Primitives**: Using `@base-ui/react` for accessible headless components
+- **TypeScript**: Fully typed components for better developer experience
+- **Dark Mode**: Built-in theme support with `next-themes`
+- **Monorepo Ready**: Designed to work seamlessly in a Turborepo monorepo setup
+
+## Component Categories
+
+### Core Components
+
+- **Button**: Versatile button component with multiple variants and sizes
+- **Card**: Flexible card component for content organization
+- **Badge**: Status and label indicators
+- **Input**: Form input fields with validation support
+- **Dialog**: Modal dialogs and overlays
+- **Dropdown Menu**: Contextual menus and dropdowns
+
+### Navigation
+
+- **Sidebar**: App navigation sidebar
+- **Command**: Command palette for keyboard shortcuts
+- **Combobox**: Searchable select component
+
+### Form Components
+
+- **Field**: Form field wrapper with labels and descriptions
+- **Input Group**: Grouped input fields
+- **Button Group**: Grouped button controls
+- **Select**: Dropdown select component
+- **Textarea**: Multi-line text input
+
+### Feedback
+
+- **Alert Dialog**: Confirmations and alerts
+- **Tooltip**: Contextual help and information
+- **Skeleton**: Loading placeholders
+
+## Usage
+
+All components are exported from the `@repo/ui` package:
+
+```tsx
+import { Button, Card, Badge } from "@repo/ui";
+
+function MyComponent() {
+    return (
+        <Card>
+            <CardHeader>
+                <CardTitle>Hello World</CardTitle>
+            </CardHeader>
+            <CardContent>
+                <Button>Click me</Button>
+                <Badge>New</Badge>
+            </CardContent>
+        </Card>
+    );
+}
+```
+
+## Theme Configuration
+
+The library uses CSS variables for theming, making it easy to customize colors and styles:
+
+```css
+:root {
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+    --primary: 240 5.9% 10%;
+    --primary-foreground: 0 0% 98%;
+    /* ... more variables */
+}
+
+.dark {
+    --background: 240 10% 3.9%;
+    --foreground: 0 0% 98%;
+    /* ... dark mode overrides */
+}
+```
+
+## Development
+
+This component library is part of the Catalyst monorepo. To contribute or extend components:
+
+1. **Add new components** using the shadcn CLI:
+
+    ```bash
+    cd packages/ui
+    bunx --bun shadcn@latest add <component-name>
+    bun run fix-imports
+    ```
+
+2. **Create stories** for new components in `*.stories.tsx` files
+
+3. **Export components** from `src/components/index.ts`
+
+## Resources
+
+- [shadcn/ui Documentation](https://ui.shadcn.com/)
+- [Base UI Documentation](https://base-ui.com/)
+- [Tailwind CSS Documentation](https://tailwindcss.com/)
+- [React 19 Documentation](https://react.dev/)

@@ -828,6 +828,157 @@ Keep in app directory when:
 - It contains app-specific routing or state management
 - It's a composed component using multiple UI primitives for a specific feature
 
+### Using HugeIcons
+
+This project uses [HugeIcons](https://hugeicons.com/) free collection (4,600+ icons) for all icon needs. HugeIcons are rendered via the `HugeiconsIcon` component from `@hugeicons/react`.
+
+#### Correct Import Pattern
+
+**CRITICAL**: Icons must be imported individually, NOT via namespace imports.
+
+**CORRECT:**
+
+```typescript
+import { HomeIcon, Settings02Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+
+function MyComponent() {
+    return <HugeiconsIcon icon={HomeIcon} className="size-6" />;
+}
+```
+
+**INCORRECT (Will cause runtime errors):**
+
+```typescript
+// ❌ DO NOT USE namespace imports
+import * as Icons from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+
+function MyComponent() {
+    // ❌ This will fail with "currentIcon is not iterable"
+    return <HugeiconsIcon icon={Icons.HomeIcon} className="size-6" />;
+}
+```
+
+#### Icon Sizing
+
+Icons are sized using Tailwind's `size-*` utilities:
+
+```typescript
+<HugeiconsIcon icon={HomeIcon} className="size-4" />   {/* 16px */}
+<HugeiconsIcon icon={HomeIcon} className="size-6" />   {/* 24px */}
+<HugeiconsIcon icon={HomeIcon} className="size-8" />   {/* 32px */}
+<HugeiconsIcon icon={HomeIcon} className="size-12" />  {/* 48px - default in stories */}
+```
+
+#### Icon Colors
+
+Icons inherit text color and can be themed:
+
+```typescript
+<HugeiconsIcon icon={HomeIcon} className="size-6 text-foreground" />
+<HugeiconsIcon icon={HomeIcon} className="size-6 text-muted-foreground" />
+<HugeiconsIcon icon={HomeIcon} className="size-6 text-primary" />
+<HugeiconsIcon icon={HomeIcon} className="size-6 text-destructive" />
+```
+
+#### Finding Available Icons
+
+1. **Browse in Storybook**: Run `bun run storybook` and navigate to "Foundation/Icons" to see commonly used icons
+2. **Check the package**: Look at `packages/ui/src/components/icons.stories.tsx` for verified icon names
+3. **HugeIcons website**: Visit [hugeicons.com](https://hugeicons.com/) to search the full collection
+4. **Common icons in this project**:
+    - Navigation: `HomeIcon`, `DashboardSpeed01Icon`, `Settings02Icon`, `ChevronDown`
+    - Files: `FileIcon`, `FolderIcon`, `FolderOpenIcon`
+    - User: `UserIcon`, `Logout03Icon`
+    - Communication: `MessageMultiple01Icon`
+    - Time: `CalendarIcon`, `ClockIcon`
+    - Status: `LockIcon`, `StarIcon`
+    - Commerce: `ShoppingCart01Icon`
+    - AI: `AiNetworkIcon`
+
+#### Adding Icons to Navigation Config
+
+When adding icons to navigation items in `packages/ui/src/config/navigation.ts` or `packages/ui/src/config/user-menu.ts`:
+
+```typescript
+import { Settings02Icon, HomeIcon } from "@hugeicons/core-free-icons";
+
+export const navigationItems: NavigationItem[] = [
+    {
+        label: "Home",
+        icon: HomeIcon, // Pass the icon directly, not as JSX
+        href: "/",
+        app: "frontend",
+        keywords: ["home", "dashboard"]
+    },
+    {
+        label: "Settings",
+        icon: Settings02Icon,
+        href: "/settings",
+        app: "frontend",
+        keywords: ["settings", "config"]
+    }
+];
+```
+
+**Important**: Pass the icon component reference (e.g., `HomeIcon`), NOT JSX (e.g., `<HomeIcon />`).
+
+#### Common Mistakes to Avoid
+
+1. **Namespace imports**: `import * as Icons` - This doesn't work with HugeiconsIcon
+2. **Non-existent icon names**: Not all icon names you might expect exist. Verify names first.
+3. **Using icons directly**: Don't use HugeIcons components directly - always wrap with `HugeiconsIcon`
+4. **Typos in icon names**: Icon names are case-sensitive and follow specific patterns (e.g., `Settings02Icon`, not `SettingsIcon`)
+
+#### Icon Naming Conventions
+
+HugeIcons use numbered suffixes when multiple variants exist:
+
+- `DashboardSpeed01Icon` (variant 01)
+- `Settings02Icon` (variant 02)
+- `Message01Icon`, `MessageMultiple01Icon` (different types)
+
+If an icon import fails, try:
+
+1. Check the exact name in the package or Storybook
+2. Try different variant numbers (01, 02, 03)
+3. Search for similar names (e.g., "MessageIcon" might be "Message01Icon")
+
+#### Example: Complete Component with Icons
+
+```typescript
+import { HugeiconsIcon } from "@hugeicons/react";
+import { HomeIcon, Settings02Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { Button } from "@repo/ui";
+
+export function Navigation() {
+    return (
+        <nav className="flex gap-2">
+            <Button variant="ghost" size="icon">
+                <HugeiconsIcon icon={HomeIcon} className="size-5" />
+            </Button>
+            <Button variant="ghost" size="icon">
+                <HugeiconsIcon icon={Settings02Icon} className="size-5" />
+            </Button>
+            <Button variant="ghost" size="icon">
+                <HugeiconsIcon icon={UserIcon} className="size-5" />
+            </Button>
+        </nav>
+    );
+}
+```
+
+#### Storybook Icon Showcase
+
+The UI package includes an icon showcase story at `packages/ui/src/components/icons.stories.tsx` with:
+
+- **CommonIcons**: Curated collection organized by category
+- **IconSizes**: Visual reference for all size utilities
+- **IconColors**: Theme color examples
+
+The showcase uses a constant `ICON_SIZE = "size-12"` that can be easily changed to adjust all icon sizes at once.
+
 ### Troubleshooting
 
 **Component imports not working:**
