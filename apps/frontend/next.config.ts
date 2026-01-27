@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
         DATABASE_URL: process.env.DATABASE_URL,
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
     },
+    devIndicators: {
+        position: "bottom-right"
+    },
     async rewrites() {
         // These rewrites are used when accessing frontend directly (bun run dev:local)
         // When using Caddy (bun run dev), Caddy handles the routing instead

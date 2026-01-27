@@ -20,14 +20,8 @@ else
     echo -e "${GREEN}✓${NC} Caddy is installed"
 fi
 
-# Check if /etc/hosts entry exists
-if ! grep -q "catalyst.local" /etc/hosts 2>/dev/null; then
-    echo -e "${RED}✗${NC} catalyst.local not in /etc/hosts"
-    echo "  Add with: ${YELLOW}echo '127.0.0.1 catalyst.local' | sudo tee -a /etc/hosts${NC}"
-    ISSUES_FOUND=1
-else
-    echo -e "${GREEN}✓${NC} catalyst.local in /etc/hosts"
-fi
+# Note: .localhost domains automatically resolve to 127.0.0.1, no /etc/hosts needed
+echo -e "${GREEN}✓${NC} Using catalyst.localhost (no /etc/hosts required)"
 
 # Check if Caddy CA is trusted
 CADDY_CA_ROOT="$HOME/Library/Application Support/Caddy/pki/authorities/local/root.crt"
@@ -47,7 +41,6 @@ if [ $ISSUES_FOUND -eq 1 ]; then
     echo "Quick setup:"
     echo "  brew install caddy"
     echo "  caddy trust"
-    echo "  echo '127.0.0.1 catalyst.local' | sudo tee -a /etc/hosts"
     echo ""
     exit 1
 else

@@ -13,7 +13,7 @@ export default async function AgentHomePage() {
     if (!session) {
         // Use absolute URL to redirect to frontend login page
         // Relative paths don't work correctly with basePath: "/agent"
-        redirect(process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.local");
+        redirect(process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost");
     }
 
     // Session is guaranteed to exist here due to redirect above

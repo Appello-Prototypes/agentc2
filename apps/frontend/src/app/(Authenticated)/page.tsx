@@ -11,5 +11,7 @@ export default async function AuthenticatedPage({ children }: { children: React.
         redirect("/");
     }
 
+    console.log("AuthenticatedPage", session);
+
     return children;
 }

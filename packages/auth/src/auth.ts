@@ -26,7 +26,7 @@ export const auth = betterAuth({
         "http://localhost:3000",
         "http://localhost:3001",
         // Add HTTPS localhost if needed for testing
-        "https://catalyst.local"
+        "https://catalyst.localhost"
     ],
     // Explicitly set advanced cookie options for cross-path sharing
     advanced: {

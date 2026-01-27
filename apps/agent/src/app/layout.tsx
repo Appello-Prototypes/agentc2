@@ -1,12 +1,21 @@
-import type { Metadata } from "next";
-import { SessionProvider } from "@repo/auth/providers";
-import { ThemeProvider } from "@repo/ui";
-import "@/styles/globals.css";
+import { CommandPalette, type CommandPaletteCommand } from "@repo/ui";
+import { HomeIcon, DashboardSpeed01Icon } from "@hugeicons/core-free-icons";
 
-export const metadata: Metadata = {
-    title: "Catalyst Agent",
-    description: "Agent application for Catalyst"
-};
+import "@/styles/globals.css";
+import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
+
+const commands: CommandPaletteCommand[] = [
+    {
+        label: "Agent Home",
+        icon: HomeIcon,
+        path: "/"
+    },
+    {
+        label: "Agent Dashboard",
+        icon: DashboardSpeed01Icon,
+        path: "/dashboard"
+    }
+];
 
 export default function RootLayout({
     children
@@ -16,14 +25,10 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body>
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    <SessionProvider>{children}</SessionProvider>
-                </ThemeProvider>
+                <AppProvidersWrapper>
+                    {children}
+                    <CommandPalette commands={commands} />
+                </AppProvidersWrapper>
             </body>
         </html>
     );

@@ -54,19 +54,15 @@ catalyst-agent/
     caddy trust
     ```
 
-3. **Setup DNS**
+    Note: `.localhost` domains automatically resolve to 127.0.0.1, so no `/etc/hosts` modification is needed.
 
-    ```bash
-    echo "127.0.0.1 catalyst.local" | sudo tee -a /etc/hosts
-    ```
-
-4. **Install dependencies**
+3. **Install dependencies**
 
     ```bash
     bun install
     ```
 
-5. **Set up environment variables**
+4. **Set up environment variables**
 
     ```bash
     cp .env.example .env
@@ -74,26 +70,26 @@ catalyst-agent/
 
     Edit `.env` if needed (default values work for local dev).
 
-6. **Start the database**
+5. **Start the database**
 
     ```bash
     docker compose up -d
     ```
 
-7. **Set up the database schema**
+6. **Set up the database schema**
 
     ```bash
     bun run db:generate
     bun run db:push
     ```
 
-8. **Seed the database (optional)**
+7. **Seed the database (optional)**
 
     ```bash
     bun run db:seed
     ```
 
-9. **Start the development server**
+8. **Start the development server**
 
     ```bash
     bun run dev
@@ -104,9 +100,9 @@ catalyst-agent/
     - Start all services in Turbo TUI (Caddy, frontend, agent)
     - Show organized logs for each service
 
-10. **Open your browser**
+9. **Open your browser**
 
-    Navigate to [https://catalyst.local](https://catalyst.local)
+    Navigate to [https://catalyst.localhost](https://catalyst.localhost)
 
 ## Available Scripts
 
@@ -158,7 +154,7 @@ MYSQL_PASSWORD=catalyst_password
 MYSQL_PORT=3306
 
 # Authentication
-NEXT_PUBLIC_APP_URL="https://catalyst.local"
+NEXT_PUBLIC_APP_URL="https://catalyst.localhost"
 BETTER_AUTH_SECRET="your-secret-key-here"
 ```
 
@@ -172,7 +168,7 @@ openssl rand -base64 32
 
 - ✅ Authentication with Better Auth (email/password)
 - ✅ Cross-app session sharing via Caddy reverse proxy
-- ✅ Path-based routing with cookie sharing (`catalyst.local` domain)
+- ✅ Path-based routing with cookie sharing (`catalyst.localhost` domain)
 - ✅ Local HTTPS development with self-signed certificates
 - ✅ Protected routes with middleware
 - ✅ Dark mode support
@@ -189,15 +185,15 @@ This project uses **Caddy** as a reverse proxy to enable cookie sharing between 
 **URL Structure:**
 
 ```
-https://catalyst.local           → Frontend (localhost:3000)
-https://catalyst.local/agent     → Agent App (localhost:3001)
-https://catalyst.local/api/auth  → Better Auth API (via frontend)
+https://catalyst.localhost           → Frontend (localhost:3000)
+https://catalyst.localhost/agent     → Agent App (localhost:3001)
+https://catalyst.localhost/api/auth  → Better Auth API (via frontend)
 ```
 
 **How It Works:**
 
-1. **Single Domain**: All apps accessed via `catalyst.local` domain
-2. **Cookie Sharing**: Better Auth cookies set on `catalyst.local` with path `/`
+1. **Single Domain**: All apps accessed via `catalyst.localhost` domain
+2. **Cookie Sharing**: Better Auth cookies set on `catalyst.localhost` with path `/`
 3. **Path Routing**: Caddy routes `/agent*` to agent app, everything else to frontend
 4. **HTTPS**: Caddy provides local HTTPS with self-signed certificates
 5. **Result**: Login on frontend → automatically authenticated on agent app
@@ -207,14 +203,14 @@ https://catalyst.local/api/auth  → Better Auth API (via frontend)
 The agent app uses `basePath: "/agent"` in `next.config.ts`:
 
 - **Why**: Tells Next.js to prefix all asset URLs with `/agent`
-- **Result**: Assets load from `https://catalyst.local/agent/_next/...` ✓
+- **Result**: Assets load from `https://catalyst.localhost/agent/_next/...` ✓
 - **File Structure**: Pages go in `apps/agent/src/app/`, NOT `apps/agent/src/app/agent/`
-- **Example**: `app/page.tsx` serves at `https://catalyst.local/agent`
+- **Example**: `app/page.tsx` serves at `https://catalyst.localhost/agent`
 
 ### Authentication Flow
 
 1. Frontend hosts Better Auth API at `/api/auth/*`
-2. Both apps use same `NEXT_PUBLIC_APP_URL="https://catalyst.local"`
+2. Both apps use same `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"`
 3. Agent auth client fetches sessions from frontend's auth API
 4. Cookies shared automatically via same domain
 5. Session state synchronized across all apps
@@ -230,7 +226,7 @@ The agent app uses `basePath: "/agent"` in `next.config.ts`:
 **Agent App Routes**:
 
 - Add pages in `apps/agent/src/app/` (automatically served at `/agent`)
-- Example: `apps/agent/src/app/dashboard/page.tsx` → `https://catalyst.local/agent/dashboard`
+- Example: `apps/agent/src/app/dashboard/page.tsx` → `https://catalyst.localhost/agent/dashboard`
 - Use `useSession()` from `@/lib/auth-client` for authentication
 
 **Shared Components**: Add to `packages/ui/src/` and export via `index.ts`
@@ -270,27 +266,22 @@ lsof -i :443  # Check if port 443 is available
 caddy validate --config ./Caddyfile  # Verify config
 ```
 
-**DNS not resolving:**
-
-```bash
-cat /etc/hosts | grep catalyst  # Verify entry exists
-sudo dscacheutil -flushcache    # Clear DNS cache (macOS)
-```
+Note: `.localhost` domains automatically resolve to 127.0.0.1, so no DNS configuration is needed.
 
 ### Authentication Issues
 
 **Agent app shows "Please sign in" after logging in on frontend:**
 
-- Verify `NEXT_PUBLIC_APP_URL="https://catalyst.local"` in `.env`
-- Check cookies in DevTools > Application > Cookies (should see cookies on `catalyst.local`)
-- Ensure accessing via `https://catalyst.local`, not `localhost`
+- Verify `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"` in `.env`
+- Check cookies in DevTools > Application > Cookies (should see cookies on `catalyst.localhost`)
+- Ensure accessing via `https://catalyst.localhost`, not `localhost`
 - Restart dev server after changing `.env`
 
 **Assets (CSS/JS) not loading on agent app:**
 
 - Verify `basePath: "/agent"` is set in `apps/agent/next.config.ts`
 - Check page files are in `apps/agent/src/app/`, NOT `apps/agent/src/app/agent/`
-- Assets should load from `https://catalyst.local/agent/_next/...`
+- Assets should load from `https://catalyst.localhost/agent/_next/...`
 
 ### Development Mode
 

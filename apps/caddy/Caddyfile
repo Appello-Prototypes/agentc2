@@ -4,7 +4,7 @@
     admin localhost:2019
 }
 
-https://catalyst.local {
+https://catalyst.localhost {
     # Use internal self-signed certificate
     tls internal
 

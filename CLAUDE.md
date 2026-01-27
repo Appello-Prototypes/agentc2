@@ -114,10 +114,7 @@ This project uses **Caddy** as a reverse proxy for local development to enable c
     # Requires sudo password
     ```
 
-3. **Add to `/etc/hosts`**:
-    ```bash
-    echo "127.0.0.1 catalyst.local" | sudo tee -a /etc/hosts
-    ```
+**Note**: `.localhost` domains automatically resolve to 127.0.0.1, so no `/etc/hosts` modification is needed.
 
 ### Starting Development
 
@@ -127,11 +124,11 @@ This project uses **Caddy** as a reverse proxy for local development to enable c
 bun run dev
 ```
 
-Access at: **https://catalyst.local**
+Access at: **https://catalyst.localhost**
 
 The `bun run dev` command:
 
-1. Runs pre-flight checks (Caddy installation, /etc/hosts, CA certificate)
+1. Runs pre-flight checks (Caddy installation, CA certificate)
 2. Starts Caddy reverse proxy via Turbo (appears in TUI as separate service)
 3. Starts all Next.js apps via Turbo
 
@@ -166,19 +163,19 @@ bun run caddy:reload  # Reload Caddyfile configuration
 
 ### URL Structure
 
-- **Frontend**: `https://catalyst.local` → `localhost:3000`
-- **Agent**: `https://catalyst.local/agent` → `localhost:3001/agent`
-- **Auth API**: `https://catalyst.local/api/auth` → `localhost:3000/api/auth`
+- **Frontend**: `https://catalyst.localhost` → `localhost:3000`
+- **Agent**: `https://catalyst.localhost/agent` → `localhost:3001/agent`
+- **Auth API**: `https://catalyst.localhost/api/auth` → `localhost:3000/api/auth`
 
-All apps share cookies automatically via same domain (`catalyst.local`).
+All apps share cookies automatically via same domain (`catalyst.localhost`).
 
 ### How Cookie Sharing Works
 
-1. **Single Domain**: Both apps are accessed via `catalyst.local`
+1. **Single Domain**: Both apps are accessed via `catalyst.localhost`
 2. **Better Auth Configuration**:
-    - Server config in `apps/frontend/src/lib/auth.ts` sets `baseURL: "https://catalyst.local"`
-    - Client config in both apps uses `NEXT_PUBLIC_APP_URL="https://catalyst.local"`
-    - Cookies are set with domain=`catalyst.local` and path=`/`
+    - Server config in `apps/frontend/src/lib/auth.ts` sets `baseURL: "https://catalyst.localhost"`
+    - Client config in both apps uses `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"`
+    - Cookies are set with domain=`catalyst.localhost` and path=`/`
 3. **Path-Based Routing**: Caddy routes requests to appropriate apps while preserving cookies
 4. **Result**: Login on frontend → automatically authenticated on agent
 
@@ -196,8 +193,8 @@ const nextConfig: NextConfig = {
 
 **Why `basePath` is Required:**
 
-- Without it, assets load from `https://catalyst.local/_next/...` (404)
-- With it, assets load from `https://catalyst.local/agent/_next/...` (✓)
+- Without it, assets load from `https://catalyst.localhost/_next/...` (404)
+- With it, assets load from `https://catalyst.localhost/agent/_next/...` (✓)
 - Next.js automatically prefixes all URLs (links, images, scripts) with `/agent`
 
 **File Structure:**
@@ -222,16 +219,13 @@ apps/agent/src/app/
 - Check if port 443 is available: `lsof -i :443`
 - Verify Caddyfile syntax: `caddy validate --config ./Caddyfile`
 
-**DNS not resolving:**
-
-- Verify `/etc/hosts` entry: `cat /etc/hosts | grep catalyst`
-- Clear DNS cache (macOS): `sudo dscacheutil -flushcache`
+**Note**: `.localhost` domains automatically resolve to 127.0.0.1, so no DNS configuration is needed.
 
 **Cookies not working:**
 
-- Ensure accessing via `https://catalyst.local`, not `localhost`
+- Ensure accessing via `https://catalyst.localhost`, not `localhost`
 - Check browser DevTools > Application > Cookies
-- Verify `.env` has `NEXT_PUBLIC_APP_URL="https://catalyst.local"`
+- Verify `.env` has `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"`
 
 ## Architecture
 
@@ -253,10 +247,10 @@ The app uses **Better Auth** (v1.4+) with email/password authentication and cros
 **Cross-App Authentication:**
 
 - Frontend hosts the auth API at `/api/auth/*`
-- Agent app uses auth client pointing to `https://catalyst.local/api/auth`
+- Agent app uses auth client pointing to `https://catalyst.localhost/api/auth`
 - Both apps share the same `NEXT_PUBLIC_APP_URL` environment variable
 - Both apps import from `@repo/auth` package
-- Cookies are set on `catalyst.local` domain with path `/`, accessible to both apps
+- Cookies are set on `catalyst.localhost` domain with path `/`, accessible to both apps
 - Login on frontend → session automatically available on agent app
 
 ### Next.js App Router Structure
@@ -343,7 +337,7 @@ Required environment variables (see `.env.example`):
 - `MYSQL_PASSWORD`: Application database password
 - `MYSQL_PORT`: MySQL port (default: 3306)
 - `BETTER_AUTH_SECRET`: Auth secret key (generate with Better Auth CLI)
-- `NEXT_PUBLIC_APP_URL`: Application URL for callbacks (use `https://catalyst.local` with Caddy, `http://localhost:3000` for dev:local)
+- `NEXT_PUBLIC_APP_URL`: Application URL for callbacks (use `https://catalyst.localhost` with Caddy, `http://localhost:3000` for dev:local)
 
 **Important Notes:**
 
@@ -430,7 +424,7 @@ When adding routes to the agent app:
 2. **File structure**: Pages go in `apps/agent/src/app/`, NOT in `apps/agent/src/app/agent/`
 3. **Example**:
     - File: `apps/agent/src/app/dashboard/page.tsx`
-    - URL: `https://catalyst.local/agent/dashboard`
+    - URL: `https://catalyst.localhost/agent/dashboard`
 4. **Links**: Use Next.js `<Link href="/dashboard">` (basePath is automatic)
 5. **Assets**: All `_next` assets automatically served from `/agent/_next/`
 6. **Auth**: Import from `@repo/auth` - sessions shared automatically

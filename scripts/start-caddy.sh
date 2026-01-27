@@ -57,7 +57,7 @@ if [ -n "$CADDY_PID" ]; then
     echo "$CADDY_PID" > "$CADDY_PID_FILE"
     echo "Caddy started successfully (PID: $CADDY_PID)"
     echo ""
-    echo "Access your app at: https://catalyst.local"
+    echo "Access your app at: https://catalyst.localhost"
     echo ""
 else
     echo "Warning: Could not determine Caddy PID"

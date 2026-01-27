@@ -10,8 +10,11 @@ const nextConfig: NextConfig = {
         DATABASE_URL: process.env.DATABASE_URL,
         NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
     },
+    devIndicators: {
+        position: "bottom-right"
+    },
     // BasePath is required so Next.js prefixes all asset URLs with /agent
-    // This ensures assets load from https://catalyst.local/agent/_next/... instead of https://catalyst.local/_next/...
+    // This ensures assets load from https://catalyst.localhost/agent/_next/... instead of https://catalyst.localhost/_next/...
     basePath: "/agent"
 };
 
