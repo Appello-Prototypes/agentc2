@@ -5,14 +5,9 @@ import { useTheme } from "next-themes";
 import { Moon, Sun } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 
-import { buttonVariants } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger
-} from "@/components/ui";
-import { cn } from "@/lib/utils";
+import { buttonVariants } from "@repo/ui";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@repo/ui";
+import { cn } from "@repo/ui";
 
 export function ThemeToggle() {
     const { setTheme } = useTheme();

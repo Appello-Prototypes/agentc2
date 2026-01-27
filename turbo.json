@@ -1,12 +1,14 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": ["DATABASE_URL"],
+  "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
+      "dependsOn": ["^db:push"],
       "cache": false,
       "persistent": true
     },
@@ -33,6 +35,14 @@
     },
     "db:seed": {
       "cache": false
+    },
+    "storybook": {
+      "cache": false,
+      "persistent": true
+    },
+    "build-storybook": {
+      "dependsOn": ["^build"],
+      "outputs": ["storybook-static/**"]
     }
   }
 }

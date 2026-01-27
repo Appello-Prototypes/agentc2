@@ -1,0 +1,30 @@
+{
+    # Enable local CA for self-signed certificates
+    local_certs
+    admin localhost:2019
+}
+
+https://catalyst.localhost {
+    # Use internal self-signed certificate
+    tls internal
+
+    # Logging for development (ERROR = only show errors, no request logs)
+    log {
+        output stdout
+        format console
+        level ERROR
+    }
+
+    # Agent app routes (must come before frontend catch-all)
+    # Matches /agent and /agent/* requests including assets like /agent/_next/*
+    # Routes to localhost:3001 which has basePath="/agent" configured
+    @agent path /agent /agent/*
+    handle @agent {
+        reverse_proxy localhost:3001
+    }
+
+    # Frontend app (catch-all for everything else)
+    handle {
+        reverse_proxy localhost:3000
+    }
+}

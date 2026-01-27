@@ -1,0 +1,20 @@
+{
+  "name": "@repo/next-config",
+  "version": "0.0.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "lint": "eslint . --max-warnings 0",
+    "type-check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9",
+    "@repo/typescript-config": "workspace:*",
+    "eslint": "^9",
+    "next": "16.1.0",
+    "typescript": "^5",
+    "typescript-eslint": "^8"
+  }
+}

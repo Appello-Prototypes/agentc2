@@ -8,7 +8,12 @@
   ],
   "packageManager": "bun@1.3.4",
   "scripts": {
+    "predev": "./scripts/check-caddy-setup.sh",
     "dev": "turbo dev",
+    "dev:local": "turbo dev --filter=!caddy",
+    "caddy:start": "./scripts/start-caddy.sh",
+    "caddy:stop": "./scripts/stop-caddy.sh",
+    "caddy:reload": "caddy reload --config ./apps/caddy/Caddyfile --adapter caddyfile",
     "build": "turbo build",
     "lint": "turbo lint",
     "type-check": "turbo type-check",
@@ -18,7 +23,10 @@
     "db:migrate": "turbo db:migrate",
     "db:studio": "turbo db:studio",
     "db:seed": "turbo db:seed",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "add-shadcn": "./scripts/add-shadcn.sh",
+    "storybook": "turbo storybook",
+    "build-storybook": "turbo build-storybook"
   },
   "devDependencies": {
     "prettier": "^3.8.1",

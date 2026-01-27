@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "@/styles/globals.css";
-import { SessionProvider } from "@/components/providers/session-provider";
-import { ThemeProvider } from "@/components/providers/theme-provider";
+import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -29,14 +28,7 @@ export default function RootLayout({
     return (
         <html lang="en" className={dmSans.variable} suppressHydrationWarning>
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-                <ThemeProvider
-                    attribute="class"
-                    defaultTheme="system"
-                    enableSystem
-                    disableTransitionOnChange
-                >
-                    <SessionProvider>{children}</SessionProvider>
-                </ThemeProvider>
+                <AppProvidersWrapper>{children}</AppProvidersWrapper>
             </body>
         </html>
     );

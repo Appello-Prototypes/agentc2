@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signIn } from "@/lib/auth-client";
-import { Button, Input, Field, FieldError, FieldLabel } from "@/components/ui";
+import { signIn } from "@repo/auth";
+import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
 import Link from "next/link";
 
 export function SignInForm() {
@@ -77,7 +77,7 @@ export function SignInForm() {
             </Button>
 
             <p className="text-muted-foreground text-center text-sm">
-                Don't have an account?{" "}
+                Don&apos;t have an account?{" "}
                 <Link href="/signup" className="text-primary hover:underline">
                     Sign up
                 </Link>
