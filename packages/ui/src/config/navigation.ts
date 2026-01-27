@@ -1,18 +1,11 @@
-import type { HugeiconsProps } from "@hugeicons/react";
-import {
-    HomeIcon,
-    DashboardSpeed01Icon,
-    ShoppingCart01Icon,
-    FolderOpenIcon,
-    AiNetworkIcon
-} from "@hugeicons/core-free-icons";
+import { icons, type IconComponent } from "../icons";
 
 export const NavigationAppValues = ["frontend", "agent"] as const;
 export type NavigationApp = (typeof NavigationAppValues)[number];
 
 export type NavigationItem = {
     label: string;
-    icon: HugeiconsProps["icon"];
+    icon: IconComponent;
     href: string;
     app: NavigationApp; // Which app this item belongs to
     keywords?: string[]; // For command palette search
@@ -31,7 +24,7 @@ export const navigationItems: NavigationItem[] = [
     // Frontend navigation
     {
         label: "Dashboard",
-        icon: DashboardSpeed01Icon,
+        icon: icons.dashboard,
         href: "/dashboard",
         app: "frontend",
         keywords: ["home", "overview", "main"],
@@ -50,7 +43,7 @@ export const navigationItems: NavigationItem[] = [
     },
     {
         label: "Examples",
-        icon: FolderOpenIcon,
+        icon: icons["folder-open"],
         href: "/examples",
         app: "frontend",
         keywords: ["demos", "samples", "examples"]
@@ -58,7 +51,7 @@ export const navigationItems: NavigationItem[] = [
     // Agent navigation
     {
         label: "Agent",
-        icon: HomeIcon,
+        icon: icons.home,
         href: "/agent",
         app: "agent",
         keywords: ["agent", "ai", "assistant"]

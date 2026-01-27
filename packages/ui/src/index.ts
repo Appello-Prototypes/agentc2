@@ -7,6 +7,10 @@ export { cn } from "./lib/utils";
 // Export hooks
 export { useIsMobile } from "./hooks/use-mobile";
 
+// Export icons
+export { Icon, icons, HugeiconsIcon } from "./icons";
+export type { IconName, IconComponent, IconProps, HugeiconsProps } from "./icons";
+
 // Export configuration
 export {
     navigationItems,

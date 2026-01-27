@@ -10,8 +10,7 @@ import {
 import { Button } from "./button";
 import { UserMenu } from "./user-menu";
 import { navigationItems } from "../config/navigation";
-import { ChevronDown, Search01Icon, MessageMultiple01Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import { icons, HugeiconsIcon } from "../icons";
 
 type Session = {
     user: {
@@ -51,7 +50,7 @@ export function AppTopBar({
                     <DropdownMenu>
                         <DropdownMenuTrigger className="hover:bg-accent data-popup-open:bg-accent flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors outline-none">
                             <span className="text-base font-semibold">{title}</span>
-                            <HugeiconsIcon icon={ChevronDown} className="size-4" />
+                            <HugeiconsIcon icon={icons["chevron-down"]!} className="size-4" />
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="start" className="w-56">
                             <div className="px-2 py-1.5 text-sm font-semibold">Navigation</div>
@@ -60,7 +59,7 @@ export function AppTopBar({
                                 item.children ? (
                                     <div key={item.label}>
                                         <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs font-semibold">
-                                            <HugeiconsIcon icon={item.icon} className="size-4" />
+                                            <HugeiconsIcon icon={item.icon!} className="size-4" />
                                             {item.label}
                                         </div>
                                         {item.children.map((child) => (
@@ -78,7 +77,7 @@ export function AppTopBar({
                                         key={item.href}
                                         onClick={() => (window.location.href = item.href)}
                                     >
-                                        <HugeiconsIcon icon={item.icon} className="size-4" />
+                                        <HugeiconsIcon icon={item.icon!} className="size-4" />
                                         {item.label}
                                     </DropdownMenuItem>
                                 )
@@ -111,11 +110,11 @@ export function AppTopBar({
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-2">
                     <Button variant="ghost" size="icon" className="size-9">
-                        <HugeiconsIcon icon={Search01Icon} className="size-5" />
+                        <HugeiconsIcon icon={icons.search!} className="size-5" />
                         <span className="sr-only">Search</span>
                     </Button>
                     <Button variant="ghost" size="icon" className="size-9">
-                        <HugeiconsIcon icon={MessageMultiple01Icon} className="size-5" />
+                        <HugeiconsIcon icon={icons.messages!} className="size-5" />
                         <span className="sr-only">Messages</span>
                     </Button>
 

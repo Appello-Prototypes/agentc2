@@ -105,12 +105,12 @@ const SidebarItemNode = ({
             <SidebarMenuButton>
                 {isExternalApp ? (
                     <a href={item.href} className="flex items-center gap-2">
-                        {hasIcon && <HugeiconsIcon icon={item.icon} strokeWidth={2} />}
+                        {hasIcon && <HugeiconsIcon icon={item.icon!} strokeWidth={2} />}
                         {item.label}
                     </a>
                 ) : (
                     <Link href={item.href} className="flex items-center gap-2">
-                        {hasIcon && <HugeiconsIcon icon={item.icon} strokeWidth={2} />}
+                        {hasIcon && <HugeiconsIcon icon={item.icon!} strokeWidth={2} />}
                         {item.label}
                     </Link>
                 )}

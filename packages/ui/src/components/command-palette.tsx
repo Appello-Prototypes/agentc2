@@ -10,9 +10,7 @@ import {
     CommandSeparator
 } from "./command";
 import { useCommand } from "./providers/command-provider";
-import { HugeiconsIcon } from "@hugeicons/react";
-import type { HugeiconsProps } from "@hugeicons/react";
-import { DashboardSpeed01Icon, AiNetworkIcon } from "@hugeicons/core-free-icons";
+import { icons, HugeiconsIcon, type IconComponent } from "../icons";
 import { getAllNavigationItems, type NavigationItem } from "../config/navigation";
 import { userMenuItems, type UserMenuItem } from "../config/user-menu";
 import { useState } from "react";
@@ -25,7 +23,7 @@ import { signOut } from "@repo/auth";
  */
 export interface CommandPaletteCommand {
     label: string;
-    icon: HugeiconsProps["icon"];
+    icon: IconComponent;
     path?: string; // For internal Next.js navigation
     href?: string; // For external/cross-app navigation (full page reload)
     action?: () => void; // For custom actions
@@ -238,13 +236,13 @@ export function CommandPalette({
               commands: [
                   {
                       label: "Frontend Dashboard",
-                      icon: DashboardSpeed01Icon,
+                      icon: icons.dashboard!,
                       href: appNavigation.baseUrl,
                       keywords: ["main", "home", "dashboard", "switch"]
                   },
                   {
                       label: "Agent App",
-                      icon: AiNetworkIcon,
+                      icon: icons["ai-network"]!,
                       href: `${appNavigation.baseUrl}/agent`,
                       keywords: ["ai", "assistant", "bot", "switch"]
                   }

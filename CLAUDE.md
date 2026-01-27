@@ -697,20 +697,35 @@ Keep in app directory when:
 - It contains app-specific routing or state management
 - It's a composed component using multiple UI primitives for a specific feature
 
-### Using HugeIcons
+### Using Icons
 
-Uses [HugeIcons](https://hugeicons.com/) free collection (4,600+ icons) via `@hugeicons/react`.
+Icons are centralized in the `packages/ui` shared package through a **wrapper system** that makes it easy to swap icon libraries in the future.
 
 **CRITICAL - Import Pattern:**
 
 ```typescript
-// ✅ CORRECT - Individual imports
-import { HomeIcon, Settings02Icon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+// ✅ CORRECT - Import from wrapper
+import { Icon, icons } from "@repo/ui";
 
-// ❌ INCORRECT - Namespace imports cause runtime errors
-import * as Icons from "@hugeicons/core-free-icons";
+// Semantic usage (recommended for components)
+<Icon name="home" className="size-6" />
+
+// Reference usage (for config files)
+const config = { icon: icons.home };
+
+// Legacy HugeIcons direct import (for backward compatibility during migration)
+import { HugeiconsIcon } from "@repo/ui";
+<HugeiconsIcon icon={icons.search} className="size-5" />
+
+// ❌ INCORRECT - Don't import directly from @hugeicons
+import { HomeIcon } from "@hugeicons/core-free-icons";
 ```
+
+**Architecture:**
+
+- **Types**: `packages/ui/src/icons/types.ts` - Semantic icon names (`"home"`, `"dashboard"`, etc.)
+- **Mapping**: `packages/ui/src/icons/icon-map.ts` - Maps semantic names to library-specific components (ONLY file importing from icon library)
+- **Public API**: `packages/ui/src/icons/index.tsx` - Exports `Icon` component and `icons` object
 
 **Sizing:** Use Tailwind `size-*` utilities (`size-4`, `size-6`, `size-8`, `size-12`)
 
@@ -719,10 +734,26 @@ import * as Icons from "@hugeicons/core-free-icons";
 **Finding Icons:**
 
 - Browse: `bun run storybook` → "Foundation/Icons"
-- Common: `HomeIcon`, `DashboardSpeed01Icon`, `Settings02Icon`, `UserIcon`, `Logout03Icon`
-- Note: Icons use numbered variants (`Settings02Icon`, `Message01Icon`)
+- Semantic names: `icons.home`, `icons.dashboard`, `icons.settings`, `icons.user`, `icons.logout`
+- Config usage: Pass `icons.name` reference (not JSX): `icon: icons.home`
 
-**In Navigation Config:** Pass icon reference directly (`icon: HomeIcon`), NOT JSX
+**Adding New Icons:**
+
+When adding a new icon to the library:
+
+1. Add the icon import to `packages/ui/src/icons/icon-map.ts`
+2. Add the semantic name to the `IconName` type in `packages/ui/src/icons/types.ts`
+3. Map the icon in the `iconMap` object in `packages/ui/src/icons/icon-map.ts`
+4. **IMPORTANT:** Update `packages/ui/src/components/icons.stories.tsx` to showcase the new icon in the appropriate category
+
+**Swapping Icon Libraries:**
+
+When changing icon libraries (e.g., HugeIcons → Lucide):
+
+1. Update `packages/ui/src/icons/icon-map.ts` - Change imports and mappings
+2. Update `packages/ui/src/icons/index.tsx` - Replace wrapper component
+3. Update `packages/ui/package.json` - Swap dependencies
+4. All consuming code continues to work unchanged
 
 ### Troubleshooting
 

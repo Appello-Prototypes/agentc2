@@ -1,24 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-    // Core icons verified to exist
-    HomeIcon,
-    DashboardSpeed01Icon,
-    Settings02Icon,
-    FolderOpenIcon,
-    ShoppingCart01Icon,
-    AiNetworkIcon,
-    UserIcon,
-    FileIcon,
-    FolderIcon,
-    CalendarIcon,
-    ClockIcon,
-    LockIcon,
-    StarIcon,
-    Logout03Icon,
-    MessageMultiple01Icon,
-    ChevronDown
-} from "@hugeicons/core-free-icons";
+import { Icon, icons, HugeiconsIcon } from "../icons";
 
 // Icon size constant - change this to adjust all icon sizes
 const ICON_SIZE = "size-12";
@@ -45,16 +26,16 @@ const IconItem = ({ icon, name }: { icon: any; name: string }) => (
 // Helper component for icon sections
 const IconSection = ({
     title,
-    icons
+    iconList
 }: {
     title: string;
-    icons: Array<{ icon: any; name: string }>;
+    iconList: Array<{ key: string; name: string }>;
 }) => (
     <div className="space-y-4">
         <h3 className="text-foreground text-lg font-semibold">{title}</h3>
         <div className="grid grid-cols-4 gap-4 sm:grid-cols-6 md:grid-cols-8 lg:grid-cols-10">
-            {icons.map(({ icon, name }) => (
-                <IconItem key={name} icon={icon} name={name} />
+            {iconList.map(({ key, name }) => (
+                <IconItem key={key} icon={icons[key as keyof typeof icons]} name={name} />
             ))}
         </div>
     </div>
@@ -64,101 +45,155 @@ export const CommonIcons: Story = {
     render: () => (
         <div className="space-y-8">
             <div>
-                <h1 className="text-foreground mb-2 text-2xl font-bold">
-                    HugeIcons Free Collection
-                </h1>
+                <h1 className="text-foreground mb-2 text-2xl font-bold">Icon System</h1>
                 <p className="text-muted-foreground text-sm">
-                    Commonly used icons from HugeIcons. All icons are {ICON_SIZE} in size. This is a
-                    curated subset - the free collection includes 4,600+ icons.
+                    Centralized icon wrapper that makes it easy to swap icon libraries. All icons
+                    are {ICON_SIZE} in size. Use semantic names for maintainability.
                 </p>
             </div>
 
             <IconSection
                 title="Navigation & Core UI"
-                icons={[
-                    { icon: HomeIcon, name: "Home" },
-                    { icon: DashboardSpeed01Icon, name: "Dashboard" },
-                    { icon: Settings02Icon, name: "Settings" },
-                    { icon: ChevronDown, name: "Chevron" }
+                iconList={[
+                    { key: "home", name: "home" },
+                    { key: "dashboard", name: "dashboard" },
+                    { key: "settings", name: "settings" },
+                    { key: "chevron-down", name: "chevron-down" },
+                    { key: "search", name: "search" },
+                    { key: "sidebar-left", name: "sidebar-left" },
+                    { key: "more-horizontal", name: "more-horizontal" }
                 ]}
             />
 
             <IconSection
                 title="Files & Organization"
-                icons={[
-                    { icon: FileIcon, name: "File" },
-                    { icon: FolderIcon, name: "Folder" },
-                    { icon: FolderOpenIcon, name: "Folder Open" }
+                iconList={[
+                    { key: "file", name: "file" },
+                    { key: "folder", name: "folder" },
+                    { key: "folder-open", name: "folder-open" }
                 ]}
             />
 
-            <IconSection
-                title="Communication"
-                icons={[{ icon: MessageMultiple01Icon, name: "Messages" }]}
-            />
+            <IconSection title="Communication" iconList={[{ key: "messages", name: "messages" }]} />
 
             <IconSection
                 title="User & Account"
-                icons={[
-                    { icon: UserIcon, name: "User" },
-                    { icon: Logout03Icon, name: "Logout" }
+                iconList={[
+                    { key: "user", name: "user" },
+                    { key: "logout", name: "logout" }
                 ]}
             />
 
             <IconSection
                 title="Time & Calendar"
-                icons={[
-                    { icon: CalendarIcon, name: "Calendar" },
-                    { icon: ClockIcon, name: "Clock" }
+                iconList={[
+                    { key: "calendar", name: "calendar" },
+                    { key: "clock", name: "clock" }
                 ]}
             />
 
             <IconSection
                 title="Commerce & Shopping"
-                icons={[{ icon: ShoppingCart01Icon, name: "Shopping Cart" }]}
+                iconList={[{ key: "shopping-cart", name: "shopping-cart" }]}
             />
 
             <IconSection
                 title="Security & Status"
-                icons={[
-                    { icon: LockIcon, name: "Lock" },
-                    { icon: StarIcon, name: "Star" }
+                iconList={[
+                    { key: "lock", name: "lock" },
+                    { key: "star", name: "star" }
                 ]}
             />
 
             <IconSection
                 title="AI & Technology"
-                icons={[{ icon: AiNetworkIcon, name: "AI Network" }]}
+                iconList={[{ key: "ai-network", name: "ai-network" }]}
+            />
+
+            <IconSection
+                title="Arrows"
+                iconList={[
+                    { key: "arrow-left", name: "arrow-left" },
+                    { key: "arrow-right", name: "arrow-right" }
+                ]}
+            />
+
+            <IconSection
+                title="Alerts & Feedback"
+                iconList={[
+                    { key: "alert-triangle", name: "alert-triangle" },
+                    { key: "alert-diamond", name: "alert-diamond" },
+                    { key: "info-circle", name: "info-circle" },
+                    { key: "checkmark-circle", name: "checkmark-circle" },
+                    { key: "tick", name: "tick" },
+                    { key: "cancel", name: "cancel" },
+                    { key: "delete", name: "delete" },
+                    { key: "refresh", name: "refresh" }
+                ]}
             />
 
             <div className="bg-muted/30 rounded-lg p-6">
+                <h3 className="text-foreground mb-2 text-sm font-semibold">Usage Patterns</h3>
+                <div className="space-y-4">
+                    <div>
+                        <p className="text-muted-foreground mb-2 text-xs font-semibold">
+                            Semantic Usage (Recommended for Components)
+                        </p>
+                        <code className="bg-background text-foreground block rounded p-2 text-xs">
+                            import &#123; Icon &#125; from &quot;@repo/ui&quot;;
+                            <br />
+                            <br />
+                            &lt;Icon name=&quot;home&quot; className=&quot;{ICON_SIZE}&quot; /&gt;
+                            <br />
+                            &lt;Icon name=&quot;settings&quot; className=&quot;size-6&quot; /&gt;
+                        </code>
+                    </div>
+                    <div>
+                        <p className="text-muted-foreground mb-2 text-xs font-semibold">
+                            Reference Usage (For Config Files)
+                        </p>
+                        <code className="bg-background text-foreground block rounded p-2 text-xs">
+                            import &#123; icons &#125; from &quot;@repo/ui&quot;;
+                            <br />
+                            <br />
+                            const navigationConfig = &#123;
+                            <br />
+                            &nbsp;&nbsp;icon: icons.home, // Component reference, not JSX
+                            <br />
+                            &nbsp;&nbsp;label: &quot;Home&quot;
+                            <br />
+                            &#125;;
+                        </code>
+                    </div>
+                    <div>
+                        <p className="text-muted-foreground mb-2 text-xs font-semibold">
+                            Legacy HugeIcons Usage (Backward Compatibility)
+                        </p>
+                        <code className="bg-background text-foreground block rounded p-2 text-xs">
+                            import &#123; icons, HugeiconsIcon &#125; from &quot;@repo/ui&quot;;
+                            <br />
+                            <br />
+                            &lt;HugeiconsIcon icon=&#123;icons.search&#125;
+                            className=&quot;size-5&quot; /&gt;
+                        </code>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-muted/30 rounded-lg p-6">
                 <h3 className="text-foreground mb-2 text-sm font-semibold">
-                    About HugeIcons Free Collection
+                    Swapping Icon Libraries
                 </h3>
                 <p className="text-muted-foreground text-xs leading-relaxed">
-                    The HugeIcons free collection contains over 4,600 icons. This showcase displays
-                    a curated subset of commonly used icons in this project. To use additional
-                    icons, import them from{" "}
-                    <code className="bg-muted text-foreground rounded px-1 py-0.5">
-                        @hugeicons/core-free-icons
-                    </code>{" "}
-                    and render with{" "}
-                    <code className="bg-muted text-foreground rounded px-1 py-0.5">
-                        HugeiconsIcon
-                    </code>
-                    .
+                    The icon system is designed to make library swaps easy. To change from HugeIcons
+                    to another library (e.g., Lucide):
                 </p>
-                <div className="mt-3">
-                    <code className="bg-background text-foreground text-muted-foreground block rounded p-2 text-xs">
-                        import &#123; IconName &#125; from &quot;@hugeicons/core-free-icons&quot;;
-                        <br />
-                        import &#123; HugeiconsIcon &#125; from &quot;@hugeicons/react&quot;;
-                        <br />
-                        <br />
-                        &lt;HugeiconsIcon icon=&#123;IconName&#125; className=&quot;
-                        {ICON_SIZE}&quot; /&gt;
-                    </code>
-                </div>
+                <ol className="text-muted-foreground mt-2 list-inside list-decimal space-y-1 text-xs">
+                    <li>Update imports in packages/ui/src/icons/icon-map.ts</li>
+                    <li>Replace wrapper component in packages/ui/src/icons/index.tsx</li>
+                    <li>Update dependencies in packages/ui/package.json</li>
+                    <li>All consuming code continues to work unchanged</li>
+                </ol>
             </div>
         </div>
     )
@@ -189,9 +224,9 @@ export const IconSizes: Story = {
                         <div className="w-48">
                             <span className="text-muted-foreground font-mono text-sm">{label}</span>
                         </div>
-                        <HugeiconsIcon icon={Settings02Icon} className={size} />
-                        <HugeiconsIcon icon={HomeIcon} className={size} />
-                        <HugeiconsIcon icon={UserIcon} className={size} />
+                        <Icon name="settings" className={size} />
+                        <Icon name="home" className={size} />
+                        <Icon name="user" className={size} />
                     </div>
                 ))}
             </div>
@@ -211,22 +246,19 @@ export const IconColors: Story = {
 
             <div className="grid grid-cols-2 gap-6 md:grid-cols-3 lg:grid-cols-4">
                 <div className="flex flex-col items-center gap-2">
-                    <HugeiconsIcon icon={HomeIcon} className={`${ICON_SIZE} text-foreground`} />
+                    <Icon name="home" className={`${ICON_SIZE} text-foreground`} />
                     <span className="text-muted-foreground text-xs">Foreground</span>
                 </div>
                 <div className="flex flex-col items-center gap-2">
-                    <HugeiconsIcon
-                        icon={HomeIcon}
-                        className={`${ICON_SIZE} text-muted-foreground`}
-                    />
+                    <Icon name="home" className={`${ICON_SIZE} text-muted-foreground`} />
                     <span className="text-muted-foreground text-xs">Muted</span>
                 </div>
                 <div className="flex flex-col items-center gap-2">
-                    <HugeiconsIcon icon={HomeIcon} className={`${ICON_SIZE} text-primary`} />
+                    <Icon name="home" className={`${ICON_SIZE} text-primary`} />
                     <span className="text-muted-foreground text-xs">Primary</span>
                 </div>
                 <div className="flex flex-col items-center gap-2">
-                    <HugeiconsIcon icon={HomeIcon} className={`${ICON_SIZE} text-destructive`} />
+                    <Icon name="home" className={`${ICON_SIZE} text-destructive`} />
                     <span className="text-muted-foreground text-xs">Destructive</span>
                 </div>
             </div>

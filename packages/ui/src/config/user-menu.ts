@@ -1,11 +1,10 @@
-import type { HugeiconsProps } from "@hugeicons/react";
-import { Settings02Icon, Logout03Icon } from "@hugeicons/core-free-icons";
+import { icons, type IconComponent } from "../icons";
 
 export type UserMenuItem = {
     label: string;
     action: "settings" | "signout";
     variant?: "default" | "destructive";
-    icon?: HugeiconsProps["icon"]; // Optional icon for command palette
+    icon?: IconComponent; // Optional icon for command palette
     keywords?: string[]; // Optional keywords for command palette search
 };
 
@@ -17,14 +16,14 @@ export const userMenuItems: UserMenuItem[] = [
     {
         label: "Settings",
         action: "settings",
-        icon: Settings02Icon,
+        icon: icons.settings,
         keywords: ["settings", "preferences", "config", "options"]
     },
     {
         label: "Sign out",
         action: "signout",
         variant: "destructive",
-        icon: Logout03Icon,
+        icon: icons.logout,
         keywords: ["logout", "signout", "exit", "leave"]
     }
 ];

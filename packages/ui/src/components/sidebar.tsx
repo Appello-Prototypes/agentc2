@@ -13,8 +13,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "./skeleton";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip";
 import { useIsMobile } from "../hooks/use-mobile";
-import { HugeiconsIcon } from "@hugeicons/react";
-import { SidebarLeftIcon } from "@hugeicons/core-free-icons";
+import { icons, HugeiconsIcon } from "../icons";
 
 const SIDEBAR_COOKIE_NAME = "sidebar_state";
 const SIDEBAR_COOKIE_MAX_AGE = 60 * 60 * 24 * 7;
@@ -255,7 +254,7 @@ function SidebarTrigger({ className, onClick, ...props }: React.ComponentProps<t
             }}
             {...props}
         >
-            <HugeiconsIcon icon={SidebarLeftIcon} strokeWidth={2} />
+            <HugeiconsIcon icon={icons["sidebar-left"]!} strokeWidth={2} />
             <span className="sr-only">Toggle Sidebar</span>
         </Button>
     );
