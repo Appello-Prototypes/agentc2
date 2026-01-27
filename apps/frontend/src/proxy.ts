@@ -14,14 +14,20 @@ async function proxy(request: NextRequest) {
         });
 
         if (!session) {
-            return NextResponse.redirect(new URL("/", request.url));
+            const redirectUrl = new URL("/", request.url);
+            const callbackUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+            redirectUrl.searchParams.set("callbackUrl", callbackUrl);
+            return NextResponse.redirect(redirectUrl);
         }
 
         return NextResponse.next();
     } catch (error) {
         // Log error and redirect to root on auth failure
         console.error("Authentication error in frontend proxy:", error);
-        return NextResponse.redirect(new URL("/", request.url));
+        const redirectUrl = new URL("/", request.url);
+        const callbackUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+        redirectUrl.searchParams.set("callbackUrl", callbackUrl);
+        return NextResponse.redirect(redirectUrl);
     }
 }
 
