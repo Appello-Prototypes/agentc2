@@ -8,5 +8,10 @@ export { cn } from "./lib/utils";
 export { useIsMobile } from "./hooks/use-mobile";
 
 // Export configuration
-export { navigationItems, type NavigationItem } from "./config/navigation";
+export {
+    navigationItems,
+    getNavigationItemsForApp,
+    getAllNavigationItems,
+    type NavigationItem
+} from "./config/navigation";
 export { userMenuItems, type UserMenuItem } from "./config/user-menu";

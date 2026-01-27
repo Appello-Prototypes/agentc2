@@ -229,6 +229,212 @@ apps/agent/src/app/
 
 ## Architecture
 
+### DRY Methodology for Multiple Apps
+
+This monorepo follows strict **Don't Repeat Yourself (DRY)** principles to maintain a single source of truth for shared functionality between the frontend and agent apps.
+
+#### Centralized Navigation Configuration
+
+**Location**: `packages/ui/src/config/navigation.ts`
+
+**Purpose**: Single source of truth for all navigation items across Sidebar, TopBar, and CommandPalette.
+
+**Structure**:
+
+```typescript
+export const navigationItems: NavigationItem[] = [
+    {
+        label: "Dashboard",
+        icon: DashboardSpeed01Icon,
+        href: "/dashboard",
+        app: "frontend", // Which app this item belongs to
+        keywords: ["home", "overview"], // For command palette search
+        children: [
+            {
+                label: "Overview",
+                href: "/dashboard",
+                keywords: ["home", "overview", "main"]
+            },
+            {
+                label: "Sales",
+                href: "/dashboard/sales",
+                keywords: ["sales", "revenue"]
+            }
+        ]
+    }
+    // ... more items
+];
+```
+
+**Key Properties**:
+
+- `app`: Specifies which app the item belongs to ("frontend" or "agent")
+- `keywords`: Array of search terms for command palette fuzzy search
+- `children`: Optional nested navigation items
+
+**Helper Functions**:
+
+- `getNavigationItemsForApp(app)`: Filter items for a specific app
+- `getAllNavigationItems()`: Get all items (for cross-app navigation)
+
+**Usage**:
+
+- **Sidebar**: Uses `navigationItems` directly to show all navigation
+- **CommandPalette**: Uses `getAllNavigationItems()` to build navigation groups with smart routing:
+    - Current app items use internal routing (`path`)
+    - Other app items use cross-app navigation (`href`)
+
+**Adding New Navigation**:
+
+```typescript
+// Add to packages/ui/src/config/navigation.ts
+{
+    label: "Settings",
+    icon: SettingsIcon,
+    href: "/settings",
+    app: "frontend",
+    keywords: ["config", "preferences", "options"]
+}
+```
+
+This single addition automatically updates Sidebar, CommandPalette, and any other components that consume the navigation config.
+
+#### Centralized User Menu Configuration
+
+**Location**: `packages/ui/src/config/user-menu.ts`
+
+**Purpose**: Single source of truth for user actions (Settings, Sign out, etc.) across UserMenu dropdown and CommandPalette.
+
+**Structure**:
+
+```typescript
+export const userMenuItems: UserMenuItem[] = [
+    {
+        label: "Settings",
+        action: "settings",
+        icon: Settings02Icon,
+        keywords: ["settings", "preferences", "config"]
+    },
+    {
+        label: "Sign out",
+        action: "signout",
+        variant: "destructive",
+        icon: Logout03Icon,
+        keywords: ["logout", "signout", "exit"]
+    }
+];
+```
+
+**Key Properties**:
+
+- `action`: Unique identifier for the action ("settings", "signout", etc.)
+- `icon`: Icon component for command palette
+- `keywords`: Array of search terms for command palette
+- `variant`: Visual variant ("default" or "destructive")
+
+**Usage**:
+
+- **UserMenu dropdown**: Renders items with click handlers
+- **CommandPalette**: Automatically includes user menu items with default behaviors:
+    - `onSignOut`: Calls Better Auth `signOut()` and redirects to home
+    - `onSettings`: Opens built-in settings dialog
+
+**Default Behaviors**: The CommandPalette component provides automatic implementations for common actions. Apps don't need to pass handlers unless they want to override defaults.
+
+**Adding New User Actions**:
+
+```typescript
+// 1. Add to packages/ui/src/config/user-menu.ts
+{
+    label: "Profile",
+    action: "profile",
+    icon: UserIcon,
+    keywords: ["user", "account", "profile"]
+}
+
+// 2. Update UserMenuItem type
+export type UserMenuItem = {
+    action: "settings" | "signout" | "profile"; // Add new action
+    // ... other properties
+};
+
+// 3. Optionally override default behavior in app layout
+const userActions: UserActions = {
+    onProfile: () => router.push("/profile")
+};
+<CommandPalette appNavigation={appNavigation} userActions={userActions} />
+```
+
+#### CommandPalette Component Architecture
+
+**Location**: `packages/ui/src/components/command-palette.tsx`
+
+The CommandPalette is the central hub for navigation and user actions, consuming both centralized configs.
+
+**Automatic Features**:
+
+1. **Navigation Groups**: Built from `packages/ui/src/config/navigation.ts`
+    - Automatically groups by app (Frontend, Agent)
+    - Smart routing: internal `path` for current app, `href` for cross-app
+    - Includes nested children as flattened commands
+
+2. **Quick Switch**: Optional cross-app switcher
+    - Filters out current app
+    - Provides fast switching between Frontend and Agent
+
+3. **User Menu**: Built from `packages/ui/src/config/user-menu.ts`
+    - Appears in "Account" group
+    - Default implementations provided (no boilerplate needed)
+    - Optional custom handlers via `userActions` prop
+
+**Minimal Setup**:
+
+```typescript
+// apps/frontend/src/app/(Authenticated)/layout.tsx
+const appNavigation: AppNavigationConfig = {
+    currentApp: "frontend",
+    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost"
+};
+
+<CommandPalette appNavigation={appNavigation} />
+```
+
+That's it! Navigation, user menu, and cross-app switching all work automatically.
+
+**Override Defaults** (only when needed):
+
+```typescript
+const userActions: UserActions = {
+    onSignOut: async () => {
+        await doCustomCleanup();
+        await signOut();
+        router.push("/goodbye");
+    }
+};
+
+<CommandPalette appNavigation={appNavigation} userActions={userActions} />
+```
+
+#### Best Practices for Multi-App Features
+
+When adding features that appear in both frontend and agent apps:
+
+1. **Check if it's navigation**: Add to `packages/ui/src/config/navigation.ts`
+2. **Check if it's a user action**: Add to `packages/ui/src/config/user-menu.ts`
+3. **Check if it's a UI component**: Add to `packages/ui/src/components/`
+4. **Check if it's shared logic**: Add to appropriate shared package (`@repo/auth`, `@repo/database`, etc.)
+5. **Check if it's app-specific**: Only then add to individual app directories
+
+**Never duplicate**:
+
+- Navigation items between apps
+- User menu items between apps
+- Auth logic (use `@repo/auth`)
+- Database queries (use `@repo/database`)
+- UI components (use `@repo/ui`)
+
+**Key Principle**: If the same code appears in more than one place, it should be in a shared package.
+
 ### Authentication Flow
 
 The app uses **Better Auth** (v1.4+) with email/password authentication and cross-app session sharing:
