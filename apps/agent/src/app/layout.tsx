@@ -1,4 +1,5 @@
 import { CommandPalette, type AppNavigationConfig } from "@repo/ui";
+import { getAppUrl } from "@repo/auth";
 
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
@@ -6,7 +7,7 @@ import { AgentHeader } from "@/components/AgentHeader";
 
 const appNavigation: AppNavigationConfig = {
     currentApp: "agent",
-    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost"
+    baseUrl: getAppUrl("https://catalyst.localhost")
 };
 
 /**

@@ -1,6 +1,9 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@repo/database";
+import { getAppUrl } from "./env";
+
+const appUrl = getAppUrl("http://localhost:3000");
 
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
@@ -19,9 +22,9 @@ export const auth = betterAuth({
         }
     },
     secret: process.env.BETTER_AUTH_SECRET!,
-    baseURL: process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+    baseURL: appUrl,
     trustedOrigins: [
-        process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000",
+        appUrl,
         // Keep localhost URLs for dev:local fallback
         "http://localhost:3000",
         "http://localhost:3001",

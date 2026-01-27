@@ -8,15 +8,27 @@ import { auth } from "@repo/auth";
  * Note: Next.js 16 renamed middleware to proxy
  */
 async function proxy(request: NextRequest) {
-    const session = await auth.api.getSession({
-        headers: await headers()
-    });
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
 
-    if (!session) {
-        return NextResponse.redirect(new URL("/", request.url));
+        if (!session) {
+            const redirectUrl = new URL("/", request.url);
+            const callbackUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+            redirectUrl.searchParams.set("callbackUrl", callbackUrl);
+            return NextResponse.redirect(redirectUrl);
+        }
+
+        return NextResponse.next();
+    } catch (error) {
+        // Log error and redirect to root on auth failure
+        console.error("Authentication error in frontend proxy:", error);
+        const redirectUrl = new URL("/", request.url);
+        const callbackUrl = `${request.nextUrl.pathname}${request.nextUrl.search}`;
+        redirectUrl.searchParams.set("callbackUrl", callbackUrl);
+        return NextResponse.redirect(redirectUrl);
     }
-
-    return NextResponse.next();
 }
 
 // Export as default proxy for Next.js 16
@@ -41,6 +53,6 @@ export const config = {
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          */
-        "/((?!api/auth|_next/static|_next/image|favicon.ico|signup$|^$).*)"
+        "/((?!api/auth|_next/static|_next/image|favicon.ico|signup$|$).*)"
     ]
 };

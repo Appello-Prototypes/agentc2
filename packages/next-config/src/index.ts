@@ -76,7 +76,6 @@ export function createHeadersConfig(): NextConfig["headers"] {
  * Exposes common environment variables to both server and client
  */
 export const sharedEnv = {
-    DATABASE_URL: process.env.DATABASE_URL,
     NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL
 };
 
