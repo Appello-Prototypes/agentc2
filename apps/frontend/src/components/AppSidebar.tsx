@@ -97,7 +97,7 @@ const SidebarItemNode = ({
 }: {
     item: NavigationItem | NonNullable<NavigationItem["children"]>[number];
 }) => {
-    const isExternalApp = item.href.startsWith("/agent");
+    const isExternalApp = item.href === "/agent" || item.href.startsWith("/agent/");
     const hasIcon = "icon" in item;
 
     return (

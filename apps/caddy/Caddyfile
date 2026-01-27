@@ -16,9 +16,10 @@ https://catalyst.localhost {
     }
 
     # Agent app routes (must come before frontend catch-all)
-    # Matches all /agent/* requests including assets like /agent/_next/*
+    # Matches /agent and /agent/* requests including assets like /agent/_next/*
     # Routes to localhost:3001 which has basePath="/agent" configured
-    handle /agent* {
+    @agent path /agent /agent/*
+    handle @agent {
         reverse_proxy localhost:3001
     }
 
