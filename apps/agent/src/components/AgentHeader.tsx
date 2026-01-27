@@ -18,7 +18,7 @@ export function AgentHeader() {
 
     const isActive = (href: string) => {
         if (href === "/") {
-            return pathname === "/" || pathname === "/agent";
+            return pathname === "/";
         }
         return pathname?.startsWith(href);
     };
