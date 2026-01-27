@@ -41,6 +41,7 @@ export default proxy;
  * - Sign up page (/signup)
  * - Auth API endpoints (/api/auth/*)
  * - Static assets (_next/*, favicon.ico, etc.)
+ * - Files with extensions (robots.txt, manifest.json, images, etc.)
  */
 export const config = {
     matcher: [
@@ -52,7 +53,8 @@ export const config = {
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
+         * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|_next/static|_next/image|favicon.ico|signup$)(?!$).*)"
+        "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };
