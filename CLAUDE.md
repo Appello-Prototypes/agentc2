@@ -22,6 +22,231 @@ When working on files in this repository, follow these practices:
 - **Only ask to start if needed**: If you detect that the development server is not running (e.g., through error messages or explicit user indication), then ask if you should start it
 - The user will start/stop the server as needed for their workflow
 
+## Next.js MCP (Model Context Protocol) Integration
+
+This project uses **Next.js 16** which has built-in MCP (Model Context Protocol) support. MCP provides direct access to the Next.js dev server's runtime information, making it the **preferred method** for investigating issues, understanding the application state, and planning changes.
+
+### What is Next.js MCP?
+
+Next.js 16+ automatically exposes an MCP endpoint at `/_next/mcp` when the dev server starts. No configuration needed - it's enabled by default and provides real-time access to:
+
+- Compilation errors and runtime diagnostics
+- Complete route information and structure
+- Build status and cache state
+- Component hierarchy and data flows
+- Browser console messages and errors
+
+### Available MCP Tools
+
+#### Core Development Tools
+
+**`mcp__next-devtools__init`** - Initialize Next.js DevTools MCP context
+
+- **When to use**: At the start of every Next.js development session
+- **Purpose**: Establishes documentation-first approach and lists all available MCP tools
+- **Important**: This resets AI knowledge baseline to rely on official Next.js docs
+
+**`mcp__next-devtools__nextjs_docs`** - Fetch Next.js official documentation
+
+- **When to use**: For ANY Next.js-related questions or before implementing Next.js features
+- **Workflow**:
+    1. First read the `nextjs-docs://llms-index` MCP resource to get documentation paths
+    2. Find the relevant path for your query
+    3. Call this tool with the exact path
+- **Example**: `nextjs_docs({ path: "/docs/app/api-reference/functions/refresh" })`
+- **Critical**: Do NOT guess documentation paths - always consult the index first
+
+**`mcp__next-devtools__nextjs_index`** - Discover running Next.js dev servers
+
+- **When to use**: FIRST CHOICE for investigating or understanding the running application
+- **Use proactively when**:
+    - Before implementing ANY changes to the app (check current structure first)
+    - For diagnostic questions ("What's happening?", "Why isn't this working?")
+    - For agentic codebase search (try this before static file search)
+    - When asked about routes, errors, or build status
+- **Returns**: List of running servers with ports, PIDs, and available MCP tools
+- **Fallback**: If auto-discovery fails, ask user for port and call with `port` parameter
+
+**`mcp__next-devtools__nextjs_call`** - Call specific MCP tools on dev server
+
+- **When to use**: After discovering servers with `nextjs_index`
+- **Requirements**:
+    - Port number of target dev server
+    - Tool name to execute
+    - Optional arguments object (if required)
+- **CRITICAL**:
+    - `args` parameter MUST be an object `{key: "value"}`, NOT a string
+    - If tool doesn't require arguments, OMIT the `args` parameter entirely - do NOT pass `{}` or `"{}"`
+- **Common tools**:
+    - Error diagnostics (compilation/runtime errors)
+    - Route information (list all routes)
+    - Build status (check compilation state)
+    - Cache management (clear caches)
+
+**`mcp__next-devtools__browser_eval`** - Browser automation with Playwright
+
+- **When to use**: For verifying pages, testing user flows, or detecting runtime issues
+- **CRITICAL for Next.js projects**: Use Next.js MCP tools (`nextjs_index`/`nextjs_call`) FIRST for error reporting
+    - Only use browser console forwarding as fallback when Next.js MCP isn't available
+    - Next.js MCP provides superior error reporting directly from the dev server
+- **Use browser automation when**:
+    - Verifying pages in Next.js projects (especially during upgrades)
+    - Testing client-side behavior that Next.js runtime cannot capture
+    - Detecting hydration issues, runtime errors, or client-side problems
+- **Why better than curl**: Executes JavaScript, detects runtime errors, verifies full user experience
+- **Available actions**: start, navigate, click, type, fill_form, evaluate, screenshot, console_messages, close, drag, upload_file
+
+#### Migration and Upgrade Tools
+
+**`mcp__next-devtools__upgrade_nextjs_16`** - Upgrade to Next.js 16
+
+- **When to use**: When upgrading from Next.js 15 or earlier
+- **Features**:
+    - Runs official codemod FIRST (requires clean git state)
+    - Automatically upgrades Next.js, React, and React DOM
+    - Handles async API changes (params, searchParams, cookies, headers)
+    - Config migration and deprecated API removals
+    - React 19 compatibility
+- **Requirements**: Clean git working directory, Node.js 18+, package manager installed
+
+**`mcp__next-devtools__enable_cache_components`** - Migrate to Cache Components mode
+
+- **When to use**: Migrating to or enabling Cache Components in Next.js 16+
+- **Handles ALL migration steps**:
+    - Configuration updates (cacheComponents flag)
+    - Dev server startup (MCP enabled by default)
+    - Error detection via browser automation + Next.js MCP
+    - Automated fixing (Suspense boundaries, "use cache" directives, cacheLife, cache tags)
+    - Verification (validates all routes work)
+- **Requirements**: Next.js 16.0.0+ (stable or canary only), clean working directory preferred
+
+### Workflow Best Practices
+
+#### Investigation and Planning Workflow
+
+**ALWAYS use Next.js MCP before making changes:**
+
+1. **Start with MCP discovery**: Call `nextjs_index` to see available servers and tools
+2. **Gather runtime context**: Use `nextjs_call` to get current errors, routes, and build status
+3. **Understand current state**: Check component hierarchy, data flows, and runtime diagnostics
+4. **Plan changes**: Now that you understand the current state, plan your implementation
+5. **Verify changes**: Use browser automation or MCP tools to verify fixes work
+
+**Example workflow for "Add loading state to dashboard":**
+
+```
+1. Call nextjs_index to discover dev server
+2. Call nextjs_call to get current routes and component structure
+3. Read relevant files based on MCP information
+4. Plan and implement loading state
+5. Use browser_eval to verify loading state works
+6. Check for errors via nextjs_call
+```
+
+#### Documentation-First Approach
+
+**CRITICAL**: The Next.js MCP tools establish a **mandatory documentation-first workflow**:
+
+1. **Initialize MCP context**: Call `mcp__next-devtools__init` at session start
+2. **Consult docs for ALL Next.js questions**: Use `nextjs_docs` tool instead of relying on prior knowledge
+3. **Always check the index**: Read `nextjs-docs://llms-index` resource before calling `nextjs_docs`
+4. **No guessing**: Never guess documentation paths or Next.js behavior
+
+#### Prioritization Rules
+
+**When investigating issues or planning changes:**
+
+1. **Next.js MCP FIRST**: Use `nextjs_index` and `nextjs_call` for runtime information
+2. **Browser automation SECOND**: Use `browser_eval` for client-side verification
+3. **Static file search LAST**: Only use file-based search if MCP tools don't provide the answer
+
+**When researching Next.js features:**
+
+1. **Official docs FIRST**: Use `nextjs_docs` tool (never guess paths)
+2. **Runtime inspection SECOND**: Use MCP tools to see how it's currently implemented
+3. **Web search LAST**: Only if docs don't cover the specific scenario
+
+### MCP vs. Traditional Debugging
+
+**Use Next.js MCP instead of:**
+
+- ❌ `curl` or HTTP requests to check pages (use `browser_eval` with Playwright)
+- ❌ Reading build logs manually (use `nextjs_call` for build status)
+- ❌ Guessing which routes exist (use `nextjs_call` for route information)
+- ❌ Manually checking console in browser (use `browser_eval` console_messages)
+- ❌ Relying on outdated Next.js knowledge (use `nextjs_docs` with documentation index)
+
+**Benefits of MCP approach:**
+
+- ✅ Real-time runtime information directly from dev server
+- ✅ Faster diagnosis with structured error data
+- ✅ Complete route and component hierarchy
+- ✅ Browser automation for full user experience testing
+- ✅ Documentation-first approach ensures accuracy
+- ✅ No need to restart dev server - Fast Refresh applies changes instantly
+
+### Common MCP Workflows
+
+**Check for compilation errors:**
+
+```typescript
+// 1. Discover server
+mcp__next - devtools__nextjs_index();
+
+// 2. Get errors from port 3000
+mcp__next - devtools__nextjs_call({ port: "3000", toolName: "get_errors" });
+```
+
+**List all available routes:**
+
+```typescript
+mcp__next - devtools__nextjs_call({ port: "3000", toolName: "list_routes" });
+```
+
+**Clear Next.js caches:**
+
+```typescript
+mcp__next - devtools__nextjs_call({ port: "3000", toolName: "clear_cache" });
+```
+
+**Verify page loads correctly:**
+
+```typescript
+// 1. Start browser
+mcp__next - devtools__browser_eval({ action: "start", headless: true });
+
+// 2. Navigate to page
+mcp__next -
+    devtools__browser_eval({ action: "navigate", url: "https://catalyst.localhost/dashboard" });
+
+// 3. Check console messages
+mcp__next - devtools__browser_eval({ action: "console_messages", errorsOnly: true });
+
+// 4. Take screenshot
+mcp__next - devtools__browser_eval({ action: "screenshot", fullPage: true });
+```
+
+**Look up Next.js documentation:**
+
+```typescript
+// 1. Read documentation index (use ReadMcpResourceTool)
+ReadMcpResourceTool({ server: "next-devtools", uri: "nextjs-docs://llms-index" });
+
+// 2. Find relevant path in index (e.g., "/docs/app/api-reference/functions/refresh")
+
+// 3. Fetch documentation
+mcp__next - devtools__nextjs_docs({ path: "/docs/app/api-reference/functions/refresh" });
+```
+
+### Important Notes
+
+- **MCP requires Next.js 16+**: If on Next.js 15 or earlier, use `upgrade_nextjs_16` first
+- **MCP is enabled by default**: No configuration needed in Next.js 16+
+- **Dev server must be running**: MCP tools require an active development server
+- **Port discovery**: If auto-discovery fails, ask user for port number
+- **Clean git state**: Upgrade and migration tools require clean working directory
+- **Browser automation**: Playwright is auto-installed if needed
+
 ## Monorepo Structure
 
 - **apps/frontend**: Next.js 16 application with App Router
@@ -446,9 +671,19 @@ The app uses **Better Auth** (v1.4+) with email/password authentication and cros
     - Imported in both apps via `@repo/auth`
 - Auth API endpoints: `apps/frontend/src/app/(Public)/api/auth/[...all]/route.ts`
 - Session management via Better Auth with 7-day expiry
-- Middleware proxy pattern in `apps/frontend/src/proxy.ts` handles route protection
-- Public routes: `/`, `/signup`, `/api/auth/*`
-- All other routes require authentication and redirect to `/` if unauthenticated
+- Uses Better Auth's recommended integration pattern (Note: Next.js 16 renamed middleware to proxy)
+
+**Proxy Configuration (Route Protection):**
+
+Each Next.js app requires its own `proxy.ts` file to handle authentication:
+
+- **Frontend**: `apps/frontend/src/proxy.ts`
+    - Public routes: `/`, `/signup`, `/api/auth/*`
+    - All other routes require authentication and redirect to `/` if unauthenticated
+- **Agent**: `apps/agent/src/proxy.ts`
+    - All routes require authentication (entire agent app is protected)
+    - Redirects to frontend root if unauthenticated
+    - Important: With `basePath="/agent"`, the proxy sees routes AFTER the basePath is stripped
 
 **Cross-App Authentication:**
 
@@ -458,6 +693,14 @@ The app uses **Better Auth** (v1.4+) with email/password authentication and cros
 - Both apps import from `@repo/auth` package
 - Cookies are set on `catalyst.localhost` domain with path `/`, accessible to both apps
 - Login on frontend → session automatically available on agent app
+
+**IMPORTANT: When adding a new app to the monorepo:**
+
+1. Create a `proxy.ts` file in the app's `src/` directory
+2. Use the agent app's proxy as a template if the entire app requires authentication
+3. Use the frontend app's proxy as a template if the app has both public and authenticated routes
+4. Import from `@repo/auth` for session validation
+5. Configure the matcher to exclude static assets (`_next/static`, `_next/image`, `favicon.ico`)
 
 ### Next.js App Router Structure
 
@@ -637,6 +880,161 @@ When adding routes to the agent app:
 7. **UI Components**: Import from `@repo/ui` - shares the same component library as frontend
 
 ## Component Development
+
+### ShadCN MCP (Model Context Protocol) Integration
+
+This project has built-in MCP support for working with ShadCN components. The ShadCN MCP provides direct access to component registries, examples, and automation tools, making it easier to discover and add components.
+
+#### What is ShadCN MCP?
+
+The ShadCN MCP connects to component registries (like `@shadcn`) and provides tools to:
+
+- Search and discover available components
+- View component details and source code
+- Find usage examples and demos
+- Generate CLI commands for adding components
+- Validate component installations
+
+#### Available ShadCN MCP Tools
+
+**`mcp__shadcn__get_project_registries`** - Get configured registries
+
+- **When to use**: To see which component registries are configured in the project
+- **Returns**: List of registry names from `components.json`
+- **Note**: Requires `components.json` to exist (use `init_project` if missing)
+
+**`mcp__shadcn__search_items_in_registries`** - Search for components
+
+- **When to use**: When looking for a component but unsure of exact name
+- **Features**: Fuzzy matching against component names and descriptions
+- **Parameters**:
+    - `registries`: Array of registry names (e.g., `['@shadcn']`)
+    - `query`: Search query string
+    - `limit`: Optional max results
+    - `offset`: Optional pagination offset
+- **Example**: Search for "button" to find Button, ButtonGroup, etc.
+- **Follow-up**: After finding a component, use `get_item_examples_from_registries` for usage examples
+
+**`mcp__shadcn__list_items_in_registries`** - List all available components
+
+- **When to use**: To browse all components in a registry
+- **Parameters**:
+    - `registries`: Array of registry names
+    - `limit`: Optional max items to return
+    - `offset`: Optional pagination offset
+
+**`mcp__shadcn__view_items_in_registries`** - View component details
+
+- **When to use**: To see detailed information about specific components
+- **Returns**: Component name, description, type, and file contents
+- **Parameters**:
+    - `items`: Array of item names with registry prefix (e.g., `['@shadcn/button', '@shadcn/card']`)
+- **Note**: For usage examples, use `get_item_examples_from_registries` instead
+
+**`mcp__shadcn__get_item_examples_from_registries`** - Find usage examples
+
+- **When to use**: To see how to use a component with complete implementation code
+- **Search patterns**:
+    - `{component-name}-demo` (e.g., "accordion-demo")
+    - `{component-name} example` (e.g., "button example")
+    - `example-{feature}` (e.g., "example-booking-form")
+- **Returns**: Full implementation code with dependencies
+- **Parameters**:
+    - `registries`: Array of registry names
+    - `query`: Search query for examples
+
+**`mcp__shadcn__get_add_command_for_items`** - Get CLI add command
+
+- **When to use**: To get the exact `shadcn` CLI command for adding components
+- **Returns**: Complete command ready to run (e.g., `bunx --bun shadcn@latest add button card`)
+- **Parameters**:
+    - `items`: Array of items with registry prefix (e.g., `['@shadcn/button', '@shadcn/card']`)
+
+**`mcp__shadcn__get_audit_checklist`** - Get post-installation checklist
+
+- **When to use**: After creating new components or generating code files
+- **Returns**: Checklist to verify everything is working correctly
+- **Important**: Run this after all required installation steps are complete
+
+#### ShadCN MCP Workflow
+
+**Standard component addition workflow:**
+
+1. **Search for component**: Use `search_items_in_registries` to find the component
+2. **View examples**: Use `get_item_examples_from_registries` to see usage patterns
+3. **Get add command**: Use `get_add_command_for_items` to get the CLI command
+4. **Run the command**: Execute the command in the terminal (or use the automated script)
+5. **Audit installation**: Use `get_audit_checklist` to verify everything works
+
+**Example workflow - Adding a dialog component:**
+
+```typescript
+// 1. Search for dialog components
+mcp__shadcn__search_items_in_registries({
+    registries: ["@shadcn"],
+    query: "dialog"
+});
+
+// 2. View dialog component details
+mcp__shadcn__view_items_in_registries({
+    items: ["@shadcn/dialog"]
+});
+
+// 3. Find usage examples
+mcp__shadcn__get_item_examples_from_registries({
+    registries: ["@shadcn"],
+    query: "dialog-demo"
+});
+
+// 4. Get the add command
+mcp__shadcn__get_add_command_for_items({
+    items: ["@shadcn/dialog"]
+});
+
+// 5. After installation, verify
+mcp__shadcn__get_audit_checklist();
+```
+
+#### When to Use ShadCN MCP vs. Manual Installation
+
+**Use ShadCN MCP when:**
+
+- ✅ Discovering what components are available
+- ✅ Searching for components by keyword or feature
+- ✅ Looking for usage examples and demos
+- ✅ Unsure of exact component names
+- ✅ Want to see component implementation before adding
+- ✅ Need to verify registries are configured correctly
+
+**Use manual workflow when:**
+
+- ✅ You already know the exact component name
+- ✅ Using the automated `bun run add-shadcn` script (recommended)
+- ✅ Adding multiple related components at once
+
+#### Integration with Existing Workflow
+
+The ShadCN MCP **complements** the existing component addition workflow documented below:
+
+- **Discovery phase**: Use ShadCN MCP to search and explore components
+- **Installation phase**: Use the automated `bun run add-shadcn` script (recommended)
+- **Verification phase**: Use ShadCN MCP audit checklist
+
+**Best practice workflow:**
+
+1. Use `mcp__shadcn__search_items_in_registries` to find components
+2. Use `mcp__shadcn__get_item_examples_from_registries` to see usage examples
+3. Run `bun run add-shadcn <component-name>` (automated script handles everything)
+4. Export component in `packages/ui/src/components/index.ts`
+5. Use `mcp__shadcn__get_audit_checklist` to verify installation
+
+#### Important Notes
+
+- **Requires components.json**: All ShadCN MCP tools require a valid `components.json` file
+- **Registry configuration**: Default registry is `@shadcn`, additional registries can be configured
+- **Monorepo setup**: ShadCN MCP understands the project structure and registries
+- **Examples are separate items**: Component examples are stored as separate registry items (e.g., `accordion-demo`, `button-example`)
+- **Item naming convention**: Items must include registry prefix when viewing or getting commands (e.g., `@shadcn/button`, not just `button`)
 
 ### ShadCN UI Components in Monorepo
 
