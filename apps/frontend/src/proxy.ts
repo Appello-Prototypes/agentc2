@@ -8,15 +8,21 @@ import { auth } from "@repo/auth";
  * Note: Next.js 16 renamed middleware to proxy
  */
 async function proxy(request: NextRequest) {
-    const session = await auth.api.getSession({
-        headers: await headers()
-    });
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
 
-    if (!session) {
+        if (!session) {
+            return NextResponse.redirect(new URL("/", request.url));
+        }
+
+        return NextResponse.next();
+    } catch (error) {
+        // Log error and redirect to root on auth failure
+        console.error("Authentication error in frontend proxy:", error);
         return NextResponse.redirect(new URL("/", request.url));
     }
-
-    return NextResponse.next();
 }
 
 // Export as default proxy for Next.js 16

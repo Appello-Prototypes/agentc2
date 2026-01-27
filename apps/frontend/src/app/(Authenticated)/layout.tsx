@@ -2,10 +2,11 @@
 
 import { AppSidebar } from "@/components/AppSidebar";
 import { CommandPalette, SidebarProvider, type AppNavigationConfig } from "@repo/ui";
+import { getAppUrl } from "@repo/auth";
 
 const appNavigation: AppNavigationConfig = {
     currentApp: "frontend",
-    baseUrl: process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost"
+    baseUrl: getAppUrl("https://catalyst.localhost")
 };
 
 export default function AuthenticatedLayout({ children }: { children: React.ReactNode }) {

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { auth, getAppUrl } from "@repo/auth";
 
 /**
  * Proxy for Better Auth with Next.js 16 (Agent App)
@@ -11,17 +11,24 @@ import { auth } from "@repo/auth";
  * So requests to /agent/something appear as /something to this proxy.
  */
 async function proxy(_request: NextRequest) {
-    const session = await auth.api.getSession({
-        headers: await headers()
-    });
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
 
-    if (!session) {
-        // Redirect to frontend root (no /agent prefix needed - full URL)
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost";
+        if (!session) {
+            // Redirect to frontend root (no /agent prefix needed - full URL)
+            const baseUrl = getAppUrl("https://catalyst.localhost");
+            return NextResponse.redirect(new URL("/", baseUrl));
+        }
+
+        return NextResponse.next();
+    } catch (error) {
+        // Log error and redirect to frontend root on auth failure
+        console.error("Authentication error in agent proxy:", error);
+        const baseUrl = getAppUrl("https://catalyst.localhost");
         return NextResponse.redirect(new URL("/", baseUrl));
     }
-
-    return NextResponse.next();
 }
 
 // Export as default proxy for Next.js 16

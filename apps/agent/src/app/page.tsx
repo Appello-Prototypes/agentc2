@@ -1,4 +1,4 @@
-import { auth } from "@repo/auth";
+import { auth, getAppUrl } from "@repo/auth";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -10,7 +10,7 @@ export default async function AgentHomePage() {
     if (!session) {
         // Use absolute URL to redirect to frontend login page
         // Relative paths don't work correctly with basePath: "/agent"
-        redirect(process.env.NEXT_PUBLIC_APP_URL || "https://catalyst.localhost");
+        redirect(getAppUrl("https://catalyst.localhost"));
     }
 
     // Session is guaranteed to exist here due to redirect above
