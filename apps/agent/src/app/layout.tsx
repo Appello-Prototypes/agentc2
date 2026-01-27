@@ -8,6 +8,7 @@ import {
 
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
+import { AgentHeader } from "@/components/AgentHeader";
 
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
@@ -80,6 +81,7 @@ export default async function RootLayout({
         <html lang="en" suppressHydrationWarning>
             <body>
                 <AppProvidersWrapper>
+                    <AgentHeader />
                     {children}
                     <CommandPalette groups={commandGroups} appNavigation={appNavigation} />
                 </AppProvidersWrapper>
