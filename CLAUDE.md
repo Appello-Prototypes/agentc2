@@ -815,6 +815,81 @@ Build dependencies are configured in `turbo.json`:
 - Database tasks are not cached
 - `dev` task runs persistently without caching
 
+## Security
+
+### Security Headers
+
+Both Next.js applications (frontend and agent) have **production-grade security headers** configured in their `next.config.ts` files:
+
+**Implemented Headers:**
+
+- **Strict-Transport-Security (HSTS)**: Forces HTTPS for 1 year, including subdomains
+- **X-Frame-Options**: Prevents clickjacking attacks (SAMEORIGIN)
+- **X-Content-Type-Options**: Prevents MIME type sniffing (nosniff)
+- **X-XSS-Protection**: Legacy XSS protection (enabled with blocking mode)
+- **Referrer-Policy**: Controls referrer information (strict-origin-when-cross-origin)
+- **Permissions-Policy**: Disables camera, microphone, and geolocation
+- **Content-Security-Policy (CSP)**: Comprehensive content security policy
+
+**CSP Configuration:**
+
+The CSP is environment-aware:
+
+- **Development**: Allows `'unsafe-eval'` and `'unsafe-inline'` for Next.js hot reloading and Turbopack
+- **Production**: Strict policy with no unsafe directives
+- **Common rules**: Allows self-hosted resources, data URIs for images/fonts, HTTPS for images, and blocks frame embedding
+
+**Locations:**
+
+- Frontend: `apps/frontend/next.config.ts` (lines 18-68)
+- Agent: `apps/agent/next.config.ts` (lines 18-68)
+
+**Testing Security Headers:**
+
+After deployment, verify headers using:
+
+- [Security Headers Scanner](https://securityheaders.com/)
+- [SSL Labs Test](https://www.ssllabs.com/ssltest/)
+- Browser DevTools Network tab
+
+### Error Boundaries
+
+Error boundaries are implemented at multiple levels for graceful error handling:
+
+**Shared Components:**
+
+- `packages/ui/src/components/error-boundary.tsx`: Reusable ErrorBoundary class component and DefaultErrorFallback UI
+
+**Frontend App:**
+
+- `apps/frontend/src/app/error.tsx`: Root level errors
+- `apps/frontend/src/app/(Authenticated)/error.tsx`: Authenticated section errors
+- `apps/frontend/src/app/global-error.tsx`: Global errors (root layout)
+
+**Agent App:**
+
+- `apps/agent/src/app/error.tsx`: Root level errors
+- `apps/agent/src/app/global-error.tsx`: Global errors (root layout)
+
+All error boundaries log errors appropriately and provide user-friendly fallback UI with retry and navigation options.
+
+### Production Security Documentation
+
+Comprehensive production security requirements are documented in `SECURITY.md`, covering:
+
+- Environment variables and secrets management
+- Database security (user privileges, TLS/SSL, backups)
+- Authentication and session management
+- HTTPS/TLS configuration
+- Reverse proxy setup (Caddy and Nginx examples)
+- Error handling and logging strategies
+- Content Security Policy
+- Deployment checklist
+- Monitoring and incident response
+- Regular maintenance schedule
+
+**IMPORTANT**: Review `SECURITY.md` before deploying to production.
+
 ## Database Migrations
 
 ### Development Workflow

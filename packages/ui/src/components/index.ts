@@ -10,6 +10,7 @@ export * from "./command";
 export * from "./command-palette";
 export * from "./dialog";
 export * from "./dropdown-menu";
+export * from "./error-boundary";
 export * from "./field";
 export * from "./input";
 export * from "./input-group";
