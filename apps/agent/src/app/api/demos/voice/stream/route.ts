@@ -139,9 +139,11 @@ export async function POST(request: NextRequest) {
                         totalChunks: chunks.length,
                         totalSize
                     });
-                } else if (typeof (responseAudio as ReadableStream).getReader === "function") {
+                } else if (
+                    typeof (responseAudio as unknown as ReadableStream).getReader === "function"
+                ) {
                     // Web ReadableStream
-                    const reader = (responseAudio as ReadableStream).getReader();
+                    const reader = (responseAudio as unknown as ReadableStream).getReader();
                     let chunkIndex = 0;
                     let totalSize = 0;
 

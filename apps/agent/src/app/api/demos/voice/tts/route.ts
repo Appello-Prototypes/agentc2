@@ -72,10 +72,10 @@ export async function POST(request: NextRequest) {
         ) {
             // Node.js stream
             audioBuffer = await streamToBuffer(audioStream as NodeJS.ReadableStream);
-        } else if (typeof (audioStream as ReadableStream).getReader === "function") {
+        } else if (typeof (audioStream as unknown as ReadableStream).getReader === "function") {
             // Web ReadableStream
             const chunks: Uint8Array[] = [];
-            const reader = (audioStream as ReadableStream).getReader();
+            const reader = (audioStream as unknown as ReadableStream).getReader();
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
