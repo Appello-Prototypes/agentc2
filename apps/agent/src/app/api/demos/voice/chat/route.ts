@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
             filetype: extension as "mp3" | "wav" | "webm" | "m4a"
         });
 
-        if (!transcript) {
+        if (!transcript || typeof transcript !== "string") {
             return NextResponse.json({ error: "Could not transcribe audio" }, { status: 400 });
         }
 
