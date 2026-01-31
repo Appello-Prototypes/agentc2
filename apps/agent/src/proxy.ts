@@ -3,6 +3,12 @@ import { headers } from "next/headers";
 import { auth, getAppUrl } from "@repo/auth";
 
 /**
+ * Check if running in standalone mode (not behind Caddy proxy)
+ * When standalone, we skip auth for demo pages
+ */
+const isStandalone = !process.env.NEXT_PUBLIC_APP_URL?.includes("catalyst.localhost");
+
+/**
  * Proxy for Better Auth with Next.js 16 (Agent App)
  * Validates sessions and protects all agent routes
  * Note: Next.js 16 renamed middleware to proxy
@@ -10,7 +16,12 @@ import { auth, getAppUrl } from "@repo/auth";
  * Important: With basePath="/agent", this proxy runs AFTER the basePath is stripped.
  * So requests to /agent/something appear as /something to this proxy.
  */
-async function proxy(_request: NextRequest) {
+async function proxy(request: NextRequest) {
+    // In standalone mode (Vercel deployment), allow public access to demos
+    if (isStandalone) {
+        return NextResponse.next();
+    }
+
     try {
         const session = await auth.api.getSession({
             headers: await headers()
