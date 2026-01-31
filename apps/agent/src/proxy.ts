@@ -5,8 +5,13 @@ import { auth, getAppUrl } from "@repo/auth";
 /**
  * Check if running in standalone mode (not behind Caddy proxy)
  * When standalone, we skip auth for demo pages
+ * Check at runtime using request hostname
  */
-const isStandalone = !process.env.NEXT_PUBLIC_APP_URL?.includes("catalyst.localhost");
+function isStandaloneDeployment(request: NextRequest): boolean {
+    const host = request.headers.get("host") || "";
+    // If not running on catalyst.localhost, we're in standalone mode
+    return !host.includes("catalyst.localhost");
+}
 
 /**
  * Proxy for Better Auth with Next.js 16 (Agent App)
@@ -18,7 +23,7 @@ const isStandalone = !process.env.NEXT_PUBLIC_APP_URL?.includes("catalyst.localh
  */
 async function proxy(request: NextRequest) {
     // In standalone mode (Vercel deployment), allow public access to demos
-    if (isStandalone) {
+    if (isStandaloneDeployment(request)) {
         return NextResponse.next();
     }
 
