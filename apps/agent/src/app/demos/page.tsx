@@ -43,6 +43,13 @@ const demos = [
         href: "/demos/mcp",
         features: ["Wikipedia", "Sequential Thinking", "External APIs"],
         status: "ready" as const
+    },
+    {
+        title: "Voice",
+        description: "Text-to-Speech, Speech-to-Text, and voice conversations",
+        href: "/demos/voice",
+        features: ["TTS", "STT", "Voice Chat", "Multi-Provider"],
+        status: "ready" as const
     }
 ];
 

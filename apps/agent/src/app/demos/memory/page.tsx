@@ -51,10 +51,7 @@ export default function MemoryDemoPage() {
             if (!res.ok) {
                 throw new Error(data.error || "Failed to get response");
             }
-            setMessages((prev) => [
-                ...prev,
-                { role: "assistant", content: data.text }
-            ]);
+            setMessages((prev) => [...prev, { role: "assistant", content: data.text }]);
         } catch {
             setMessages((prev) => [
                 ...prev,

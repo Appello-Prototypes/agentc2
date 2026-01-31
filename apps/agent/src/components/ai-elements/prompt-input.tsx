@@ -37,7 +37,7 @@ export function PromptInputBody({ children, className, ...props }: PromptInputBo
     );
 }
 
-interface PromptInputTextareaProps extends React.TextareaHTMLAttributes<HTMLTextAreaElement> {}
+type PromptInputTextareaProps = React.TextareaHTMLAttributes<HTMLTextAreaElement>;
 
 export function PromptInputTextarea({ className, ...props }: PromptInputTextareaProps) {
     const textareaRef = React.useRef<HTMLTextAreaElement>(null);

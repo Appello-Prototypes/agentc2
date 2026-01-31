@@ -30,6 +30,9 @@ export default function DemosLayout({ children }: { children: React.ReactNode })
                         <Link href="/demos/mcp" className="hover:text-primary transition-colors">
                             MCP
                         </Link>
+                        <Link href="/demos/voice" className="hover:text-primary transition-colors">
+                            Voice
+                        </Link>
                     </div>
                 </div>
             </nav>

@@ -26,6 +26,7 @@ This folder contains detailed implementation plans for demonstrating all Mastra 
 | 7     | [07-evals-scorers.md](./07-evals-scorers.md)           | Add relevancy and toxicity scorers                        | Pending | Partial    |
 | 8     | [08-mcp-client.md](./08-mcp-client.md)                 | Connect to external MCP servers                           | Pending | Yes        |
 | 9     | [09-demo-pages.md](./09-demo-pages.md)                 | Create UI demo pages for each feature                     | Pending | Partial    |
+| 10    | [10-voice-agents.md](./10-voice-agents.md)             | Add TTS, STT, and voice chat with OpenAI & ElevenLabs     | Pending | Yes        |
 
 ## Documentation Audit Summary
 
@@ -60,6 +61,7 @@ Phase 2 (Observability)
 Phase 3 (Enhanced Agents)
     └── Phase 4 (Tools used by agents)
     └── Phase 7 (Scorers on agents)
+    └── Phase 10 (Voice Agents) - Adds voice to agents
 
 Phase 5 (Workflows)
     └── Phase 4 (Workflow Trigger Tool)
@@ -67,6 +69,8 @@ Phase 5 (Workflows)
 Phase 8 (MCP) - Standalone
 
 Phase 9 (Demo Pages) - Depends on all phases for full functionality
+
+Phase 10 (Voice Agents) - Standalone (requires OPENAI_API_KEY, ELEVENLABS_API_KEY)
 ```
 
 ## Current Project State
@@ -93,20 +97,23 @@ Phase 9 (Demo Pages) - Depends on all phases for full functionality
 
 ### Packages to Install (by Phase)
 
-| Phase | Package         |
-| ----- | --------------- |
-| 6     | `@mastra/rag`   |
-| 7     | `@mastra/evals` |
-| 8     | `@mastra/mcp`   |
+| Phase | Package                    |
+| ----- | -------------------------- |
+| 6     | `@mastra/rag`              |
+| 7     | `@mastra/evals`            |
+| 8     | `@mastra/mcp`              |
+| 10    | `@mastra/voice-openai`     |
+| 10    | `@mastra/voice-elevenlabs` |
 
 ### Environment Variables Required
 
-| Variable                      | Phase   | Purpose                          |
-| ----------------------------- | ------- | -------------------------------- |
-| `DATABASE_URL`                | All     | PostgreSQL connection            |
-| `ANTHROPIC_API_KEY`           | All     | Claude model access              |
-| `OPENAI_API_KEY`              | 1, 6, 7 | Embeddings and evaluation models |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 2       | Tracing (optional)               |
+| Variable                      | Phase       | Purpose                      |
+| ----------------------------- | ----------- | ---------------------------- |
+| `DATABASE_URL`                | All         | PostgreSQL connection        |
+| `ANTHROPIC_API_KEY`           | All         | Claude model access          |
+| `OPENAI_API_KEY`              | 1, 6, 7, 10 | Embeddings, evals, and voice |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 2           | Tracing (optional)           |
+| `ELEVENLABS_API_KEY`          | 10          | ElevenLabs premium TTS       |
 
 ## Architecture
 
@@ -119,6 +126,7 @@ packages/mastra/src/
 │   ├── research.ts         # Phase 3
 │   ├── evaluated.ts        # Phase 7
 │   ├── mcp-agent.ts        # Phase 8
+│   ├── voice.ts            # Phase 10
 │   └── index.ts
 ├── tools/
 │   ├── example-tools.ts    # Existing
@@ -157,7 +165,8 @@ apps/agent/src/app/
 │   ├── memory/page.tsx     # Phase 9
 │   ├── rag/page.tsx        # Phase 9
 │   ├── evals/page.tsx      # Phase 9
-│   └── mcp/page.tsx        # Phase 9
+│   ├── mcp/page.tsx        # Phase 9
+│   └── voice/page.tsx      # Phase 10
 └── api/
     ├── chat/route.ts       # Existing
     ├── workflow/route.ts   # Existing
@@ -165,11 +174,15 @@ apps/agent/src/app/
     │   ├── ingest/route.ts # Phase 6
     │   └── query/route.ts  # Phase 6
     ├── mcp/route.ts        # Phase 8
-    └── demos/              # Phase 9
+    └── demos/              # Phase 9, 10
         ├── agents/
         ├── workflows/
         ├── memory/
-        └── evals/
+        ├── evals/
+        └── voice/          # Phase 10
+            ├── tts/route.ts
+            ├── stt/route.ts
+            └── chat/route.ts
 ```
 
 ## Success Criteria
