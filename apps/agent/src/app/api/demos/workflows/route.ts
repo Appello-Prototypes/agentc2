@@ -32,12 +32,14 @@ export async function POST(req: NextRequest) {
         // Format suspended steps for the frontend
         let suspended: Array<{ step: string; data: Record<string, unknown> }> | undefined;
         if (result.status === "suspended" && result.suspended) {
-            suspended = result.suspended.map(
-                (s: { step: string; data?: Record<string, unknown> }) => ({
-                    step: s.step,
-                    data: s.data || {}
-                })
-            );
+            const suspendedSteps = result.suspended as unknown as Array<{
+                step: string;
+                data?: Record<string, unknown>;
+            }>;
+            suspended = suspendedSteps.map((s) => ({
+                step: s.step,
+                data: s.data || {}
+            }));
         }
 
         return NextResponse.json({

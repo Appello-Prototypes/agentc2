@@ -322,7 +322,7 @@ export default function RagDemoPage() {
                 </div>
 
                 {/* How RAG Works */}
-                <Accordion type="single" collapsible className="w-full">
+                <Accordion className="w-full">
                     <AccordionItem value="how-it-works">
                         <AccordionTrigger className="text-lg font-semibold">
                             How does RAG work?
@@ -430,7 +430,12 @@ export default function RagDemoPage() {
                                             <Label className="mb-2 block text-sm">
                                                 Document Type
                                             </Label>
-                                            <Select value={docType} onValueChange={setDocType}>
+                                            <Select
+                                                value={docType}
+                                                onValueChange={(value) =>
+                                                    value && setDocType(value)
+                                                }
+                                            >
                                                 <SelectTrigger>
                                                     <SelectValue />
                                                 </SelectTrigger>
@@ -502,7 +507,9 @@ export default function RagDemoPage() {
                                         </Label>
                                         <Select
                                             value={chunkStrategy}
-                                            onValueChange={setChunkStrategy}
+                                            onValueChange={(value) =>
+                                                value && setChunkStrategy(value)
+                                            }
                                         >
                                             <SelectTrigger>
                                                 <SelectValue />
@@ -559,7 +566,11 @@ export default function RagDemoPage() {
                                                 </div>
                                                 <Slider
                                                     value={[chunkSize]}
-                                                    onValueChange={([v]) => setChunkSize(v)}
+                                                    onValueChange={(value) =>
+                                                        setChunkSize(
+                                                            Array.isArray(value) ? value[0] : value
+                                                        )
+                                                    }
                                                     min={128}
                                                     max={2048}
                                                     step={64}
@@ -593,7 +604,11 @@ export default function RagDemoPage() {
                                                 </div>
                                                 <Slider
                                                     value={[chunkOverlap]}
-                                                    onValueChange={([v]) => setChunkOverlap(v)}
+                                                    onValueChange={(value) =>
+                                                        setChunkOverlap(
+                                                            Array.isArray(value) ? value[0] : value
+                                                        )
+                                                    }
                                                     min={0}
                                                     max={200}
                                                     step={10}
@@ -758,7 +773,11 @@ export default function RagDemoPage() {
                                                 </div>
                                                 <Slider
                                                     value={[topK]}
-                                                    onValueChange={([v]) => setTopK(v)}
+                                                    onValueChange={(value) =>
+                                                        setTopK(
+                                                            Array.isArray(value) ? value[0] : value
+                                                        )
+                                                    }
                                                     min={1}
                                                     max={20}
                                                     step={1}
@@ -788,7 +807,11 @@ export default function RagDemoPage() {
                                                 </div>
                                                 <Slider
                                                     value={[minScore]}
-                                                    onValueChange={([v]) => setMinScore(v)}
+                                                    onValueChange={(value) =>
+                                                        setMinScore(
+                                                            Array.isArray(value) ? value[0] : value
+                                                        )
+                                                    }
                                                     min={0}
                                                     max={1}
                                                     step={0.05}

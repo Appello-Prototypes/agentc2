@@ -2,7 +2,7 @@
 
 ## Objective
 
-Connect to external MCP (Model Context Protocol) servers to give agents access to external tools like Wikipedia search and sequential thinking.
+Connect to external MCP (Model Context Protocol) servers to give agents access to external tools like Wikipedia search, Playwright browser automation, and various third-party integrations.
 
 ## Documentation References
 
@@ -51,7 +51,7 @@ declare global {
  * Connects to external MCP servers to provide additional tools.
  * Currently configured:
  * - Wikipedia: Search and retrieve Wikipedia articles
- * - Sequential Thinking: Break down complex reasoning
+ * - Playwright: Browser automation
  */
 function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
@@ -62,19 +62,6 @@ function getMcpClient(): MCPClient {
                 wikipedia: {
                     command: "npx",
                     args: ["-y", "wikipedia-mcp"]
-                },
-
-                // Sequential Thinking MCP Server (via Smithery)
-                sequentialThinking: {
-                    command: "npx",
-                    args: [
-                        "-y",
-                        "@smithery/cli@latest",
-                        "run",
-                        "@smithery-ai/server-sequential-thinking",
-                        "--config",
-                        "{}"
-                    ]
                 }
             },
             timeout: 60000 // 60 second timeout
@@ -141,14 +128,14 @@ export const mcpAgent = new Agent({
 - Retrieve full article content
 - Use for factual information, definitions, historical data
 
-### Sequential Thinking
-- Use for complex reasoning tasks
-- Helps break down problems step by step
-- Good for analysis and decision-making
+### Playwright
+- Browser automation and web interaction
+- Navigate, click, screenshot, interact with web pages
+- Use for testing and web scraping tasks
 
 ## Guidelines
 1. Use Wikipedia for factual questions and research
-2. Use sequential thinking for complex multi-step problems
+2. Use Playwright for browser automation tasks
 3. Always cite sources when using Wikipedia
 4. Combine tools when needed for comprehensive answers
 
@@ -257,7 +244,7 @@ export async function POST(req: NextRequest) {
 | Deviation                 | Status          | Justification                                    |
 | ------------------------- | --------------- | ------------------------------------------------ |
 | Using Wikipedia MCP       | **Valid**       | Free, no API key required, good for demos        |
-| Using Smithery CLI        | **Valid**       | Official pattern for Smithery-hosted servers     |
+| Using Playwright MCP      | **Valid**       | Browser automation, no API key required          |
 | Factory pattern for agent | **Recommended** | Tools must be loaded async before agent creation |
 
 ## Demo Page Spec
@@ -274,7 +261,7 @@ export async function POST(req: NextRequest) {
 - **Sample data**:
     - "What is the history of artificial intelligence?"
     - "Tell me about the Mastra AI framework" (may not find if not on Wikipedia)
-    - "Break down how to build a web application step by step"
+    - "Take a screenshot of google.com"
 
 ### Sample Inputs/Test Data
 
@@ -291,9 +278,9 @@ const mcpExamples = [
         description: "Should retrieve Wikipedia article"
     },
     {
-        query: "Help me think through the steps to launch a startup",
-        expectedTool: "sequentialThinking_think",
-        description: "Should use sequential thinking"
+        query: "Take a screenshot of google.com",
+        expectedTool: "playwright_screenshot",
+        description: "Should use Playwright for browser automation"
     }
 ];
 ```
@@ -320,11 +307,11 @@ const mcpExamples = [
 ## Acceptance Criteria
 
 - [ ] MCPClient connects to Wikipedia MCP server
-- [ ] MCPClient connects to Sequential Thinking server
+- [ ] MCPClient connects to Playwright MCP server
 - [ ] listTools() returns tools with namespaced names (serverName_toolName)
 - [ ] Agent can call Wikipedia search tool
 - [ ] Agent can call Wikipedia get_article tool
-- [ ] Agent can use sequential thinking tool
+- [ ] Agent can use Playwright browser automation tools
 - [ ] Tool calls appear in response metadata
 - [ ] disconnect() cleans up resources
 - [ ] Timeout errors handled gracefully
@@ -354,7 +341,7 @@ const mcpExamples = [
 
 - [ ] End-to-end: query → MCP tools → agent response
 - [ ] Wikipedia search returns relevant results
-- [ ] Sequential thinking produces step-by-step output
+- [ ] Playwright browser automation works correctly
 - [ ] Multiple tool calls in single query work
 - [ ] Authentication required for API endpoint
 - [ ] Traces show MCP tool executions (requires Phase 2)
@@ -385,28 +372,10 @@ const mcpExamples = [
 }
 ```
 
-### Smithery Registry Servers
-
-```typescript
-{
-  sequential: {
-    command: "npx",
-    args: [
-      "-y",
-      "@smithery/cli@latest",
-      "run",
-      "@smithery-ai/server-sequential-thinking",
-      "--config", "{}",
-    ],
-  }
-}
-```
-
 ## Available MCP Registries
 
 | Registry  | URL              | Description               |
 | --------- | ---------------- | ------------------------- |
-| Smithery  | smithery.ai      | CLI-based MCP servers     |
 | mcp.run   | mcp.run          | Pre-authenticated servers |
 | Composio  | mcp.composio.dev | SSE-based servers         |
 | Klavis AI | klavis.ai        | Enterprise-grade servers  |

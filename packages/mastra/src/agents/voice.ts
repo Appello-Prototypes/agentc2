@@ -23,7 +23,7 @@ export const voiceProviders = {
     elevenlabs: () =>
         new ElevenLabsVoice({
             speechModel: {
-                model: "eleven_turbo_v2_5",
+                name: "eleven_multilingual_v2",
                 apiKey: process.env.ELEVENLABS_API_KEY
             }
         }),
@@ -39,7 +39,7 @@ export const voiceProviders = {
             }),
             output: new ElevenLabsVoice({
                 speechModel: {
-                    model: "eleven_turbo_v2_5",
+                    name: "eleven_multilingual_v2",
                     apiKey: process.env.ELEVENLABS_API_KEY
                 }
             })

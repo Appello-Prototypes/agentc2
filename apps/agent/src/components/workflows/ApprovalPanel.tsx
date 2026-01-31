@@ -8,7 +8,7 @@ interface ApprovalPanelProps {
     step: string;
     workflowType: string;
     suspendedData: {
-        reason: string;
+        reason?: string;
         preview?: string;
         contentType?: string;
         title?: string;
@@ -129,9 +129,11 @@ export function ApprovalPanel({
             </div>
 
             {/* Reason */}
-            <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
-                {suspendedData.reason}
-            </p>
+            {suspendedData.reason && (
+                <p className="mb-4 text-sm text-amber-800 dark:text-amber-200">
+                    {suspendedData.reason}
+                </p>
+            )}
 
             {/* Content Preview */}
             {suspendedData.content && (

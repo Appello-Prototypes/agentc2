@@ -154,7 +154,9 @@ function LiveAgentTab() {
                                 <>
                                     <Select
                                         value={selectedAgentId}
-                                        onValueChange={setSelectedAgentId}
+                                        onValueChange={(value) =>
+                                            value && setSelectedAgentId(value)
+                                        }
                                         disabled={isConnecting}
                                     >
                                         <SelectTrigger>
@@ -1781,7 +1783,10 @@ export default function VoiceDemoPage() {
                                 <label className="mb-2 block text-sm font-medium">
                                     Voice Provider
                                 </label>
-                                <Select value={liveProvider} onValueChange={setLiveProvider}>
+                                <Select
+                                    value={liveProvider}
+                                    onValueChange={(value) => value && setLiveProvider(value)}
+                                >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
@@ -2005,7 +2010,9 @@ export default function VoiceDemoPage() {
                                         </label>
                                         <Select
                                             value={selectedDevice}
-                                            onValueChange={setSelectedDevice}
+                                            onValueChange={(value) =>
+                                                value && setSelectedDevice(value)
+                                            }
                                         >
                                             <SelectTrigger>
                                                 <SelectValue placeholder="Select microphone" />
@@ -2331,7 +2338,10 @@ export default function VoiceDemoPage() {
                                     <label className="mb-2 block text-sm font-medium">
                                         Provider
                                     </label>
-                                    <Select value={ttsProvider} onValueChange={setTtsProvider}>
+                                    <Select
+                                        value={ttsProvider}
+                                        onValueChange={(value) => value && setTtsProvider(value)}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
@@ -2346,7 +2356,10 @@ export default function VoiceDemoPage() {
                                         <label className="mb-2 block text-sm font-medium">
                                             Voice
                                         </label>
-                                        <Select value={ttsSpeaker} onValueChange={setTtsSpeaker}>
+                                        <Select
+                                            value={ttsSpeaker}
+                                            onValueChange={(value) => value && setTtsSpeaker(value)}
+                                        >
                                             <SelectTrigger>
                                                 <SelectValue />
                                             </SelectTrigger>
@@ -2519,7 +2532,10 @@ export default function VoiceDemoPage() {
                                     <label className="mb-2 block text-sm font-medium">
                                         Provider
                                     </label>
-                                    <Select value={chatProvider} onValueChange={setChatProvider}>
+                                    <Select
+                                        value={chatProvider}
+                                        onValueChange={(value) => value && setChatProvider(value)}
+                                    >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
@@ -2537,7 +2553,12 @@ export default function VoiceDemoPage() {
                                         <label className="mb-2 block text-sm font-medium">
                                             Voice
                                         </label>
-                                        <Select value={chatSpeaker} onValueChange={setChatSpeaker}>
+                                        <Select
+                                            value={chatSpeaker}
+                                            onValueChange={(value) =>
+                                                value && setChatSpeaker(value)
+                                            }
+                                        >
                                             <SelectTrigger>
                                                 <SelectValue />
                                             </SelectTrigger>

@@ -64,11 +64,12 @@ export async function POST(req: NextRequest) {
                 // Capture tool calls from this step
                 if (step.toolCalls && step.toolCalls.length > 0) {
                     for (const toolCall of step.toolCalls) {
+                        const tc = toolCall as { toolName?: string; args?: unknown };
                         capturedSteps.push({
                             stepNumber,
                             type: "tool-call",
-                            toolName: toolCall.toolName,
-                            toolArgs: toolCall.args,
+                            toolName: tc.toolName,
+                            toolArgs: tc.args,
                             timestamp: Date.now()
                         });
                     }
@@ -77,11 +78,12 @@ export async function POST(req: NextRequest) {
                 // Capture tool results from this step
                 if (step.toolResults && step.toolResults.length > 0) {
                     for (const toolResult of step.toolResults) {
+                        const tr = toolResult as { toolName?: string; result?: unknown };
                         capturedSteps.push({
                             stepNumber,
                             type: "tool-result",
-                            toolName: toolResult.toolName,
-                            toolResult: toolResult.result,
+                            toolName: tr.toolName,
+                            toolResult: tr.result,
                             timestamp: Date.now()
                         });
                     }
@@ -104,20 +106,27 @@ export async function POST(req: NextRequest) {
         const mcpResponse: McpResponse = {
             text: response.text || "",
             steps: capturedSteps,
-            toolCalls: (response.toolCalls || []).map((tc) => ({
-                toolName: tc.toolName,
-                args: tc.args
-            })),
-            toolResults: (response.toolResults || []).map((tr) => ({
-                toolName: tr.toolName,
-                result: tr.result
-            })),
+            toolCalls: (response.toolCalls || []).map((tc) => {
+                const toolCall = tc as { toolName?: string; args?: unknown };
+                return {
+                    toolName: toolCall.toolName || "unknown",
+                    args: toolCall.args
+                };
+            }),
+            toolResults: (response.toolResults || []).map((tr) => {
+                const toolResult = tr as { toolName?: string; result?: unknown };
+                return {
+                    toolName: toolResult.toolName || "unknown",
+                    result: toolResult.result
+                };
+            }),
             reasoning: response.reasoningText,
             usage: response.usage
                 ? {
-                      promptTokens: response.usage.promptTokens,
-                      completionTokens: response.usage.completionTokens,
-                      totalTokens: response.usage.totalTokens
+                      promptTokens: (response.usage as { promptTokens?: number }).promptTokens || 0,
+                      completionTokens:
+                          (response.usage as { completionTokens?: number }).completionTokens || 0,
+                      totalTokens: response.usage.totalTokens || 0
                   }
                 : undefined,
             finishReason: response.finishReason || "unknown"

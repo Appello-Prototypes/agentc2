@@ -88,7 +88,6 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
  * MCP Client Configuration
  *
  * Connects to external MCP servers to provide additional tools.
- * Note: Sequential Thinking server removed due to Smithery auth redirect issues.
  */
 function getMcpClient(): MCPClient {
     if (!global.mcpClient) {

@@ -194,7 +194,7 @@ function ExecutionStep({ step }: { step: McpStep }) {
             </CollapsibleTrigger>
             <CollapsibleContent>
                 <div className="bg-muted/30 mt-2 ml-8 rounded-md border p-3">
-                    {step.toolArgs && (
+                    {step.toolArgs !== undefined && (
                         <div className="mb-3">
                             <p className="text-muted-foreground mb-1 text-xs font-medium">
                                 Input Arguments:
@@ -204,7 +204,7 @@ function ExecutionStep({ step }: { step: McpStep }) {
                             </pre>
                         </div>
                     )}
-                    {step.toolResult && (
+                    {step.toolResult !== undefined && (
                         <div className="mb-3">
                             <p className="text-muted-foreground mb-1 text-xs font-medium">
                                 Result:
@@ -357,10 +357,8 @@ export default function McpDemoPage() {
                         </div>
                     ) : serverStatus ? (
                         <Accordion
-                            type="single"
-                            collapsible
-                            value={selectedServer || undefined}
-                            onValueChange={(v) => setSelectedServer(v)}
+                            value={selectedServer ? [selectedServer] : []}
+                            onValueChange={(value) => setSelectedServer(value[0] ?? null)}
                         >
                             <div className="grid gap-2">
                                 {serverStatus.servers.map((server) => (

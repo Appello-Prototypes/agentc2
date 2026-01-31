@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
             }
             voice = new ElevenLabsVoice({
                 speechModel: {
-                    model: "eleven_turbo_v2_5",
+                    name: "eleven_multilingual_v2",
                     apiKey: process.env.ELEVENLABS_API_KEY
                 }
             });
@@ -95,7 +95,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Generated audio is empty" }, { status: 500 });
         }
 
-        return new NextResponse(audioBuffer, {
+        return new NextResponse(new Uint8Array(audioBuffer), {
             headers: {
                 "Content-Type": "audio/mpeg",
                 "Content-Length": audioBuffer.length.toString()

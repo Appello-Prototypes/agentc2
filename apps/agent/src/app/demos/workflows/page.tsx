@@ -130,8 +130,12 @@ export default function WorkflowsDemoPage() {
     const [foreachSteps, setForeachSteps] = useState<WorkflowStep[]>([]);
 
     // Approval workflow state
-    const [approvalInput, setApprovalInput] = useState({
-        contentType: "blogPost" as const,
+    const [approvalInput, setApprovalInput] = useState<{
+        contentType: keyof typeof contentPresets;
+        topic: string;
+        tone: "professional" | "casual" | "inspirational";
+    }>({
+        contentType: "blogPost",
         topic: contentPresets.blogPost.topic,
         tone: contentPresets.blogPost.tone
     });

@@ -46,7 +46,7 @@ class AudioCapture {
         this.processor.onaudioprocess = (event) => {
             const inputData = event.inputBuffer.getChannelData(0);
             const pcmData = this.floatTo16BitPCM(inputData);
-            const base64 = this.arrayBufferToBase64(pcmData.buffer);
+            const base64 = this.arrayBufferToBase64(pcmData.buffer as ArrayBuffer);
             this.onAudioChunk(base64);
         };
 
