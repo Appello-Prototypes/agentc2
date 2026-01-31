@@ -29,9 +29,12 @@ export async function POST(req: NextRequest) {
         }
 
         // Use agent.generate for non-streaming response
+        // Memory options use thread/resource keys per Mastra docs
         const result = await agent.generate(message, {
-            resourceId: userId,
-            threadId
+            memory: {
+                thread: threadId,
+                resource: userId
+            }
         });
 
         return NextResponse.json({
