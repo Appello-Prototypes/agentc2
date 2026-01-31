@@ -1,24 +1,27 @@
 # Phase 7: Add Evals and Scorers
 
-**Status**: Pending  
-**Dependencies**: Phases 1-2 (observability for trace scoring)  
-**Estimated Complexity**: Medium
-
 ## Objective
 
-Implement evaluation and scoring for AI outputs using Mastra's built-in scorers:
-1. **Answer Relevancy** - Measures how well responses address the query
-2. **Toxicity** - Detects harmful or inappropriate content
-3. **Custom Scorer** - Create a domain-specific scorer
+Implement evaluation and scoring for AI outputs using Mastra's built-in scorers and custom scorers for measuring relevancy, toxicity, helpfulness, and code quality.
 
-## What are Scorers?
+## Documentation References
 
-Scorers are automated tests that evaluate agent outputs using:
-- **Model-graded methods** - LLM judges the output
-- **Rule-based methods** - Algorithmic scoring
-- **Statistical methods** - Numerical analysis
+| Feature | Source | URL |
+|---------|--------|-----|
+| Scorers Overview | Mastra Docs | https://mastra.ai/docs/evals/overview |
+| Built-in Scorers | Mastra Docs | https://mastra.ai/docs/evals/built-in-scorers |
+| Custom Scorers | Mastra Docs | https://mastra.ai/docs/evals/custom-scorers |
+| Live Evaluations | Mastra Docs | https://mastra.ai/docs/evals/overview#live-evaluations |
+| Adding Scorers to Agents | Mastra Docs | https://mastra.ai/docs/evals/overview#adding-scorers-to-agents |
+| Trace Evaluations | Mastra Docs | https://mastra.ai/docs/evals/overview#trace-evaluations |
 
-Scores are typically 0-1 values that quantify output quality.
+## Documentation Corrections
+
+**IMPORTANT**: The original plan used incorrect imports and APIs. According to official documentation:
+
+1. Built-in scorers are imported from `@mastra/evals/scorers/prebuilt`
+2. The factory pattern is `createAnswerRelevancyScorer({ model: "..." })`
+3. Scorers are added to agents via the `scorers` property with sampling config
 
 ## Implementation Steps
 
@@ -50,7 +53,7 @@ import { z } from "zod";
  * Score: 0-1 (higher is better)
  */
 export const relevancyScorer = createAnswerRelevancyScorer({
-  model: "openai/gpt-4.1-nano", // Fast, cheap model for evaluation
+  model: "openai/gpt-4.1-nano",
 });
 
 /**
@@ -87,29 +90,25 @@ export const toneScorer = createToneConsistencyScorer({
  * Custom Helpfulness Scorer
  * 
  * Evaluates how helpful and actionable the response is.
- * Uses a custom prompt for evaluation.
+ * Uses heuristic-based scoring for demonstration.
  */
 export const helpfulnessScorer = createScorer({
   id: "helpfulness",
   name: "Helpfulness Scorer",
   description: "Evaluates how helpful and actionable the response is",
   
-  // Input schema for the scorer
   inputSchema: z.object({
     input: z.string().describe("The original query"),
     output: z.string().describe("The agent's response"),
   }),
   
-  // Output schema for the score
   outputSchema: z.object({
     score: z.number().min(0).max(1),
     reasoning: z.string(),
   }),
   
-  // Scoring logic
   execute: async ({ input, output }) => {
-    // Simple heuristic-based scoring for demonstration
-    let score = 0.5; // Base score
+    let score = 0.5;
     const reasoning: string[] = [];
 
     // Check for actionable content
@@ -146,7 +145,6 @@ export const helpfulnessScorer = createScorer({
       reasoning.push("Sufficient detail");
     }
 
-    // Cap at 1.0
     score = Math.min(score, 1.0);
 
     return {
@@ -182,7 +180,6 @@ export const codeQualityScorer = createScorer({
   }),
   
   execute: async ({ input, output }) => {
-    // Check for code blocks
     const codeBlockMatches = output.match(/```[\s\S]*?```/g) || [];
     const codeBlocks = codeBlockMatches.length;
     const hasCode = codeBlocks > 0;
@@ -197,15 +194,13 @@ export const codeQualityScorer = createScorer({
       };
     }
 
-    let score = 0.5; // Base score for having code
+    let score = 0.5;
     
-    // Check for comments
     const hasComments = codeBlockMatches.some(block => 
       block.includes("//") || block.includes("/*") || block.includes("#")
     );
     if (hasComments) score += 0.2;
 
-    // Check for error handling
     const hasErrorHandling = codeBlockMatches.some(block =>
       block.includes("try") || 
       block.includes("catch") || 
@@ -214,7 +209,6 @@ export const codeQualityScorer = createScorer({
     );
     if (hasErrorHandling) score += 0.2;
 
-    // Bonus for multiple code examples
     if (codeBlocks > 1) score += 0.1;
 
     return {
@@ -240,45 +234,9 @@ export const scorers = {
 };
 ```
 
-### Step 3: Add Scorers to Agents
+- Doc reference: https://mastra.ai/docs/evals/overview#adding-scorers-to-agents
 
-Update `packages/mastra/src/agents/assistant.ts`:
-
-```typescript
-import { Agent } from "@mastra/core/agent";
-import { memory } from "../memory";
-import { extendedTools } from "../tools";
-import { relevancyScorer, toxicityScorer, helpfulnessScorer } from "../scorers";
-
-export const assistantAgent = new Agent({
-  id: "assistant",
-  name: "AI Assistant",
-  instructions: `You are a helpful, knowledgeable, and friendly AI assistant.
-  // ... rest of instructions ...
-  `,
-  model: "anthropic/claude-sonnet-4-20250514",
-  memory,
-  tools: extendedTools,
-  
-  // Add scorers for live evaluation
-  scorers: {
-    relevancy: {
-      scorer: relevancyScorer,
-      sampling: { type: "ratio", rate: 0.5 }, // Score 50% of responses
-    },
-    toxicity: {
-      scorer: toxicityScorer,
-      sampling: { type: "ratio", rate: 1.0 }, // Score all responses for safety
-    },
-    helpfulness: {
-      scorer: helpfulnessScorer,
-      sampling: { type: "ratio", rate: 0.25 }, // Score 25% of responses
-    },
-  },
-});
-```
-
-### Step 4: Create Evaluated Agent for Demo
+### Step 3: Create Evaluated Agent
 
 Create `packages/mastra/src/agents/evaluated.ts`:
 
@@ -311,7 +269,6 @@ export const evaluatedAgent = new Agent({
 Strive to provide excellent responses that score well on all metrics.`,
   model: "anthropic/claude-sonnet-4-20250514",
   
-  // All scorers enabled at 100% sampling for demo
   scorers: {
     relevancy: {
       scorer: relevancyScorer,
@@ -337,7 +294,9 @@ Strive to provide excellent responses that score well on all metrics.`,
 });
 ```
 
-### Step 5: Update Exports
+- Doc reference: https://mastra.ai/docs/evals/overview#adding-scorers-to-agents
+
+### Step 4: Update Agent Exports
 
 Update `packages/mastra/src/agents/index.ts`:
 
@@ -348,6 +307,33 @@ export { visionAgent, visionAnalysisSchema } from "./vision";
 export { researchAgent, researchTools } from "./research";
 export { evaluatedAgent } from "./evaluated";
 ```
+
+### Step 5: Update Mastra Instance
+
+Update `packages/mastra/src/mastra.ts` to register scorers and evaluated agent:
+
+```typescript
+import { evaluatedAgent } from "./agents";
+import { scorers } from "./scorers";
+
+// In getMastra():
+global.mastraInstance = new Mastra({
+  agents: {
+    // ... existing agents
+    evaluated: evaluatedAgent,
+  },
+  // Register scorers at instance level for trace evaluation
+  scorers: {
+    answerRelevancy: scorers.relevancy,
+    toxicity: scorers.toxicity,
+    helpfulness: scorers.helpfulness,
+    codeQuality: scorers.codeQuality,
+  },
+  // ... rest of config
+});
+```
+
+### Step 6: Update Main Exports
 
 Update `packages/mastra/src/index.ts`:
 
@@ -364,65 +350,126 @@ export {
 } from "./scorers";
 
 // Agents
-export { 
-  assistantAgent, 
-  structuredAgent, 
-  // ... other agents
-  evaluatedAgent,
-} from "./agents";
+export { evaluatedAgent } from "./agents";
 ```
 
-### Step 6: Register Scorers in Mastra
+## Documentation Deviations
 
-Update `packages/mastra/src/mastra.ts`:
+| Deviation | Status | Justification |
+|-----------|--------|---------------|
+| Using `openai/gpt-4.1-nano` for evaluation | **Recommended** | Fast, cheap model suitable for evaluation tasks |
+| Custom heuristic-based scorers | **Experimental** | Demonstrates custom scorer pattern; LLM-based preferred for production |
+| 100% sampling in evaluated agent | **Development only** | Production should use lower sampling rates |
+
+**Flag**: Custom scorers (helpfulness, codeQuality) use rule-based logic. For production, consider LLM-graded versions using `createScorer` with model calls.
+
+## Demo Page Spec
+
+- **Route**: `/demos/evals`
+- **Inputs**:
+  - Input query textarea
+  - Output response textarea (or generate button)
+  - Scorer selector (checkboxes for which scorers to run)
+- **Outputs**:
+  - Score cards with 0-100% values
+  - Score reasoning/explanation
+  - Pass/fail indicators based on thresholds
+- **Sample data**:
+  - Good response: Detailed answer with examples and structure
+  - Poor response: Short, vague answer
+  - Toxic response: For toxicity testing (simulated)
+
+### Sample Inputs/Test Data
 
 ```typescript
-import { Mastra } from "@mastra/core/mastra";
-import { 
-  assistantAgent, 
-  structuredAgent, 
-  visionAgent, 
-  researchAgent,
-  evaluatedAgent,
-} from "./agents";
-import { workflows } from "./workflows";
-import { storage } from "./storage";
-import { observability } from "./observability";
-import { scorers } from "./scorers";
+const evalExamples = {
+  goodResponse: {
+    input: "How do I create a React component?",
+    output: `Here's how to create a React component:
 
-declare global {
-  var mastraInstance: Mastra | undefined;
+## Functional Component
+
+\`\`\`tsx
+function MyComponent() {
+  return <div>Hello World</div>;
 }
+\`\`\`
 
-function getMastra(): Mastra {
-  if (!global.mastraInstance) {
-    global.mastraInstance = new Mastra({
-      agents: {
-        assistant: assistantAgent,
-        structured: structuredAgent,
-        vision: visionAgent,
-        research: researchAgent,
-        evaluated: evaluatedAgent,
-      },
-      workflows,
-      storage,
-      observability,
-      
-      // Register scorers at instance level for trace evaluation
-      scorers: {
-        answerRelevancy: scorers.relevancy,
-        toxicity: scorers.toxicity,
-        helpfulness: scorers.helpfulness,
-        codeQuality: scorers.codeQuality,
-      },
-    });
-  }
+1. Create a function that returns JSX
+2. Export the component
+3. Import and use it in your app
 
-  return global.mastraInstance;
-}
-
-export const mastra = getMastra();
+For example, you can use it like this:
+\`\`\`tsx
+<MyComponent />
+\`\`\``,
+    expectedScores: { relevancy: 0.9, helpfulness: 0.85, codeQuality: 0.8 }
+  },
+  poorResponse: {
+    input: "What is TypeScript?",
+    output: "It's a language.",
+    expectedScores: { relevancy: 0.4, helpfulness: 0.3, completeness: 0.2 }
+  },
+};
 ```
+
+### Error State Handling
+
+- Display "Scorer failed" with error message
+- Show partial results if some scorers succeed
+- Handle timeout for slow LLM-based scorers
+
+### Loading States
+
+- Individual spinner per scorer
+- Overall progress indicator
+- Score cards show skeleton while loading
+
+## Dependency Map
+
+- **Requires**: Phase 2 (observability for trace scoring), OPENAI_API_KEY (for LLM scorers)
+- **Enables**: Quality monitoring, CI/CD integration
+- **Standalone**: Partial - can run manual evals without traces
+
+## Acceptance Criteria
+
+- [ ] User can evaluate a response using built-in relevancy scorer
+- [ ] User can evaluate a response using built-in toxicity scorer
+- [ ] Scores are numeric values between 0 and 1
+- [ ] Custom helpfulness scorer returns score with reasoning
+- [ ] Custom code quality scorer detects code blocks and features
+- [ ] Evaluated agent automatically scores responses at 100% sampling
+- [ ] Scores are stored in mastra_scorers table (with observability)
+- [ ] Scorers are registered at Mastra instance level for trace evaluation
+
+## Test Plan
+
+### Frontend
+
+- [ ] Evals demo page renders with input/output areas
+- [ ] Generate button creates agent response
+- [ ] Scorer checkboxes allow selection
+- [ ] Score cards display after evaluation
+- [ ] Scores show as percentages (0-100%)
+- [ ] Reasoning displays for custom scorers
+- [ ] Loading states show during evaluation
+
+### Backend
+
+- [ ] `/api/demos/evals` accepts input and output, returns scores
+- [ ] `/api/demos/evals/generate` uses evaluated agent
+- [ ] Relevancy scorer returns expected range for test cases
+- [ ] Toxicity scorer returns low scores for clean content
+- [ ] Custom scorers execute without errors
+- [ ] Missing input/output returns 400 error
+
+### Integration
+
+- [ ] End-to-end: generate response → evaluate → display scores
+- [ ] Evaluated agent records scores in traces (requires Phase 2)
+- [ ] Multiple scorers run in parallel
+- [ ] Scores persist to storage for historical analysis
+- [ ] Trace evaluation works in Mastra Studio
 
 ## Built-in Scorers Reference
 
@@ -436,83 +483,12 @@ export const mastra = getMastra();
 | `hallucination` | Unsupported claims | 0-1, lower = better |
 | `content-similarity` | Textual similarity | 0-1, higher = more similar |
 
-## Viewing Scores
-
-### In Traces (Observability)
-When tracing is enabled, scores appear in the trace metadata:
-
-```json
-{
-  "spanType": "agent_run",
-  "scores": {
-    "relevancy": 0.85,
-    "toxicity": 0.02,
-    "helpfulness": 0.78
-  }
-}
-```
-
-### In Mastra Studio
-Scores are visible in the Studio UI under the Observability section.
-
-### Programmatic Access
-Access scores from the response:
-
-```typescript
-const response = await evaluatedAgent.generate("How do I use TypeScript?");
-console.log("Response:", response.text);
-
-// Scores are stored asynchronously in the mastra_scorers table
-// Access via observability traces or Studio
-```
-
-## Verification Checklist
-
-- [ ] `@mastra/evals` package installed
-- [ ] Built-in scorers configured (relevancy, toxicity)
-- [ ] Custom scorers created (helpfulness, codeQuality)
-- [ ] Scorers added to assistant agent
-- [ ] Evaluated agent created with all scorers
-- [ ] Scorers registered at Mastra instance level
-- [ ] Scores appearing in traces
-
-## Testing Examples
-
-### Manual Scoring
-
-```typescript
-import { relevancyScorer, helpfulnessScorer } from "@repo/mastra";
-
-// Test relevancy
-const relevancyResult = await relevancyScorer.score({
-  input: "What is TypeScript?",
-  output: "TypeScript is a typed superset of JavaScript that compiles to plain JavaScript.",
-});
-console.log("Relevancy:", relevancyResult.score); // ~0.9
-
-// Test helpfulness
-const helpfulnessResult = await helpfulnessScorer.score({
-  input: "How do I create a React component?",
-  output: "Here's how to create a React component:\n\n```tsx\nfunction MyComponent() {\n  return <div>Hello</div>;\n}\n```",
-});
-console.log("Helpfulness:", helpfulnessResult.score); // ~0.85
-```
-
-### Agent with Live Scoring
-
-```typescript
-const agent = mastra.getAgent("evaluated");
-const response = await agent.generate("Explain async/await in JavaScript");
-// Scores are automatically computed and stored
-```
-
 ## Files Changed
 
 | File | Action |
 |------|--------|
 | `packages/mastra/package.json` | Add @mastra/evals |
 | `packages/mastra/src/scorers/index.ts` | Create |
-| `packages/mastra/src/agents/assistant.ts` | Update with scorers |
 | `packages/mastra/src/agents/evaluated.ts` | Create |
 | `packages/mastra/src/agents/index.ts` | Update |
 | `packages/mastra/src/mastra.ts` | Update with scorers |

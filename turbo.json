@@ -1,10 +1,10 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY"],
+  "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY", "BETTER_AUTH_SECRET"],
   "ui": "tui",
   "tasks": {
     "build": {
-      "dependsOn": ["^build"],
+      "dependsOn": ["^build", "^db:generate"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {

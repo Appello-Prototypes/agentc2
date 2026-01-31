@@ -1,28 +1,19 @@
 # Phase 6: Implement RAG Pipeline
 
-**Status**: Pending  
-**Dependencies**: Phase 1 (pgvector must be configured)  
-**Estimated Complexity**: High
-
 ## Objective
 
-Implement a complete RAG (Retrieval-Augmented Generation) pipeline with:
-1. Document ingestion and chunking
-2. Embedding generation
-3. Vector storage in Supabase pgvector
-4. Similarity search and retrieval
-5. Context-augmented generation
+Implement a complete RAG (Retrieval-Augmented Generation) pipeline with document ingestion, chunking, embedding generation, vector storage, similarity search, and context-augmented generation.
 
-## What is RAG?
+## Documentation References
 
-RAG enhances LLM outputs by incorporating relevant context from your own data sources. The process:
-
-1. **Ingest**: Load documents (text, markdown, HTML, JSON)
-2. **Chunk**: Split into manageable pieces
-3. **Embed**: Convert chunks to vectors
-4. **Store**: Save vectors in database
-5. **Query**: Find similar chunks
-6. **Generate**: Use retrieved context for better answers
+| Feature | Source | URL |
+|---------|--------|-----|
+| RAG Overview | Mastra Docs | https://mastra.ai/docs/rag/overview |
+| Chunking & Embedding | Mastra Docs | https://mastra.ai/docs/rag/chunking-and-embedding |
+| Vector Databases | Mastra Docs | https://mastra.ai/docs/rag/vector-databases |
+| MDocument Reference | Mastra Docs | https://mastra.ai/reference/rag/document |
+| PgVector Reference | Mastra Docs | https://mastra.ai/reference/vectors/pg |
+| AI SDK embedMany | Vercel AI SDK | https://ai-sdk.dev/docs/ai-sdk-core/embeddings |
 
 ## Implementation Steps
 
@@ -43,15 +34,10 @@ import { embedMany, embed } from "ai";
 import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { vector } from "../vector";
 
-// Index name for RAG documents
 const RAG_INDEX_NAME = "rag_documents";
 
-// Embedding model - same as memory for consistency
 const embedder = new ModelRouterEmbeddingModel("openai/text-embedding-3-small");
 
-/**
- * Supported document types and their initialization methods
- */
 export type DocumentType = "text" | "markdown" | "html" | "json";
 
 /**
@@ -70,9 +56,6 @@ export function createDocument(content: string, type: DocumentType = "text"): MD
   }
 }
 
-/**
- * Chunking configuration options
- */
 export interface ChunkOptions {
   strategy?: "recursive" | "character" | "sentence" | "markdown";
   maxSize?: number;
@@ -115,13 +98,6 @@ export async function initializeRagIndex(): Promise<void> {
       indexName: RAG_INDEX_NAME,
       dimension: 1536, // OpenAI text-embedding-3-small dimension
       metric: "cosine",
-      indexConfig: {
-        type: "hnsw", // Better performance for similarity search
-        hnsw: {
-          m: 16,
-          efConstruction: 64,
-        },
-      },
     });
     console.log(`Created RAG index: ${RAG_INDEX_NAME}`);
   }
@@ -146,7 +122,6 @@ export async function ingestDocument(
   const { type = "text", sourceId, sourceName, chunkOptions } = options;
   const documentId = sourceId || `doc_${Date.now()}`;
 
-  // Create and chunk the document
   const doc = createDocument(content, type);
   const chunks = await chunkDocument(doc, chunkOptions);
 
@@ -154,30 +129,25 @@ export async function ingestDocument(
     throw new Error("No chunks generated from document");
   }
 
-  // Generate embeddings for all chunks
   const { embeddings } = await embedMany({
     model: embedder,
     values: chunks.map((c) => c.text),
   });
 
-  // Prepare metadata for each chunk
   const metadata = chunks.map((chunk, index) => ({
     ...chunk.metadata,
     documentId,
     sourceName: sourceName || documentId,
-    text: chunk.text, // Store text in metadata for retrieval
+    text: chunk.text,
     chunkIndex: index,
     totalChunks: chunks.length,
     ingestedAt: new Date().toISOString(),
   }));
 
-  // Generate IDs for vectors
   const vectorIds = chunks.map((_, index) => `${documentId}_chunk_${index}`);
 
-  // Ensure index exists
   await initializeRagIndex();
 
-  // Upsert vectors
   await vector.upsert({
     indexName: RAG_INDEX_NAME,
     vectors: embeddings,
@@ -209,13 +179,11 @@ export async function queryRag(
 }>> {
   const { topK = 5, minScore = 0.5, filter } = options;
 
-  // Generate embedding for query
   const { embedding } = await embed({
     model: embedder,
     value: query,
   });
 
-  // Query vector store
   const results = await vector.query({
     indexName: RAG_INDEX_NAME,
     vector: embedding,
@@ -232,7 +200,7 @@ export async function queryRag(
 }
 
 /**
- * RAG-enhanced generation - combines retrieval with agent generation
+ * RAG-enhanced generation
  */
 export async function ragGenerate(
   query: string,
@@ -248,16 +216,13 @@ export async function ragGenerate(
 }> {
   const { topK = 5, minScore = 0.5, systemContext = "" } = options;
 
-  // Retrieve relevant chunks
   const chunks = await queryRag(query, { topK, minScore });
 
-  // Build context from retrieved chunks
   const contextParts = chunks.map(
     (chunk, i) => `[Source ${i + 1}]: ${chunk.text}`
   );
   const context = contextParts.join("\n\n");
 
-  // Generate response with context
   const prompt = `${systemContext}
 
 Use the following context to answer the question. If the context doesn't contain relevant information, say so.
@@ -300,8 +265,6 @@ export async function listDocuments(): Promise<Array<{
   chunkCount: number;
   ingestedAt: string;
 }>> {
-  // Note: This is a simplified implementation
-  // In production, you'd want a separate metadata table
   const stats = await vector.describeIndex(RAG_INDEX_NAME);
   
   return [
@@ -314,6 +277,8 @@ export async function listDocuments(): Promise<Array<{
   ];
 }
 ```
+
+- Doc reference: https://mastra.ai/docs/rag/overview
 
 ### Step 3: Create RAG Exports
 
@@ -339,8 +304,6 @@ export {
 Update `packages/mastra/src/index.ts`:
 
 ```typescript
-// ... existing exports ...
-
 // RAG
 export {
   createDocument,
@@ -400,8 +363,7 @@ Create `apps/agent/src/app/api/rag/query/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { queryRag, ragGenerate } from "@repo/mastra";
-import { mastra } from "@repo/mastra";
+import { queryRag, ragGenerate, mastra } from "@repo/mastra";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -418,14 +380,12 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Query is required" }, { status: 400 });
     }
 
-    // If generateResponse is true, use RAG-enhanced generation
     if (generateResponse) {
       const agent = mastra.getAgent("assistant");
       const result = await ragGenerate(query, agent, { topK, minScore });
       return NextResponse.json(result);
     }
 
-    // Otherwise, just return relevant chunks
     const results = await queryRag(query, { topK, minScore });
     return NextResponse.json({ results });
   } catch (error) {
@@ -438,7 +398,119 @@ export async function POST(req: NextRequest) {
 }
 ```
 
-## Chunking Strategies Explained
+## Documentation Deviations
+
+| Deviation | Status | Justification |
+|-----------|--------|---------------|
+| Custom wrapper functions | **Valid pattern** | Docs show direct usage; wrappers provide consistent API |
+| Using separate RAG index | **Recommended** | Separates RAG documents from memory embeddings |
+| Index config omitted | **Simplified** | HNSW config optional; default IVFFlat works for most cases |
+
+## Demo Page Spec
+
+- **Route**: `/demos/rag`
+- **Inputs**:
+  - Document content textarea (multiline)
+  - Document type selector (text, markdown, html, json)
+  - Source name input
+  - Query input
+  - Toggle for "Generate Response" vs "Search Only"
+- **Outputs**:
+  - Ingest results (chunks count, document ID)
+  - Search results with similarity scores
+  - Generated response with source citations
+- **Sample data**:
+  - Sample markdown document about Mastra
+  - Test queries: "What is Mastra?", "How do I use agents?"
+
+### Sample Inputs/Test Data
+
+```typescript
+const ragExamples = {
+  ingestDocument: {
+    content: `# Mastra AI Framework
+
+Mastra is a TypeScript framework for building AI applications.
+It supports agents, tools, workflows, and memory management.
+
+## Key Features
+- Model routing with 40+ providers
+- Built-in memory and semantic recall
+- Graph-based workflow engine`,
+    type: "markdown",
+    sourceName: "Mastra Documentation",
+  },
+  queries: [
+    { query: "What is Mastra?", expectedMatch: "TypeScript framework" },
+    { query: "What features does Mastra have?", expectedMatch: "Model routing" },
+    { query: "How does workflow work?", expectedMatch: "workflow engine" },
+  ],
+};
+```
+
+### Error State Handling
+
+- Display "No documents ingested" when index is empty
+- Show "No matching results" for queries with no hits
+- Display chunk errors for invalid document formats
+- Handle vector dimension mismatch errors
+
+### Loading States
+
+- Progress bar during document chunking
+- Spinner during embedding generation
+- Loading skeleton for search results
+- Stream indicator for generated responses
+
+## Dependency Map
+
+- **Requires**: Phase 1 (vector store must be configured)
+- **Enables**: Standalone RAG capabilities for any use case
+- **Standalone**: Partial - requires Phase 1 vector configuration
+
+## Acceptance Criteria
+
+- [ ] User can ingest a text document and receive chunk count
+- [ ] User can ingest markdown document with preserved structure
+- [ ] Chunking respects size limits and overlap configuration
+- [ ] User can query ingested documents by semantic similarity
+- [ ] Query returns top K results with similarity scores > minScore
+- [ ] RAG-enhanced generation includes source citations
+- [ ] User can delete a document by ID
+- [ ] Multiple document types supported (text, markdown, html, json)
+
+## Test Plan
+
+### Frontend
+
+- [ ] RAG demo page renders with two sections (ingest/query)
+- [ ] Document type selector shows all 4 options
+- [ ] Ingest button disabled when content empty
+- [ ] Results show chunk count after successful ingest
+- [ ] Query results display with scores
+- [ ] Generated response shows with source citations
+- [ ] Error messages display for failures
+
+### Backend
+
+- [ ] `/api/rag/ingest` accepts content and returns document ID
+- [ ] `/api/rag/ingest` rejects empty content with 400
+- [ ] `/api/rag/query` returns relevant chunks
+- [ ] `/api/rag/query` with `generateResponse: true` returns LLM response
+- [ ] Chunking produces expected number of chunks for document size
+- [ ] Embeddings are 1536 dimensions (text-embedding-3-small)
+- [ ] Query with no matches returns empty array
+
+### Integration
+
+- [ ] End-to-end: ingest document → query → receive relevant chunks
+- [ ] RAG generation uses retrieved context in prompt
+- [ ] Multiple documents can be ingested and queried together
+- [ ] Document deletion removes all associated chunks
+- [ ] Authentication required for all RAG endpoints
+- [ ] Vector operations work with Supabase pgvector
+
+## Chunking Strategies
 
 | Strategy | Best For | Description |
 |----------|----------|-------------|
@@ -446,71 +518,6 @@ export async function POST(req: NextRequest) {
 | `sentence` | Prose, articles | Preserves sentence boundaries |
 | `markdown` | Documentation | Respects markdown structure |
 | `character` | Simple splits | Character-based splitting |
-
-## Verification Checklist
-
-- [ ] `@mastra/rag` package installed
-- [ ] `pipeline.ts` created with all functions
-- [ ] RAG index created in Supabase
-- [ ] Document ingestion works
-- [ ] Query returns relevant chunks
-- [ ] RAG-enhanced generation works
-- [ ] API routes created and authenticated
-
-## Testing Examples
-
-### Ingest a Document
-
-```typescript
-import { ingestDocument } from "@repo/mastra";
-
-const result = await ingestDocument(
-  `# Mastra AI Framework
-  
-  Mastra is a TypeScript framework for building AI applications.
-  It supports agents, tools, workflows, and memory management.
-  
-  ## Key Features
-  - Model routing with 40+ providers
-  - Built-in memory and semantic recall
-  - Graph-based workflow engine
-  `,
-  {
-    type: "markdown",
-    sourceId: "mastra-docs-1",
-    sourceName: "Mastra Documentation",
-  }
-);
-
-console.log(`Ingested ${result.chunksIngested} chunks`);
-```
-
-### Query RAG
-
-```typescript
-import { queryRag } from "@repo/mastra";
-
-const results = await queryRag("What is Mastra?", { topK: 3 });
-results.forEach((r) => {
-  console.log(`Score: ${r.score.toFixed(3)} - ${r.text.substring(0, 100)}...`);
-});
-```
-
-### RAG-Enhanced Generation
-
-```typescript
-import { ragGenerate, mastra } from "@repo/mastra";
-
-const agent = mastra.getAgent("assistant");
-const result = await ragGenerate(
-  "How do I use Mastra for building AI applications?",
-  agent,
-  { topK: 5 }
-);
-
-console.log("Answer:", result.response);
-console.log("Sources:", result.sources);
-```
 
 ## Files Changed
 

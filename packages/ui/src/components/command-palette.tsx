@@ -15,7 +15,7 @@ import { getAllNavigationItems, type NavigationItem } from "../config/navigation
 import { userMenuItems, type UserMenuItem } from "../config/user-menu";
 import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
-import { signOut } from "@repo/auth";
+import { signOut } from "@repo/auth/client";
 
 /**
  * Command configuration for command palette

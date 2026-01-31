@@ -6,6 +6,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
+    "./client": "./src/auth-client.ts",
     "./providers": "./src/providers/index.ts"
   },
   "dependencies": {
