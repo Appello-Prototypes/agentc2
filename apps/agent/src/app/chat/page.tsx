@@ -28,7 +28,7 @@ export default function ChatPage() {
 
     const { messages, setMessages, sendMessage, status } = useChat({
         transport: new DefaultChatTransport({
-            api: "/agent/api/chat"
+            api: "/api/chat"
         })
     });
 
@@ -36,7 +36,7 @@ export default function ChatPage() {
     useEffect(() => {
         const fetchMessages = async () => {
             try {
-                const res = await fetch("/agent/api/chat");
+                const res = await fetch("/api/chat");
                 if (res.ok) {
                     const data = await res.json();
                     if (data.length > 0) {

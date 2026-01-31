@@ -53,7 +53,7 @@ It supports agents, tools, workflows, and memory management.
     const handleIngest = async () => {
         setIngestLoading(true);
         try {
-            const res = await fetch("/agent/api/rag/ingest", {
+            const res = await fetch("/api/rag/ingest", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ content, type: docType, sourceName })
@@ -69,7 +69,7 @@ It supports agents, tools, workflows, and memory management.
     const handleQuery = async () => {
         setQueryLoading(true);
         try {
-            const res = await fetch("/agent/api/rag/query", {
+            const res = await fetch("/api/rag/query", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query, generateResponse })

@@ -57,7 +57,7 @@ For example, you can use it like this:
     const handleEvaluate = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/agent/api/demos/evals", {
+            const res = await fetch("/api/demos/evals", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ input, output })
@@ -73,7 +73,7 @@ For example, you can use it like this:
     const handleGenerate = async () => {
         setGenerating(true);
         try {
-            const res = await fetch("/agent/api/demos/evals/generate", {
+            const res = await fetch("/api/demos/evals/generate", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ input })

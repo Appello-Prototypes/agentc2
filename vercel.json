@@ -1,5 +1,5 @@
 {
-    "framework": "nextjs",
-    "buildCommand": "bun run build",
-    "outputDirectory": ".next"
+  "framework": "nextjs",
+  "buildCommand": "bun run build",
+  "outputDirectory": ".next"
 }

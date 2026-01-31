@@ -30,7 +30,7 @@ export default function McpDemoPage() {
     const handleQuery = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/agent/api/mcp", {
+            const res = await fetch("/api/mcp", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: query })

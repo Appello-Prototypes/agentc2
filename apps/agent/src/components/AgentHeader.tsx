@@ -7,7 +7,14 @@ import { usePathname } from "next/navigation";
 
 const navItems = [
     { label: "Home", href: "/" },
-    { label: "Chat", href: "/chat" }
+    { label: "Chat", href: "/chat" },
+    { label: "Demos", href: "/demos" },
+    { label: "Agents", href: "/demos/agents" },
+    { label: "Workflows", href: "/demos/workflows" },
+    { label: "Memory", href: "/demos/memory" },
+    { label: "RAG", href: "/demos/rag" },
+    { label: "Evals", href: "/demos/evals" },
+    { label: "MCP", href: "/demos/mcp" }
 ];
 
 export function AgentHeader() {

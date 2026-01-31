@@ -44,7 +44,7 @@ export default function WorkflowsDemoPage() {
     ) => {
         setLoading(true);
         try {
-            const res = await fetch("/agent/api/demos/workflows", {
+            const res = await fetch("/api/demos/workflows", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ workflowType, input })

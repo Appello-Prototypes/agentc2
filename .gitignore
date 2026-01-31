@@ -63,3 +63,4 @@ data/
 # Storybook
 packages/ui/storybook-static
 storybook-static
+.env*.local

@@ -42,7 +42,7 @@ export default function MemoryDemoPage() {
         setChatLoading(true);
 
         try {
-            const res = await fetch("/agent/api/chat", {
+            const res = await fetch("/api/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -67,7 +67,7 @@ export default function MemoryDemoPage() {
         if (!searchQuery.trim()) return;
         setSearchLoading(true);
         try {
-            const res = await fetch("/agent/api/demos/memory/semantic", {
+            const res = await fetch("/api/demos/memory/semantic", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: searchQuery })
@@ -83,7 +83,7 @@ export default function MemoryDemoPage() {
     const handleGetWorkingMemory = async () => {
         setWorkingLoading(true);
         try {
-            const res = await fetch("/agent/api/demos/memory/working");
+            const res = await fetch("/api/demos/memory/working");
             const data = await res.json();
             setWorkingMemory(data);
         } catch {

@@ -1,11 +1,11 @@
 import { MDocument } from "@mastra/rag";
 import { embedMany, embed } from "ai";
-import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
+import { openai } from "@ai-sdk/openai";
 import { vector } from "../vector";
 
 const RAG_INDEX_NAME = "rag_documents";
 
-const embedder = new ModelRouterEmbeddingModel("openai/text-embedding-3-small");
+const embedder = openai.embedding("text-embedding-3-small");
 
 export type DocumentType = "text" | "markdown" | "html" | "json";
 

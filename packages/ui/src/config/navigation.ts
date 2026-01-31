@@ -50,11 +50,62 @@ export const navigationItems: NavigationItem[] = [
     },
     // Agent navigation
     {
-        label: "Agent",
+        label: "Home",
         icon: icons.home,
-        href: "/agent",
+        href: "/",
         app: "agent",
-        keywords: ["agent", "ai", "assistant"]
+        keywords: ["home", "agent", "main"]
+    },
+    {
+        label: "Chat",
+        icon: icons.messages,
+        href: "/chat",
+        app: "agent",
+        keywords: ["chat", "assistant", "conversation", "ai"]
+    },
+    {
+        label: "Demos",
+        icon: icons["folder-open"],
+        href: "/demos",
+        app: "agent",
+        keywords: ["demos", "examples", "primitives"],
+        children: [
+            {
+                label: "Overview",
+                href: "/demos",
+                keywords: ["demos", "overview", "all"]
+            },
+            {
+                label: "Agents",
+                href: "/demos/agents",
+                keywords: ["agents", "structured", "vision", "research"]
+            },
+            {
+                label: "Workflows",
+                href: "/demos/workflows",
+                keywords: ["workflows", "parallel", "branch", "loop"]
+            },
+            {
+                label: "Memory",
+                href: "/demos/memory",
+                keywords: ["memory", "semantic", "recall", "working"]
+            },
+            {
+                label: "RAG",
+                href: "/demos/rag",
+                keywords: ["rag", "retrieval", "documents", "embeddings"]
+            },
+            {
+                label: "Evals",
+                href: "/demos/evals",
+                keywords: ["evals", "evaluation", "scoring", "metrics"]
+            },
+            {
+                label: "MCP",
+                href: "/demos/mcp",
+                keywords: ["mcp", "model context protocol", "tools"]
+            }
+        ]
     }
 ];
 
