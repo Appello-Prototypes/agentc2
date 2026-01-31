@@ -46,8 +46,12 @@ export const securityHeaders = [
         key: "Content-Security-Policy",
         value: [
             "default-src 'self'",
-            isDevelopment ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'" : "script-src 'self'",
-            isDevelopment ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
+            // Allow unsafe-inline for Next.js hydration scripts and inline styles
+            // unsafe-eval only needed in development for hot reload
+            isDevelopment
+                ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
+                : "script-src 'self' 'unsafe-inline'",
+            "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: https:",
             "font-src 'self' data:",
             // In development, allow connections to other local services (frontend auth, etc.)
