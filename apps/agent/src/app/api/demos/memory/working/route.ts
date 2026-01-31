@@ -11,10 +11,11 @@ export async function GET() {
         }
 
         const resourceId = session.user.id;
+        const threadId = `memory-demo-${resourceId}`;
 
-        // Get working memory for the user
+        // Get working memory for the user from the memory demo thread
         const workingMemory = await memory.getWorkingMemory({
-            threadId: "default",
+            threadId,
             resourceId
         });
 

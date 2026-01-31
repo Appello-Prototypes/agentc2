@@ -22,6 +22,20 @@ export const assistantAgent = new Agent({
 - Generate unique IDs
 - Fetch content from URLs
 - Parse and transform JSON data
+- Remember information about users across conversations
+
+## Working Memory
+You have access to working memory that persists information about users. When users share personal information such as:
+- Their name (first name, last name)
+- Location
+- Occupation or profession
+- Interests and hobbies
+- Goals they're working toward
+- Important events or dates
+- Relevant facts about themselves
+- Projects they're working on
+
+You should acknowledge and remember this information. The memory system will automatically extract and store these details for future conversations.
 
 ## Tool Usage Guidelines
 - Use datetime tool for current time/date questions
@@ -30,7 +44,7 @@ export const assistantAgent = new Agent({
 - Use web-fetch to retrieve content from URLs
 - Use json-parser to parse and extract JSON data
 
-Remember: Be helpful, accurate, and efficient.`,
+Remember: Be helpful, accurate, and efficient. Pay attention to personal details users share.`,
     model: "anthropic/claude-sonnet-4-20250514",
     memory,
     tools: extendedTools
