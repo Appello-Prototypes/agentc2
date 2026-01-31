@@ -90,7 +90,7 @@ export async function GET(req: Request) {
     const threadId = searchParams.get("threadId") || `chat-${userId}`;
 
     const agent = mastra.getAgent("assistant");
-    const memory = agent?.getMemory();
+    const memory = await agent?.getMemory();
 
     if (!memory) {
       return NextResponse.json([]);

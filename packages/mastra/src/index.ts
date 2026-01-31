@@ -1,9 +1,10 @@
 // Main Mastra instance
 export { mastra } from "./mastra";
 
-// Storage and Memory
+// Storage, Memory, and Vector
 export { storage } from "./storage";
 export { memory } from "./memory";
+export { vector } from "./vector";
 
 // Agents
 export { assistantAgent } from "./agents";

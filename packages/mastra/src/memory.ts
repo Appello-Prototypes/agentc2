@@ -1,5 +1,7 @@
 import { Memory } from "@mastra/memory";
+import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { storage } from "./storage";
+import { vector } from "./vector";
 
 // Extend global type for Next.js HMR singleton pattern
 declare global {
@@ -11,11 +13,15 @@ declare global {
  * - Message History: Recent conversation messages
  * - Working Memory: Persistent structured user data
  * - Semantic Recall: Vector search across older conversations
+ *
+ * Requires OPENAI_API_KEY for embeddings.
  */
 function getMemory(): Memory {
   if (!global.mastraMemory) {
     global.mastraMemory = new Memory({
       storage,
+      vector,
+      embedder: new ModelRouterEmbeddingModel("openai/text-embedding-3-small"),
       options: {
         // Automatically generate titles for threads
         generateTitle: true,
@@ -25,10 +31,15 @@ function getMemory(): Memory {
         workingMemory: {
           enabled: true,
         },
-        // Semantic recall is disabled until a vector store is configured
-        // To enable, add a vector store (e.g., pgvector, pinecone) and embedder
-        // See: https://mastra.ai/docs/memory/semantic-recall
-        semanticRecall: false,
+        // Semantic recall configuration
+        semanticRecall: {
+          // Number of semantically similar messages to retrieve
+          topK: 3,
+          // Include N messages before and after each match for context
+          messageRange: 2,
+          // Search across all threads for this user (vs "thread" for current thread only)
+          scope: "resource",
+        },
       },
     });
   }
