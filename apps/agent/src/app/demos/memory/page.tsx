@@ -42,17 +42,18 @@ export default function MemoryDemoPage() {
         setChatLoading(true);
 
         try {
-            const res = await fetch("/api/chat", {
+            const res = await fetch("/api/demos/memory/chat", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    messages: [...messages, userMessage]
-                })
+                body: JSON.stringify({ message: userMessage.content })
             });
             const data = await res.json();
+            if (!res.ok) {
+                throw new Error(data.error || "Failed to get response");
+            }
             setMessages((prev) => [
                 ...prev,
-                { role: "assistant", content: data.text || data.error }
+                { role: "assistant", content: data.text }
             ]);
         } catch {
             setMessages((prev) => [
