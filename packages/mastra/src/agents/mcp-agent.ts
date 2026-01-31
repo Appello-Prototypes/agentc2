@@ -2,17 +2,9 @@ import { Agent } from "@mastra/core/agent";
 import { getMcpTools } from "../mcp/client";
 
 /**
- * MCP-Enabled Agent
- *
- * Demonstrates using tools from external MCP servers.
- * Has access to:
- * - Wikipedia for knowledge retrieval
- * - Sequential thinking for complex reasoning
+ * MCP Agent Instructions
  */
-export const mcpAgent = new Agent({
-    id: "mcp-agent",
-    name: "MCP-Enabled Agent",
-    instructions: `You are an AI assistant with access to external knowledge sources via MCP servers.
+const MCP_AGENT_INSTRUCTIONS = `You are an AI assistant with access to external knowledge sources via MCP servers.
 
 ## Available MCP Tools
 
@@ -32,7 +24,20 @@ export const mcpAgent = new Agent({
 3. Always cite sources when using Wikipedia
 4. Combine tools when needed for comprehensive answers
 
-You have real-time access to these external tools. Use them to provide accurate, well-researched responses.`,
+You have real-time access to these external tools. Use them to provide accurate, well-researched responses.`;
+
+/**
+ * MCP-Enabled Agent
+ *
+ * Demonstrates using tools from external MCP servers.
+ * Has access to:
+ * - Wikipedia for knowledge retrieval
+ * - Sequential thinking for complex reasoning
+ */
+export const mcpAgent = new Agent({
+    id: "mcp-agent",
+    name: "MCP-Enabled Agent",
+    instructions: MCP_AGENT_INSTRUCTIONS,
     model: "anthropic/claude-sonnet-4-20250514"
     // MCP tools will be loaded dynamically
 });
@@ -47,7 +52,7 @@ export async function createMcpAgent() {
     return new Agent({
         id: "mcp-agent-configured",
         name: "MCP-Enabled Agent",
-        instructions: mcpAgent.instructions,
+        instructions: MCP_AGENT_INSTRUCTIONS,
         model: "anthropic/claude-sonnet-4-20250514",
         tools: mcpTools
     });

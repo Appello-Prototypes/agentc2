@@ -36,7 +36,8 @@ Be thorough but concise.`
 
         // Determine confidence based on response length and content
         const text = response.text || "";
-        const confidence = text.length > 500 ? "high" : text.length > 200 ? "medium" : "low";
+        const confidence: "high" | "medium" | "low" =
+            text.length > 500 ? "high" : text.length > 200 ? "medium" : "low";
 
         return {
             analysis: text,

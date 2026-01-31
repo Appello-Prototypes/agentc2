@@ -13,13 +13,13 @@ export async function GET() {
         const resourceId = session.user.id;
 
         // Get working memory for the user
-        const result = await memory.recall({
+        const workingMemory = await memory.getWorkingMemory({
             threadId: "default",
             resourceId
         });
 
         return NextResponse.json({
-            workingMemory: result.workingMemory,
+            workingMemory,
             resourceId
         });
     } catch (error) {

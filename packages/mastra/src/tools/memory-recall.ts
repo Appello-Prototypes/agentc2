@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { memory } from "../memory";
 
 /**
  * Memory Recall Tool
@@ -13,6 +14,7 @@ export const memoryRecallTool = createTool({
         "Search through conversation history to find relevant past messages. Use when you need to recall specific information from previous conversations.",
     inputSchema: z.object({
         query: z.string().describe("What to search for in memory"),
+        threadId: z.string().optional().default("default").describe("Thread to search in"),
         topK: z.number().optional().default(5).describe("Number of results to return")
     }),
     outputSchema: z.object({
@@ -26,37 +28,26 @@ export const memoryRecallTool = createTool({
         ),
         searchQuery: z.string()
     }),
-    execute: async ({ query, topK = 5 }, context) => {
-        // Access memory from context if available
-        const memory = context?.memory;
-
-        if (!memory) {
-            console.log(`[Memory Recall] Memory not available in context`);
-            return {
-                found: false,
-                results: [],
-                searchQuery: query
-            };
-        }
-
+    execute: async ({ query, threadId = "default", topK = 5 }) => {
         try {
             // Use the recall method with semantic search
             const { messages } = await memory.recall({
-                threadId: context?.threadId || "default",
-                vectorSearchString: query,
-                threadConfig: {
-                    semanticRecall: true
-                }
+                threadId,
+                vectorSearchString: query
             });
 
             return {
                 found: messages.length > 0,
-                results: messages.slice(0, topK).map((msg: any) => ({
-                    content:
-                        typeof msg.content === "string" ? msg.content : JSON.stringify(msg.content),
-                    role: msg.role,
-                    similarity: msg.similarity
-                })),
+                results: messages
+                    .slice(0, topK)
+                    .map((msg: { content: unknown; role: string; similarity?: number }) => ({
+                        content:
+                            typeof msg.content === "string"
+                                ? msg.content
+                                : JSON.stringify(msg.content),
+                        role: msg.role,
+                        similarity: msg.similarity
+                    })),
                 searchQuery: query
             };
         } catch (error) {

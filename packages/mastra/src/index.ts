@@ -29,9 +29,10 @@ export {
     toxicityScorer,
     completenessScorer,
     toneScorer,
-    helpfulnessScorer,
-    codeQualityScorer,
-    scorers
+    scorers,
+    evaluateHelpfulness,
+    evaluateCodeQuality,
+    evaluators
 } from "./scorers";
 
 // Tools

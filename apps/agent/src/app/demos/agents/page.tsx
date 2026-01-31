@@ -17,18 +17,45 @@ import {
     Input
 } from "@repo/ui";
 
+interface StructuredResultType {
+    result?: unknown;
+    error?: string;
+}
+
+interface VisionResultType {
+    analysis?: {
+        description?: string;
+        objects?: string[];
+        colors?: string[];
+        mood?: string;
+    };
+    error?: string;
+}
+
+interface ResearchStep {
+    type: string;
+    content: unknown;
+}
+
+interface ResearchResultType {
+    text?: string;
+    steps?: ResearchStep[];
+    toolCalls?: unknown[];
+    error?: string;
+}
+
 export default function AgentsDemoPage() {
     const [structuredInput, setStructuredInput] = useState("Break down the task: Build a website");
     const [structuredSchema, setStructuredSchema] = useState("taskBreakdown");
-    const [structuredResult, setStructuredResult] = useState<Record<string, unknown> | null>(null);
+    const [structuredResult, setStructuredResult] = useState<StructuredResultType | null>(null);
     const [structuredLoading, setStructuredLoading] = useState(false);
 
     const [visionUrl, setVisionUrl] = useState("https://placebear.com/cache/395-205.jpg");
-    const [visionResult, setVisionResult] = useState<Record<string, unknown> | null>(null);
+    const [visionResult, setVisionResult] = useState<VisionResultType | null>(null);
     const [visionLoading, setVisionLoading] = useState(false);
 
     const [researchQuery, setResearchQuery] = useState("What are the benefits of TypeScript?");
-    const [researchResult, setResearchResult] = useState<Record<string, unknown> | null>(null);
+    const [researchResult, setResearchResult] = useState<ResearchResultType | null>(null);
     const [researchLoading, setResearchLoading] = useState(false);
 
     const handleStructured = async () => {

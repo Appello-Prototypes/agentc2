@@ -11,9 +11,20 @@ import {
     Textarea
 } from "@repo/ui";
 
+interface ToolCall {
+    toolName: string;
+    args?: unknown;
+}
+
+interface McpResult {
+    text?: string;
+    toolCalls?: ToolCall[];
+    error?: string;
+}
+
 export default function McpDemoPage() {
     const [query, setQuery] = useState("What is the history of artificial intelligence?");
-    const [result, setResult] = useState<Record<string, unknown> | null>(null);
+    const [result, setResult] = useState<McpResult | null>(null);
     const [loading, setLoading] = useState(false);
 
     const handleQuery = async () => {
@@ -91,21 +102,16 @@ export default function McpDemoPage() {
                                     {result.toolCalls && result.toolCalls.length > 0 && (
                                         <div className="bg-muted rounded-md p-4">
                                             <h4 className="mb-2 font-medium">Tool Calls:</h4>
-                                            {result.toolCalls.map(
-                                                (
-                                                    call: { toolName: string; args: unknown },
-                                                    i: number
-                                                ) => (
-                                                    <div key={i} className="mb-2 text-sm">
-                                                        <span className="text-primary font-mono">
-                                                            {call.toolName}
-                                                        </span>
-                                                        <pre className="bg-background mt-1 overflow-auto rounded p-2 text-xs">
-                                                            {JSON.stringify(call.args, null, 2)}
-                                                        </pre>
-                                                    </div>
-                                                )
-                                            )}
+                                            {result.toolCalls.map((call, i) => (
+                                                <div key={i} className="mb-2 text-sm">
+                                                    <span className="text-primary font-mono">
+                                                        {call.toolName}
+                                                    </span>
+                                                    <pre className="bg-background mt-1 overflow-auto rounded p-2 text-xs">
+                                                        {JSON.stringify(call.args, null, 2)}
+                                                    </pre>
+                                                </div>
+                                            ))}
                                         </div>
                                     )}
                                     {result.error && (

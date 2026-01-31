@@ -11,6 +11,24 @@ import {
     Textarea
 } from "@repo/ui";
 
+interface HelpfulnessScore {
+    score: number;
+    reasoning?: string;
+}
+
+interface CodeQualityScore {
+    score: number;
+    codeBlocks: number;
+    hasComments: boolean;
+    hasErrorHandling: boolean;
+}
+
+interface EvaluationScores {
+    helpfulness?: HelpfulnessScore;
+    codeQuality?: CodeQualityScore;
+    error?: string;
+}
+
 export default function EvalsDemoPage() {
     const [input, setInput] = useState("How do I create a React component?");
     const [output, setOutput] = useState(`Here's how to create a React component:
@@ -32,7 +50,7 @@ For example, you can use it like this:
 <MyComponent />
 \`\`\``);
 
-    const [scores, setScores] = useState<Record<string, unknown> | null>(null);
+    const [scores, setScores] = useState<EvaluationScores | null>(null);
     const [loading, setLoading] = useState(false);
     const [generating, setGenerating] = useState(false);
 

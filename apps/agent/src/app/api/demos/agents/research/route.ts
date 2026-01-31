@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
             maxSteps,
             onStepFinish: (step) => {
                 steps.push({
-                    type: step.finishReason,
+                    type: step.finishReason || "unknown",
                     content: step.text || step.toolCalls
                 });
             }

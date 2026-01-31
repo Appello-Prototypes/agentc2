@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { helpfulnessScorer, codeQualityScorer } from "@repo/mastra";
+import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/mastra";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -16,11 +16,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Input and output are required" }, { status: 400 });
         }
 
-        // Run custom scorers (built-in LLM scorers would require additional API calls)
-        const [helpfulness, codeQuality] = await Promise.all([
-            helpfulnessScorer.execute({ input, output }),
-            codeQualityScorer.execute({ input, output })
-        ]);
+        // Run custom evaluators (built-in LLM scorers would require additional API calls)
+        const helpfulness = evaluateHelpfulness(input, output);
+        const codeQuality = evaluateCodeQuality(output);
 
         return NextResponse.json({
             helpfulness,

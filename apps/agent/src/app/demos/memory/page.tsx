@@ -3,16 +3,34 @@
 import { useState } from "react";
 import { Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@repo/ui";
 
+interface SemanticMessage {
+    role: string;
+    content: string;
+    similarity?: number;
+}
+
+interface SearchResults {
+    query?: string;
+    messages?: SemanticMessage[];
+    error?: string;
+}
+
+interface WorkingMemoryResult {
+    workingMemory?: string | null;
+    resourceId?: string;
+    error?: string;
+}
+
 export default function MemoryDemoPage() {
     const [chatInput, setChatInput] = useState("");
     const [messages, setMessages] = useState<Array<{ role: string; content: string }>>([]);
     const [chatLoading, setChatLoading] = useState(false);
 
     const [searchQuery, setSearchQuery] = useState("");
-    const [searchResults, setSearchResults] = useState<Record<string, unknown> | null>(null);
+    const [searchResults, setSearchResults] = useState<SearchResults | null>(null);
     const [searchLoading, setSearchLoading] = useState(false);
 
-    const [workingMemory, setWorkingMemory] = useState<Record<string, unknown> | null>(null);
+    const [workingMemory, setWorkingMemory] = useState<WorkingMemoryResult | null>(null);
     const [workingLoading, setWorkingLoading] = useState(false);
 
     const handleChat = async () => {

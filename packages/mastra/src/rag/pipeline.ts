@@ -42,7 +42,7 @@ export async function chunkDocument(
 
     const chunks = await doc.chunk({
         strategy,
-        size: maxSize,
+        maxSize,
         overlap
     });
 
@@ -157,7 +157,7 @@ export async function queryRag(
 
     const results = await vector.query({
         indexName: RAG_INDEX_NAME,
-        vector: embedding,
+        queryVector: embedding,
         topK,
         minScore,
         filter
@@ -236,7 +236,7 @@ export async function listDocuments(): Promise<
         ingestedAt: string;
     }>
 > {
-    const stats = await vector.describeIndex(RAG_INDEX_NAME);
+    const stats = await vector.describeIndex({ indexName: RAG_INDEX_NAME });
 
     return [
         {

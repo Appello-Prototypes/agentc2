@@ -12,6 +12,23 @@ import {
     Input
 } from "@repo/ui";
 
+interface IngestResult {
+    documentId?: string;
+    chunks?: number;
+    error?: string;
+}
+
+interface RagChunk {
+    content: string;
+    score?: number;
+}
+
+interface QueryResult {
+    response?: string;
+    chunks?: RagChunk[];
+    error?: string;
+}
+
 export default function RagDemoPage() {
     const [content, setContent] = useState(`# Mastra AI Framework
 
@@ -25,12 +42,12 @@ It supports agents, tools, workflows, and memory management.
 - RAG (Retrieval-Augmented Generation) pipeline`);
     const [docType, setDocType] = useState("markdown");
     const [sourceName, setSourceName] = useState("Mastra Documentation");
-    const [ingestResult, setIngestResult] = useState<Record<string, unknown> | null>(null);
+    const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
     const [ingestLoading, setIngestLoading] = useState(false);
 
     const [query, setQuery] = useState("What is Mastra?");
     const [generateResponse, setGenerateResponse] = useState(true);
-    const [queryResult, setQueryResult] = useState<Record<string, unknown> | null>(null);
+    const [queryResult, setQueryResult] = useState<QueryResult | null>(null);
     const [queryLoading, setQueryLoading] = useState(false);
 
     const handleIngest = async () => {

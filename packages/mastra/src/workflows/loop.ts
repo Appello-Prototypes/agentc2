@@ -6,7 +6,7 @@ const processItemStep = createStep({
     description: "Process a single item in the list",
     inputSchema: z.object({
         value: z.string(),
-        index: z.number().optional()
+        index: z.number()
     }),
     outputSchema: z.object({
         original: z.string(),

@@ -112,7 +112,14 @@ export default function ChatPage() {
                                                     state={toolPart.state || "output-available"}
                                                 />
                                                 <ToolContent>
-                                                    <ToolInput input={toolPart.input || {}} />
+                                                    <ToolInput
+                                                        input={
+                                                            (toolPart.input ?? {}) as Record<
+                                                                string,
+                                                                unknown
+                                                            >
+                                                        }
+                                                    />
                                                     <ToolOutput
                                                         output={toolPart.output}
                                                         errorText={toolPart.errorText}

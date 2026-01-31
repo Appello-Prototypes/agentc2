@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
             result: result.status === "success" ? result.result : undefined,
             error: result.status === "failed" ? result.error?.message : undefined,
             suspended: result.status === "suspended",
-            suspendedStep: result.status === "suspended" ? result.suspendedStep : undefined
+            suspendedSteps: result.status === "suspended" ? result.suspended : undefined
         });
     } catch (error) {
         console.error("Workflow error:", error);

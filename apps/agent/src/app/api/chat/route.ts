@@ -87,17 +87,17 @@ export async function GET(req: Request) {
             return NextResponse.json([]);
         }
 
-        // Get messages from the user's thread
-        const messages = await memory.getMessages({
+        // Get messages from the user's thread using recall
+        const result = await memory.recall({
             threadId,
             resourceId: userId
         });
 
-        if (!messages || messages.length === 0) {
+        if (!result.messages || result.messages.length === 0) {
             return NextResponse.json([]);
         }
 
-        const uiMessages = toAISdkV5Messages(messages);
+        const uiMessages = toAISdkV5Messages(result.messages);
 
         return NextResponse.json(uiMessages);
     } catch (error) {

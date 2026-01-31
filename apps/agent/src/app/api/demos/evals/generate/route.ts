@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mastra, helpfulnessScorer, codeQualityScorer } from "@repo/mastra";
+import { mastra, evaluateHelpfulness, evaluateCodeQuality } from "@repo/mastra";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -25,11 +25,9 @@ export async function POST(req: NextRequest) {
         const response = await agent.generate(input);
         const output = response.text || "";
 
-        // Run custom scorers
-        const [helpfulness, codeQuality] = await Promise.all([
-            helpfulnessScorer.execute({ input, output }),
-            codeQualityScorer.execute({ input, output })
-        ]);
+        // Run custom evaluators
+        const helpfulness = evaluateHelpfulness(input, output);
+        const codeQuality = evaluateCodeQuality(output);
 
         return NextResponse.json({
             output,
