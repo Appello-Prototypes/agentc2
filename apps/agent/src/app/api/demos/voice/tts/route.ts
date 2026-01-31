@@ -3,14 +3,14 @@ import { OpenAIVoice } from "@mastra/voice-openai";
 import { ElevenLabsVoice } from "@mastra/voice-elevenlabs";
 import { Readable } from "stream";
 
-// Helper to convert Node.js Readable stream to buffer
+// Helper to convert Node.js Readable stream to buffer using async iteration
+// This handles already-ended streams (like PassThrough) more reliably than events
 async function streamToBuffer(stream: NodeJS.ReadableStream): Promise<Buffer> {
     const chunks: Buffer[] = [];
-    return new Promise((resolve, reject) => {
-        stream.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
-        stream.on("end", () => resolve(Buffer.concat(chunks)));
-        stream.on("error", reject);
-    });
+    for await (const chunk of stream as AsyncIterable<Buffer>) {
+        chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
 }
 
 export async function POST(request: NextRequest) {
@@ -84,6 +84,15 @@ export async function POST(request: NextRequest) {
             audioBuffer = Buffer.concat(chunks);
         } else {
             return NextResponse.json({ error: "Unexpected stream type" }, { status: 500 });
+        }
+
+        console.log(
+            `TTS: Generated audio buffer of ${audioBuffer.length} bytes for text: "${text.substring(0, 50)}..."`
+        );
+
+        if (audioBuffer.length === 0) {
+            console.error("TTS: Audio buffer is empty!");
+            return NextResponse.json({ error: "Generated audio is empty" }, { status: 500 });
         }
 
         return new NextResponse(audioBuffer, {

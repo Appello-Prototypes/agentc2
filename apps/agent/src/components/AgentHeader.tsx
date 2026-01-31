@@ -6,15 +6,15 @@ import { useSession, signOut } from "@repo/auth";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-    { label: "Home", href: "/" },
+    { label: "Overview", href: "/demos" },
     { label: "Chat", href: "/chat" },
-    { label: "Demos", href: "/demos" },
     { label: "Agents", href: "/demos/agents" },
     { label: "Workflows", href: "/demos/workflows" },
     { label: "Memory", href: "/demos/memory" },
     { label: "RAG", href: "/demos/rag" },
     { label: "Evals", href: "/demos/evals" },
-    { label: "MCP", href: "/demos/mcp" }
+    { label: "MCP", href: "/demos/mcp" },
+    { label: "Voice", href: "/demos/voice" }
 ];
 
 export function AgentHeader() {
@@ -35,11 +35,12 @@ export function AgentHeader() {
 
     return (
         <AppTopBar
-            title="Catalyst Agent"
+            title="Mastra Playground"
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}
             isActive={isActive}
+            app="agent"
             renderNavLink={(item, active) => (
                 <Link
                     href={item.href}

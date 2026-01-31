@@ -40,7 +40,7 @@ export const securityHeaders = [
     },
     {
         key: "Permissions-Policy",
-        value: "camera=(), microphone=(), geolocation=()"
+        value: "camera=(self), microphone=(self), geolocation=()"
     },
     {
         key: "Content-Security-Policy",
@@ -54,10 +54,13 @@ export const securityHeaders = [
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: https:",
             "font-src 'self' data:",
+            // Allow audio/video playback from data URIs and blob URLs (for voice features)
+            "media-src 'self' data: blob:",
             // In development, allow connections to other local services (frontend auth, etc.)
+            // Also allow ElevenLabs API for voice features
             isDevelopment
-                ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001"
-                : "connect-src 'self'",
+                ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001 https://api.elevenlabs.io wss://api.elevenlabs.io"
+                : "connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io",
             "frame-ancestors 'none'"
         ].join("; ")
     }

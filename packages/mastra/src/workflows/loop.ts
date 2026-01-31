@@ -1,99 +1,225 @@
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 
-const processItemStep = createStep({
-    id: "process-item",
-    description: "Process a single item in the list",
-    inputSchema: z.object({
-        value: z.string(),
-        index: z.number()
-    }),
-    outputSchema: z.object({
-        original: z.string(),
-        processed: z.string(),
-        length: z.number()
-    }),
-    execute: async ({ inputData }) => ({
-        original: inputData.value,
-        processed: inputData.value.toUpperCase().trim(),
-        length: inputData.value.length
-    })
+/**
+ * Batch Lead Enrichment Workflow - Foreach Loop Demo
+ *
+ * Scenario: Process a list of sales leads - enrich each with company info,
+ * score by potential, and generate personalized outreach suggestions.
+ *
+ * This demonstrates scalable batch processing with configurable concurrency.
+ */
+
+// Schema for enriched lead data
+const enrichedLeadSchema = z.object({
+    companyName: z.string(),
+    industry: z.string(),
+    estimatedSize: z.enum(["startup", "small", "medium", "large", "enterprise"]),
+    website: z.string(),
+    leadScore: z.number(),
+    scoreFactors: z.array(z.string()),
+    personalizedOutreach: z.string(),
+    recommendedChannel: z.enum(["email", "linkedin", "phone", "event"])
 });
 
-const aggregateStep = createStep({
-    id: "aggregate",
-    description: "Aggregate all processed items",
-    inputSchema: z.array(
-        z.object({
-            original: z.string(),
-            processed: z.string(),
-            length: z.number()
-        })
-    ),
-    outputSchema: z.object({
-        items: z.array(
-            z.object({
-                original: z.string(),
-                processed: z.string()
-            })
-        ),
-        count: z.number(),
-        totalLength: z.number(),
-        avgLength: z.number()
-    }),
-    execute: async ({ inputData }) => ({
-        items: inputData.map((item) => ({
-            original: item.original,
-            processed: item.processed
-        })),
-        count: inputData.length,
-        totalLength: inputData.reduce((sum, item) => sum + item.length, 0),
-        avgLength:
-            inputData.length > 0
-                ? Math.round(
-                      inputData.reduce((sum, item) => sum + item.length, 0) / inputData.length
-                  )
-                : 0
-    })
-});
-
+/**
+ * Prepare Step - Parse and validate lead list
+ */
 const prepareStep = createStep({
     id: "prepare",
-    description: "Prepare items for processing",
+    description: "Prepare and validate the list of leads for processing",
     inputSchema: z.object({
-        items: z.array(z.string())
+        companies: z.array(z.string()).describe("List of company names to enrich")
     }),
     outputSchema: z.array(
         z.object({
-            value: z.string(),
+            companyName: z.string(),
             index: z.number()
         })
     ),
-    execute: async ({ inputData }) => inputData.items.map((value, index) => ({ value, index }))
+    execute: async ({ inputData }) => {
+        // Clean and deduplicate company names
+        const cleaned = inputData.companies
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+            .filter((name, index, self) => self.indexOf(name) === index);
+
+        return cleaned.map((companyName, index) => ({ companyName, index }));
+    }
+});
+
+/**
+ * Process Lead Step - Enrich a single lead with AI
+ */
+const processLeadStep = createStep({
+    id: "process-lead",
+    description: "Enrich a single lead with company information and scoring",
+    inputSchema: z.object({
+        companyName: z.string(),
+        index: z.number()
+    }),
+    outputSchema: enrichedLeadSchema,
+    execute: async ({ inputData, mastra }) => {
+        const agent = mastra?.getAgent("assistant");
+
+        if (!agent) {
+            throw new Error("Assistant agent not found");
+        }
+
+        const response = await agent.generate(
+            `You are a sales intelligence assistant. Enrich this lead with realistic business data.
+
+Company Name: ${inputData.companyName}
+
+Generate realistic (but fictional) enrichment data for this company. Make educated guesses based on the company name about their likely industry and size.
+
+Respond with ONLY a JSON object (no markdown):
+{
+  "industry": "e.g., Technology, Healthcare, Finance, Retail, Manufacturing",
+  "estimatedSize": "startup" | "small" | "medium" | "large" | "enterprise",
+  "website": "www.companyname.com",
+  "leadScore": 1-100 (higher = better prospect),
+  "scoreFactors": ["reason for score", "another reason"],
+  "personalizedOutreach": "A brief, personalized outreach message for this company",
+  "recommendedChannel": "email" | "linkedin" | "phone" | "event"
+}`
+        );
+
+        try {
+            const text = response.text || "";
+            const jsonMatch = text.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                const parsed = JSON.parse(jsonMatch[0]);
+                return {
+                    companyName: inputData.companyName,
+                    industry: parsed.industry || "Unknown",
+                    estimatedSize: parsed.estimatedSize || "medium",
+                    website:
+                        parsed.website ||
+                        `www.${inputData.companyName.toLowerCase().replace(/\s+/g, "")}.com`,
+                    leadScore: parsed.leadScore || 50,
+                    scoreFactors: parsed.scoreFactors || [],
+                    personalizedOutreach: parsed.personalizedOutreach || "",
+                    recommendedChannel: parsed.recommendedChannel || "email"
+                };
+            }
+        } catch {
+            // Fallback
+        }
+
+        return {
+            companyName: inputData.companyName,
+            industry: "Unknown",
+            estimatedSize: "medium" as const,
+            website: `www.${inputData.companyName.toLowerCase().replace(/\s+/g, "")}.com`,
+            leadScore: 50,
+            scoreFactors: ["Default scoring applied"],
+            personalizedOutreach: `Hello ${inputData.companyName} team, I'd love to connect about how we can help your business grow.`,
+            recommendedChannel: "email" as const
+        };
+    }
+});
+
+/**
+ * Aggregate Step - Compile results and generate insights
+ */
+const aggregateStep = createStep({
+    id: "aggregate",
+    description: "Aggregate all enriched leads and generate summary insights",
+    inputSchema: z.array(enrichedLeadSchema),
+    outputSchema: z.object({
+        leads: z.array(enrichedLeadSchema),
+        summary: z.object({
+            totalLeads: z.number(),
+            averageScore: z.number(),
+            topLeads: z.array(z.string()),
+            industryBreakdown: z.record(z.number()),
+            sizeBreakdown: z.record(z.number()),
+            recommendedPriority: z.array(
+                z.object({
+                    companyName: z.string(),
+                    score: z.number(),
+                    reason: z.string()
+                })
+            )
+        })
+    }),
+    execute: async ({ inputData }) => {
+        // Sort by lead score descending
+        const sortedLeads = [...inputData].sort((a, b) => b.leadScore - a.leadScore);
+
+        // Calculate average score
+        const totalScore = inputData.reduce((sum, lead) => sum + lead.leadScore, 0);
+        const averageScore = inputData.length > 0 ? Math.round(totalScore / inputData.length) : 0;
+
+        // Top leads (score > 70)
+        const topLeads = sortedLeads.filter((l) => l.leadScore >= 70).map((l) => l.companyName);
+
+        // Industry breakdown
+        const industryBreakdown: Record<string, number> = {};
+        inputData.forEach((lead) => {
+            industryBreakdown[lead.industry] = (industryBreakdown[lead.industry] || 0) + 1;
+        });
+
+        // Size breakdown
+        const sizeBreakdown: Record<string, number> = {};
+        inputData.forEach((lead) => {
+            sizeBreakdown[lead.estimatedSize] = (sizeBreakdown[lead.estimatedSize] || 0) + 1;
+        });
+
+        // Recommended priority (top 3)
+        const recommendedPriority = sortedLeads.slice(0, 3).map((lead) => ({
+            companyName: lead.companyName,
+            score: lead.leadScore,
+            reason: lead.scoreFactors[0] || "High potential lead"
+        }));
+
+        return {
+            leads: sortedLeads,
+            summary: {
+                totalLeads: inputData.length,
+                averageScore,
+                topLeads,
+                industryBreakdown,
+                sizeBreakdown,
+                recommendedPriority
+            }
+        };
+    }
 });
 
 export const foreachWorkflow = createWorkflow({
     id: "foreach-loop",
-    description: "Process each item in an array with optional parallel execution",
+    description: "Batch lead enrichment - process and score multiple sales leads with AI",
     inputSchema: z.object({
-        items: z.array(z.string()).describe("Items to process")
+        companies: z.array(z.string()).describe("List of company names to enrich")
     }),
     outputSchema: z.object({
-        items: z.array(
-            z.object({
-                original: z.string(),
-                processed: z.string()
-            })
-        ),
-        count: z.number(),
-        totalLength: z.number(),
-        avgLength: z.number()
+        leads: z.array(enrichedLeadSchema),
+        summary: z.object({
+            totalLeads: z.number(),
+            averageScore: z.number(),
+            topLeads: z.array(z.string()),
+            industryBreakdown: z.record(z.number()),
+            sizeBreakdown: z.record(z.number()),
+            recommendedPriority: z.array(
+                z.object({
+                    companyName: z.string(),
+                    score: z.number(),
+                    reason: z.string()
+                })
+            )
+        })
     })
 })
     .then(prepareStep)
-    .foreach(processItemStep, { concurrency: 3 })
+    .foreach(processLeadStep, { concurrency: 3 })
     .then(aggregateStep)
     .commit();
+
+// ============================================================================
+// DoWhile Loop Demo - Progress Counter
+// ============================================================================
 
 const incrementStep = createStep({
     id: "increment",

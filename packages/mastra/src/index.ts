@@ -21,7 +21,14 @@ export {
 } from "./agents";
 
 // MCP
-export { mcpClient, getMcpTools, getMcpToolsets, disconnectMcp } from "./mcp";
+export {
+    mcpClient,
+    getMcpTools,
+    getMcpToolsets,
+    disconnectMcp,
+    MCP_SERVER_CONFIGS,
+    type McpServerConfig
+} from "./mcp";
 
 // Scorers
 export {

@@ -24,8 +24,21 @@ export async function POST(req: NextRequest) {
             );
         }
 
+        const startTime = Date.now();
         const run = await workflow.createRun();
         const result = await run.start({ inputData: input });
+        const executionTime = Date.now() - startTime;
+
+        // Format suspended steps for the frontend
+        let suspended: Array<{ step: string; data: Record<string, unknown> }> | undefined;
+        if (result.status === "suspended" && result.suspended) {
+            suspended = result.suspended.map(
+                (s: { step: string; data?: Record<string, unknown> }) => ({
+                    step: s.step,
+                    data: s.data || {}
+                })
+            );
+        }
 
         return NextResponse.json({
             workflowType,
@@ -33,8 +46,8 @@ export async function POST(req: NextRequest) {
             status: result.status,
             result: result.status === "success" ? result.result : undefined,
             error: result.status === "failed" ? result.error?.message : undefined,
-            suspended: result.status === "suspended",
-            suspendedSteps: result.status === "suspended" ? result.suspended : undefined
+            suspended,
+            executionTime
         });
     } catch (error) {
         console.error("Workflow error:", error);

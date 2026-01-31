@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ingestDocument } from "@repo/mastra";
+import { ingestDocument, type ChunkOptions } from "@repo/mastra";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -10,7 +10,7 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { content, type, sourceId, sourceName } = await req.json();
+        const { content, type, sourceId, sourceName, chunkOptions } = await req.json();
 
         if (!content) {
             return NextResponse.json({ error: "Content is required" }, { status: 400 });
@@ -19,7 +19,8 @@ export async function POST(req: NextRequest) {
         const result = await ingestDocument(content, {
             type: type || "text",
             sourceId,
-            sourceName
+            sourceName,
+            chunkOptions: chunkOptions as ChunkOptions
         });
 
         return NextResponse.json(result);

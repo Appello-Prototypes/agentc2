@@ -3,6 +3,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo
 
 const demos = [
     {
+        title: "Chat",
+        description: "Conversational AI assistant with tool use and memory",
+        href: "/chat",
+        features: ["Conversation", "Tool Use", "Memory"],
+        status: "ready" as const
+    },
+    {
         title: "Agents",
         description: "Explore structured output, vision analysis, and multi-step research agents",
         href: "/demos/agents",
@@ -57,7 +64,7 @@ export default function DemosPage() {
     return (
         <div>
             <div className="mb-12 text-center">
-                <h1 className="mb-4 text-4xl font-bold">Mastra Primitives Demo</h1>
+                <h1 className="mb-4 text-4xl font-bold">Mastra Playground</h1>
                 <p className="text-muted-foreground mx-auto max-w-2xl text-lg">
                     Explore all the capabilities of the Mastra AI framework through interactive
                     demonstrations of each primitive.

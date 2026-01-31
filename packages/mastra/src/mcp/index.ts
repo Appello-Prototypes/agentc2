@@ -1,1 +1,8 @@
-export { mcpClient, getMcpTools, getMcpToolsets, disconnectMcp } from "./client";
+export {
+    mcpClient,
+    getMcpTools,
+    getMcpToolsets,
+    disconnectMcp,
+    MCP_SERVER_CONFIGS,
+    type McpServerConfig
+} from "./client";

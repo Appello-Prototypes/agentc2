@@ -9,7 +9,7 @@ import {
 } from "./dropdown-menu";
 import { Button } from "./button";
 import { UserMenu } from "./user-menu";
-import { navigationItems } from "../config/navigation";
+import { navigationItems, type NavigationApp } from "../config/navigation";
 import { icons, HugeiconsIcon } from "../icons";
 
 type Session = {
@@ -32,6 +32,7 @@ type AppTopBarProps = {
     onSignOut: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
+    app?: NavigationApp;
 };
 
 export function AppTopBar({
@@ -40,8 +41,14 @@ export function AppTopBar({
     navItems = [],
     onSignOut,
     isActive = () => false,
-    renderNavLink
+    renderNavLink,
+    app
 }: AppTopBarProps) {
+    // Filter navigation items by app if specified
+    const filteredNavItems = app
+        ? navigationItems.filter((item) => item.app === app)
+        : navigationItems;
+
     return (
         <header className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
             <div className="flex h-14 w-full items-center px-4">
@@ -55,7 +62,7 @@ export function AppTopBar({
                         <DropdownMenuContent align="start" className="w-56">
                             <div className="px-2 py-1.5 text-sm font-semibold">Navigation</div>
                             <DropdownMenuSeparator />
-                            {navigationItems.map((item) =>
+                            {filteredNavItems.map((item) =>
                                 item.children ? (
                                     <div key={item.label}>
                                         <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs font-semibold">

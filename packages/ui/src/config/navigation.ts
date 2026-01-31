@@ -48,13 +48,13 @@ export const navigationItems: NavigationItem[] = [
         app: "frontend",
         keywords: ["demos", "samples", "examples"]
     },
-    // Agent navigation
+    // Agent navigation (Mastra Playground)
     {
-        label: "Home",
+        label: "Overview",
         icon: icons.home,
-        href: "/",
+        href: "/demos",
         app: "agent",
-        keywords: ["home", "agent", "main"]
+        keywords: ["home", "overview", "demos", "all"]
     },
     {
         label: "Chat",
@@ -64,48 +64,53 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["chat", "assistant", "conversation", "ai"]
     },
     {
-        label: "Demos",
+        label: "Agents",
         icon: icons["folder-open"],
-        href: "/demos",
+        href: "/demos/agents",
         app: "agent",
-        keywords: ["demos", "examples", "primitives"],
-        children: [
-            {
-                label: "Overview",
-                href: "/demos",
-                keywords: ["demos", "overview", "all"]
-            },
-            {
-                label: "Agents",
-                href: "/demos/agents",
-                keywords: ["agents", "structured", "vision", "research"]
-            },
-            {
-                label: "Workflows",
-                href: "/demos/workflows",
-                keywords: ["workflows", "parallel", "branch", "loop"]
-            },
-            {
-                label: "Memory",
-                href: "/demos/memory",
-                keywords: ["memory", "semantic", "recall", "working"]
-            },
-            {
-                label: "RAG",
-                href: "/demos/rag",
-                keywords: ["rag", "retrieval", "documents", "embeddings"]
-            },
-            {
-                label: "Evals",
-                href: "/demos/evals",
-                keywords: ["evals", "evaluation", "scoring", "metrics"]
-            },
-            {
-                label: "MCP",
-                href: "/demos/mcp",
-                keywords: ["mcp", "model context protocol", "tools"]
-            }
-        ]
+        keywords: ["agents", "structured", "vision", "research"]
+    },
+    {
+        label: "Workflows",
+        icon: icons["folder-open"],
+        href: "/demos/workflows",
+        app: "agent",
+        keywords: ["workflows", "parallel", "branch", "loop"]
+    },
+    {
+        label: "Memory",
+        icon: icons["folder-open"],
+        href: "/demos/memory",
+        app: "agent",
+        keywords: ["memory", "semantic", "recall", "working"]
+    },
+    {
+        label: "RAG",
+        icon: icons["folder-open"],
+        href: "/demos/rag",
+        app: "agent",
+        keywords: ["rag", "retrieval", "documents", "embeddings"]
+    },
+    {
+        label: "Evals",
+        icon: icons["folder-open"],
+        href: "/demos/evals",
+        app: "agent",
+        keywords: ["evals", "evaluation", "scoring", "metrics"]
+    },
+    {
+        label: "MCP",
+        icon: icons["folder-open"],
+        href: "/demos/mcp",
+        app: "agent",
+        keywords: ["mcp", "model context protocol", "tools"]
+    },
+    {
+        label: "Voice",
+        icon: icons["folder-open"],
+        href: "/demos/voice",
+        app: "agent",
+        keywords: ["voice", "speech", "tts", "stt", "audio"]
     }
 ];
 
