@@ -29,7 +29,17 @@ function getMemory(): Memory {
                 lastMessages: 10,
                 // Enable working memory for user context persistence
                 workingMemory: {
-                    enabled: true
+                    enabled: true,
+                    template: `# User Information
+- **First Name**:
+- **Last Name**:
+- **Location**:
+- **Occupation**:
+- **Interests**:
+- **Goals**:
+- **Events**:
+- **Facts**:
+- **Projects**:`
                 },
                 // Semantic recall configuration
                 semanticRecall: {
