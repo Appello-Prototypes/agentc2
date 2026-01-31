@@ -43,11 +43,17 @@ export const config = {
     matcher: [
         /*
          * Match all request paths except:
+         * - api (API routes handle their own authentication for fine-grained control)
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
+         *
+         * Note: API routes are excluded because they implement their own auth checks.
+         * This allows each API endpoint to decide its own auth requirements
+         * (e.g., some may be public, others require auth, some need specific roles).
+         * See api/chat/route.ts for an example of route-level authentication.
          */
-        "/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"
+        "/((?!api|_next/static|_next/image|favicon.ico|.*\\..*).*)"
     ]
 };

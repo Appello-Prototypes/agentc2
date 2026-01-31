@@ -50,7 +50,8 @@ export const securityHeaders = [
             isDevelopment ? "style-src 'self' 'unsafe-inline'" : "style-src 'self'",
             "img-src 'self' data: https:",
             "font-src 'self' data:",
-            "connect-src 'self'",
+            // In development, allow connections to other local services (frontend auth, etc.)
+            isDevelopment ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001" : "connect-src 'self'",
             "frame-ancestors 'none'"
         ].join("; ")
     }

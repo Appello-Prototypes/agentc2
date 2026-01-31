@@ -1,6 +1,6 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL"],
+  "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY"],
   "ui": "tui",
   "tasks": {
     "build": {
@@ -8,7 +8,7 @@
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
-      "dependsOn": ["^db:push"],
+      "dependsOn": ["^db:generate"],
       "cache": false,
       "persistent": true
     },

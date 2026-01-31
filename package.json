@@ -29,6 +29,7 @@
     "build-storybook": "turbo build-storybook"
   },
   "devDependencies": {
+    "pg": "^8.18.0",
     "prettier": "^3.8.1",
     "prettier-plugin-prisma": "^5.0.0",
     "prettier-plugin-tailwindcss": "^0.7.2",

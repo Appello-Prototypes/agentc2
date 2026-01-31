@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useSession, signOut } from "@repo/auth";
 import { usePathname } from "next/navigation";
 
-const navItems = [{ label: "Home", href: "/" }];
+const navItems = [
+    { label: "Home", href: "/" },
+    { label: "Chat", href: "/chat" },
+];
 
 export function AgentHeader() {
     const { data: session } = useSession();

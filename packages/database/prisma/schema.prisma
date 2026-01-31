@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-    provider = "mysql"
+    provider = "postgresql"
     url      = env("DATABASE_URL")
 }
 
@@ -16,7 +16,7 @@ model User {
     name          String
     email         String    @unique
     emailVerified Boolean   @default(false)
-    image         String?   @db.Text
+    image         String?
     createdAt     DateTime  @default(now())
     updatedAt     DateTime  @updatedAt
     sessions      Session[]
@@ -28,11 +28,11 @@ model User {
 model Session {
     id        String   @id @default(cuid())
     expiresAt DateTime
-    token     String   @unique @db.VarChar(255)
+    token     String   @unique
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
-    ipAddress String?  @db.VarChar(45)
-    userAgent String?  @db.Text
+    ipAddress String?
+    userAgent String?
     userId    String
     user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -46,13 +46,13 @@ model Account {
     providerId            String
     userId                String
     user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-    accessToken           String?   @db.Text
-    refreshToken          String?   @db.Text
-    idToken               String?   @db.Text
+    accessToken           String?
+    refreshToken          String?
+    idToken               String?
     accessTokenExpiresAt  DateTime?
     refreshTokenExpiresAt DateTime?
-    scope                 String?   @db.Text
-    password              String?   @db.Text
+    scope                 String?
+    password              String?
     createdAt             DateTime  @default(now())
     updatedAt             DateTime  @updatedAt
 
@@ -63,7 +63,7 @@ model Account {
 model Verification {
     id         String    @id @default(cuid())
     identifier String
-    value      String    @db.Text
+    value      String
     expiresAt  DateTime
     createdAt  DateTime? @default(now())
     updatedAt  DateTime? @updatedAt
