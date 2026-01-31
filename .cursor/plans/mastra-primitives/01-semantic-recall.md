@@ -6,13 +6,13 @@ Enable semantic recall in the memory system using Supabase PostgreSQL with pgvec
 
 ## Documentation References
 
-| Feature | Source | URL |
-|---------|--------|-----|
-| Semantic Recall Overview | Mastra Docs | https://mastra.ai/docs/memory/semantic-recall |
-| Memory Configuration | Mastra Docs | https://mastra.ai/docs/memory/overview |
-| PgVector Reference | Mastra Docs | https://mastra.ai/reference/vectors/pg |
-| Embedder Configuration | Mastra Docs | https://mastra.ai/docs/memory/semantic-recall#embedder-configuration |
-| Storage Configuration | Mastra Docs | https://mastra.ai/docs/memory/storage |
+| Feature                  | Source      | URL                                                                  |
+| ------------------------ | ----------- | -------------------------------------------------------------------- |
+| Semantic Recall Overview | Mastra Docs | https://mastra.ai/docs/memory/semantic-recall                        |
+| Memory Configuration     | Mastra Docs | https://mastra.ai/docs/memory/overview                               |
+| PgVector Reference       | Mastra Docs | https://mastra.ai/reference/vectors/pg                               |
+| Embedder Configuration   | Mastra Docs | https://mastra.ai/docs/memory/semantic-recall#embedder-configuration |
+| Storage Configuration    | Mastra Docs | https://mastra.ai/docs/memory/storage                                |
 
 ## Implementation Steps
 
@@ -38,22 +38,22 @@ Create new file: `packages/mastra/src/vector.ts`
 import { PgVector } from "@mastra/pg";
 
 declare global {
-  var pgVector: PgVector | undefined;
+    var pgVector: PgVector | undefined;
 }
 
 function getPgVector(): PgVector {
-  if (!global.pgVector) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL is not defined in environment variables");
+    if (!global.pgVector) {
+        if (!process.env.DATABASE_URL) {
+            throw new Error("DATABASE_URL is not defined in environment variables");
+        }
+
+        global.pgVector = new PgVector({
+            id: "mastra-vector",
+            connectionString: process.env.DATABASE_URL
+        });
     }
 
-    global.pgVector = new PgVector({
-      id: "mastra-vector",
-      connectionString: process.env.DATABASE_URL,
-    });
-  }
-
-  return global.pgVector;
+    return global.pgVector;
 }
 
 export const vector = getPgVector();
@@ -72,31 +72,31 @@ import { storage } from "./storage";
 import { vector } from "./vector";
 
 declare global {
-  var mastraMemory: Memory | undefined;
+    var mastraMemory: Memory | undefined;
 }
 
 function getMemory(): Memory {
-  if (!global.mastraMemory) {
-    global.mastraMemory = new Memory({
-      storage,
-      vector,
-      embedder: new ModelRouterEmbeddingModel("openai/text-embedding-3-small"),
-      options: {
-        generateTitle: true,
-        lastMessages: 10,
-        workingMemory: {
-          enabled: true,
-        },
-        semanticRecall: {
-          topK: 3,
-          messageRange: 2,
-          scope: "resource",
-        },
-      },
-    });
-  }
+    if (!global.mastraMemory) {
+        global.mastraMemory = new Memory({
+            storage,
+            vector,
+            embedder: new ModelRouterEmbeddingModel("openai/text-embedding-3-small"),
+            options: {
+                generateTitle: true,
+                lastMessages: 10,
+                workingMemory: {
+                    enabled: true
+                },
+                semanticRecall: {
+                    topK: 3,
+                    messageRange: 2,
+                    scope: "resource"
+                }
+            }
+        });
+    }
 
-  return global.mastraMemory;
+    return global.mastraMemory;
 }
 
 export const memory = getMemory();
@@ -116,7 +116,7 @@ Update `turbo.json`:
 
 ```json
 {
-  "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+    "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
 }
 ```
 
@@ -132,43 +132,50 @@ export { vector } from "./vector";
 
 ## Documentation Deviations
 
-| Deviation | Justification |
-|-----------|---------------|
+| Deviation                          | Justification                                                                    |
+| ---------------------------------- | -------------------------------------------------------------------------------- |
 | Using `PgVector` from `@mastra/pg` | Verified correct - docs show both `LibSQLVector` and `PgVector` as valid options |
-| Using `ModelRouterEmbeddingModel` | Verified correct - recommended pattern per docs |
+| Using `ModelRouterEmbeddingModel`  | Verified correct - recommended pattern per docs                                  |
 
 ## Demo Page Spec
 
 - **Route**: `/demos/memory`
-- **Inputs**: 
-  - Text input for new messages
-  - Search query input for semantic recall testing
-  - Thread ID selector
+- **Inputs**:
+    - Text input for new messages
+    - Search query input for semantic recall testing
+    - Thread ID selector
 - **Outputs**:
-  - Chat history display
-  - Semantic recall search results with similarity scores
-  - Working memory display panel
+    - Chat history display
+    - Semantic recall search results with similarity scores
+    - Working memory display panel
 - **Sample data**:
-  - Pre-seeded conversation: "My name is Alex and I work at Acme Corp as a software engineer"
-  - Test query: "What is my job?" should recall relevant context
-  - Test query: "Where do I work?" should recall Acme Corp reference
+    - Pre-seeded conversation: "My name is Alex and I work at Acme Corp as a software engineer"
+    - Test query: "What is my job?" should recall relevant context
+    - Test query: "Where do I work?" should recall Acme Corp reference
 
 ### Sample Inputs/Test Data
 
 ```typescript
 // Initial conversation to seed
 const seedMessages = [
-  { role: "user", content: "Hi, my name is Alex and I'm a software engineer at Acme Corp" },
-  { role: "assistant", content: "Nice to meet you Alex! It's great to hear you're a software engineer at Acme Corp." },
-  { role: "user", content: "I prefer TypeScript over JavaScript" },
-  { role: "assistant", content: "TypeScript is a great choice! The type safety really helps with larger codebases." },
+    { role: "user", content: "Hi, my name is Alex and I'm a software engineer at Acme Corp" },
+    {
+        role: "assistant",
+        content:
+            "Nice to meet you Alex! It's great to hear you're a software engineer at Acme Corp."
+    },
+    { role: "user", content: "I prefer TypeScript over JavaScript" },
+    {
+        role: "assistant",
+        content: "TypeScript is a great choice! The type safety really helps with larger codebases."
+    }
 ];
 
 // Semantic recall test queries
 const testQueries = [
-  { query: "What's my name?", expectedMatch: "Alex" },
-  { query: "What language do I prefer?", expectedMatch: "TypeScript" },
-  { query: "Where do I work?", expectedMatch: "Acme Corp" },
+    { query: "What's my name?", expectedMatch: "Alex" },
+    { query: "What language do I prefer?", expectedMatch: "TypeScript" },
+    { query: "Where do I work?", expectedMatch: "Acme Corp" }
 ];
 ```
 
@@ -232,19 +239,19 @@ const testQueries = [
 
 ## Configuration Options Explained
 
-| Option | Value | Description |
-|--------|-------|-------------|
-| `topK` | 3 | Number of semantically similar messages to retrieve |
-| `messageRange` | 2 | Include N messages before and after each match for context |
-| `scope` | "resource" | Search across all threads for this user (vs "thread" for current thread only) |
+| Option         | Value      | Description                                                                   |
+| -------------- | ---------- | ----------------------------------------------------------------------------- |
+| `topK`         | 3          | Number of semantically similar messages to retrieve                           |
+| `messageRange` | 2          | Include N messages before and after each match for context                    |
+| `scope`        | "resource" | Search across all threads for this user (vs "thread" for current thread only) |
 
 ## Files Changed
 
-| File | Action |
-|------|--------|
-| `packages/mastra/src/vector.ts` | Create |
-| `packages/mastra/src/memory.ts` | Update |
-| `packages/mastra/src/index.ts` | Update |
-| `.env` | Add OPENAI_API_KEY |
-| `turbo.json` | Add to globalEnv |
-| `apps/agent/src/app/demos/memory/page.tsx` | Create (Phase 9) |
+| File                                       | Action             |
+| ------------------------------------------ | ------------------ |
+| `packages/mastra/src/vector.ts`            | Create             |
+| `packages/mastra/src/memory.ts`            | Update             |
+| `packages/mastra/src/index.ts`             | Update             |
+| `.env`                                     | Add OPENAI_API_KEY |
+| `turbo.json`                               | Add to globalEnv   |
+| `apps/agent/src/app/demos/memory/page.tsx` | Create (Phase 9)   |

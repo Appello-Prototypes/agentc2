@@ -6,14 +6,14 @@ Connect to external MCP (Model Context Protocol) servers to give agents access t
 
 ## Documentation References
 
-| Feature | Source | URL |
-|---------|--------|-----|
-| MCPClient Reference | Mastra Docs | https://mastra.ai/reference/tools/mcp-client |
-| MCPClient Configuration | Mastra Docs | https://mastra.ai/reference/tools/mcp-configuration |
-| MCP Migration Guide | Mastra Docs | https://mastra.ai/guides/v1/migrations/upgrade-to-v1/mcp |
-| Static Tool Config | Mastra Docs | https://mastra.ai/reference/tools/mcp-client#static-tool-configuration |
-| Dynamic Toolsets | Mastra Docs | https://mastra.ai/reference/tools/mcp-client#dynamic-toolsets |
-| MCP Specification | External | https://modelcontextprotocol.io/specification |
+| Feature                 | Source      | URL                                                                    |
+| ----------------------- | ----------- | ---------------------------------------------------------------------- |
+| MCPClient Reference     | Mastra Docs | https://mastra.ai/reference/tools/mcp-client                           |
+| MCPClient Configuration | Mastra Docs | https://mastra.ai/reference/tools/mcp-configuration                    |
+| MCP Migration Guide     | Mastra Docs | https://mastra.ai/guides/v1/migrations/upgrade-to-v1/mcp               |
+| Static Tool Config      | Mastra Docs | https://mastra.ai/reference/tools/mcp-client#static-tool-configuration |
+| Dynamic Toolsets        | Mastra Docs | https://mastra.ai/reference/tools/mcp-client#dynamic-toolsets          |
+| MCP Specification       | External    | https://modelcontextprotocol.io/specification                          |
 
 ## Documentation Corrections
 
@@ -42,46 +42,46 @@ Create `packages/mastra/src/mcp/client.ts`:
 import { MCPClient } from "@mastra/mcp";
 
 declare global {
-  var mcpClient: MCPClient | undefined;
+    var mcpClient: MCPClient | undefined;
 }
 
 /**
  * MCP Client Configuration
- * 
+ *
  * Connects to external MCP servers to provide additional tools.
  * Currently configured:
  * - Wikipedia: Search and retrieve Wikipedia articles
  * - Sequential Thinking: Break down complex reasoning
  */
 function getMcpClient(): MCPClient {
-  if (!global.mcpClient) {
-    global.mcpClient = new MCPClient({
-      id: "mastra-mcp-client",
-      servers: {
-        // Wikipedia MCP Server - Free, no API key required
-        wikipedia: {
-          command: "npx",
-          args: ["-y", "wikipedia-mcp"],
-        },
-        
-        // Sequential Thinking MCP Server (via Smithery)
-        sequentialThinking: {
-          command: "npx",
-          args: [
-            "-y",
-            "@smithery/cli@latest",
-            "run",
-            "@smithery-ai/server-sequential-thinking",
-            "--config",
-            "{}",
-          ],
-        },
-      },
-      timeout: 60000, // 60 second timeout
-    });
-  }
+    if (!global.mcpClient) {
+        global.mcpClient = new MCPClient({
+            id: "mastra-mcp-client",
+            servers: {
+                // Wikipedia MCP Server - Free, no API key required
+                wikipedia: {
+                    command: "npx",
+                    args: ["-y", "wikipedia-mcp"]
+                },
 
-  return global.mcpClient;
+                // Sequential Thinking MCP Server (via Smithery)
+                sequentialThinking: {
+                    command: "npx",
+                    args: [
+                        "-y",
+                        "@smithery/cli@latest",
+                        "run",
+                        "@smithery-ai/server-sequential-thinking",
+                        "--config",
+                        "{}"
+                    ]
+                }
+            },
+            timeout: 60000 // 60 second timeout
+        });
+    }
+
+    return global.mcpClient;
 }
 
 export const mcpClient = getMcpClient();
@@ -91,7 +91,7 @@ export const mcpClient = getMcpClient();
  * Use this when configuring an agent with static tools
  */
 export async function getMcpTools() {
-  return await mcpClient.listTools();
+    return await mcpClient.listTools();
 }
 
 /**
@@ -99,7 +99,7 @@ export async function getMcpTools() {
  * Use this when tools need to vary by request (e.g., different API keys per user)
  */
 export async function getMcpToolsets() {
-  return await mcpClient.listToolsets();
+    return await mcpClient.listToolsets();
 }
 
 /**
@@ -107,7 +107,7 @@ export async function getMcpToolsets() {
  * Call when shutting down the application
  */
 export async function disconnectMcp() {
-  await mcpClient.disconnect();
+    await mcpClient.disconnect();
 }
 ```
 
@@ -123,16 +123,16 @@ import { getMcpTools } from "../mcp/client";
 
 /**
  * MCP-Enabled Agent
- * 
+ *
  * Demonstrates using tools from external MCP servers.
  * Has access to:
  * - Wikipedia for knowledge retrieval
  * - Sequential thinking for complex reasoning
  */
 export const mcpAgent = new Agent({
-  id: "mcp-agent",
-  name: "MCP-Enabled Agent",
-  instructions: `You are an AI assistant with access to external knowledge sources via MCP servers.
+    id: "mcp-agent",
+    name: "MCP-Enabled Agent",
+    instructions: `You are an AI assistant with access to external knowledge sources via MCP servers.
 
 ## Available MCP Tools
 
@@ -153,8 +153,8 @@ export const mcpAgent = new Agent({
 4. Combine tools when needed for comprehensive answers
 
 You have real-time access to these external tools. Use them to provide accurate, well-researched responses.`,
-  model: "anthropic/claude-sonnet-4-20250514",
-  // MCP tools will be loaded dynamically
+    model: "anthropic/claude-sonnet-4-20250514"
+    // MCP tools will be loaded dynamically
 });
 
 /**
@@ -162,15 +162,15 @@ You have real-time access to these external tools. Use them to provide accurate,
  * Call this to get an agent with MCP tools attached
  */
 export async function createMcpAgent() {
-  const mcpTools = await getMcpTools();
-  
-  return new Agent({
-    id: "mcp-agent-configured",
-    name: "MCP-Enabled Agent",
-    instructions: mcpAgent.instructions,
-    model: "anthropic/claude-sonnet-4-20250514",
-    tools: mcpTools,
-  });
+    const mcpTools = await getMcpTools();
+
+    return new Agent({
+        id: "mcp-agent-configured",
+        name: "MCP-Enabled Agent",
+        instructions: mcpAgent.instructions,
+        model: "anthropic/claude-sonnet-4-20250514",
+        tools: mcpTools
+    });
 }
 ```
 
@@ -194,12 +194,7 @@ export { mcpAgent, createMcpAgent } from "./mcp-agent";
 Create `packages/mastra/src/mcp/index.ts`:
 
 ```typescript
-export { 
-  mcpClient, 
-  getMcpTools, 
-  getMcpToolsets, 
-  disconnectMcp 
-} from "./client";
+export { mcpClient, getMcpTools, getMcpToolsets, disconnectMcp } from "./client";
 ```
 
 ### Step 6: Update Main Exports
@@ -223,83 +218,83 @@ import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
 export async function POST(req: NextRequest) {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { message } = await req.json();
+
+        if (!message) {
+            return NextResponse.json({ error: "Message is required" }, { status: 400 });
+        }
+
+        // Create agent with MCP tools loaded
+        const agent = await createMcpAgent();
+
+        // Generate response
+        const response = await agent.generate(message, {
+            maxSteps: 5
+        });
+
+        return NextResponse.json({
+            text: response.text,
+            toolCalls: response.toolCalls
+        });
+    } catch (error) {
+        console.error("MCP agent error:", error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "MCP request failed" },
+            { status: 500 }
+        );
     }
-
-    const { message } = await req.json();
-
-    if (!message) {
-      return NextResponse.json({ error: "Message is required" }, { status: 400 });
-    }
-
-    // Create agent with MCP tools loaded
-    const agent = await createMcpAgent();
-    
-    // Generate response
-    const response = await agent.generate(message, {
-      maxSteps: 5,
-    });
-
-    return NextResponse.json({
-      text: response.text,
-      toolCalls: response.toolCalls,
-    });
-  } catch (error) {
-    console.error("MCP agent error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "MCP request failed" },
-      { status: 500 }
-    );
-  }
 }
 ```
 
 ## Documentation Deviations
 
-| Deviation | Status | Justification |
-|-----------|--------|---------------|
-| Using Wikipedia MCP | **Valid** | Free, no API key required, good for demos |
-| Using Smithery CLI | **Valid** | Official pattern for Smithery-hosted servers |
+| Deviation                 | Status          | Justification                                    |
+| ------------------------- | --------------- | ------------------------------------------------ |
+| Using Wikipedia MCP       | **Valid**       | Free, no API key required, good for demos        |
+| Using Smithery CLI        | **Valid**       | Official pattern for Smithery-hosted servers     |
 | Factory pattern for agent | **Recommended** | Tools must be loaded async before agent creation |
 
 ## Demo Page Spec
 
 - **Route**: `/demos/mcp`
 - **Inputs**:
-  - Query textarea for questions
-  - MCP server status indicators
-  - Tool usage toggle (verbose mode)
+    - Query textarea for questions
+    - MCP server status indicators
+    - Tool usage toggle (verbose mode)
 - **Outputs**:
-  - Agent response text
-  - Tool calls made (which MCP tools were used)
-  - Tool inputs/outputs in expandable panels
+    - Agent response text
+    - Tool calls made (which MCP tools were used)
+    - Tool inputs/outputs in expandable panels
 - **Sample data**:
-  - "What is the history of artificial intelligence?"
-  - "Tell me about the Mastra AI framework" (may not find if not on Wikipedia)
-  - "Break down how to build a web application step by step"
+    - "What is the history of artificial intelligence?"
+    - "Tell me about the Mastra AI framework" (may not find if not on Wikipedia)
+    - "Break down how to build a web application step by step"
 
 ### Sample Inputs/Test Data
 
 ```typescript
 const mcpExamples = [
-  {
-    query: "What is the history of artificial intelligence?",
-    expectedTool: "wikipedia_search",
-    description: "Should search Wikipedia for AI history"
-  },
-  {
-    query: "Who invented the telephone?",
-    expectedTool: "wikipedia_get_article",
-    description: "Should retrieve Wikipedia article"
-  },
-  {
-    query: "Help me think through the steps to launch a startup",
-    expectedTool: "sequentialThinking_think",
-    description: "Should use sequential thinking"
-  },
+    {
+        query: "What is the history of artificial intelligence?",
+        expectedTool: "wikipedia_search",
+        description: "Should search Wikipedia for AI history"
+    },
+    {
+        query: "Who invented the telephone?",
+        expectedTool: "wikipedia_get_article",
+        description: "Should retrieve Wikipedia article"
+    },
+    {
+        query: "Help me think through the steps to launch a startup",
+        expectedTool: "sequentialThinking_think",
+        description: "Should use sequential thinking"
+    }
 ];
 ```
 
@@ -409,35 +404,39 @@ const mcpExamples = [
 
 ## Available MCP Registries
 
-| Registry | URL | Description |
-|----------|-----|-------------|
-| Smithery | smithery.ai | CLI-based MCP servers |
-| mcp.run | mcp.run | Pre-authenticated servers |
-| Composio | mcp.composio.dev | SSE-based servers |
-| Klavis AI | klavis.ai | Enterprise-grade servers |
+| Registry  | URL              | Description               |
+| --------- | ---------------- | ------------------------- |
+| Smithery  | smithery.ai      | CLI-based MCP servers     |
+| mcp.run   | mcp.run          | Pre-authenticated servers |
+| Composio  | mcp.composio.dev | SSE-based servers         |
+| Klavis AI | klavis.ai        | Enterprise-grade servers  |
 
 ## Troubleshooting
 
 ### "Cannot find module 'wikipedia-mcp'"
+
 The MCP server is downloaded on first use via npx. Ensure you have internet access.
 
 ### MCP Tools Not Loading
+
 Check that the command paths are correct and npx is available.
 
 ### Slow First Request
+
 First request downloads MCP servers. Subsequent requests are faster.
 
 ### Connection Timeout
+
 Some MCP servers take time to start. Increase timeout or pre-warm.
 
 ## Files Changed
 
-| File | Action |
-|------|--------|
-| `packages/mastra/package.json` | Add @mastra/mcp |
-| `packages/mastra/src/mcp/client.ts` | Create |
-| `packages/mastra/src/mcp/index.ts` | Create |
-| `packages/mastra/src/agents/mcp-agent.ts` | Create |
-| `packages/mastra/src/agents/index.ts` | Update |
-| `packages/mastra/src/index.ts` | Update |
-| `apps/agent/src/app/api/mcp/route.ts` | Create |
+| File                                      | Action          |
+| ----------------------------------------- | --------------- |
+| `packages/mastra/package.json`            | Add @mastra/mcp |
+| `packages/mastra/src/mcp/client.ts`       | Create          |
+| `packages/mastra/src/mcp/index.ts`        | Create          |
+| `packages/mastra/src/agents/mcp-agent.ts` | Create          |
+| `packages/mastra/src/agents/index.ts`     | Update          |
+| `packages/mastra/src/index.ts`            | Update          |
+| `apps/agent/src/app/api/mcp/route.ts`     | Create          |

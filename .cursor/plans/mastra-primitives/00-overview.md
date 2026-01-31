@@ -7,43 +7,44 @@
 This folder contains detailed implementation plans for demonstrating all Mastra AI primitives. Each phase has been audited against official documentation and enhanced with demo specifications, dependency mapping, acceptance criteria, and test plans.
 
 **Last Audited**: January 2026  
-**Documentation Sources**: 
+**Documentation Sources**:
+
 - Mastra Docs (https://mastra.ai/docs) - Primary
 - Mastra Guides (https://mastra.ai/guides) - Patterns
 - Vercel AI SDK (https://ai-sdk.dev/docs/) - Underlying primitives
 
 ## Implementation Order
 
-| Phase | Plan File | Description | Status | Standalone |
-|-------|-----------|-------------|--------|------------|
-| 1 | [01-semantic-recall.md](./01-semantic-recall.md) | Enable semantic recall with Supabase pgvector | Pending | Yes |
-| 2 | [02-observability.md](./02-observability.md) | Add tracing and observability | Pending | Yes |
-| 3 | [03-enhanced-agents.md](./03-enhanced-agents.md) | Create structured output, vision, and research agents | Pending | Yes |
-| 4 | [04-advanced-tools.md](./04-advanced-tools.md) | Add web search, memory recall, and workflow trigger tools | Pending | Partial |
-| 5 | [05-advanced-workflows.md](./05-advanced-workflows.md) | Build parallel, branch, loop, suspend/resume workflows | Pending | Yes |
-| 6 | [06-rag-pipeline.md](./06-rag-pipeline.md) | Implement RAG with chunking, embedding, and retrieval | Pending | Partial |
-| 7 | [07-evals-scorers.md](./07-evals-scorers.md) | Add relevancy and toxicity scorers | Pending | Partial |
-| 8 | [08-mcp-client.md](./08-mcp-client.md) | Connect to external MCP servers | Pending | Yes |
-| 9 | [09-demo-pages.md](./09-demo-pages.md) | Create UI demo pages for each feature | Pending | Partial |
+| Phase | Plan File                                              | Description                                               | Status  | Standalone |
+| ----- | ------------------------------------------------------ | --------------------------------------------------------- | ------- | ---------- |
+| 1     | [01-semantic-recall.md](./01-semantic-recall.md)       | Enable semantic recall with Supabase pgvector             | Pending | Yes        |
+| 2     | [02-observability.md](./02-observability.md)           | Add tracing and observability                             | Pending | Yes        |
+| 3     | [03-enhanced-agents.md](./03-enhanced-agents.md)       | Create structured output, vision, and research agents     | Pending | Yes        |
+| 4     | [04-advanced-tools.md](./04-advanced-tools.md)         | Add web search, memory recall, and workflow trigger tools | Pending | Partial    |
+| 5     | [05-advanced-workflows.md](./05-advanced-workflows.md) | Build parallel, branch, loop, suspend/resume workflows    | Pending | Yes        |
+| 6     | [06-rag-pipeline.md](./06-rag-pipeline.md)             | Implement RAG with chunking, embedding, and retrieval     | Pending | Partial    |
+| 7     | [07-evals-scorers.md](./07-evals-scorers.md)           | Add relevancy and toxicity scorers                        | Pending | Partial    |
+| 8     | [08-mcp-client.md](./08-mcp-client.md)                 | Connect to external MCP servers                           | Pending | Yes        |
+| 9     | [09-demo-pages.md](./09-demo-pages.md)                 | Create UI demo pages for each feature                     | Pending | Partial    |
 
 ## Documentation Audit Summary
 
 ### Corrections Made
 
-| Phase | Issue | Correction |
-|-------|-------|------------|
-| Phase 2 | Used non-existent `@mastra/observability` package | Changed to use built-in `telemetry` config in Mastra constructor |
-| Phase 2 | Used `DefaultExporter`, `SensitiveDataFilter` classes | Removed - these don't exist in current API |
-| Phase 5 | Used `bail()` incorrectly for rejection | Changed to return result directly; bail is for early exit with error |
-| Phase 7 | Incorrect import path for scorers | Changed to `@mastra/evals/scorers/prebuilt` |
+| Phase   | Issue                                                 | Correction                                                           |
+| ------- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| Phase 2 | Used non-existent `@mastra/observability` package     | Changed to use built-in `telemetry` config in Mastra constructor     |
+| Phase 2 | Used `DefaultExporter`, `SensitiveDataFilter` classes | Removed - these don't exist in current API                           |
+| Phase 5 | Used `bail()` incorrectly for rejection               | Changed to return result directly; bail is for early exit with error |
+| Phase 7 | Incorrect import path for scorers                     | Changed to `@mastra/evals/scorers/prebuilt`                          |
 
 ### Experimental/Custom Features
 
-| Phase | Feature | Status |
-|-------|---------|--------|
-| Phase 3 | Simulated web search tool | Connect real API (Tavily, Serper) for production |
+| Phase   | Feature                            | Status                                                |
+| ------- | ---------------------------------- | ----------------------------------------------------- |
+| Phase 3 | Simulated web search tool          | Connect real API (Tavily, Serper) for production      |
 | Phase 4 | Memory recall tool context pattern | Context API may vary; test with actual implementation |
-| Phase 7 | Heuristic-based custom scorers | Consider LLM-graded versions for production |
+| Phase 7 | Heuristic-based custom scorers     | Consider LLM-graded versions for production           |
 
 ## Dependency Graph
 
@@ -82,30 +83,30 @@ Phase 9 (Demo Pages) - Depends on all phases for full functionality
 
 ```json
 {
-  "@mastra/core": "latest",
-  "@mastra/memory": "latest",
-  "@mastra/pg": "latest",
-  "zod": "^3.x",
-  "@anthropic-ai/sdk": "latest"
+    "@mastra/core": "latest",
+    "@mastra/memory": "latest",
+    "@mastra/pg": "latest",
+    "zod": "^3.x",
+    "@anthropic-ai/sdk": "latest"
 }
 ```
 
 ### Packages to Install (by Phase)
 
-| Phase | Package |
-|-------|---------|
-| 6 | `@mastra/rag` |
-| 7 | `@mastra/evals` |
-| 8 | `@mastra/mcp` |
+| Phase | Package         |
+| ----- | --------------- |
+| 6     | `@mastra/rag`   |
+| 7     | `@mastra/evals` |
+| 8     | `@mastra/mcp`   |
 
 ### Environment Variables Required
 
-| Variable | Phase | Purpose |
-|----------|-------|---------|
-| `DATABASE_URL` | All | PostgreSQL connection |
-| `ANTHROPIC_API_KEY` | All | Claude model access |
-| `OPENAI_API_KEY` | 1, 6, 7 | Embeddings and evaluation models |
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | 2 | Tracing (optional) |
+| Variable                      | Phase   | Purpose                          |
+| ----------------------------- | ------- | -------------------------------- |
+| `DATABASE_URL`                | All     | PostgreSQL connection            |
+| `ANTHROPIC_API_KEY`           | All     | Claude model access              |
+| `OPENAI_API_KEY`              | 1, 6, 7 | Embeddings and evaluation models |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | 2       | Tracing (optional)               |
 
 ## Architecture
 
@@ -174,6 +175,7 @@ apps/agent/src/app/
 ## Success Criteria
 
 Each phase should:
+
 1. Be independently testable where marked as "Standalone: Yes"
 2. Include working examples with sample inputs
 3. Not break existing functionality
@@ -194,14 +196,14 @@ Each phase should:
 1. Review Phase 1 to understand the foundation
 2. Check dependency graph above before starting any phase
 3. Each phase file contains:
-   - Objective (1 sentence)
-   - Documentation references (with URLs)
-   - Implementation steps (with code)
-   - Demo page spec
-   - Dependency map
-   - Acceptance criteria (binary/testable)
-   - Test plan (frontend/backend/integration)
-   - Files changed
+    - Objective (1 sentence)
+    - Documentation references (with URLs)
+    - Implementation steps (with code)
+    - Demo page spec
+    - Dependency map
+    - Acceptance criteria (binary/testable)
+    - Test plan (frontend/backend/integration)
+    - Files changed
 
 ## Related Resources
 

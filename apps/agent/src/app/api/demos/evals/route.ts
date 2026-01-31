@@ -1,0 +1,36 @@
+import { NextRequest, NextResponse } from "next/server";
+import { helpfulnessScorer, codeQualityScorer } from "@repo/mastra";
+import { auth } from "@repo/auth";
+import { headers } from "next/headers";
+
+export async function POST(req: NextRequest) {
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { input, output } = await req.json();
+
+        if (!input || !output) {
+            return NextResponse.json({ error: "Input and output are required" }, { status: 400 });
+        }
+
+        // Run custom scorers (built-in LLM scorers would require additional API calls)
+        const [helpfulness, codeQuality] = await Promise.all([
+            helpfulnessScorer.execute({ input, output }),
+            codeQualityScorer.execute({ input, output })
+        ]);
+
+        return NextResponse.json({
+            helpfulness,
+            codeQuality
+        });
+    } catch (error) {
+        console.error("Evaluation error:", error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Evaluation failed" },
+            { status: 500 }
+        );
+    }
+}

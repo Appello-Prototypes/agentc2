@@ -2,7 +2,7 @@ import { PgVector } from "@mastra/pg";
 
 // Extend global type for Next.js HMR singleton pattern
 declare global {
-  var pgVector: PgVector | undefined;
+    var pgVector: PgVector | undefined;
 }
 
 /**
@@ -17,18 +17,18 @@ declare global {
  * ```
  */
 function getPgVector(): PgVector {
-  if (!global.pgVector) {
-    if (!process.env.DATABASE_URL) {
-      throw new Error("DATABASE_URL is not defined in environment variables");
+    if (!global.pgVector) {
+        if (!process.env.DATABASE_URL) {
+            throw new Error("DATABASE_URL is not defined in environment variables");
+        }
+
+        global.pgVector = new PgVector({
+            id: "mastra-vector",
+            connectionString: process.env.DATABASE_URL
+        });
     }
 
-    global.pgVector = new PgVector({
-      id: "mastra-vector",
-      connectionString: process.env.DATABASE_URL,
-    });
-  }
-
-  return global.pgVector;
+    return global.pgVector;
 }
 
 export const vector = getPgVector();

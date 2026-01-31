@@ -51,7 +51,9 @@ export const securityHeaders = [
             "img-src 'self' data: https:",
             "font-src 'self' data:",
             // In development, allow connections to other local services (frontend auth, etc.)
-            isDevelopment ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001" : "connect-src 'self'",
+            isDevelopment
+                ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001"
+                : "connect-src 'self'",
             "frame-ancestors 'none'"
         ].join("; ")
     }

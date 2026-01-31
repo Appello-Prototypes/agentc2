@@ -6,12 +6,12 @@ Enable tracing and observability to monitor agent runs, LLM calls, tool executio
 
 ## Documentation References
 
-| Feature | Source | URL |
-|---------|--------|-----|
-| Tracing Overview | Mastra Docs | https://mastra.ai/docs/observability/tracing |
-| OtelConfig Reference | Mastra Docs | https://mastra.ai/reference/observability/otel-config |
-| Observability Providers | Mastra Docs | https://mastra.ai/reference/observability/providers/ |
-| Memory Debugging | Mastra Docs | https://mastra.ai/docs/memory/overview#debugging-memory |
+| Feature                 | Source      | URL                                                     |
+| ----------------------- | ----------- | ------------------------------------------------------- |
+| Tracing Overview        | Mastra Docs | https://mastra.ai/docs/observability/tracing            |
+| OtelConfig Reference    | Mastra Docs | https://mastra.ai/reference/observability/otel-config   |
+| Observability Providers | Mastra Docs | https://mastra.ai/reference/observability/providers/    |
+| Memory Debugging        | Mastra Docs | https://mastra.ai/docs/memory/overview#debugging-memory |
 
 ## Documentation Corrections
 
@@ -23,18 +23,18 @@ The documentation shows telemetry is configured directly in the Mastra construct
 
 ```typescript
 export const mastra = new Mastra({
-  // ... other config
-  telemetry: {
-    serviceName: "my-app",
-    enabled: true,
-    sampling: {
-      type: "always_on",
-    },
-    export: {
-      type: "otlp",
-      endpoint: "http://localhost:4318",
-    },
-  },
+    // ... other config
+    telemetry: {
+        serviceName: "my-app",
+        enabled: true,
+        sampling: {
+            type: "always_on"
+        },
+        export: {
+            type: "otlp",
+            endpoint: "http://localhost:4318"
+        }
+    }
 });
 ```
 
@@ -51,40 +51,40 @@ import { assistantAgent } from "./agents";
 import { analysisWorkflow } from "./workflows";
 
 declare global {
-  var mastraInstance: Mastra | undefined;
+    var mastraInstance: Mastra | undefined;
 }
 
 function getMastra(): Mastra {
-  if (!global.mastraInstance) {
-    const isDev = process.env.NODE_ENV !== "production";
-    
-    global.mastraInstance = new Mastra({
-      agents: {
-        assistant: assistantAgent,
-      },
-      workflows: {
-        "analysis-workflow": analysisWorkflow,
-      },
-      storage,
-      telemetry: {
-        serviceName: "mastra-experiment",
-        enabled: true,
-        sampling: {
-          type: isDev ? "always_on" : "ratio",
-          probability: isDev ? undefined : 0.1,
-        },
-        export: {
-          type: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ? "otlp" : "console",
-          endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
-          headers: process.env.OTEL_EXPORTER_OTLP_HEADERS 
-            ? JSON.parse(process.env.OTEL_EXPORTER_OTLP_HEADERS) 
-            : undefined,
-        },
-      },
-    });
-  }
+    if (!global.mastraInstance) {
+        const isDev = process.env.NODE_ENV !== "production";
 
-  return global.mastraInstance;
+        global.mastraInstance = new Mastra({
+            agents: {
+                assistant: assistantAgent
+            },
+            workflows: {
+                "analysis-workflow": analysisWorkflow
+            },
+            storage,
+            telemetry: {
+                serviceName: "mastra-experiment",
+                enabled: true,
+                sampling: {
+                    type: isDev ? "always_on" : "ratio",
+                    probability: isDev ? undefined : 0.1
+                },
+                export: {
+                    type: process.env.OTEL_EXPORTER_OTLP_ENDPOINT ? "otlp" : "console",
+                    endpoint: process.env.OTEL_EXPORTER_OTLP_ENDPOINT,
+                    headers: process.env.OTEL_EXPORTER_OTLP_HEADERS
+                        ? JSON.parse(process.env.OTEL_EXPORTER_OTLP_HEADERS)
+                        : undefined
+                }
+            }
+        });
+    }
+
+    return global.mastraInstance;
 }
 
 export const mastra = getMastra();
@@ -109,23 +109,23 @@ Add telemetry env vars to globalEnv:
 
 ```json
 {
-  "globalEnv": [
-    "DATABASE_URL", 
-    "ANTHROPIC_API_KEY", 
-    "OPENAI_API_KEY",
-    "OTEL_EXPORTER_OTLP_ENDPOINT",
-    "OTEL_EXPORTER_OTLP_HEADERS"
-  ]
+    "globalEnv": [
+        "DATABASE_URL",
+        "ANTHROPIC_API_KEY",
+        "OPENAI_API_KEY",
+        "OTEL_EXPORTER_OTLP_ENDPOINT",
+        "OTEL_EXPORTER_OTLP_HEADERS"
+    ]
 }
 ```
 
 ## Documentation Deviations
 
-| Deviation | Status | Justification |
-|-----------|--------|---------------|
-| Original plan used `@mastra/observability` package | **INCORRECT** | Docs show telemetry is built into `@mastra/core` via `telemetry` config |
-| Original plan used `DefaultExporter`, `SensitiveDataFilter` | **INCORRECT** | These classes do not exist in current API |
-| Using `telemetry` config in Mastra constructor | **CORRECT** | Per official docs |
+| Deviation                                                   | Status        | Justification                                                           |
+| ----------------------------------------------------------- | ------------- | ----------------------------------------------------------------------- |
+| Original plan used `@mastra/observability` package          | **INCORRECT** | Docs show telemetry is built into `@mastra/core` via `telemetry` config |
+| Original plan used `DefaultExporter`, `SensitiveDataFilter` | **INCORRECT** | These classes do not exist in current API                               |
+| Using `telemetry` config in Mastra constructor              | **CORRECT**   | Per official docs                                                       |
 
 **Flag**: The original plan's implementation strategy contradicts documentation. This has been corrected above.
 
@@ -133,17 +133,17 @@ Add telemetry env vars to globalEnv:
 
 - **Route**: `/demos/observability` (or integrated into existing demos)
 - **Inputs**:
-  - Agent query input
-  - Workflow trigger button
+    - Agent query input
+    - Workflow trigger button
 - **Outputs**:
-  - Trace ID display after each operation
-  - Trace timeline visualization (if using external provider)
-  - Token usage statistics
-  - Latency metrics
+    - Trace ID display after each operation
+    - Trace timeline visualization (if using external provider)
+    - Token usage statistics
+    - Latency metrics
 - **Sample data**:
-  - Run agent query: "What time is it?"
-  - Trigger workflow: Analysis workflow with sample input
-  - Display resulting trace IDs and metrics
+    - Run agent query: "What time is it?"
+    - Trigger workflow: Analysis workflow with sample input
+    - Display resulting trace IDs and metrics
 
 ### Demo Visibility
 
@@ -239,17 +239,17 @@ Configure endpoint to send traces to SigNoz, Jaeger, Honeycomb, or other provide
 
 ## Sampling Strategies
 
-| Strategy | Configuration | Use Case |
-|----------|---------------|----------|
-| `always_on` | `{ type: "always_on" }` | Development - capture every trace |
-| `always_off` | `{ type: "always_off" }` | Disable tracing entirely |
-| `ratio` | `{ type: "ratio", probability: 0.1 }` | Production - sample 10% |
+| Strategy       | Configuration                                          | Use Case                          |
+| -------------- | ------------------------------------------------------ | --------------------------------- |
+| `always_on`    | `{ type: "always_on" }`                                | Development - capture every trace |
+| `always_off`   | `{ type: "always_off" }`                               | Disable tracing entirely          |
+| `ratio`        | `{ type: "ratio", probability: 0.1 }`                  | Production - sample 10%           |
 | `parent_based` | `{ type: "parent_based", root: { probability: 0.1 } }` | Inherit sampling from parent span |
 
 ## Files Changed
 
-| File | Action |
-|------|--------|
-| `packages/mastra/src/mastra.ts` | Update with telemetry config |
-| `turbo.json` | Add OTEL env vars to globalEnv |
-| `.env` | Add OTEL_EXPORTER_OTLP_ENDPOINT (optional) |
+| File                            | Action                                     |
+| ------------------------------- | ------------------------------------------ |
+| `packages/mastra/src/mastra.ts` | Update with telemetry config               |
+| `turbo.json`                    | Add OTEL env vars to globalEnv             |
+| `.env`                          | Add OTEL_EXPORTER_OTLP_ENDPOINT (optional) |

@@ -6,14 +6,14 @@ Implement a complete RAG (Retrieval-Augmented Generation) pipeline with document
 
 ## Documentation References
 
-| Feature | Source | URL |
-|---------|--------|-----|
-| RAG Overview | Mastra Docs | https://mastra.ai/docs/rag/overview |
-| Chunking & Embedding | Mastra Docs | https://mastra.ai/docs/rag/chunking-and-embedding |
-| Vector Databases | Mastra Docs | https://mastra.ai/docs/rag/vector-databases |
-| MDocument Reference | Mastra Docs | https://mastra.ai/reference/rag/document |
-| PgVector Reference | Mastra Docs | https://mastra.ai/reference/vectors/pg |
-| AI SDK embedMany | Vercel AI SDK | https://ai-sdk.dev/docs/ai-sdk-core/embeddings |
+| Feature              | Source        | URL                                               |
+| -------------------- | ------------- | ------------------------------------------------- |
+| RAG Overview         | Mastra Docs   | https://mastra.ai/docs/rag/overview               |
+| Chunking & Embedding | Mastra Docs   | https://mastra.ai/docs/rag/chunking-and-embedding |
+| Vector Databases     | Mastra Docs   | https://mastra.ai/docs/rag/vector-databases       |
+| MDocument Reference  | Mastra Docs   | https://mastra.ai/reference/rag/document          |
+| PgVector Reference   | Mastra Docs   | https://mastra.ai/reference/vectors/pg            |
+| AI SDK embedMany     | Vercel AI SDK | https://ai-sdk.dev/docs/ai-sdk-core/embeddings    |
 
 ## Implementation Steps
 
@@ -44,186 +44,186 @@ export type DocumentType = "text" | "markdown" | "html" | "json";
  * Create a document from content
  */
 export function createDocument(content: string, type: DocumentType = "text"): MDocument {
-  switch (type) {
-    case "markdown":
-      return MDocument.fromMarkdown(content);
-    case "html":
-      return MDocument.fromHTML(content);
-    case "json":
-      return MDocument.fromJSON(content);
-    default:
-      return MDocument.fromText(content);
-  }
+    switch (type) {
+        case "markdown":
+            return MDocument.fromMarkdown(content);
+        case "html":
+            return MDocument.fromHTML(content);
+        case "json":
+            return MDocument.fromJSON(content);
+        default:
+            return MDocument.fromText(content);
+    }
 }
 
 export interface ChunkOptions {
-  strategy?: "recursive" | "character" | "sentence" | "markdown";
-  maxSize?: number;
-  overlap?: number;
+    strategy?: "recursive" | "character" | "sentence" | "markdown";
+    maxSize?: number;
+    overlap?: number;
 }
 
 /**
  * Chunk a document into smaller pieces
  */
 export async function chunkDocument(
-  doc: MDocument,
-  options: ChunkOptions = {}
+    doc: MDocument,
+    options: ChunkOptions = {}
 ): Promise<Array<{ text: string; metadata: Record<string, any> }>> {
-  const { strategy = "recursive", maxSize = 512, overlap = 50 } = options;
+    const { strategy = "recursive", maxSize = 512, overlap = 50 } = options;
 
-  const chunks = await doc.chunk({
-    strategy,
-    size: maxSize,
-    overlap,
-  });
+    const chunks = await doc.chunk({
+        strategy,
+        size: maxSize,
+        overlap
+    });
 
-  return chunks.map((chunk, index) => ({
-    text: chunk.text,
-    metadata: {
-      chunkIndex: index,
-      charCount: chunk.text.length,
-      ...chunk.metadata,
-    },
-  }));
+    return chunks.map((chunk, index) => ({
+        text: chunk.text,
+        metadata: {
+            chunkIndex: index,
+            charCount: chunk.text.length,
+            ...chunk.metadata
+        }
+    }));
 }
 
 /**
  * Initialize the RAG index (run once)
  */
 export async function initializeRagIndex(): Promise<void> {
-  const indexes = await vector.listIndexes();
-  
-  if (!indexes.includes(RAG_INDEX_NAME)) {
-    await vector.createIndex({
-      indexName: RAG_INDEX_NAME,
-      dimension: 1536, // OpenAI text-embedding-3-small dimension
-      metric: "cosine",
-    });
-    console.log(`Created RAG index: ${RAG_INDEX_NAME}`);
-  }
+    const indexes = await vector.listIndexes();
+
+    if (!indexes.includes(RAG_INDEX_NAME)) {
+        await vector.createIndex({
+            indexName: RAG_INDEX_NAME,
+            dimension: 1536, // OpenAI text-embedding-3-small dimension
+            metric: "cosine"
+        });
+        console.log(`Created RAG index: ${RAG_INDEX_NAME}`);
+    }
 }
 
 /**
  * Ingest a document into the RAG system
  */
 export async function ingestDocument(
-  content: string,
-  options: {
-    type?: DocumentType;
-    sourceId?: string;
-    sourceName?: string;
-    chunkOptions?: ChunkOptions;
-  } = {}
+    content: string,
+    options: {
+        type?: DocumentType;
+        sourceId?: string;
+        sourceName?: string;
+        chunkOptions?: ChunkOptions;
+    } = {}
 ): Promise<{
-  documentId: string;
-  chunksIngested: number;
-  vectorIds: string[];
+    documentId: string;
+    chunksIngested: number;
+    vectorIds: string[];
 }> {
-  const { type = "text", sourceId, sourceName, chunkOptions } = options;
-  const documentId = sourceId || `doc_${Date.now()}`;
+    const { type = "text", sourceId, sourceName, chunkOptions } = options;
+    const documentId = sourceId || `doc_${Date.now()}`;
 
-  const doc = createDocument(content, type);
-  const chunks = await chunkDocument(doc, chunkOptions);
+    const doc = createDocument(content, type);
+    const chunks = await chunkDocument(doc, chunkOptions);
 
-  if (chunks.length === 0) {
-    throw new Error("No chunks generated from document");
-  }
+    if (chunks.length === 0) {
+        throw new Error("No chunks generated from document");
+    }
 
-  const { embeddings } = await embedMany({
-    model: embedder,
-    values: chunks.map((c) => c.text),
-  });
+    const { embeddings } = await embedMany({
+        model: embedder,
+        values: chunks.map((c) => c.text)
+    });
 
-  const metadata = chunks.map((chunk, index) => ({
-    ...chunk.metadata,
-    documentId,
-    sourceName: sourceName || documentId,
-    text: chunk.text,
-    chunkIndex: index,
-    totalChunks: chunks.length,
-    ingestedAt: new Date().toISOString(),
-  }));
+    const metadata = chunks.map((chunk, index) => ({
+        ...chunk.metadata,
+        documentId,
+        sourceName: sourceName || documentId,
+        text: chunk.text,
+        chunkIndex: index,
+        totalChunks: chunks.length,
+        ingestedAt: new Date().toISOString()
+    }));
 
-  const vectorIds = chunks.map((_, index) => `${documentId}_chunk_${index}`);
+    const vectorIds = chunks.map((_, index) => `${documentId}_chunk_${index}`);
 
-  await initializeRagIndex();
+    await initializeRagIndex();
 
-  await vector.upsert({
-    indexName: RAG_INDEX_NAME,
-    vectors: embeddings,
-    metadata,
-    ids: vectorIds,
-  });
+    await vector.upsert({
+        indexName: RAG_INDEX_NAME,
+        vectors: embeddings,
+        metadata,
+        ids: vectorIds
+    });
 
-  return {
-    documentId,
-    chunksIngested: chunks.length,
-    vectorIds,
-  };
+    return {
+        documentId,
+        chunksIngested: chunks.length,
+        vectorIds
+    };
 }
 
 /**
  * Query the RAG system for relevant chunks
  */
 export async function queryRag(
-  query: string,
-  options: {
-    topK?: number;
-    minScore?: number;
-    filter?: Record<string, any>;
-  } = {}
-): Promise<Array<{
-  text: string;
-  score: number;
-  metadata: Record<string, any>;
-}>> {
-  const { topK = 5, minScore = 0.5, filter } = options;
+    query: string,
+    options: {
+        topK?: number;
+        minScore?: number;
+        filter?: Record<string, any>;
+    } = {}
+): Promise<
+    Array<{
+        text: string;
+        score: number;
+        metadata: Record<string, any>;
+    }>
+> {
+    const { topK = 5, minScore = 0.5, filter } = options;
 
-  const { embedding } = await embed({
-    model: embedder,
-    value: query,
-  });
+    const { embedding } = await embed({
+        model: embedder,
+        value: query
+    });
 
-  const results = await vector.query({
-    indexName: RAG_INDEX_NAME,
-    vector: embedding,
-    topK,
-    minScore,
-    filter,
-  });
+    const results = await vector.query({
+        indexName: RAG_INDEX_NAME,
+        vector: embedding,
+        topK,
+        minScore,
+        filter
+    });
 
-  return results.map((result) => ({
-    text: result.metadata?.text || "",
-    score: result.score,
-    metadata: result.metadata || {},
-  }));
+    return results.map((result) => ({
+        text: result.metadata?.text || "",
+        score: result.score,
+        metadata: result.metadata || {}
+    }));
 }
 
 /**
  * RAG-enhanced generation
  */
 export async function ragGenerate(
-  query: string,
-  agent: any,
-  options: {
-    topK?: number;
-    minScore?: number;
-    systemContext?: string;
-  } = {}
+    query: string,
+    agent: any,
+    options: {
+        topK?: number;
+        minScore?: number;
+        systemContext?: string;
+    } = {}
 ): Promise<{
-  response: string;
-  sources: Array<{ text: string; score: number; documentId?: string }>;
+    response: string;
+    sources: Array<{ text: string; score: number; documentId?: string }>;
 }> {
-  const { topK = 5, minScore = 0.5, systemContext = "" } = options;
+    const { topK = 5, minScore = 0.5, systemContext = "" } = options;
 
-  const chunks = await queryRag(query, { topK, minScore });
+    const chunks = await queryRag(query, { topK, minScore });
 
-  const contextParts = chunks.map(
-    (chunk, i) => `[Source ${i + 1}]: ${chunk.text}`
-  );
-  const context = contextParts.join("\n\n");
+    const contextParts = chunks.map((chunk, i) => `[Source ${i + 1}]: ${chunk.text}`);
+    const context = contextParts.join("\n\n");
 
-  const prompt = `${systemContext}
+    const prompt = `${systemContext}
 
 Use the following context to answer the question. If the context doesn't contain relevant information, say so.
 
@@ -234,47 +234,49 @@ QUESTION: ${query}
 
 Provide a comprehensive answer based on the context above.`;
 
-  const response = await agent.generate(prompt);
+    const response = await agent.generate(prompt);
 
-  return {
-    response: response.text || "",
-    sources: chunks.map((chunk) => ({
-      text: chunk.text.substring(0, 200) + (chunk.text.length > 200 ? "..." : ""),
-      score: chunk.score,
-      documentId: chunk.metadata.documentId,
-    })),
-  };
+    return {
+        response: response.text || "",
+        sources: chunks.map((chunk) => ({
+            text: chunk.text.substring(0, 200) + (chunk.text.length > 200 ? "..." : ""),
+            score: chunk.score,
+            documentId: chunk.metadata.documentId
+        }))
+    };
 }
 
 /**
  * Delete a document and all its chunks from RAG
  */
 export async function deleteDocument(documentId: string): Promise<void> {
-  await vector.deleteVectors({
-    indexName: RAG_INDEX_NAME,
-    filter: { documentId },
-  });
+    await vector.deleteVectors({
+        indexName: RAG_INDEX_NAME,
+        filter: { documentId }
+    });
 }
 
 /**
  * List all ingested documents
  */
-export async function listDocuments(): Promise<Array<{
-  documentId: string;
-  sourceName: string;
-  chunkCount: number;
-  ingestedAt: string;
-}>> {
-  const stats = await vector.describeIndex(RAG_INDEX_NAME);
-  
-  return [
-    {
-      documentId: "index_stats",
-      sourceName: RAG_INDEX_NAME,
-      chunkCount: stats.count,
-      ingestedAt: new Date().toISOString(),
-    },
-  ];
+export async function listDocuments(): Promise<
+    Array<{
+        documentId: string;
+        sourceName: string;
+        chunkCount: number;
+        ingestedAt: string;
+    }>
+> {
+    const stats = await vector.describeIndex(RAG_INDEX_NAME);
+
+    return [
+        {
+            documentId: "index_stats",
+            sourceName: RAG_INDEX_NAME,
+            chunkCount: stats.count,
+            ingestedAt: new Date().toISOString()
+        }
+    ];
 }
 ```
 
@@ -286,16 +288,16 @@ Create `packages/mastra/src/rag/index.ts`:
 
 ```typescript
 export {
-  createDocument,
-  chunkDocument,
-  initializeRagIndex,
-  ingestDocument,
-  queryRag,
-  ragGenerate,
-  deleteDocument,
-  listDocuments,
-  type DocumentType,
-  type ChunkOptions,
+    createDocument,
+    chunkDocument,
+    initializeRagIndex,
+    ingestDocument,
+    queryRag,
+    ragGenerate,
+    deleteDocument,
+    listDocuments,
+    type DocumentType,
+    type ChunkOptions
 } from "./pipeline";
 ```
 
@@ -306,16 +308,16 @@ Update `packages/mastra/src/index.ts`:
 ```typescript
 // RAG
 export {
-  createDocument,
-  chunkDocument,
-  initializeRagIndex,
-  ingestDocument,
-  queryRag,
-  ragGenerate,
-  deleteDocument,
-  listDocuments,
-  type DocumentType,
-  type ChunkOptions,
+    createDocument,
+    chunkDocument,
+    initializeRagIndex,
+    ingestDocument,
+    queryRag,
+    ragGenerate,
+    deleteDocument,
+    listDocuments,
+    type DocumentType,
+    type ChunkOptions
 } from "./rag";
 ```
 
@@ -330,32 +332,32 @@ import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
 export async function POST(req: NextRequest) {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { content, type, sourceId, sourceName } = await req.json();
+
+        if (!content) {
+            return NextResponse.json({ error: "Content is required" }, { status: 400 });
+        }
+
+        const result = await ingestDocument(content, {
+            type: type || "text",
+            sourceId,
+            sourceName
+        });
+
+        return NextResponse.json(result);
+    } catch (error) {
+        console.error("RAG ingest error:", error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Ingest failed" },
+            { status: 500 }
+        );
     }
-
-    const { content, type, sourceId, sourceName } = await req.json();
-
-    if (!content) {
-      return NextResponse.json({ error: "Content is required" }, { status: 400 });
-    }
-
-    const result = await ingestDocument(content, {
-      type: type || "text",
-      sourceId,
-      sourceName,
-    });
-
-    return NextResponse.json(result);
-  } catch (error) {
-    console.error("RAG ingest error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Ingest failed" },
-      { status: 500 }
-    );
-  }
 }
 ```
 
@@ -368,67 +370,67 @@ import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
 export async function POST(req: NextRequest) {
-  try {
-    const session = await auth.api.getSession({ headers: await headers() });
-    if (!session?.user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { query, topK, minScore, generateResponse } = await req.json();
+
+        if (!query) {
+            return NextResponse.json({ error: "Query is required" }, { status: 400 });
+        }
+
+        if (generateResponse) {
+            const agent = mastra.getAgent("assistant");
+            const result = await ragGenerate(query, agent, { topK, minScore });
+            return NextResponse.json(result);
+        }
+
+        const results = await queryRag(query, { topK, minScore });
+        return NextResponse.json({ results });
+    } catch (error) {
+        console.error("RAG query error:", error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Query failed" },
+            { status: 500 }
+        );
     }
-
-    const { query, topK, minScore, generateResponse } = await req.json();
-
-    if (!query) {
-      return NextResponse.json({ error: "Query is required" }, { status: 400 });
-    }
-
-    if (generateResponse) {
-      const agent = mastra.getAgent("assistant");
-      const result = await ragGenerate(query, agent, { topK, minScore });
-      return NextResponse.json(result);
-    }
-
-    const results = await queryRag(query, { topK, minScore });
-    return NextResponse.json({ results });
-  } catch (error) {
-    console.error("RAG query error:", error);
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Query failed" },
-      { status: 500 }
-    );
-  }
 }
 ```
 
 ## Documentation Deviations
 
-| Deviation | Status | Justification |
-|-----------|--------|---------------|
-| Custom wrapper functions | **Valid pattern** | Docs show direct usage; wrappers provide consistent API |
-| Using separate RAG index | **Recommended** | Separates RAG documents from memory embeddings |
-| Index config omitted | **Simplified** | HNSW config optional; default IVFFlat works for most cases |
+| Deviation                | Status            | Justification                                              |
+| ------------------------ | ----------------- | ---------------------------------------------------------- |
+| Custom wrapper functions | **Valid pattern** | Docs show direct usage; wrappers provide consistent API    |
+| Using separate RAG index | **Recommended**   | Separates RAG documents from memory embeddings             |
+| Index config omitted     | **Simplified**    | HNSW config optional; default IVFFlat works for most cases |
 
 ## Demo Page Spec
 
 - **Route**: `/demos/rag`
 - **Inputs**:
-  - Document content textarea (multiline)
-  - Document type selector (text, markdown, html, json)
-  - Source name input
-  - Query input
-  - Toggle for "Generate Response" vs "Search Only"
+    - Document content textarea (multiline)
+    - Document type selector (text, markdown, html, json)
+    - Source name input
+    - Query input
+    - Toggle for "Generate Response" vs "Search Only"
 - **Outputs**:
-  - Ingest results (chunks count, document ID)
-  - Search results with similarity scores
-  - Generated response with source citations
+    - Ingest results (chunks count, document ID)
+    - Search results with similarity scores
+    - Generated response with source citations
 - **Sample data**:
-  - Sample markdown document about Mastra
-  - Test queries: "What is Mastra?", "How do I use agents?"
+    - Sample markdown document about Mastra
+    - Test queries: "What is Mastra?", "How do I use agents?"
 
 ### Sample Inputs/Test Data
 
 ```typescript
 const ragExamples = {
-  ingestDocument: {
-    content: `# Mastra AI Framework
+    ingestDocument: {
+        content: `# Mastra AI Framework
 
 Mastra is a TypeScript framework for building AI applications.
 It supports agents, tools, workflows, and memory management.
@@ -437,14 +439,14 @@ It supports agents, tools, workflows, and memory management.
 - Model routing with 40+ providers
 - Built-in memory and semantic recall
 - Graph-based workflow engine`,
-    type: "markdown",
-    sourceName: "Mastra Documentation",
-  },
-  queries: [
-    { query: "What is Mastra?", expectedMatch: "TypeScript framework" },
-    { query: "What features does Mastra have?", expectedMatch: "Model routing" },
-    { query: "How does workflow work?", expectedMatch: "workflow engine" },
-  ],
+        type: "markdown",
+        sourceName: "Mastra Documentation"
+    },
+    queries: [
+        { query: "What is Mastra?", expectedMatch: "TypeScript framework" },
+        { query: "What features does Mastra have?", expectedMatch: "Model routing" },
+        { query: "How does workflow work?", expectedMatch: "workflow engine" }
+    ]
 };
 ```
 
@@ -512,20 +514,20 @@ It supports agents, tools, workflows, and memory management.
 
 ## Chunking Strategies
 
-| Strategy | Best For | Description |
-|----------|----------|-------------|
-| `recursive` | General text | Smart splitting based on content structure |
-| `sentence` | Prose, articles | Preserves sentence boundaries |
-| `markdown` | Documentation | Respects markdown structure |
-| `character` | Simple splits | Character-based splitting |
+| Strategy    | Best For        | Description                                |
+| ----------- | --------------- | ------------------------------------------ |
+| `recursive` | General text    | Smart splitting based on content structure |
+| `sentence`  | Prose, articles | Preserves sentence boundaries              |
+| `markdown`  | Documentation   | Respects markdown structure                |
+| `character` | Simple splits   | Character-based splitting                  |
 
 ## Files Changed
 
-| File | Action |
-|------|--------|
-| `packages/mastra/package.json` | Add @mastra/rag |
-| `packages/mastra/src/rag/pipeline.ts` | Create |
-| `packages/mastra/src/rag/index.ts` | Create |
-| `packages/mastra/src/index.ts` | Update |
-| `apps/agent/src/app/api/rag/ingest/route.ts` | Create |
-| `apps/agent/src/app/api/rag/query/route.ts` | Create |
+| File                                         | Action          |
+| -------------------------------------------- | --------------- |
+| `packages/mastra/package.json`               | Add @mastra/rag |
+| `packages/mastra/src/rag/pipeline.ts`        | Create          |
+| `packages/mastra/src/rag/index.ts`           | Create          |
+| `packages/mastra/src/index.ts`               | Update          |
+| `apps/agent/src/app/api/rag/ingest/route.ts` | Create          |
+| `apps/agent/src/app/api/rag/query/route.ts`  | Create          |

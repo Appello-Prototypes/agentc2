@@ -16,8 +16,11 @@
   },
   "dependencies": {
     "@mastra/core": "latest",
+    "@mastra/evals": "^1.0.1",
+    "@mastra/mcp": "^1.0.0",
     "@mastra/memory": "latest",
     "@mastra/pg": "latest",
+    "@mastra/rag": "^2.1.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

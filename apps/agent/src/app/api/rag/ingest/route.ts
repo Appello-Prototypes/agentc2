@@ -1,0 +1,33 @@
+import { NextRequest, NextResponse } from "next/server";
+import { ingestDocument } from "@repo/mastra";
+import { auth } from "@repo/auth";
+import { headers } from "next/headers";
+
+export async function POST(req: NextRequest) {
+    try {
+        const session = await auth.api.getSession({ headers: await headers() });
+        if (!session?.user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+        }
+
+        const { content, type, sourceId, sourceName } = await req.json();
+
+        if (!content) {
+            return NextResponse.json({ error: "Content is required" }, { status: 400 });
+        }
+
+        const result = await ingestDocument(content, {
+            type: type || "text",
+            sourceId,
+            sourceName
+        });
+
+        return NextResponse.json(result);
+    } catch (error) {
+        console.error("RAG ingest error:", error);
+        return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Ingest failed" },
+            { status: 500 }
+        );
+    }
+}

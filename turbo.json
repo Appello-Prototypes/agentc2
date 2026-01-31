@@ -1,6 +1,13 @@
 {
   "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["DATABASE_URL", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "BETTER_AUTH_SECRET", "OTEL_EXPORTER_OTLP_ENDPOINT", "OTEL_EXPORTER_OTLP_HEADERS"],
+  "globalEnv": [
+    "DATABASE_URL",
+    "ANTHROPIC_API_KEY",
+    "OPENAI_API_KEY",
+    "BETTER_AUTH_SECRET",
+    "OTEL_EXPORTER_OTLP_ENDPOINT",
+    "OTEL_EXPORTER_OTLP_HEADERS"
+  ],
   "ui": "tui",
   "tasks": {
     "build": {

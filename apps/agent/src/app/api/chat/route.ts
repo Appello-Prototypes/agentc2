@@ -11,15 +11,15 @@ import { auth } from "@repo/auth";
  * Returns null if not authenticated
  */
 async function getAuthenticatedSession() {
-  try {
-    const session = await auth.api.getSession({
-      headers: await headers(),
-    });
-    return session;
-  } catch (error) {
-    console.error("Auth error:", error);
-    return null;
-  }
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        return session;
+    } catch (error) {
+        console.error("Auth error:", error);
+        return null;
+    }
 }
 
 /**
@@ -28,44 +28,38 @@ async function getAuthenticatedSession() {
  * Requires authentication - uses user ID for memory isolation
  */
 export async function POST(req: Request) {
-  // Authenticate the request
-  const session = await getAuthenticatedSession();
+    // Authenticate the request
+    const session = await getAuthenticatedSession();
 
-  if (!session?.user) {
-    return NextResponse.json(
-      { error: "Unauthorized - please sign in" },
-      { status: 401 }
-    );
-  }
+    if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });
+    }
 
-  try {
-    const body = await req.json();
-    const { threadId, ...params } = body;
+    try {
+        const body = await req.json();
+        const { threadId, ...params } = body;
 
-    // Use user ID to isolate conversations per user
-    const userId = session.user.id;
-    const userThreadId = threadId || `chat-${userId}`;
+        // Use user ID to isolate conversations per user
+        const userId = session.user.id;
+        const userThreadId = threadId || `chat-${userId}`;
 
-    const stream = await handleChatStream({
-      mastra,
-      agentId: "assistant",
-      params: {
-        ...params,
-        memory: {
-          thread: userThreadId,
-          resource: userId,
-        },
-      },
-    });
+        const stream = await handleChatStream({
+            mastra,
+            agentId: "assistant",
+            params: {
+                ...params,
+                memory: {
+                    thread: userThreadId,
+                    resource: userId
+                }
+            }
+        });
 
-    return createUIMessageStreamResponse({ stream });
-  } catch (error) {
-    console.error("Chat API error:", error);
-    return NextResponse.json(
-      { error: "Failed to process chat request" },
-      { status: 500 }
-    );
-  }
+        return createUIMessageStreamResponse({ stream });
+    } catch (error) {
+        console.error("Chat API error:", error);
+        return NextResponse.json({ error: "Failed to process chat request" }, { status: 500 });
+    }
 }
 
 /**
@@ -74,43 +68,40 @@ export async function POST(req: Request) {
  * Requires authentication
  */
 export async function GET(req: Request) {
-  // Authenticate the request
-  const session = await getAuthenticatedSession();
+    // Authenticate the request
+    const session = await getAuthenticatedSession();
 
-  if (!session?.user) {
-    return NextResponse.json(
-      { error: "Unauthorized - please sign in" },
-      { status: 401 }
-    );
-  }
-
-  try {
-    const { searchParams } = new URL(req.url);
-    const userId = session.user.id;
-    const threadId = searchParams.get("threadId") || `chat-${userId}`;
-
-    const agent = mastra.getAgent("assistant");
-    const memory = await agent?.getMemory();
-
-    if (!memory) {
-      return NextResponse.json([]);
+    if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });
     }
 
-    // Get messages from the user's thread
-    const messages = await memory.getMessages({
-      threadId,
-      resourceId: userId,
-    });
+    try {
+        const { searchParams } = new URL(req.url);
+        const userId = session.user.id;
+        const threadId = searchParams.get("threadId") || `chat-${userId}`;
 
-    if (!messages || messages.length === 0) {
-      return NextResponse.json([]);
+        const agent = mastra.getAgent("assistant");
+        const memory = await agent?.getMemory();
+
+        if (!memory) {
+            return NextResponse.json([]);
+        }
+
+        // Get messages from the user's thread
+        const messages = await memory.getMessages({
+            threadId,
+            resourceId: userId
+        });
+
+        if (!messages || messages.length === 0) {
+            return NextResponse.json([]);
+        }
+
+        const uiMessages = toAISdkV5Messages(messages);
+
+        return NextResponse.json(uiMessages);
+    } catch (error) {
+        console.error("Chat history error:", error);
+        return NextResponse.json([]);
     }
-
-    const uiMessages = toAISdkV5Messages(messages);
-
-    return NextResponse.json(uiMessages);
-  } catch (error) {
-    console.error("Chat history error:", error);
-    return NextResponse.json([]);
-  }
 }
