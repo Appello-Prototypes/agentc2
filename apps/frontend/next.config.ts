@@ -12,7 +12,8 @@ const nextConfig: NextConfig = {
     env: sharedEnv,
     devIndicators,
     async headers() {
-        const baseHeaders = await createHeadersConfig()();
+        const headersFn = createHeadersConfig();
+        const baseHeaders = headersFn ? await headersFn() : [];
 
         // Add CORS headers for auth API in development to allow agent app access
         if (isDevelopment) {

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mastra } from "@repo/mastra";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
+    const encoder = new TextEncoder();
+
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getDemoSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -21,22 +22,60 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Research agent not found" }, { status: 500 });
         }
 
-        const steps: Array<{ type: string; content: unknown }> = [];
+        const stream = new ReadableStream({
+            async start(controller) {
+                const sendEvent = (event: string, data: unknown) => {
+                    controller.enqueue(encoder.encode(`event: ${event}\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                };
 
-        const response = await agent.generate(query, {
-            maxSteps,
-            onStepFinish: (step) => {
-                steps.push({
-                    type: step.finishReason || "unknown",
-                    content: step.text || step.toolCalls
-                });
+                try {
+                    const steps: Array<{ type: string; content: unknown }> = [];
+
+                    // Use streaming generation
+                    const responseStream = await agent.stream(query, {
+                        maxSteps,
+                        onStepFinish: (step) => {
+                            const stepData = {
+                                type: step.finishReason || "unknown",
+                                content: step.text || step.toolCalls
+                            };
+                            steps.push(stepData);
+                            sendEvent("step", stepData);
+                        }
+                    });
+
+                    let fullText = "";
+
+                    // Stream text chunks
+                    for await (const chunk of responseStream.textStream) {
+                        fullText += chunk;
+                        sendEvent("text", { chunk, full: fullText });
+                    }
+
+                    // Send completion event
+                    sendEvent("done", {
+                        text: fullText,
+                        steps
+                    });
+
+                    controller.close();
+                } catch (error) {
+                    console.error("Research agent streaming error:", error);
+                    sendEvent("error", {
+                        message: error instanceof Error ? error.message : "Research failed"
+                    });
+                    controller.close();
+                }
             }
         });
 
-        return NextResponse.json({
-            text: response.text,
-            steps,
-            toolCalls: response.toolCalls
+        return new Response(stream, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                Connection: "keep-alive"
+            }
         });
     } catch (error) {
         console.error("Research agent error:", error);

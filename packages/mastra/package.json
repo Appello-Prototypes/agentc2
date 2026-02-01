@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./agents": "./src/agents/index.ts",
     "./tools": "./src/tools/index.ts",
-    "./workflows": "./src/workflows/index.ts"
+    "./workflows": "./src/workflows/index.ts",
+    "./orchestrator": "./src/orchestrator/index.ts",
+    "./channels": "./src/channels/index.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"
@@ -24,11 +26,20 @@
     "@mastra/rag": "^2.1.0",
     "@mastra/voice-elevenlabs": "^0.12.0",
     "@mastra/voice-openai": "^0.12.0",
+    "@repo/database": "workspace:*",
+    "@types/pg": "^8.16.0",
+    "@whiskeysockets/baileys": "^6.7.16",
     "ai": "^6.0.64",
+    "grammy": "^1.35.0",
+    "pg": "^8.18.0",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0",
+    "twilio": "^5.5.1",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",
+    "@types/qrcode-terminal": "^0.12.2",
     "typescript": "^5.0.0"
   }
 }

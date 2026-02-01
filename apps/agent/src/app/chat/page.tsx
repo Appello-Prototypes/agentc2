@@ -3,30 +3,35 @@
 import { useEffect, useState } from "react";
 import { DefaultChatTransport, type ToolUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
-import { Button } from "@repo/ui";
-
 import {
+    Button,
+    Conversation,
+    ConversationContent,
+    ConversationEmptyState,
+    ConversationScrollButton,
+    Message,
+    MessageContent,
+    MessageResponse,
+    MessageActions,
+    MessageAction,
     PromptInput,
     PromptInputBody,
-    PromptInputTextarea
-} from "@/components/ai-elements/prompt-input";
-
-import { Conversation, ConversationContent } from "@/components/ai-elements/conversation";
-
-import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-
-import {
+    PromptInputTextarea,
+    PromptInputSubmit,
+    PromptInputFooter,
     Tool,
     ToolHeader,
     ToolContent,
     ToolInput,
-    ToolOutput
-} from "@/components/ai-elements/tool";
+    ToolOutput,
+    Loader
+} from "@repo/ui";
+import { MessageSquareIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
 
 export default function ChatPage() {
     const [input, setInput] = useState<string>("");
 
-    const { messages, setMessages, sendMessage, status } = useChat({
+    const { messages, setMessages, sendMessage, status, regenerate } = useChat({
         transport: new DefaultChatTransport({
             api: "/api/chat"
         })
@@ -61,6 +66,10 @@ export default function ChatPage() {
         setMessages([]);
     };
 
+    const handleCopyMessage = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
     return (
         <div className="flex h-[calc(100vh-4rem)] flex-col">
             {/* Header */}
@@ -78,26 +87,44 @@ export default function ChatPage() {
             <Conversation className="flex-1">
                 <ConversationContent>
                     {messages.length === 0 ? (
-                        <div className="text-muted-foreground flex h-full items-center justify-center">
-                            <div className="space-y-2 text-center">
-                                <p className="text-lg">Welcome to the AI Assistant</p>
-                                <p className="text-sm">
-                                    Ask me anything! I can help with questions, calculations, and
-                                    more.
-                                </p>
-                            </div>
-                        </div>
+                        <ConversationEmptyState
+                            icon={<MessageSquareIcon className="size-12" />}
+                            title="Welcome to the AI Assistant"
+                            description="Ask me anything! I can help with questions, calculations, and more."
+                        />
                     ) : (
-                        messages.map((message) => (
+                        messages.map((message, messageIndex) => (
                             <div key={message.id} className="space-y-2">
                                 {message.parts?.map((part, i) => {
                                     // Handle text messages
                                     if (part.type === "text") {
+                                        const isLastAssistantMessage =
+                                            message.role === "assistant" &&
+                                            messageIndex === messages.length - 1;
+
                                         return (
                                             <Message key={`${message.id}-${i}`} from={message.role}>
                                                 <MessageContent>
                                                     <MessageResponse>{part.text}</MessageResponse>
                                                 </MessageContent>
+                                                {isLastAssistantMessage && status === "ready" && (
+                                                    <MessageActions>
+                                                        <MessageAction
+                                                            tooltip="Copy"
+                                                            onClick={() =>
+                                                                handleCopyMessage(part.text)
+                                                            }
+                                                        >
+                                                            <CopyIcon className="size-3" />
+                                                        </MessageAction>
+                                                        <MessageAction
+                                                            tooltip="Regenerate"
+                                                            onClick={() => regenerate()}
+                                                        >
+                                                            <RefreshCwIcon className="size-3" />
+                                                        </MessageAction>
+                                                    </MessageActions>
+                                                )}
                                             </Message>
                                         );
                                     }
@@ -105,23 +132,38 @@ export default function ChatPage() {
                                     // Handle tool invocations
                                     if (part.type?.startsWith("tool-")) {
                                         const toolPart = part as ToolUIPart;
+
+                                        // Hide internal memory management tools from the UI
+                                        const internalTools = [
+                                            "updateWorkingMemory",
+                                            "getWorkingMemory"
+                                        ];
+                                        const toolName = toolPart.type?.replace("tool-", "") || "";
+                                        if (internalTools.includes(toolName)) {
+                                            return null;
+                                        }
+
                                         return (
-                                            <Tool key={`${message.id}-${i}`}>
+                                            <Tool
+                                                key={`${message.id}-${i}`}
+                                                defaultOpen={toolPart.state === "output-error"}
+                                            >
                                                 <ToolHeader
                                                     type={toolPart.type}
                                                     state={toolPart.state || "output-available"}
                                                 />
                                                 <ToolContent>
-                                                    <ToolInput
-                                                        input={
-                                                            (toolPart.input ?? {}) as Record<
-                                                                string,
-                                                                unknown
-                                                            >
-                                                        }
-                                                    />
+                                                    <ToolInput input={toolPart.input} />
                                                     <ToolOutput
-                                                        output={toolPart.output}
+                                                        output={
+                                                            toolPart.output
+                                                                ? JSON.stringify(
+                                                                      toolPart.output,
+                                                                      null,
+                                                                      2
+                                                                  )
+                                                                : undefined
+                                                        }
                                                         errorText={toolPart.errorText}
                                                     />
                                                 </ToolContent>
@@ -136,17 +178,13 @@ export default function ChatPage() {
                     )}
 
                     {/* Loading indicator */}
-                    {status === "streaming" && (
-                        <div className="text-muted-foreground flex items-center gap-2 text-sm">
-                            <span className="animate-pulse">●</span>
-                            <span>Assistant is thinking...</span>
-                        </div>
-                    )}
+                    {status === "submitted" && <Loader />}
                 </ConversationContent>
+                <ConversationScrollButton />
             </Conversation>
 
             {/* Input */}
-            <PromptInput onSubmit={handleSubmit}>
+            <PromptInput onSubmit={handleSubmit} className="border-t p-4">
                 <PromptInputBody>
                     <PromptInputTextarea
                         value={input}
@@ -154,14 +192,10 @@ export default function ChatPage() {
                         placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
                         disabled={status !== "ready"}
                     />
-                    <Button
-                        type="submit"
-                        disabled={status !== "ready" || !input.trim()}
-                        className="shrink-0"
-                    >
-                        Send
-                    </Button>
                 </PromptInputBody>
+                <PromptInputFooter>
+                    <PromptInputSubmit status={status} disabled={!input.trim()} />
+                </PromptInputFooter>
             </PromptInput>
         </div>
     );

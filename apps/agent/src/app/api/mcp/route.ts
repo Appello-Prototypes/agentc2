@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createMcpAgent } from "@repo/mastra";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { getDemoSession } from "@/lib/standalone-auth";
 
 export interface McpStep {
     stepNumber: number;
@@ -36,8 +35,10 @@ export interface McpResponse {
 }
 
 export async function POST(req: NextRequest) {
+    const encoder = new TextEncoder();
+
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getDemoSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -48,91 +49,110 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Message is required" }, { status: 400 });
         }
 
-        // Create agent with MCP tools loaded
-        const agent = await createMcpAgent();
+        const stream = new ReadableStream({
+            async start(controller) {
+                const sendEvent = (event: string, data: unknown) => {
+                    controller.enqueue(encoder.encode(`event: ${event}\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
+                };
 
-        // Capture steps during execution
-        const capturedSteps: McpStep[] = [];
-        let stepNumber = 0;
+                try {
+                    // Create agent with MCP tools loaded
+                    const agent = await createMcpAgent();
 
-        // Generate response with step tracking
-        const response = await agent.generate(message, {
-            maxSteps,
-            onStepFinish: (step) => {
-                stepNumber++;
+                    // Capture steps during execution
+                    const capturedSteps: McpStep[] = [];
+                    let stepNumber = 0;
 
-                // Capture tool calls from this step
-                if (step.toolCalls && step.toolCalls.length > 0) {
-                    for (const toolCall of step.toolCalls) {
-                        const tc = toolCall as { toolName?: string; args?: unknown };
-                        capturedSteps.push({
-                            stepNumber,
-                            type: "tool-call",
-                            toolName: tc.toolName,
-                            toolArgs: tc.args,
-                            timestamp: Date.now()
-                        });
-                    }
-                }
+                    // Use streaming generation with step tracking
+                    const responseStream = await agent.stream(message, {
+                        maxSteps,
+                        onStepFinish: (step) => {
+                            stepNumber++;
 
-                // Capture tool results from this step
-                if (step.toolResults && step.toolResults.length > 0) {
-                    for (const toolResult of step.toolResults) {
-                        const tr = toolResult as { toolName?: string; result?: unknown };
-                        capturedSteps.push({
-                            stepNumber,
-                            type: "tool-result",
-                            toolName: tr.toolName,
-                            toolResult: tr.result,
-                            timestamp: Date.now()
-                        });
-                    }
-                }
+                            // Capture tool calls from this step
+                            if (step.toolCalls && step.toolCalls.length > 0) {
+                                for (const toolCall of step.toolCalls) {
+                                    const tc = toolCall as { toolName?: string; args?: unknown };
+                                    const stepData: McpStep = {
+                                        stepNumber,
+                                        type: "tool-call",
+                                        toolName: tc.toolName,
+                                        toolArgs: tc.args,
+                                        timestamp: Date.now()
+                                    };
+                                    capturedSteps.push(stepData);
+                                    sendEvent("step", stepData);
+                                }
+                            }
 
-                // Capture text from this step
-                if (step.text) {
-                    capturedSteps.push({
-                        stepNumber,
-                        type: "text",
-                        text: step.text,
-                        finishReason: step.finishReason,
-                        timestamp: Date.now()
+                            // Capture tool results from this step
+                            if (step.toolResults && step.toolResults.length > 0) {
+                                for (const toolResult of step.toolResults) {
+                                    const tr = toolResult as {
+                                        toolName?: string;
+                                        result?: unknown;
+                                    };
+                                    const stepData: McpStep = {
+                                        stepNumber,
+                                        type: "tool-result",
+                                        toolName: tr.toolName,
+                                        toolResult: tr.result,
+                                        timestamp: Date.now()
+                                    };
+                                    capturedSteps.push(stepData);
+                                    sendEvent("step", stepData);
+                                }
+                            }
+
+                            // Capture text from this step
+                            if (step.text) {
+                                const stepData: McpStep = {
+                                    stepNumber,
+                                    type: "text",
+                                    text: step.text,
+                                    finishReason: step.finishReason,
+                                    timestamp: Date.now()
+                                };
+                                capturedSteps.push(stepData);
+                                sendEvent("step", stepData);
+                            }
+                        }
                     });
+
+                    let fullText = "";
+
+                    // Stream text chunks
+                    for await (const chunk of responseStream.textStream) {
+                        fullText += chunk;
+                        sendEvent("text", { chunk, full: fullText });
+                    }
+
+                    // Send completion event
+                    sendEvent("done", {
+                        text: fullText,
+                        steps: capturedSteps,
+                        finishReason: "stop"
+                    });
+
+                    controller.close();
+                } catch (error) {
+                    console.error("MCP agent streaming error:", error);
+                    sendEvent("error", {
+                        message: error instanceof Error ? error.message : "MCP request failed"
+                    });
+                    controller.close();
                 }
             }
         });
 
-        // Build comprehensive response
-        const mcpResponse: McpResponse = {
-            text: response.text || "",
-            steps: capturedSteps,
-            toolCalls: (response.toolCalls || []).map((tc) => {
-                const toolCall = tc as { toolName?: string; args?: unknown };
-                return {
-                    toolName: toolCall.toolName || "unknown",
-                    args: toolCall.args
-                };
-            }),
-            toolResults: (response.toolResults || []).map((tr) => {
-                const toolResult = tr as { toolName?: string; result?: unknown };
-                return {
-                    toolName: toolResult.toolName || "unknown",
-                    result: toolResult.result
-                };
-            }),
-            reasoning: response.reasoningText,
-            usage: response.usage
-                ? {
-                      promptTokens: (response.usage as { promptTokens?: number }).promptTokens || 0,
-                      completionTokens:
-                          (response.usage as { completionTokens?: number }).completionTokens || 0,
-                      totalTokens: response.usage.totalTokens || 0
-                  }
-                : undefined,
-            finishReason: response.finishReason || "unknown"
-        };
-
-        return NextResponse.json(mcpResponse);
+        return new Response(stream, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                Connection: "keep-alive"
+            }
+        });
     } catch (error) {
         console.error("MCP agent error:", error);
         return NextResponse.json(

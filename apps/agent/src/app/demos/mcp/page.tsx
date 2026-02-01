@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Button,
     Card,
@@ -16,8 +16,54 @@ import {
     Accordion,
     AccordionContent,
     AccordionItem,
-    AccordionTrigger
+    AccordionTrigger,
+    Tool,
+    ToolHeader,
+    ToolContent,
+    ToolInput,
+    ToolOutput,
+    Loader,
+    ChainOfThought,
+    ChainOfThoughtHeader,
+    ChainOfThoughtStep,
+    ChainOfThoughtContent
 } from "@repo/ui";
+
+// SSE stream consumer helper
+async function consumeSSEStream(
+    response: Response,
+    onEvent: (event: string, data: unknown) => void
+): Promise<void> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+            if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7);
+            } else if (line.startsWith("data: ") && currentEvent) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    onEvent(currentEvent, data);
+                } catch {
+                    // Ignore parse errors
+                }
+                currentEvent = "";
+            }
+        }
+    }
+}
 
 // Types matching the API responses
 interface McpStep {
@@ -229,7 +275,7 @@ function ExecutionStep({ step }: { step: McpStep }) {
 }
 
 export default function McpDemoPage() {
-    const [query, setQuery] = useState("What is the history of artificial intelligence?");
+    const [query, setQuery] = useState("Navigate to https://example.com and describe what you see");
     const [result, setResult] = useState<McpResponse | null>(null);
     const [loading, setLoading] = useState(false);
     const [serverStatus, setServerStatus] = useState<McpStatusResponse | null>(null);
@@ -255,17 +301,81 @@ export default function McpDemoPage() {
         fetchStatus();
     }, []);
 
-    const handleQuery = async () => {
+    const handleQuery = useCallback(async () => {
         setLoading(true);
         setResult(null);
+
         try {
             const res = await fetch("/api/mcp", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: query, maxSteps: 10 })
             });
-            const data = await res.json();
-            setResult(data);
+
+            if (!res.ok) {
+                const data = await res.json();
+                setResult({
+                    text: "",
+                    steps: [],
+                    toolCalls: [],
+                    toolResults: [],
+                    finishReason: "error",
+                    error: data.error || "Failed to query MCP agent"
+                });
+                setLoading(false);
+                return;
+            }
+
+            const steps: McpStep[] = [];
+            let currentText = "";
+
+            await consumeSSEStream(res, (event, data) => {
+                const d = data as McpStep & {
+                    chunk?: string;
+                    full?: string;
+                    text?: string;
+                    steps?: McpStep[];
+                    finishReason?: string;
+                    message?: string;
+                };
+
+                if (event === "text") {
+                    currentText = d.full || "";
+                    setResult({
+                        text: currentText,
+                        steps: [...steps],
+                        toolCalls: [],
+                        toolResults: [],
+                        finishReason: "streaming"
+                    });
+                } else if (event === "step") {
+                    steps.push(d);
+                    setResult({
+                        text: currentText,
+                        steps: [...steps],
+                        toolCalls: [],
+                        toolResults: [],
+                        finishReason: "streaming"
+                    });
+                } else if (event === "done") {
+                    setResult({
+                        text: d.text || currentText,
+                        steps: d.steps || steps,
+                        toolCalls: [],
+                        toolResults: [],
+                        finishReason: d.finishReason || "stop"
+                    });
+                } else if (event === "error") {
+                    setResult({
+                        text: currentText,
+                        steps,
+                        toolCalls: [],
+                        toolResults: [],
+                        finishReason: "error",
+                        error: d.message || "MCP request failed"
+                    });
+                }
+            });
         } catch {
             setResult({
                 text: "",
@@ -277,13 +387,13 @@ export default function McpDemoPage() {
             });
         }
         setLoading(false);
-    };
+    }, [query]);
 
     const examples = [
         {
-            query: "What is the history of artificial intelligence?",
-            description: "Wikipedia search",
-            server: "wikipedia"
+            query: "Navigate to https://example.com and take a screenshot",
+            description: "Playwright browser automation",
+            server: "playwright"
         },
         {
             query: "Scrape the content from https://example.com",
@@ -301,14 +411,9 @@ export default function McpDemoPage() {
             server: "jira"
         },
         {
-            query: "What meetings did I have this week?",
-            description: "Fathom meeting lookup",
-            server: "fathom"
-        },
-        {
-            query: "Navigate to https://example.com and take a screenshot",
-            description: "Playwright browser automation",
-            server: "playwright"
+            query: "List my recent JustCall calls",
+            description: "JustCall call logs",
+            server: "justcall"
         }
     ];
 

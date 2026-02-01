@@ -216,6 +216,51 @@ Provide a comprehensive answer based on the context above.`;
 }
 
 /**
+ * RAG-enhanced streaming generation
+ */
+export async function ragGenerateStream(
+    query: string,
+    agent: any,
+    options: {
+        topK?: number;
+        minScore?: number;
+        systemContext?: string;
+    } = {}
+): Promise<{
+    textStream: AsyncIterable<string>;
+    sources: Array<{ text: string; score: number; documentId?: string }>;
+}> {
+    const { topK = 5, minScore = 0.5, systemContext = "" } = options;
+
+    const chunks = await queryRag(query, { topK, minScore });
+
+    const contextParts = chunks.map((chunk, i) => `[Source ${i + 1}]: ${chunk.text}`);
+    const context = contextParts.join("\n\n");
+
+    const prompt = `${systemContext}
+
+Use the following context to answer the question. If the context doesn't contain relevant information, say so.
+
+CONTEXT:
+${context}
+
+QUESTION: ${query}
+
+Provide a comprehensive answer based on the context above.`;
+
+    const responseStream = await agent.stream(prompt);
+
+    return {
+        textStream: responseStream.textStream,
+        sources: chunks.map((chunk) => ({
+            text: chunk.text.substring(0, 200) + (chunk.text.length > 200 ? "..." : ""),
+            score: chunk.score,
+            documentId: chunk.metadata.documentId
+        }))
+    };
+}
+
+/**
  * Delete a document and all its chunks from RAG
  */
 export async function deleteDocument(documentId: string): Promise<void> {

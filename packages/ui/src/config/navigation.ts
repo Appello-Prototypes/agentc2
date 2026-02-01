@@ -64,11 +64,38 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["chat", "assistant", "conversation", "ai"]
     },
     {
+        label: "Agent Network",
+        icon: icons["folder-open"],
+        href: "/demos/agent-network",
+        app: "agent",
+        keywords: [
+            "network",
+            "multi-agent",
+            "orchestration",
+            "trip",
+            "planner",
+            "routing",
+            "workflows"
+        ]
+    },
+    {
         label: "Agents",
         icon: icons["folder-open"],
         href: "/demos/agents",
         app: "agent",
-        keywords: ["agents", "structured", "vision", "research"]
+        keywords: ["agents", "structured", "vision", "research", "manage"],
+        children: [
+            {
+                label: "Agent Demos",
+                href: "/demos/agents",
+                keywords: ["agents", "structured", "vision", "research", "demo"]
+            },
+            {
+                label: "Agent Management",
+                href: "/demos/agents/manage",
+                keywords: ["agent", "manage", "config", "settings", "instructions", "tools"]
+            }
+        ]
     },
     {
         label: "Workflows",
@@ -110,7 +137,34 @@ export const navigationItems: NavigationItem[] = [
         icon: icons["folder-open"],
         href: "/demos/voice",
         app: "agent",
-        keywords: ["voice", "speech", "tts", "stt", "audio"]
+        keywords: ["voice", "speech", "tts", "stt", "audio", "elevenlabs"],
+        children: [
+            {
+                label: "Voice Agent",
+                href: "/demos/voice",
+                keywords: ["voice", "speech", "tts", "stt", "audio", "elevenlabs"]
+            },
+            {
+                label: "Live Agent (MCP)",
+                href: "/demos/live-agent-mcp",
+                keywords: ["live", "agent", "mcp", "voice", "elevenlabs", "realtime", "tools"]
+            }
+        ]
+    },
+    {
+        label: "Observability",
+        icon: icons["folder-open"],
+        href: "/demos/observability",
+        app: "agent",
+        keywords: [
+            "observability",
+            "traces",
+            "monitoring",
+            "debugging",
+            "tools",
+            "dashboard",
+            "tracing"
+        ]
     }
 ];
 

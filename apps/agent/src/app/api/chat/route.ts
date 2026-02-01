@@ -3,24 +3,7 @@ import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 import { createUIMessageStreamResponse } from "ai";
 import { mastra } from "@repo/mastra";
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
-
-/**
- * Helper to get authenticated session
- * Returns null if not authenticated
- */
-async function getAuthenticatedSession() {
-    try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        return session;
-    } catch (error) {
-        console.error("Auth error:", error);
-        return null;
-    }
-}
+import { getDemoSession } from "@/lib/standalone-auth";
 
 /**
  * POST /api/chat
@@ -29,7 +12,7 @@ async function getAuthenticatedSession() {
  */
 export async function POST(req: Request) {
     // Authenticate the request
-    const session = await getAuthenticatedSession();
+    const session = await getDemoSession();
 
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });
@@ -69,7 +52,7 @@ export async function POST(req: Request) {
  */
 export async function GET(req: Request) {
     // Authenticate the request
-    const session = await getAuthenticatedSession();
+    const session = await getDemoSession();
 
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });

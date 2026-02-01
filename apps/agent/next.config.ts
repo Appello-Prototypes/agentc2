@@ -16,7 +16,10 @@ const nextConfig: NextConfig = {
     headers: createHeadersConfig(),
     // BasePath is required so Next.js prefixes all asset URLs with /agent
     // This ensures assets load from https://catalyst.localhost/agent/_next/... instead of https://catalyst.localhost/_next/...
-    ...(useBasePath && { basePath: "/agent" })
+    ...(useBasePath && { basePath: "/agent" }),
+    // Externalize server-only packages that have Node.js-specific dependencies
+    // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
+    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"]
 };
 
 export default nextConfig;

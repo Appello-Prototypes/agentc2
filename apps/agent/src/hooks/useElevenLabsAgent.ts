@@ -6,9 +6,7 @@ import type {
     ClientEvent,
     ConversationMessage,
     ConversationState,
-    ServerEvent,
-    ConnectionStatus,
-    AgentState
+    ServerEvent
 } from "@/types/elevenlabs-websocket";
 
 // ============================================================================

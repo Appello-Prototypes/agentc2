@@ -3,6 +3,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo
 
 const demos = [
     {
+        title: "Agent Network",
+        description:
+            "Multi-agent trip planner with routing, parallel workflows, memory, and human approval",
+        href: "/demos/agent-network",
+        features: ["Multi-Agent", "Parallel Workflows", "Memory", "Human Approval"],
+        status: "ready" as const
+    },
+    {
+        title: "Mission Control",
+        description: "Submit goals and let AI agents work autonomously in the background",
+        href: "/demos/mission-control",
+        features: ["Background Execution", "Goal Tracking", "Auto-Scoring"],
+        status: "ready" as const
+    },
+    {
         title: "Chat",
         description: "Conversational AI assistant with tool use and memory",
         href: "/chat",
@@ -56,6 +71,21 @@ const demos = [
         description: "Text-to-Speech, Speech-to-Text, and voice conversations",
         href: "/demos/voice",
         features: ["TTS", "STT", "Voice Chat", "Multi-Provider"],
+        status: "ready" as const
+    },
+    {
+        title: "Live Agent (MCP)",
+        description:
+            "Real-time voice agent with access to MCP tools for CRM, projects, and web browsing",
+        href: "/demos/live-agent-mcp",
+        features: ["Real-time Voice", "MCP Tools", "ElevenLabs"],
+        status: "ready" as const
+    },
+    {
+        title: "Observability",
+        description: "Full tracing dashboard for model, tools, reasoning, and execution steps",
+        href: "/demos/observability",
+        features: ["Traces", "Tool Calls", "Eval Scores", "Debugging"],
         status: "ready" as const
     }
 ];

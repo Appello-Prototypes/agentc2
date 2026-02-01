@@ -1,0 +1,1380 @@
+"use client";
+
+import { useState, useEffect, useCallback, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    Badge,
+    Button,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+    Skeleton,
+    Textarea,
+    Input,
+    Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+    Switch,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+    AlertDialogTrigger
+} from "@repo/ui";
+
+// Types - Updated for new Agent model
+interface AgentTool {
+    id: string;
+    agentId: string;
+    toolId: string;
+    config: unknown | null;
+}
+
+interface StoredAgent {
+    id: string;
+    slug?: string;
+    name: string;
+    description: string | null;
+    instructions: string;
+    instructionsTemplate?: string | null;
+    modelProvider: string;
+    modelName: string;
+    temperature: number | null;
+    maxTokens?: number | null;
+    modelConfig?: Record<string, unknown> | null;
+    // Support both old and new formats
+    // tools is optional since list endpoint returns toolCount instead
+    tools?: string[] | AgentTool[];
+    // toolCount is returned by list endpoint for efficiency
+    toolCount?: number;
+    memory?: boolean;
+    memoryEnabled?: boolean;
+    memoryConfig?: {
+        lastMessages?: number;
+        semanticRecall?: { topK?: number; messageRange?: number } | false;
+        workingMemory?: { enabled?: boolean; template?: string };
+    } | null;
+    maxSteps?: number | null;
+    scorers?: string[];
+    type?: "SYSTEM" | "USER";
+    ownerId?: string | null;
+    isPublic?: boolean;
+    metadata: Record<string, unknown> | null;
+    isActive: boolean;
+    version?: number;
+    createdAt: string;
+    updatedAt: string;
+}
+
+interface ToolInfo {
+    id: string;
+    name: string;
+    description: string;
+    source: string; // "registry" or "mcp:serverName"
+}
+
+interface ModelInfo {
+    provider: string;
+    name: string;
+    displayName: string;
+}
+
+interface ScorerInfo {
+    id: string;
+    name: string;
+    description: string;
+}
+
+// Helper to get tool IDs from agent (when full tools array is available)
+function getToolIds(agent: StoredAgent): string[] {
+    if (!agent.tools || agent.tools.length === 0) return [];
+    // Check if it's the new format (array of objects with toolId)
+    if (typeof agent.tools[0] === "object" && "toolId" in agent.tools[0]) {
+        return (agent.tools as AgentTool[]).map((t) => t.toolId);
+    }
+    // Old format (array of strings)
+    return agent.tools as string[];
+}
+
+// Helper to get tool count (works with both list and detail responses)
+function getToolCount(agent: StoredAgent): number {
+    // List endpoint returns toolCount directly
+    if (typeof agent.toolCount === "number") {
+        return agent.toolCount;
+    }
+    // Detail endpoint returns tools array
+    return getToolIds(agent).length;
+}
+
+// Helper to check if agent is deletable (SYSTEM agents cannot be deleted)
+function isAgentDeletable(agent: StoredAgent): boolean {
+    return agent.type !== "SYSTEM";
+}
+
+type ViewMode = "list" | "create" | "edit";
+
+function AgentManagePageContent() {
+    // URL params for deep linking
+    const searchParams = useSearchParams();
+    const agentParam = searchParams.get("agent");
+
+    // Data state
+    const [storedAgents, setStoredAgents] = useState<StoredAgent[]>([]);
+    const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+    const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
+
+    // UI state
+    const [selectedAgent, setSelectedAgent] = useState<StoredAgent | null>(null);
+    const [viewMode, setViewMode] = useState<ViewMode>("list");
+    const [loading, setLoading] = useState({ list: true, tools: true, action: false, test: false });
+    const [activeTab, setActiveTab] = useState("overview");
+
+    // Form state for create/edit (enhanced with new fields)
+    const [formData, setFormData] = useState({
+        name: "",
+        slug: "",
+        description: "",
+        instructions: "",
+        instructionsTemplate: "",
+        modelProvider: "anthropic",
+        modelName: "claude-sonnet-4-20250514",
+        temperature: 0.7,
+        maxSteps: 5,
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: {
+            lastMessages: 10,
+            semanticRecall: false as { topK?: number; messageRange?: number } | false,
+            workingMemory: { enabled: false }
+        },
+        scorers: [] as string[],
+        isActive: true,
+        isPublic: false,
+        // Extended thinking configuration
+        extendedThinking: false,
+        thinkingBudget: 10000
+    });
+
+    // Test panel state
+    const [testInput, setTestInput] = useState("");
+    const [testOutput, setTestOutput] = useState<string | null>(null);
+
+    // Fetch stored agents
+    const fetchStoredAgents = useCallback(async () => {
+        try {
+            const res = await fetch("/api/agents");
+            const data = await res.json();
+            if (data.success) {
+                setStoredAgents(data.agents);
+            }
+        } catch (error) {
+            console.error("Failed to fetch stored agents:", error);
+        } finally {
+            setLoading((prev) => ({ ...prev, list: false }));
+        }
+    }, []);
+
+    // Fetch available tools, models, and scorers
+    const fetchToolsAndModels = useCallback(async () => {
+        try {
+            const res = await fetch("/api/agents/tools");
+            const data = await res.json();
+            if (data.success) {
+                setAvailableTools(data.tools);
+                setAvailableModels(data.models);
+                setAvailableScorers(data.scorers || []);
+            }
+        } catch (error) {
+            console.error("Failed to fetch tools:", error);
+        } finally {
+            setLoading((prev) => ({ ...prev, tools: false }));
+        }
+    }, []);
+
+    // Create agent
+    const createAgent = async () => {
+        setLoading((prev) => ({ ...prev, action: true }));
+        try {
+            const res = await fetch("/api/agents", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData)
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchStoredAgents();
+                setSelectedAgent(data.agent);
+                setViewMode("list");
+                resetForm();
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error("Failed to create agent:", error);
+            alert("Failed to create agent");
+        } finally {
+            setLoading((prev) => ({ ...prev, action: false }));
+        }
+    };
+
+    // Update agent
+    const updateAgent = async () => {
+        if (!selectedAgent) return;
+        setLoading((prev) => ({ ...prev, action: true }));
+        try {
+            const res = await fetch(`/api/agents/${selectedAgent.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(formData)
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchStoredAgents();
+                setSelectedAgent(data.agent);
+                setViewMode("list");
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error("Failed to update agent:", error);
+            alert("Failed to update agent");
+        } finally {
+            setLoading((prev) => ({ ...prev, action: false }));
+        }
+    };
+
+    // Delete agent
+    const deleteAgent = async (id: string) => {
+        setLoading((prev) => ({ ...prev, action: true }));
+        try {
+            const res = await fetch(`/api/agents/${id}`, {
+                method: "DELETE"
+            });
+            const data = await res.json();
+            if (data.success) {
+                await fetchStoredAgents();
+                if (selectedAgent?.id === id) {
+                    setSelectedAgent(null);
+                }
+            } else {
+                alert(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            console.error("Failed to delete agent:", error);
+            alert("Failed to delete agent");
+        } finally {
+            setLoading((prev) => ({ ...prev, action: false }));
+        }
+    };
+
+    // Fetch full agent details (list endpoint returns partial data)
+    const fetchAgentDetails = useCallback(async (agentId: string) => {
+        try {
+            const res = await fetch(`/api/agents/${agentId}`);
+            const data = await res.json();
+            if (data.success && data.agent) {
+                setSelectedAgent(data.agent);
+                setActiveTab("overview");
+                setTestOutput(null);
+            } else {
+                console.error("Failed to fetch agent details:", data.error);
+            }
+        } catch (error) {
+            console.error("Failed to fetch agent details:", error);
+        }
+    }, []);
+
+    // Test agent
+    const testAgent = async () => {
+        if (!selectedAgent || !testInput.trim()) return;
+
+        setLoading((prev) => ({ ...prev, test: true }));
+        setTestOutput(null);
+
+        try {
+            const res = await fetch(`/api/agents/${selectedAgent.id}/test`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ prompt: testInput })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setTestOutput(
+                    `${data.response.text}\n\n---\nModel: ${data.response.model}\nDuration: ${data.response.durationMs}ms\nTool calls: ${data.response.toolCalls}`
+                );
+            } else {
+                setTestOutput(`Error: ${data.error}`);
+            }
+        } catch (error) {
+            setTestOutput(`Error: ${error instanceof Error ? error.message : "Unknown error"}`);
+        } finally {
+            setLoading((prev) => ({ ...prev, test: false }));
+        }
+    };
+
+    // Reset form
+    const resetForm = () => {
+        setFormData({
+            name: "",
+            slug: "",
+            description: "",
+            instructions: "",
+            instructionsTemplate: "",
+            modelProvider: "anthropic",
+            modelName: "claude-sonnet-4-20250514",
+            temperature: 0.7,
+            maxSteps: 5,
+            tools: [],
+            memoryEnabled: false,
+            memoryConfig: {
+                lastMessages: 10,
+                semanticRecall: false,
+                workingMemory: { enabled: false }
+            },
+            scorers: [],
+            isActive: true,
+            isPublic: false,
+            extendedThinking: false,
+            thinkingBudget: 10000
+        });
+    };
+
+    // Load agent into form for editing
+    const loadAgentForEdit = async (agent: StoredAgent) => {
+        // Fetch full agent data since the list endpoint doesn't include all fields
+        try {
+            const res = await fetch(`/api/agents/${agent.id}`);
+            const data = await res.json();
+            if (!data.success || !data.agent) {
+                alert("Failed to load agent details");
+                return;
+            }
+            const fullAgent = data.agent as StoredAgent;
+
+            // Extract extended thinking settings from modelConfig
+            const modelConfig = fullAgent.modelConfig as {
+                thinking?: { type: string; budget_tokens?: number };
+            } | null;
+            const extendedThinking = modelConfig?.thinking?.type === "enabled";
+            const thinkingBudget = modelConfig?.thinking?.budget_tokens ?? 10000;
+
+            setFormData({
+                name: fullAgent.name,
+                slug: fullAgent.slug || "",
+                description: fullAgent.description || "",
+                instructions: fullAgent.instructions,
+                instructionsTemplate: fullAgent.instructionsTemplate || "",
+                modelProvider: fullAgent.modelProvider,
+                modelName: fullAgent.modelName,
+                temperature: fullAgent.temperature ?? 0.7,
+                maxSteps: fullAgent.maxSteps ?? 5,
+                tools: getToolIds(fullAgent),
+                memoryEnabled: fullAgent.memoryEnabled ?? fullAgent.memory ?? false,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                memoryConfig: {
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    lastMessages: (fullAgent.memoryConfig as any)?.lastMessages ?? 10,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    semanticRecall: (fullAgent.memoryConfig as any)?.semanticRecall ?? false,
+                    workingMemory: {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        enabled: (fullAgent.memoryConfig as any)?.workingMemory?.enabled ?? false
+                    }
+                },
+                scorers: fullAgent.scorers || [],
+                isActive: fullAgent.isActive,
+                isPublic: fullAgent.isPublic ?? false,
+                extendedThinking,
+                thinkingBudget
+            });
+            setSelectedAgent(fullAgent);
+            setViewMode("edit");
+        } catch (error) {
+            console.error("Failed to load agent for editing:", error);
+            alert("Failed to load agent details");
+        }
+    };
+
+    // Toggle tool selection
+    const toggleTool = (toolId: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            tools: prev.tools.includes(toolId)
+                ? prev.tools.filter((t) => t !== toolId)
+                : [...prev.tools, toolId]
+        }));
+    };
+
+    // Group tools by source
+    const groupToolsBySource = (tools: ToolInfo[]) => {
+        const groups: Record<string, ToolInfo[]> = {};
+        tools.forEach((tool) => {
+            const source = tool.source || "registry";
+            if (!groups[source]) {
+                groups[source] = [];
+            }
+            groups[source].push(tool);
+        });
+        // Sort groups: registry first, then MCP servers alphabetically
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === "registry") return -1;
+            if (b === "registry") return 1;
+            return a.localeCompare(b);
+        });
+        return sortedKeys.map((key) => ({
+            source: key,
+            displayName: key === "registry" ? "Built-in Tools" : key.replace("mcp:", ""),
+            tools: groups[key]
+        }));
+    };
+
+    // Select all tools
+    const selectAllTools = () => {
+        setFormData((prev) => ({
+            ...prev,
+            tools: availableTools.map((t) => t.id)
+        }));
+    };
+
+    // Deselect all tools
+    const deselectAllTools = () => {
+        setFormData((prev) => ({
+            ...prev,
+            tools: []
+        }));
+    };
+
+    // Select all tools for a specific source
+    const selectAllToolsForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        setFormData((prev) => ({
+            ...prev,
+            tools: [...new Set([...prev.tools, ...sourceToolIds])]
+        }));
+    };
+
+    // Deselect all tools for a specific source
+    const deselectAllToolsForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        setFormData((prev) => ({
+            ...prev,
+            tools: prev.tools.filter((t) => !sourceToolIds.includes(t))
+        }));
+    };
+
+    // Check if all tools for a source are selected
+    const areAllToolsSelectedForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        return sourceToolIds.length > 0 && sourceToolIds.every((id) => formData.tools.includes(id));
+    };
+
+    // Toggle scorer selection
+    const toggleScorer = (scorerId: string) => {
+        setFormData((prev) => ({
+            ...prev,
+            scorers: prev.scorers.includes(scorerId)
+                ? prev.scorers.filter((s) => s !== scorerId)
+                : [...prev.scorers, scorerId]
+        }));
+    };
+
+    // Initial fetch
+    useEffect(() => {
+        fetchStoredAgents();
+        fetchToolsAndModels();
+    }, [fetchStoredAgents, fetchToolsAndModels]);
+
+    // Handle ?agent= query parameter for deep linking
+    useEffect(() => {
+        if (agentParam && storedAgents.length > 0 && !selectedAgent) {
+            // Find agent by slug or id
+            const agent = storedAgents.find((a) => a.slug === agentParam || a.id === agentParam);
+            if (agent) {
+                fetchAgentDetails(agent.id);
+            }
+        }
+    }, [agentParam, storedAgents, selectedAgent, fetchAgentDetails]);
+
+    // Render form (used for both create and edit)
+    const renderForm = () => (
+        <div className="space-y-6">
+            {/* Basic Info */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <Label htmlFor="name">Name *</Label>
+                    <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => setFormData((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="My Assistant"
+                    />
+                </div>
+                <div className="space-y-2">
+                    <Label htmlFor="slug">Slug (URL-safe identifier)</Label>
+                    <Input
+                        id="slug"
+                        value={formData.slug}
+                        onChange={(e) =>
+                            setFormData((p) => ({
+                                ...p,
+                                slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-")
+                            }))
+                        }
+                        placeholder="my-assistant"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Input
+                    id="description"
+                    value={formData.description}
+                    onChange={(e) => setFormData((p) => ({ ...p, description: e.target.value }))}
+                    placeholder="A helpful assistant..."
+                />
+            </div>
+
+            <div className="space-y-2">
+                <Label htmlFor="instructions">System Instructions *</Label>
+                <Textarea
+                    id="instructions"
+                    value={formData.instructions}
+                    onChange={(e) => setFormData((p) => ({ ...p, instructions: e.target.value }))}
+                    placeholder="You are a helpful assistant..."
+                    rows={6}
+                />
+            </div>
+
+            {/* Model Configuration */}
+            <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                    <Label>Model Provider *</Label>
+                    <Select
+                        value={formData.modelProvider}
+                        onValueChange={(v) => v && setFormData((p) => ({ ...p, modelProvider: v }))}
+                    >
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="openai">OpenAI</SelectItem>
+                            <SelectItem value="anthropic">Anthropic</SelectItem>
+                            <SelectItem value="google">Google</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Model *</Label>
+                    <Select
+                        value={formData.modelName}
+                        onValueChange={(v) => v && setFormData((p) => ({ ...p, modelName: v }))}
+                    >
+                        <SelectTrigger>
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableModels
+                                .filter((m) => m.provider === formData.modelProvider)
+                                .map((m) => (
+                                    <SelectItem key={m.name} value={m.name}>
+                                        {m.name}
+                                    </SelectItem>
+                                ))}
+                        </SelectContent>
+                    </Select>
+                </div>
+                <div className="space-y-2">
+                    <Label>Max Steps: {formData.maxSteps}</Label>
+                    <input
+                        type="range"
+                        min="1"
+                        max="20"
+                        step="1"
+                        value={formData.maxSteps}
+                        onChange={(e) =>
+                            setFormData((p) => ({ ...p, maxSteps: parseInt(e.target.value) }))
+                        }
+                        className="w-full"
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2">
+                <Label>Temperature: {formData.temperature}</Label>
+                <input
+                    type="range"
+                    min="0"
+                    max="1"
+                    step="0.1"
+                    value={formData.temperature}
+                    onChange={(e) =>
+                        setFormData((p) => ({ ...p, temperature: parseFloat(e.target.value) }))
+                    }
+                    className="w-full"
+                />
+            </div>
+
+            {/* Extended Thinking (Anthropic Claude 4+ only) */}
+            {formData.modelProvider === "anthropic" &&
+                (formData.modelName.includes("opus-4") ||
+                    formData.modelName.includes("sonnet-4")) && (
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                checked={formData.extendedThinking}
+                                onCheckedChange={(c) =>
+                                    setFormData((p) => ({ ...p, extendedThinking: c }))
+                                }
+                            />
+                            <Label>Extended Thinking</Label>
+                            <span className="text-muted-foreground text-xs">
+                                (Enhanced reasoning for complex tasks)
+                            </span>
+                        </div>
+
+                        {formData.extendedThinking && (
+                            <div className="bg-muted space-y-2 rounded-lg p-4">
+                                <Label>
+                                    Thinking Budget: {formData.thinkingBudget.toLocaleString()}{" "}
+                                    tokens
+                                </Label>
+                                <input
+                                    type="range"
+                                    min="1024"
+                                    max="32000"
+                                    step="1024"
+                                    value={formData.thinkingBudget}
+                                    onChange={(e) =>
+                                        setFormData((p) => ({
+                                            ...p,
+                                            thinkingBudget: parseInt(e.target.value)
+                                        }))
+                                    }
+                                    className="w-full"
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    Higher budgets enable more thorough reasoning but increase
+                                    latency and cost.
+                                </p>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+            {/* Tools */}
+            <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                    <Label>
+                        Tools ({formData.tools.length} of {availableTools.length} selected)
+                    </Label>
+                    <div className="flex gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={selectAllTools}
+                            disabled={formData.tools.length === availableTools.length}
+                        >
+                            Select All
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={deselectAllTools}
+                            disabled={formData.tools.length === 0}
+                        >
+                            Deselect All
+                        </Button>
+                    </div>
+                </div>
+                <div className="max-h-96 space-y-4 overflow-auto rounded-lg border p-4">
+                    {groupToolsBySource(availableTools).map((group) => {
+                        const selectedCount = group.tools.filter((t) =>
+                            formData.tools.includes(t.id)
+                        ).length;
+                        const allSelected = areAllToolsSelectedForSource(group.source);
+                        return (
+                            <div key={group.source} className="space-y-2">
+                                <div className="flex items-center justify-between border-b pb-2">
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-medium">{group.displayName}</h4>
+                                        <Badge variant="outline" className="text-xs">
+                                            {selectedCount}/{group.tools.length}
+                                        </Badge>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() =>
+                                            allSelected
+                                                ? deselectAllToolsForSource(group.source)
+                                                : selectAllToolsForSource(group.source)
+                                        }
+                                    >
+                                        {allSelected ? "Deselect All" : "Select All"}
+                                    </Button>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {group.tools.map((tool) => (
+                                        <label
+                                            key={tool.id}
+                                            className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.tools.includes(tool.id)}
+                                                onChange={() => toggleTool(tool.id)}
+                                                className="mt-0.5"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium">{tool.name}</p>
+                                                {tool.description && (
+                                                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                                        {tool.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+            </div>
+
+            {/* Scorers */}
+            <div className="space-y-2">
+                <Label>Scorers ({formData.scorers.length} selected)</Label>
+                <div className="bg-muted grid max-h-32 grid-cols-2 gap-2 overflow-auto rounded-lg p-3">
+                    {availableScorers.map((scorer) => (
+                        <label key={scorer.id} className="flex cursor-pointer items-center gap-2">
+                            <input
+                                type="checkbox"
+                                checked={formData.scorers.includes(scorer.id)}
+                                onChange={() => toggleScorer(scorer.id)}
+                            />
+                            <span className="text-sm" title={scorer.description}>
+                                {scorer.name}
+                            </span>
+                        </label>
+                    ))}
+                </div>
+            </div>
+
+            {/* Memory Configuration */}
+            <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                    <Switch
+                        checked={formData.memoryEnabled}
+                        onCheckedChange={(c) => setFormData((p) => ({ ...p, memoryEnabled: c }))}
+                    />
+                    <Label>Enable Memory</Label>
+                </div>
+
+                {formData.memoryEnabled && (
+                    <div className="bg-muted space-y-4 rounded-lg p-4">
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="space-y-2">
+                                <Label>Last Messages: {formData.memoryConfig.lastMessages}</Label>
+                                <input
+                                    type="range"
+                                    min="1"
+                                    max="50"
+                                    value={formData.memoryConfig.lastMessages}
+                                    onChange={(e) =>
+                                        setFormData((p) => ({
+                                            ...p,
+                                            memoryConfig: {
+                                                ...p.memoryConfig,
+                                                lastMessages: parseInt(e.target.value)
+                                            }
+                                        }))
+                                    }
+                                    className="w-full"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        checked={
+                                            formData.memoryConfig.workingMemory?.enabled ?? false
+                                        }
+                                        onCheckedChange={(c) =>
+                                            setFormData((p) => ({
+                                                ...p,
+                                                memoryConfig: {
+                                                    ...p.memoryConfig,
+                                                    workingMemory: {
+                                                        ...p.memoryConfig.workingMemory,
+                                                        enabled: c
+                                                    }
+                                                }
+                                            }))
+                                        }
+                                    />
+                                    <Label>Working Memory</Label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* Status Toggles */}
+            <div className="flex items-center gap-6">
+                <div className="flex items-center gap-2">
+                    <Switch
+                        checked={formData.isActive}
+                        onCheckedChange={(c) => setFormData((p) => ({ ...p, isActive: c }))}
+                    />
+                    <Label>Active</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                    <Switch
+                        checked={formData.isPublic}
+                        onCheckedChange={(c) => setFormData((p) => ({ ...p, isPublic: c }))}
+                    />
+                    <Label>Public</Label>
+                </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-2">
+                <Button
+                    onClick={viewMode === "create" ? createAgent : updateAgent}
+                    disabled={loading.action || !formData.name || !formData.instructions}
+                >
+                    {loading.action
+                        ? "Saving..."
+                        : viewMode === "create"
+                          ? "Create Agent"
+                          : "Save Changes"}
+                </Button>
+                <Button
+                    variant="outline"
+                    onClick={() => {
+                        setViewMode("list");
+                        resetForm();
+                    }}
+                >
+                    Cancel
+                </Button>
+            </div>
+        </div>
+    );
+
+    return (
+        <div className="container mx-auto space-y-6 py-6">
+            {/* Header */}
+            <div className="flex items-start justify-between">
+                <div>
+                    <h1 className="text-3xl font-bold">Agent Management</h1>
+                    <p className="text-muted-foreground">
+                        Create, edit, and test your database-backed agents
+                    </p>
+                </div>
+                {viewMode === "list" && (
+                    <Button
+                        onClick={() => {
+                            resetForm();
+                            setViewMode("create");
+                        }}
+                    >
+                        Create Agent
+                    </Button>
+                )}
+            </div>
+
+            {/* Create/Edit Form */}
+            {(viewMode === "create" || viewMode === "edit") && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>
+                            {viewMode === "create"
+                                ? "Create New Agent"
+                                : `Edit: ${selectedAgent?.name}`}
+                        </CardTitle>
+                        <CardDescription>
+                            {viewMode === "create"
+                                ? "Configure a new stored agent"
+                                : "Modify agent configuration"}
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>{renderForm()}</CardContent>
+                </Card>
+            )}
+
+            {/* List View */}
+            {viewMode === "list" && (
+                <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+                    {/* Left Column: Agent List */}
+                    <div className="space-y-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>Stored Agents</CardTitle>
+                                <CardDescription>
+                                    {storedAgents.length} agents in database
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {loading.list ? (
+                                    <div className="space-y-2">
+                                        {[1, 2, 3].map((i) => (
+                                            <Skeleton key={i} className="h-16 w-full" />
+                                        ))}
+                                    </div>
+                                ) : storedAgents.length === 0 ? (
+                                    <div className="text-muted-foreground py-8 text-center">
+                                        <p>No agents yet</p>
+                                        <p className="mt-2 text-sm">
+                                            Click &quot;Create Agent&quot; to add one
+                                        </p>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {storedAgents.map((agent) => (
+                                            <div
+                                                key={agent.id}
+                                                className={`hover:bg-muted/50 cursor-pointer rounded-lg border p-3 transition-colors ${
+                                                    selectedAgent?.id === agent.id
+                                                        ? "border-primary bg-primary/5"
+                                                        : ""
+                                                }`}
+                                                onClick={() => {
+                                                    // Fetch full agent details (list response is partial)
+                                                    fetchAgentDetails(agent.id);
+                                                }}
+                                            >
+                                                <div className="flex items-start justify-between">
+                                                    <div>
+                                                        <p className="font-medium">{agent.name}</p>
+                                                        <p className="text-muted-foreground font-mono text-xs">
+                                                            {agent.slug || agent.modelProvider}/
+                                                            {agent.modelName}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        {agent.type === "SYSTEM" && (
+                                                            <Badge
+                                                                variant="default"
+                                                                className="text-xs"
+                                                            >
+                                                                SYSTEM
+                                                            </Badge>
+                                                        )}
+                                                        {(agent.memoryEnabled || agent.memory) && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                            >
+                                                                Memory
+                                                            </Badge>
+                                                        )}
+                                                        {!agent.isActive && (
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="text-xs"
+                                                            >
+                                                                Inactive
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <div className="mt-2 flex gap-2">
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {getToolCount(agent)} tools
+                                                    </Badge>
+                                                    {(agent.scorers?.length ?? 0) > 0 && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                        >
+                                                            {agent.scorers?.length} scorers
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+
+                    {/* Right Column: Agent Detail */}
+                    <div className="lg:col-span-2">
+                        {selectedAgent ? (
+                            <Card>
+                                <CardHeader>
+                                    <div className="flex items-start justify-between">
+                                        <div>
+                                            <CardTitle>{selectedAgent.name}</CardTitle>
+                                            <CardDescription>
+                                                {selectedAgent.description || "No description"}
+                                            </CardDescription>
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => loadAgentForEdit(selectedAgent)}
+                                            >
+                                                Edit
+                                            </Button>
+                                            {isAgentDeletable(selectedAgent) ? (
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger>
+                                                        <Button variant="destructive" size="sm">
+                                                            Delete
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>
+                                                                Delete Agent?
+                                                            </AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                This will permanently delete &quot;
+                                                                {selectedAgent.name}&quot;. This
+                                                                action cannot be undone.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter>
+                                                            <AlertDialogCancel>
+                                                                Cancel
+                                                            </AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                onClick={() =>
+                                                                    deleteAgent(selectedAgent.id)
+                                                                }
+                                                            >
+                                                                Delete
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            ) : (
+                                                <Badge variant="secondary">Protected</Badge>
+                                            )}
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <Tabs
+                                        defaultValue="overview"
+                                        value={activeTab}
+                                        onValueChange={(v) => v && setActiveTab(v)}
+                                    >
+                                        <TabsList className="mb-4">
+                                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                                            <TabsTrigger value="instructions">
+                                                Instructions
+                                            </TabsTrigger>
+                                            <TabsTrigger value="tools">
+                                                Tools ({getToolIds(selectedAgent).length})
+                                            </TabsTrigger>
+                                            <TabsTrigger value="test">Test</TabsTrigger>
+                                        </TabsList>
+
+                                        {/* Overview Tab */}
+                                        <TabsContent value="overview" className="space-y-4">
+                                            {/* Type Badge */}
+                                            {selectedAgent.type && (
+                                                <div className="flex gap-2">
+                                                    <Badge
+                                                        variant={
+                                                            selectedAgent.type === "SYSTEM"
+                                                                ? "default"
+                                                                : "outline"
+                                                        }
+                                                    >
+                                                        {selectedAgent.type}
+                                                    </Badge>
+                                                    {selectedAgent.slug && (
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="font-mono"
+                                                        >
+                                                            {selectedAgent.slug}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            <div className="bg-muted rounded-lg p-4">
+                                                <h3 className="mb-2 font-medium">
+                                                    Model Configuration
+                                                </h3>
+                                                <div className="grid grid-cols-4 gap-4">
+                                                    <div>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Provider
+                                                        </p>
+                                                        <p className="font-mono">
+                                                            {selectedAgent.modelProvider}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Model
+                                                        </p>
+                                                        <p className="font-mono">
+                                                            {selectedAgent.modelName}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Temperature
+                                                        </p>
+                                                        <p className="font-mono">
+                                                            {selectedAgent.temperature ?? 0.7}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-muted-foreground text-sm">
+                                                            Max Steps
+                                                        </p>
+                                                        <p className="font-mono">
+                                                            {selectedAgent.maxSteps ?? 5}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div className="bg-muted rounded-lg p-4">
+                                                    <h3 className="mb-2 font-medium">Memory</h3>
+                                                    <Badge
+                                                        variant={
+                                                            selectedAgent.memoryEnabled ||
+                                                            selectedAgent.memory
+                                                                ? "default"
+                                                                : "outline"
+                                                        }
+                                                    >
+                                                        {selectedAgent.memoryEnabled ||
+                                                        selectedAgent.memory
+                                                            ? "Enabled"
+                                                            : "Disabled"}
+                                                    </Badge>
+                                                    {selectedAgent.memoryConfig && (
+                                                        <p className="text-muted-foreground mt-2 text-xs">
+                                                            Last{" "}
+                                                            {selectedAgent.memoryConfig
+                                                                .lastMessages || 10}{" "}
+                                                            messages
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <div className="bg-muted rounded-lg p-4">
+                                                    <h3 className="mb-2 font-medium">Scorers</h3>
+                                                    {(selectedAgent.scorers?.length ?? 0) > 0 ? (
+                                                        <div className="flex flex-wrap gap-1">
+                                                            {selectedAgent.scorers?.map((s) => (
+                                                                <Badge
+                                                                    key={s}
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    {s}
+                                                                </Badge>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <Badge variant="outline">None</Badge>
+                                                    )}
+                                                </div>
+                                                <div className="bg-muted rounded-lg p-4">
+                                                    <h3 className="mb-2 font-medium">Status</h3>
+                                                    <div className="flex gap-2">
+                                                        <Badge
+                                                            variant={
+                                                                selectedAgent.isActive
+                                                                    ? "default"
+                                                                    : "secondary"
+                                                            }
+                                                        >
+                                                            {selectedAgent.isActive
+                                                                ? "Active"
+                                                                : "Inactive"}
+                                                        </Badge>
+                                                        {selectedAgent.isPublic && (
+                                                            <Badge variant="outline">Public</Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="bg-muted rounded-lg p-4">
+                                                <h3 className="mb-2 font-medium">Timestamps</h3>
+                                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                                    <div>
+                                                        <span className="text-muted-foreground">
+                                                            Created:
+                                                        </span>{" "}
+                                                        {new Date(
+                                                            selectedAgent.createdAt
+                                                        ).toLocaleString()}
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-muted-foreground">
+                                                            Updated:
+                                                        </span>{" "}
+                                                        {new Date(
+                                                            selectedAgent.updatedAt
+                                                        ).toLocaleString()}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </TabsContent>
+
+                                        {/* Instructions Tab */}
+                                        <TabsContent value="instructions">
+                                            <div className="space-y-4">
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="font-medium">
+                                                        System Instructions
+                                                    </h3>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            navigator.clipboard.writeText(
+                                                                selectedAgent.instructions
+                                                            );
+                                                        }}
+                                                    >
+                                                        Copy
+                                                    </Button>
+                                                </div>
+                                                <pre className="bg-muted max-h-96 overflow-auto rounded-lg p-4 text-sm whitespace-pre-wrap">
+                                                    {selectedAgent.instructions}
+                                                </pre>
+                                            </div>
+                                        </TabsContent>
+
+                                        {/* Tools Tab */}
+                                        <TabsContent value="tools">
+                                            <div className="space-y-4">
+                                                <p className="text-muted-foreground text-sm">
+                                                    {getToolIds(selectedAgent).length} tools
+                                                    attached
+                                                </p>
+                                                {getToolIds(selectedAgent).length === 0 ? (
+                                                    <div className="text-muted-foreground bg-muted rounded-lg p-4 text-center">
+                                                        No tools configured
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {getToolIds(selectedAgent).map((toolId) => {
+                                                            const tool = availableTools.find(
+                                                                (t) => t.id === toolId
+                                                            );
+                                                            return (
+                                                                <div
+                                                                    key={toolId}
+                                                                    className="bg-muted rounded-lg p-3"
+                                                                >
+                                                                    <p className="text-primary font-mono text-sm">
+                                                                        {toolId}
+                                                                    </p>
+                                                                    {tool?.description && (
+                                                                        <p className="text-muted-foreground mt-1 text-xs">
+                                                                            {tool.description}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </TabsContent>
+
+                                        {/* Test Tab */}
+                                        <TabsContent value="test">
+                                            <div className="space-y-4">
+                                                <div>
+                                                    <h3 className="mb-2 font-medium">Test Agent</h3>
+                                                    <p className="text-muted-foreground mb-4 text-sm">
+                                                        Send a message to test this agent
+                                                    </p>
+                                                </div>
+
+                                                <div className="space-y-2">
+                                                    <Textarea
+                                                        placeholder="Enter your test message..."
+                                                        value={testInput}
+                                                        onChange={(e) =>
+                                                            setTestInput(e.target.value)
+                                                        }
+                                                        rows={3}
+                                                    />
+                                                    <Button
+                                                        onClick={testAgent}
+                                                        disabled={loading.test || !testInput.trim()}
+                                                        className="w-full"
+                                                    >
+                                                        {loading.test
+                                                            ? "Testing..."
+                                                            : "Send Test Message"}
+                                                    </Button>
+                                                </div>
+
+                                                {testOutput && (
+                                                    <div className="space-y-2">
+                                                        <h4 className="font-medium">Response</h4>
+                                                        <div className="bg-muted max-h-60 overflow-auto rounded-lg p-4">
+                                                            <p className="text-sm whitespace-pre-wrap">
+                                                                {testOutput}
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </TabsContent>
+                                    </Tabs>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card>
+                                <CardContent className="text-muted-foreground py-12 text-center">
+                                    <p className="text-lg">Select an agent to view details</p>
+                                    <p className="mt-2 text-sm">
+                                        Or click &quot;Create Agent&quot; to add a new one
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+export default function AgentManagePage() {
+    return (
+        <Suspense fallback={<div className="flex h-full items-center justify-center">Loading...</div>}>
+            <AgentManagePageContent />
+        </Suspense>
+    );
+}

@@ -18,7 +18,10 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Badge
+    Badge,
+    Message,
+    MessageContent,
+    Loader
 } from "@repo/ui";
 import { useElevenLabsAgent } from "@/hooks/useElevenLabsAgent";
 
@@ -56,20 +59,28 @@ function LiveAgentTab() {
 
     // Fetch available agents from ElevenLabs API on mount
     useEffect(() => {
-        setIsLoadingAgents(true);
-        fetch("/api/demos/voice/signed-url?list=true")
-            .then((res) => res.json())
-            .then((data) => {
-                if (data.agents && data.agents.length > 0) {
+        let isMounted = true;
+        const fetchAgents = async () => {
+            try {
+                const res = await fetch("/api/demos/voice/signed-url?list=true");
+                const data = await res.json();
+                if (isMounted && data.agents && data.agents.length > 0) {
                     setAvailableAgents(data.agents);
                     // Select first agent by default
-                    if (!selectedAgentId) {
-                        setSelectedAgentId(data.agents[0].key);
-                    }
+                    setSelectedAgentId((prev) => prev || data.agents[0].key);
                 }
-            })
-            .catch(console.error)
-            .finally(() => setIsLoadingAgents(false));
+            } catch (error) {
+                console.error(error);
+            } finally {
+                if (isMounted) {
+                    setIsLoadingAgents(false);
+                }
+            }
+        };
+        fetchAgents();
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const getStatusColor = () => {

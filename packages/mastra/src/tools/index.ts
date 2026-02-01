@@ -4,6 +4,17 @@ export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
 
+// Tool registry for stored agents
+export {
+    toolRegistry,
+    listAvailableTools,
+    getToolsByNames,
+    getToolsByNamesAsync,
+    getToolByName,
+    hasToolInRegistry
+} from "./registry";
+export type { ToolInfo } from "./registry";
+
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { jsonParserTool } from "./json-parser";

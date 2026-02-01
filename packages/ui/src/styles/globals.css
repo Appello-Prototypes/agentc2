@@ -5,6 +5,8 @@
 /* Specify content sources for Tailwind to scan in the UI package */
 @source "../**/*.{js,ts,jsx,tsx}";
 @source "../../.storybook/**/*.{js,ts,jsx,tsx}";
+/* Streamdown styles for AI Elements MessageResponse */
+@source "../../node_modules/streamdown/dist/*.js";
 
 @custom-variant dark (&:is(.dark *));
 

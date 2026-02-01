@@ -5,6 +5,7 @@ export {
     ingestDocument,
     queryRag,
     ragGenerate,
+    ragGenerateStream,
     deleteDocument,
     listDocuments,
     type DocumentType,

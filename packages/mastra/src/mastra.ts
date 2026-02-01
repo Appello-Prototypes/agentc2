@@ -20,6 +20,13 @@ import {
     humanApprovalWorkflow
 } from "./workflows";
 
+// Trip Planner Workflows (agents are now database-driven via NetworkResolver)
+import {
+    parallelResearchWorkflow,
+    itineraryAssemblyWorkflow,
+    budgetApprovalWorkflow
+} from "./workflows/trip-planner";
+
 // Extend global type for Next.js HMR singleton pattern
 declare global {
     var mastraInstance: Mastra | undefined;
@@ -27,6 +34,9 @@ declare global {
 
 /**
  * Build agents object, only including voice agents if their API keys are available.
+ *
+ * Note: The Trip Planner network is now database-driven and resolved via NetworkResolver.
+ * It is not registered here; instead, it's constructed dynamically when needed.
  */
 function buildAgents(): Record<string, Agent> {
     const agents: Record<string, Agent> = {
@@ -64,10 +74,16 @@ function getMastra(): Mastra {
                 "conditional-branch": branchWorkflow,
                 "foreach-loop": foreachWorkflow,
                 "dowhile-loop": doWhileWorkflow,
-                "human-approval": humanApprovalWorkflow
+                "human-approval": humanApprovalWorkflow,
+                // Trip Planner Workflows
+                "trip-parallel-research": parallelResearchWorkflow,
+                "trip-itinerary-assembly": itineraryAssemblyWorkflow,
+                "trip-budget-approval": budgetApprovalWorkflow
             },
             storage
         });
+
+        console.log("[Mastra] Initialized with agents and workflows");
     }
 
     return global.mastraInstance;

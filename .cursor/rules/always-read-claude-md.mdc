@@ -1,0 +1,96 @@
+---
+description: Core project guidance for the Mastra AI Agent Framework
+globs: **/*
+alwaysApply: true
+---
+
+# Mastra AI Agent Framework - Core Guidelines
+
+**ALWAYS READ `/CLAUDE.md` AT THE START OF EVERY CONVERSATION.**
+
+This project is the Mastra AI Agent Framework - a production-grade system for building, deploying, and orchestrating AI agents with voice capabilities, MCP integrations, and background job processing.
+
+## Critical Principles
+
+1. **NEVER BE LAZY** - Do the job right, not the quick way
+2. **NEVER SKIP STEPS** - Follow plans completely
+3. **ALWAYS TEST** - Run `bun run build`, `bun run lint`, `bun run type-check`
+4. **ALWAYS READ BEFORE WRITING** - Understand context first
+5. **COMPLETE THE TASK** - Partial implementations are unacceptable
+
+## Quick Reference
+
+### Technology Stack
+
+- **Runtime**: Bun 1.3.4+, Turborepo
+- **Framework**: Next.js 16, React 19, TypeScript 5
+- **AI**: Mastra Core, @mastra/mcp, @mastra/memory, @mastra/rag
+- **Voice**: ElevenLabs, OpenAI Realtime
+- **Database**: PostgreSQL (Supabase), Prisma 6
+- **Auth**: Better Auth
+- **UI**: shadcn/ui, Tailwind CSS 4
+
+### Key Packages
+
+- `@repo/mastra` - Agent framework, tools, workflows
+- `@repo/database` - Prisma client and schema
+- `@repo/auth` - Authentication configuration
+- `@repo/ui` - Shared UI components
+
+### Essential Commands
+
+```bash
+bun run dev           # Start development
+bun run build         # Build all apps
+bun run lint          # Run linting
+bun run type-check    # TypeScript checking
+bun run format        # Format code
+bun run db:generate   # Generate Prisma client
+bun run db:push       # Push schema changes
+```
+
+### Before Every Push
+
+1. `bun run type-check`
+2. `bun run lint`
+3. `bun run format`
+4. `bun run build`
+5. `git status` - review changes
+6. `git diff --staged` - verify diff
+
+### Environment Variables
+
+Key integrations configured in `.env`:
+
+- `OPENAI_API_KEY`, `ANTHROPIC_API_KEY` - AI providers
+- `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID` - Voice
+- `FIRECRAWL_API_KEY`, `HUBSPOT_ACCESS_TOKEN` - MCP servers
+- `INNGEST_EVENT_KEY`, `INNGEST_SIGNING_KEY` - Background jobs
+- `NGROK_DOMAIN` - Webhook tunneling
+
+### Monorepo Structure
+
+```
+apps/agent/      - AI Agent app (port 3001)
+apps/frontend/   - Main app (port 3000)
+packages/mastra/ - Core agent framework
+packages/database/ - Prisma schema
+packages/ui/     - Shared components
+```
+
+## Full Documentation
+
+For complete details, refer to `/CLAUDE.md` which contains:
+
+- Complete technology stack with versions
+- All environment variables explained
+- MCP server configurations
+- Agent architecture details
+- Workflow system documentation
+- RAG pipeline usage
+- Voice agent integration
+- Vercel deployment procedures
+- GitHub push procedures
+- Troubleshooting guides
+
+**READ IT. FOLLOW IT. DO THE JOB RIGHT.**

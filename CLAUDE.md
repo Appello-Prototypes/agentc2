@@ -1,770 +1,789 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) and Cursor AI when working with code in this repository.
 
-## Project Overview
+---
 
-This is a **Turborepo monorepo** for the Catalyst application, built with Next.js 16 (App Router), React 19, Prisma (MySQL), and Better Auth for authentication. The project uses **Bun** as the package manager and runtime.
+## CRITICAL MINDSET: DO THE JOB RIGHT
 
-## Claude Code Workflow
+**NEVER BE LAZY. NEVER TAKE SHORTCUTS. NEVER DO THE EASY THING TO SAVE TIME.**
 
-When working on files in this repository, follow these practices:
+This is a production-grade AI agent framework. Every change you make affects real systems with real integrations. When working on this codebase:
 
-### Code Quality
+1. **Follow the plan completely** - If there's a plan, execute EVERY step. Do not skip steps because they seem tedious.
+2. **Read before you write** - ALWAYS read existing code thoroughly before making changes. Understand the context.
+3. **Test your changes** - Verify your work compiles, lints, and functions correctly before declaring done.
+4. **Be thorough, not fast** - Quality over speed. A proper implementation now saves hours of debugging later.
+5. **Ask if uncertain** - When in doubt, ask for clarification rather than guessing.
+6. **Complete the task** - Partial implementations are worse than no implementation. Finish what you start.
 
-- **Formatting**: After completing work on any file, run `bun run format` to ensure proper Prettier formatting is applied
-- **Linting**: After completing work on any file, run `bun run lint` to catch and fix any linting issues
-- Always ensure code passes both formatting and linting checks before considering the task complete
+**Failure to follow these principles wastes the user's time and creates technical debt.**
 
-### Development Server
+---
 
-- **Assume the dev server is running**: Do not ask to start `bun run dev` or `bun run dev:local` - assume the development server is already running during active development sessions
-- **Only ask to start if needed**: If you detect that the development server is not running (e.g., through error messages or explicit user indication), then ask if you should start it
-- The user will start/stop the server as needed for their workflow
+## System Overview
 
-## Next.js MCP (Model Context Protocol) Integration
+This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorepo for building, deploying, and orchestrating AI agents. The system integrates multiple AI providers, voice capabilities, MCP (Model Context Protocol) servers, RAG (Retrieval Augmented Generation), background job processing, and a comprehensive UI for agent management.
 
-Next.js 16+ exposes an MCP endpoint at `/_next/mcp` providing real-time access to compilation errors, routes, build status, and runtime diagnostics.
+### Primary Purpose
 
-### Key MCP Tools
+- Build and deploy AI agents with multiple LLM backends (OpenAI, Anthropic)
+- Voice-enabled agents using ElevenLabs and OpenAI voice APIs
+- MCP integrations for external tools (HubSpot CRM, Jira, Firecrawl, Playwright, JustCall, ATLAS/n8n)
+- RAG pipeline for document ingestion and semantic search
+- Database-driven agent configuration with version control
+- Background job processing with Inngest
+- Real-time webhooks via ngrok for ElevenLabs live agents
 
-**`mcp__next-devtools__init`** - Initialize MCP context (use at session start)
+---
 
-**`mcp__next-devtools__nextjs_docs`** - Fetch Next.js documentation
+## Core Technology Stack
 
-- Always read `nextjs-docs://llms-index` resource first to get correct paths
-- Never guess documentation paths
+### Framework & Runtime
 
-**`mcp__next-devtools__nextjs_index`** - Discover running dev servers
+| Technology     | Version | Purpose                                      |
+| -------------- | ------- | -------------------------------------------- |
+| **Bun**        | 1.3.4+  | Package manager and JavaScript runtime       |
+| **Turborepo**  | 2.3.3+  | Monorepo build system and task orchestration |
+| **Next.js**    | 16.1.0  | React framework with App Router              |
+| **React**      | 19.2.3  | UI library                                   |
+| **TypeScript** | 5.x     | Type-safe JavaScript                         |
 
-- FIRST CHOICE for investigating running applications
-- Use before implementing changes to check current structure
-- Returns servers with ports, PIDs, and available tools
+### AI & Agent Framework
 
-**`mcp__next-devtools__nextjs_call`** - Call specific MCP tools
+| Technology        | Package                                  | Purpose                                          |
+| ----------------- | ---------------------------------------- | ------------------------------------------------ |
+| **Mastra Core**   | `@mastra/core`                           | Agent framework, workflows, orchestration        |
+| **Mastra MCP**    | `@mastra/mcp`                            | Model Context Protocol client for external tools |
+| **Mastra Memory** | `@mastra/memory`                         | Conversation memory and semantic recall          |
+| **Mastra RAG**    | `@mastra/rag`                            | Document ingestion, chunking, vector search      |
+| **Mastra Evals**  | `@mastra/evals`                          | Agent evaluation and scoring                     |
+| **AI SDK**        | `ai`, `@ai-sdk/openai`, `@mastra/ai-sdk` | Vercel AI SDK for streaming and tools            |
 
-- Requires port number and tool name
-- `args` must be object `{key: "value"}` or omitted entirely
-- Common tools: get_errors, list_routes, clear_cache
+### Voice Capabilities
 
-**`mcp__next-devtools__browser_eval`** - Browser automation with Playwright
+| Technology            | Package                    | Purpose                       |
+| --------------------- | -------------------------- | ----------------------------- |
+| **ElevenLabs Voice**  | `@mastra/voice-elevenlabs` | Text-to-speech, voice cloning |
+| **OpenAI Voice**      | `@mastra/voice-openai`     | OpenAI Realtime API for voice |
+| **ElevenLabs Agents** | ElevenLabs Platform        | Live conversational AI agents |
 
-- Use for verifying pages and detecting runtime issues
-- Use Next.js MCP tools FIRST for error reporting
-- Actions: start, navigate, click, type, screenshot, console_messages
+### Database & ORM
 
-### MCP Workflow
+| Technology     | Version      | Purpose                            |
+| -------------- | ------------ | ---------------------------------- |
+| **PostgreSQL** | Via Supabase | Primary database                   |
+| **Prisma**     | 6.2.1+       | ORM and schema management          |
+| **Mastra PG**  | `@mastra/pg` | Mastra-specific PostgreSQL storage |
 
-1. Call `nextjs_index` to discover servers
-2. Use `nextjs_call` to get errors, routes, build status
-3. Read relevant files based on MCP information
-4. Make changes
-5. Use browser automation to verify
+### Authentication
 
-**Prioritization**: Next.js MCP → Browser automation → Static file search
+| Technology             | Package               | Purpose                      |
+| ---------------------- | --------------------- | ---------------------------- |
+| **Better Auth**        | `better-auth` 1.4.17+ | Session-based authentication |
+| **Cross-app sessions** | Via Caddy proxy       | Cookie sharing between apps  |
+
+### UI Components
+
+| Technology       | Package            | Purpose                             |
+| ---------------- | ------------------ | ----------------------------------- |
+| **shadcn/ui**    | Via `@repo/ui`     | Component library (base-nova style) |
+| **Tailwind CSS** | 4.x                | Utility-first CSS                   |
+| **HugeIcons**    | `@hugeicons/react` | Icon library                        |
+| **Storybook**    | 8.6.x              | Component documentation             |
+
+### Background Jobs & Webhooks
+
+| Technology  | Package            | Purpose                                           |
+| ----------- | ------------------ | ------------------------------------------------- |
+| **Inngest** | `inngest` 3.50.0+  | Background job processing, event-driven workflows |
+| **ngrok**   | Via `NGROK_DOMAIN` | Stable webhook URLs for ElevenLabs                |
+
+### Development Tools
+
+| Technology         | Purpose                                          |
+| ------------------ | ------------------------------------------------ |
+| **Caddy**          | Reverse proxy for local HTTPS and cookie sharing |
+| **Prettier**       | Code formatting (4-space indent, no semicolons)  |
+| **ESLint**         | Code linting                                     |
+| **Docker Compose** | Database container management                    |
+
+---
 
 ## Monorepo Structure
 
-- **apps/frontend**: Next.js 16 application with App Router
-    - **src/components**: App-specific components (auth forms, dashboards, etc.)
-    - **src/app/(Public)/api/auth**: Better Auth API endpoints
-- **apps/agent**: Next.js 16 agent application with App Router
-    - Configured with `basePath: "/agent"` for path-based routing
-    - Shares authentication with frontend via cookies
-    - **src/app/page.tsx**: Agent home page (served at `/agent`)
-- **packages/auth**: Shared authentication configuration and providers
-    - Server and client auth configurations
-    - SessionProvider component
-- **packages/database**: Prisma schema and client configuration
-- **packages/ui**: Shared UI component library (shadcn/ui)
-    - All shadcn components, utilities, hooks, and styles
-    - Includes Tailwind CSS configuration and dependencies
-    - Consumed by both frontend and agent apps
-- **packages/typescript-config**: Shared TypeScript configurations
+```
+/
+├── apps/
+│   ├── agent/          # AI Agent Next.js app (port 3001, basePath: /agent)
+│   ├── frontend/       # Main Next.js app (port 3000)
+│   └── ngrok/          # ngrok tunnel management
+│
+├── packages/
+│   ├── auth/           # Better Auth configuration (@repo/auth)
+│   ├── database/       # Prisma schema and client (@repo/database)
+│   ├── mastra/         # Mastra agents, tools, workflows (@repo/mastra)
+│   ├── ui/             # Shared UI components (@repo/ui)
+│   ├── next-config/    # Shared Next.js configuration
+│   └── typescript-config/  # Shared TypeScript configs
+│
+├── docs/               # Documentation and migration guides
+├── scripts/            # Development and deployment scripts
+└── .cursor/plans/      # AI implementation plans
+```
+
+---
+
+## Environment Variables - COMPLETE REFERENCE
+
+The `.env` file contains ALL integrations. Here is the complete breakdown:
+
+### Database (PostgreSQL via Supabase)
+
+```bash
+DATABASE_URL="postgresql://..."           # Prisma connection string
+NEXT_PUBLIC_SUPABASE_URL="https://..."    # Supabase project URL
+NEXT_PUBLIC_SUPABASE_ANON_KEY="..."       # Supabase anonymous key
+```
+
+### Authentication (Better Auth)
+
+```bash
+NEXT_PUBLIC_APP_URL="https://catalyst.localhost"  # With Caddy
+NEXT_PUBLIC_APP_URL="http://localhost:3000"       # Without Caddy
+BETTER_AUTH_SECRET="..."                           # Auth encryption key
+CADDY_ADMIN_API="http://localhost:2019"           # Caddy admin endpoint
+```
+
+### AI Providers
+
+```bash
+OPENAI_API_KEY="sk-..."           # OpenAI API key (GPT-4o, Whisper, TTS)
+ANTHROPIC_API_KEY="sk-ant-..."    # Anthropic API key (Claude models)
+```
+
+### Voice Providers (ElevenLabs)
+
+```bash
+ELEVENLABS_API_KEY="sk_..."              # ElevenLabs API key
+ELEVENLABS_AGENT_ID="agent_..."          # ElevenLabs Agent ID (e.g., Grace)
+ELEVENLABS_WEBHOOK_SECRET="wsec_..."     # Webhook authentication secret
+ELEVENLABS_MCP_WEBHOOK_URL="https://..." # ngrok URL for live agent tools
+```
+
+### MCP Server Integrations
+
+```bash
+# Firecrawl - Web scraping
+FIRECRAWL_API_KEY="fc-..."
+
+# HubSpot CRM
+HUBSPOT_ACCESS_TOKEN="pat-na1-..."
+
+# Jira - Project management
+JIRA_URL="https://your-org.atlassian.net"
+JIRA_USERNAME="email@example.com"
+JIRA_API_TOKEN="ATATT3x..."
+JIRA_PROJECTS_FILTER="PROJECT_KEY"
+
+# JustCall - Phone/SMS
+JUSTCALL_AUTH_TOKEN="api_key:api_secret"
+
+# Fathom - Analytics/Meeting transcripts
+FATHOM_API_KEY="..."
+
+# ATLAS - n8n workflow automation
+ATLAS_N8N_SSE_URL="https://your-n8n.app.n8n.cloud/mcp/.../sse"
+```
+
+### Slack Integration
+
+```bash
+# Slack App Configuration
+# Create app at https://api.slack.com/apps
+SLACK_BOT_TOKEN="xoxb-..."           # Bot User OAuth Token
+SLACK_SIGNING_SECRET="..."           # App Credentials > Signing Secret
+SLACK_DEFAULT_AGENT_SLUG="assistant" # Agent to use for Slack conversations
+```
+
+### Webhooks & Tunneling (ngrok)
+
+```bash
+NGROK_AUTHTOKEN="..."                              # ngrok auth token
+NGROK_DOMAIN="your-subdomain.ngrok-free.dev"       # Stable ngrok domain
+```
+
+### Background Jobs (Inngest)
+
+```bash
+INNGEST_EVENT_KEY="..."       # Event publishing key
+INNGEST_SIGNING_KEY="..."     # Webhook verification key
+```
+
+### Feature Flags
+
+```bash
+FEATURE_DB_AGENTS="true"      # Enable database-driven agents
+```
+
+---
+
+## Package-Specific Dependencies
+
+### @repo/mastra (packages/mastra)
+
+This is the core AI package. Key dependencies:
+
+```json
+{
+    "@mastra/core": "latest", // Agent framework
+    "@mastra/mcp": "^1.0.0", // MCP client
+    "@mastra/memory": "latest", // Conversation memory
+    "@mastra/pg": "latest", // PostgreSQL storage
+    "@mastra/rag": "^2.1.0", // RAG pipeline
+    "@mastra/evals": "^1.0.1", // Evaluation scorers
+    "@mastra/voice-elevenlabs": "^0.12.0",
+    "@mastra/voice-openai": "^0.12.0",
+    "@ai-sdk/openai": "^3.0.23",
+    "ai": "^6.0.64",
+    "zod": "^3.24.0"
+}
+```
+
+### apps/agent
+
+```json
+{
+    "@mastra/ai-sdk": "latest",
+    "@mastra/voice-elevenlabs": "^0.12.0",
+    "@mastra/voice-openai": "^0.12.0",
+    "@repo/auth": "workspace:*",
+    "@repo/database": "workspace:*",
+    "@repo/mastra": "workspace:*",
+    "@repo/ui": "workspace:*",
+    "inngest": "^3.50.0",
+    "next": "16.1.0",
+    "react": "19.2.3"
+}
+```
+
+---
 
 ## Development Commands
 
-All commands should be run from the **root directory** using Bun:
+All commands run from the **root directory**:
 
 ```bash
 # Development
-bun run dev                 # Start all apps in development mode
+bun run dev               # Start with Caddy (HTTPS)
+bun run dev:local         # Start without Caddy (localhost)
 
-# Build
-bun run build              # Build all apps and packages
+# Build & Quality
+bun run build             # Build all apps
+bun run lint              # Run ESLint
+bun run type-check        # TypeScript checking
+bun run format            # Format with Prettier
 
-# Code Quality
-bun run lint               # Run ESLint across all workspaces
-bun run type-check         # TypeScript type checking
-bun run format             # Format code with Prettier
+# Database
+bun run db:generate       # Generate Prisma client
+bun run db:push           # Push schema changes (dev)
+bun run db:migrate        # Create migrations (prod-ready)
+bun run db:studio         # Open Prisma Studio
+bun run db:seed           # Seed database
 
-# Database (Prisma)
-bun run db:generate        # Generate Prisma client
-bun run db:push            # Push schema changes to database (development only)
-bun run db:migrate         # Create and apply migrations (uses root credentials)
-bun run db:migrate:reset   # Reset database and apply all migrations (destructive)
-bun run db:migrate:deploy  # Apply migrations in production
-bun run db:studio          # Open Prisma Studio
-bun run db:seed            # Seed the database
-
-# UI Components
-bun run add-shadcn <name>  # Add ShadCN component(s) to shared UI package
-
-# Cleanup
-bun run clean              # Clean build artifacts
+# UI Development
+bun run add-shadcn <name> # Add shadcn component
+bun run storybook         # Launch Storybook
 ```
 
-### Running Single Workspace Commands
+---
 
-To run commands in a specific workspace:
+## GitHub Push Procedures
 
-```bash
-cd apps/frontend
-bun run dev                # Run only frontend in dev mode
-bun run build              # Build only frontend
-```
+### Pre-Push Checklist
 
-### Database Setup
+Before pushing ANY code to GitHub, you MUST complete these steps:
 
-1. Start MySQL container: `docker compose up -d`
-2. Copy `.env.example` to `.env` and configure database credentials
-3. Generate Prisma client: `bun run db:generate`
-4. Choose your database workflow:
-    - **For rapid development**: `bun run db:push` (syncs schema without migrations)
-    - **For production-ready migrations**: `bun run db:migrate` (creates migration files)
-5. (Optional) Seed database: `bun run db:seed`
-
-**Note**: Migration commands use `DATABASE_URL_MIGRATE` which connects as the root user. This is required because Prisma Migrate needs CREATE DATABASE privileges to create shadow databases for migration validation.
-
-## Development with Caddy
-
-This project uses **Caddy** as a reverse proxy for local development to enable cookie sharing between the frontend and agent apps.
-
-### Prerequisites
-
-1. **Install Caddy**:
+1. **Run type checking**:
 
     ```bash
-    brew install caddy  # macOS
+    bun run type-check
     ```
 
-2. **Trust Caddy's root CA** (for HTTPS):
+2. **Run linting and fix errors**:
 
     ```bash
-    caddy trust
-    # Requires sudo password
+    bun run lint
     ```
 
-**Note**: `.localhost` domains automatically resolve to 127.0.0.1, so no `/etc/hosts` modification is needed.
+3. **Run formatting**:
 
-### Starting Development
+    ```bash
+    bun run format
+    ```
 
-**Default (with Caddy - HTTPS):**
+4. **Verify build succeeds**:
 
-```bash
-bun run dev
-```
+    ```bash
+    bun run build
+    ```
 
-Access at: **https://catalyst.localhost**
+5. **Check for uncommitted changes**:
 
-The `bun run dev` command:
+    ```bash
+    git status
+    ```
 
-1. Runs pre-flight checks (Caddy installation, CA certificate)
-2. Starts Caddy reverse proxy via Turbo (appears in TUI as separate service)
-3. Starts all Next.js apps via Turbo
+6. **Review diff before committing**:
 
-**Fallback (without Caddy - localhost):**
+    ```bash
+    git diff --staged
+    ```
 
-```bash
-bun run dev:local
-```
+### Commit Message Standards
 
-Access at: **http://localhost:3000**
-
-Use this if Caddy setup is not complete or you want to bypass the proxy.
-
-### Turbo TUI
-
-When running `bun run dev`, you'll see all services in the Turbo TUI:
-
-- **caddy**: Reverse proxy (only shows errors, not request logs)
-- **frontend**: Main Next.js app
-- **agent**: Agent Next.js app
-- **database**: Prisma tasks
-
-You can collapse/expand individual service logs in the TUI for better organization.
-
-### Caddy Management
+Use conventional commits:
 
 ```bash
-bun run caddy:start   # Start Caddy only
-bun run caddy:stop    # Stop Caddy only
-bun run caddy:reload  # Reload Caddyfile configuration
+feat: add new MCP tool integration
+fix: resolve memory leak in agent resolver
+docs: update CLAUDE.md with deployment procedures
+refactor: extract tool registry to separate module
+chore: update dependencies
 ```
 
-### URL Structure
+### Push Workflow
 
-- **Frontend**: `https://catalyst.localhost` → `localhost:3000`
-- **Agent**: `https://catalyst.localhost/agent` → `localhost:3001/agent`
-- **Auth API**: `https://catalyst.localhost/api/auth` → `localhost:3000/api/auth`
+```bash
+# Stage changes
+git add -A
 
-All apps share cookies automatically via same domain (`catalyst.localhost`).
+# Commit with descriptive message
+git commit -m "feat: description of what was done"
 
-### How Cookie Sharing Works
+# Push to remote
+git push origin main
+```
 
-1. **Single Domain**: Both apps are accessed via `catalyst.localhost`
-2. **Better Auth Configuration**:
-    - Server config in `apps/frontend/src/lib/auth.ts` sets `baseURL: "https://catalyst.localhost"`
-    - Client config in both apps uses `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"`
-    - Cookies are set with domain=`catalyst.localhost` and path=`/`
-3. **Path-Based Routing**: Caddy routes requests to appropriate apps while preserving cookies
-4. **Result**: Login on frontend → automatically authenticated on agent
+### NEVER DO
 
-### Agent App Configuration
+- Push without running `bun run build` first
+- Push with linting errors
+- Push with type errors
+- Force push to main without explicit permission
+- Commit .env files or secrets
 
-The agent app requires specific Next.js configuration for path-based routing:
+---
 
-**File: `apps/agent/next.config.ts`**
+## Vercel CLI Monitoring & Fixing
+
+### Monitor Vercel Deployments from Terminal
+
+```bash
+# Install Vercel CLI if needed
+npm i -g vercel
+
+# Login to Vercel
+vercel login
+
+# Check deployment status
+vercel ls
+
+# View deployment logs
+vercel logs <deployment-url>
+
+# Tail logs in real-time
+vercel logs --follow <deployment-url>
+
+# Check for build errors
+vercel inspect <deployment-url>
+```
+
+### Common Vercel Build Issues & Fixes
+
+1. **Type Errors in Build**:
+
+    ```bash
+    # Run locally first
+    bun run type-check
+    bun run build
+    ```
+
+2. **Environment Variable Missing**:
+
+    ```bash
+    # Check Vercel env vars
+    vercel env ls
+
+    # Add missing env var
+    vercel env add <VAR_NAME>
+    ```
+
+3. **Build Timeout**:
+    - Check for infinite loops in build-time code
+    - Reduce bundle size
+    - Check Prisma generate runs correctly
+
+4. **Memory Issues**:
+
+    ```bash
+    # Increase Node memory in vercel.json
+    {
+        "builds": [{
+            "config": {
+                "maxLambdaSize": "50mb"
+            }
+        }]
+    }
+    ```
+
+5. **Redeploy After Fix**:
+
+    ```bash
+    # Trigger new deployment
+    vercel --prod
+
+    # Or force redeploy
+    vercel --prod --force
+    ```
+
+### Vercel Logs Analysis
+
+When a deployment fails:
+
+1. Get the deployment URL from Vercel dashboard or `vercel ls`
+2. Run `vercel logs <url>` to see build logs
+3. Look for:
+    - TypeScript compilation errors
+    - Missing environment variables
+    - Failed Prisma generate
+    - Memory/timeout issues
+4. Fix locally, test with `bun run build`, then redeploy
+
+---
+
+## MCP Server Integration Details
+
+The system uses Mastra's MCP client to connect to external tools:
+
+### Available MCP Servers
+
+| Server         | Category      | Tools Provided                                    |
+| -------------- | ------------- | ------------------------------------------------- |
+| **Playwright** | Web           | Browser automation, screenshots, page interaction |
+| **Firecrawl**  | Web           | Web scraping, content extraction                  |
+| **HubSpot**    | CRM           | Contacts, companies, deals, pipeline              |
+| **Jira**       | Productivity  | Issues, sprints, project tracking                 |
+| **JustCall**   | Communication | Call logs, SMS messaging                          |
+| **ATLAS**      | Automation    | n8n workflow triggers                             |
+
+### MCP Tool Execution
 
 ```typescript
-const nextConfig: NextConfig = {
-    basePath: "/agent" // Critical for asset loading
-};
+import { executeMcpTool, listMcpToolDefinitions } from "@repo/mastra";
+
+// List available tools
+const tools = await listMcpToolDefinitions();
+
+// Execute a tool
+const result = await executeMcpTool("hubspot.hubspot-get-user-details", {
+    userId: "12345"
+});
 ```
 
-**Why `basePath` is Required:**
+---
 
-- Without it, assets load from `https://catalyst.localhost/_next/...` (404)
-- With it, assets load from `https://catalyst.localhost/agent/_next/...` (✓)
-- Next.js automatically prefixes all URLs (links, images, scripts) with `/agent`
+## Agent Architecture
 
-**File Structure:**
+### Database-Driven Agents
 
-```
-apps/agent/src/app/
-├── layout.tsx       # Root layout
-└── page.tsx         # Home page (served at /agent, not /agent/agent)
-```
-
-**Important**: With `basePath: "/agent"`, pages should be at the root of `app/`, not in an `app/agent/` subdirectory.
-
-### Troubleshooting
-
-**Certificate warning:** Run `caddy trust` and restart browser
-
-**Caddy not starting:** Check port 443 availability (`lsof -i :443`) or validate Caddyfile (`caddy validate --config ./Caddyfile`)
-
-**Cookies not working:** Access via `https://catalyst.localhost` (not `localhost`), verify `NEXT_PUBLIC_APP_URL` in `.env`
-
-## Architecture
-
-### DRY Methodology for Multiple Apps
-
-**Centralized Navigation:** `packages/ui/src/config/navigation.ts`
-
-- Single source for Sidebar, TopBar, and CommandPalette
-- Properties: `app` (frontend/agent), `keywords` (search terms), `children` (nested items)
-- Helpers: `getNavigationItemsForApp()`, `getAllNavigationItems()`
-
-**Centralized User Menu:** `packages/ui/src/config/user-menu.ts`
-
-- Single source for user actions (Settings, Sign out)
-- Properties: `action`, `icon`, `keywords`, `variant`
-- CommandPalette provides default behaviors (no boilerplate needed)
-
-**CommandPalette Architecture:** `packages/ui/src/components/command-palette.tsx`
-
-- Consumes both config files
-- Automatic navigation groups, cross-app switching, user menu
-- Minimal setup: just pass `appNavigation` config
-
-**Multi-App Best Practices:**
-
-- Navigation → `packages/ui/src/config/navigation.ts`
-- User actions → `packages/ui/src/config/user-menu.ts`
-- UI components → `packages/ui/src/components/`
-- Shared logic → `@repo/auth`, `@repo/database`, etc.
-- Never duplicate: navigation, user menu, auth logic, database queries, UI components
-
-### Authentication Flow
-
-The app uses **Better Auth** (v1.4+) with email/password authentication and cross-app session sharing:
-
-- **Shared Auth Package**: `packages/auth`
-    - Server config: `packages/auth/src/auth.ts`
-    - Client config: `packages/auth/src/auth-client.ts`
-    - SessionProvider: `packages/auth/src/providers/session-provider.tsx`
-    - Imported in both apps via `@repo/auth`
-- Auth API endpoints: `apps/frontend/src/app/(Public)/api/auth/[...all]/route.ts`
-- Session management via Better Auth with 7-day expiry
-- Uses Better Auth's recommended integration pattern (Note: Next.js 16 renamed middleware to proxy)
-
-**Proxy Configuration (Route Protection):**
-
-Each Next.js app requires its own `proxy.ts` file to handle authentication:
-
-- **Frontend**: `apps/frontend/src/proxy.ts`
-    - Public routes: `/`, `/signup`, `/api/auth/*`
-    - All other routes require authentication and redirect to `/` if unauthenticated
-- **Agent**: `apps/agent/src/proxy.ts`
-    - All routes require authentication (entire agent app is protected)
-    - Redirects to frontend root if unauthenticated
-    - Important: With `basePath="/agent"`, the proxy sees routes AFTER the basePath is stripped
-
-**Cross-App Authentication:**
-
-- Frontend hosts the auth API at `/api/auth/*`
-- Agent app uses auth client pointing to `https://catalyst.localhost/api/auth`
-- Both apps share the same `NEXT_PUBLIC_APP_URL` environment variable
-- Both apps import from `@repo/auth` package
-- Cookies are set on `catalyst.localhost` domain with path `/`, accessible to both apps
-- Login on frontend → session automatically available on agent app
-
-**IMPORTANT: When adding a new app to the monorepo:**
-
-1. Create a `proxy.ts` file in the app's `src/` directory
-2. Use the agent app's proxy as a template if the entire app requires authentication
-3. Use the frontend app's proxy as a template if the app has both public and authenticated routes
-4. Import from `@repo/auth` for session validation
-5. Configure the matcher to exclude static assets (`_next/static`, `_next/image`, `favicon.ico`)
-
-### Next.js App Router Structure
-
-The frontend uses Next.js **route groups** for organization:
-
-- `app/(Public)/`: Unauthenticated routes (signup, login)
-- `app/(Authenticated)/`: Protected routes (dashboard, etc.)
-- Root `app/page.tsx`: Landing/login page
-
-### Database Schema
-
-Prisma schema located at `packages/database/prisma/schema.prisma`. Models:
-
-- **User**: Core user data with email/password authentication
-- **Session**: Better Auth session management
-- **Account**: OAuth provider accounts (for future OAuth support)
-- **Verification**: Email verification tokens
-
-The Prisma client is exported from `packages/database/src/index.ts` and used throughout the monorepo as `@repo/database`.
-
-### Styling and UI Components
-
-This project follows the **ShadCN monorepo pattern** with a shared UI package:
-
-- **Shared UI Package**: `packages/ui` - Contains all shadcn/ui components
-    - 23+ UI components (Button, Card, Dialog, Sidebar, etc.)
-    - Utility functions (`cn()` for className merging)
-    - Hooks (`useIsMobile()`)
-    - ThemeProvider component
-    - **Global styles** (`packages/ui/src/styles/globals.css`):
-        - All Tailwind CSS imports and configuration
-        - Complete theme with CSS variables (light/dark modes)
-        - Base layer styles
-        - Imported by both apps to ensure consistent styling
-    - Consumed by both frontend and agent apps via `@repo/ui`
-- **Tailwind CSS 4**: Configured at workspace root
-    - **Shared styles**: All Tailwind imports, theme variables, and base styles are in `packages/ui/src/styles/globals.css`
-    - **App-specific CSS**: Each app imports the shared styles and adds its own `@source` directive
-    - Example in `apps/frontend/src/styles/globals.css`:
-
-        ```css
-        /* Import shared UI styles and theme from packages/ui */
-        @import "../../../../packages/ui/src/styles/globals.css";
-
-        /* Scan frontend app source files for Tailwind classes */
-        @source "../../**/*.{js,ts,jsx,tsx}";
-        ```
-
-    - The shared `packages/ui/src/styles/globals.css` includes:
-        - `@source "../**/*.{js,ts,jsx,tsx}"` to scan UI components
-        - All Tailwind imports (@import "tailwindcss", etc.)
-        - Complete theme configuration (CSS variables, dark mode, base layer)
-
-- **shadcn/ui Configuration**:
-    - Base style: `base-nova`
-    - Icon library: `hugeicons`
-    - Each app has its own `components.json` that points to the shared UI package
-    - Shared package: `packages/ui/components.json`
-- Uses `@base-ui/react` for headless component primitives
-- Theme support via `next-themes` (dark mode configured)
-
-### TypeScript Configuration
-
-- Shared configs in `packages/typescript-config`
-- Workspace imports use `workspace:*` protocol
-- Path aliases configured in frontend (`apps/frontend/tsconfig.json`):
-    - `@/components`: Frontend components directory
-    - `@/lib`: Utility functions and configurations
-    - `@/hooks`: Custom React hooks
-    - `@/styles`: Global styles
-
-## Important Notes
-
-### Environment Variables
-
-Required environment variables (see `.env.example`):
-
-- `DATABASE_URL`: MySQL connection string (used by application code)
-- `DATABASE_URL_MIGRATE`: MySQL connection string with root user (used by Prisma Migrate)
-- `MYSQL_ROOT_PASSWORD`: Root password for MySQL (used in DATABASE_URL_MIGRATE)
-- `MYSQL_DATABASE`: Database name
-- `MYSQL_USER`: Application database user
-- `MYSQL_PASSWORD`: Application database password
-- `MYSQL_PORT`: MySQL port (default: 3306)
-- `BETTER_AUTH_SECRET`: Auth secret key (generate with Better Auth CLI)
-- `NEXT_PUBLIC_APP_URL`: Application URL for callbacks (use `https://catalyst.localhost` with Caddy, `http://localhost:3000` for dev:local)
-
-**Important Notes:**
-
-- `DATABASE_URL` uses a limited user for application security, while `DATABASE_URL_MIGRATE` uses root for migration operations that require elevated privileges
-- `NEXT_PUBLIC_APP_URL` must be explicitly exposed in `next.config.ts` files under the `env` key for both frontend and agent apps
-- Environment variables are loaded from root `.env` file using `dotenv` in each app's `next.config.ts`
-
-### Important Notes
-
-**Prettier:** 4 spaces indent (2 for JSON/YAML), no semicolons, Tailwind sorting enabled
-
-**Package Manager:** Requires Bun v1.3.4+ (lockfile: `bun.lock`)
-
-**Turbo:** Lint/type-check depend on `^build`, database tasks uncached, dev runs persistently
-
-## Security
-
-**Security Headers:** Both apps have production-grade headers in `next.config.ts` (HSTS, X-Frame-Options, CSP, etc.)
-
-- CSP is environment-aware (allows unsafe directives in dev, strict in prod)
-- Test with [securityheaders.com](https://securityheaders.com/)
-
-**Error Boundaries:** Implemented at root, authenticated, and global levels
-
-- Shared component: `packages/ui/src/components/error-boundary.tsx`
-- App-specific: `error.tsx` and `global-error.tsx` files
-
-**Production Security:** See `SECURITY.md` for deployment checklist (environment variables, database security, HTTPS/TLS, monitoring)
-
-## Database Migrations
-
-**Quick iteration:** `bun run db:push` (syncs schema, no migration files)
-
-**Production-ready:** `bun run db:migrate` (creates migration files)
-
-**Commands:**
-
-- `db:migrate`: Create and apply migration (uses root credentials)
-- `db:migrate:deploy`: Apply pending migrations (production)
-- `db:migrate:reset`: Reset database (destructive, dev only)
-
-**Important:** Migration commands use `DATABASE_URL_MIGRATE` (root user) for shadow database creation. Application uses `DATABASE_URL` (limited privileges). Always commit migration files.
-
-## Adding New Features
-
-### Frontend Features
-
-When adding authenticated features:
-
-1. Create routes in `apps/frontend/src/app/(Authenticated)/`
-2. They will automatically be protected by the middleware
-3. Access user session via Better Auth hooks or API
-
-When adding public features:
-
-1. Create routes in `apps/frontend/src/app/(Public)/`
-2. Or add to `publicRoutes` array in `apps/frontend/src/proxy.ts`
-
-### Agent App Features
-
-When adding routes to the agent app:
-
-1. **Remember `basePath`**: All routes are automatically prefixed with `/agent`
-2. **File structure**: Pages go in `apps/agent/src/app/`, NOT in `apps/agent/src/app/agent/`
-3. **Example**:
-    - File: `apps/agent/src/app/dashboard/page.tsx`
-    - URL: `https://catalyst.localhost/agent/dashboard`
-4. **Links**: Use Next.js `<Link href="/dashboard">` (basePath is automatic)
-5. **Assets**: All `_next` assets automatically served from `/agent/_next/`
-6. **Auth**: Import from `@repo/auth` - sessions shared automatically
-7. **UI Components**: Import from `@repo/ui` - shares the same component library as frontend
-
-## Component Development
-
-### ShadCN MCP Integration
-
-Built-in MCP support for discovering and adding ShadCN components.
-
-**Available Tools:**
-
-- `mcp__shadcn__search_items_in_registries` - Search components by keyword
-- `mcp__shadcn__get_item_examples_from_registries` - Find usage examples (patterns: `component-demo`, `component example`)
-- `mcp__shadcn__view_items_in_registries` - View component details (use registry prefix: `@shadcn/button`)
-- `mcp__shadcn__get_add_command_for_items` - Get CLI command for adding components
-- `mcp__shadcn__get_audit_checklist` - Verify installation
-
-**Recommended Workflow:**
-
-1. Search for components with `search_items_in_registries`
-2. View examples with `get_item_examples_from_registries`
-3. Run `bun run add-shadcn <component-name>` (automated script)
-4. Export in `packages/ui/src/components/index.ts`
-5. Verify with `get_audit_checklist`
-
-### ShadCN UI Components in Monorepo
-
-This project follows the **ShadCN monorepo pattern** where all UI components are centralized in a shared package (`packages/ui`). This allows both the frontend and agent apps to use the same component library.
-
-#### Package Structure
-
-```
-packages/ui/
-├── components.json          # ShadCN configuration for the UI package
-├── package.json
-├── tsconfig.json
-└── src/
-    ├── index.ts            # Main exports
-    ├── components/         # All ShadCN UI components
-    │   ├── button.tsx
-    │   ├── card.tsx
-    │   ├── dialog.tsx
-    │   ├── sidebar.tsx
-    │   ├── providers/
-    │   │   └── theme-provider.tsx
-    │   └── index.ts        # Component re-exports
-    ├── lib/
-    │   └── utils.ts        # cn() utility
-    ├── hooks/
-    │   └── use-mobile.tsx
-    └── styles/
-        └── globals.css     # Theme CSS variables
-```
-
-#### Adding New ShadCN Components
-
-**IMPORTANT**: ShadCN components should be added to the **shared UI package**, not individual apps.
-
-##### Automated Script (Recommended)
-
-The easiest way to add components is using the automated script from the **root directory**:
-
-```bash
-bun run add-shadcn <component-name> [additional-components...]
-```
-
-**Examples**:
-
-```bash
-bun run add-shadcn accordion
-bun run add-shadcn accordion tabs form
-```
-
-This script automatically handles all steps: adding the component, fixing imports, formatting, and linting.
-
-**Don't forget**: After the script completes, export the component in `packages/ui/src/components/index.ts`.
-
-##### Manual Workflow
-
-If you prefer to run the steps manually:
-
-**Step 1: Navigate to the UI Package**
-
-```bash
-cd packages/ui
-```
-
-##### Step 2: Add Component Using ShadCN CLI
-
-```bash
-bunx --bun shadcn@latest add <component-name>
-```
-
-Examples:
-
-```bash
-bunx --bun shadcn@latest add accordion
-bunx --bun shadcn@latest add tabs
-bunx --bun shadcn@latest add form
-```
-
-The CLI will automatically:
-
-- Install the component in `packages/ui/src/components/`
-- Resolve internal dependencies
-- Generate imports using `@/` aliases (e.g., `import { cn } from "@/lib/utils"`)
-
-##### Step 3: Fix Imports (CRITICAL)
-
-**IMPORTANT**: Immediately run the fix-imports script to convert `@/` alias imports to relative imports:
-
-```bash
-bun run fix-imports
-```
-
-**Why this is necessary**: The ShadCN CLI generates components with `@/` alias imports that would collide with the frontend and agent apps' own `@/` aliases, causing build errors. The fix-imports script converts these to relative imports that work correctly in the monorepo:
-
-- `from "@/lib/utils"` → `from "../lib/utils"`
-- `from "@/components/button"` → `from "./button"`
-- `from "@/hooks/use-mobile"` → `from "../hooks/use-mobile"`
-
-**Complete workflow** (can be run as a one-liner):
-
-```bash
-cd packages/ui && bunx --bun shadcn@latest add <component-name> && bun run fix-imports
-```
-
-##### Step 4: Export the Component
-
-Add the component to `packages/ui/src/components/index.ts`:
+Agents are stored in PostgreSQL and resolved at runtime:
 
 ```typescript
-export * from "./accordion";
-export * from "./tabs";
-export * from "./form";
+import { agentResolver, AgentResolver } from "@repo/mastra";
+
+// Resolve agent from database
+const agent = await agentResolver.resolve("trip-planner", {
+    userId: "user-123"
+});
 ```
 
-##### Step 5: Format and Lint
+### Agent Configuration (Prisma Schema)
 
-From the root directory, format and lint the code:
+```prisma
+model Agent {
+    id                   String      @id
+    slug                 String      @unique
+    name                 String
+    instructions         String      @db.Text
+    instructionsTemplate String?     @db.Text
+    modelProvider        String // "openai", "anthropic"
+    modelName            String // "gpt-4o", "claude-sonnet-4-20250514"
+    temperature          Float?
+    memoryEnabled        Boolean
+    memoryConfig         Json?
+    tools                AgentTool[]
+    scorers              String[]
+    // ...
+}
+```
+
+### Tool Registry
+
+Tools are registered in the tool registry and resolved by name:
+
+```typescript
+import { toolRegistry, getToolsByNames } from "@repo/mastra";
+
+// Get tools by name
+const tools = await getToolsByNames(["calculator", "web-fetch", "memory-recall"]);
+```
+
+---
+
+## Workflow System
+
+Mastra workflows enable multi-step agent orchestration:
+
+```typescript
+import { humanApprovalWorkflow, parallelWorkflow } from "@repo/mastra";
+
+// Execute workflow
+const result = await humanApprovalWorkflow.execute({
+    input: { request: "..." }
+});
+
+// Wait for human approval
+await humanApprovalWorkflow.resume(runId, { approved: true });
+```
+
+---
+
+## RAG Pipeline
+
+Document ingestion and semantic search:
+
+```typescript
+import { ingestDocument, queryRag, ragGenerate } from "@repo/mastra";
+
+// Ingest document
+await ingestDocument({
+    content: "...",
+    metadata: { source: "manual" }
+});
+
+// Query with RAG
+const response = await ragGenerate({
+    query: "What is...",
+    maxResults: 5
+});
+```
+
+---
+
+## Voice Agent Integration
+
+### ElevenLabs Live Agents
+
+The system supports ElevenLabs conversational agents with MCP tool integration:
+
+1. **Agent Configuration**: Defined in ElevenLabs platform
+2. **Webhook Tools**: Exposed via ngrok at `/api/demos/live-agent-mcp/tools`
+3. **Authentication**: Verified via `ELEVENLABS_WEBHOOK_SECRET`
+
+### Starting ngrok for Webhooks
 
 ```bash
-cd ../.. && bun run format && bun run lint
+# Start ngrok tunnel
+./scripts/start-ngrok.sh
+
+# Or manually
+ngrok http 3001 --domain=your-domain.ngrok-free.dev
 ```
 
-##### Step 6: Use in Apps
+---
 
-Import from the shared package in both frontend and agent apps:
+## Slack Integration
+
+The system supports two-way Slack conversations where users can talk to agents directly from Slack.
+
+### How It Works
+
+1. **Incoming Messages**: Slack sends webhook events to `/api/slack/events` when:
+    - Someone @mentions the bot in a channel
+    - Someone sends a direct message to the bot
+
+2. **Agent Processing**: Messages are processed by the configured agent (default: `assistant`)
+    - Each Slack thread maintains its own conversation memory
+    - The agent generates a response using its configured tools
+
+3. **Response**: The bot replies in the same thread using the Slack Web API
+
+### Setting Up Slack Integration
+
+1. **Create a Slack App** at https://api.slack.com/apps
+    - Click "Create New App" > "From scratch"
+    - Give it a name and select your workspace
+
+2. **Configure Bot Permissions** (OAuth & Permissions):
+    - Add Bot Token Scopes:
+        - `app_mentions:read` - Receive @mentions
+        - `chat:write` - Send messages
+        - `im:history` - Read DM history
+        - `im:read` - Access DM metadata
+        - `im:write` - Send DMs
+        - `channels:history` - Read channel messages (for @mentions)
+        - `channels:read` - Access channel metadata
+
+3. **Enable Event Subscriptions**:
+    - Turn on "Enable Events"
+    - Set Request URL to: `https://your-domain/agent/api/slack/events`
+    - Subscribe to bot events:
+        - `app_mention` - When bot is @mentioned
+        - `message.im` - Direct messages to bot
+    - Note: You'll need ngrok or a public URL for local development
+
+4. **Install to Workspace**:
+    - Go to "Install App" and click "Install to Workspace"
+    - Copy the "Bot User OAuth Token" (starts with `xoxb-`)
+
+5. **Configure Environment Variables**:
+
+```bash
+SLACK_BOT_TOKEN="xoxb-your-bot-token"
+SLACK_SIGNING_SECRET="your-signing-secret"  # From App Credentials
+SLACK_DEFAULT_AGENT_SLUG="assistant"        # Optional: which agent to use
+```
+
+### Usage
+
+Once configured, you can:
+
+- **@mention the bot** in any channel it's added to
+- **Send direct messages** to the bot
+- The bot will respond in a thread, maintaining conversation context
+
+### Changing the Agent
+
+Set `SLACK_DEFAULT_AGENT_SLUG` to use a different agent:
+
+```bash
+SLACK_DEFAULT_AGENT_SLUG="research"  # Use the research agent
+```
+
+Or create a dedicated Slack agent in the database with specific instructions.
+
+---
+
+## Background Jobs with Inngest
+
+### Event Publishing
 
 ```typescript
-// In apps/frontend or apps/agent
-import { Accordion, Tabs, Form } from "@repo/ui";
+import { inngest } from "@/lib/inngest";
+
+// Send event
+await inngest.send({
+    name: "goal/execute",
+    data: { goalId: "..." }
+});
 ```
 
-#### Configuration Notes
+### Function Registration
 
-- Each workspace has its own `components.json`:
-    - `packages/ui/components.json` - Uses `@/` aliases for ShadCN CLI compatibility
-    - `apps/frontend/components.json` - Points to `@repo/ui`
-    - `apps/agent/components.json` - Points to `@repo/ui`
-- All `components.json` files must have the same:
-    - `style`: `base-nova`
-    - `iconLibrary`: `hugeicons`
-    - `baseColor`: `zinc`
-- The `tailwind.config` field is left empty (Tailwind CSS v4)
-- **Important**: `packages/ui/components.json` does NOT have a `resolvedPaths` field (causes validation errors)
-- **Monorepo Path Alias Issue**: The UI package uses `@/` aliases in `components.json` for ShadCN CLI compatibility, but these must be converted to relative imports using the `fix-imports` script to avoid collisions with app-level `@/` aliases
+Functions are registered in `apps/agent/src/lib/inngest-functions.ts` and served via `/api/inngest`.
 
-#### Importing Components
+---
 
-All apps import components from the shared package:
+## Important File Locations
+
+| File                                     | Purpose                            |
+| ---------------------------------------- | ---------------------------------- |
+| `packages/mastra/src/mastra.ts`          | Main Mastra instance configuration |
+| `packages/mastra/src/agents/index.ts`    | Agent exports and factory          |
+| `packages/mastra/src/mcp/client.ts`      | MCP server configuration           |
+| `packages/mastra/src/tools/registry.ts`  | Tool registry                      |
+| `packages/database/prisma/schema.prisma` | Database schema                    |
+| `apps/agent/src/app/api/`                | API routes                         |
+| `.env`                                   | Environment configuration          |
+
+---
+
+## Troubleshooting
+
+### Agent Not Loading
+
+1. Check `FEATURE_DB_AGENTS` is set to `"true"`
+2. Verify database connection with `bun run db:studio`
+3. Check agent exists: `SELECT * FROM agent WHERE slug = 'agent-name'`
+
+### MCP Tools Not Available
+
+1. Check API keys in `.env`
+2. Test MCP client: `await mcpClient.listTools()`
+3. Check server-specific logs
+
+### Voice Agent Issues
+
+1. Verify `ELEVENLABS_API_KEY` and `ELEVENLABS_AGENT_ID`
+2. Check ngrok tunnel is running for webhooks
+3. Verify `ELEVENLABS_WEBHOOK_SECRET` matches ElevenLabs config
+
+### Build Failures
+
+1. Run `bun run type-check` first
+2. Run `bun run lint` and fix errors
+3. Clear build cache: `bun run clean`
+4. Regenerate Prisma: `bun run db:generate`
+
+---
+
+## Code Quality Standards
+
+### Before Completing ANY Task
+
+1. Run `bun run format`
+2. Run `bun run lint`
+3. Run `bun run type-check`
+4. If modified UI: check Storybook renders correctly
+
+### File Formatting
+
+- **Indent**: 4 spaces (2 for JSON/YAML)
+- **Semicolons**: None
+- **Quotes**: Double quotes for strings
+- **Tailwind**: Classes sorted by Prettier plugin
+
+### Import Order
 
 ```typescript
-// Import individual components
-import { Button, Card, Dialog } from "@repo/ui";
+// 1. React/Next
+import { useState } from "react";
+import { NextRequest } from "next/server";
 
-// Import utilities
-import { cn } from "@repo/ui";
+// 2. External packages
+import { Agent } from "@mastra/core/agent";
 
-// Import hooks
-import { useIsMobile } from "@repo/ui";
+// 3. Internal packages
+import { prisma } from "@repo/database";
+import { Button } from "@repo/ui";
 
-// Import ThemeProvider
-import { ThemeProvider } from "@repo/ui";
+// 4. Relative imports
+import { localHelper } from "./helpers";
 ```
 
-#### App-Specific Components
+---
 
-Custom components that are specific to an app (not shared UI primitives) should stay in the app's component directory:
+## Final Reminder
 
-**Frontend-specific components:**
+**DO THE JOB RIGHT. DO NOT CUT CORNERS.**
 
-- Location: `apps/frontend/src/components/`
-- Examples: `auth/sign-in-form.tsx`, `dashboard/header.tsx`, `AppSidebar.tsx`
-- Import alias: `@/components`
+When working on this codebase:
 
-**Agent-specific components:**
+- Read the full context before making changes
+- Follow existing patterns and conventions
+- Test thoroughly before declaring complete
+- Update documentation when adding features
+- Ask questions when requirements are unclear
 
-- Location: `apps/agent/src/components/`
-- Import alias: `@/components`
-
-#### When to Add to Shared UI Package
-
-Add to `packages/ui` when:
-
-- It's a primitive ShadCN component (Button, Card, Dialog, etc.)
-- It's a reusable utility or hook used by UI components
-- Both apps need the same component
-
-Keep in app directory when:
-
-- It's business logic specific to that app
-- It contains app-specific routing or state management
-- It's a composed component using multiple UI primitives for a specific feature
-
-### Using Icons
-
-Icons are centralized in the `packages/ui` shared package through a **wrapper system** that makes it easy to swap icon libraries in the future.
-
-**CRITICAL - Import Pattern:**
-
-```typescript
-// ✅ CORRECT - Import from wrapper
-import { Icon, icons } from "@repo/ui";
-
-// Semantic usage (recommended for components)
-<Icon name="home" className="size-6" />
-
-// Reference usage (for config files)
-const config = { icon: icons.home };
-
-// Legacy HugeIcons direct import (for backward compatibility during migration)
-import { HugeiconsIcon } from "@repo/ui";
-<HugeiconsIcon icon={icons.search} className="size-5" />
-
-// ❌ INCORRECT - Don't import directly from @hugeicons
-import { HomeIcon } from "@hugeicons/core-free-icons";
-```
-
-**Architecture:**
-
-- **Types**: `packages/ui/src/icons/types.ts` - Semantic icon names (`"home"`, `"dashboard"`, etc.)
-- **Mapping**: `packages/ui/src/icons/icon-map.ts` - Maps semantic names to library-specific components (ONLY file importing from icon library)
-- **Public API**: `packages/ui/src/icons/index.tsx` - Exports `Icon` component and `icons` object
-
-**Sizing:** Use Tailwind `size-*` utilities (`size-4`, `size-6`, `size-8`, `size-12`)
-
-**Colors:** Icons inherit text color (`text-foreground`, `text-muted-foreground`, `text-primary`)
-
-**Finding Icons:**
-
-- Browse: `bun run storybook` → "Foundation/Icons"
-- Semantic names: `icons.home`, `icons.dashboard`, `icons.settings`, `icons.user`, `icons.logout`
-- Config usage: Pass `icons.name` reference (not JSX): `icon: icons.home`
-
-**Adding New Icons:**
-
-When adding a new icon to the library:
-
-1. Add the icon import to `packages/ui/src/icons/icon-map.ts`
-2. Add the semantic name to the `IconName` type in `packages/ui/src/icons/types.ts`
-3. Map the icon in the `iconMap` object in `packages/ui/src/icons/icon-map.ts`
-4. **IMPORTANT:** Update `packages/ui/src/components/icons.stories.tsx` to showcase the new icon in the appropriate category
-
-**Swapping Icon Libraries:**
-
-When changing icon libraries (e.g., HugeIcons → Lucide):
-
-1. Update `packages/ui/src/icons/icon-map.ts` - Change imports and mappings
-2. Update `packages/ui/src/icons/index.tsx` - Replace wrapper component
-3. Update `packages/ui/package.json` - Swap dependencies
-4. All consuming code continues to work unchanged
-
-### Troubleshooting
-
-**Component imports not working:** Run `bun install` from root, verify `@repo/ui` in `package.json`
-
-**"Module not found: '@/components/...'":** Run `bun run fix-imports` in `packages/ui` after adding components
-
-**"Invalid configuration in components.json":** Remove `resolvedPaths` field from `packages/ui/components.json`
-
-**Tailwind classes missing:**
-
-- Verify app's `globals.css` imports shared styles: `@import "../../../../packages/ui/src/styles/globals.css"`
-- `@import` must come before `@source` directive
-- Restart dev server or clear cache: `rm -rf apps/[app]/.next`
+Every shortcut creates technical debt. Every incomplete implementation wastes time. Be thorough, be precise, be professional.

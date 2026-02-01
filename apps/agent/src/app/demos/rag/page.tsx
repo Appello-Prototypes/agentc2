@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
     Button,
     Card,
@@ -34,8 +34,46 @@ import {
     Accordion,
     AccordionContent,
     AccordionItem,
-    AccordionTrigger
+    AccordionTrigger,
+    Loader,
+    MessageResponse
 } from "@repo/ui";
+
+// SSE stream consumer helper
+async function consumeSSEStream(
+    response: Response,
+    onEvent: (event: string, data: unknown) => void
+): Promise<void> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+            if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7);
+            } else if (line.startsWith("data: ") && currentEvent) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    onEvent(currentEvent, data);
+                } catch {
+                    // Ignore parse errors
+                }
+                currentEvent = "";
+            }
+        }
+    }
+}
 
 // Sample documents for quick experimentation
 const SAMPLE_DOCUMENTS = [
@@ -265,9 +303,10 @@ export default function RagDemoPage() {
         setIngestLoading(false);
     };
 
-    const handleQuery = async () => {
+    const handleQuery = useCallback(async () => {
         setQueryLoading(true);
         setQueryResult(null);
+
         try {
             const res = await fetch("/api/rag/query", {
                 method: "POST",
@@ -279,13 +318,55 @@ export default function RagDemoPage() {
                     minScore
                 })
             });
-            const data = await res.json();
-            setQueryResult(data);
+
+            // Non-streaming path (search only)
+            if (!generateResponse) {
+                const data = await res.json();
+                setQueryResult(data);
+                setQueryLoading(false);
+                return;
+            }
+
+            // Streaming path
+            if (!res.ok) {
+                const data = await res.json();
+                setQueryResult({ error: data.error || "Query failed" });
+                setQueryLoading(false);
+                return;
+            }
+
+            let sources: Array<{ text: string; score: number; documentId?: string }> = [];
+            let currentText = "";
+
+            await consumeSSEStream(res, (event, data) => {
+                const d = data as {
+                    chunk?: string;
+                    full?: string;
+                    sources?: Array<{ text: string; score: number; documentId?: string }>;
+                    response?: string;
+                    message?: string;
+                };
+
+                if (event === "sources") {
+                    sources = d.sources || [];
+                    setQueryResult({ sources, response: "" });
+                } else if (event === "text") {
+                    currentText = d.full || "";
+                    setQueryResult({ sources, response: currentText });
+                } else if (event === "done") {
+                    setQueryResult({
+                        sources: d.sources || sources,
+                        response: d.response || currentText
+                    });
+                } else if (event === "error") {
+                    setQueryResult({ error: d.message || "Query failed" });
+                }
+            });
         } catch {
             setQueryResult({ error: "Failed to query" });
         }
         setQueryLoading(false);
-    };
+    }, [query, generateResponse, topK, minScore]);
 
     const handleDeleteDocument = async (documentId: string) => {
         try {
@@ -632,7 +713,7 @@ export default function RagDemoPage() {
                                         >
                                             {ingestLoading ? (
                                                 <>
-                                                    <span className="mr-2 animate-spin">⏳</span>
+                                                    <Loader size={16} />
                                                     Chunking & Embedding...
                                                 </>
                                             ) : (
@@ -828,7 +909,7 @@ export default function RagDemoPage() {
                                     >
                                         {queryLoading ? (
                                             <>
-                                                <span className="mr-2 animate-spin">⏳</span>
+                                                <Loader size={16} />
                                                 {generateResponse
                                                     ? "Searching & Generating..."
                                                     : "Searching..."}
@@ -869,9 +950,9 @@ export default function RagDemoPage() {
                                 <CardContent>
                                     {queryLoading ? (
                                         <div className="flex items-center justify-center py-12">
-                                            <div className="text-muted-foreground text-center">
-                                                <div className="mb-2 text-4xl">🔍</div>
-                                                <p>Searching vector store...</p>
+                                            <div className="text-muted-foreground flex flex-col items-center text-center">
+                                                <Loader size={32} />
+                                                <p className="mt-2">Searching vector store...</p>
                                             </div>
                                         </div>
                                     ) : queryResult ? (
@@ -891,9 +972,9 @@ export default function RagDemoPage() {
                                                             <div className="mb-2 flex items-center gap-2">
                                                                 <Badge>AI Response</Badge>
                                                             </div>
-                                                            <p className="text-sm leading-relaxed">
+                                                            <MessageResponse>
                                                                 {queryResult.response}
-                                                            </p>
+                                                            </MessageResponse>
                                                         </div>
                                                     )}
 

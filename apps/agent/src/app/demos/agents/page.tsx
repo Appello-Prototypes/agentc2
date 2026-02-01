@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import {
     Button,
@@ -14,8 +14,16 @@ import {
     TabsList,
     TabsTrigger,
     Textarea,
-    Input
+    Input,
+    CodeBlock,
+    CodeBlockHeader,
+    CodeBlockTitle,
+    CodeBlockFilename,
+    CodeBlockActions,
+    CodeBlockCopyButton,
+    Loader
 } from "@repo/ui";
+import { FileJsonIcon } from "lucide-react";
 
 interface StructuredResultType {
     result?: unknown;
@@ -42,6 +50,42 @@ interface ResearchResultType {
     steps?: ResearchStep[];
     toolCalls?: unknown[];
     error?: string;
+}
+
+// SSE stream consumer helper
+async function consumeSSEStream(
+    response: Response,
+    onEvent: (event: string, data: unknown) => void
+): Promise<void> {
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response body");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        let currentEvent = "";
+        for (const line of lines) {
+            if (line.startsWith("event: ")) {
+                currentEvent = line.slice(7);
+            } else if (line.startsWith("data: ") && currentEvent) {
+                try {
+                    const data = JSON.parse(line.slice(6));
+                    onEvent(currentEvent, data);
+                } catch {
+                    // Ignore parse errors
+                }
+                currentEvent = "";
+            }
+        }
+    }
 }
 
 export default function AgentsDemoPage() {
@@ -90,21 +134,55 @@ export default function AgentsDemoPage() {
         setVisionLoading(false);
     };
 
-    const handleResearch = async () => {
+    const handleResearch = useCallback(async () => {
         setResearchLoading(true);
+        setResearchResult(null);
+
         try {
             const res = await fetch("/api/demos/agents/research", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: researchQuery, maxSteps: 5 })
             });
-            const data = await res.json();
-            setResearchResult(data);
+
+            if (!res.ok) {
+                const data = await res.json();
+                setResearchResult({ error: data.error || "Failed to perform research" });
+                setResearchLoading(false);
+                return;
+            }
+
+            const steps: ResearchStep[] = [];
+            let currentText = "";
+
+            await consumeSSEStream(res, (event, data) => {
+                const d = data as {
+                    chunk?: string;
+                    full?: string;
+                    type?: string;
+                    content?: unknown;
+                    text?: string;
+                    steps?: ResearchStep[];
+                    message?: string;
+                };
+
+                if (event === "text") {
+                    currentText = d.full || "";
+                    setResearchResult({ text: currentText, steps });
+                } else if (event === "step") {
+                    steps.push({ type: d.type || "unknown", content: d.content });
+                    setResearchResult({ text: currentText, steps: [...steps] });
+                } else if (event === "done") {
+                    setResearchResult({ text: d.text || currentText, steps: d.steps || steps });
+                } else if (event === "error") {
+                    setResearchResult({ error: d.message || "Research failed" });
+                }
+            });
         } catch {
             setResearchResult({ error: "Failed to perform research" });
         }
         setResearchLoading(false);
-    };
+    }, [researchQuery]);
 
     return (
         <div>
@@ -152,12 +230,30 @@ export default function AgentsDemoPage() {
                                 </select>
                             </div>
                             <Button onClick={handleStructured} disabled={structuredLoading}>
-                                {structuredLoading ? "Generating..." : "Generate"}
+                                {structuredLoading ? (
+                                    <>
+                                        <Loader size={16} /> Generating...
+                                    </>
+                                ) : (
+                                    "Generate"
+                                )}
                             </Button>
                             {structuredResult && (
-                                <pre className="bg-muted mt-4 overflow-auto rounded-md p-4 text-sm">
-                                    {JSON.stringify(structuredResult, null, 2)}
-                                </pre>
+                                <CodeBlock
+                                    code={JSON.stringify(structuredResult, null, 2)}
+                                    language="json"
+                                    className="mt-4"
+                                >
+                                    <CodeBlockHeader>
+                                        <CodeBlockTitle>
+                                            <FileJsonIcon className="size-4" />
+                                            <CodeBlockFilename>result.json</CodeBlockFilename>
+                                        </CodeBlockTitle>
+                                        <CodeBlockActions>
+                                            <CodeBlockCopyButton />
+                                        </CodeBlockActions>
+                                    </CodeBlockHeader>
+                                </CodeBlock>
                             )}
                         </CardContent>
                     </Card>
@@ -191,12 +287,30 @@ export default function AgentsDemoPage() {
                                 />
                             )}
                             <Button onClick={handleVision} disabled={visionLoading}>
-                                {visionLoading ? "Analyzing..." : "Analyze Image"}
+                                {visionLoading ? (
+                                    <>
+                                        <Loader size={16} /> Analyzing...
+                                    </>
+                                ) : (
+                                    "Analyze Image"
+                                )}
                             </Button>
                             {visionResult && (
-                                <pre className="bg-muted mt-4 overflow-auto rounded-md p-4 text-sm">
-                                    {JSON.stringify(visionResult, null, 2)}
-                                </pre>
+                                <CodeBlock
+                                    code={JSON.stringify(visionResult, null, 2)}
+                                    language="json"
+                                    className="mt-4"
+                                >
+                                    <CodeBlockHeader>
+                                        <CodeBlockTitle>
+                                            <FileJsonIcon className="size-4" />
+                                            <CodeBlockFilename>analysis.json</CodeBlockFilename>
+                                        </CodeBlockTitle>
+                                        <CodeBlockActions>
+                                            <CodeBlockCopyButton />
+                                        </CodeBlockActions>
+                                    </CodeBlockHeader>
+                                </CodeBlock>
                             )}
                         </CardContent>
                     </Card>
@@ -223,12 +337,30 @@ export default function AgentsDemoPage() {
                                 />
                             </div>
                             <Button onClick={handleResearch} disabled={researchLoading}>
-                                {researchLoading ? "Researching..." : "Start Research"}
+                                {researchLoading ? (
+                                    <>
+                                        <Loader size={16} /> Researching...
+                                    </>
+                                ) : (
+                                    "Start Research"
+                                )}
                             </Button>
                             {researchResult && (
-                                <pre className="bg-muted mt-4 overflow-auto rounded-md p-4 text-sm">
-                                    {JSON.stringify(researchResult, null, 2)}
-                                </pre>
+                                <CodeBlock
+                                    code={JSON.stringify(researchResult, null, 2)}
+                                    language="json"
+                                    className="mt-4"
+                                >
+                                    <CodeBlockHeader>
+                                        <CodeBlockTitle>
+                                            <FileJsonIcon className="size-4" />
+                                            <CodeBlockFilename>research.json</CodeBlockFilename>
+                                        </CodeBlockTitle>
+                                        <CodeBlockActions>
+                                            <CodeBlockCopyButton />
+                                        </CodeBlockActions>
+                                    </CodeBlockHeader>
+                                </CodeBlock>
                             )}
                         </CardContent>
                     </Card>

@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/mastra";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getDemoSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

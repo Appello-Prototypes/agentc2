@@ -2,8 +2,7 @@ import { handleWorkflowStream } from "@mastra/ai-sdk";
 import { createUIMessageStreamResponse } from "ai";
 import { mastra } from "@repo/mastra";
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
+import { getDemoSession } from "@/lib/standalone-auth";
 
 /**
  * POST /api/workflow
@@ -12,17 +11,10 @@ import { auth } from "@repo/auth";
  */
 export async function POST(req: Request) {
     // Authenticate the request
-    try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+    const session = await getDemoSession();
 
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });
-        }
-    } catch (error) {
-        console.error("Auth error:", error);
-        return NextResponse.json({ error: "Authentication failed" }, { status: 401 });
+    if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized - please sign in" }, { status: 401 });
     }
 
     try {

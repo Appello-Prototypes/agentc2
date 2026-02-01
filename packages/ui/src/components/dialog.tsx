@@ -114,9 +114,9 @@ function DialogFooter({
     );
 }
 
-function DialogTitle({ className, ...props }: React.ComponentProps<"h2">) {
+function DialogTitle({ className, ...props }: DialogPrimitive.Title.Props) {
     return (
-        <h2
+        <DialogPrimitive.Title
             data-slot="dialog-title"
             className={cn("text-base leading-none font-medium", className)}
             {...props}
@@ -124,9 +124,9 @@ function DialogTitle({ className, ...props }: React.ComponentProps<"h2">) {
     );
 }
 
-function DialogDescription({ className, ...props }: React.ComponentProps<"p">) {
+function DialogDescription({ className, ...props }: DialogPrimitive.Description.Props) {
     return (
-        <p
+        <DialogPrimitive.Description
             data-slot="dialog-description"
             className={cn(
                 "text-muted-foreground *:[a]:hover:text-foreground text-sm *:[a]:underline *:[a]:underline-offset-3",

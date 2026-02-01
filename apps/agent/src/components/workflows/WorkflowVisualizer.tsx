@@ -1,11 +1,26 @@
 "use client";
 
+import { useMemo } from "react";
+import { Node, Edge, NodeTypes } from "@xyflow/react";
 import { cn } from "@repo/ui";
+import { WorkflowCanvas } from "./WorkflowCanvas";
+import {
+    WorkflowNode,
+    DecisionNode,
+    LoopNode,
+    HumanNode,
+    WorkflowNodeStatus
+} from "./WorkflowNode";
+import { workflowEdgeTypes } from "./WorkflowEdge";
 
 interface WorkflowStep {
     id: string;
     label: string;
-    status: "pending" | "running" | "completed" | "error" | "suspended";
+    status: WorkflowNodeStatus;
+    description?: string;
+    content?: string;
+    footer?: string;
+    timing?: number;
 }
 
 interface WorkflowVisualizerProps {
@@ -15,10 +30,454 @@ interface WorkflowVisualizerProps {
     className?: string;
 }
 
+// Node types registry
+const nodeTypes: NodeTypes = {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    workflow: WorkflowNode as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    decision: DecisionNode as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    loop: LoopNode as any,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    human: HumanNode as any
+};
+
+// Helper to format timing
+const formatTiming = (ms?: number) => {
+    if (!ms) return undefined;
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+};
+
+// Helper to get edge type based on status
+const getEdgeType = (sourceStatus: WorkflowNodeStatus, targetStatus: WorkflowNodeStatus) => {
+    if (sourceStatus === "completed" && targetStatus === "completed") return "completed";
+    if (sourceStatus === "running" || targetStatus === "running") return "animated";
+    if (sourceStatus === "error" || targetStatus === "error") return "error";
+    return "temporary";
+};
+
 /**
- * WorkflowVisualizer - Visual flow diagram showing workflow execution
- *
- * Displays different workflow patterns with highlighted current/completed steps
+ * Generate nodes and edges for PARALLEL workflow
+ * Input → [Sentiment, Priority, Suggestions] (parallel) → Combine
+ */
+function generateParallelFlow(steps: WorkflowStep[]): { nodes: Node[]; edges: Edge[] } {
+    const getStep = (id: string) =>
+        steps.find((s) => s.id === id) || { id, label: id, status: "pending" as const };
+
+    const inputStep = getStep("input");
+    const sentimentStep = getStep("sentiment");
+    const priorityStep = getStep("priority");
+    const suggestionsStep = getStep("suggestions");
+    const combineStep = getStep("combine");
+
+    const nodes: Node[] = [
+        {
+            id: "input",
+            type: "workflow",
+            position: { x: 250, y: 0 },
+            data: {
+                label: inputStep.label || "Input",
+                description: "Receive customer message",
+                content: inputStep.content || "Parsing incoming support ticket...",
+                footer: inputStep.timing
+                    ? `Completed in ${formatTiming(inputStep.timing)}`
+                    : undefined,
+                status: inputStep.status,
+                handles: { top: false, bottom: true }
+            }
+        },
+        {
+            id: "sentiment",
+            type: "workflow",
+            position: { x: 0, y: 150 },
+            data: {
+                label: sentimentStep.label || "Sentiment",
+                description: "Analyze emotional tone",
+                content: sentimentStep.content || "Running sentiment classifier...",
+                footer: sentimentStep.timing ? formatTiming(sentimentStep.timing) : undefined,
+                status: sentimentStep.status,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "priority",
+            type: "workflow",
+            position: { x: 250, y: 150 },
+            data: {
+                label: priorityStep.label || "Priority",
+                description: "Determine urgency level",
+                content: priorityStep.content || "Evaluating priority factors...",
+                footer: priorityStep.timing ? formatTiming(priorityStep.timing) : undefined,
+                status: priorityStep.status,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "suggestions",
+            type: "workflow",
+            position: { x: 500, y: 150 },
+            data: {
+                label: suggestionsStep.label || "Suggestions",
+                description: "Generate response options",
+                content: suggestionsStep.content || "Generating AI suggestions...",
+                footer: suggestionsStep.timing ? formatTiming(suggestionsStep.timing) : undefined,
+                status: suggestionsStep.status,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "combine",
+            type: "workflow",
+            position: { x: 250, y: 320 },
+            data: {
+                label: combineStep.label || "Combine",
+                description: "Merge all analysis results",
+                content: combineStep.content || "Aggregating parallel results...",
+                footer: combineStep.timing ? formatTiming(combineStep.timing) : undefined,
+                status: combineStep.status,
+                handles: { top: true, bottom: false }
+            }
+        }
+    ];
+
+    const edges: Edge[] = [
+        {
+            id: "input-sentiment",
+            source: "input",
+            target: "sentiment",
+            type: getEdgeType(inputStep.status, sentimentStep.status)
+        },
+        {
+            id: "input-priority",
+            source: "input",
+            target: "priority",
+            type: getEdgeType(inputStep.status, priorityStep.status)
+        },
+        {
+            id: "input-suggestions",
+            source: "input",
+            target: "suggestions",
+            type: getEdgeType(inputStep.status, suggestionsStep.status)
+        },
+        {
+            id: "sentiment-combine",
+            source: "sentiment",
+            target: "combine",
+            type: getEdgeType(sentimentStep.status, combineStep.status)
+        },
+        {
+            id: "priority-combine",
+            source: "priority",
+            target: "combine",
+            type: getEdgeType(priorityStep.status, combineStep.status)
+        },
+        {
+            id: "suggestions-combine",
+            source: "suggestions",
+            target: "combine",
+            type: getEdgeType(suggestionsStep.status, combineStep.status)
+        }
+    ];
+
+    return { nodes, edges };
+}
+
+/**
+ * Generate nodes and edges for BRANCH workflow
+ * Classify → Decision → [Billing, Support, Product, Help Desk] → Finalize
+ */
+function generateBranchFlow(
+    steps: WorkflowStep[],
+    currentBranch?: string
+): { nodes: Node[]; edges: Edge[] } {
+    const getStep = (id: string) =>
+        steps.find((s) => s.id === id) || { id, label: id, status: "pending" as const };
+
+    const classifyStep = getStep("classify");
+    const refundStep = getStep("handle-refund");
+    const technicalStep = getStep("handle-technical");
+    const featureStep = getStep("handle-feature");
+    const generalStep = getStep("handle-general");
+    const finalizeStep = getStep("finalize");
+
+    const branchMap: Record<string, { step: WorkflowStep; label: string; x: number }> = {
+        refund: { step: refundStep, label: "Billing", x: 0 },
+        technical: { step: technicalStep, label: "Support", x: 200 },
+        feature: { step: featureStep, label: "Product", x: 400 },
+        general: { step: generalStep, label: "Help Desk", x: 600 }
+    };
+
+    const nodes: Node[] = [
+        {
+            id: "classify",
+            type: "workflow",
+            position: { x: 300, y: 0 },
+            data: {
+                label: classifyStep.label || "Classify",
+                description: "Analyze ticket type",
+                content: classifyStep.content || "Classifying customer inquiry...",
+                footer: classifyStep.timing ? formatTiming(classifyStep.timing) : undefined,
+                status: classifyStep.status,
+                handles: { top: false, bottom: true }
+            }
+        },
+        {
+            id: "decision",
+            type: "decision",
+            position: { x: 338, y: 120 },
+            data: {
+                label: "Route",
+                status: classifyStep.status === "completed" ? "completed" : "pending",
+                handles: { top: true, bottom: true, left: true, right: true }
+            }
+        }
+    ];
+
+    // Add branch nodes
+    Object.entries(branchMap).forEach(([branch, { step, label, x }]) => {
+        const isBranchInactive = currentBranch && currentBranch !== branch;
+
+        nodes.push({
+            id: step.id,
+            type: "workflow",
+            position: { x, y: 260 },
+            data: {
+                label: label,
+                description: `Handle ${branch} requests`,
+                content: step.content || `Processing ${branch} ticket...`,
+                footer: step.timing ? formatTiming(step.timing) : undefined,
+                status: isBranchInactive ? "pending" : step.status,
+                handles: { top: true, bottom: true }
+            }
+        });
+    });
+
+    // Add finalize node
+    nodes.push({
+        id: "finalize",
+        type: "workflow",
+        position: { x: 300, y: 420 },
+        data: {
+            label: finalizeStep.label || "Finalize",
+            description: "Complete ticket processing",
+            content: finalizeStep.content || "Generating response...",
+            footer: finalizeStep.timing ? formatTiming(finalizeStep.timing) : undefined,
+            status: finalizeStep.status,
+            handles: { top: true, bottom: false }
+        }
+    });
+
+    // Create edges
+    const edges: Edge[] = [
+        {
+            id: "classify-decision",
+            source: "classify",
+            target: "decision",
+            type: classifyStep.status === "completed" ? "completed" : "animated"
+        }
+    ];
+
+    // Add branch edges
+    Object.entries(branchMap).forEach(([branch, { step }]) => {
+        const isActive = currentBranch === branch;
+        const isInactive = currentBranch && currentBranch !== branch;
+
+        edges.push({
+            id: `decision-${step.id}`,
+            source: "decision",
+            target: step.id,
+            type: isActive
+                ? getEdgeType("completed" as WorkflowNodeStatus, step.status)
+                : "temporary",
+            data: isActive ? { label: branch } : undefined
+        });
+
+        edges.push({
+            id: `${step.id}-finalize`,
+            source: step.id,
+            target: "finalize",
+            type: isInactive ? "temporary" : getEdgeType(step.status, finalizeStep.status)
+        });
+    });
+
+    return { nodes, edges };
+}
+
+/**
+ * Generate nodes and edges for FOREACH workflow
+ * Prepare → [Loop: Process Lead 1, 2, 3...] → Aggregate
+ */
+function generateForeachFlow(steps: WorkflowStep[]): { nodes: Node[]; edges: Edge[] } {
+    const getStep = (id: string) =>
+        steps.find((s) => s.id === id) || { id, label: id, status: "pending" as const };
+
+    const prepareStep = getStep("prepare");
+    const processStep = getStep("process-lead");
+    const aggregateStep = getStep("aggregate");
+
+    // Determine iteration progress
+    let currentIteration = 0;
+    if (processStep.status === "running") currentIteration = 2;
+    else if (processStep.status === "completed") currentIteration = 5;
+
+    const nodes: Node[] = [
+        {
+            id: "prepare",
+            type: "workflow",
+            position: { x: 150, y: 0 },
+            data: {
+                label: prepareStep.label || "Prepare",
+                description: "Fetch leads to process",
+                content: prepareStep.content || "Loading lead data from CRM...",
+                footer: prepareStep.timing ? formatTiming(prepareStep.timing) : undefined,
+                status: prepareStep.status,
+                handles: { top: false, bottom: true }
+            }
+        },
+        {
+            id: "process-lead",
+            type: "loop",
+            position: { x: 100, y: 130 },
+            data: {
+                label: "Process Leads",
+                description: "Enrich and score each lead",
+                status: processStep.status,
+                iterationCount: 5,
+                currentIteration: currentIteration,
+                concurrency: 3,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "aggregate",
+            type: "workflow",
+            position: { x: 150, y: 300 },
+            data: {
+                label: aggregateStep.label || "Aggregate",
+                description: "Compile final results",
+                content: aggregateStep.content || "Merging processed lead data...",
+                footer: aggregateStep.timing ? formatTiming(aggregateStep.timing) : undefined,
+                status: aggregateStep.status,
+                handles: { top: true, bottom: false }
+            }
+        }
+    ];
+
+    const edges: Edge[] = [
+        {
+            id: "prepare-process",
+            source: "prepare",
+            target: "process-lead",
+            type: getEdgeType(prepareStep.status, processStep.status)
+        },
+        {
+            id: "process-aggregate",
+            source: "process-lead",
+            target: "aggregate",
+            type: getEdgeType(processStep.status, aggregateStep.status)
+        }
+    ];
+
+    return { nodes, edges };
+}
+
+/**
+ * Generate nodes and edges for APPROVAL workflow
+ * Generate → Prepare → Human Review → Publish
+ */
+function generateApprovalFlow(steps: WorkflowStep[]): { nodes: Node[]; edges: Edge[] } {
+    const getStep = (id: string) =>
+        steps.find((s) => s.id === id) || { id, label: id, status: "pending" as const };
+
+    const generateStep = getStep("generate-draft");
+    const prepareStep = getStep("prepare-review");
+    const approvalStep = getStep("human-approval");
+    const publishStep = getStep("publish");
+
+    const nodes: Node[] = [
+        {
+            id: "generate-draft",
+            type: "workflow",
+            position: { x: 150, y: 0 },
+            data: {
+                label: generateStep.label || "Generate",
+                description: "Create initial content",
+                content: generateStep.content || "Generating draft with AI...",
+                footer: generateStep.timing ? formatTiming(generateStep.timing) : undefined,
+                status: generateStep.status,
+                handles: { top: false, bottom: true }
+            }
+        },
+        {
+            id: "prepare-review",
+            type: "workflow",
+            position: { x: 150, y: 130 },
+            data: {
+                label: prepareStep.label || "Prepare",
+                description: "Format for review",
+                content: prepareStep.content || "Preparing content for review...",
+                footer: prepareStep.timing ? formatTiming(prepareStep.timing) : undefined,
+                status: prepareStep.status,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "human-approval",
+            type: "human",
+            position: { x: 150, y: 260 },
+            data: {
+                label: approvalStep.label || "Human Review",
+                description: "Requires manual approval",
+                content:
+                    approvalStep.status === "suspended"
+                        ? "Awaiting human approval..."
+                        : approvalStep.content || "Review and approve content",
+                status: approvalStep.status,
+                handles: { top: true, bottom: true }
+            }
+        },
+        {
+            id: "publish",
+            type: "workflow",
+            position: { x: 150, y: 400 },
+            data: {
+                label: publishStep.label || "Publish",
+                description: "Deploy approved content",
+                content: publishStep.content || "Publishing to destination...",
+                footer: publishStep.timing ? formatTiming(publishStep.timing) : undefined,
+                status: publishStep.status,
+                handles: { top: true, bottom: false }
+            }
+        }
+    ];
+
+    const edges: Edge[] = [
+        {
+            id: "generate-prepare",
+            source: "generate-draft",
+            target: "prepare-review",
+            type: getEdgeType(generateStep.status, prepareStep.status)
+        },
+        {
+            id: "prepare-approval",
+            source: "prepare-review",
+            target: "human-approval",
+            type: getEdgeType(prepareStep.status, approvalStep.status)
+        },
+        {
+            id: "approval-publish",
+            source: "human-approval",
+            target: "publish",
+            type: getEdgeType(approvalStep.status, publishStep.status)
+        }
+    ];
+
+    return { nodes, edges };
+}
+
+/**
+ * WorkflowVisualizer - Interactive flow diagram using React Flow
  */
 export function WorkflowVisualizer({
     type,
@@ -26,376 +485,47 @@ export function WorkflowVisualizer({
     currentBranch,
     className
 }: WorkflowVisualizerProps) {
-    const getStepColor = (status: WorkflowStep["status"]) => {
-        switch (status) {
-            case "completed":
-                return "bg-green-500 text-white border-green-600";
-            case "running":
-                return "bg-blue-500 text-white border-blue-600 animate-pulse";
-            case "error":
-                return "bg-red-500 text-white border-red-600";
-            case "suspended":
-                return "bg-amber-500 text-white border-amber-600";
+    const { nodes, edges } = useMemo(() => {
+        switch (type) {
+            case "parallel":
+                return generateParallelFlow(steps);
+            case "branch":
+                return generateBranchFlow(steps, currentBranch);
+            case "foreach":
+                return generateForeachFlow(steps);
+            case "approval":
+                return generateApprovalFlow(steps);
             default:
-                return "bg-muted text-muted-foreground border-border";
+                return { nodes: [], edges: [] };
         }
-    };
-
-    const getStepById = (id: string) => steps.find((s) => s.id === id);
-
-    const renderParallelFlow = () => {
-        const inputStep = getStepById("input") || {
-            id: "input",
-            label: "Input",
-            status: "pending" as const
-        };
-        const sentimentStep = getStepById("sentiment") || {
-            id: "sentiment",
-            label: "Sentiment",
-            status: "pending" as const
-        };
-        const priorityStep = getStepById("priority") || {
-            id: "priority",
-            label: "Priority",
-            status: "pending" as const
-        };
-        const suggestionsStep = getStepById("suggestions") || {
-            id: "suggestions",
-            label: "Suggestions",
-            status: "pending" as const
-        };
-        const combineStep = getStepById("combine") || {
-            id: "combine",
-            label: "Combine",
-            status: "pending" as const
-        };
-
-        return (
-            <div className="flex flex-col items-center gap-2">
-                {/* Input */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(inputStep.status)
-                    )}
-                >
-                    {inputStep.label}
-                </div>
-
-                {/* Arrow down */}
-                <div className="bg-border h-4 w-px" />
-
-                {/* Parallel branches */}
-                <div className="flex items-start gap-8">
-                    {[sentimentStep, priorityStep, suggestionsStep].map((step) => (
-                        <div key={step.id} className="flex flex-col items-center">
-                            <div className="bg-border h-4 w-px" />
-                            <div
-                                className={cn(
-                                    "rounded-md border px-3 py-1.5 text-xs font-medium",
-                                    getStepColor(step.status)
-                                )}
-                            >
-                                {step.label}
-                            </div>
-                            <div className="bg-border h-4 w-px" />
-                        </div>
-                    ))}
-                </div>
-
-                {/* Horizontal connector */}
-                <div className="flex items-center">
-                    <div className="bg-border h-px w-16" />
-                    <div className="bg-border h-4 w-px" />
-                    <div className="bg-border h-px w-16" />
-                </div>
-
-                {/* Combine */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(combineStep.status)
-                    )}
-                >
-                    {combineStep.label}
-                </div>
-            </div>
-        );
-    };
-
-    const renderBranchFlow = () => {
-        const classifyStep = getStepById("classify") || {
-            id: "classify",
-            label: "Classify",
-            status: "pending" as const
-        };
-        const refundStep = getStepById("handle-refund") || {
-            id: "handle-refund",
-            label: "Billing",
-            status: "pending" as const
-        };
-        const technicalStep = getStepById("handle-technical") || {
-            id: "handle-technical",
-            label: "Support",
-            status: "pending" as const
-        };
-        const featureStep = getStepById("handle-feature") || {
-            id: "handle-feature",
-            label: "Product",
-            status: "pending" as const
-        };
-        const generalStep = getStepById("handle-general") || {
-            id: "handle-general",
-            label: "Help Desk",
-            status: "pending" as const
-        };
-        const finalizeStep = getStepById("finalize") || {
-            id: "finalize",
-            label: "Finalize",
-            status: "pending" as const
-        };
-
-        const branches = [
-            { step: refundStep, branch: "refund" },
-            { step: technicalStep, branch: "technical" },
-            { step: featureStep, branch: "feature" },
-            { step: generalStep, branch: "general" }
-        ];
-
-        return (
-            <div className="flex flex-col items-center gap-2">
-                {/* Classify */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(classifyStep.status)
-                    )}
-                >
-                    {classifyStep.label}
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Decision diamond */}
-                <div className="border-border bg-muted rotate-45 rounded border p-2">
-                    <span className="block -rotate-45 text-xs">Type?</span>
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Branch handlers */}
-                <div className="flex items-start gap-4">
-                    {branches.map(({ step, branch }) => {
-                        const isActive = currentBranch === branch;
-                        const isInactive = currentBranch && currentBranch !== branch;
-
-                        return (
-                            <div
-                                key={step.id}
-                                className={cn(
-                                    "flex flex-col items-center",
-                                    isInactive && "opacity-30"
-                                )}
-                            >
-                                <div className="bg-border h-4 w-px" />
-                                <div
-                                    className={cn(
-                                        "rounded-md border px-2 py-1 text-xs font-medium",
-                                        isActive
-                                            ? getStepColor(step.status)
-                                            : "bg-muted text-muted-foreground border-border"
-                                    )}
-                                >
-                                    {step.label}
-                                </div>
-                                <div className="bg-border h-4 w-px" />
-                            </div>
-                        );
-                    })}
-                </div>
-
-                {/* Finalize */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(finalizeStep.status)
-                    )}
-                >
-                    {finalizeStep.label}
-                </div>
-            </div>
-        );
-    };
-
-    const renderForeachFlow = () => {
-        const prepareStep = getStepById("prepare") || {
-            id: "prepare",
-            label: "Prepare",
-            status: "pending" as const
-        };
-        const processStep = getStepById("process-lead") || {
-            id: "process-lead",
-            label: "Process",
-            status: "pending" as const
-        };
-        const aggregateStep = getStepById("aggregate") || {
-            id: "aggregate",
-            label: "Aggregate",
-            status: "pending" as const
-        };
-
-        return (
-            <div className="flex flex-col items-center gap-2">
-                {/* Prepare */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(prepareStep.status)
-                    )}
-                >
-                    {prepareStep.label}
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Foreach loop */}
-                <div className="border-border relative rounded-lg border-2 border-dashed p-4">
-                    <span className="bg-background text-muted-foreground absolute -top-3 left-2 px-2 text-xs">
-                        foreach (concurrency: 3)
-                    </span>
-                    <div className="flex gap-2">
-                        {[1, 2, 3].map((i) => (
-                            <div
-                                key={i}
-                                className={cn(
-                                    "rounded border px-3 py-1.5 text-xs",
-                                    processStep.status === "running"
-                                        ? "animate-pulse border-blue-500 bg-blue-500/20"
-                                        : processStep.status === "completed"
-                                          ? "border-green-500 bg-green-500/20"
-                                          : "bg-muted border-border"
-                                )}
-                            >
-                                Lead {i}
-                            </div>
-                        ))}
-                        <span className="text-muted-foreground">...</span>
-                    </div>
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Aggregate */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(aggregateStep.status)
-                    )}
-                >
-                    {aggregateStep.label}
-                </div>
-            </div>
-        );
-    };
-
-    const renderApprovalFlow = () => {
-        const generateStep = getStepById("generate-draft") || {
-            id: "generate-draft",
-            label: "Generate",
-            status: "pending" as const
-        };
-        const prepareStep = getStepById("prepare-review") || {
-            id: "prepare-review",
-            label: "Prepare",
-            status: "pending" as const
-        };
-        const approvalStep = getStepById("human-approval") || {
-            id: "human-approval",
-            label: "Review",
-            status: "pending" as const
-        };
-        const publishStep = getStepById("publish") || {
-            id: "publish",
-            label: "Publish",
-            status: "pending" as const
-        };
-
-        return (
-            <div className="flex flex-col items-center gap-2">
-                {/* Generate */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(generateStep.status)
-                    )}
-                >
-                    {generateStep.label}
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Prepare */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(prepareStep.status)
-                    )}
-                >
-                    {prepareStep.label}
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Approval - special styling for suspended */}
-                <div
-                    className={cn(
-                        "rounded-md border-2 border-dashed px-4 py-2 text-sm font-medium",
-                        approvalStep.status === "suspended"
-                            ? "border-amber-500 bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300"
-                            : getStepColor(approvalStep.status)
-                    )}
-                >
-                    {approvalStep.status === "suspended" ? "⏸ Awaiting Review" : approvalStep.label}
-                </div>
-
-                <div className="bg-border h-4 w-px" />
-
-                {/* Publish */}
-                <div
-                    className={cn(
-                        "rounded-md border px-4 py-2 text-sm font-medium",
-                        getStepColor(publishStep.status)
-                    )}
-                >
-                    {publishStep.label}
-                </div>
-            </div>
-        );
-    };
+    }, [type, steps, currentBranch]);
 
     return (
-        <div className={cn("bg-card rounded-lg border p-6", className)}>
-            <div className="mb-4 flex items-center justify-between">
-                <h3 className="text-muted-foreground text-sm font-medium">Workflow Flow</h3>
-                <div className="flex gap-2 text-xs">
-                    <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-green-500" /> Completed
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" /> Running
-                    </span>
-                    <span className="flex items-center gap-1">
-                        <span className="h-2 w-2 rounded-full bg-amber-500" /> Suspended
-                    </span>
-                </div>
+        <div className={cn("relative", className)}>
+            {/* Legend */}
+            <div className="bg-background/80 absolute top-2 left-2 z-10 flex gap-3 rounded-md border px-3 py-1.5 text-xs backdrop-blur-sm">
+                <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-green-500" /> Completed
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 animate-pulse rounded-full bg-blue-500" /> Running
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="h-2 w-2 rounded-full bg-amber-500" /> Suspended
+                </span>
+                <span className="flex items-center gap-1">
+                    <span className="bg-muted-foreground/50 h-2 w-2 rounded-full" /> Pending
+                </span>
             </div>
 
-            <div className="flex justify-center py-4">
-                {type === "parallel" && renderParallelFlow()}
-                {type === "branch" && renderBranchFlow()}
-                {type === "foreach" && renderForeachFlow()}
-                {type === "approval" && renderApprovalFlow()}
-            </div>
+            <WorkflowCanvas
+                nodes={nodes}
+                edges={edges}
+                nodeTypes={nodeTypes}
+                edgeTypes={workflowEdgeTypes}
+                className="h-[450px]"
+                showMiniMap={type === "branch"}
+            />
         </div>
     );
 }

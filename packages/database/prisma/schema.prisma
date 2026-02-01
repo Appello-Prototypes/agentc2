@@ -21,6 +21,7 @@ model User {
     updatedAt     DateTime  @updatedAt
     sessions      Session[]
     accounts      Account[]
+    agents        Agent[]
 
     @@map("user")
 }
@@ -69,4 +70,207 @@ model Verification {
     updatedAt  DateTime? @updatedAt
 
     @@map("verification")
+}
+
+// Agent Type Enum
+enum AgentType {
+    SYSTEM // Seeded from code, protected from deletion
+    USER // User-created, fully editable
+}
+
+// Agents - Database-backed agent configurations (Mastra-aligned)
+model Agent {
+    id          String  @id @default(cuid())
+    slug        String  @unique // URL-safe identifier
+    name        String
+    description String?
+
+    // Instructions - static or templated
+    instructions         String  @db.Text
+    instructionsTemplate String? @db.Text // Template with {{userId}}, {{userName}}, etc.
+
+    // Model configuration
+    modelProvider String // "openai", "anthropic", "google"
+    modelName     String // "gpt-4o", "claude-sonnet-4-20250514"
+    temperature   Float? @default(0.7)
+    maxTokens     Int?
+    modelConfig   Json? // Provider-specific: {reasoning: {type: "enabled"}, toolChoice: "auto"}
+
+    // Tool configuration (junction table)
+    tools AgentTool[]
+
+    // Memory configuration (Mastra Memory pattern)
+    memoryEnabled Boolean @default(false)
+    memoryConfig  Json? // {lastMessages, semanticRecall, workingMemory}
+
+    // Multi-step workflows
+    maxSteps Int? @default(5)
+
+    // Evaluation configuration
+    scorers String[] @default([])
+
+    // Permissions/tenancy
+    type     AgentType @default(USER)
+    ownerId  String?
+    owner    User?     @relation(fields: [ownerId], references: [id])
+    isPublic Boolean   @default(false)
+
+    // Metadata
+    metadata Json?
+    isActive Boolean @default(true)
+    version  Int     @default(1)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    // Versioning
+    versions AgentVersion[]
+
+    @@index([slug])
+    @@index([ownerId])
+    @@index([type])
+    @@map("agent")
+}
+
+// Agent-Tool Junction Table
+model AgentTool {
+    id      String @id @default(cuid())
+    agentId String
+    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    toolId  String // Tool registry key (e.g., "calculator", "web-fetch")
+    config  Json? // Tool-specific: {inputSchema, outputSchema, description override}
+
+    @@unique([agentId, toolId])
+    @@map("agent_tool")
+}
+
+// Agent Version History
+model AgentVersion {
+    id            String   @id @default(cuid())
+    agentId       String
+    agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    version       Int
+    instructions  String   @db.Text
+    modelProvider String
+    modelName     String
+    snapshot      Json // Full agent config at this version
+    createdAt     DateTime @default(now())
+    createdBy     String?
+
+    @@unique([agentId, version])
+    @@map("agent_version")
+}
+
+// Legacy Stored Agents - Kept for backwards compatibility during migration
+model StoredAgent {
+    id            String   @id @default(cuid())
+    name          String
+    description   String?
+    instructions  String   @db.Text
+    modelProvider String // "openai", "anthropic", etc.
+    modelName     String // "gpt-4o", "claude-sonnet", etc.
+    temperature   Float?   @default(0.7)
+    tools         String[] // Tool names to attach
+    memory        Boolean  @default(false)
+    metadata      Json?
+    isActive      Boolean  @default(true)
+    createdAt     DateTime @default(now())
+    updatedAt     DateTime @updatedAt
+
+    @@map("stored_agent")
+}
+
+// ==============================
+// Channel System Models
+// ==============================
+
+// Channel Session - Tracks conversations per channel/user
+model ChannelSession {
+    id         String   @id @default(cuid())
+    channel    String // "whatsapp" | "telegram" | "voice"
+    channelId  String // Phone number, chat ID, or call SID
+    agentSlug  String // Which agent handles this conversation
+    metadata   Json? // Channel-specific data (e.g., username, group info)
+    lastActive DateTime @default(now())
+    createdAt  DateTime @default(now())
+
+    @@unique([channel, channelId])
+    @@index([channel])
+    @@index([agentSlug])
+    @@map("channel_session")
+}
+
+// Channel Credentials - Stores encrypted credentials for each channel
+model ChannelCredentials {
+    id          String   @id @default(cuid())
+    channel     String   @unique // "whatsapp" | "telegram" | "voice"
+    credentials Json // Encrypted credentials (WhatsApp session, bot tokens, etc.)
+    isActive    Boolean  @default(true)
+    updatedAt   DateTime @updatedAt
+
+    @@map("channel_credentials")
+}
+
+// Voice Call Log - Tracks voice call history
+model VoiceCallLog {
+    id           String    @id @default(cuid())
+    callSid      String    @unique // Twilio call SID
+    direction    String // "inbound" | "outbound"
+    fromNumber   String
+    toNumber     String
+    agentSlug    String?
+    status       String // "ringing" | "in-progress" | "completed" | "failed" | "busy" | "no-answer"
+    duration     Int? // Duration in seconds
+    recordingUrl String?
+    transcript   String?   @db.Text
+    metadata     Json?
+    startedAt    DateTime  @default(now())
+    endedAt      DateTime?
+    createdAt    DateTime  @default(now())
+
+    @@index([fromNumber])
+    @@index([toNumber])
+    @@index([agentSlug])
+    @@map("voice_call_log")
+}
+
+// Voice Agent Trace - Full observability for voice agent conversations
+model VoiceAgentTrace {
+    id        String   @id @default(cuid())
+    traceId   String   @unique // External trace ID
+    timestamp DateTime @default(now())
+
+    // Conversation content
+    input  String @db.Text // User's question
+    output String @db.Text // Agent's response
+
+    // Model configuration
+    model Json // {provider, name, temperature}
+
+    // Tools
+    availableTools String[] // Tool names available to agent
+    toolCalls      Json // Array of {name, input, output, success, error, durationMs}
+
+    // Execution trace
+    steps Json // Array of {step, type, content, timestamp, toolCall?}
+
+    // Performance
+    durationMs Int
+    tokens     Json? // {prompt, completion, total}
+
+    // Evaluation scores
+    scores Json // {helpfulness?: {score, reasoning}, relevancy?: {score}}
+
+    // Metadata
+    metadata Json // {source, agentSlug, agentSource, elevenlabsAgentId, maxSteps}
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([timestamp])
+    @@index([createdAt])
+    @@map("voice_agent_trace")
 }

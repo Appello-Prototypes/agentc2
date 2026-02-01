@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { MCP_SERVER_CONFIGS, getMcpTools, type McpServerConfig } from "@repo/mastra";
-import { auth } from "@repo/auth";
-import { headers } from "next/headers";
+import { getDemoSession } from "@/lib/standalone-auth";
 
 export interface McpToolInfo {
     name: string;
@@ -43,7 +42,7 @@ function checkEnvVars(config: McpServerConfig): { configured: boolean; missing: 
 
 export async function GET() {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
+        const session = await getDemoSession();
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
