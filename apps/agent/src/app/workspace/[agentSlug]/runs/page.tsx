@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState, useEffect } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -44,73 +45,6 @@ interface Run {
     createdAt: string;
 }
 
-// Generate mock runs
-function generateMockRuns(count: number): Run[] {
-    const statuses: Run["status"][] = [
-        "completed",
-        "completed",
-        "completed",
-        "completed",
-        "failed",
-        "timeout"
-    ];
-    const tools = ["web-search", "calculator", "calendar", "email", "database-query"];
-    const inputs = [
-        "What's the weather like today?",
-        "Help me draft an email to the client",
-        "Calculate the quarterly revenue",
-        "Schedule a meeting for next week",
-        "Analyze the sales data",
-        "Find information about the competitor",
-        "Summarize the meeting notes",
-        "Create a project timeline",
-        "Review the contract terms",
-        "Generate a report on user engagement"
-    ];
-
-    return Array.from({ length: count }, (_, i) => {
-        const status = statuses[Math.floor(Math.random() * statuses.length)];
-        const numTools = Math.floor(Math.random() * 3);
-        const selectedTools = tools
-            .slice(0, numTools)
-            .map(() => tools[Math.floor(Math.random() * tools.length)]);
-
-        return {
-            id: `run-${1000 - i}`,
-            input: inputs[i % inputs.length],
-            output:
-                status === "completed"
-                    ? "Here's the response to your query..."
-                    : status === "failed"
-                      ? "Error: Unable to process request"
-                      : "Request timed out after 30 seconds",
-            status,
-            durationMs: status === "timeout" ? 30000 : 1000 + Math.floor(Math.random() * 4000),
-            promptTokens: 150 + Math.floor(Math.random() * 500),
-            completionTokens: 200 + Math.floor(Math.random() * 800),
-            totalTokens: 350 + Math.floor(Math.random() * 1300),
-            estimatedCost: 0.001 + Math.random() * 0.01,
-            modelName: "claude-sonnet-4-20250514",
-            toolCalls: selectedTools,
-            scores:
-                status === "completed"
-                    ? {
-                          helpfulness: 0.7 + Math.random() * 0.3,
-                          relevancy: 0.75 + Math.random() * 0.25
-                      }
-                    : {},
-            feedback:
-                Math.random() > 0.7
-                    ? {
-                          thumbs: Math.random() > 0.2 ? "up" : "down"
-                      }
-                    : undefined,
-            userId: `user-${Math.floor(Math.random() * 10)}`,
-            createdAt: new Date(Date.now() - i * 1000 * 60 * (5 + Math.random() * 30)).toISOString()
-        };
-    });
-}
-
 function StatusBadge({ status }: { status: Run["status"] }) {
     const config = {
         completed: { variant: "default" as const, label: "Completed" },
@@ -135,12 +69,81 @@ export default function RunsPage() {
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
-        // Simulate loading
-        setTimeout(() => {
-            setRuns(generateMockRuns(50));
-            setLoading(false);
-        }, 500);
-    }, [agentSlug]);
+        const fetchRuns = async () => {
+            try {
+                setLoading(true);
+                const params = new URLSearchParams();
+                if (statusFilter !== "all") {
+                    params.append("status", statusFilter.toUpperCase());
+                }
+                if (searchQuery) {
+                    params.append("search", searchQuery);
+                }
+
+                const response = await fetch(
+                    `${getApiBase()}/api/agents/${agentSlug}/runs?${params.toString()}`
+                );
+                const result = await response.json();
+
+                if (result.success) {
+                    // Transform API response to match Run interface
+                    const transformedRuns = result.runs.map(
+                        (run: {
+                            id: string;
+                            runType: string;
+                            status: string;
+                            inputText: string;
+                            outputText: string;
+                            durationMs: number;
+                            startedAt: string;
+                            modelName?: string;
+                            totalTokens?: number;
+                            costUsd?: number;
+                            evaluation?: Record<string, number>;
+                            feedback?: { thumbs?: boolean; rating?: number };
+                        }) => ({
+                            id: run.id,
+                            input: run.inputText,
+                            output: run.outputText || "",
+                            status: run.status.toLowerCase() as Run["status"],
+                            durationMs: run.durationMs || 0,
+                            promptTokens: 0,
+                            completionTokens: 0,
+                            totalTokens: run.totalTokens || 0,
+                            estimatedCost: run.costUsd || 0,
+                            modelName: run.modelName || "unknown",
+                            toolCalls: [],
+                            scores: run.evaluation || {},
+                            feedback: run.feedback
+                                ? {
+                                      thumbs:
+                                          run.feedback.thumbs === true
+                                              ? ("up" as const)
+                                              : run.feedback.thumbs === false
+                                                ? ("down" as const)
+                                                : undefined,
+                                      rating: run.feedback.rating
+                                  }
+                                : undefined,
+                            createdAt: run.startedAt
+                        })
+                    );
+                    setRuns(transformedRuns);
+                } else {
+                    console.error("Failed to fetch runs:", result.error);
+                    // Fall back to empty array on error
+                    setRuns([]);
+                }
+            } catch (error) {
+                console.error("Error fetching runs:", error);
+                setRuns([]);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchRuns();
+    }, [agentSlug, statusFilter, searchQuery]);
 
     const filteredRuns = runs.filter((run) => {
         if (statusFilter !== "all" && run.status !== statusFilter) return false;

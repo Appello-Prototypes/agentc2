@@ -57,6 +57,21 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["home", "overview", "demos", "all"]
     },
     {
+        label: "Agent Workspace",
+        icon: icons.user,
+        href: "/workspace",
+        app: "agent",
+        keywords: [
+            "workspace",
+            "agents",
+            "manage",
+            "monitor",
+            "configure",
+            "analytics",
+            "digital employee"
+        ]
+    },
+    {
         label: "Chat",
         icon: icons.messages,
         href: "/chat",

@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,
@@ -21,28 +21,92 @@ import {
     TabsList,
     TabsTrigger
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
-// Mock data for charts
-const mockTimeSeriesData = {
-    runs: [45, 52, 38, 65, 72, 58, 84, 92, 67, 78, 95, 88, 102, 115],
-    latency: [2.1, 2.3, 2.0, 2.5, 2.2, 2.4, 2.1, 2.6, 2.3, 2.2, 2.4, 2.5, 2.3, 2.1],
-    errors: [2, 1, 3, 2, 1, 4, 2, 3, 1, 2, 3, 2, 1, 2],
-    quality: [87, 89, 85, 88, 91, 87, 90, 88, 92, 89, 91, 93, 90, 92]
-};
+// Types for API response
+interface AnalyticsData {
+    success: boolean;
+    summary: {
+        totalRuns: number;
+        completedRuns: number;
+        failedRuns: number;
+        successRate: number;
+        avgLatencyMs: number;
+        totalTokens: number;
+        totalCostUsd: number;
+    };
+    latency: {
+        avg: number;
+        p50: number;
+        p95: number;
+        p99: number;
+        histogram: number[];
+    };
+    trends: {
+        runs: Array<{
+            date: string;
+            total: number;
+            completed: number;
+            failed: number;
+            successRate: number;
+        }>;
+    };
+    toolUsage: Array<{
+        tool: string;
+        calls: number;
+        successRate: number;
+        avgDurationMs: number;
+    }>;
+    quality: {
+        scorers: Array<{
+            scorer: string;
+            avgScore: number;
+            sampleCount: number;
+        }>;
+        feedback: {
+            positive: number;
+            negative: number;
+            total: number;
+            positiveRate: number;
+        };
+    };
+    models: Array<{
+        model: string;
+        runs: number;
+        tokens: number;
+        costUsd: number;
+        avgLatencyMs: number;
+    }>;
+    dateRange: {
+        from: string;
+        to: string;
+    };
+}
 
-const mockToolUsage = [
-    { name: "web-search", count: 245, successRate: 98.2 },
-    { name: "calculator", count: 189, successRate: 99.8 },
-    { name: "calendar", count: 156, successRate: 95.5 },
-    { name: "email", count: 134, successRate: 97.1 },
-    { name: "database-query", count: 98, successRate: 94.2 }
-];
+// Helper to get date range from time range selector
+function getDateRange(timeRange: string): { from: Date; to: Date } {
+    const to = new Date();
+    const from = new Date();
 
-const mockModelComparison = [
-    { model: "claude-sonnet-4", runs: 847, avgLatency: 2.3, quality: 91, cost: 23.45 },
-    { model: "gpt-4o", runs: 312, avgLatency: 2.8, quality: 88, cost: 18.92 },
-    { model: "claude-haiku", runs: 156, avgLatency: 0.8, quality: 82, cost: 3.21 }
-];
+    switch (timeRange) {
+        case "24h":
+            from.setHours(from.getHours() - 24);
+            break;
+        case "7d":
+            from.setDate(from.getDate() - 7);
+            break;
+        case "30d":
+            from.setDate(from.getDate() - 30);
+            break;
+        case "90d":
+            from.setDate(from.getDate() - 90);
+            break;
+        default:
+            from.setDate(from.getDate() - 7);
+    }
+
+    return { from, to };
+}
 
 // Simple bar chart component for prototype
 function SimpleBarChart({
@@ -69,28 +133,47 @@ function SimpleBarChart({
     );
 }
 
-// Simple line indicator
-function TrendIndicator({ value, positive = true }: { value: number; positive?: boolean }) {
-    const isUp = value > 0;
-    const isGood = positive ? isUp : !isUp;
-    return (
-        <span className={`text-sm font-medium ${isGood ? "text-green-600" : "text-red-600"}`}>
-            {isUp ? "↑" : "↓"} {Math.abs(value)}%
-        </span>
-    );
-}
-
 export default function AnalyticsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [data, setData] = useState<AnalyticsData | null>(null);
     const [timeRange, setTimeRange] = useState("7d");
     const [activeTab, setActiveTab] = useState("overview");
 
+    const fetchAnalytics = useCallback(async () => {
+        setLoading(true);
+        setError(null);
+
+        try {
+            const { from, to } = getDateRange(timeRange);
+            const params = new URLSearchParams({
+                from: from.toISOString(),
+                to: to.toISOString()
+            });
+
+            const response = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/analytics?${params}`
+            );
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to fetch analytics");
+            }
+
+            setData(result);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to fetch analytics");
+        } finally {
+            setLoading(false);
+        }
+    }, [agentSlug, timeRange]);
+
     useEffect(() => {
-        setTimeout(() => setLoading(false), 500);
-    }, [agentSlug]);
+        fetchAnalytics();
+    }, [fetchAnalytics]);
 
     if (loading) {
         return (
@@ -105,6 +188,123 @@ export default function AnalyticsPage() {
             </div>
         );
     }
+
+    if (error) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Analytics</h1>
+                    <p className="text-muted-foreground">Performance metrics and insights</p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchAnalytics}>Retry</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    if (!data) {
+        return null;
+    }
+
+    // Extract data for easier access
+    const { summary, latency, trends, toolUsage, quality, models } = data;
+
+    // Export analytics data as CSV
+    const handleExport = () => {
+        const rows: string[] = [];
+
+        // Summary section
+        rows.push("ANALYTICS SUMMARY");
+        rows.push(`Period,${data.dateRange.from} to ${data.dateRange.to}`);
+        rows.push(`Total Runs,${summary.totalRuns}`);
+        rows.push(`Completed Runs,${summary.completedRuns}`);
+        rows.push(`Failed Runs,${summary.failedRuns}`);
+        rows.push(`Success Rate,${summary.successRate}%`);
+        rows.push(`Average Latency,${summary.avgLatencyMs}ms`);
+        rows.push(`Total Tokens,${summary.totalTokens}`);
+        rows.push(`Total Cost,$${summary.totalCostUsd.toFixed(2)}`);
+        rows.push("");
+
+        // Latency section
+        rows.push("LATENCY PERCENTILES");
+        rows.push(`Average,${latency.avg}ms`);
+        rows.push(`p50,${latency.p50}ms`);
+        rows.push(`p95,${latency.p95}ms`);
+        rows.push(`p99,${latency.p99}ms`);
+        rows.push("");
+
+        // Trends section
+        if (trends.runs.length > 0) {
+            rows.push("DAILY TRENDS");
+            rows.push("Date,Total,Completed,Failed,Success Rate");
+            trends.runs.forEach((r) => {
+                rows.push(`${r.date},${r.total},${r.completed},${r.failed},${r.successRate}%`);
+            });
+            rows.push("");
+        }
+
+        // Tool usage section
+        if (toolUsage.length > 0) {
+            rows.push("TOOL USAGE");
+            rows.push("Tool,Calls,Success Rate,Avg Duration (ms)");
+            toolUsage.forEach((t) => {
+                rows.push(`${t.tool},${t.calls},${t.successRate}%,${t.avgDurationMs}`);
+            });
+            rows.push("");
+        }
+
+        // Quality section
+        if (quality.scorers.length > 0) {
+            rows.push("QUALITY SCORES");
+            rows.push("Scorer,Average Score,Sample Count");
+            quality.scorers.forEach((s) => {
+                rows.push(`${s.scorer},${(s.avgScore * 100).toFixed(1)}%,${s.sampleCount}`);
+            });
+            rows.push("");
+        }
+
+        rows.push("USER FEEDBACK");
+        rows.push(`Positive,${quality.feedback.positive}`);
+        rows.push(`Negative,${quality.feedback.negative}`);
+        rows.push(`Total,${quality.feedback.total}`);
+        rows.push(`Positive Rate,${quality.feedback.positiveRate}%`);
+        rows.push("");
+
+        // Models section
+        if (models.length > 0) {
+            rows.push("MODEL COMPARISON");
+            rows.push("Model,Runs,Tokens,Cost,Avg Latency (ms)");
+            models.forEach((m) => {
+                rows.push(
+                    `${m.model},${m.runs},${m.tokens},$${m.costUsd.toFixed(2)},${m.avgLatencyMs}`
+                );
+            });
+        }
+
+        // Create and download CSV
+        const csvContent = rows.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `${agentSlug}-analytics-${timeRange}-${new Date().toISOString().split("T")[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    // Prepare chart data from trends
+    const runsTrend = trends.runs.map((r) => r.total);
+    const errorsTrend = trends.runs.map((r) => r.failed);
+    const successRateTrend = trends.runs.map((r) => r.successRate);
+
+    // Calculate max tool calls for scaling
+    const maxToolCalls = Math.max(...toolUsage.map((t) => t.calls), 1);
 
     return (
         <div className="space-y-6">
@@ -126,7 +326,9 @@ export default function AnalyticsPage() {
                             <SelectItem value="90d">Last 90 days</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Button variant="outline">Export</Button>
+                    <Button variant="outline" onClick={handleExport}>
+                        Export
+                    </Button>
                 </div>
             </div>
 
@@ -136,12 +338,17 @@ export default function AnalyticsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Total Runs</CardDescription>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-2xl">1,247</CardTitle>
-                            <TrendIndicator value={12} />
+                            <CardTitle className="text-2xl">
+                                {summary.totalRuns.toLocaleString()}
+                            </CardTitle>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <SimpleBarChart data={mockTimeSeriesData.runs} height={40} />
+                        {runsTrend.length > 0 ? (
+                            <SimpleBarChart data={runsTrend} height={40} />
+                        ) : (
+                            <p className="text-muted-foreground text-sm">No data</p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -149,16 +356,21 @@ export default function AnalyticsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Avg Latency (p50)</CardDescription>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-2xl">2.3s</CardTitle>
-                            <TrendIndicator value={-5} positive={false} />
+                            <CardTitle className="text-2xl">
+                                {latency.p50 > 0 ? `${(latency.p50 / 1000).toFixed(1)}s` : "—"}
+                            </CardTitle>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <SimpleBarChart
-                            data={mockTimeSeriesData.latency}
-                            height={40}
-                            color="bg-blue-500"
-                        />
+                        {latency.histogram.length > 0 ? (
+                            <SimpleBarChart
+                                data={latency.histogram.slice(0, 14)}
+                                height={40}
+                                color="bg-blue-500"
+                            />
+                        ) : (
+                            <p className="text-muted-foreground text-sm">No data</p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -166,33 +378,43 @@ export default function AnalyticsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Error Rate</CardDescription>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-2xl">1.8%</CardTitle>
-                            <TrendIndicator value={-12} positive={false} />
+                            <CardTitle className="text-2xl">
+                                {summary.totalRuns > 0
+                                    ? `${((summary.failedRuns / summary.totalRuns) * 100).toFixed(1)}%`
+                                    : "—"}
+                            </CardTitle>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <SimpleBarChart
-                            data={mockTimeSeriesData.errors}
-                            height={40}
-                            color="bg-red-500"
-                        />
+                        {errorsTrend.length > 0 ? (
+                            <SimpleBarChart data={errorsTrend} height={40} color="bg-red-500" />
+                        ) : (
+                            <p className="text-muted-foreground text-sm">No data</p>
+                        )}
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Quality Score</CardDescription>
+                        <CardDescription>Success Rate</CardDescription>
                         <div className="flex items-center justify-between">
-                            <CardTitle className="text-2xl">91%</CardTitle>
-                            <TrendIndicator value={3} />
+                            <CardTitle className="text-2xl">
+                                {summary.successRate > 0
+                                    ? `${summary.successRate.toFixed(0)}%`
+                                    : "—"}
+                            </CardTitle>
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <SimpleBarChart
-                            data={mockTimeSeriesData.quality}
-                            height={40}
-                            color="bg-green-500"
-                        />
+                        {successRateTrend.length > 0 ? (
+                            <SimpleBarChart
+                                data={successRateTrend}
+                                height={40}
+                                color="bg-green-500"
+                            />
+                        ) : (
+                            <p className="text-muted-foreground text-sm">No data</p>
+                        )}
                     </CardContent>
                 </Card>
             </div>
@@ -221,91 +443,104 @@ export default function AnalyticsPage() {
                                 <CardDescription>Daily run volume</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <SimpleBarChart data={mockTimeSeriesData.runs} height={200} />
-                                <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                                    <span>7 days ago</span>
-                                    <span>Today</span>
-                                </div>
+                                {runsTrend.length > 0 ? (
+                                    <>
+                                        <SimpleBarChart data={runsTrend} height={200} />
+                                        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
+                                            <span>
+                                                {trends.runs[0]?.date
+                                                    ? new Date(
+                                                          trends.runs[0].date
+                                                      ).toLocaleDateString()
+                                                    : "Start"}
+                                            </span>
+                                            <span>
+                                                {trends.runs[trends.runs.length - 1]?.date
+                                                    ? new Date(
+                                                          trends.runs[trends.runs.length - 1].date
+                                                      ).toLocaleDateString()
+                                                    : "Today"}
+                                            </span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                        No run data for this period
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 
-                        {/* Quality Distribution */}
+                        {/* Scorer Breakdown (moved from Quality tab for overview) */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>Quality Score Distribution</CardTitle>
-                                <CardDescription>Helpfulness ratings breakdown</CardDescription>
+                                <CardTitle>Quality Scores</CardTitle>
+                                <CardDescription>Average scores by evaluator</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-3">
-                                    {[
-                                        { range: "90-100%", count: 523, pct: 42 },
-                                        { range: "80-90%", count: 412, pct: 33 },
-                                        { range: "70-80%", count: 198, pct: 16 },
-                                        { range: "60-70%", count: 87, pct: 7 },
-                                        { range: "<60%", count: 27, pct: 2 }
-                                    ].map((item) => (
-                                        <div key={item.range} className="flex items-center gap-3">
-                                            <span className="w-20 text-sm">{item.range}</span>
-                                            <div className="bg-muted h-4 flex-1 overflow-hidden rounded-full">
-                                                <div
-                                                    className="bg-primary h-full rounded-full"
-                                                    style={{ width: `${item.pct}%` }}
-                                                />
+                                {quality.scorers.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {quality.scorers.map((scorer) => (
+                                            <div
+                                                key={scorer.scorer}
+                                                className="flex items-center gap-3"
+                                            >
+                                                <span className="w-28 truncate text-sm">
+                                                    {scorer.scorer}
+                                                </span>
+                                                <div className="bg-muted h-4 flex-1 overflow-hidden rounded-full">
+                                                    <div
+                                                        className="bg-primary h-full rounded-full"
+                                                        style={{
+                                                            width: `${Math.min(scorer.avgScore * 100, 100)}%`
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="text-muted-foreground w-16 text-right text-sm">
+                                                    {(scorer.avgScore * 100).toFixed(0)}%
+                                                </span>
                                             </div>
-                                            <span className="text-muted-foreground w-16 text-right text-sm">
-                                                {item.count}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-muted-foreground flex h-[150px] items-center justify-center">
+                                        No evaluation data
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
 
-                    {/* Insights */}
+                    {/* Summary Stats */}
                     <Card>
                         <CardHeader>
-                            <CardTitle>AI Insights</CardTitle>
-                            <CardDescription>
-                                Automated analysis and recommendations
-                            </CardDescription>
+                            <CardTitle>Summary Statistics</CardTitle>
+                            <CardDescription>Key metrics for the selected period</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                                <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-                                    <div className="mb-2 flex items-center gap-2">
-                                        <span className="text-green-600">✓</span>
-                                        <span className="font-medium text-green-600">
-                                            Performance Improving
-                                        </span>
-                                    </div>
-                                    <p className="text-muted-foreground text-sm">
-                                        Quality scores have increased 3% over the last week, likely
-                                        due to the updated instructions in version 4.
+                            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                <div className="rounded-lg border p-4">
+                                    <p className="text-muted-foreground text-sm">Completed Runs</p>
+                                    <p className="text-2xl font-bold">
+                                        {summary.completedRuns.toLocaleString()}
                                     </p>
                                 </div>
-                                <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/5 p-4">
-                                    <div className="mb-2 flex items-center gap-2">
-                                        <span className="text-yellow-600">⚠</span>
-                                        <span className="font-medium text-yellow-600">
-                                            Latency Spike Detected
-                                        </span>
-                                    </div>
-                                    <p className="text-muted-foreground text-sm">
-                                        P95 latency increased 15% on Tuesday, correlating with
-                                        increased database-query tool usage.
+                                <div className="rounded-lg border p-4">
+                                    <p className="text-muted-foreground text-sm">Failed Runs</p>
+                                    <p className="text-2xl font-bold text-red-600">
+                                        {summary.failedRuns.toLocaleString()}
                                     </p>
                                 </div>
-                                <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-                                    <div className="mb-2 flex items-center gap-2">
-                                        <span className="text-blue-600">💡</span>
-                                        <span className="font-medium text-blue-600">
-                                            Optimization Opportunity
-                                        </span>
-                                    </div>
-                                    <p className="text-muted-foreground text-sm">
-                                        Consider caching web-search results. 23% of queries are
-                                        repeated within 1 hour.
+                                <div className="rounded-lg border p-4">
+                                    <p className="text-muted-foreground text-sm">Total Tokens</p>
+                                    <p className="text-2xl font-bold">
+                                        {summary.totalTokens.toLocaleString()}
+                                    </p>
+                                </div>
+                                <div className="rounded-lg border p-4">
+                                    <p className="text-muted-foreground text-sm">Total Cost</p>
+                                    <p className="text-2xl font-bold">
+                                        ${summary.totalCostUsd.toFixed(2)}
                                     </p>
                                 </div>
                             </div>
@@ -323,33 +558,56 @@ export default function AnalyticsPage() {
                         <CardContent>
                             <div className="mb-6 grid grid-cols-4 gap-4">
                                 <div className="bg-muted rounded-lg p-4 text-center">
-                                    <p className="text-muted-foreground text-sm">p50</p>
-                                    <p className="text-2xl font-bold">2.3s</p>
+                                    <p className="text-muted-foreground text-sm">Average</p>
+                                    <p className="text-2xl font-bold">
+                                        {latency.avg > 0
+                                            ? `${(latency.avg / 1000).toFixed(1)}s`
+                                            : "—"}
+                                    </p>
                                 </div>
                                 <div className="bg-muted rounded-lg p-4 text-center">
-                                    <p className="text-muted-foreground text-sm">p75</p>
-                                    <p className="text-2xl font-bold">3.1s</p>
+                                    <p className="text-muted-foreground text-sm">p50</p>
+                                    <p className="text-2xl font-bold">
+                                        {latency.p50 > 0
+                                            ? `${(latency.p50 / 1000).toFixed(1)}s`
+                                            : "—"}
+                                    </p>
                                 </div>
                                 <div className="bg-muted rounded-lg p-4 text-center">
                                     <p className="text-muted-foreground text-sm">p95</p>
-                                    <p className="text-2xl font-bold">5.8s</p>
+                                    <p className="text-2xl font-bold">
+                                        {latency.p95 > 0
+                                            ? `${(latency.p95 / 1000).toFixed(1)}s`
+                                            : "—"}
+                                    </p>
                                 </div>
                                 <div className="bg-muted rounded-lg p-4 text-center">
                                     <p className="text-muted-foreground text-sm">p99</p>
-                                    <p className="text-2xl font-bold">12.4s</p>
+                                    <p className="text-2xl font-bold">
+                                        {latency.p99 > 0
+                                            ? `${(latency.p99 / 1000).toFixed(1)}s`
+                                            : "—"}
+                                    </p>
                                 </div>
                             </div>
-                            <SimpleBarChart
-                                data={[15, 28, 42, 68, 85, 72, 45, 23, 12, 8, 5, 3, 2, 1]}
-                                height={200}
-                                color="bg-blue-500"
-                            />
-                            <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                                <span>0-1s</span>
-                                <span>5s</span>
-                                <span>10s</span>
-                                <span>15s+</span>
-                            </div>
+                            {latency.histogram.length > 0 ? (
+                                <>
+                                    <SimpleBarChart
+                                        data={latency.histogram}
+                                        height={200}
+                                        color="bg-blue-500"
+                                    />
+                                    <div className="text-muted-foreground mt-2 flex justify-between text-xs">
+                                        <span>Fastest</span>
+                                        <span>Response Time Distribution</span>
+                                        <span>Slowest</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                    No latency data for this period
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -362,45 +620,55 @@ export default function AnalyticsPage() {
                             <CardDescription>How tools are being used</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-4">
-                                {mockToolUsage.map((tool) => (
-                                    <div
-                                        key={tool.name}
-                                        className="flex items-center gap-4 rounded-lg border p-3"
-                                    >
-                                        <div className="bg-primary/10 flex h-8 w-8 items-center justify-center rounded-lg">
-                                            🔧
-                                        </div>
-                                        <div className="flex-1">
-                                            <p className="font-medium">{tool.name}</p>
-                                            <div className="mt-1 flex items-center gap-4">
-                                                <span className="text-muted-foreground text-sm">
-                                                    {tool.count} calls
-                                                </span>
-                                                <Badge
-                                                    variant={
-                                                        tool.successRate >= 95
-                                                            ? "default"
-                                                            : "secondary"
-                                                    }
-                                                >
-                                                    {tool.successRate}% success
-                                                </Badge>
+                            {toolUsage.length > 0 ? (
+                                <div className="space-y-4">
+                                    {toolUsage.map((tool) => (
+                                        <div
+                                            key={tool.tool}
+                                            className="flex items-center gap-4 rounded-lg border p-3"
+                                        >
+                                            <div className="bg-primary/10 flex h-8 w-8 items-center justify-center rounded-lg">
+                                                🔧
+                                            </div>
+                                            <div className="flex-1">
+                                                <p className="font-medium">{tool.tool}</p>
+                                                <div className="mt-1 flex items-center gap-4">
+                                                    <span className="text-muted-foreground text-sm">
+                                                        {tool.calls} calls
+                                                    </span>
+                                                    <span className="text-muted-foreground text-sm">
+                                                        avg {(tool.avgDurationMs / 1000).toFixed(1)}
+                                                        s
+                                                    </span>
+                                                    <Badge
+                                                        variant={
+                                                            tool.successRate >= 95
+                                                                ? "default"
+                                                                : "secondary"
+                                                        }
+                                                    >
+                                                        {tool.successRate}% success
+                                                    </Badge>
+                                                </div>
+                                            </div>
+                                            <div className="w-32">
+                                                <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                                    <div
+                                                        className="bg-primary h-full"
+                                                        style={{
+                                                            width: `${(tool.calls / maxToolCalls) * 100}%`
+                                                        }}
+                                                    />
+                                                </div>
                                             </div>
                                         </div>
-                                        <div className="w-32">
-                                            <div className="bg-muted h-2 overflow-hidden rounded-full">
-                                                <div
-                                                    className="bg-primary h-full"
-                                                    style={{
-                                                        width: `${(tool.count / 245) * 100}%`
-                                                    }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                    No tool usage data for this period
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -414,30 +682,38 @@ export default function AnalyticsPage() {
                                 <CardDescription>Individual evaluation metrics</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-4">
-                                    {[
-                                        { name: "Helpfulness", score: 91, trend: 3 },
-                                        { name: "Relevancy", score: 88, trend: 1 },
-                                        { name: "Completeness", score: 85, trend: -2 },
-                                        { name: "Tone", score: 94, trend: 0 }
-                                    ].map((scorer) => (
-                                        <div key={scorer.name} className="flex items-center gap-4">
-                                            <span className="w-28 text-sm">{scorer.name}</span>
-                                            <div className="bg-muted h-3 flex-1 overflow-hidden rounded-full">
-                                                <div
-                                                    className="bg-primary h-full"
-                                                    style={{ width: `${scorer.score}%` }}
-                                                />
+                                {quality.scorers.length > 0 ? (
+                                    <div className="space-y-4">
+                                        {quality.scorers.map((scorer) => (
+                                            <div
+                                                key={scorer.scorer}
+                                                className="flex items-center gap-4"
+                                            >
+                                                <span className="w-28 truncate text-sm">
+                                                    {scorer.scorer}
+                                                </span>
+                                                <div className="bg-muted h-3 flex-1 overflow-hidden rounded-full">
+                                                    <div
+                                                        className="bg-primary h-full"
+                                                        style={{
+                                                            width: `${Math.min(scorer.avgScore * 100, 100)}%`
+                                                        }}
+                                                    />
+                                                </div>
+                                                <span className="w-12 text-sm font-medium">
+                                                    {(scorer.avgScore * 100).toFixed(0)}%
+                                                </span>
+                                                <span className="text-muted-foreground w-16 text-right text-xs">
+                                                    ({scorer.sampleCount})
+                                                </span>
                                             </div>
-                                            <span className="w-12 text-sm font-medium">
-                                                {scorer.score}%
-                                            </span>
-                                            {scorer.trend !== 0 && (
-                                                <TrendIndicator value={scorer.trend} />
-                                            )}
-                                        </div>
-                                    ))}
-                                </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-muted-foreground flex h-[150px] items-center justify-center">
+                                        No evaluation data for this period
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
 
@@ -447,22 +723,40 @@ export default function AnalyticsPage() {
                                 <CardDescription>Direct user ratings</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="mb-6 text-center">
-                                    <p className="text-5xl font-bold">👍 89%</p>
-                                    <p className="text-muted-foreground mt-2 text-sm">
-                                        Positive feedback ratio
-                                    </p>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="rounded-lg bg-green-500/10 p-4 text-center">
-                                        <p className="text-2xl font-bold text-green-600">412</p>
-                                        <p className="text-muted-foreground text-sm">Thumbs up</p>
+                                {quality.feedback.total > 0 ? (
+                                    <>
+                                        <div className="mb-6 text-center">
+                                            <p className="text-5xl font-bold">
+                                                👍 {quality.feedback.positiveRate}%
+                                            </p>
+                                            <p className="text-muted-foreground mt-2 text-sm">
+                                                Positive feedback ratio
+                                            </p>
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="rounded-lg bg-green-500/10 p-4 text-center">
+                                                <p className="text-2xl font-bold text-green-600">
+                                                    {quality.feedback.positive}
+                                                </p>
+                                                <p className="text-muted-foreground text-sm">
+                                                    Thumbs up
+                                                </p>
+                                            </div>
+                                            <div className="rounded-lg bg-red-500/10 p-4 text-center">
+                                                <p className="text-2xl font-bold text-red-600">
+                                                    {quality.feedback.negative}
+                                                </p>
+                                                <p className="text-muted-foreground text-sm">
+                                                    Thumbs down
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                        No feedback data for this period
                                     </div>
-                                    <div className="rounded-lg bg-red-500/10 p-4 text-center">
-                                        <p className="text-2xl font-bold text-red-600">51</p>
-                                        <p className="text-muted-foreground text-sm">Thumbs down</p>
-                                    </div>
-                                </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -476,59 +770,59 @@ export default function AnalyticsPage() {
                             <CardDescription>Performance across different models</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th className="px-4 py-3 text-left font-medium">
-                                                Model
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Runs
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Avg Latency
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Quality
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Cost
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {mockModelComparison.map((row) => (
-                                            <tr
-                                                key={row.model}
-                                                className="hover:bg-muted/50 border-b"
-                                            >
-                                                <td className="px-4 py-3 font-mono text-sm">
-                                                    {row.model}
-                                                </td>
-                                                <td className="px-4 py-3 text-right">{row.runs}</td>
-                                                <td className="px-4 py-3 text-right">
-                                                    {row.avgLatency}s
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    <Badge
-                                                        variant={
-                                                            row.quality >= 90
-                                                                ? "default"
-                                                                : "secondary"
-                                                        }
-                                                    >
-                                                        {row.quality}%
-                                                    </Badge>
-                                                </td>
-                                                <td className="px-4 py-3 text-right">
-                                                    ${row.cost.toFixed(2)}
-                                                </td>
+                            {models.length > 0 ? (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className="px-4 py-3 text-left font-medium">
+                                                    Model
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Runs
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Avg Latency
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Tokens
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Cost
+                                                </th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {models.map((row) => (
+                                                <tr
+                                                    key={row.model}
+                                                    className="hover:bg-muted/50 border-b"
+                                                >
+                                                    <td className="px-4 py-3 font-mono text-sm">
+                                                        {row.model}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {row.runs.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {(row.avgLatencyMs / 1000).toFixed(1)}s
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        {row.tokens.toLocaleString()}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-right">
+                                                        ${row.costUsd.toFixed(2)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            ) : (
+                                <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                    No model data for this period
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

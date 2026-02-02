@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -73,7 +74,7 @@ export default function MissionControlPage() {
 
     // SSE connection for real-time updates
     useEffect(() => {
-        const eventSource = new EventSource("/api/goals/stream");
+        const eventSource = new EventSource(`${getApiBase()}/api/goals/stream`);
 
         eventSource.addEventListener("init", (e) => {
             try {
@@ -120,7 +121,7 @@ export default function MissionControlPage() {
         setError(null);
 
         try {
-            const response = await fetch("/api/goals", {
+            const response = await fetch(`${getApiBase()}/api/goals`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ title: title.trim(), description: description.trim() })
@@ -144,7 +145,7 @@ export default function MissionControlPage() {
 
     const retryGoal = useCallback(async (goalId: string) => {
         try {
-            const response = await fetch(`/api/goals/${goalId}`, {
+            const response = await fetch(`${getApiBase()}/api/goals/${goalId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "retry" })
@@ -161,7 +162,7 @@ export default function MissionControlPage() {
 
     const cancelGoal = useCallback(async (goalId: string) => {
         try {
-            const response = await fetch(`/api/goals/${goalId}`, {
+            const response = await fetch(`${getApiBase()}/api/goals/${goalId}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ action: "cancel" })
@@ -179,7 +180,7 @@ export default function MissionControlPage() {
     const deleteGoal = useCallback(
         async (goalId: string) => {
             try {
-                const response = await fetch(`/api/goals/${goalId}`, {
+                const response = await fetch(`${getApiBase()}/api/goals/${goalId}`, {
                     method: "DELETE"
                 });
 

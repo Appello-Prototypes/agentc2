@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,
@@ -16,18 +16,14 @@ import {
     TabsList,
     TabsTrigger
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface EvaluationResult {
     id: string;
     runId: string;
     input: string;
     output: string;
-    scores: {
-        helpfulness: number;
-        relevancy: number;
-        completeness: number;
-        tone: number;
-    };
+    scores: Record<string, number>;
     feedback?: {
         thumbs: "up" | "down";
         comment?: string;
@@ -35,50 +31,206 @@ interface EvaluationResult {
     timestamp: string;
 }
 
-// Mock data
-const mockEvaluations: EvaluationResult[] = Array.from({ length: 20 }, (_, i) => ({
-    id: `eval-${i + 1}`,
-    runId: `run-${i + 1}`,
-    input: `Test query ${i + 1}: What is the meaning of life?`,
-    output: `This is a sample response for evaluation ${i + 1}...`,
-    scores: {
-        helpfulness: 0.7 + Math.random() * 0.3,
-        relevancy: 0.75 + Math.random() * 0.25,
-        completeness: 0.65 + Math.random() * 0.35,
-        tone: 0.85 + Math.random() * 0.15
-    },
-    feedback:
-        Math.random() > 0.7
-            ? {
-                  thumbs: Math.random() > 0.2 ? "up" : "down",
-                  comment: Math.random() > 0.5 ? "Good response" : undefined
-              }
-            : undefined,
-    timestamp: new Date(Date.now() - i * 1000 * 60 * 30).toISOString()
-}));
+interface EvaluationSummary {
+    total: number;
+    avgScores: Array<{
+        scorer: string;
+        avg: number;
+        min: number;
+        max: number;
+        count: number;
+    }>;
+}
 
-const feedbackThemes = [
-    { theme: "Accurate information", count: 45, sentiment: "positive" },
-    { theme: "Too verbose", count: 23, sentiment: "negative" },
-    { theme: "Helpful examples", count: 38, sentiment: "positive" },
-    { theme: "Missing context", count: 15, sentiment: "negative" },
-    { theme: "Clear explanations", count: 52, sentiment: "positive" }
-];
+interface FeedbackTheme {
+    theme: string;
+    count: number;
+    sentiment: string;
+}
+
+interface Insight {
+    id: string;
+    type: string;
+    title: string;
+    description: string;
+    createdAt: string;
+}
+
+interface TrendData {
+    scorer: string;
+    data: Array<{ date: string; score: number }>;
+}
 
 export default function EvaluationsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [evaluations, setEvaluations] = useState<EvaluationResult[]>([]);
+    const [summary, setSummary] = useState<EvaluationSummary | null>(null);
+    const [themes, setThemes] = useState<FeedbackTheme[]>([]);
+    const [insights, setInsights] = useState<Insight[]>([]);
+    const [trends, setTrends] = useState<TrendData[]>([]);
     const [activeTab, setActiveTab] = useState("scorers");
+    const [runningEvals, setRunningEvals] = useState(false);
+    const [exporting, setExporting] = useState(false);
+    const [statusMessage, setStatusMessage] = useState<{
+        type: "success" | "error";
+        message: string;
+    } | null>(null);
+
+    const fetchEvaluations = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/evaluations`);
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to fetch evaluations");
+            }
+
+            // Transform API response to match our interface
+            const transformedEvals: EvaluationResult[] = result.evaluations.map(
+                (eval_: {
+                    id: string;
+                    runId: string;
+                    scoresJson: Record<string, number>;
+                    createdAt: string;
+                    run?: {
+                        inputPreview?: string;
+                        outputPreview?: string;
+                    };
+                }) => ({
+                    id: eval_.id,
+                    runId: eval_.runId,
+                    input: eval_.run?.inputPreview || "",
+                    output: eval_.run?.outputPreview || "",
+                    scores: eval_.scoresJson || {},
+                    timestamp: eval_.createdAt
+                })
+            );
+
+            setEvaluations(transformedEvals);
+            setSummary(result.summary);
+            setThemes(result.themes || []);
+            setInsights(result.insights || []);
+            setTrends(result.trends || []);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load evaluations");
+        } finally {
+            setLoading(false);
+        }
+    }, [agentSlug]);
 
     useEffect(() => {
-        setTimeout(() => {
-            setEvaluations(mockEvaluations);
-            setLoading(false);
-        }, 500);
-    }, [agentSlug]);
+        fetchEvaluations();
+    }, [fetchEvaluations]);
+
+    const runEvaluations = useCallback(async () => {
+        try {
+            setRunningEvals(true);
+            setStatusMessage(null);
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/evaluations`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ limit: 20 })
+            });
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to run evaluations");
+            }
+
+            if (result.evaluated === 0) {
+                setStatusMessage({
+                    type: "success",
+                    message: "No runs to evaluate. All completed runs have already been evaluated."
+                });
+            } else {
+                setStatusMessage({
+                    type: "success",
+                    message: `Successfully evaluated ${result.evaluated} run(s).${result.failed > 0 ? ` ${result.failed} failed.` : ""}`
+                });
+                // Refresh the evaluations list
+                fetchEvaluations();
+            }
+        } catch (err) {
+            setStatusMessage({
+                type: "error",
+                message: err instanceof Error ? err.message : "Failed to run evaluations"
+            });
+        } finally {
+            setRunningEvals(false);
+            // Auto-clear success messages after 5 seconds
+            setTimeout(() => setStatusMessage(null), 5000);
+        }
+    }, [agentSlug, fetchEvaluations]);
+
+    const exportReport = useCallback(() => {
+        try {
+            setExporting(true);
+            setStatusMessage(null);
+
+            // Build CSV content
+            const headers = [
+                "ID",
+                "Run ID",
+                "Input",
+                "Output",
+                ...Object.keys(evaluations[0]?.scores || {}),
+                "Feedback",
+                "Timestamp"
+            ];
+
+            const rows = evaluations.map((eval_) => {
+                const scoreValues = Object.keys(evaluations[0]?.scores || {}).map(
+                    (key) => ((eval_.scores[key] || 0) * 100).toFixed(1) + "%"
+                );
+                return [
+                    eval_.id,
+                    eval_.runId,
+                    `"${(eval_.input || "").replace(/"/g, '""')}"`,
+                    `"${(eval_.output || "").replace(/"/g, '""')}"`,
+                    ...scoreValues,
+                    eval_.feedback?.thumbs || "-",
+                    new Date(eval_.timestamp).toISOString()
+                ];
+            });
+
+            const csvContent = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+
+            // Create and download file
+            const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+            const link = document.createElement("a");
+            const url = URL.createObjectURL(blob);
+            link.setAttribute("href", url);
+            link.setAttribute(
+                "download",
+                `${agentSlug}-evaluations-${new Date().toISOString().split("T")[0]}.csv`
+            );
+            link.style.visibility = "hidden";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            setStatusMessage({
+                type: "success",
+                message: `Exported ${evaluations.length} evaluation(s) to CSV.`
+            });
+        } catch (err) {
+            setStatusMessage({
+                type: "error",
+                message: err instanceof Error ? err.message : "Failed to export report"
+            });
+        } finally {
+            setExporting(false);
+            // Auto-clear success messages after 5 seconds
+            setTimeout(() => setStatusMessage(null), 5000);
+        }
+    }, [agentSlug, evaluations]);
 
     if (loading) {
         return (
@@ -94,15 +246,45 @@ export default function EvaluationsPage() {
         );
     }
 
-    // Calculate aggregates
-    const avgScores = {
-        helpfulness:
-            evaluations.reduce((sum, e) => sum + e.scores.helpfulness, 0) / evaluations.length,
-        relevancy: evaluations.reduce((sum, e) => sum + e.scores.relevancy, 0) / evaluations.length,
-        completeness:
-            evaluations.reduce((sum, e) => sum + e.scores.completeness, 0) / evaluations.length,
-        tone: evaluations.reduce((sum, e) => sum + e.scores.tone, 0) / evaluations.length
-    };
+    if (error) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Evaluation Center</h1>
+                    <p className="text-muted-foreground">
+                        Quality metrics, feedback analysis, and improvement insights
+                    </p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchEvaluations}>Retry</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // Calculate aggregates from API summary or from evaluations
+    const avgScores: Record<string, number> = {};
+    if (summary?.avgScores) {
+        for (const scorer of summary.avgScores) {
+            avgScores[scorer.scorer] = scorer.avg;
+        }
+    } else if (evaluations.length > 0) {
+        // Fallback: calculate from evaluations
+        const scoreTotals: Record<string, { sum: number; count: number }> = {};
+        for (const eval_ of evaluations) {
+            for (const [key, value] of Object.entries(eval_.scores)) {
+                if (!scoreTotals[key]) scoreTotals[key] = { sum: 0, count: 0 };
+                scoreTotals[key].sum += value;
+                scoreTotals[key].count += 1;
+            }
+        }
+        for (const [key, data] of Object.entries(scoreTotals)) {
+            avgScores[key] = data.sum / data.count;
+        }
+    }
 
     const feedbackStats = {
         total: evaluations.filter((e) => e.feedback).length,
@@ -120,9 +302,24 @@ export default function EvaluationsPage() {
                         Quality metrics, feedback analysis, and improvement insights
                     </p>
                 </div>
-                <div className="flex gap-2">
-                    <Button variant="outline">Run Evaluation</Button>
-                    <Button variant="outline">Export Report</Button>
+                <div className="flex items-center gap-2">
+                    {statusMessage && (
+                        <span
+                            className={`text-sm ${statusMessage.type === "error" ? "text-destructive" : "text-green-600"}`}
+                        >
+                            {statusMessage.message}
+                        </span>
+                    )}
+                    <Button variant="outline" onClick={runEvaluations} disabled={runningEvals}>
+                        {runningEvals ? "Running..." : "Run Evaluation"}
+                    </Button>
+                    <Button
+                        variant="outline"
+                        onClick={exportReport}
+                        disabled={exporting || evaluations.length === 0}
+                    >
+                        {exporting ? "Exporting..." : "Export Report"}
+                    </Button>
                 </div>
             </div>
 
@@ -205,22 +402,39 @@ export default function EvaluationsPage() {
                                 <CardDescription>Performance over time</CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="flex h-[200px] items-end gap-1">
-                                    {[85, 87, 84, 88, 91, 89, 92, 90, 93, 91, 94, 92, 95, 93].map(
-                                        (v, i) => (
-                                            <div
-                                                key={i}
-                                                className="bg-primary flex-1 rounded-t opacity-80"
-                                                style={{ height: `${v}%` }}
-                                                title={`${v}%`}
-                                            />
-                                        )
-                                    )}
-                                </div>
-                                <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                                    <span>14 days ago</span>
-                                    <span>Today</span>
-                                </div>
+                                {trends.length > 0 ? (
+                                    <>
+                                        {trends.map((trend) => (
+                                            <div key={trend.scorer} className="mb-4">
+                                                <p className="text-muted-foreground mb-2 text-sm capitalize">
+                                                    {trend.scorer}
+                                                </p>
+                                                <div className="flex h-[120px] items-end gap-1">
+                                                    {trend.data.map((d, i) => (
+                                                        <div
+                                                            key={i}
+                                                            className="bg-primary flex-1 rounded-t opacity-80"
+                                                            style={{
+                                                                height: `${(d.score * 100).toFixed(0)}%`
+                                                            }}
+                                                            title={`${d.date}: ${(d.score * 100).toFixed(0)}%`}
+                                                        />
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
+                                            <span>14 days ago</span>
+                                            <span>Today</span>
+                                        </div>
+                                    </>
+                                ) : (
+                                    <div className="flex h-[200px] items-center justify-center">
+                                        <p className="text-muted-foreground text-sm">
+                                            No trend data available yet
+                                        </p>
+                                    </div>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -230,33 +444,64 @@ export default function EvaluationsPage() {
                         <CardHeader>
                             <CardTitle>Low-Scoring Runs</CardTitle>
                             <CardDescription>
-                                Runs that need attention (score &lt; 80%)
+                                Runs that need attention (avg score &lt; 80%)
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
                                 {evaluations
-                                    .filter((e) => e.scores.helpfulness < 0.8)
+                                    .filter((e) => {
+                                        const scoreValues = Object.values(e.scores);
+                                        const avg =
+                                            scoreValues.length > 0
+                                                ? scoreValues.reduce((a, b) => a + b, 0) /
+                                                  scoreValues.length
+                                                : 1;
+                                        return avg < 0.8;
+                                    })
                                     .slice(0, 5)
-                                    .map((eval_) => (
-                                        <div
-                                            key={eval_.id}
-                                            className="flex items-center gap-4 rounded-lg border p-3"
-                                        >
-                                            <Badge variant="destructive">
-                                                {(eval_.scores.helpfulness * 100).toFixed(0)}%
-                                            </Badge>
-                                            <div className="min-w-0 flex-1">
-                                                <p className="truncate text-sm">{eval_.input}</p>
-                                                <p className="text-muted-foreground text-xs">
-                                                    {new Date(eval_.timestamp).toLocaleString()}
-                                                </p>
+                                    .map((eval_) => {
+                                        const scoreValues = Object.values(eval_.scores);
+                                        const avg =
+                                            scoreValues.length > 0
+                                                ? scoreValues.reduce((a, b) => a + b, 0) /
+                                                  scoreValues.length
+                                                : 0;
+                                        return (
+                                            <div
+                                                key={eval_.id}
+                                                className="flex items-center gap-4 rounded-lg border p-3"
+                                            >
+                                                <Badge variant="destructive">
+                                                    {(avg * 100).toFixed(0)}%
+                                                </Badge>
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="truncate text-sm">
+                                                        {eval_.input}
+                                                    </p>
+                                                    <p className="text-muted-foreground text-xs">
+                                                        {new Date(eval_.timestamp).toLocaleString()}
+                                                    </p>
+                                                </div>
+                                                <Button variant="ghost" size="sm">
+                                                    View
+                                                </Button>
                                             </div>
-                                            <Button variant="ghost" size="sm">
-                                                View
-                                            </Button>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
+                                {evaluations.filter((e) => {
+                                    const scoreValues = Object.values(e.scores);
+                                    const avg =
+                                        scoreValues.length > 0
+                                            ? scoreValues.reduce((a, b) => a + b, 0) /
+                                              scoreValues.length
+                                            : 1;
+                                    return avg < 0.8;
+                                }).length === 0 && (
+                                    <p className="text-muted-foreground py-4 text-center text-sm">
+                                        No low-scoring runs found
+                                    </p>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -315,21 +560,34 @@ export default function EvaluationsPage() {
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <div className="space-y-3">
-                                    {feedbackThemes.map((theme) => (
-                                        <div key={theme.theme} className="flex items-center gap-3">
-                                            <span
-                                                className={`h-2 w-2 rounded-full ${
-                                                    theme.sentiment === "positive"
-                                                        ? "bg-green-500"
-                                                        : "bg-red-500"
-                                                }`}
-                                            />
-                                            <span className="flex-1 text-sm">{theme.theme}</span>
-                                            <Badge variant="outline">{theme.count}</Badge>
-                                        </div>
-                                    ))}
-                                </div>
+                                {themes.length > 0 ? (
+                                    <div className="space-y-3">
+                                        {themes.map((theme) => (
+                                            <div
+                                                key={theme.theme}
+                                                className="flex items-center gap-3"
+                                            >
+                                                <span
+                                                    className={`h-2 w-2 rounded-full ${
+                                                        theme.sentiment === "positive"
+                                                            ? "bg-green-500"
+                                                            : theme.sentiment === "negative"
+                                                              ? "bg-red-500"
+                                                              : "bg-gray-500"
+                                                    }`}
+                                                />
+                                                <span className="flex-1 text-sm">
+                                                    {theme.theme}
+                                                </span>
+                                                <Badge variant="outline">{theme.count}</Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground py-4 text-center text-sm">
+                                        No feedback themes identified yet
+                                    </p>
+                                )}
                             </CardContent>
                         </Card>
                     </div>
@@ -381,59 +639,75 @@ export default function EvaluationsPage() {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-6">
-                                {[
-                                    {
-                                        type: "success",
-                                        title: "Strong Performance on Factual Queries",
-                                        description:
-                                            "The agent scores 94% on relevancy for factual questions. This is likely due to the comprehensive web-search tool integration."
-                                    },
-                                    {
-                                        type: "warning",
-                                        title: "Completeness Score Dropping",
-                                        description:
-                                            "Completeness scores have decreased 8% this week. Consider reviewing recent instruction changes or increasing max tokens."
-                                    },
-                                    {
-                                        type: "info",
-                                        title: "Optimization Opportunity",
-                                        description:
-                                            "23% of negative feedback mentions 'too verbose'. Consider adding conciseness guidelines to the system instructions."
-                                    },
-                                    {
-                                        type: "success",
-                                        title: "Improved Tone Consistency",
-                                        description:
-                                            "Tone scores have increased 5% since v4, correlating with the updated personality guidelines."
-                                    }
-                                ].map((insight, i) => (
-                                    <div
-                                        key={i}
-                                        className={`rounded-lg border p-4 ${
-                                            insight.type === "success"
-                                                ? "border-green-500/20 bg-green-500/5"
-                                                : insight.type === "warning"
-                                                  ? "border-yellow-500/20 bg-yellow-500/5"
-                                                  : "border-blue-500/20 bg-blue-500/5"
-                                        }`}
-                                    >
-                                        <div className="mb-2 flex items-center gap-2">
-                                            <span>
-                                                {insight.type === "success"
-                                                    ? "✓"
-                                                    : insight.type === "warning"
-                                                      ? "⚠"
-                                                      : "💡"}
-                                            </span>
-                                            <span className="font-medium">{insight.title}</span>
-                                        </div>
-                                        <p className="text-muted-foreground text-sm">
-                                            {insight.description}
-                                        </p>
-                                    </div>
-                                ))}
-                            </div>
+                            {insights.length > 0 ? (
+                                <div className="space-y-6">
+                                    {insights.map((insight) => {
+                                        // Map insight type to visual style
+                                        const typeStyles: Record<
+                                            string,
+                                            { border: string; bg: string; icon: string }
+                                        > = {
+                                            performance: {
+                                                border: "border-green-500/20",
+                                                bg: "bg-green-500/5",
+                                                icon: "✓"
+                                            },
+                                            quality: {
+                                                border: "border-green-500/20",
+                                                bg: "bg-green-500/5",
+                                                icon: "✓"
+                                            },
+                                            cost: {
+                                                border: "border-yellow-500/20",
+                                                bg: "bg-yellow-500/5",
+                                                icon: "⚠"
+                                            },
+                                            warning: {
+                                                border: "border-yellow-500/20",
+                                                bg: "bg-yellow-500/5",
+                                                icon: "⚠"
+                                            },
+                                            info: {
+                                                border: "border-blue-500/20",
+                                                bg: "bg-blue-500/5",
+                                                icon: "💡"
+                                            }
+                                        };
+                                        const style = typeStyles[insight.type] || typeStyles.info;
+
+                                        return (
+                                            <div
+                                                key={insight.id}
+                                                className={`rounded-lg border p-4 ${style.border} ${style.bg}`}
+                                            >
+                                                <div className="mb-2 flex items-center gap-2">
+                                                    <span>{style.icon}</span>
+                                                    <span className="font-medium">
+                                                        {insight.title}
+                                                    </span>
+                                                </div>
+                                                <p className="text-muted-foreground text-sm">
+                                                    {insight.description}
+                                                </p>
+                                                <p className="text-muted-foreground mt-2 text-xs">
+                                                    {new Date(
+                                                        insight.createdAt
+                                                    ).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="flex flex-col items-center justify-center py-12">
+                                    <p className="text-muted-foreground mb-2 text-sm">
+                                        No AI-generated insights available yet
+                                    </p>
+                                    <p className="text-muted-foreground text-xs">
+                                        Insights are generated as evaluation data accumulates
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -446,69 +720,89 @@ export default function EvaluationsPage() {
                             <CardDescription>All evaluated runs</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="overflow-x-auto">
-                                <table className="w-full">
-                                    <thead>
-                                        <tr className="border-b">
-                                            <th className="px-4 py-3 text-left font-medium">
-                                                Input
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Helpfulness
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Relevancy
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Completeness
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Tone
-                                            </th>
-                                            <th className="px-4 py-3 text-center font-medium">
-                                                Feedback
-                                            </th>
-                                            <th className="px-4 py-3 text-right font-medium">
-                                                Time
-                                            </th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {evaluations.slice(0, 10).map((eval_) => (
-                                            <tr
-                                                key={eval_.id}
-                                                className="hover:bg-muted/50 border-b"
-                                            >
-                                                <td className="max-w-xs truncate px-4 py-3">
-                                                    {eval_.input}
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-mono">
-                                                    {(eval_.scores.helpfulness * 100).toFixed(0)}%
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-mono">
-                                                    {(eval_.scores.relevancy * 100).toFixed(0)}%
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-mono">
-                                                    {(eval_.scores.completeness * 100).toFixed(0)}%
-                                                </td>
-                                                <td className="px-4 py-3 text-right font-mono">
-                                                    {(eval_.scores.tone * 100).toFixed(0)}%
-                                                </td>
-                                                <td className="px-4 py-3 text-center">
-                                                    {eval_.feedback
-                                                        ? eval_.feedback.thumbs === "up"
-                                                            ? "👍"
-                                                            : "👎"
-                                                        : "-"}
-                                                </td>
-                                                <td className="text-muted-foreground px-4 py-3 text-right text-sm">
-                                                    {new Date(eval_.timestamp).toLocaleTimeString()}
-                                                </td>
+                            {evaluations.length === 0 ? (
+                                <p className="text-muted-foreground py-8 text-center">
+                                    No evaluations found
+                                </p>
+                            ) : (
+                                <div className="overflow-x-auto">
+                                    <table className="w-full">
+                                        <thead>
+                                            <tr className="border-b">
+                                                <th className="px-4 py-3 text-left font-medium">
+                                                    Input
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Avg Score
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Scores
+                                                </th>
+                                                <th className="px-4 py-3 text-center font-medium">
+                                                    Feedback
+                                                </th>
+                                                <th className="px-4 py-3 text-right font-medium">
+                                                    Time
+                                                </th>
                                             </tr>
-                                        ))}
-                                    </tbody>
-                                </table>
-                            </div>
+                                        </thead>
+                                        <tbody>
+                                            {evaluations.slice(0, 10).map((eval_) => {
+                                                const scoreValues = Object.values(eval_.scores);
+                                                const avg =
+                                                    scoreValues.length > 0
+                                                        ? scoreValues.reduce((a, b) => a + b, 0) /
+                                                          scoreValues.length
+                                                        : 0;
+                                                return (
+                                                    <tr
+                                                        key={eval_.id}
+                                                        className="hover:bg-muted/50 border-b"
+                                                    >
+                                                        <td className="max-w-xs truncate px-4 py-3">
+                                                            {eval_.input || "-"}
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right font-mono">
+                                                            {(avg * 100).toFixed(0)}%
+                                                        </td>
+                                                        <td className="px-4 py-3 text-right">
+                                                            <div className="flex flex-wrap justify-end gap-1">
+                                                                {Object.entries(eval_.scores)
+                                                                    .slice(0, 3)
+                                                                    .map(([key, value]) => (
+                                                                        <Badge
+                                                                            key={key}
+                                                                            variant="outline"
+                                                                            className="text-xs"
+                                                                        >
+                                                                            {key}:{" "}
+                                                                            {(value * 100).toFixed(
+                                                                                0
+                                                                            )}
+                                                                            %
+                                                                        </Badge>
+                                                                    ))}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {eval_.feedback
+                                                                ? eval_.feedback.thumbs === "up"
+                                                                    ? "👍"
+                                                                    : "👎"
+                                                                : "-"}
+                                                        </td>
+                                                        <td className="text-muted-foreground px-4 py-3 text-right text-sm">
+                                                            {new Date(
+                                                                eval_.timestamp
+                                                            ).toLocaleTimeString()}
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>

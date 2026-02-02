@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -54,131 +55,9 @@ interface Trace {
         completion: number;
         total: number;
     };
-    scores: {
-        helpfulness?: number;
-        relevancy?: number;
-    };
+    scores: Record<string, number>;
     createdAt: string;
 }
-
-// Mock trace data
-const mockTraces: Trace[] = [
-    {
-        id: "trace-001",
-        runId: "run-001",
-        input: "What's the weather in San Francisco and schedule a meeting for tomorrow?",
-        output: "The weather in San Francisco is currently 65°F and partly cloudy. I've scheduled your meeting for tomorrow at 2:00 PM.",
-        status: "completed",
-        durationMs: 4250,
-        model: { provider: "anthropic", name: "claude-sonnet-4", temperature: 0.7 },
-        steps: [
-            {
-                step: 1,
-                type: "thinking",
-                content:
-                    "User wants weather info and to schedule a meeting. I'll need to use two tools.",
-                timestamp: new Date(Date.now() - 4000).toISOString(),
-                durationMs: 450
-            },
-            {
-                step: 2,
-                type: "tool_call",
-                content: "Calling weather API for San Francisco",
-                timestamp: new Date(Date.now() - 3500).toISOString(),
-                durationMs: 850
-            },
-            {
-                step: 3,
-                type: "tool_result",
-                content: "Weather data received: 65°F, partly cloudy",
-                timestamp: new Date(Date.now() - 2650).toISOString()
-            },
-            {
-                step: 4,
-                type: "tool_call",
-                content: "Scheduling meeting for tomorrow 2:00 PM",
-                timestamp: new Date(Date.now() - 2500).toISOString(),
-                durationMs: 620
-            },
-            {
-                step: 5,
-                type: "tool_result",
-                content: "Meeting scheduled successfully",
-                timestamp: new Date(Date.now() - 1880).toISOString()
-            },
-            {
-                step: 6,
-                type: "thinking",
-                content: "Both tasks completed. Composing response.",
-                timestamp: new Date(Date.now() - 1700).toISOString(),
-                durationMs: 280
-            },
-            {
-                step: 7,
-                type: "response",
-                content: "Final response generated",
-                timestamp: new Date(Date.now() - 1420).toISOString(),
-                durationMs: 1420
-            }
-        ],
-        toolCalls: [
-            {
-                name: "weather-api",
-                input: { city: "San Francisco" },
-                output: { temp: 65, condition: "partly cloudy" },
-                durationMs: 850,
-                success: true
-            },
-            {
-                name: "calendar-schedule",
-                input: { time: "tomorrow 2:00 PM", title: "Meeting" },
-                output: { eventId: "evt-123" },
-                durationMs: 620,
-                success: true
-            }
-        ],
-        tokens: { prompt: 245, completion: 156, total: 401 },
-        scores: { helpfulness: 0.94, relevancy: 0.91 },
-        createdAt: new Date(Date.now() - 1000 * 60 * 5).toISOString()
-    },
-    {
-        id: "trace-002",
-        runId: "run-002",
-        input: "Analyze the sales data from last quarter",
-        output: "Error: Database connection timeout",
-        status: "timeout",
-        durationMs: 30000,
-        model: { provider: "anthropic", name: "claude-sonnet-4", temperature: 0.7 },
-        steps: [
-            {
-                step: 1,
-                type: "thinking",
-                content: "User wants sales analysis. I'll query the database.",
-                timestamp: new Date(Date.now() - 35000).toISOString(),
-                durationMs: 320
-            },
-            {
-                step: 2,
-                type: "tool_call",
-                content: "Querying database for Q4 sales data...",
-                timestamp: new Date(Date.now() - 34680).toISOString(),
-                durationMs: 30000
-            }
-        ],
-        toolCalls: [
-            {
-                name: "database-query",
-                input: { query: "SELECT * FROM sales WHERE quarter = 'Q4'" },
-                error: "Connection timeout after 30s",
-                durationMs: 30000,
-                success: false
-            }
-        ],
-        tokens: { prompt: 189, completion: 0, total: 189 },
-        scores: {},
-        createdAt: new Date(Date.now() - 1000 * 60 * 20).toISOString()
-    }
-];
 
 const stepConfig: Record<string, { color: string; icon: string; label: string }> = {
     thinking: {
@@ -209,7 +88,7 @@ function StatusBadge({ status }: { status: Trace["status"] }) {
         failed: { variant: "destructive" as const, label: "Failed" },
         timeout: { variant: "secondary" as const, label: "Timeout" }
     };
-    const { variant, label } = config[status];
+    const { variant, label } = config[status] || { variant: "secondary" as const, label: status };
     return <Badge variant={variant}>{label}</Badge>;
 }
 
@@ -218,18 +97,136 @@ export default function TracesPage() {
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [traces, setTraces] = useState<Trace[]>([]);
     const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
     const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
+    const [timeTravelEnabled, setTimeTravelEnabled] = useState(false);
+    const [timeTravelStep, setTimeTravelStep] = useState(0);
+    const [isPlaying, setIsPlaying] = useState(false);
+
+    // Fetch runs and their traces
+    const fetchTraces = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // First, get the runs list
+            const runsRes = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs?limit=20`);
+            const runsResult = await runsRes.json();
+
+            if (!runsResult.success) {
+                throw new Error(runsResult.error || "Failed to fetch runs");
+            }
+
+            // Transform runs into trace objects (without full trace details)
+            const transformedTraces: Trace[] = runsResult.runs.map(
+                (run: {
+                    id: string;
+                    status: string;
+                    inputText: string;
+                    outputText?: string;
+                    durationMs?: number;
+                    modelProvider?: string;
+                    modelName?: string;
+                    startedAt: string;
+                    totalTokens?: number;
+                }) => ({
+                    id: `trace-${run.id}`,
+                    runId: run.id,
+                    input: run.inputText,
+                    output: run.outputText || "",
+                    status: run.status.toLowerCase() as Trace["status"],
+                    durationMs: run.durationMs || 0,
+                    model: {
+                        provider: run.modelProvider || "unknown",
+                        name: run.modelName || "unknown",
+                        temperature: 0.7
+                    },
+                    steps: [],
+                    toolCalls: [],
+                    tokens: { prompt: 0, completion: 0, total: run.totalTokens || 0 },
+                    scores: {},
+                    createdAt: run.startedAt
+                })
+            );
+
+            setTraces(transformedTraces);
+            // Select first trace if available (details loaded separately)
+            if (transformedTraces.length > 0) {
+                setSelectedTrace(transformedTraces[0]);
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load traces");
+        } finally {
+            setLoading(false);
+        }
+    }, [agentSlug]);
+
+    // Load full trace details for a specific run
+    const loadTraceDetails = useCallback(
+        async (runId: string, baseTrace: Trace) => {
+            try {
+                const response = await fetch(
+                    `${getApiBase()}/api/agents/${agentSlug}/runs/${runId}/trace`
+                );
+                const result = await response.json();
+
+                if (result.success && result.trace) {
+                    const traceData = result.trace;
+                    const detailedTrace: Trace = {
+                        ...baseTrace,
+                        steps: (traceData.steps || []).map(
+                            (s: {
+                                stepNumber: number;
+                                type: string;
+                                content: string;
+                                timestamp: string;
+                                durationMs?: number;
+                            }) => ({
+                                step: s.stepNumber,
+                                type: s.type as ExecutionStep["type"],
+                                content: s.content,
+                                timestamp: s.timestamp,
+                                durationMs: s.durationMs
+                            })
+                        ),
+                        toolCalls: (traceData.toolCalls || []).map(
+                            (tc: {
+                                toolKey: string;
+                                inputJson: Record<string, unknown>;
+                                outputJson?: unknown;
+                                success: boolean;
+                                error?: string;
+                                durationMs?: number;
+                            }) => ({
+                                name: tc.toolKey,
+                                input: tc.inputJson as Record<string, unknown>,
+                                output: tc.outputJson,
+                                success: tc.success,
+                                error: tc.error,
+                                durationMs: tc.durationMs
+                            })
+                        ),
+                        tokens: traceData.tokensJson || baseTrace.tokens,
+                        scores: traceData.scoresJson || {}
+                    };
+                    setSelectedTrace(detailedTrace);
+                } else {
+                    setSelectedTrace(baseTrace);
+                }
+            } catch (err) {
+                console.error("Failed to load trace details:", err);
+                setSelectedTrace(baseTrace);
+            }
+        },
+        [agentSlug]
+    );
 
     useEffect(() => {
-        setTimeout(() => {
-            setTraces(mockTraces);
-            setSelectedTrace(mockTraces[0]);
-            setLoading(false);
-        }, 500);
-    }, [agentSlug]);
+        fetchTraces();
+    }, [fetchTraces]);
 
     const handleCopyTrace = async () => {
         if (!selectedTrace) return;
@@ -239,6 +236,73 @@ export default function TracesPage() {
         setTimeout(() => setCopyStatus("idle"), 2000);
     };
 
+    const handleTraceSelect = (trace: Trace) => {
+        loadTraceDetails(trace.runId, trace);
+        // Reset time travel when changing traces
+        setTimeTravelEnabled(false);
+        setTimeTravelStep(0);
+        setIsPlaying(false);
+    };
+
+    // Toggle time travel mode
+    const handleTimeTravelToggle = () => {
+        if (timeTravelEnabled) {
+            // Exiting time travel - show all steps
+            setTimeTravelEnabled(false);
+            setIsPlaying(false);
+        } else {
+            // Entering time travel - start at step 0
+            setTimeTravelEnabled(true);
+            setTimeTravelStep(0);
+            setIsPlaying(false);
+        }
+    };
+
+    // Time travel controls
+    const handleStepForward = () => {
+        if (selectedTrace && timeTravelStep < selectedTrace.steps.length) {
+            setTimeTravelStep((prev) => prev + 1);
+        }
+    };
+
+    const handleStepBackward = () => {
+        if (timeTravelStep > 0) {
+            setTimeTravelStep((prev) => prev - 1);
+        }
+    };
+
+    const handlePlayPause = () => {
+        setIsPlaying((prev) => !prev);
+    };
+
+    const handleReset = () => {
+        setTimeTravelStep(0);
+        setIsPlaying(false);
+    };
+
+    // Auto-play effect
+    useEffect(() => {
+        if (!isPlaying || !selectedTrace) return;
+
+        const maxStep = selectedTrace.steps.length;
+        if (timeTravelStep >= maxStep) {
+            setIsPlaying(false);
+            return;
+        }
+
+        const timer = setTimeout(() => {
+            setTimeTravelStep((prev) => prev + 1);
+        }, 1000); // 1 second per step
+
+        return () => clearTimeout(timer);
+    }, [isPlaying, timeTravelStep, selectedTrace]);
+
+    // Get visible steps based on time travel mode
+    const visibleSteps =
+        timeTravelEnabled && selectedTrace
+            ? selectedTrace.steps.slice(0, timeTravelStep)
+            : selectedTrace?.steps || [];
+
     if (loading) {
         return (
             <div className="space-y-6">
@@ -247,6 +311,25 @@ export default function TracesPage() {
                     <Skeleton className="h-96" />
                     <Skeleton className="h-96" />
                 </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Trace Explorer</h1>
+                    <p className="text-muted-foreground">
+                        Deep dive into execution traces with time-travel debugging
+                    </p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchTraces}>Retry</Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -261,7 +344,13 @@ export default function TracesPage() {
                         Deep dive into execution traces with time-travel debugging
                     </p>
                 </div>
-                <Button variant="outline">Time Travel Mode</Button>
+                <Button
+                    variant={timeTravelEnabled ? "default" : "outline"}
+                    onClick={handleTimeTravelToggle}
+                    disabled={!selectedTrace || selectedTrace.steps.length === 0}
+                >
+                    {timeTravelEnabled ? "⏹ Exit Time Travel" : "⏱ Time Travel Mode"}
+                </Button>
             </div>
 
             {/* Search */}
@@ -290,9 +379,9 @@ export default function TracesPage() {
                             {traces.map((trace) => (
                                 <div
                                     key={trace.id}
-                                    onClick={() => setSelectedTrace(trace)}
+                                    onClick={() => handleTraceSelect(trace)}
                                     className={`cursor-pointer rounded-lg border p-3 transition-colors ${
-                                        selectedTrace?.id === trace.id
+                                        selectedTrace?.runId === trace.runId
                                             ? "border-primary bg-primary/5"
                                             : "hover:bg-muted/50"
                                     }`}
@@ -393,41 +482,136 @@ export default function TracesPage() {
                                     </div>
                                 </div>
 
+                                {/* Time Travel Controls */}
+                                {timeTravelEnabled && (
+                                    <div className="bg-primary/10 border-primary/30 rounded-lg border p-4">
+                                        <div className="mb-3 flex items-center justify-between">
+                                            <p className="text-sm font-medium">
+                                                ⏱ Time Travel Mode
+                                            </p>
+                                            <p className="text-muted-foreground text-xs">
+                                                Step {timeTravelStep} / {selectedTrace.steps.length}
+                                            </p>
+                                        </div>
+                                        {/* Progress bar */}
+                                        <div className="bg-muted mb-3 h-2 w-full overflow-hidden rounded-full">
+                                            <div
+                                                className="bg-primary h-full transition-all duration-300"
+                                                style={{
+                                                    width:
+                                                        selectedTrace.steps.length > 0
+                                                            ? `${(timeTravelStep / selectedTrace.steps.length) * 100}%`
+                                                            : "0%"
+                                                }}
+                                            />
+                                        </div>
+                                        {/* Controls */}
+                                        <div className="flex items-center justify-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleReset}
+                                                disabled={timeTravelStep === 0}
+                                            >
+                                                ⏮ Reset
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleStepBackward}
+                                                disabled={timeTravelStep === 0}
+                                            >
+                                                ◀ Back
+                                            </Button>
+                                            <Button
+                                                variant={isPlaying ? "destructive" : "default"}
+                                                size="sm"
+                                                onClick={handlePlayPause}
+                                                disabled={
+                                                    timeTravelStep >= selectedTrace.steps.length
+                                                }
+                                            >
+                                                {isPlaying ? "⏸ Pause" : "▶ Play"}
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={handleStepForward}
+                                                disabled={
+                                                    timeTravelStep >= selectedTrace.steps.length
+                                                }
+                                            >
+                                                Next ▶
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+
                                 {/* Execution Timeline */}
                                 <div>
-                                    <p className="mb-2 text-sm font-medium">Execution Timeline</p>
+                                    <p className="mb-2 text-sm font-medium">
+                                        Execution Timeline
+                                        {timeTravelEnabled && (
+                                            <span className="text-muted-foreground ml-2 text-xs">
+                                                (showing {visibleSteps.length} of{" "}
+                                                {selectedTrace.steps.length} steps)
+                                            </span>
+                                        )}
+                                    </p>
                                     <div className="space-y-2">
-                                        {selectedTrace.steps.map((step) => {
-                                            const config = stepConfig[step.type];
-                                            return (
-                                                <div
-                                                    key={step.step}
-                                                    className={`rounded-lg border p-3 ${config.color}`}
-                                                >
-                                                    <div className="mb-1 flex items-center justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <span>{config.icon}</span>
-                                                            <span className="text-sm font-medium">
-                                                                Step {step.step}: {config.label}
-                                                            </span>
+                                        {visibleSteps.length === 0 && timeTravelEnabled ? (
+                                            <div className="text-muted-foreground rounded-lg border py-4 text-center text-sm">
+                                                Click &quot;Next&quot; or &quot;Play&quot; to step
+                                                through the execution
+                                            </div>
+                                        ) : (
+                                            visibleSteps.map((step, index) => {
+                                                const config = stepConfig[step.type];
+                                                const isLatestStep =
+                                                    timeTravelEnabled &&
+                                                    index === visibleSteps.length - 1;
+                                                return (
+                                                    <div
+                                                        key={step.step}
+                                                        className={`rounded-lg border p-3 transition-all ${config.color} ${
+                                                            isLatestStep
+                                                                ? "ring-primary ring-offset-background ring-2 ring-offset-2"
+                                                                : ""
+                                                        }`}
+                                                    >
+                                                        <div className="mb-1 flex items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <span>{config.icon}</span>
+                                                                <span className="text-sm font-medium">
+                                                                    Step {step.step}: {config.label}
+                                                                </span>
+                                                                {isLatestStep && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        className="text-xs"
+                                                                    >
+                                                                        Current
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                            <div className="flex items-center gap-2 text-xs opacity-70">
+                                                                {step.durationMs && (
+                                                                    <span>{step.durationMs}ms</span>
+                                                                )}
+                                                                <span>
+                                                                    {new Date(
+                                                                        step.timestamp
+                                                                    ).toLocaleTimeString()}
+                                                                </span>
+                                                            </div>
                                                         </div>
-                                                        <div className="flex items-center gap-2 text-xs opacity-70">
-                                                            {step.durationMs && (
-                                                                <span>{step.durationMs}ms</span>
-                                                            )}
-                                                            <span>
-                                                                {new Date(
-                                                                    step.timestamp
-                                                                ).toLocaleTimeString()}
-                                                            </span>
-                                                        </div>
+                                                        <p className="text-sm opacity-90">
+                                                            {step.content}
+                                                        </p>
                                                     </div>
-                                                    <p className="text-sm opacity-90">
-                                                        {step.content}
-                                                    </p>
-                                                </div>
-                                            );
-                                        })}
+                                                );
+                                            })
+                                        )}
                                     </div>
                                 </div>
 

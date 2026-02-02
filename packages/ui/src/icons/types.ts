@@ -33,7 +33,15 @@ export type IconName =
     | "tick"
     | "cancel"
     | "delete"
-    | "refresh";
+    | "refresh"
+    | "test-tube"
+    | "play-circle"
+    | "analytics"
+    | "activity"
+    | "chart-evaluation"
+    | "dollar"
+    | "git-branch"
+    | "shield";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

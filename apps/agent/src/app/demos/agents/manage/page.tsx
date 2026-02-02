@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -176,7 +177,7 @@ function AgentManagePageContent() {
     // Fetch stored agents
     const fetchStoredAgents = useCallback(async () => {
         try {
-            const res = await fetch("/api/agents");
+            const res = await fetch(`${getApiBase()}/api/agents`);
             const data = await res.json();
             if (data.success) {
                 setStoredAgents(data.agents);
@@ -191,7 +192,7 @@ function AgentManagePageContent() {
     // Fetch available tools, models, and scorers
     const fetchToolsAndModels = useCallback(async () => {
         try {
-            const res = await fetch("/api/agents/tools");
+            const res = await fetch(`${getApiBase()}/api/agents/tools`);
             const data = await res.json();
             if (data.success) {
                 setAvailableTools(data.tools);
@@ -209,7 +210,7 @@ function AgentManagePageContent() {
     const createAgent = async () => {
         setLoading((prev) => ({ ...prev, action: true }));
         try {
-            const res = await fetch("/api/agents", {
+            const res = await fetch(`${getApiBase()}/api/agents`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(formData)
@@ -236,7 +237,7 @@ function AgentManagePageContent() {
         if (!selectedAgent) return;
         setLoading((prev) => ({ ...prev, action: true }));
         try {
-            const res = await fetch(`/api/agents/${selectedAgent.id}`, {
+            const res = await fetch(`${getApiBase()}/api/agents/${selectedAgent.id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(formData)
@@ -261,7 +262,7 @@ function AgentManagePageContent() {
     const deleteAgent = async (id: string) => {
         setLoading((prev) => ({ ...prev, action: true }));
         try {
-            const res = await fetch(`/api/agents/${id}`, {
+            const res = await fetch(`${getApiBase()}/api/agents/${id}`, {
                 method: "DELETE"
             });
             const data = await res.json();
@@ -284,7 +285,7 @@ function AgentManagePageContent() {
     // Fetch full agent details (list endpoint returns partial data)
     const fetchAgentDetails = useCallback(async (agentId: string) => {
         try {
-            const res = await fetch(`/api/agents/${agentId}`);
+            const res = await fetch(`${getApiBase()}/api/agents/${agentId}`);
             const data = await res.json();
             if (data.success && data.agent) {
                 setSelectedAgent(data.agent);
@@ -306,7 +307,7 @@ function AgentManagePageContent() {
         setTestOutput(null);
 
         try {
-            const res = await fetch(`/api/agents/${selectedAgent.id}/test`, {
+            const res = await fetch(`${getApiBase()}/api/agents/${selectedAgent.id}/test`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: testInput })
@@ -357,7 +358,7 @@ function AgentManagePageContent() {
     const loadAgentForEdit = async (agent: StoredAgent) => {
         // Fetch full agent data since the list endpoint doesn't include all fields
         try {
-            const res = await fetch(`/api/agents/${agent.id}`);
+            const res = await fetch(`${getApiBase()}/api/agents/${agent.id}`);
             const data = await res.json();
             if (!data.success || !data.agent) {
                 alert("Failed to load agent details");
@@ -1373,7 +1374,9 @@ function AgentManagePageContent() {
 
 export default function AgentManagePage() {
     return (
-        <Suspense fallback={<div className="flex h-full items-center justify-center">Loading...</div>}>
+        <Suspense
+            fallback={<div className="flex h-full items-center justify-center">Loading...</div>}
+        >
             <AgentManagePageContent />
         </Suspense>
     );

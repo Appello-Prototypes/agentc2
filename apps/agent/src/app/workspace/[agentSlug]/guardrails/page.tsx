@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,
@@ -19,6 +19,7 @@ import {
     TabsList,
     TabsTrigger
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface GuardrailConfig {
     input: {
@@ -53,6 +54,12 @@ interface GuardrailEvent {
     timestamp: string;
 }
 
+interface EventSummary {
+    blocked: number;
+    modified: number;
+    flagged: number;
+}
+
 const defaultConfig: GuardrailConfig = {
     input: {
         topicFiltering: { enabled: true, blockedTopics: ["violence", "illegal activities"] },
@@ -77,50 +84,98 @@ const defaultConfig: GuardrailConfig = {
     }
 };
 
-const mockEvents: GuardrailEvent[] = [
-    {
-        id: "evt-1",
-        type: "blocked",
-        guardrail: "Topic Filtering",
-        reason: "Request contained blocked topic: violence",
-        input: "How to [blocked content]...",
-        timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString()
-    },
-    {
-        id: "evt-2",
-        type: "modified",
-        guardrail: "PII Detection",
-        reason: "Email address masked in input",
-        input: "Contact me at [MASKED]@example.com",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString()
-    },
-    {
-        id: "evt-3",
-        type: "flagged",
-        guardrail: "Toxicity Filter",
-        reason: "Output flagged for review (score: 0.72)",
-        input: "Respond aggressively to this complaint...",
-        timestamp: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString()
-    }
-];
-
 export default function GuardrailsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [config, setConfig] = useState<GuardrailConfig>(defaultConfig);
     const [events, setEvents] = useState<GuardrailEvent[]>([]);
+    const [eventSummary, setEventSummary] = useState<EventSummary>({
+        blocked: 0,
+        modified: 0,
+        flagged: 0
+    });
     const [activeTab, setActiveTab] = useState("input");
     const [hasChanges, setHasChanges] = useState(false);
 
-    useEffect(() => {
-        setTimeout(() => {
-            setConfig(defaultConfig);
-            setEvents(mockEvents);
+    const fetchGuardrails = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Fetch guardrail config and events in parallel
+            const [configRes, eventsRes] = await Promise.all([
+                fetch(`${getApiBase()}/api/agents/${agentSlug}/guardrails`),
+                fetch(`${getApiBase()}/api/agents/${agentSlug}/guardrails/events`)
+            ]);
+
+            const [configResult, eventsResult] = await Promise.all([
+                configRes.json(),
+                eventsRes.json()
+            ]);
+
+            // Handle guardrail config
+            if (configResult.success && configResult.guardrailConfig?.configJson) {
+                setConfig(configResult.guardrailConfig.configJson as GuardrailConfig);
+            }
+
+            // Handle events
+            if (eventsResult.success) {
+                const transformedEvents: GuardrailEvent[] = eventsResult.events.map(
+                    (e: {
+                        id: string;
+                        type: string;
+                        guardrailKey: string;
+                        reason: string;
+                        inputSnippet?: string;
+                        createdAt: string;
+                    }) => ({
+                        id: e.id,
+                        type: e.type.toLowerCase() as "blocked" | "modified" | "flagged",
+                        guardrail: e.guardrailKey,
+                        reason: e.reason,
+                        input: e.inputSnippet || "",
+                        timestamp: e.createdAt
+                    })
+                );
+                setEvents(transformedEvents);
+                setEventSummary(eventsResult.summary || { blocked: 0, modified: 0, flagged: 0 });
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load guardrails");
+        } finally {
             setLoading(false);
-        }, 500);
+        }
     }, [agentSlug]);
+
+    const saveConfig = async () => {
+        try {
+            setSaving(true);
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/guardrails`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ configJson: config })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || "Failed to save guardrails");
+            }
+
+            setHasChanges(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to save guardrails");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchGuardrails();
+    }, [fetchGuardrails]);
 
     if (loading) {
         return (
@@ -131,10 +186,29 @@ export default function GuardrailsPage() {
         );
     }
 
+    if (error && !config) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Guardrails</h1>
+                    <p className="text-muted-foreground">
+                        Safety controls, content filtering, and execution limits
+                    </p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchGuardrails}>Retry</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     const stats = {
-        blocked: events.filter((e) => e.type === "blocked").length,
-        modified: events.filter((e) => e.type === "modified").length,
-        flagged: events.filter((e) => e.type === "flagged").length
+        blocked: eventSummary.blocked,
+        modified: eventSummary.modified,
+        flagged: eventSummary.flagged
     };
 
     return (
@@ -162,7 +236,9 @@ export default function GuardrailsPage() {
                     >
                         Reset
                     </Button>
-                    <Button disabled={!hasChanges}>Save Changes</Button>
+                    <Button disabled={!hasChanges || saving} onClick={saveConfig}>
+                        {saving ? "Saving..." : "Save Changes"}
+                    </Button>
                 </div>
             </div>
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -23,77 +24,82 @@ import {
 } from "@repo/ui";
 
 interface AgentVersion {
+    id: string;
     version: number;
     createdAt: string;
     createdBy: string;
     description: string;
     changes: string[];
     isActive: boolean;
+    modelProvider: string;
+    modelName: string;
     stats: {
         runs: number;
         successRate: number;
         avgQuality: number;
-    };
+    } | null;
 }
-
-const mockVersions: AgentVersion[] = [
-    {
-        version: 4,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(),
-        createdBy: "user@example.com",
-        description: "Updated instructions for better conciseness",
-        changes: [
-            "Reduced verbosity in system instructions",
-            "Added tone guidelines",
-            "Enabled semantic recall"
-        ],
-        isActive: true,
-        stats: { runs: 312, successRate: 94.2, avgQuality: 91 }
-    },
-    {
-        version: 3,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
-        createdBy: "user@example.com",
-        description: "Added new tools and increased max steps",
-        changes: ["Added calendar tool", "Added email tool", "Increased max steps from 3 to 5"],
-        isActive: false,
-        stats: { runs: 523, successRate: 91.8, avgQuality: 87 }
-    },
-    {
-        version: 2,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 14).toISOString(),
-        createdBy: "user@example.com",
-        description: "Switched to Claude Sonnet 4",
-        changes: ["Model changed from gpt-4o to claude-sonnet-4", "Temperature reduced to 0.7"],
-        isActive: false,
-        stats: { runs: 412, successRate: 89.5, avgQuality: 84 }
-    },
-    {
-        version: 1,
-        createdAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30).toISOString(),
-        createdBy: "user@example.com",
-        description: "Initial version",
-        changes: ["Created agent with basic instructions", "Added web-search and calculator tools"],
-        isActive: false,
-        stats: { runs: 156, successRate: 85.2, avgQuality: 79 }
-    }
-];
 
 export default function VersionsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [versions, setVersions] = useState<AgentVersion[]>([]);
     // Store mount time in state (lazy initializer only runs once)
     const [now] = useState(() => Date.now());
 
-    useEffect(() => {
-        setTimeout(() => {
-            setVersions(mockVersions);
+    const fetchVersions = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/versions`);
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to fetch versions");
+            }
+
+            // Transform API response to match our interface
+            const transformedVersions: AgentVersion[] = result.versions.map(
+                (v: {
+                    id: string;
+                    version: number;
+                    description: string;
+                    modelProvider: string;
+                    modelName: string;
+                    changesJson?: string[];
+                    createdBy?: string;
+                    createdAt: string;
+                    isActive: boolean;
+                    stats?: { runs: number; successRate: number; avgQuality: number };
+                }) => ({
+                    id: v.id,
+                    version: v.version,
+                    createdAt: v.createdAt,
+                    createdBy: v.createdBy || "Unknown",
+                    description: v.description || `Version ${v.version}`,
+                    changes: v.changesJson || [],
+                    isActive: v.isActive,
+                    modelProvider: v.modelProvider,
+                    modelName: v.modelName,
+                    stats: v.stats || null
+                })
+            );
+
+            setVersions(transformedVersions);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load versions");
+        } finally {
             setLoading(false);
-        }, 500);
+        }
     }, [agentSlug]);
+
+    useEffect(() => {
+        fetchVersions();
+    }, [fetchVersions]);
 
     if (loading) {
         return (
@@ -104,6 +110,25 @@ export default function VersionsPage() {
                         <Skeleton key={i} className="h-32" />
                     ))}
                 </div>
+            </div>
+        );
+    }
+
+    if (error) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Version History</h1>
+                    <p className="text-muted-foreground">
+                        Track changes, compare versions, and rollback if needed
+                    </p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchVersions}>Retry</Button>
+                    </CardContent>
+                </Card>
             </div>
         );
     }
@@ -147,18 +172,20 @@ export default function VersionsPage() {
                         <div className="grid grid-cols-4 gap-4">
                             <div className="bg-background rounded-lg p-3 text-center">
                                 <p className="text-muted-foreground text-sm">Runs</p>
-                                <p className="text-xl font-bold">{activeVersion.stats.runs}</p>
+                                <p className="text-xl font-bold">
+                                    {activeVersion.stats?.runs ?? 0}
+                                </p>
                             </div>
                             <div className="bg-background rounded-lg p-3 text-center">
                                 <p className="text-muted-foreground text-sm">Success Rate</p>
                                 <p className="text-xl font-bold">
-                                    {activeVersion.stats.successRate}%
+                                    {activeVersion.stats?.successRate ?? 0}%
                                 </p>
                             </div>
                             <div className="bg-background rounded-lg p-3 text-center">
                                 <p className="text-muted-foreground text-sm">Quality</p>
                                 <p className="text-xl font-bold">
-                                    {activeVersion.stats.avgQuality}%
+                                    {activeVersion.stats?.avgQuality ?? 0}%
                                 </p>
                             </div>
                             <div className="bg-background rounded-lg p-3 text-center">
@@ -244,13 +271,13 @@ export default function VersionsPage() {
                                     {/* Stats */}
                                     <div className="mb-3 flex items-center gap-4">
                                         <span className="text-muted-foreground text-xs">
-                                            {version.stats.runs} runs
+                                            {version.stats?.runs ?? 0} runs
                                         </span>
                                         <span className="text-muted-foreground text-xs">
-                                            {version.stats.successRate}% success
+                                            {version.stats?.successRate ?? 0}% success
                                         </span>
                                         <span className="text-muted-foreground text-xs">
-                                            {version.stats.avgQuality}% quality
+                                            {version.stats?.avgQuality ?? 0}% quality
                                         </span>
                                     </div>
 
@@ -329,9 +356,12 @@ export default function VersionsPage() {
                             <tbody>
                                 {versions.map((version, i) => {
                                     const prev = versions[i + 1];
-                                    const qualityDiff = prev
-                                        ? version.stats.avgQuality - prev.stats.avgQuality
-                                        : 0;
+                                    const versionQuality = version.stats?.avgQuality ?? 0;
+                                    const prevQuality = prev?.stats?.avgQuality ?? 0;
+                                    const qualityDiff =
+                                        prev && version.stats && prev.stats
+                                            ? versionQuality - prevQuality
+                                            : 0;
 
                                     return (
                                         <tr
@@ -355,13 +385,13 @@ export default function VersionsPage() {
                                                 </div>
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                {version.stats.runs}
+                                                {version.stats?.runs ?? 0}
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                {version.stats.successRate}%
+                                                {version.stats?.successRate ?? 0}%
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                {version.stats.avgQuality}%
+                                                {version.stats?.avgQuality ?? 0}%
                                             </td>
                                             <td className="px-4 py-3 text-right">
                                                 {qualityDiff !== 0 && (

@@ -17,7 +17,7 @@ import {
 } from "@repo/ui";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { useSession, signOut } from "@repo/auth";
+import { useSession, signOut } from "@repo/auth/client";
 
 export function AppSidebar() {
     const { data: session } = useSession();

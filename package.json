@@ -26,14 +26,30 @@
     "format": "prettier --write .",
     "add-shadcn": "./scripts/add-shadcn.sh",
     "storybook": "turbo storybook",
-    "build-storybook": "turbo build-storybook"
+    "build-storybook": "turbo build-storybook",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:e2e": "vitest run tests/e2e",
+    "test:e2e:playwright": "playwright test",
+    "test:e2e:playwright:ui": "playwright test --ui",
+    "test:e2e:playwright:headed": "playwright test --headed",
+    "test:e2e:playwright:debug": "playwright test --debug"
   },
   "devDependencies": {
+    "@faker-js/faker": "^10.2.0",
+    "@playwright/test": "^1.58.1",
+    "@vitest/coverage-v8": "^4.0.18",
+    "dotenv": "^17.2.3",
     "pg": "^8.18.0",
     "prettier": "^3.8.1",
     "prettier-plugin-prisma": "^5.0.0",
     "prettier-plugin-tailwindcss": "^0.7.2",
     "shadcn": "^3.7.0",
-    "turbo": "^2.3.3"
+    "turbo": "^2.3.3",
+    "vitest": "^4.0.18",
+    "vitest-mock-extended": "^3.1.0"
   }
 }

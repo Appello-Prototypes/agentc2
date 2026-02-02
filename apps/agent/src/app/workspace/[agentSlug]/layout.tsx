@@ -3,7 +3,21 @@
 import { useParams, usePathname, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Badge, Button, Skeleton, cn } from "@repo/ui";
+import {
+    Badge,
+    Button,
+    Skeleton,
+    cn,
+    icons,
+    HugeiconsIcon,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
+} from "@repo/ui";
+import type { IconName } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface Agent {
     id: string;
@@ -16,17 +30,37 @@ interface Agent {
     type: "SYSTEM" | "USER";
 }
 
-const navItems = [
-    { id: "overview", label: "Overview", icon: "📊" },
-    { id: "configure", label: "Configure", icon: "⚙️" },
-    { id: "test", label: "Test", icon: "🧪" },
-    { id: "runs", label: "Runs", icon: "📋" },
-    { id: "analytics", label: "Analytics", icon: "📈" },
-    { id: "traces", label: "Traces", icon: "🔍" },
-    { id: "evaluations", label: "Evaluations", icon: "✅" },
-    { id: "costs", label: "Costs", icon: "💰" },
-    { id: "versions", label: "Versions", icon: "📚" },
-    { id: "guardrails", label: "Guardrails", icon: "🛡️" }
+interface AgentListItem {
+    id: string;
+    slug: string;
+    name: string;
+    isActive: boolean;
+    type: "SYSTEM" | "USER";
+}
+
+/** Format model name for display (e.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4") */
+function formatModelName(modelName: string): string {
+    // Remove date suffix (e.g., -20250514)
+    const withoutDate = modelName.replace(/-\d{8}$/, "");
+    // Split by hyphens and capitalize
+    return withoutDate
+        .split("-")
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+}
+
+const navItems: { id: string; label: string; icon: IconName }[] = [
+    { id: "overview", label: "Overview", icon: "dashboard" },
+    { id: "configure", label: "Configure", icon: "settings" },
+    { id: "test", label: "Test", icon: "test-tube" },
+    { id: "runs", label: "Runs", icon: "play-circle" },
+    { id: "analytics", label: "Analytics", icon: "analytics" },
+    { id: "traces", label: "Traces", icon: "activity" },
+    { id: "evaluations", label: "Evaluations", icon: "chart-evaluation" },
+    { id: "learning", label: "Learning", icon: "ai-network" },
+    { id: "costs", label: "Costs", icon: "dollar" },
+    { id: "versions", label: "Versions", icon: "git-branch" },
+    { id: "guardrails", label: "Guardrails", icon: "shield" }
 ];
 
 export default function AgentWorkspaceLayout({ children }: { children: React.ReactNode }) {
@@ -36,27 +70,46 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
     const agentSlug = params.agentSlug as string;
 
     const [agent, setAgent] = useState<Agent | null>(null);
+    const [allAgents, setAllAgents] = useState<AgentListItem[]>([]);
     const [loading, setLoading] = useState(true);
 
     // Determine active tab from pathname
     const activeTab = pathname.split("/").pop() || "overview";
 
     useEffect(() => {
-        async function fetchAgent() {
+        async function fetchData() {
             try {
-                const res = await fetch(`/api/agents/${agentSlug}`);
-                const data = await res.json();
-                if (data.success && data.agent) {
-                    setAgent(data.agent);
+                // Fetch current agent and all agents in parallel
+                const [agentRes, allAgentsRes] = await Promise.all([
+                    fetch(`${getApiBase()}/api/agents/${agentSlug}`),
+                    fetch(`${getApiBase()}/api/agents`)
+                ]);
+
+                const agentData = await agentRes.json();
+                if (agentData.success && agentData.agent) {
+                    setAgent(agentData.agent);
+                }
+
+                const allAgentsData = await allAgentsRes.json();
+                if (allAgentsData.success && allAgentsData.agents) {
+                    setAllAgents(allAgentsData.agents);
                 }
             } catch (error) {
-                console.error("Failed to fetch agent:", error);
+                console.error("Failed to fetch agent data:", error);
             } finally {
                 setLoading(false);
             }
         }
-        fetchAgent();
+        fetchData();
     }, [agentSlug]);
+
+    // Handle agent switch
+    const handleAgentSwitch = (newSlug: string | null) => {
+        if (newSlug && newSlug !== agentSlug) {
+            // Navigate to the same tab for the new agent
+            router.push(`/workspace/${newSlug}/${activeTab}`);
+        }
+    };
 
     if (loading) {
         return (
@@ -95,49 +148,98 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
         <div className="flex h-screen overflow-hidden">
             {/* Sidebar */}
             <aside className="bg-muted/30 flex w-64 flex-col border-r">
-                {/* Agent Header */}
-                <div className="border-b p-4">
-                    <div className="mb-2 flex items-start justify-between">
-                        <h1 className="truncate text-lg font-bold">{agent.name}</h1>
-                        <Badge
-                            variant={agent.isActive ? "default" : "secondary"}
-                            className="ml-2 shrink-0"
-                        >
-                            {agent.isActive ? "Active" : "Inactive"}
-                        </Badge>
+                {/* Agent Header with Switcher */}
+                <div className="border-b p-3">
+                    {/* Agent Switcher Dropdown */}
+                    <Select value={agentSlug} onValueChange={handleAgentSwitch}>
+                        <SelectTrigger className="mb-2 w-full">
+                            <div className="flex items-center gap-2">
+                                <span
+                                    className={cn(
+                                        "size-2 shrink-0 rounded-full",
+                                        agent.isActive ? "bg-green-500" : "bg-muted-foreground"
+                                    )}
+                                    title={agent.isActive ? "Active" : "Inactive"}
+                                />
+                                <SelectValue placeholder="Select agent">
+                                    <span className="truncate font-medium">{agent.name}</span>
+                                </SelectValue>
+                            </div>
+                        </SelectTrigger>
+                        <SelectContent>
+                            {allAgents.map((a) => (
+                                <SelectItem key={a.slug} value={a.slug}>
+                                    <div className="flex items-center gap-2">
+                                        <span
+                                            className={cn(
+                                                "size-2 shrink-0 rounded-full",
+                                                a.isActive ? "bg-green-500" : "bg-muted-foreground"
+                                            )}
+                                        />
+                                        <span className="truncate">{a.name}</span>
+                                        {a.type === "SYSTEM" && (
+                                            <Badge
+                                                variant="outline"
+                                                className="text-muted-foreground ml-auto h-4 px-1 text-[9px] font-normal"
+                                            >
+                                                System
+                                            </Badge>
+                                        )}
+                                    </div>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+
+                    {/* Model Info */}
+                    <div className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs">
+                        <span className="capitalize">{agent.modelProvider}</span>
+                        <span className="text-muted-foreground/50">·</span>
+                        <span className="truncate" title={agent.modelName}>
+                            {formatModelName(agent.modelName)}
+                        </span>
                     </div>
-                    <p className="text-muted-foreground truncate font-mono text-xs">
-                        {agent.modelProvider}/{agent.modelName}
-                    </p>
+
+                    {/* Type Badge */}
                     {agent.type === "SYSTEM" && (
-                        <Badge variant="outline" className="mt-2 text-xs">
-                            SYSTEM
+                        <Badge
+                            variant="outline"
+                            className="text-muted-foreground h-5 px-1.5 text-[10px] font-normal"
+                        >
+                            System Agent
                         </Badge>
                     )}
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 overflow-y-auto p-2">
-                    {navItems.map((item) => {
-                        const isActive = activeTab === item.id;
-                        const href = `/workspace/${agentSlug}/${item.id}`;
+                <nav className="flex-1 overflow-y-auto px-2 py-1">
+                    <ul className="flex flex-col gap-0.5">
+                        {navItems.map((item) => {
+                            const isActive = activeTab === item.id;
+                            const href = `/workspace/${agentSlug}/${item.id}`;
 
-                        return (
-                            <Link
-                                key={item.id}
-                                href={href}
-                                className={cn(
-                                    "mb-1 flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
-                                    isActive
-                                        ? "bg-primary text-primary-foreground"
-                                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                                )}
-                            >
-                                <span>{item.icon}</span>
-                                <span>{item.label}</span>
-                            </Link>
-                        );
-                    })}
+                            return (
+                                <li key={item.id}>
+                                    <Link
+                                        href={href}
+                                        className={cn(
+                                            "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors",
+                                            isActive
+                                                ? "bg-accent text-accent-foreground font-medium"
+                                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                                        )}
+                                    >
+                                        <HugeiconsIcon
+                                            icon={icons[item.icon]!}
+                                            className="size-4 shrink-0"
+                                            strokeWidth={1.5}
+                                        />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
                 </nav>
 
                 {/* Footer */}

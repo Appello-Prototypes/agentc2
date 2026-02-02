@@ -1,7 +1,10 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { DefaultChatTransport, type ToolUIPart } from "ai";
+import { useChat } from "@ai-sdk/react";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -16,18 +19,29 @@ import {
     Tabs,
     TabsContent,
     TabsList,
-    TabsTrigger
+    TabsTrigger,
+    Conversation,
+    ConversationContent,
+    ConversationEmptyState,
+    ConversationScrollButton,
+    Message,
+    MessageContent,
+    MessageResponse,
+    MessageActions,
+    MessageAction,
+    PromptInput,
+    PromptInputBody,
+    PromptInputTextarea,
+    PromptInputSubmit,
+    PromptInputFooter,
+    Tool,
+    ToolHeader,
+    ToolContent,
+    ToolInput,
+    ToolOutput,
+    Loader
 } from "@repo/ui";
-
-interface Message {
-    id: string;
-    role: "user" | "assistant";
-    content: string;
-    timestamp: string;
-    durationMs?: number;
-    toolCalls?: string[];
-    tokens?: number;
-}
+import { MessageSquareIcon, CopyIcon, RefreshCwIcon, TrashIcon } from "lucide-react";
 
 interface TestCase {
     id: string;
@@ -41,54 +55,16 @@ interface TestCase {
     };
 }
 
-const mockTestCases: TestCase[] = [
-    {
-        id: "tc-1",
-        name: "Weather Query",
-        input: "What's the weather in New York?",
-        expectedOutput: "weather information",
-        lastResult: {
-            passed: true,
-            output: "The weather in New York is...",
-            timestamp: new Date().toISOString()
-        }
-    },
-    {
-        id: "tc-2",
-        name: "Math Calculation",
-        input: "Calculate 15% of 250",
-        expectedOutput: "37.5",
-        lastResult: {
-            passed: true,
-            output: "15% of 250 is 37.5",
-            timestamp: new Date().toISOString()
-        }
-    },
-    {
-        id: "tc-3",
-        name: "Error Handling",
-        input: "Search for [invalid query]",
-        expectedOutput: "error message",
-        lastResult: {
-            passed: false,
-            output: "Unexpected response format",
-            timestamp: new Date().toISOString()
-        }
-    }
-];
-
 export default function TestPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
-    const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const [loading, setLoading] = useState(true);
-    const [sending, setSending] = useState(false);
     const [activeTab, setActiveTab] = useState("chat");
+    const [input, setInput] = useState("");
 
-    // Chat state
-    const [messages, setMessages] = useState<Message[]>([]);
-    const [inputValue, setInputValue] = useState("");
+    // Thread management for isolated test sessions
+    const [threadId, setThreadId] = useState<string>(() => `test-${agentSlug}-${Date.now()}`);
 
     // Context injection
     const [contextVars, setContextVars] = useState({
@@ -98,56 +74,140 @@ export default function TestPage() {
     });
 
     // Test cases
-    const [testCases] = useState<TestCase[]>(mockTestCases);
+    const [testCases, setTestCases] = useState<TestCase[]>([]);
     const [runningTests, setRunningTests] = useState(false);
+    const [runningTestId, setRunningTestId] = useState<string | null>(null);
 
-    useEffect(() => {
-        setTimeout(() => setLoading(false), 500);
+    // Use the AI SDK's useChat hook for streaming
+    const { messages, setMessages, sendMessage, status, regenerate, stop } = useChat({
+        transport: new DefaultChatTransport({
+            api: `${getApiBase()}/api/agents/${agentSlug}/chat`,
+            body: {
+                threadId,
+                requestContext: contextVars
+            }
+        })
+    });
+
+    // Fetch test cases from API
+    const fetchTestCases = useCallback(async () => {
+        try {
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/test-cases`);
+            const result = await response.json();
+            if (result.success) {
+                setTestCases(
+                    result.testCases.map(
+                        (tc: {
+                            id: string;
+                            name: string;
+                            inputText: string;
+                            expectedOutput?: string;
+                            lastRun?: { passed: boolean; createdAt: string };
+                        }) => ({
+                            id: tc.id,
+                            name: tc.name,
+                            input: tc.inputText,
+                            expectedOutput: tc.expectedOutput,
+                            lastResult: tc.lastRun
+                                ? {
+                                      passed: tc.lastRun.passed,
+                                      output: "",
+                                      timestamp: tc.lastRun.createdAt
+                                  }
+                                : undefined
+                        })
+                    )
+                );
+            }
+        } catch (error) {
+            console.error("Failed to fetch test cases:", error);
+        }
     }, [agentSlug]);
 
     useEffect(() => {
-        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-    }, [messages]);
-
-    const sendMessage = async () => {
-        if (!inputValue.trim() || sending) return;
-
-        const userMessage: Message = {
-            id: `msg-${Date.now()}`,
-            role: "user",
-            content: inputValue,
-            timestamp: new Date().toISOString()
+        const init = async () => {
+            await fetchTestCases();
+            setLoading(false);
         };
+        init();
+    }, [fetchTestCases]);
 
-        setMessages((prev) => [...prev, userMessage]);
-        setInputValue("");
-        setSending(true);
-
-        // Simulate API call
-        await new Promise((resolve) => setTimeout(resolve, 1500 + Math.random() * 1500));
-
-        const assistantMessage: Message = {
-            id: `msg-${Date.now() + 1}`,
-            role: "assistant",
-            content: `This is a simulated response to: "${userMessage.content}"\n\nIn a real implementation, this would call your agent API and stream the response.`,
-            timestamp: new Date().toISOString(),
-            durationMs: 1500 + Math.floor(Math.random() * 1500),
-            toolCalls: Math.random() > 0.5 ? ["web-search"] : [],
-            tokens: 150 + Math.floor(Math.random() * 200)
-        };
-
-        setMessages((prev) => [...prev, assistantMessage]);
-        setSending(false);
+    const handleSubmit = async () => {
+        if (!input.trim() || status !== "ready") return;
+        sendMessage({ text: input });
+        setInput("");
     };
 
-    const clearChat = () => {
+    const handleClearChat = () => {
         setMessages([]);
+        // Create a new thread for fresh conversation
+        setThreadId(`test-${agentSlug}-${Date.now()}`);
+    };
+
+    const handleCopyMessage = (text: string) => {
+        navigator.clipboard.writeText(text);
+    };
+
+    const runSingleTest = async (testCase: TestCase) => {
+        setRunningTestId(testCase.id);
+        try {
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/test`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    prompt: testCase.input,
+                    requestContext: contextVars
+                })
+            });
+
+            const result = await response.json();
+            const output = result.success ? result.response.text : result.error;
+            const passed = testCase.expectedOutput
+                ? output.toLowerCase().includes(testCase.expectedOutput.toLowerCase())
+                : result.success;
+
+            setTestCases((prev) =>
+                prev.map((tc) =>
+                    tc.id === testCase.id
+                        ? {
+                              ...tc,
+                              lastResult: {
+                                  passed,
+                                  output,
+                                  timestamp: new Date().toISOString()
+                              }
+                          }
+                        : tc
+                )
+            );
+        } catch (error) {
+            setTestCases((prev) =>
+                prev.map((tc) =>
+                    tc.id === testCase.id
+                        ? {
+                              ...tc,
+                              lastResult: {
+                                  passed: false,
+                                  output:
+                                      error instanceof Error
+                                          ? error.message
+                                          : "Test execution failed",
+                                  timestamp: new Date().toISOString()
+                              }
+                          }
+                        : tc
+                )
+            );
+        } finally {
+            setRunningTestId(null);
+        }
     };
 
     const runAllTests = async () => {
         setRunningTests(true);
-        // Simulate running tests
-        await new Promise((resolve) => setTimeout(resolve, 2000));
+        for (const testCase of testCases) {
+            await runSingleTest(testCase);
+        }
         setRunningTests(false);
     };
 
@@ -183,108 +243,209 @@ export default function TestPage() {
                 <TabsContent value="chat">
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-4">
                         {/* Chat Panel */}
-                        <Card className="lg:col-span-3">
+                        <Card className="flex flex-col lg:col-span-3">
                             <CardHeader>
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <CardTitle>Chat Test</CardTitle>
                                         <CardDescription>
-                                            Multi-turn conversation testing
+                                            Multi-turn conversation testing with streaming
                                         </CardDescription>
                                     </div>
-                                    <Button variant="outline" size="sm" onClick={clearChat}>
-                                        Clear Chat
-                                    </Button>
+                                    <div className="flex items-center gap-2">
+                                        {status === "streaming" && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => stop()}
+                                            >
+                                                Stop
+                                            </Button>
+                                        )}
+                                        <Button
+                                            data-testid="clear-chat"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleClearChat}
+                                        >
+                                            <TrashIcon className="mr-1 size-4" />
+                                            Clear Chat
+                                        </Button>
+                                    </div>
                                 </div>
                             </CardHeader>
-                            <CardContent>
-                                {/* Messages */}
-                                <div className="bg-muted/30 mb-4 h-[400px] space-y-4 overflow-y-auto rounded-lg p-4">
-                                    {messages.length === 0 ? (
-                                        <div className="text-muted-foreground py-12 text-center">
-                                            <p>Start a conversation to test the agent</p>
-                                            <p className="mt-2 text-sm">
-                                                Messages will appear here
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        messages.map((msg) => (
-                                            <div
-                                                key={msg.id}
-                                                className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-                                            >
-                                                <div
-                                                    className={`max-w-[80%] rounded-lg p-3 ${
-                                                        msg.role === "user"
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "bg-muted"
-                                                    }`}
-                                                >
-                                                    <p className="text-sm whitespace-pre-wrap">
-                                                        {msg.content}
-                                                    </p>
-                                                    {msg.role === "assistant" && (
-                                                        <div className="mt-2 flex items-center gap-2 text-xs opacity-70">
-                                                            {msg.durationMs && (
-                                                                <span>
-                                                                    {(
-                                                                        msg.durationMs / 1000
-                                                                    ).toFixed(1)}
-                                                                    s
-                                                                </span>
-                                                            )}
-                                                            {msg.tokens && (
-                                                                <span>• {msg.tokens} tokens</span>
-                                                            )}
-                                                            {msg.toolCalls &&
-                                                                msg.toolCalls.length > 0 && (
-                                                                    <span>
-                                                                        • 🔧{" "}
-                                                                        {msg.toolCalls.join(", ")}
-                                                                    </span>
-                                                                )}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                    {sending && (
-                                        <div className="flex justify-start">
-                                            <div className="bg-muted rounded-lg p-3">
-                                                <div className="flex items-center gap-2">
-                                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full" />
-                                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:0.1s]" />
-                                                    <div className="bg-primary h-2 w-2 animate-bounce rounded-full [animation-delay:0.2s]" />
-                                                </div>
-                                            </div>
-                                        </div>
-                                    )}
-                                    <div ref={messagesEndRef} />
-                                </div>
-
-                                {/* Input */}
-                                <div className="flex gap-2">
-                                    <Textarea
-                                        value={inputValue}
-                                        onChange={(e) => setInputValue(e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === "Enter" && !e.shiftKey) {
-                                                e.preventDefault();
-                                                sendMessage();
-                                            }
-                                        }}
-                                        placeholder="Type your message... (Enter to send, Shift+Enter for newline)"
-                                        rows={2}
-                                        className="flex-1"
-                                    />
-                                    <Button
-                                        onClick={sendMessage}
-                                        disabled={sending || !inputValue.trim()}
+                            <CardContent className="flex flex-1 flex-col">
+                                {/* Conversation using AI SDK components */}
+                                <Conversation className="flex-1">
+                                    <ConversationContent
+                                        data-testid="messages-container"
+                                        className="min-h-[400px]"
                                     >
-                                        Send
-                                    </Button>
-                                </div>
+                                        {messages.length === 0 ? (
+                                            <ConversationEmptyState
+                                                icon={<MessageSquareIcon className="size-12" />}
+                                                title="Start a conversation"
+                                                description="Send a message to test the agent's responses. Messages are streamed in real-time."
+                                            />
+                                        ) : (
+                                            messages.map((message, messageIndex) => (
+                                                <div key={message.id} className="space-y-2">
+                                                    {message.parts?.map((part, i) => {
+                                                        // Handle text messages
+                                                        if (part.type === "text") {
+                                                            const isLastAssistantMessage =
+                                                                message.role === "assistant" &&
+                                                                messageIndex ===
+                                                                    messages.length - 1;
+
+                                                            return (
+                                                                <Message
+                                                                    key={`${message.id}-${i}`}
+                                                                    from={message.role}
+                                                                    data-testid={
+                                                                        message.role === "user"
+                                                                            ? "user-message"
+                                                                            : "assistant-message"
+                                                                    }
+                                                                >
+                                                                    <MessageContent>
+                                                                        <MessageResponse>
+                                                                            {part.text}
+                                                                        </MessageResponse>
+                                                                    </MessageContent>
+                                                                    {isLastAssistantMessage &&
+                                                                        status === "ready" && (
+                                                                            <MessageActions>
+                                                                                <MessageAction
+                                                                                    tooltip="Copy"
+                                                                                    onClick={() =>
+                                                                                        handleCopyMessage(
+                                                                                            part.text
+                                                                                        )
+                                                                                    }
+                                                                                >
+                                                                                    <CopyIcon className="size-3" />
+                                                                                </MessageAction>
+                                                                                <MessageAction
+                                                                                    tooltip="Regenerate"
+                                                                                    onClick={() =>
+                                                                                        regenerate()
+                                                                                    }
+                                                                                >
+                                                                                    <RefreshCwIcon className="size-3" />
+                                                                                </MessageAction>
+                                                                            </MessageActions>
+                                                                        )}
+                                                                </Message>
+                                                            );
+                                                        }
+
+                                                        // Handle tool invocations
+                                                        if (part.type?.startsWith("tool-")) {
+                                                            const toolPart = part as ToolUIPart;
+
+                                                            // Hide internal memory management tools from the UI
+                                                            const internalTools = [
+                                                                "updateWorkingMemory",
+                                                                "getWorkingMemory"
+                                                            ];
+                                                            const toolName =
+                                                                toolPart.type?.replace(
+                                                                    "tool-",
+                                                                    ""
+                                                                ) || "";
+                                                            if (internalTools.includes(toolName)) {
+                                                                return null;
+                                                            }
+
+                                                            return (
+                                                                <Tool
+                                                                    key={`${message.id}-${i}`}
+                                                                    defaultOpen={
+                                                                        toolPart.state ===
+                                                                        "output-error"
+                                                                    }
+                                                                >
+                                                                    <ToolHeader
+                                                                        type={toolPart.type}
+                                                                        state={
+                                                                            toolPart.state ||
+                                                                            "output-available"
+                                                                        }
+                                                                    />
+                                                                    <ToolContent>
+                                                                        <ToolInput
+                                                                            input={toolPart.input}
+                                                                        />
+                                                                        <ToolOutput
+                                                                            output={
+                                                                                toolPart.output
+                                                                                    ? JSON.stringify(
+                                                                                          toolPart.output,
+                                                                                          null,
+                                                                                          2
+                                                                                      )
+                                                                                    : undefined
+                                                                            }
+                                                                            errorText={
+                                                                                toolPart.errorText
+                                                                            }
+                                                                        />
+                                                                    </ToolContent>
+                                                                </Tool>
+                                                            );
+                                                        }
+
+                                                        return null;
+                                                    })}
+                                                </div>
+                                            ))
+                                        )}
+
+                                        {/* Loading indicator for streaming */}
+                                        {(status === "submitted" || status === "streaming") &&
+                                            !messages.some(
+                                                (m) =>
+                                                    m.role === "assistant" &&
+                                                    m.parts?.some(
+                                                        (p) => p.type === "text" && p.text
+                                                    )
+                                            ) && <Loader />}
+                                    </ConversationContent>
+                                    <ConversationScrollButton />
+                                </Conversation>
+
+                                {/* Prompt Input using AI SDK components */}
+                                <PromptInput onSubmit={handleSubmit} className="mt-4 border-t pt-4">
+                                    <PromptInputBody>
+                                        <PromptInputTextarea
+                                            data-testid="chat-input"
+                                            value={input}
+                                            onChange={(e) => setInput(e.target.value)}
+                                            placeholder="Type your message... (Press Enter to send, Shift+Enter for new line)"
+                                            disabled={status !== "ready"}
+                                        />
+                                    </PromptInputBody>
+                                    <PromptInputFooter>
+                                        <div className="text-muted-foreground text-xs">
+                                            {status === "streaming" && (
+                                                <span className="text-primary animate-pulse">
+                                                    Streaming response...
+                                                </span>
+                                            )}
+                                            {status === "submitted" && (
+                                                <span className="text-muted-foreground">
+                                                    Processing...
+                                                </span>
+                                            )}
+                                        </div>
+                                        <PromptInputSubmit
+                                            data-testid="send-button"
+                                            status={status}
+                                            disabled={!input.trim()}
+                                        />
+                                    </PromptInputFooter>
+                                </PromptInput>
                             </CardContent>
                         </Card>
 
@@ -339,6 +500,35 @@ export default function TestPage() {
                                 <Button variant="outline" size="sm" className="w-full">
                                     + Add Variable
                                 </Button>
+
+                                {/* Thread Info */}
+                                <div className="border-t pt-4">
+                                    <p className="text-muted-foreground mb-2 text-xs font-medium">
+                                        Session Info
+                                    </p>
+                                    <div className="space-y-1 text-xs">
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Thread:</span>
+                                            <span className="font-mono">
+                                                {threadId.slice(-8)}...
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Messages:</span>
+                                            <span>{messages.length}</span>
+                                        </div>
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Status:</span>
+                                            <Badge
+                                                variant={
+                                                    status === "ready" ? "default" : "secondary"
+                                                }
+                                            >
+                                                {status}
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </div>
                             </CardContent>
                         </Card>
                     </div>
@@ -365,70 +555,86 @@ export default function TestPage() {
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
-                                {testCases.map((tc) => (
-                                    <div
-                                        key={tc.id}
-                                        className="flex items-start gap-4 rounded-lg border p-4"
-                                    >
-                                        <div
-                                            className={`mt-1.5 h-3 w-3 rounded-full ${
-                                                tc.lastResult?.passed
-                                                    ? "bg-green-500"
-                                                    : "bg-red-500"
-                                            }`}
-                                        />
-                                        <div className="flex-1">
-                                            <div className="mb-1 flex items-center gap-2">
-                                                <p className="font-medium">{tc.name}</p>
-                                                <Badge
-                                                    variant={
-                                                        tc.lastResult?.passed
-                                                            ? "default"
-                                                            : "destructive"
-                                                    }
-                                                >
-                                                    {tc.lastResult?.passed ? "Passed" : "Failed"}
-                                                </Badge>
-                                            </div>
-                                            <div className="mt-2 grid grid-cols-2 gap-4">
-                                                <div>
-                                                    <p className="text-muted-foreground mb-1 text-xs">
-                                                        Input
-                                                    </p>
-                                                    <p className="bg-muted rounded p-2 text-sm">
-                                                        {tc.input}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground mb-1 text-xs">
-                                                        Expected Contains
-                                                    </p>
-                                                    <p className="bg-muted rounded p-2 text-sm">
-                                                        {tc.expectedOutput}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                            {tc.lastResult && (
-                                                <div className="mt-2">
-                                                    <p className="text-muted-foreground mb-1 text-xs">
-                                                        Last Output
-                                                    </p>
-                                                    <p className="bg-muted line-clamp-2 rounded p-2 text-sm">
-                                                        {tc.lastResult.output}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col gap-1">
-                                            <Button variant="ghost" size="sm">
-                                                Run
-                                            </Button>
-                                            <Button variant="ghost" size="sm">
-                                                Edit
-                                            </Button>
-                                        </div>
+                                {testCases.length === 0 ? (
+                                    <div className="text-muted-foreground py-12 text-center">
+                                        <p>No test cases configured</p>
+                                        <p className="mt-2 text-sm">
+                                            Add test cases to run regression tests
+                                        </p>
                                     </div>
-                                ))}
+                                ) : (
+                                    testCases.map((tc) => (
+                                        <div
+                                            key={tc.id}
+                                            className="flex items-start gap-4 rounded-lg border p-4"
+                                        >
+                                            <div
+                                                className={`mt-1.5 h-3 w-3 rounded-full ${
+                                                    tc.lastResult?.passed
+                                                        ? "bg-green-500"
+                                                        : "bg-red-500"
+                                                }`}
+                                            />
+                                            <div className="flex-1">
+                                                <div className="mb-1 flex items-center gap-2">
+                                                    <p className="font-medium">{tc.name}</p>
+                                                    <Badge
+                                                        variant={
+                                                            tc.lastResult?.passed
+                                                                ? "default"
+                                                                : "destructive"
+                                                        }
+                                                    >
+                                                        {tc.lastResult?.passed
+                                                            ? "Passed"
+                                                            : "Failed"}
+                                                    </Badge>
+                                                </div>
+                                                <div className="mt-2 grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <p className="text-muted-foreground mb-1 text-xs">
+                                                            Input
+                                                        </p>
+                                                        <p className="bg-muted rounded p-2 text-sm">
+                                                            {tc.input}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-muted-foreground mb-1 text-xs">
+                                                            Expected Contains
+                                                        </p>
+                                                        <p className="bg-muted rounded p-2 text-sm">
+                                                            {tc.expectedOutput}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                                {tc.lastResult && (
+                                                    <div className="mt-2">
+                                                        <p className="text-muted-foreground mb-1 text-xs">
+                                                            Last Output
+                                                        </p>
+                                                        <p className="bg-muted line-clamp-2 rounded p-2 text-sm">
+                                                            {tc.lastResult.output}
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex flex-col gap-1">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    disabled={runningTestId === tc.id}
+                                                    onClick={() => runSingleTest(tc)}
+                                                >
+                                                    {runningTestId === tc.id ? "Running..." : "Run"}
+                                                </Button>
+                                                <Button variant="ghost" size="sm">
+                                                    Edit
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
                             </div>
                         </CardContent>
                     </Card>

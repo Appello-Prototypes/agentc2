@@ -18,14 +18,65 @@ type AgentRecord = Prisma.AgentGetPayload<{ include: { tools: true } }>;
 type AgentToolRecord = Prisma.AgentToolGetPayload<object>;
 
 /**
- * RequestContext - Injected per-request for dynamic behavior
+ * ResourceContext - User/tenant identification following Mastra patterns
  */
-export interface RequestContext {
+export interface ResourceContext {
     userId?: string;
     userName?: string;
     tenantId?: string;
+}
+
+/**
+ * ThreadContext - Conversation/session thread identification
+ */
+export interface ThreadContext {
+    id?: string;
     sessionId?: string;
+}
+
+/**
+ * RequestContext - Injected per-request for dynamic behavior
+ *
+ * Aligns with Mastra's reserved keys:
+ * - `resource`: Contains user and tenant identifiers
+ * - `thread`: Contains conversation/session identifiers
+ * - `metadata`: Custom key-value pairs for additional context
+ */
+export interface RequestContext {
+    resource?: ResourceContext;
+    thread?: ThreadContext;
     metadata?: Record<string, unknown>;
+
+    // Legacy flat properties for backwards compatibility
+    /** @deprecated Use resource.userId instead */
+    userId?: string;
+    /** @deprecated Use resource.userName instead */
+    userName?: string;
+    /** @deprecated Use resource.tenantId instead */
+    tenantId?: string;
+    /** @deprecated Use thread.sessionId instead */
+    sessionId?: string;
+}
+
+/**
+ * Normalize RequestContext to use Mastra-aligned structure
+ * Handles both legacy flat properties and new nested structure
+ */
+function normalizeRequestContext(context?: RequestContext): RequestContext {
+    if (!context) return {};
+
+    return {
+        resource: {
+            userId: context.resource?.userId || context.userId,
+            userName: context.resource?.userName || context.userName,
+            tenantId: context.resource?.tenantId || context.tenantId
+        },
+        thread: {
+            id: context.thread?.id,
+            sessionId: context.thread?.sessionId || context.sessionId
+        },
+        metadata: context.metadata
+    };
 }
 
 /**
@@ -170,21 +221,50 @@ export class AgentResolver {
      * Interpolate instructions template with RequestContext values
      *
      * Replaces {{key}} placeholders with values from context.
+     * Supports both nested keys (e.g., {{resource.userId}}) and flat keys (e.g., {{userId}}).
      * If a key is not found, the placeholder is kept as-is.
      */
     private interpolateInstructions(template: string, context: RequestContext): string {
-        return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
-            // Check direct context properties
-            if (key in context) {
-                const value = context[key as keyof RequestContext];
-                if (value !== undefined && typeof value !== "object") {
-                    return String(value);
+        // Normalize the context to use Mastra-aligned structure
+        const normalized = normalizeRequestContext(context);
+
+        return template.replace(/\{\{([\w.]+)\}\}/g, (match, key: string) => {
+            // Handle nested keys like resource.userId or thread.id
+            const parts = key.split(".");
+            if (parts.length === 2) {
+                const [parent, child] = parts;
+                if (parent === "resource" && normalized.resource) {
+                    const value = normalized.resource[child as keyof ResourceContext];
+                    if (value !== undefined) {
+                        return String(value);
+                    }
+                }
+                if (parent === "thread" && normalized.thread) {
+                    const value = normalized.thread[child as keyof ThreadContext];
+                    if (value !== undefined) {
+                        return String(value);
+                    }
                 }
             }
 
+            // Handle flat keys (backwards compatibility)
+            // Map to resource context
+            if (key === "userId" && normalized.resource?.userId) {
+                return String(normalized.resource.userId);
+            }
+            if (key === "userName" && normalized.resource?.userName) {
+                return String(normalized.resource.userName);
+            }
+            if (key === "tenantId" && normalized.resource?.tenantId) {
+                return String(normalized.resource.tenantId);
+            }
+            if (key === "sessionId" && normalized.thread?.sessionId) {
+                return String(normalized.thread.sessionId);
+            }
+
             // Check metadata
-            if (context.metadata && key in context.metadata) {
-                const value = context.metadata[key];
+            if (normalized.metadata && key in normalized.metadata) {
+                const value = normalized.metadata[key];
                 if (value !== undefined) {
                     return String(value);
                 }

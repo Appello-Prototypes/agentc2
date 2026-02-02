@@ -1,5 +1,11 @@
 import { Mastra } from "@mastra/core/mastra";
 import { Agent } from "@mastra/core/agent";
+import {
+    Observability,
+    DefaultExporter,
+    SensitiveDataFilter,
+    SamplingStrategyType
+} from "@mastra/observability";
 import { storage } from "./storage";
 import {
     assistantAgent,
@@ -30,6 +36,47 @@ import {
 // Extend global type for Next.js HMR singleton pattern
 declare global {
     var mastraInstance: Mastra | undefined;
+    var observabilityInstance: Observability | undefined;
+}
+
+/**
+ * Build Observability instance for Mastra.
+ * Enables automatic tracing of agent runs, tool calls, and model generations.
+ *
+ * Configuration:
+ * - DefaultExporter: Persists traces to PostgreSQL storage (initialized automatically by Mastra)
+ * - SensitiveDataFilter: Redacts sensitive fields (password, apiKey, token, secret, authorization)
+ * - 100% sampling: All traces are collected
+ */
+function getObservability(): Observability {
+    if (!global.observabilityInstance) {
+        global.observabilityInstance = new Observability({
+            configs: {
+                default: {
+                    serviceName: "mastra-agent-workspace",
+                    sampling: {
+                        type: SamplingStrategyType.ALWAYS
+                    },
+                    exporters: [new DefaultExporter()],
+                    spanOutputProcessors: [
+                        new SensitiveDataFilter({
+                            sensitiveFields: [
+                                "password",
+                                "apiKey",
+                                "token",
+                                "secret",
+                                "authorization",
+                                "api_key",
+                                "access_token",
+                                "refresh_token"
+                            ]
+                        })
+                    ]
+                }
+            }
+        });
+    }
+    return global.observabilityInstance;
 }
 
 /**
@@ -80,10 +127,11 @@ function getMastra(): Mastra {
                 "trip-itinerary-assembly": itineraryAssemblyWorkflow,
                 "trip-budget-approval": budgetApprovalWorkflow
             },
-            storage
+            storage,
+            observability: getObservability()
         });
 
-        console.log("[Mastra] Initialized with agents and workflows");
+        console.log("[Mastra] Initialized with agents, workflows, and observability");
     }
 
     return global.mastraInstance;

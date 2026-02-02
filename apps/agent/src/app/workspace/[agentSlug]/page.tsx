@@ -1,6 +1,11 @@
 import { redirect } from "next/navigation";
 
-export default function AgentWorkspacePage({ params }: { params: { agentSlug: string } }) {
+export default async function AgentWorkspacePage({
+    params
+}: {
+    params: Promise<{ agentSlug: string }>;
+}) {
+    const { agentSlug } = await params;
     // Redirect to overview by default
-    redirect(`/workspace/${params.agentSlug}/overview`);
+    redirect(`/workspace/${agentSlug}/overview`);
 }

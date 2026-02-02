@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,
@@ -25,6 +25,14 @@ import {
     TabsList,
     TabsTrigger
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
+
+interface ModelConfig {
+    thinking?: {
+        type: "enabled" | "disabled";
+        budget_tokens?: number;
+    };
+}
 
 interface Agent {
     id: string;
@@ -45,6 +53,7 @@ interface Agent {
         semanticRecall: { topK: number; messageRange: number } | false;
         workingMemory: { enabled: boolean };
     } | null;
+    modelConfig?: ModelConfig | null;
     scorers: string[];
     isActive: boolean;
     isPublic: boolean;
@@ -52,56 +61,24 @@ interface Agent {
     version: number;
 }
 
-// Mock agent data
-const mockAgent: Agent = {
-    id: "agent-001",
-    slug: "research-assistant",
-    name: "Research Assistant",
-    description: "A helpful research assistant that can search the web and analyze data",
-    instructions: `You are a helpful research assistant. Your primary tasks are:
+interface ModelInfo {
+    provider: string;
+    name: string;
+    displayName: string;
+}
 
-1. Search the web for accurate information
-2. Analyze and synthesize data
-3. Provide clear, well-structured responses
-4. Always cite your sources
+interface ToolInfo {
+    id: string;
+    name: string;
+    description: string;
+    source: string; // "registry" or "mcp:serverName"
+}
 
-Be concise but thorough. If you're unsure about something, say so.`,
-    instructionsTemplate: null,
-    modelProvider: "anthropic",
-    modelName: "claude-sonnet-4-20250514",
-    temperature: 0.7,
-    maxTokens: 4096,
-    maxSteps: 5,
-    tools: ["web-search", "calculator", "calendar"],
-    memoryEnabled: true,
-    memoryConfig: {
-        lastMessages: 10,
-        semanticRecall: { topK: 5, messageRange: 100 },
-        workingMemory: { enabled: true }
-    },
-    scorers: ["helpfulness", "relevancy"],
-    isActive: true,
-    isPublic: false,
-    type: "USER",
-    version: 4
-};
-
-const availableTools = [
-    { id: "web-search", name: "Web Search", description: "Search the web for information" },
-    { id: "calculator", name: "Calculator", description: "Perform mathematical calculations" },
-    { id: "calendar", name: "Calendar", description: "Manage calendar events" },
-    { id: "email", name: "Email", description: "Send and read emails" },
-    { id: "database-query", name: "Database Query", description: "Query databases" },
-    { id: "code-interpreter", name: "Code Interpreter", description: "Execute code" }
-];
-
-const availableScorers = [
-    { id: "helpfulness", name: "Helpfulness", description: "Measures response helpfulness" },
-    { id: "relevancy", name: "Relevancy", description: "Measures response relevancy" },
-    { id: "toxicity", name: "Toxicity", description: "Detects toxic content" },
-    { id: "completeness", name: "Completeness", description: "Measures response completeness" },
-    { id: "tone", name: "Tone", description: "Evaluates response tone" }
-];
+interface ScorerInfo {
+    id: string;
+    name: string;
+    description: string;
+}
 
 export default function ConfigurePage() {
     const params = useParams();
@@ -109,20 +86,159 @@ export default function ConfigurePage() {
 
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [agent, setAgent] = useState<Agent | null>(null);
     const [activeTab, setActiveTab] = useState("basic");
+
+    // Available tools, models, and scorers from API
+    const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+    const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+    const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
+    const [toolsLoading, setToolsLoading] = useState(true);
+
+    // Extended thinking state (for form)
+    const [extendedThinking, setExtendedThinking] = useState(false);
+    const [thinkingBudget, setThinkingBudget] = useState(10000);
 
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
     const [hasChanges, setHasChanges] = useState(false);
 
-    useEffect(() => {
-        setTimeout(() => {
-            setAgent(mockAgent);
-            setFormData(mockAgent);
+    // Fetch available tools, models, and scorers
+    const fetchToolsAndScorers = useCallback(async () => {
+        try {
+            setToolsLoading(true);
+            const res = await fetch(`${getApiBase()}/api/agents/tools`);
+            const data = await res.json();
+            if (data.success) {
+                setAvailableTools(data.tools || []);
+                setAvailableModels(data.models || []);
+                setAvailableScorers(data.scorers || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch tools:", err);
+        } finally {
+            setToolsLoading(false);
+        }
+    }, []);
+
+    const fetchAgent = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}`);
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to fetch agent");
+            }
+
+            // Transform API response to match our interface
+            const agentData = result.agent;
+            const transformedAgent: Agent = {
+                id: agentData.id,
+                slug: agentData.slug,
+                name: agentData.name,
+                description: agentData.description,
+                instructions: agentData.instructions,
+                instructionsTemplate: agentData.instructionsTemplate,
+                modelProvider: agentData.modelProvider,
+                modelName: agentData.modelName,
+                temperature: agentData.temperature ?? 0.7,
+                maxTokens: agentData.maxTokens,
+                maxSteps: agentData.maxSteps ?? 5,
+                tools: (agentData.tools || []).map((t: { toolId: string }) => t.toolId),
+                memoryEnabled: agentData.memoryEnabled ?? false,
+                memoryConfig: agentData.memoryConfig,
+                modelConfig: agentData.modelConfig,
+                scorers: agentData.scorers || [],
+                isActive: agentData.isActive ?? true,
+                isPublic: agentData.isPublic ?? false,
+                type: agentData.type || "USER",
+                version: agentData.version ?? 1
+            };
+
+            // Extract extended thinking settings from modelConfig
+            const modelConfig = agentData.modelConfig as ModelConfig | null;
+            const hasExtendedThinking = modelConfig?.thinking?.type === "enabled";
+            const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
+            setExtendedThinking(hasExtendedThinking);
+            setThinkingBudget(budget);
+
+            setAgent(transformedAgent);
+            setFormData(transformedAgent);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load agent");
+        } finally {
             setLoading(false);
-        }, 500);
+        }
     }, [agentSlug]);
+
+    useEffect(() => {
+        fetchAgent();
+        fetchToolsAndScorers();
+    }, [fetchAgent, fetchToolsAndScorers]);
+
+    // Group tools by source for display
+    const groupToolsBySource = (tools: ToolInfo[]) => {
+        const groups: Record<string, ToolInfo[]> = {};
+        tools.forEach((tool) => {
+            const source = tool.source || "registry";
+            if (!groups[source]) {
+                groups[source] = [];
+            }
+            groups[source].push(tool);
+        });
+        // Sort groups: registry first, then MCP servers alphabetically
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === "registry") return -1;
+            if (b === "registry") return 1;
+            return a.localeCompare(b);
+        });
+        return sortedKeys.map((key) => ({
+            source: key,
+            displayName: key === "registry" ? "Built-in Tools" : key.replace("mcp:", ""),
+            tools: groups[key]
+        }));
+    };
+
+    // Select all tools for a specific source
+    const selectAllToolsForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        const currentTools = formData.tools || [];
+        handleChange("tools", [...new Set([...currentTools, ...sourceToolIds])]);
+    };
+
+    // Deselect all tools for a specific source
+    const deselectAllToolsForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        const currentTools = formData.tools || [];
+        handleChange(
+            "tools",
+            currentTools.filter((t) => !sourceToolIds.includes(t))
+        );
+    };
+
+    // Check if all tools for a source are selected
+    const areAllToolsSelectedForSource = (source: string) => {
+        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+        const currentTools = formData.tools || [];
+        return sourceToolIds.length > 0 && sourceToolIds.every((id) => currentTools.includes(id));
+    };
+
+    // Select all tools
+    const selectAllTools = () => {
+        handleChange(
+            "tools",
+            availableTools.map((t) => t.id)
+        );
+    };
+
+    // Deselect all tools
+    const deselectAllTools = () => {
+        handleChange("tools", []);
+    };
 
     const handleChange = <K extends keyof Agent>(key: K, value: Agent[K]) => {
         setFormData((prev) => ({ ...prev, [key]: value }));
@@ -130,12 +246,69 @@ export default function ConfigurePage() {
     };
 
     const handleSave = async () => {
-        setSaving(true);
-        // Simulate save
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setAgent(formData as Agent);
-        setHasChanges(false);
-        setSaving(false);
+        try {
+            setSaving(true);
+            setError(null);
+
+            // Include extended thinking settings in the request
+            const requestBody = {
+                ...formData,
+                extendedThinking,
+                thinkingBudget
+            };
+
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(requestBody)
+            });
+
+            const result = await response.json();
+
+            if (!result.success) {
+                throw new Error(result.error || "Failed to save agent");
+            }
+
+            // Update agent with new data
+            const agentData = result.agent;
+            const updatedAgent: Agent = {
+                id: agentData.id,
+                slug: agentData.slug,
+                name: agentData.name,
+                description: agentData.description,
+                instructions: agentData.instructions,
+                instructionsTemplate: agentData.instructionsTemplate,
+                modelProvider: agentData.modelProvider,
+                modelName: agentData.modelName,
+                temperature: agentData.temperature ?? 0.7,
+                maxTokens: agentData.maxTokens,
+                maxSteps: agentData.maxSteps ?? 5,
+                tools: (agentData.tools || []).map((t: { toolId: string }) => t.toolId),
+                memoryEnabled: agentData.memoryEnabled ?? false,
+                memoryConfig: agentData.memoryConfig,
+                modelConfig: agentData.modelConfig,
+                scorers: agentData.scorers || [],
+                isActive: agentData.isActive ?? true,
+                isPublic: agentData.isPublic ?? false,
+                type: agentData.type || "USER",
+                version: agentData.version ?? 1
+            };
+
+            // Update extended thinking state from response
+            const modelConfig = agentData.modelConfig as ModelConfig | null;
+            const hasExtendedThinking = modelConfig?.thinking?.type === "enabled";
+            const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
+            setExtendedThinking(hasExtendedThinking);
+            setThinkingBudget(budget);
+
+            setAgent(updatedAgent);
+            setFormData(updatedAgent);
+            setHasChanges(false);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to save agent");
+        } finally {
+            setSaving(false);
+        }
     };
 
     const toggleTool = (toolId: string) => {
@@ -164,6 +337,23 @@ export default function ConfigurePage() {
         );
     }
 
+    if (error && !agent) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Configuration</h1>
+                    <p className="text-muted-foreground">Full agent configuration</p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchAgent}>Retry</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
             {/* Header */}
@@ -175,12 +365,33 @@ export default function ConfigurePage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
+                    {error && (
+                        <Badge variant="destructive" className="mr-2">
+                            {error}
+                        </Badge>
+                    )}
                     {hasChanges && (
                         <Badge variant="outline" className="text-yellow-600">
                             Unsaved Changes
                         </Badge>
                     )}
-                    <Button variant="outline" onClick={() => setFormData(agent as Agent)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => {
+                            if (agent) {
+                                setFormData(agent);
+                                // Reset extended thinking state from agent's modelConfig
+                                const modelConfig = agent.modelConfig as ModelConfig | null;
+                                const hasExtendedThinking =
+                                    modelConfig?.thinking?.type === "enabled";
+                                const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
+                                setExtendedThinking(hasExtendedThinking);
+                                setThinkingBudget(budget);
+                                setHasChanges(false);
+                                setError(null);
+                            }
+                        }}
+                    >
                         Discard
                     </Button>
                     <Button onClick={handleSave} disabled={!hasChanges || saving}>
@@ -295,7 +506,26 @@ export default function ConfigurePage() {
                                     <Label>Provider</Label>
                                     <Select
                                         value={formData.modelProvider}
-                                        onValueChange={(v) => v && handleChange("modelProvider", v)}
+                                        onValueChange={(v) => {
+                                            if (v) {
+                                                handleChange("modelProvider", v);
+                                                // Auto-select first model for new provider
+                                                const providerModels = availableModels.filter(
+                                                    (m) => m.provider === v
+                                                );
+                                                if (providerModels.length > 0) {
+                                                    handleChange(
+                                                        "modelName",
+                                                        providerModels[0].name
+                                                    );
+                                                }
+                                                // Reset extended thinking if switching away from Anthropic
+                                                if (v !== "anthropic") {
+                                                    setExtendedThinking(false);
+                                                    setHasChanges(true);
+                                                }
+                                            }
+                                        }}
                                     >
                                         <SelectTrigger>
                                             <SelectValue />
@@ -311,20 +541,33 @@ export default function ConfigurePage() {
                                     <Label>Model</Label>
                                     <Select
                                         value={formData.modelName}
-                                        onValueChange={(v) => v && handleChange("modelName", v)}
+                                        onValueChange={(v) => {
+                                            if (v) {
+                                                handleChange("modelName", v);
+                                                // Reset extended thinking if switching to non-Claude 4 model
+                                                if (
+                                                    !v.includes("opus-4") &&
+                                                    !v.includes("sonnet-4")
+                                                ) {
+                                                    setExtendedThinking(false);
+                                                    setHasChanges(true);
+                                                }
+                                            }
+                                        }}
                                     >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="claude-sonnet-4-20250514">
-                                                Claude Sonnet 4
-                                            </SelectItem>
-                                            <SelectItem value="claude-opus-4-20250514">
-                                                Claude Opus 4
-                                            </SelectItem>
-                                            <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                                            <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                                            {availableModels
+                                                .filter(
+                                                    (m) => m.provider === formData.modelProvider
+                                                )
+                                                .map((m) => (
+                                                    <SelectItem key={m.name} value={m.name}>
+                                                        {m.name}
+                                                    </SelectItem>
+                                                ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -338,7 +581,7 @@ export default function ConfigurePage() {
                                     <input
                                         type="range"
                                         min="0"
-                                        max="1"
+                                        max="2"
                                         step="0.1"
                                         value={formData.temperature || 0.7}
                                         onChange={(e) =>
@@ -347,23 +590,27 @@ export default function ConfigurePage() {
                                         className="w-full"
                                     />
                                     <p className="text-muted-foreground text-xs">
-                                        Lower = more focused, Higher = more creative
+                                        Lower = more focused, Higher = more creative (0-2)
                                     </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label>Max Tokens</Label>
+                                        <Label>Max Tokens (Output)</Label>
                                         <Input
                                             type="number"
+                                            placeholder="Default (provider limit)"
                                             value={formData.maxTokens || ""}
                                             onChange={(e) =>
                                                 handleChange(
                                                     "maxTokens",
-                                                    parseInt(e.target.value) || null
+                                                    e.target.value ? parseInt(e.target.value) : null
                                                 )
                                             }
                                         />
+                                        <p className="text-muted-foreground text-xs">
+                                            Maximum tokens in response. Leave empty for default.
+                                        </p>
                                     </div>
                                     <div className="space-y-2">
                                         <Label>Max Steps: {formData.maxSteps}</Label>
@@ -377,22 +624,80 @@ export default function ConfigurePage() {
                                             }
                                             className="w-full"
                                         />
+                                        <p className="text-muted-foreground text-xs">
+                                            Maximum tool call iterations per request.
+                                        </p>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* Extended Thinking (Anthropic only) */}
-                            {formData.modelProvider === "anthropic" && (
-                                <div className="bg-muted space-y-4 rounded-lg p-4">
-                                    <div className="flex items-center justify-between">
-                                        <div>
-                                            <Label>Extended Thinking</Label>
-                                            <p className="text-muted-foreground text-xs">
-                                                Enhanced reasoning for complex tasks (Claude 4 only)
-                                            </p>
+                            {/* Extended Thinking (Anthropic Claude 4+ only) */}
+                            {formData.modelProvider === "anthropic" &&
+                                (formData.modelName?.includes("opus-4") ||
+                                    formData.modelName?.includes("sonnet-4")) && (
+                                    <div className="border-primary/20 bg-primary/5 space-y-4 rounded-lg border p-4">
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <Label className="text-base font-medium">
+                                                    Extended Thinking
+                                                </Label>
+                                                <p className="text-muted-foreground text-xs">
+                                                    Enhanced reasoning for complex tasks (Claude 4
+                                                    only)
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                checked={extendedThinking}
+                                                onCheckedChange={(checked) => {
+                                                    setExtendedThinking(checked);
+                                                    setHasChanges(true);
+                                                }}
+                                            />
                                         </div>
-                                        <Switch />
+
+                                        {extendedThinking && (
+                                            <div className="space-y-2 pt-2">
+                                                <Label>
+                                                    Thinking Budget:{" "}
+                                                    {thinkingBudget.toLocaleString()} tokens
+                                                </Label>
+                                                <input
+                                                    type="range"
+                                                    min="1024"
+                                                    max="32000"
+                                                    step="1024"
+                                                    value={thinkingBudget}
+                                                    onChange={(e) => {
+                                                        setThinkingBudget(parseInt(e.target.value));
+                                                        setHasChanges(true);
+                                                    }}
+                                                    className="w-full"
+                                                />
+                                                <p className="text-muted-foreground text-xs">
+                                                    Higher budgets enable more thorough reasoning
+                                                    but increase latency and cost.
+                                                </p>
+                                            </div>
+                                        )}
                                     </div>
+                                )}
+
+                            {/* Provider-specific options hint */}
+                            {formData.modelProvider === "openai" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        💡 OpenAI models support function calling and JSON mode.
+                                        Configure tools in the Tools tab.
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "google" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        💡 Google Gemini models support multimodal inputs and
+                                        function calling.
+                                    </p>
                                 </div>
                             )}
                         </CardContent>
@@ -464,51 +769,118 @@ export default function ConfigurePage() {
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() =>
-                                            handleChange(
-                                                "tools",
-                                                availableTools.map((t) => t.id)
-                                            )
-                                        }
+                                        onClick={selectAllTools}
+                                        disabled={formData.tools?.length === availableTools.length}
                                     >
                                         Select All
                                     </Button>
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        onClick={() => handleChange("tools", [])}
+                                        onClick={deselectAllTools}
+                                        disabled={(formData.tools?.length || 0) === 0}
                                     >
-                                        Clear All
+                                        Deselect All
                                     </Button>
                                 </div>
                             </div>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                {availableTools.map((tool) => (
-                                    <label
-                                        key={tool.id}
-                                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                                            formData.tools?.includes(tool.id)
-                                                ? "border-primary bg-primary/5"
-                                                : "hover:bg-muted/50"
-                                        }`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.tools?.includes(tool.id) || false}
-                                            onChange={() => toggleTool(tool.id)}
-                                            className="mt-1"
-                                        />
-                                        <div>
-                                            <p className="font-medium">{tool.name}</p>
-                                            <p className="text-muted-foreground text-sm">
-                                                {tool.description}
+                            {toolsLoading ? (
+                                <div className="space-y-4">
+                                    <Skeleton className="h-8 w-48" />
+                                    <Skeleton className="h-32 w-full" />
+                                    <Skeleton className="h-8 w-48" />
+                                    <Skeleton className="h-32 w-full" />
+                                </div>
+                            ) : (
+                                <div className="max-h-[500px] space-y-6 overflow-auto">
+                                    {groupToolsBySource(availableTools).map((group) => {
+                                        const selectedCount = group.tools.filter((t) =>
+                                            formData.tools?.includes(t.id)
+                                        ).length;
+                                        const allSelected = areAllToolsSelectedForSource(
+                                            group.source
+                                        );
+                                        return (
+                                            <div key={group.source} className="space-y-3">
+                                                <div className="flex items-center justify-between border-b pb-2">
+                                                    <div className="flex items-center gap-2">
+                                                        <h4 className="font-medium">
+                                                            {group.displayName}
+                                                        </h4>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                        >
+                                                            {selectedCount}/{group.tools.length}
+                                                        </Badge>
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            allSelected
+                                                                ? deselectAllToolsForSource(
+                                                                      group.source
+                                                                  )
+                                                                : selectAllToolsForSource(
+                                                                      group.source
+                                                                  )
+                                                        }
+                                                    >
+                                                        {allSelected
+                                                            ? "Deselect All"
+                                                            : "Select All"}
+                                                    </Button>
+                                                </div>
+                                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                                    {group.tools.map((tool) => (
+                                                        <label
+                                                            key={tool.id}
+                                                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                                formData.tools?.includes(tool.id)
+                                                                    ? "border-primary bg-primary/5"
+                                                                    : "hover:bg-muted/50"
+                                                            }`}
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                checked={
+                                                                    formData.tools?.includes(
+                                                                        tool.id
+                                                                    ) || false
+                                                                }
+                                                                onChange={() => toggleTool(tool.id)}
+                                                                className="mt-0.5"
+                                                            />
+                                                            <div className="min-w-0 flex-1">
+                                                                <p className="text-sm font-medium">
+                                                                    {tool.name}
+                                                                </p>
+                                                                {tool.description && (
+                                                                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                                                        {tool.description}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </label>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                    {availableTools.length === 0 && !toolsLoading && (
+                                        <div className="text-muted-foreground py-8 text-center">
+                                            <p>No tools available</p>
+                                            <p className="mt-1 text-sm">
+                                                Check MCP server connections
                                             </p>
                                         </div>
-                                    </label>
-                                ))}
-                            </div>
+                                    )}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -611,34 +983,50 @@ export default function ConfigurePage() {
                     <Card>
                         <CardHeader>
                             <CardTitle>Evaluation & Scorers</CardTitle>
-                            <CardDescription>Automated quality measurement</CardDescription>
+                            <CardDescription>
+                                Automated quality measurement ({formData.scorers?.length || 0}{" "}
+                                selected)
+                            </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
-                            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                {availableScorers.map((scorer) => (
-                                    <label
-                                        key={scorer.id}
-                                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
-                                            formData.scorers?.includes(scorer.id)
-                                                ? "border-primary bg-primary/5"
-                                                : "hover:bg-muted/50"
-                                        }`}
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={formData.scorers?.includes(scorer.id) || false}
-                                            onChange={() => toggleScorer(scorer.id)}
-                                            className="mt-1"
-                                        />
-                                        <div>
-                                            <p className="font-medium">{scorer.name}</p>
-                                            <p className="text-muted-foreground text-sm">
-                                                {scorer.description}
-                                            </p>
-                                        </div>
-                                    </label>
-                                ))}
-                            </div>
+                            {toolsLoading ? (
+                                <div className="space-y-2">
+                                    <Skeleton className="h-16 w-full" />
+                                    <Skeleton className="h-16 w-full" />
+                                </div>
+                            ) : availableScorers.length > 0 ? (
+                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                    {availableScorers.map((scorer) => (
+                                        <label
+                                            key={scorer.id}
+                                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors ${
+                                                formData.scorers?.includes(scorer.id)
+                                                    ? "border-primary bg-primary/5"
+                                                    : "hover:bg-muted/50"
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    formData.scorers?.includes(scorer.id) || false
+                                                }
+                                                onChange={() => toggleScorer(scorer.id)}
+                                                className="mt-1"
+                                            />
+                                            <div>
+                                                <p className="font-medium">{scorer.name}</p>
+                                                <p className="text-muted-foreground text-sm">
+                                                    {scorer.description}
+                                                </p>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-muted-foreground py-4 text-center text-sm">
+                                    No scorers available
+                                </div>
+                            )}
 
                             <div className="bg-muted rounded-lg p-4">
                                 <p className="mb-2 text-sm font-medium">Sampling Rate</p>

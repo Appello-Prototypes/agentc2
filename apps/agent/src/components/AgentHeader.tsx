@@ -2,7 +2,7 @@
 
 import { AppTopBar } from "@repo/ui";
 import Link from "next/link";
-import { useSession, signOut } from "@repo/auth";
+import { useSession, signOut } from "@repo/auth/client";
 import { usePathname } from "next/navigation";
 
 const navItems = [

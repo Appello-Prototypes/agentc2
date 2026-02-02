@@ -22,6 +22,7 @@
     "@mastra/evals": "^1.0.1",
     "@mastra/mcp": "^1.0.0",
     "@mastra/memory": "latest",
+    "@mastra/observability": "latest",
     "@mastra/pg": "latest",
     "@mastra/rag": "^2.1.0",
     "@mastra/voice-elevenlabs": "^0.12.0",

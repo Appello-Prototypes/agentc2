@@ -78,6 +78,44 @@ enum AgentType {
     USER // User-created, fully editable
 }
 
+// Run Status Enum
+enum RunStatus {
+    QUEUED
+    RUNNING
+    COMPLETED
+    FAILED
+    CANCELLED
+}
+
+// Run Type Enum
+enum RunType {
+    TEST
+    PROD
+    AB
+}
+
+// Alert Severity Enum
+enum AlertSeverity {
+    INFO
+    WARNING
+    CRITICAL
+}
+
+// Alert Source Enum
+enum AlertSource {
+    COST
+    GUARDRAIL
+    EVAL
+    SYSTEM
+}
+
+// Guardrail Event Type Enum
+enum GuardrailEventType {
+    BLOCKED
+    MODIFIED
+    FLAGGED
+}
+
 // Agents - Database-backed agent configurations (Mastra-aligned)
 model Agent {
     id          String  @id @default(cuid())
@@ -111,6 +149,7 @@ model Agent {
 
     // Permissions/tenancy
     type     AgentType @default(USER)
+    tenantId String? // Multi-tenant isolation
     ownerId  String?
     owner    User?     @relation(fields: [ownerId], references: [id])
     isPublic Boolean   @default(false)
@@ -125,11 +164,39 @@ model Agent {
     updatedAt DateTime @updatedAt
     createdBy String?
 
-    // Versioning
-    versions AgentVersion[]
+    // Relations
+    versions               AgentVersion[]
+    runs                   AgentRun[]
+    traces                 AgentTrace[]
+    alerts                 AgentAlert[]
+    evaluations            AgentEvaluation[]
+    feedback               AgentFeedback[]
+    testCases              AgentTestCase[]
+    testRuns               AgentTestRun[]
+    conversations          AgentConversation[]
+    budgetPolicy           BudgetPolicy?
+    costEvents             CostEvent[]
+    costDaily              AgentCostDaily[]
+    modelCostDaily         AgentModelCostDaily[]
+    costRecommendations    CostRecommendation[]
+    guardrailPolicy        GuardrailPolicy?
+    guardrailEvents        GuardrailEvent[]
+    statsDaily             AgentStatsDaily[]
+    metricDaily            AgentMetricDaily[]
+    toolMetricDaily        AgentToolMetricDaily[]
+    modelMetricDaily       AgentModelMetricDaily[]
+    qualityMetricDaily     AgentQualityMetricDaily[]
+    feedbackAggregateDaily AgentFeedbackAggregateDaily[]
+    versionStats           AgentVersionStats[]
+    themes                 EvaluationTheme[]
+    insights               Insight[]
+    learningSessions       LearningSession[]
+    learningMetricDaily    LearningMetricDaily[]
+    learningPolicy         LearningPolicy?
 
     @@index([slug])
     @@index([ownerId])
+    @@index([tenantId])
     @@index([type])
     @@map("agent")
 }
@@ -151,15 +218,22 @@ model AgentVersion {
     id            String   @id @default(cuid())
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
     version       Int
+    description   String?  @db.Text
     instructions  String   @db.Text
     modelProvider String
     modelName     String
-    snapshot      Json // Full agent config at this version
+    changesJson   Json? // Description of changes from previous version
+    snapshot      Json // Full agent config + tool IDs + scorer IDs at this version
     createdAt     DateTime @default(now())
     createdBy     String?
 
+    // Relations
+    versionStats AgentVersionStats[]
+
     @@unique([agentId, version])
+    @@index([agentId, version])
     @@map("agent_version")
 }
 
@@ -273,4 +347,817 @@ model VoiceAgentTrace {
     @@index([timestamp])
     @@index([createdAt])
     @@map("voice_agent_trace")
+}
+
+// ==============================
+// Agent Workspace Models
+// ==============================
+
+// Agent Run - Execution history
+model AgentRun {
+    id               String    @id @default(cuid())
+    agentId          String
+    agent            Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId         String?
+    runType          RunType   @default(PROD)
+    status           RunStatus @default(QUEUED)
+    inputText        String    @db.Text
+    outputText       String?   @db.Text
+    durationMs       Int?
+    startedAt        DateTime  @default(now())
+    completedAt      DateTime?
+    modelProvider    String?
+    modelName        String?
+    versionId        String?
+    promptTokens     Int?
+    completionTokens Int?
+    totalTokens      Int?
+    costUsd          Float?
+    userId           String?
+    createdAt        DateTime  @default(now())
+
+    // Continuous Learning: Experiment linkage for shadow A/B testing
+    experimentId    String? // Links run to active experiment for A/B testing
+    experiment      LearningExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
+    experimentGroup String? // "baseline" or "candidate" - which version this run used
+
+    // Relations
+    trace           AgentTrace?
+    toolCalls       AgentToolCall[]
+    evaluation      AgentEvaluation?
+    feedback        AgentFeedback?
+    costEvent       CostEvent?
+    guardrailEvents GuardrailEvent[]
+    conversation    AgentConversation?
+    testRun         AgentTestRun?
+
+    @@index([agentId, createdAt])
+    @@index([status])
+    @@index([tenantId])
+    @@index([experimentId])
+    @@map("agent_run")
+}
+
+// Agent Trace - Detailed execution trace per run
+model AgentTrace {
+    id         String    @id @default(cuid())
+    runId      String    @unique
+    run        AgentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+    agentId    String
+    agent      Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    status     RunStatus @default(RUNNING)
+    inputText  String    @db.Text
+    outputText String?   @db.Text
+    durationMs Int?
+    stepsJson  Json? // Array of execution steps
+    modelJson  Json? // Model configuration used
+    tokensJson Json? // Token counts
+    scoresJson Json? // Evaluation scores
+    createdAt  DateTime  @default(now())
+
+    // Relations
+    steps     AgentTraceStep[]
+    toolCalls AgentToolCall[]
+
+    @@index([runId])
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("agent_trace")
+}
+
+// Agent Trace Step - Individual execution steps
+model AgentTraceStep {
+    id         String     @id @default(cuid())
+    traceId    String
+    trace      AgentTrace @relation(fields: [traceId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    stepNumber Int
+    type       String // "llm" | "tool" | "memory" | "guardrail"
+    content    Json // Step-specific content
+    timestamp  DateTime   @default(now())
+    durationMs Int?
+
+    @@index([traceId, stepNumber])
+    @@index([tenantId])
+    @@map("agent_trace_step")
+}
+
+// Agent Tool Call - Tool call records
+model AgentToolCall {
+    id          String      @id @default(cuid())
+    runId       String?
+    run         AgentRun?   @relation(fields: [runId], references: [id], onDelete: Cascade)
+    traceId     String?
+    trace       AgentTrace? @relation(fields: [traceId], references: [id], onDelete: Cascade)
+    tenantId    String?
+    toolKey     String
+    mcpServerId String?
+    inputJson   Json?
+    outputJson  Json?
+    success     Boolean     @default(true)
+    error       String?     @db.Text
+    durationMs  Int?
+    createdAt   DateTime    @default(now())
+
+    @@index([runId])
+    @@index([traceId, toolKey])
+    @@index([tenantId])
+    @@map("agent_tool_call")
+}
+
+// Agent Alert - System/budget/guardrail alerts
+model AgentAlert {
+    id         String        @id @default(cuid())
+    agentId    String
+    agent      Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    severity   AlertSeverity @default(INFO)
+    message    String        @db.Text
+    source     AlertSource   @default(SYSTEM)
+    createdAt  DateTime      @default(now())
+    resolvedAt DateTime?
+
+    @@index([agentId, createdAt, severity])
+    @@index([tenantId])
+    @@map("agent_alert")
+}
+
+// Audit Log - All write operations
+model AuditLog {
+    id         String   @id @default(cuid())
+    tenantId   String?
+    actorId    String? // User ID who performed the action
+    action     String // AGENT_CREATE, AGENT_UPDATE, CONFIG_CHANGE, etc.
+    entityType String // Agent, AgentVersion, etc.
+    entityId   String
+    metadata   Json? // Additional context
+    createdAt  DateTime @default(now())
+
+    @@index([tenantId, createdAt])
+    @@index([entityId])
+    @@map("audit_log")
+}
+
+// Agent Evaluation - Evaluation scores per run
+model AgentEvaluation {
+    id            String   @id @default(cuid())
+    runId         String   @unique
+    run           AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+    agentId       String
+    agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
+    scoresJson    Json // {relevancy: 0.9, toxicity: 0.1, ...}
+    scorerVersion String?
+    createdAt     DateTime @default(now())
+
+    @@index([runId])
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("agent_evaluation")
+}
+
+// Agent Feedback - User feedback per run
+model AgentFeedback {
+    id        String   @id @default(cuid())
+    runId     String   @unique
+    run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+    agentId   String
+    agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId  String?
+    thumbs    Boolean? // true = up, false = down
+    rating    Int? // 1-5 scale
+    comment   String?  @db.Text
+    createdAt DateTime @default(now())
+
+    @@index([runId])
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("agent_feedback")
+}
+
+// Agent Test Case - Stored test cases
+model AgentTestCase {
+    id             String   @id @default(cuid())
+    agentId        String
+    agent          Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId       String?
+    name           String
+    inputText      String   @db.Text
+    expectedOutput String?  @db.Text
+    tags           String[] @default([])
+    createdBy      String?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    // Relations
+    testRuns AgentTestRun[]
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("agent_test_case")
+}
+
+// Agent Test Run - Test execution results
+model AgentTestRun {
+    id         String        @id @default(cuid())
+    testCaseId String
+    testCase   AgentTestCase @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+    agentId    String
+    agent      Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    versionId  String?
+    runId      String?       @unique
+    run        AgentRun?     @relation(fields: [runId], references: [id], onDelete: SetNull)
+    outputText String?       @db.Text
+    passed     Boolean?
+    score      Float?
+    durationMs Int?
+    tokens     Int?
+    createdAt  DateTime      @default(now())
+
+    @@index([testCaseId])
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("agent_test_run")
+}
+
+// Agent Conversation - Multi-turn conversation persistence
+model AgentConversation {
+    id           String    @id @default(cuid())
+    agentId      String
+    agent        Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId     String?
+    runId        String?   @unique
+    run          AgentRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
+    messagesJson Json // Array of {role, content, timestamp}
+    createdAt    DateTime  @default(now())
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("agent_conversation")
+}
+
+// Budget Policy - Per-agent budget settings
+model BudgetPolicy {
+    id              String   @id @default(cuid())
+    agentId         String   @unique
+    agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId        String?
+    enabled         Boolean  @default(false)
+    monthlyLimitUsd Float?
+    alertAtPct      Float?   @default(80) // Alert when usage reaches this percentage
+    hardLimit       Boolean  @default(false) // Block runs when limit exceeded
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("budget_policy")
+}
+
+// Cost Event - Token/cost tracking per run
+model CostEvent {
+    id               String   @id @default(cuid())
+    runId            String   @unique
+    run              AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+    agentId          String
+    agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId         String?
+    provider         String
+    modelName        String
+    promptTokens     Int?
+    completionTokens Int?
+    totalTokens      Int?
+    costUsd          Float?
+    createdAt        DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("cost_event")
+}
+
+// Agent Cost Daily - Daily cost rollups
+model AgentCostDaily {
+    id                String   @id @default(cuid())
+    agentId           String
+    agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId          String?
+    date              DateTime @db.Date
+    totalCostUsd      Float    @default(0)
+    promptCostUsd     Float    @default(0)
+    completionCostUsd Float    @default(0)
+    runs              Int      @default(0)
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("agent_cost_daily")
+}
+
+// Agent Model Cost Daily - Cost by model per day
+model AgentModelCostDaily {
+    id        String   @id @default(cuid())
+    agentId   String
+    agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId  String?
+    modelName String
+    date      DateTime @db.Date
+    costUsd   Float    @default(0)
+    tokens    Int      @default(0)
+    runs      Int      @default(0)
+
+    @@unique([agentId, modelName, date])
+    @@index([agentId, modelName, date])
+    @@index([tenantId])
+    @@map("agent_model_cost_daily")
+}
+
+// Cost Recommendation - AI-generated savings tips
+model CostRecommendation {
+    id                  String   @id @default(cuid())
+    agentId             String
+    agent               Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId            String?
+    type                String // "model_switch", "prompt_optimization", etc.
+    title               String
+    description         String   @db.Text
+    estimatedSavingsUsd Float?
+    createdAt           DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("cost_recommendation")
+}
+
+// Guardrail Policy - Per-agent guardrail config
+model GuardrailPolicy {
+    id         String   @id @default(cuid())
+    agentId    String   @unique
+    agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    configJson Json // Full guardrail configuration
+    version    Int      @default(1)
+    createdBy  String?
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("guardrail_policy")
+}
+
+// Guardrail Event - Blocked/modified/flagged events
+model GuardrailEvent {
+    id            String             @id @default(cuid())
+    agentId       String
+    agent         Agent              @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
+    runId         String?
+    run           AgentRun?          @relation(fields: [runId], references: [id], onDelete: SetNull)
+    type          GuardrailEventType
+    guardrailKey  String
+    reason        String             @db.Text
+    inputSnippet  String?            @db.Text
+    outputSnippet String?            @db.Text
+    createdAt     DateTime           @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("guardrail_event")
+}
+
+// Agent Stats Daily - Daily KPI rollups
+model AgentStatsDaily {
+    id              String   @id @default(cuid())
+    agentId         String
+    agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId        String?
+    date            DateTime @db.Date
+    totalRuns       Int      @default(0)
+    successRate     Float?
+    avgDurationMs   Float?
+    avgQualityScore Float?
+    totalCostUsd    Float    @default(0)
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("agent_stats_daily")
+}
+
+// Agent Metric Daily - Performance metrics
+model AgentMetricDaily {
+    id           String   @id @default(cuid())
+    agentId      String
+    agent        Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId     String?
+    date         DateTime @db.Date
+    runs         Int      @default(0)
+    successRate  Float?
+    avgLatencyMs Float?
+    errorRate    Float?
+    qualityScore Float?
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("agent_metric_daily")
+}
+
+// Agent Tool Metric Daily - Tool usage metrics
+model AgentToolMetricDaily {
+    id            String   @id @default(cuid())
+    agentId       String
+    agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
+    toolKey       String
+    date          DateTime @db.Date
+    callCount     Int      @default(0)
+    successRate   Float?
+    avgDurationMs Float?
+
+    @@unique([agentId, toolKey, date])
+    @@index([agentId, toolKey, date])
+    @@index([tenantId])
+    @@map("agent_tool_metric_daily")
+}
+
+// Agent Model Metric Daily - Model comparison metrics
+model AgentModelMetricDaily {
+    id            String   @id @default(cuid())
+    agentId       String
+    agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
+    modelProvider String
+    modelName     String
+    date          DateTime @db.Date
+    runs          Int      @default(0)
+    avgLatencyMs  Float?
+    qualityScore  Float?
+    costUsd       Float    @default(0)
+
+    @@unique([agentId, modelName, date])
+    @@index([agentId, modelName, date])
+    @@index([tenantId])
+    @@map("agent_model_metric_daily")
+}
+
+// Agent Quality Metric Daily - Quality score rollups
+model AgentQualityMetricDaily {
+    id          String   @id @default(cuid())
+    agentId     String
+    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId    String?
+    scorerKey   String
+    date        DateTime @db.Date
+    avgScore    Float?
+    sampleCount Int      @default(0)
+
+    @@unique([agentId, scorerKey, date])
+    @@index([agentId, scorerKey, date])
+    @@index([tenantId])
+    @@map("agent_quality_metric_daily")
+}
+
+// Agent Feedback Aggregate Daily - Feedback summaries
+model AgentFeedbackAggregateDaily {
+    id            String   @id @default(cuid())
+    agentId       String
+    agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId      String?
+    date          DateTime @db.Date
+    positiveCount Int      @default(0)
+    negativeCount Int      @default(0)
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("agent_feedback_aggregate_daily")
+}
+
+// Agent Version Stats - Per-version performance
+model AgentVersionStats {
+    id          String       @id @default(cuid())
+    versionId   String
+    version     AgentVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+    agentId     String
+    agent       Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId    String?
+    runs        Int          @default(0)
+    successRate Float?
+    avgQuality  Float?
+    updatedAt   DateTime     @updatedAt
+
+    @@unique([versionId])
+    @@index([versionId])
+    @@index([tenantId])
+    @@map("agent_version_stats")
+}
+
+// Evaluation Theme - Feedback theme extraction
+model EvaluationTheme {
+    id        String   @id @default(cuid())
+    agentId   String
+    agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId  String?
+    theme     String
+    sentiment String? // "positive", "negative", "neutral"
+    count     Int      @default(0)
+    createdAt DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("evaluation_theme")
+}
+
+// Insight - AI-generated insights
+model Insight {
+    id          String   @id @default(cuid())
+    agentId     String
+    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId    String?
+    type        String // "performance", "cost", "quality", etc.
+    title       String
+    description String   @db.Text
+    createdAt   DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("insight")
+}
+
+// ==============================
+// Closed-Loop Learning Models
+// ==============================
+
+// Learning Session Status Enum
+enum LearningSessionStatus {
+    COLLECTING // Gathering runs for analysis
+    ANALYZING // Extracting signals from runs
+    PROPOSING // Generating improvement proposals
+    TESTING // Running A/B experiments
+    AWAITING_APPROVAL // Waiting for human approval
+    APPROVED // Approved and promoting
+    REJECTED // Rejected by human
+    PROMOTED // Successfully promoted new version
+    FAILED // Failed during processing
+}
+
+// Learning Experiment Status Enum
+enum LearningExperimentStatus {
+    PENDING // Not started
+    RUNNING // A/B test in progress
+    COMPLETED // Test finished
+    PASSED // Candidate beat baseline
+    FAILED // Candidate did not beat baseline
+}
+
+// Learning Signal Type Enum
+enum LearningSignalType {
+    LOW_SCORE // Run scored below threshold
+    TOOL_FAILURE // Tool call failed
+    GUARDRAIL_HIT // Guardrail triggered
+    NEGATIVE_FEEDBACK // User gave negative feedback
+    HIGH_LATENCY // Run took too long
+    ERROR // Run failed with error
+    PATTERN // Detected pattern across runs
+}
+
+// Risk Tier Enum for Continuous Learning
+enum RiskTier {
+    LOW // Safe for auto-promotion (instruction-only edits)
+    MEDIUM // Requires review but not high-risk
+    HIGH // Requires human approval (model/tool/memory changes)
+}
+
+// Learning Session - Orchestrates each closed-loop learning cycle
+model LearningSession {
+    id              String                @id @default(cuid())
+    agentId         String
+    agent           Agent                 @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId        String?
+    status          LearningSessionStatus @default(COLLECTING)
+    runCount        Int                   @default(0) // Number of runs analyzed
+    datasetHash     String? // SHA256 hash of run IDs for provenance
+    baselineVersion Int? // Agent version at start
+    scorerConfig    Json? // Scorer configuration used
+    thresholdsJson  Json? // Gating thresholds for A/B test
+    metadata        Json? // Additional context
+    createdBy       String?
+    createdAt       DateTime              @default(now())
+    updatedAt       DateTime              @updatedAt
+    completedAt     DateTime?
+
+    // Relations
+    dataset     LearningDataset?
+    signals     LearningSignal[]
+    proposals   LearningProposal[]
+    experiments LearningExperiment[]
+    approval    LearningApproval?
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@index([status])
+    @@map("learning_session")
+}
+
+// Learning Dataset - Snapshot of runs used for learning
+model LearningDataset {
+    id                String          @id @default(cuid())
+    sessionId         String          @unique
+    session           LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    tenantId          String?
+    runIds            String[] // Array of AgentRun IDs included
+    selectionCriteria Json? // Criteria used to select runs
+    datasetHash       String // SHA256 hash for reproducibility
+    fromDate          DateTime? // Start of time range
+    toDate            DateTime? // End of time range
+    runCount          Int             @default(0)
+    avgScore          Float? // Average quality score
+    createdAt         DateTime        @default(now())
+
+    @@index([sessionId])
+    @@index([tenantId])
+    @@index([datasetHash])
+    @@map("learning_dataset")
+}
+
+// Learning Signal - Extracted patterns from runs
+model LearningSignal {
+    id           String             @id @default(cuid())
+    sessionId    String
+    session      LearningSession    @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    tenantId     String?
+    type         LearningSignalType
+    severity     String? // "low", "medium", "high"
+    pattern      String             @db.Text // Description of the pattern
+    evidenceJson Json? // Run IDs and specific examples
+    frequency    Int                @default(1) // How often this occurred
+    impact       Float? // Estimated impact score
+    createdAt    DateTime           @default(now())
+
+    @@index([sessionId])
+    @@index([tenantId])
+    @@index([type])
+    @@map("learning_signal")
+}
+
+// Learning Proposal - Proposed changes to improve agent
+model LearningProposal {
+    id                 String          @id @default(cuid())
+    sessionId          String
+    session            LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    tenantId           String?
+    proposalType       String // "instructions", "tools", "memory", "model", "combined"
+    title              String
+    description        String          @db.Text
+    instructionsDiff   String?         @db.Text // Unified diff of instructions change
+    toolChangesJson    Json? // {added: [], removed: [], modified: []}
+    memoryChangesJson  Json? // Changes to memory config
+    modelChangesJson   Json? // Changes to model config
+    expectedImpact     String?         @db.Text // Expected improvement
+    confidenceScore    Float? // 0-1 confidence in proposal
+    generatedBy        String? // "llm", "heuristic", "human"
+    candidateVersionId String? // Created AgentVersion ID if built
+    isSelected         Boolean         @default(false) // Selected for testing
+    createdAt          DateTime        @default(now())
+
+    // Continuous Learning: Risk assessment fields
+    riskTier     RiskTier? // LOW, MEDIUM, HIGH - determines auto-promotion eligibility
+    autoEligible Boolean   @default(false) // Whether this can be auto-promoted
+    riskReasons  Json? // Array of reasons for risk classification
+
+    // Relations
+    experiments LearningExperiment[]
+
+    @@index([sessionId])
+    @@index([tenantId])
+    @@index([riskTier])
+    @@map("learning_proposal")
+}
+
+// Learning Experiment - A/B test configuration and results
+model LearningExperiment {
+    id                 String                   @id @default(cuid())
+    sessionId          String
+    session            LearningSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    proposalId         String
+    proposal           LearningProposal         @relation(fields: [proposalId], references: [id], onDelete: Cascade)
+    tenantId           String?
+    status             LearningExperimentStatus @default(PENDING)
+    baselineVersionId  String? // Current agent version
+    candidateVersionId String? // New version to test
+    testCaseIds        String[] // Test cases used
+    syntheticTestCount Int                      @default(0) // Generated test count
+    baselineMetrics    Json? // {avgScore, successRate, latency, etc.}
+    candidateMetrics   Json? // Same structure as baseline
+    gatingThreshold    Float                    @default(0.5) // Win rate needed
+    winRate            Float? // Candidate win rate
+    confidenceInterval Json? // {lower, upper}
+    gatingResult       String? // "passed", "failed", "inconclusive"
+    startedAt          DateTime?
+    completedAt        DateTime?
+    createdAt          DateTime                 @default(now())
+
+    // Continuous Learning: Real-traffic shadow testing fields
+    trafficSplit      Json? // {baseline: 0.9, candidate: 0.1} - traffic allocation
+    shadowRunCount    Int   @default(0) // Total runs in shadow test
+    baselineRunCount  Int   @default(0) // Runs routed to baseline
+    candidateRunCount Int   @default(0) // Runs routed to candidate
+
+    // Relations
+    runs AgentRun[] // Runs tagged to this experiment
+
+    @@index([sessionId])
+    @@index([proposalId])
+    @@index([tenantId])
+    @@index([status])
+    @@map("learning_experiment")
+}
+
+// Learning Approval - Human or auto decision on proposals
+model LearningApproval {
+    id                String          @id @default(cuid())
+    sessionId         String          @unique
+    session           LearningSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    tenantId          String?
+    decision          String // "approved", "rejected", "deferred", "auto_approved"
+    rationale         String?         @db.Text
+    approvedBy        String? // User ID (null for auto-approval)
+    promotedVersionId String? // New AgentVersion ID if promoted
+    reviewedAt        DateTime?
+    createdAt         DateTime        @default(now())
+
+    // Continuous Learning: Auto-promotion tracking
+    autoApproved Boolean @default(false) // Whether this was auto-approved
+
+    @@index([sessionId])
+    @@index([tenantId])
+    @@index([autoApproved])
+    @@map("learning_approval")
+}
+
+// Learning Policy - Per-agent continuous learning configuration
+model LearningPolicy {
+    id                   String    @id @default(cuid())
+    agentId              String    @unique
+    agent                Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId             String?
+    enabled              Boolean   @default(true) // Master switch for continuous learning
+    autoPromotionEnabled Boolean   @default(false) // Allow auto-promotion for low-risk changes
+    scheduledEnabled     Boolean   @default(true) // Enable scheduled backstop triggers
+    thresholdEnabled     Boolean   @default(true) // Enable signal threshold triggers
+    paused               Boolean   @default(false) // Temporarily pause learning
+    pausedUntil          DateTime? // Auto-resume after this time
+
+    // Thresholds and configuration (can override global defaults)
+    signalThreshold       Int? // Signals needed to trigger session
+    signalWindowMinutes   Int? // Time window for signal accumulation
+    trafficSplitCandidate Float? // Default candidate traffic split (e.g., 0.1 = 10%)
+    minConfidenceForAuto  Float? // Minimum confidence score for auto-promotion
+    minWinRateForAuto     Float? // Minimum win rate for auto-promotion
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    updatedBy String?
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("learning_policy")
+}
+
+// Learning Metric Daily - Daily closed-loop learning KPIs
+model LearningMetricDaily {
+    id                 String   @id @default(cuid())
+    agentId            String
+    agent              Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId           String?
+    date               DateTime @db.Date
+    sessionsStarted    Int      @default(0)
+    sessionsCompleted  Int      @default(0)
+    proposalsGenerated Int      @default(0)
+    proposalsApproved  Int      @default(0)
+    proposalsRejected  Int      @default(0)
+    experimentsRun     Int      @default(0)
+    experimentsPassed  Int      @default(0)
+    versionsPromoted   Int      @default(0)
+    avgImprovementPct  Float? // Average quality improvement
+    evalCoverage       Float? // Percentage of runs evaluated
+
+    // Continuous Learning: Auto vs Manual tracking
+    autoPromotions    Int @default(0) // Promotions via auto-approval
+    manualPromotions  Int @default(0) // Promotions via human approval
+    shadowRunCount    Int @default(0) // Runs in shadow A/B tests
+    baselineRunCount  Int @default(0) // Runs routed to baseline
+    candidateRunCount Int @default(0) // Runs routed to candidate
+    regressionCount   Int @default(0) // Guardrail regressions detected
+    scheduledTriggers Int @default(0) // Sessions started via schedule
+    thresholdTriggers Int @default(0) // Sessions started via signal threshold
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("learning_metric_daily")
 }

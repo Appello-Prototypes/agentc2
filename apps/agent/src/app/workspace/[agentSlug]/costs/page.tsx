@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import {
     Card,
     CardContent,
@@ -14,6 +14,7 @@ import {
     Skeleton,
     Switch
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface CostData {
     totalCost: number;
@@ -34,45 +35,141 @@ interface CostData {
     byDay: number[];
 }
 
-const mockCostData: CostData = {
-    totalCost: 45.67,
-    monthlyBudget: 100,
-    dailyAverage: 3.26,
-    projectedMonthly: 97.8,
-    costPerRun: 0.037,
-    tokenBreakdown: {
-        prompt: { tokens: 892340, cost: 17.85 },
-        completion: { tokens: 1243210, cost: 27.82 }
-    },
-    byModel: [
-        { model: "claude-sonnet-4", runs: 847, tokens: 1856230, cost: 38.45 },
-        { model: "gpt-4o", runs: 312, tokens: 245890, cost: 6.12 },
-        { model: "claude-haiku", runs: 88, tokens: 33430, cost: 1.1 }
-    ],
-    byDay: [2.8, 3.2, 2.9, 3.5, 4.1, 3.2, 2.8, 3.6, 4.2, 3.8, 3.1, 2.9, 3.4, 3.7]
-};
-
 export default function CostsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [error, setError] = useState<string | null>(null);
     const [costData, setCostData] = useState<CostData | null>(null);
     const [budgetSettings, setBudgetSettings] = useState({
-        enabled: true,
+        enabled: false,
         monthlyLimit: 100,
         alertAt: 80,
         hardLimit: false
     });
 
-    useEffect(() => {
-        setTimeout(() => {
-            setCostData(mockCostData);
+    const fetchCostsAndBudget = useCallback(async () => {
+        try {
+            setLoading(true);
+            setError(null);
+
+            // Fetch costs and budget in parallel
+            const [costsRes, budgetRes] = await Promise.all([
+                fetch(`${getApiBase()}/api/agents/${agentSlug}/costs`),
+                fetch(`${getApiBase()}/api/agents/${agentSlug}/budget`)
+            ]);
+
+            const [costsResult, budgetResult] = await Promise.all([
+                costsRes.json(),
+                budgetRes.json()
+            ]);
+
+            if (costsResult.success) {
+                // Calculate derived values
+                const totalCost = costsResult.summary?.totalCostUsd || 0;
+                const runCount = costsResult.summary?.runCount || 0;
+                const byDayData = costsResult.byDay || [];
+                const dailyCosts = byDayData.map((d: { costUsd: number }) => d.costUsd);
+                const dailyAverage =
+                    dailyCosts.length > 0
+                        ? dailyCosts.reduce((a: number, b: number) => a + b, 0) / dailyCosts.length
+                        : 0;
+
+                // Get days remaining in month
+                const now = new Date();
+                const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+                const dayOfMonth = now.getDate();
+                const projectedMonthly = (totalCost / dayOfMonth) * daysInMonth;
+
+                const transformedCostData: CostData = {
+                    totalCost,
+                    monthlyBudget: budgetResult.budgetPolicy?.monthlyLimitUsd || 100,
+                    dailyAverage,
+                    projectedMonthly,
+                    costPerRun: runCount > 0 ? totalCost / runCount : 0,
+                    tokenBreakdown: {
+                        prompt: {
+                            tokens: costsResult.tokenBreakdown?.prompt || 0,
+                            cost:
+                                totalCost *
+                                ((costsResult.tokenBreakdown?.promptPercentage || 40) / 100)
+                        },
+                        completion: {
+                            tokens: costsResult.tokenBreakdown?.completion || 0,
+                            cost:
+                                totalCost *
+                                (1 - (costsResult.tokenBreakdown?.promptPercentage || 40) / 100)
+                        }
+                    },
+                    byModel: (costsResult.byModel || []).map(
+                        (m: { model: string; runs: number; tokens: number; costUsd: number }) => ({
+                            model: m.model,
+                            runs: m.runs,
+                            tokens: m.tokens,
+                            cost: m.costUsd
+                        })
+                    ),
+                    byDay: dailyCosts
+                };
+
+                setCostData(transformedCostData);
+            }
+
+            if (budgetResult.success && budgetResult.budgetPolicy) {
+                setBudgetSettings({
+                    enabled: budgetResult.budgetPolicy.enabled,
+                    monthlyLimit: budgetResult.budgetPolicy.monthlyLimitUsd || 100,
+                    alertAt: budgetResult.budgetPolicy.alertAtPct || 80,
+                    hardLimit: budgetResult.budgetPolicy.hardLimit || false
+                });
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to load costs");
+        } finally {
             setLoading(false);
-        }, 500);
+        }
     }, [agentSlug]);
 
-    if (loading || !costData) {
+    const saveBudgetSettings = async () => {
+        try {
+            setSaving(true);
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/budget`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    enabled: budgetSettings.enabled,
+                    monthlyLimitUsd: budgetSettings.monthlyLimit,
+                    alertAtPct: budgetSettings.alertAt,
+                    hardLimit: budgetSettings.hardLimit
+                })
+            });
+
+            const result = await response.json();
+            if (!result.success) {
+                throw new Error(result.error || "Failed to save budget");
+            }
+
+            // Update cost data with new budget
+            if (costData) {
+                setCostData({
+                    ...costData,
+                    monthlyBudget: budgetSettings.monthlyLimit
+                });
+            }
+        } catch (err) {
+            setError(err instanceof Error ? err.message : "Failed to save budget");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    useEffect(() => {
+        fetchCostsAndBudget();
+    }, [fetchCostsAndBudget]);
+
+    if (loading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-8 w-48" />
@@ -86,7 +183,44 @@ export default function CostsPage() {
         );
     }
 
-    const budgetUsage = (costData.totalCost / costData.monthlyBudget) * 100;
+    if (error && !costData) {
+        return (
+            <div className="space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold">Cost Management</h1>
+                    <p className="text-muted-foreground">
+                        Track spending, set budgets, and optimize costs
+                    </p>
+                </div>
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-destructive mb-4">{error}</p>
+                        <Button onClick={fetchCostsAndBudget}>Retry</Button>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
+    // Use defaults if no cost data
+    const displayCostData = costData || {
+        totalCost: 0,
+        monthlyBudget: budgetSettings.monthlyLimit,
+        dailyAverage: 0,
+        projectedMonthly: 0,
+        costPerRun: 0,
+        tokenBreakdown: {
+            prompt: { tokens: 0, cost: 0 },
+            completion: { tokens: 0, cost: 0 }
+        },
+        byModel: [],
+        byDay: []
+    };
+
+    const budgetUsage =
+        displayCostData.monthlyBudget > 0
+            ? (displayCostData.totalCost / displayCostData.monthlyBudget) * 100
+            : 0;
 
     return (
         <div className="space-y-6">
@@ -124,7 +258,9 @@ export default function CostsPage() {
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>This Month</CardDescription>
-                        <CardTitle className="text-2xl">${costData.totalCost.toFixed(2)}</CardTitle>
+                        <CardTitle className="text-2xl">
+                            ${displayCostData.totalCost.toFixed(2)}
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="flex items-center gap-2">
@@ -145,7 +281,7 @@ export default function CostsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Daily Average</CardDescription>
                         <CardTitle className="text-2xl">
-                            ${costData.dailyAverage.toFixed(2)}
+                            ${displayCostData.dailyAverage.toFixed(2)}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -157,9 +293,9 @@ export default function CostsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Projected Monthly</CardDescription>
                         <CardTitle
-                            className={`text-2xl ${costData.projectedMonthly > costData.monthlyBudget ? "text-red-600" : ""}`}
+                            className={`text-2xl ${displayCostData.projectedMonthly > displayCostData.monthlyBudget ? "text-red-600" : ""}`}
                         >
-                            ${costData.projectedMonthly.toFixed(2)}
+                            ${displayCostData.projectedMonthly.toFixed(2)}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -171,7 +307,7 @@ export default function CostsPage() {
                     <CardHeader className="pb-2">
                         <CardDescription>Cost per Run</CardDescription>
                         <CardTitle className="text-2xl">
-                            ${costData.costPerRun.toFixed(4)}
+                            ${displayCostData.costPerRun.toFixed(4)}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
@@ -188,25 +324,33 @@ export default function CostsPage() {
                         <CardDescription>Last 14 days</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex h-[200px] items-end gap-1">
-                            {costData.byDay.map((cost, i) => (
-                                <div
-                                    key={i}
-                                    className="bg-primary group relative flex-1 rounded-t opacity-80 transition-opacity hover:opacity-100"
-                                    style={{
-                                        height: `${(cost / Math.max(...costData.byDay)) * 100}%`
-                                    }}
-                                >
-                                    <div className="bg-foreground text-background absolute -top-8 left-1/2 -translate-x-1/2 rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
-                                        ${cost.toFixed(2)}
-                                    </div>
+                        {displayCostData.byDay.length > 0 ? (
+                            <>
+                                <div className="flex h-[200px] items-end gap-1">
+                                    {displayCostData.byDay.map((cost, i) => (
+                                        <div
+                                            key={i}
+                                            className="bg-primary group relative flex-1 rounded-t opacity-80 transition-opacity hover:opacity-100"
+                                            style={{
+                                                height: `${(cost / Math.max(...displayCostData.byDay, 1)) * 100}%`
+                                            }}
+                                        >
+                                            <div className="bg-foreground text-background absolute -top-8 left-1/2 -translate-x-1/2 rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
+                                                ${cost.toFixed(2)}
+                                            </div>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
-                        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                            <span>14 days ago</span>
-                            <span>Today</span>
-                        </div>
+                                <div className="text-muted-foreground mt-2 flex justify-between text-xs">
+                                    <span>14 days ago</span>
+                                    <span>Today</span>
+                                </div>
+                            </>
+                        ) : (
+                            <div className="text-muted-foreground flex h-[200px] items-center justify-center">
+                                No cost data available
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -221,38 +365,40 @@ export default function CostsPage() {
                             <div className="flex items-center justify-between">
                                 <span className="text-sm">Prompt Tokens</span>
                                 <span className="font-mono">
-                                    ${costData.tokenBreakdown.prompt.cost.toFixed(2)}
+                                    ${displayCostData.tokenBreakdown.prompt.cost.toFixed(2)}
                                 </span>
                             </div>
                             <div className="bg-muted h-3 overflow-hidden rounded-full">
                                 <div
                                     className="h-full bg-blue-500"
                                     style={{
-                                        width: `${(costData.tokenBreakdown.prompt.cost / costData.totalCost) * 100}%`
+                                        width: `${displayCostData.totalCost > 0 ? (displayCostData.tokenBreakdown.prompt.cost / displayCostData.totalCost) * 100 : 0}%`
                                     }}
                                 />
                             </div>
                             <p className="text-muted-foreground text-xs">
-                                {costData.tokenBreakdown.prompt.tokens.toLocaleString()} tokens
+                                {displayCostData.tokenBreakdown.prompt.tokens.toLocaleString()}{" "}
+                                tokens
                             </p>
                         </div>
                         <div className="space-y-2">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm">Completion Tokens</span>
                                 <span className="font-mono">
-                                    ${costData.tokenBreakdown.completion.cost.toFixed(2)}
+                                    ${displayCostData.tokenBreakdown.completion.cost.toFixed(2)}
                                 </span>
                             </div>
                             <div className="bg-muted h-3 overflow-hidden rounded-full">
                                 <div
                                     className="h-full bg-green-500"
                                     style={{
-                                        width: `${(costData.tokenBreakdown.completion.cost / costData.totalCost) * 100}%`
+                                        width: `${displayCostData.totalCost > 0 ? (displayCostData.tokenBreakdown.completion.cost / displayCostData.totalCost) * 100 : 0}%`
                                     }}
                                 />
                             </div>
                             <p className="text-muted-foreground text-xs">
-                                {costData.tokenBreakdown.completion.tokens.toLocaleString()} tokens
+                                {displayCostData.tokenBreakdown.completion.tokens.toLocaleString()}{" "}
+                                tokens
                             </p>
                         </div>
                     </CardContent>
@@ -267,32 +413,42 @@ export default function CostsPage() {
                         <CardDescription>Breakdown by LLM</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="space-y-4">
-                            {costData.byModel.map((model) => (
-                                <div key={model.model} className="flex items-center gap-4">
-                                    <div className="flex-1">
-                                        <div className="mb-1 flex items-center justify-between">
-                                            <span className="font-mono text-sm">{model.model}</span>
-                                            <span className="font-mono">
-                                                ${model.cost.toFixed(2)}
-                                            </span>
-                                        </div>
-                                        <div className="bg-muted h-2 overflow-hidden rounded-full">
-                                            <div
-                                                className="bg-primary h-full"
-                                                style={{
-                                                    width: `${(model.cost / costData.totalCost) * 100}%`
-                                                }}
-                                            />
-                                        </div>
-                                        <div className="text-muted-foreground mt-1 flex justify-between text-xs">
-                                            <span>{model.runs} runs</span>
-                                            <span>{(model.tokens / 1000).toFixed(0)}K tokens</span>
+                        {displayCostData.byModel.length > 0 ? (
+                            <div className="space-y-4">
+                                {displayCostData.byModel.map((model) => (
+                                    <div key={model.model} className="flex items-center gap-4">
+                                        <div className="flex-1">
+                                            <div className="mb-1 flex items-center justify-between">
+                                                <span className="font-mono text-sm">
+                                                    {model.model}
+                                                </span>
+                                                <span className="font-mono">
+                                                    ${model.cost.toFixed(2)}
+                                                </span>
+                                            </div>
+                                            <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                                <div
+                                                    className="bg-primary h-full"
+                                                    style={{
+                                                        width: `${displayCostData.totalCost > 0 ? (model.cost / displayCostData.totalCost) * 100 : 0}%`
+                                                    }}
+                                                />
+                                            </div>
+                                            <div className="text-muted-foreground mt-1 flex justify-between text-xs">
+                                                <span>{model.runs} runs</span>
+                                                <span>
+                                                    {(model.tokens / 1000).toFixed(0)}K tokens
+                                                </span>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                            ))}
-                        </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-muted-foreground py-4 text-center text-sm">
+                                No model usage data available
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -371,63 +527,18 @@ export default function CostsPage() {
                                     />
                                 </div>
 
-                                <Button className="w-full">Save Budget Settings</Button>
+                                <Button
+                                    className="w-full"
+                                    onClick={saveBudgetSettings}
+                                    disabled={saving}
+                                >
+                                    {saving ? "Saving..." : "Save Budget Settings"}
+                                </Button>
                             </>
                         )}
                     </CardContent>
                 </Card>
             </div>
-
-            {/* Optimization Tips */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Cost Optimization Recommendations</CardTitle>
-                    <CardDescription>AI-generated suggestions to reduce costs</CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                        <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-4">
-                            <div className="mb-2 flex items-center gap-2">
-                                <span className="text-green-600">💡</span>
-                                <span className="font-medium">Switch to Haiku</span>
-                            </div>
-                            <p className="text-muted-foreground text-sm">
-                                34% of your queries are simple lookups. Using Claude Haiku could
-                                save ~$8/month.
-                            </p>
-                            <p className="mt-2 text-xs text-green-600">
-                                Potential savings: $8.20/month
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-4">
-                            <div className="mb-2 flex items-center gap-2">
-                                <span className="text-blue-600">📦</span>
-                                <span className="font-medium">Enable Caching</span>
-                            </div>
-                            <p className="text-muted-foreground text-sm">
-                                18% of web-search queries are repeated. Caching could reduce API
-                                calls.
-                            </p>
-                            <p className="mt-2 text-xs text-blue-600">
-                                Potential savings: $5.40/month
-                            </p>
-                        </div>
-                        <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-4">
-                            <div className="mb-2 flex items-center gap-2">
-                                <span className="text-purple-600">✂️</span>
-                                <span className="font-medium">Reduce Max Tokens</span>
-                            </div>
-                            <p className="text-muted-foreground text-sm">
-                                Average response uses 45% of max tokens. Reducing limit could save
-                                costs.
-                            </p>
-                            <p className="mt-2 text-xs text-purple-600">
-                                Potential savings: $3.10/month
-                            </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
         </div>
     );
 }
