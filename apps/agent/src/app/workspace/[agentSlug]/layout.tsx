@@ -153,7 +153,7 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
                     {/* Agent Switcher Dropdown */}
                     <Select value={agentSlug} onValueChange={handleAgentSwitch}>
                         <SelectTrigger className="mb-2 w-full">
-                            <div className="flex items-center gap-2">
+                            <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                                 <span
                                     className={cn(
                                         "size-2 shrink-0 rounded-full",
@@ -162,11 +162,11 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
                                     title={agent.isActive ? "Active" : "Inactive"}
                                 />
                                 <SelectValue placeholder="Select agent">
-                                    <span className="truncate font-medium">{agent.name}</span>
+                                    <span className="block truncate font-medium">{agent.name}</span>
                                 </SelectValue>
                             </div>
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="w-auto max-w-80 min-w-(--radix-select-trigger-width)">
                             {allAgents.map((a) => (
                                 <SelectItem key={a.slug} value={a.slug}>
                                     <div className="flex items-center gap-2">
@@ -176,11 +176,11 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
                                                 a.isActive ? "bg-green-500" : "bg-muted-foreground"
                                             )}
                                         />
-                                        <span className="truncate">{a.name}</span>
+                                        <span className="whitespace-nowrap">{a.name}</span>
                                         {a.type === "SYSTEM" && (
                                             <Badge
                                                 variant="outline"
-                                                className="text-muted-foreground ml-auto h-4 px-1 text-[9px] font-normal"
+                                                className="text-muted-foreground h-4 shrink-0 px-1 text-[9px] font-normal"
                                             >
                                                 System
                                             </Badge>
