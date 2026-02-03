@@ -74,6 +74,7 @@ jobs:
           script_stop: true
           script: |
             set -euo pipefail
+            export PATH="$HOME/.bun/bin:$PATH"
 
             echo "=========================================="
             echo "Deploying Mastra AI Agent Framework"
@@ -85,8 +86,7 @@ jobs:
             echo ""
             echo "1. Pulling latest code..."
             git fetch origin
-            git checkout main
-            git pull origin main
+            git reset --hard origin/main
 
             echo ""
             echo "2. Installing dependencies..."
