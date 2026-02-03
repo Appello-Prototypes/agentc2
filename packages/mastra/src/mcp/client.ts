@@ -5,6 +5,103 @@ declare global {
 }
 
 /**
+ * Sanitize JSON Schema to fix common issues that cause OpenAI model validation failures.
+ *
+ * Known issues fixed:
+ * - Array properties missing "items" definition (e.g., HubSpot's search-objects tool)
+ * - Empty object schemas
+ *
+ * @param schema - The JSON schema to sanitize
+ * @returns Sanitized schema safe for all LLM providers
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeToolSchema(schema: any): any {
+    if (!schema || typeof schema !== "object") {
+        return schema;
+    }
+
+    // Handle arrays
+    if (Array.isArray(schema)) {
+        return schema.map(sanitizeToolSchema);
+    }
+
+    // Clone the schema to avoid mutations
+    const result = { ...schema };
+
+    // Fix: Array type missing items definition
+    if (result.type === "array" && !result.items) {
+        result.items = { type: "string" }; // Default to string array
+    }
+
+    // Recursively sanitize nested schemas
+    if (result.properties && typeof result.properties === "object") {
+        result.properties = Object.fromEntries(
+            Object.entries(result.properties).map(([key, value]) => [
+                key,
+                sanitizeToolSchema(value)
+            ])
+        );
+    }
+
+    if (result.items && typeof result.items === "object") {
+        result.items = sanitizeToolSchema(result.items);
+    }
+
+    if (result.additionalProperties && typeof result.additionalProperties === "object") {
+        result.additionalProperties = sanitizeToolSchema(result.additionalProperties);
+    }
+
+    // Handle allOf, anyOf, oneOf
+    for (const keyword of ["allOf", "anyOf", "oneOf"]) {
+        if (Array.isArray(result[keyword])) {
+            result[keyword] = result[keyword].map(sanitizeToolSchema);
+        }
+    }
+
+    return result;
+}
+
+/**
+ * Sanitize all tools returned from MCP to ensure schema compatibility with all LLM providers.
+ *
+ * @param tools - Record of tool name to tool instance
+ * @returns Sanitized tools with fixed schemas
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeMcpTools(tools: Record<string, any>): Record<string, any> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sanitized: Record<string, any> = {};
+
+    for (const [name, tool] of Object.entries(tools)) {
+        if (tool && typeof tool === "object") {
+            // Clone the tool
+            const sanitizedTool = { ...tool };
+
+            // Sanitize inputSchema if present
+            if (sanitizedTool.inputSchema) {
+                sanitizedTool.inputSchema = sanitizeToolSchema(sanitizedTool.inputSchema);
+            }
+
+            // Also check for schema property (some tools use this)
+            if (sanitizedTool.schema) {
+                sanitizedTool.schema = sanitizeToolSchema(sanitizedTool.schema);
+            }
+
+            // Check for parameters (another common property name)
+            if (sanitizedTool.parameters) {
+                sanitizedTool.parameters = sanitizeToolSchema(sanitizedTool.parameters);
+            }
+
+            sanitized[name] = sanitizedTool;
+        } else {
+            sanitized[name] = tool;
+        }
+    }
+
+    return sanitized;
+}
+
+/**
  * MCP Server Configuration
  *
  * Defines all available MCP servers and their metadata.
@@ -66,6 +163,38 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
         category: "automation",
         requiresAuth: true,
         envVars: ["ATLAS_N8N_SSE_URL"]
+    },
+    {
+        id: "fathom",
+        name: "Fathom",
+        description: "Meeting recordings, transcripts, and summaries from Fathom AI",
+        category: "knowledge",
+        requiresAuth: true,
+        envVars: ["FATHOM_API_KEY"]
+    },
+    {
+        id: "slack",
+        name: "Slack",
+        description: "Workspace messaging - channels, messages, users, and search",
+        category: "communication",
+        requiresAuth: true,
+        envVars: ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]
+    },
+    {
+        id: "gdrive",
+        name: "Google Drive",
+        description: "File storage - search, list, and read Google Drive files",
+        category: "productivity",
+        requiresAuth: true,
+        envVars: ["GDRIVE_CREDENTIALS_PATH"]
+    },
+    {
+        id: "github",
+        name: "GitHub",
+        description: "Repository management - issues, PRs, code, and actions",
+        category: "productivity",
+        requiresAuth: true,
+        envVars: ["GITHUB_PERSONAL_ACCESS_TOKEN"]
     }
 ];
 
@@ -171,6 +300,75 @@ function getMcpClient(): MCPClient {
                               ]
                           }
                       }
+                    : {}),
+
+                // Fathom AI MCP Server - Meeting recordings and transcripts
+                // Uses the JavaScript implementation from packages/fathom-mcp
+                // https://github.com/Dot-Fun/fathom-mcp
+                ...(process.env.FATHOM_API_KEY
+                    ? {
+                          fathom: {
+                              command: "node",
+                              args: [
+                                  // Use path relative to project root, resolved at runtime
+                                  `${process.cwd()}/packages/fathom-mcp/index.js`
+                              ],
+                              env: {
+                                  FATHOM_API_KEY: process.env.FATHOM_API_KEY
+                              }
+                          }
+                      }
+                    : {}),
+
+                // Slack MCP Server - Workspace messaging and search
+                // https://github.com/modelcontextprotocol/servers/tree/main/src/slack
+                ...(process.env.SLACK_BOT_TOKEN && process.env.SLACK_TEAM_ID
+                    ? {
+                          slack: {
+                              command: "npx",
+                              args: ["-y", "@modelcontextprotocol/server-slack"],
+                              env: {
+                                  SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
+                                  SLACK_TEAM_ID: process.env.SLACK_TEAM_ID
+                              }
+                          }
+                      }
+                    : {}),
+
+                // Google Drive MCP Server - File storage and search
+                // https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive
+                // Requires:
+                // - GDRIVE_OAUTH_PATH: Path to OAuth client keys JSON (from Google Cloud Console)
+                // - GDRIVE_CREDENTIALS_PATH: Path where authenticated tokens will be saved
+                // First-time auth: npx @modelcontextprotocol/server-gdrive auth
+                ...(process.env.GDRIVE_CREDENTIALS_PATH
+                    ? {
+                          gdrive: {
+                              command: "npx",
+                              args: ["-y", "@modelcontextprotocol/server-gdrive"],
+                              env: {
+                                  GDRIVE_CREDENTIALS_PATH: process.env.GDRIVE_CREDENTIALS_PATH,
+                                  ...(process.env.GDRIVE_OAUTH_PATH
+                                      ? { GDRIVE_OAUTH_PATH: process.env.GDRIVE_OAUTH_PATH }
+                                      : {})
+                              }
+                          }
+                      }
+                    : {}),
+
+                // GitHub MCP Server - Repository management and code
+                // https://github.com/github/github-mcp-server
+                ...(process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+                    ? {
+                          github: {
+                              command: "npx",
+                              args: ["-y", "@modelcontextprotocol/server-github"],
+                              env: {
+                                  GITHUB_PERSONAL_ACCESS_TOKEN:
+                                      process.env.GITHUB_PERSONAL_ACCESS_TOKEN
+                              }
+                          }
+                      }
                     : {})
             },
             timeout: 60000 // 60 second timeout
@@ -185,17 +383,25 @@ export const mcpClient = getMcpClient();
 /**
  * Get all available MCP tools
  * Use this when configuring an agent with static tools
+ *
+ * Tools are sanitized to fix schema issues that cause validation failures
+ * with strict LLM providers like OpenAI GPT-4o-mini.
  */
 export async function getMcpTools() {
-    return await mcpClient.listTools();
+    const tools = await mcpClient.listTools();
+    return sanitizeMcpTools(tools);
 }
 
 /**
  * Get MCP toolsets for dynamic per-request configuration
  * Use this when tools need to vary by request (e.g., different API keys per user)
+ *
+ * Toolsets are sanitized to fix schema issues that cause validation failures
+ * with strict LLM providers like OpenAI GPT-4o-mini.
  */
 export async function getMcpToolsets() {
-    return await mcpClient.listToolsets();
+    const toolsets = await mcpClient.listToolsets();
+    return sanitizeMcpTools(toolsets);
 }
 
 /**

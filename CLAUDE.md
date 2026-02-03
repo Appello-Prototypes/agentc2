@@ -29,7 +29,7 @@ This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorep
 
 - Build and deploy AI agents with multiple LLM backends (OpenAI, Anthropic)
 - Voice-enabled agents using ElevenLabs and OpenAI voice APIs
-- MCP integrations for external tools (HubSpot CRM, Jira, Firecrawl, Playwright, JustCall, ATLAS/n8n)
+- MCP integrations for external tools (HubSpot CRM, Jira, Firecrawl, Playwright, JustCall, ATLAS/n8n, Fathom, Slack, Google Drive, GitHub)
 - RAG pipeline for document ingestion and semantic search
 - Database-driven agent configuration with version control
 - Background job processing with Inngest
@@ -190,11 +190,17 @@ JIRA_PROJECTS_FILTER="PROJECT_KEY"
 # JustCall - Phone/SMS
 JUSTCALL_AUTH_TOKEN="api_key:api_secret"
 
-# Fathom - Analytics/Meeting transcripts
+# Fathom - Meeting recordings and transcripts
 FATHOM_API_KEY="..."
 
 # ATLAS - n8n workflow automation
 ATLAS_N8N_SSE_URL="https://your-n8n.app.n8n.cloud/mcp/.../sse"
+
+# GitHub - Repository management
+GITHUB_PERSONAL_ACCESS_TOKEN="ghp_..."
+
+# Google Drive - File storage and search
+GDRIVE_CREDENTIALS_PATH="./credentials/gdrive-oauth.json"
 ```
 
 ### Slack Integration
@@ -205,6 +211,7 @@ ATLAS_N8N_SSE_URL="https://your-n8n.app.n8n.cloud/mcp/.../sse"
 SLACK_BOT_TOKEN="xoxb-..."           # Bot User OAuth Token
 SLACK_SIGNING_SECRET="..."           # App Credentials > Signing Secret
 SLACK_DEFAULT_AGENT_SLUG="assistant" # Agent to use for Slack conversations
+SLACK_TEAM_ID="T..."                 # Workspace ID (for MCP server)
 ```
 
 ### Webhooks & Tunneling (ngrok)
@@ -469,14 +476,18 @@ The system uses Mastra's MCP client to connect to external tools:
 
 ### Available MCP Servers
 
-| Server         | Category      | Tools Provided                                    |
-| -------------- | ------------- | ------------------------------------------------- |
-| **Playwright** | Web           | Browser automation, screenshots, page interaction |
-| **Firecrawl**  | Web           | Web scraping, content extraction                  |
-| **HubSpot**    | CRM           | Contacts, companies, deals, pipeline              |
-| **Jira**       | Productivity  | Issues, sprints, project tracking                 |
-| **JustCall**   | Communication | Call logs, SMS messaging                          |
-| **ATLAS**      | Automation    | n8n workflow triggers                             |
+| Server           | Category      | Tools Provided                                    |
+| ---------------- | ------------- | ------------------------------------------------- |
+| **Playwright**   | Web           | Browser automation, screenshots, page interaction |
+| **Firecrawl**    | Web           | Web scraping, content extraction                  |
+| **HubSpot**      | CRM           | Contacts, companies, deals, pipeline              |
+| **Jira**         | Productivity  | Issues, sprints, project tracking                 |
+| **JustCall**     | Communication | Call logs, SMS messaging                          |
+| **ATLAS**        | Automation    | n8n workflow triggers                             |
+| **Fathom**       | Knowledge     | Meeting recordings, transcripts, summaries        |
+| **Slack**        | Communication | Channels, messages, users, search                 |
+| **Google Drive** | Productivity  | File search, list, read (Docs/Sheets/Slides)      |
+| **GitHub**       | Productivity  | Repos, issues, PRs, code, actions                 |
 
 ### MCP Tool Execution
 

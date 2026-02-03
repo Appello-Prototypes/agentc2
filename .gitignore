@@ -41,6 +41,12 @@ yarn-error.log*
 .env*
 !.env.example
 
+# OAuth credentials (contains secrets)
+credentials/
+
+# Fathom MCP package (vendored, has own node_modules)
+packages/fathom-mcp/
+
 # vercel
 .vercel
 
