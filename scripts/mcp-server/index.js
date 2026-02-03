@@ -94,7 +94,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 
     return {
         tools: agents.map((agent) => ({
-            name: agent.name,
+            // Replace hyphens with underscores - Cursor has a bug where it ignores tools with hyphens
+            name: agent.name.replace(/-/g, "_"),
             description:
                 agent.description || `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
             inputSchema: {
@@ -121,7 +122,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
     // Extract agent slug from tool name (format: agent.slug)
-    const agentSlug = name.startsWith("agent.") ? name.slice(6) : name;
+    // Convert underscores back to hyphens since we replaced them for Cursor compatibility
+    const rawSlug = name.startsWith("agent.") ? name.slice(6) : name;
+    const agentSlug = rawSlug.replace(/_/g, "-");
 
     try {
         const result = await invokeAgent(agentSlug, args.input, args.context);
