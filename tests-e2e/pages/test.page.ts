@@ -34,6 +34,10 @@ export class TestPage {
     readonly runAllTestsButton: Locator;
     readonly addTestCaseButton: Locator;
 
+    // Feedback buttons
+    readonly feedbackThumbsUp: Locator;
+    readonly feedbackThumbsDown: Locator;
+
     constructor(page: Page) {
         this.page = page;
 
@@ -67,6 +71,10 @@ export class TestPage {
         // Test cases tab
         this.runAllTestsButton = page.locator('button:has-text("Run All Tests")');
         this.addTestCaseButton = page.locator('button:has-text("Add Test Case")');
+
+        // Feedback buttons - only visible on the last assistant message
+        this.feedbackThumbsUp = page.locator('[data-testid="feedback-thumbs-up"]');
+        this.feedbackThumbsDown = page.locator('[data-testid="feedback-thumbs-down"]');
     }
 
     /**
@@ -202,5 +210,50 @@ export class TestPage {
      */
     async isLoaded(): Promise<boolean> {
         return await this.page.locator('h1:has-text("Testing Sandbox")').isVisible();
+    }
+
+    /**
+     * Submit positive feedback (thumbs up) on the last assistant message
+     */
+    async submitPositiveFeedback() {
+        await expect(this.feedbackThumbsUp).toBeVisible({ timeout: TIMEOUTS.short });
+        await this.feedbackThumbsUp.click();
+        // Wait for the feedback to be submitted (button gets green color)
+        await this.page.waitForTimeout(300);
+    }
+
+    /**
+     * Submit negative feedback (thumbs down) on the last assistant message
+     */
+    async submitNegativeFeedback() {
+        await expect(this.feedbackThumbsDown).toBeVisible({ timeout: TIMEOUTS.short });
+        await this.feedbackThumbsDown.click();
+        // Wait for the feedback to be submitted (button gets red color)
+        await this.page.waitForTimeout(300);
+    }
+
+    /**
+     * Check if feedback buttons are visible
+     */
+    async areFeedbackButtonsVisible(): Promise<boolean> {
+        const thumbsUpVisible = await this.feedbackThumbsUp.isVisible();
+        const thumbsDownVisible = await this.feedbackThumbsDown.isVisible();
+        return thumbsUpVisible && thumbsDownVisible;
+    }
+
+    /**
+     * Check if positive feedback is selected (has green color)
+     */
+    async isPositiveFeedbackSelected(): Promise<boolean> {
+        const className = await this.feedbackThumbsUp.locator("svg").getAttribute("class");
+        return className?.includes("text-green-500") ?? false;
+    }
+
+    /**
+     * Check if negative feedback is selected (has red color)
+     */
+    async isNegativeFeedbackSelected(): Promise<boolean> {
+        const className = await this.feedbackThumbsDown.locator("svg").getAttribute("class");
+        return className?.includes("text-red-500") ?? false;
     }
 }

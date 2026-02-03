@@ -2,6 +2,114 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 
 /**
+ * DELETE /api/agents/[id]/learning/[sessionId]
+ *
+ * Cancel an active learning session
+ */
+export async function DELETE(
+    request: NextRequest,
+    { params }: { params: Promise<{ id: string; sessionId: string }> }
+) {
+    try {
+        const { id, sessionId } = await params;
+        const body = await request.json().catch(() => ({}));
+        const reason = body.reason || "Cancelled via UI";
+
+        // Find agent by slug or id
+        const agent = await prisma.agent.findFirst({
+            where: {
+                OR: [{ slug: id }, { id: id }]
+            }
+        });
+
+        if (!agent) {
+            return NextResponse.json(
+                { success: false, error: `Agent '${id}' not found` },
+                { status: 404 }
+            );
+        }
+
+        // Get the session
+        const session = await prisma.learningSession.findFirst({
+            where: {
+                id: sessionId,
+                agentId: agent.id
+            }
+        });
+
+        if (!session) {
+            return NextResponse.json(
+                { success: false, error: `Learning session '${sessionId}' not found` },
+                { status: 404 }
+            );
+        }
+
+        // Check if session can be cancelled
+        const cancellableStatuses = [
+            "COLLECTING",
+            "ANALYZING",
+            "PROPOSING",
+            "TESTING",
+            "AWAITING_APPROVAL"
+        ];
+        if (!cancellableStatuses.includes(session.status)) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: `Cannot cancel session with status '${session.status}'`
+                },
+                { status: 400 }
+            );
+        }
+
+        // Update session to cancelled
+        const updatedSession = await prisma.learningSession.update({
+            where: { id: sessionId },
+            data: {
+                status: "FAILED",
+                completedAt: new Date(),
+                metadata: {
+                    ...((session.metadata as Record<string, unknown>) || {}),
+                    cancelledAt: new Date().toISOString(),
+                    cancelReason: reason
+                }
+            }
+        });
+
+        // Log audit event
+        await prisma.auditLog.create({
+            data: {
+                tenantId: agent.tenantId,
+                actorId: "current-user",
+                action: "LEARNING_SESSION_CANCELLED",
+                entityType: "LearningSession",
+                entityId: sessionId,
+                metadata: { reason }
+            }
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: "Learning session cancelled",
+            session: {
+                id: updatedSession.id,
+                status: updatedSession.status,
+                completedAt: updatedSession.completedAt
+            }
+        });
+    } catch (error) {
+        console.error("[Learning Session Cancel] Error:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to cancel learning session"
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/**
  * GET /api/agents/[id]/learning/[sessionId]
  *
  * Get detailed learning session information

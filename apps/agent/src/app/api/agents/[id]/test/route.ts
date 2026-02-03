@@ -26,15 +26,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         if (USE_DB_AGENTS) {
             // Use AgentResolver to get agent (supports both slug and id)
+            // MCP-enabled agents automatically receive all MCP tools via the resolver
             const { agent, record, source } = await agentResolver.resolve({
                 slug: id,
                 requestContext
             });
 
-            // Generate response
+            // Generate response with maxSteps from database or default (matches production channels)
             const startTime = Date.now();
             const response = await agent.generate(prompt, {
-                maxSteps: record?.maxSteps || 5
+                maxSteps: record?.maxSteps ?? 5
             });
             const durationMs = Date.now() - startTime;
 

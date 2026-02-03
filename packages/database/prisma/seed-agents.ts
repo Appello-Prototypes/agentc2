@@ -61,7 +61,7 @@ Remember: Be helpful, accurate, and efficient. Pay attention to personal details
             semanticRecall: { topK: 10, messageRange: 100 },
             workingMemory: { enabled: true }
         },
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -80,7 +80,7 @@ Always provide accurate, well-structured responses.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -102,7 +102,7 @@ Be thorough but concise. Structure your analysis clearly.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5
     },
     {
@@ -125,7 +125,7 @@ After gathering information, provide a comprehensive answer.`,
         tools: ["web-search", "take-note"],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 10
     },
     {
@@ -160,7 +160,7 @@ since they will be spoken aloud. Aim for 1-3 sentences unless more detail is req
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "openai",
@@ -183,7 +183,7 @@ Keep responses conversational and engaging. Aim for 1-3 sentences.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "elevenlabs",
@@ -204,7 +204,7 @@ Keep responses natural and conversational.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             voiceProvider: "hybrid",
@@ -268,7 +268,7 @@ You have real-time access to these external tools. Use them to provide accurate,
         tools: [] as string[], // MCP tools are loaded dynamically based on available servers
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             purpose: "elevenlabs-voice-backend",
@@ -304,7 +304,7 @@ Format your responses clearly with headers and bullet points for easy reading.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -345,7 +345,7 @@ Always provide multiple options when available, from budget to premium.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -386,7 +386,7 @@ Provide 3-5 options across different price points when possible.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -431,7 +431,7 @@ Match recommendations to the trip duration and pace preferences.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -477,7 +477,7 @@ Always present costs in a clear, organized format with totals.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
@@ -536,11 +536,50 @@ Include a summary with key booking requirements and packing suggestions.`,
         tools: [] as string[],
         memoryEnabled: false,
         memoryConfig: null,
-        scorers: [] as string[],
+        scorers: ["relevancy", "completeness"],
         maxSteps: 5,
         metadata: {
             networkRole: "trip-planner-sub-agent",
             category: "itinerary"
+        }
+    },
+    // ============================================
+    // Simulation System Agent
+    // ============================================
+    {
+        slug: "simulator",
+        name: "Conversation Simulator",
+        description:
+            "Generates realistic user messages to test AI agents. Used by the simulation system to create synthetic conversations.",
+        instructions: `You generate realistic user messages to test AI agents.
+
+Given a THEME describing what kind of requests to simulate, generate a single realistic user message that someone might actually send.
+
+Examples of good output:
+- Theme: "Customer service about timesheets" → "Hey, I submitted my timesheet last Friday but it still shows as pending. Can you check on that?"
+- Theme: "Technical questions about Jira" → "How do I bulk-move issues between sprints?"
+- Theme: "Sales inquiries about pricing" → "What's the difference between your Pro and Enterprise plans? We have about 50 users."
+
+Guidelines:
+- Be natural and conversational
+- Vary the tone (casual, formal, frustrated, confused, enthusiastic)
+- Include occasional typos or informal language
+- Ask follow-up questions sometimes
+- Reference realistic scenarios and details
+- Cover both common requests and edge cases
+
+Return ONLY the user message, no JSON or formatting. Just the raw message text.`,
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        temperature: 0.9,
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: [] as string[],
+        maxSteps: 1,
+        metadata: {
+            purpose: "simulation",
+            internal: true
         }
     }
 ];

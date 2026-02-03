@@ -1,169 +1,240 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createMcpAgent } from "@repo/mastra";
-import { getDemoSession } from "@/lib/standalone-auth";
+import { prisma } from "@repo/database";
 
-export interface McpStep {
-    stepNumber: number;
-    type: "tool-call" | "text" | "tool-result";
-    toolName?: string;
-    toolArgs?: unknown;
-    toolResult?: unknown;
-    text?: string;
-    finishReason?: string;
-    timestamp: number;
-}
+/**
+ * MCP Server Gateway
+ *
+ * Exposes all agents as MCP tools that can be invoked by external MCP clients.
+ * This implements the inbound MCP gateway pattern where each agent becomes
+ * a callable service.
+ *
+ * Protocol: Simplified MCP-like JSON-RPC
+ *
+ * Endpoints:
+ * - GET /api/mcp - List available tools (agents)
+ * - POST /api/mcp - Invoke a tool (agent)
+ */
 
-export interface McpResponse {
-    text: string;
-    steps: McpStep[];
-    toolCalls: Array<{
-        toolName: string;
-        args: unknown;
-    }>;
-    toolResults: Array<{
-        toolName: string;
-        result: unknown;
-    }>;
-    reasoning?: string;
-    usage?: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-    };
-    finishReason: string;
-    error?: string;
-}
-
-export async function POST(req: NextRequest) {
-    const encoder = new TextEncoder();
-
+/**
+ * GET /api/mcp
+ *
+ * Lists all agents as MCP tools.
+ * Returns tool definitions with metadata for discovery.
+ */
+export async function GET(request: NextRequest) {
     try {
-        const session = await getDemoSession();
-        if (!session?.user) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const { searchParams } = new URL(request.url);
+        const includeInactive = searchParams.get("includeInactive") === "true";
 
-        const { message, maxSteps = 10 } = await req.json();
-
-        if (!message) {
-            return NextResponse.json({ error: "Message is required" }, { status: 400 });
-        }
-
-        const stream = new ReadableStream({
-            async start(controller) {
-                const sendEvent = (event: string, data: unknown) => {
-                    controller.enqueue(encoder.encode(`event: ${event}\n`));
-                    controller.enqueue(encoder.encode(`data: ${JSON.stringify(data)}\n\n`));
-                };
-
-                try {
-                    // Create agent with MCP tools loaded
-                    const agent = await createMcpAgent();
-
-                    // Capture steps during execution
-                    const capturedSteps: McpStep[] = [];
-                    let stepNumber = 0;
-
-                    // Use streaming generation with step tracking
-                    const responseStream = await agent.stream(message, {
-                        maxSteps,
-                        onStepFinish: (step) => {
-                            stepNumber++;
-
-                            // Capture tool calls from this step
-                            if (step.toolCalls && step.toolCalls.length > 0) {
-                                for (const toolCall of step.toolCalls) {
-                                    const tc = toolCall as { toolName?: string; args?: unknown };
-                                    const stepData: McpStep = {
-                                        stepNumber,
-                                        type: "tool-call",
-                                        toolName: tc.toolName,
-                                        toolArgs: tc.args,
-                                        timestamp: Date.now()
-                                    };
-                                    capturedSteps.push(stepData);
-                                    sendEvent("step", stepData);
-                                }
-                            }
-
-                            // Capture tool results from this step
-                            if (step.toolResults && step.toolResults.length > 0) {
-                                for (const toolResult of step.toolResults) {
-                                    const tr = toolResult as {
-                                        toolName?: string;
-                                        result?: unknown;
-                                    };
-                                    const stepData: McpStep = {
-                                        stepNumber,
-                                        type: "tool-result",
-                                        toolName: tr.toolName,
-                                        toolResult: tr.result,
-                                        timestamp: Date.now()
-                                    };
-                                    capturedSteps.push(stepData);
-                                    sendEvent("step", stepData);
-                                }
-                            }
-
-                            // Capture text from this step
-                            if (step.text) {
-                                const stepData: McpStep = {
-                                    stepNumber,
-                                    type: "text",
-                                    text: step.text,
-                                    finishReason: step.finishReason,
-                                    timestamp: Date.now()
-                                };
-                                capturedSteps.push(stepData);
-                                sendEvent("step", stepData);
+        // Get all agents from database
+        const agents = await prisma.agent.findMany({
+            where: includeInactive ? {} : { isActive: true },
+            select: {
+                id: true,
+                slug: true,
+                name: true,
+                description: true,
+                modelProvider: true,
+                modelName: true,
+                isActive: true,
+                isPublic: true,
+                maxSteps: true,
+                requiresApproval: true,
+                version: true,
+                workspace: {
+                    select: {
+                        slug: true,
+                        environment: true,
+                        organization: {
+                            select: {
+                                slug: true,
+                                name: true
                             }
                         }
-                    });
-
-                    let fullText = "";
-
-                    // Stream text chunks
-                    for await (const chunk of responseStream.textStream) {
-                        fullText += chunk;
-                        sendEvent("text", { chunk, full: fullText });
                     }
-
-                    // Send completion event
-                    sendEvent("done", {
-                        text: fullText,
-                        steps: capturedSteps,
-                        finishReason: "stop"
-                    });
-
-                    controller.close();
-                } catch (error) {
-                    console.error("MCP agent streaming error:", error);
-                    sendEvent("error", {
-                        message: error instanceof Error ? error.message : "MCP request failed"
-                    });
-                    controller.close();
                 }
-            }
+            },
+            orderBy: { name: "asc" }
         });
 
-        return new Response(stream, {
+        // Transform agents to MCP tool definitions
+        const tools = agents.map((agent) => ({
+            name: `agent.${agent.slug}`,
+            description: agent.description || `Agent: ${agent.name}`,
+            version: agent.version.toString(),
+            metadata: {
+                agent_id: agent.id,
+                agent_slug: agent.slug,
+                agent_name: agent.name,
+                model: `${agent.modelProvider}/${agent.modelName}`,
+                is_active: agent.isActive,
+                is_public: agent.isPublic,
+                requires_approval: agent.requiresApproval,
+                max_steps: agent.maxSteps,
+                workspace: agent.workspace?.slug,
+                environment: agent.workspace?.environment,
+                organization: agent.workspace?.organization?.slug
+            },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    input: {
+                        type: "string",
+                        description: "The input message or task for the agent"
+                    },
+                    context: {
+                        type: "object",
+                        description: "Optional context variables",
+                        additionalProperties: true
+                    },
+                    maxSteps: {
+                        type: "number",
+                        description: "Maximum tool-use steps (optional)"
+                    }
+                },
+                required: ["input"]
+            },
+            invoke_url: `/api/agents/${agent.slug}/invoke`
+        }));
+
+        return NextResponse.json({
+            success: true,
+            protocol: "mcp-agent-gateway/1.0",
+            server_info: {
+                name: "mastra-agent-gateway",
+                version: "1.0.0",
+                capabilities: ["tools", "invoke"]
+            },
+            tools,
+            total: tools.length
+        });
+    } catch (error) {
+        console.error("[MCP Gateway] Error listing tools:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to list tools"
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/**
+ * POST /api/mcp
+ *
+ * Invokes an agent tool using MCP-like JSON-RPC.
+ *
+ * Request body:
+ * {
+ *   "method": "invoke",
+ *   "tool": "agent.mcp-agent",
+ *   "params": {
+ *     "input": "Your question here",
+ *     "context": { ... }
+ *   }
+ * }
+ *
+ * Response:
+ * {
+ *   "success": true,
+ *   "result": {
+ *     "run_id": "...",
+ *     "output": "Agent response",
+ *     "usage": { ... },
+ *     "cost_usd": 0.05
+ *   }
+ * }
+ */
+export async function POST(request: NextRequest) {
+    try {
+        const body = await request.json();
+        const { method, tool, params } = body;
+
+        // Validate request
+        if (!method) {
+            return NextResponse.json({ success: false, error: "Missing method" }, { status: 400 });
+        }
+
+        if (method !== "invoke" && method !== "tools/call") {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: `Unsupported method: ${method}. Supported: invoke, tools/call`
+                },
+                { status: 400 }
+            );
+        }
+
+        if (!tool) {
+            return NextResponse.json(
+                { success: false, error: "Missing tool name" },
+                { status: 400 }
+            );
+        }
+
+        // Parse tool name (format: agent.slug or just slug)
+        // "agent." is 6 characters
+        const agentSlug = tool.startsWith("agent.") ? tool.slice(6) : tool;
+
+        if (!params?.input) {
+            return NextResponse.json(
+                { success: false, error: "Missing params.input" },
+                { status: 400 }
+            );
+        }
+
+        // Forward to the invoke endpoint
+        const invokeUrl = new URL(`/api/agents/${agentSlug}/invoke`, request.url);
+
+        const invokeResponse = await fetch(invokeUrl, {
+            method: "POST",
             headers: {
-                "Content-Type": "text/event-stream",
-                "Cache-Control": "no-cache",
-                Connection: "keep-alive"
+                "Content-Type": "application/json",
+                // Forward auth headers if present
+                ...(request.headers.get("authorization")
+                    ? { Authorization: request.headers.get("authorization")! }
+                    : {})
+            },
+            body: JSON.stringify({
+                input: params.input,
+                context: params.context,
+                maxSteps: params.maxSteps,
+                mode: "sync"
+            })
+        });
+
+        const result = await invokeResponse.json();
+
+        if (!result.success) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: result.error,
+                    run_id: result.run_id
+                },
+                { status: invokeResponse.status }
+            );
+        }
+
+        return NextResponse.json({
+            success: true,
+            result: {
+                run_id: result.run_id,
+                output: result.output,
+                usage: result.usage,
+                cost_usd: result.cost_usd,
+                duration_ms: result.duration_ms,
+                model: result.model
             }
         });
     } catch (error) {
-        console.error("MCP agent error:", error);
+        console.error("[MCP Gateway] Error invoking tool:", error);
         return NextResponse.json(
             {
-                text: "",
-                steps: [],
-                toolCalls: [],
-                toolResults: [],
-                finishReason: "error",
-                error: error instanceof Error ? error.message : "MCP request failed"
-            } as McpResponse,
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to invoke tool"
+            },
             { status: 500 }
         );
     }

@@ -2,6 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import { calculateCost } from "@/lib/cost-calculator";
 import { getApiBase } from "@/lib/utils";
 import {
     Card,
@@ -16,7 +17,12 @@ import {
     Accordion,
     AccordionContent,
     AccordionItem,
-    AccordionTrigger
+    AccordionTrigger,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@repo/ui";
 
 interface ExecutionStep {
@@ -50,12 +56,18 @@ interface Trace {
     };
     steps: ExecutionStep[];
     toolCalls: ToolCall[];
+    stepsCount: number;
+    toolCallsCount: number;
+    guardrailCount: number;
+    costUsd: number;
     tokens: {
         prompt: number;
         completion: number;
         total: number;
     };
     scores: Record<string, number>;
+    versionId?: string | null;
+    experimentGroup?: string | null;
     createdAt: string;
 }
 
@@ -92,6 +104,26 @@ function StatusBadge({ status }: { status: Trace["status"] }) {
     return <Badge variant={variant}>{label}</Badge>;
 }
 
+function getEvalScoreLabel(scores: Record<string, number>) {
+    const values = Object.values(scores).filter((value) => typeof value === "number");
+    if (values.length === 0) return "-";
+    const average = values.reduce((sum, value) => sum + value, 0) / values.length;
+    if (average <= 1) {
+        return `${Math.round(average * 100)}%`;
+    }
+    return average.toFixed(1);
+}
+
+function getVersionLabel(trace: Trace) {
+    if (trace.experimentGroup) {
+        return trace.experimentGroup;
+    }
+    if (trace.versionId) {
+        return trace.versionId.slice(0, 8);
+    }
+    return "-";
+}
+
 export default function TracesPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
@@ -100,11 +132,13 @@ export default function TracesPage() {
     const [error, setError] = useState<string | null>(null);
     const [traces, setTraces] = useState<Trace[]>([]);
     const [selectedTrace, setSelectedTrace] = useState<Trace | null>(null);
+    const [isDetailOpen, setIsDetailOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [copyStatus, setCopyStatus] = useState<"idle" | "copied">("idle");
     const [timeTravelEnabled, setTimeTravelEnabled] = useState(false);
     const [timeTravelStep, setTimeTravelStep] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [sourceFilter, setSourceFilter] = useState<"all" | "production" | "simulation">("all");
 
     // Fetch runs and their traces
     const fetchTraces = useCallback(async () => {
@@ -112,8 +146,10 @@ export default function TracesPage() {
             setLoading(true);
             setError(null);
 
-            // First, get the runs list
-            const runsRes = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs?limit=20`);
+            // First, get the runs list with source filter
+            const runsRes = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/runs?limit=20&source=${sourceFilter}`
+            );
             const runsResult = await runsRes.json();
 
             if (!runsResult.success) {
@@ -131,25 +167,56 @@ export default function TracesPage() {
                     modelProvider?: string;
                     modelName?: string;
                     startedAt: string;
+                    promptTokens?: number;
+                    completionTokens?: number;
                     totalTokens?: number;
-                }) => ({
-                    id: `trace-${run.id}`,
-                    runId: run.id,
-                    input: run.inputText,
-                    output: run.outputText || "",
-                    status: run.status.toLowerCase() as Trace["status"],
-                    durationMs: run.durationMs || 0,
-                    model: {
-                        provider: run.modelProvider || "unknown",
-                        name: run.modelName || "unknown",
-                        temperature: 0.7
-                    },
-                    steps: [],
-                    toolCalls: [],
-                    tokens: { prompt: 0, completion: 0, total: run.totalTokens || 0 },
-                    scores: {},
-                    createdAt: run.startedAt
-                })
+                    costUsd?: number;
+                    evaluation?: Record<string, number>;
+                    traceTokens?: { prompt?: number; completion?: number; total?: number };
+                    traceScores?: Record<string, number>;
+                    traceModel?: { provider?: string; name?: string; temperature?: number };
+                    traceStepsCount?: number;
+                    traceToolCallsCount?: number;
+                    guardrailCount?: number;
+                    versionId?: string | null;
+                    experimentGroup?: string | null;
+                }) => {
+                    const tokens = {
+                        prompt: run.promptTokens ?? run.traceTokens?.prompt ?? 0,
+                        completion: run.completionTokens ?? run.traceTokens?.completion ?? 0,
+                        total: run.totalTokens ?? run.traceTokens?.total ?? 0
+                    };
+                    const modelProvider =
+                        run.modelProvider || run.traceModel?.provider || "unknown";
+                    const modelName = run.modelName || run.traceModel?.name || "unknown";
+                    const costUsd =
+                        run.costUsd ??
+                        calculateCost(modelName, modelProvider, tokens.prompt, tokens.completion);
+                    return {
+                        id: `trace-${run.id}`,
+                        runId: run.id,
+                        input: run.inputText,
+                        output: run.outputText || "",
+                        status: run.status.toLowerCase() as Trace["status"],
+                        durationMs: run.durationMs || 0,
+                        model: {
+                            provider: modelProvider,
+                            name: modelName,
+                            temperature: run.traceModel?.temperature ?? 0.7
+                        },
+                        steps: [],
+                        toolCalls: [],
+                        stepsCount: run.traceStepsCount ?? 0,
+                        toolCallsCount: run.traceToolCallsCount ?? 0,
+                        guardrailCount: run.guardrailCount ?? 0,
+                        costUsd,
+                        tokens,
+                        scores: run.evaluation || run.traceScores || {},
+                        versionId: run.versionId,
+                        experimentGroup: run.experimentGroup,
+                        createdAt: run.startedAt
+                    };
+                }
             );
 
             setTraces(transformedTraces);
@@ -162,7 +229,7 @@ export default function TracesPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug]);
+    }, [agentSlug, sourceFilter]);
 
     // Load full trace details for a specific run
     const loadTraceDetails = useCallback(
@@ -175,20 +242,52 @@ export default function TracesPage() {
 
                 if (result.success && result.trace) {
                     const traceData = result.trace;
+                    const model = traceData.modelJson
+                        ? {
+                              provider: traceData.modelJson.provider || baseTrace.model.provider,
+                              name: traceData.modelJson.name || baseTrace.model.name,
+                              temperature:
+                                  traceData.modelJson.temperature ?? baseTrace.model.temperature
+                          }
+                        : baseTrace.model;
+
+                    // Use relational steps if available, otherwise fall back to stepsJson
+                    const stepsFromRelation = traceData.steps || [];
+                    const stepsFromJson = traceData.stepsJson || [];
+
+                    // Prefer relational data, but use JSON fallback if empty
+                    const rawSteps =
+                        stepsFromRelation.length > 0 ? stepsFromRelation : stepsFromJson;
+
                     const detailedTrace: Trace = {
                         ...baseTrace,
-                        steps: (traceData.steps || []).map(
-                            (s: {
-                                stepNumber: number;
-                                type: string;
-                                content: string;
-                                timestamp: string;
-                                durationMs?: number;
-                            }) => ({
-                                step: s.stepNumber,
+                        model,
+                        steps: rawSteps.map(
+                            (
+                                s:
+                                    | {
+                                          stepNumber: number;
+                                          type: string;
+                                          content: string;
+                                          timestamp: string;
+                                          durationMs?: number;
+                                      }
+                                    | {
+                                          step: number;
+                                          type: string;
+                                          content: string;
+                                          timestamp: string;
+                                          durationMs?: number;
+                                      },
+                                index: number
+                            ) => ({
+                                step: "stepNumber" in s ? s.stepNumber : (s.step ?? index + 1),
                                 type: s.type as ExecutionStep["type"],
-                                content: s.content,
-                                timestamp: s.timestamp,
+                                content:
+                                    typeof s.content === "string"
+                                        ? s.content
+                                        : JSON.stringify(s.content),
+                                timestamp: s.timestamp || new Date().toISOString(),
                                 durationMs: s.durationMs
                             })
                         ),
@@ -209,8 +308,10 @@ export default function TracesPage() {
                                 durationMs: tc.durationMs
                             })
                         ),
+                        stepsCount: traceData.steps?.length ?? baseTrace.stepsCount,
+                        toolCallsCount: traceData.toolCalls?.length ?? baseTrace.toolCallsCount,
                         tokens: traceData.tokensJson || baseTrace.tokens,
-                        scores: traceData.scoresJson || {}
+                        scores: traceData.scoresJson || baseTrace.scores
                     };
                     setSelectedTrace(detailedTrace);
                 } else {
@@ -236,7 +337,15 @@ export default function TracesPage() {
         setTimeout(() => setCopyStatus("idle"), 2000);
     };
 
+    const handleCloseDetail = () => {
+        setIsDetailOpen(false);
+        setTimeTravelEnabled(false);
+        setIsPlaying(false);
+    };
+
     const handleTraceSelect = (trace: Trace) => {
+        setSelectedTrace(trace);
+        setIsDetailOpen(true);
         loadTraceDetails(trace.runId, trace);
         // Reset time travel when changing traces
         setTimeTravelEnabled(false);
@@ -337,23 +446,14 @@ export default function TracesPage() {
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-2xl font-bold">Trace Explorer</h1>
-                    <p className="text-muted-foreground">
-                        Deep dive into execution traces with time-travel debugging
-                    </p>
-                </div>
-                <Button
-                    variant={timeTravelEnabled ? "default" : "outline"}
-                    onClick={handleTimeTravelToggle}
-                    disabled={!selectedTrace || selectedTrace.steps.length === 0}
-                >
-                    {timeTravelEnabled ? "⏹ Exit Time Travel" : "⏱ Time Travel Mode"}
-                </Button>
+            <div>
+                <h1 className="text-2xl font-bold">Trace Explorer</h1>
+                <p className="text-muted-foreground">
+                    Deep dive into execution traces with time-travel debugging
+                </p>
             </div>
 
-            {/* Search */}
+            {/* Search and Filter */}
             <div className="flex items-center gap-4">
                 <Input
                     placeholder="Search traces by input or output..."
@@ -361,350 +461,456 @@ export default function TracesPage() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="max-w-md"
                 />
-                <Button variant="outline" size="sm">
-                    Filter
-                </Button>
+                <Select
+                    value={sourceFilter}
+                    onValueChange={(value) =>
+                        setSourceFilter(value as "all" | "production" | "simulation")
+                    }
+                >
+                    <SelectTrigger className="w-[160px]">
+                        <SelectValue placeholder="Source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="production">Production</SelectItem>
+                        <SelectItem value="simulation">Simulation</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
-            {/* Trace List & Detail */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {/* Trace List */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Traces</CardTitle>
-                        <CardDescription>Select a trace to inspect</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="max-h-[600px] space-y-2 overflow-y-auto">
-                            {traces.map((trace) => (
-                                <div
-                                    key={trace.id}
-                                    onClick={() => handleTraceSelect(trace)}
-                                    className={`cursor-pointer rounded-lg border p-3 transition-colors ${
-                                        selectedTrace?.runId === trace.runId
-                                            ? "border-primary bg-primary/5"
-                                            : "hover:bg-muted/50"
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">
-                                                {trace.input}
-                                            </p>
-                                            <div className="mt-2 flex items-center gap-2">
+            {/* Trace List */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Traces</CardTitle>
+                    <CardDescription>Select a trace to inspect</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <div className="max-h-[600px] overflow-auto rounded-lg border">
+                        <table className="w-full min-w-[1200px] text-sm">
+                            <thead className="bg-muted/50 text-muted-foreground text-xs uppercase">
+                                <tr>
+                                    <th className="px-3 py-2 text-left font-medium">Trace</th>
+                                    <th className="px-3 py-2 text-left font-medium">Status</th>
+                                    <th className="px-3 py-2 text-right font-medium">Steps</th>
+                                    <th className="px-3 py-2 text-right font-medium">Tools</th>
+                                    <th className="px-3 py-2 text-right font-medium">Tokens</th>
+                                    <th className="px-3 py-2 text-left font-medium">Model</th>
+                                    <th className="px-3 py-2 text-right font-medium">Cost</th>
+                                    <th className="px-3 py-2 text-right font-medium">Eval</th>
+                                    <th className="px-3 py-2 text-center font-medium">Guardrail</th>
+                                    <th className="px-3 py-2 text-left font-medium">Version</th>
+                                    <th className="px-3 py-2 text-right font-medium">Time</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {traces.map((trace) => {
+                                    const hasTokens = trace.tokens.total > 0;
+                                    const costLabel = hasTokens
+                                        ? `$${trace.costUsd.toFixed(4)}`
+                                        : "-";
+                                    const versionLabel = getVersionLabel(trace);
+                                    return (
+                                        <tr
+                                            key={trace.id}
+                                            onClick={() => handleTraceSelect(trace)}
+                                            className={`cursor-pointer border-t transition-colors ${
+                                                selectedTrace?.runId === trace.runId
+                                                    ? "bg-primary/5"
+                                                    : "hover:bg-muted/40"
+                                            }`}
+                                        >
+                                            <td className="px-3 py-2 align-top">
+                                                <div className="max-w-[320px]">
+                                                    <p className="truncate text-sm font-medium">
+                                                        {trace.input}
+                                                    </p>
+                                                    <p className="text-muted-foreground truncate text-xs">
+                                                        {trace.output || "—"}
+                                                    </p>
+                                                </div>
+                                            </td>
+                                            <td className="px-3 py-2 align-top">
                                                 <StatusBadge status={trace.status} />
-                                                <span className="text-muted-foreground text-xs">
-                                                    {(trace.durationMs / 1000).toFixed(1)}s
+                                            </td>
+                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                {trace.stepsCount}
+                                            </td>
+                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                {trace.toolCallsCount}
+                                            </td>
+                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                {hasTokens ? trace.tokens.total : "-"}
+                                            </td>
+                                            <td className="px-3 py-2 align-top text-xs">
+                                                <span className="font-mono">
+                                                    {trace.model.provider}/{trace.model.name}
                                                 </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    {trace.steps.length} steps
-                                                </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    {trace.toolCalls.length} tools
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div className="text-muted-foreground text-xs">
-                                            {new Date(trace.createdAt).toLocaleTimeString()}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Trace Detail */}
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-start justify-between">
-                            <div>
-                                <CardTitle>Trace Detail</CardTitle>
-                                <CardDescription className="font-mono text-xs">
-                                    {selectedTrace?.id || "Select a trace"}
-                                </CardDescription>
-                            </div>
-                            {selectedTrace && (
-                                <Button variant="outline" size="sm" onClick={handleCopyTrace}>
-                                    {copyStatus === "copied" ? "Copied!" : "Copy JSON"}
-                                </Button>
-                            )}
-                        </div>
-                    </CardHeader>
-                    <CardContent>
-                        {selectedTrace ? (
-                            <div className="max-h-[600px] space-y-6 overflow-y-auto">
-                                {/* Summary */}
-                                <div className="grid grid-cols-4 gap-3">
-                                    <div className="bg-muted rounded p-2 text-center">
-                                        <p className="text-muted-foreground text-xs">Status</p>
-                                        <StatusBadge status={selectedTrace.status} />
-                                    </div>
-                                    <div className="bg-muted rounded p-2 text-center">
-                                        <p className="text-muted-foreground text-xs">Duration</p>
-                                        <p className="font-mono text-sm">
-                                            {(selectedTrace.durationMs / 1000).toFixed(2)}s
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted rounded p-2 text-center">
-                                        <p className="text-muted-foreground text-xs">Tokens</p>
-                                        <p className="font-mono text-sm">
-                                            {selectedTrace.tokens.total}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted rounded p-2 text-center">
-                                        <p className="text-muted-foreground text-xs">Quality</p>
-                                        <p className="font-mono text-sm">
-                                            {selectedTrace.scores.helpfulness
-                                                ? `${(selectedTrace.scores.helpfulness * 100).toFixed(0)}%`
-                                                : "-"}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Model */}
-                                <div className="bg-muted rounded-lg p-3">
-                                    <p className="text-muted-foreground mb-1 text-xs">Model</p>
-                                    <p className="font-mono text-sm">
-                                        {selectedTrace.model.provider}/{selectedTrace.model.name}
-                                        <span className="text-muted-foreground">
-                                            {" "}
-                                            (temp: {selectedTrace.model.temperature})
-                                        </span>
-                                    </p>
-                                </div>
-
-                                {/* Input */}
-                                <div>
-                                    <p className="mb-1 text-sm font-medium">👤 Input</p>
-                                    <div className="bg-muted rounded-lg p-3">
-                                        <p className="text-sm">{selectedTrace.input}</p>
-                                    </div>
-                                </div>
-
-                                {/* Time Travel Controls */}
-                                {timeTravelEnabled && (
-                                    <div className="bg-primary/10 border-primary/30 rounded-lg border p-4">
-                                        <div className="mb-3 flex items-center justify-between">
-                                            <p className="text-sm font-medium">
-                                                ⏱ Time Travel Mode
-                                            </p>
-                                            <p className="text-muted-foreground text-xs">
-                                                Step {timeTravelStep} / {selectedTrace.steps.length}
-                                            </p>
-                                        </div>
-                                        {/* Progress bar */}
-                                        <div className="bg-muted mb-3 h-2 w-full overflow-hidden rounded-full">
-                                            <div
-                                                className="bg-primary h-full transition-all duration-300"
-                                                style={{
-                                                    width:
-                                                        selectedTrace.steps.length > 0
-                                                            ? `${(timeTravelStep / selectedTrace.steps.length) * 100}%`
-                                                            : "0%"
-                                                }}
-                                            />
-                                        </div>
-                                        {/* Controls */}
-                                        <div className="flex items-center justify-center gap-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleReset}
-                                                disabled={timeTravelStep === 0}
-                                            >
-                                                ⏮ Reset
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleStepBackward}
-                                                disabled={timeTravelStep === 0}
-                                            >
-                                                ◀ Back
-                                            </Button>
-                                            <Button
-                                                variant={isPlaying ? "destructive" : "default"}
-                                                size="sm"
-                                                onClick={handlePlayPause}
-                                                disabled={
-                                                    timeTravelStep >= selectedTrace.steps.length
-                                                }
-                                            >
-                                                {isPlaying ? "⏸ Pause" : "▶ Play"}
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={handleStepForward}
-                                                disabled={
-                                                    timeTravelStep >= selectedTrace.steps.length
-                                                }
-                                            >
-                                                Next ▶
-                                            </Button>
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Execution Timeline */}
-                                <div>
-                                    <p className="mb-2 text-sm font-medium">
-                                        Execution Timeline
-                                        {timeTravelEnabled && (
-                                            <span className="text-muted-foreground ml-2 text-xs">
-                                                (showing {visibleSteps.length} of{" "}
-                                                {selectedTrace.steps.length} steps)
-                                            </span>
-                                        )}
-                                    </p>
-                                    <div className="space-y-2">
-                                        {visibleSteps.length === 0 && timeTravelEnabled ? (
-                                            <div className="text-muted-foreground rounded-lg border py-4 text-center text-sm">
-                                                Click &quot;Next&quot; or &quot;Play&quot; to step
-                                                through the execution
-                                            </div>
-                                        ) : (
-                                            visibleSteps.map((step, index) => {
-                                                const config = stepConfig[step.type];
-                                                const isLatestStep =
-                                                    timeTravelEnabled &&
-                                                    index === visibleSteps.length - 1;
-                                                return (
-                                                    <div
-                                                        key={step.step}
-                                                        className={`rounded-lg border p-3 transition-all ${config.color} ${
-                                                            isLatestStep
-                                                                ? "ring-primary ring-offset-background ring-2 ring-offset-2"
-                                                                : ""
-                                                        }`}
+                                            </td>
+                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                {costLabel}
+                                            </td>
+                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                {getEvalScoreLabel(trace.scores)}
+                                            </td>
+                                            <td className="px-3 py-2 text-center align-top">
+                                                {trace.guardrailCount > 0 ? (
+                                                    <Badge
+                                                        variant="destructive"
+                                                        className="text-xs"
                                                     >
-                                                        <div className="mb-1 flex items-center justify-between">
-                                                            <div className="flex items-center gap-2">
-                                                                <span>{config.icon}</span>
-                                                                <span className="text-sm font-medium">
-                                                                    Step {step.step}: {config.label}
-                                                                </span>
-                                                                {isLatestStep && (
-                                                                    <Badge
-                                                                        variant="secondary"
-                                                                        className="text-xs"
-                                                                    >
-                                                                        Current
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                            <div className="flex items-center gap-2 text-xs opacity-70">
-                                                                {step.durationMs && (
-                                                                    <span>{step.durationMs}ms</span>
-                                                                )}
-                                                                <span>
-                                                                    {new Date(
-                                                                        step.timestamp
-                                                                    ).toLocaleTimeString()}
-                                                                </span>
-                                                            </div>
-                                                        </div>
-                                                        <p className="text-sm opacity-90">
-                                                            {step.content}
-                                                        </p>
-                                                    </div>
-                                                );
-                                            })
-                                        )}
+                                                        {trace.guardrailCount}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">
+                                                        -
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="px-3 py-2 align-top text-xs">
+                                                {versionLabel !== "-" ? (
+                                                    <Badge
+                                                        variant="secondary"
+                                                        className="font-mono text-xs"
+                                                        title={trace.versionId || undefined}
+                                                    >
+                                                        {versionLabel}
+                                                    </Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">
+                                                        -
+                                                    </span>
+                                                )}
+                                            </td>
+                                            <td className="text-muted-foreground px-3 py-2 text-right align-top text-xs">
+                                                {new Date(trace.createdAt).toLocaleTimeString()}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Trace Detail Overlay */}
+            {isDetailOpen && selectedTrace && (
+                <div className="bg-background/80 fixed inset-0 z-50 backdrop-blur">
+                    <div className="flex h-full w-full items-center justify-center p-6">
+                        <Card className="flex h-full w-full max-w-6xl flex-col">
+                            <CardHeader>
+                                <div className="flex flex-wrap items-start justify-between gap-3">
+                                    <div>
+                                        <CardTitle>Trace Detail</CardTitle>
+                                        <CardDescription className="font-mono text-xs">
+                                            {selectedTrace.id}
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Button
+                                            variant={timeTravelEnabled ? "default" : "outline"}
+                                            onClick={handleTimeTravelToggle}
+                                            disabled={selectedTrace.steps.length === 0}
+                                            size="sm"
+                                        >
+                                            {timeTravelEnabled
+                                                ? "⏹ Exit Time Travel"
+                                                : "⏱ Time Travel Mode"}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleCopyTrace}
+                                        >
+                                            {copyStatus === "copied" ? "Copied!" : "Copy JSON"}
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleCloseDetail}
+                                        >
+                                            Close
+                                        </Button>
                                     </div>
                                 </div>
+                            </CardHeader>
+                            <CardContent className="overflow-y-auto">
+                                <div className="space-y-6">
+                                    {/* Summary */}
+                                    <div className="grid grid-cols-4 gap-3">
+                                        <div className="bg-muted rounded p-2 text-center">
+                                            <p className="text-muted-foreground text-xs">Status</p>
+                                            <StatusBadge status={selectedTrace.status} />
+                                        </div>
+                                        <div className="bg-muted rounded p-2 text-center">
+                                            <p className="text-muted-foreground text-xs">
+                                                Duration
+                                            </p>
+                                            <p className="font-mono text-sm">
+                                                {(selectedTrace.durationMs / 1000).toFixed(2)}s
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted rounded p-2 text-center">
+                                            <p className="text-muted-foreground text-xs">Tokens</p>
+                                            <p className="font-mono text-sm">
+                                                {selectedTrace.tokens.total}
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted rounded p-2 text-center">
+                                            <p className="text-muted-foreground text-xs">Quality</p>
+                                            <p className="font-mono text-sm">
+                                                {getEvalScoreLabel(selectedTrace.scores)}
+                                            </p>
+                                        </div>
+                                    </div>
 
-                                {/* Tool Calls */}
-                                {selectedTrace.toolCalls.length > 0 && (
+                                    {/* Model */}
+                                    <div className="bg-muted rounded-lg p-3">
+                                        <p className="text-muted-foreground mb-1 text-xs">Model</p>
+                                        <p className="font-mono text-sm">
+                                            {selectedTrace.model.provider}/
+                                            {selectedTrace.model.name}
+                                            <span className="text-muted-foreground">
+                                                {" "}
+                                                (temp: {selectedTrace.model.temperature})
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                    {/* Input */}
+                                    <div>
+                                        <p className="mb-1 text-sm font-medium">👤 Input</p>
+                                        <div className="bg-muted rounded-lg p-3">
+                                            <p className="text-sm">{selectedTrace.input}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Time Travel Controls */}
+                                    {timeTravelEnabled && (
+                                        <div className="bg-primary/10 border-primary/30 rounded-lg border p-4">
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <p className="text-sm font-medium">
+                                                    ⏱ Time Travel Mode
+                                                </p>
+                                                <p className="text-muted-foreground text-xs">
+                                                    Step {timeTravelStep} /{" "}
+                                                    {selectedTrace.steps.length}
+                                                </p>
+                                            </div>
+                                            {/* Progress bar */}
+                                            <div className="bg-muted mb-3 h-2 w-full overflow-hidden rounded-full">
+                                                <div
+                                                    className="bg-primary h-full transition-all duration-300"
+                                                    style={{
+                                                        width:
+                                                            selectedTrace.steps.length > 0
+                                                                ? `${(timeTravelStep / selectedTrace.steps.length) * 100}%`
+                                                                : "0%"
+                                                    }}
+                                                />
+                                            </div>
+                                            {/* Controls */}
+                                            <div className="flex items-center justify-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleReset}
+                                                    disabled={timeTravelStep === 0}
+                                                >
+                                                    ⏮ Reset
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleStepBackward}
+                                                    disabled={timeTravelStep === 0}
+                                                >
+                                                    ◀ Back
+                                                </Button>
+                                                <Button
+                                                    variant={isPlaying ? "destructive" : "default"}
+                                                    size="sm"
+                                                    onClick={handlePlayPause}
+                                                    disabled={
+                                                        timeTravelStep >= selectedTrace.steps.length
+                                                    }
+                                                >
+                                                    {isPlaying ? "⏸ Pause" : "▶ Play"}
+                                                </Button>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={handleStepForward}
+                                                    disabled={
+                                                        timeTravelStep >= selectedTrace.steps.length
+                                                    }
+                                                >
+                                                    Next ▶
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Execution Timeline */}
                                     <div>
                                         <p className="mb-2 text-sm font-medium">
-                                            Tool Calls ({selectedTrace.toolCalls.length})
+                                            Execution Timeline
+                                            {timeTravelEnabled && (
+                                                <span className="text-muted-foreground ml-2 text-xs">
+                                                    (showing {visibleSteps.length} of{" "}
+                                                    {selectedTrace.steps.length} steps)
+                                                </span>
+                                            )}
                                         </p>
-                                        <Accordion className="w-full">
-                                            {selectedTrace.toolCalls.map((tc, i) => (
-                                                <AccordionItem key={i} value={`tool-${i}`}>
-                                                    <AccordionTrigger className="py-2 hover:no-underline">
-                                                        <div className="flex items-center gap-2">
-                                                            <span
-                                                                className={`h-2 w-2 rounded-full ${tc.success ? "bg-green-500" : "bg-red-500"}`}
-                                                            />
-                                                            <span className="font-mono text-sm">
-                                                                {tc.name}
-                                                            </span>
-                                                            {tc.durationMs && (
-                                                                <span className="text-muted-foreground text-xs">
-                                                                    {tc.durationMs}ms
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    </AccordionTrigger>
-                                                    <AccordionContent>
-                                                        <div className="space-y-2 pl-4">
-                                                            <div>
-                                                                <p className="text-muted-foreground mb-1 text-xs">
-                                                                    INPUT
-                                                                </p>
-                                                                <pre className="bg-muted overflow-x-auto rounded p-2 text-xs">
-                                                                    {JSON.stringify(
-                                                                        tc.input,
-                                                                        null,
-                                                                        2
+                                        <div className="space-y-2">
+                                            {visibleSteps.length === 0 && timeTravelEnabled ? (
+                                                <div className="text-muted-foreground rounded-lg border py-4 text-center text-sm">
+                                                    Click &quot;Next&quot; or &quot;Play&quot; to
+                                                    step through the execution
+                                                </div>
+                                            ) : (
+                                                visibleSteps.map((step, index) => {
+                                                    const config = stepConfig[step.type];
+                                                    const isLatestStep =
+                                                        timeTravelEnabled &&
+                                                        index === visibleSteps.length - 1;
+                                                    return (
+                                                        <div
+                                                            key={step.step}
+                                                            className={`rounded-lg border p-3 transition-all ${config.color} ${
+                                                                isLatestStep
+                                                                    ? "ring-primary ring-offset-background ring-2 ring-offset-2"
+                                                                    : ""
+                                                            }`}
+                                                        >
+                                                            <div className="mb-1 flex items-center justify-between">
+                                                                <div className="flex items-center gap-2">
+                                                                    <span>{config.icon}</span>
+                                                                    <span className="text-sm font-medium">
+                                                                        Step {step.step}:{" "}
+                                                                        {config.label}
+                                                                    </span>
+                                                                    {isLatestStep && (
+                                                                        <Badge
+                                                                            variant="secondary"
+                                                                            className="text-xs"
+                                                                        >
+                                                                            Current
+                                                                        </Badge>
                                                                     )}
-                                                                </pre>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 text-xs opacity-70">
+                                                                    {step.durationMs && (
+                                                                        <span>
+                                                                            {step.durationMs}ms
+                                                                        </span>
+                                                                    )}
+                                                                    <span>
+                                                                        {new Date(
+                                                                            step.timestamp
+                                                                        ).toLocaleTimeString()}
+                                                                    </span>
+                                                                </div>
                                                             </div>
-                                                            <div>
-                                                                <p className="text-muted-foreground mb-1 text-xs">
-                                                                    {tc.error ? "ERROR" : "OUTPUT"}
-                                                                </p>
-                                                                <pre
-                                                                    className={`overflow-x-auto rounded p-2 text-xs ${tc.error ? "bg-red-500/10" : "bg-muted"}`}
-                                                                >
-                                                                    {tc.error ||
-                                                                        JSON.stringify(
-                                                                            tc.output,
+                                                            <p className="text-sm opacity-90">
+                                                                {step.content}
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Tool Calls */}
+                                    {selectedTrace.toolCalls.length > 0 && (
+                                        <div>
+                                            <p className="mb-2 text-sm font-medium">
+                                                Tool Calls ({selectedTrace.toolCalls.length})
+                                            </p>
+                                            <Accordion className="w-full">
+                                                {selectedTrace.toolCalls.map((tc, i) => (
+                                                    <AccordionItem key={i} value={`tool-${i}`}>
+                                                        <AccordionTrigger className="py-2 hover:no-underline">
+                                                            <div className="flex items-center gap-2">
+                                                                <span
+                                                                    className={`h-2 w-2 rounded-full ${tc.success ? "bg-green-500" : "bg-red-500"}`}
+                                                                />
+                                                                <span className="font-mono text-sm">
+                                                                    {tc.name}
+                                                                </span>
+                                                                {tc.durationMs && (
+                                                                    <span className="text-muted-foreground text-xs">
+                                                                        {tc.durationMs}ms
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </AccordionTrigger>
+                                                        <AccordionContent>
+                                                            <div className="space-y-2 pl-4">
+                                                                <div>
+                                                                    <p className="text-muted-foreground mb-1 text-xs">
+                                                                        INPUT
+                                                                    </p>
+                                                                    <pre className="bg-muted overflow-x-auto rounded p-2 text-xs">
+                                                                        {JSON.stringify(
+                                                                            tc.input,
                                                                             null,
                                                                             2
                                                                         )}
-                                                                </pre>
+                                                                    </pre>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-muted-foreground mb-1 text-xs">
+                                                                        {tc.error
+                                                                            ? "ERROR"
+                                                                            : "OUTPUT"}
+                                                                    </p>
+                                                                    <pre
+                                                                        className={`overflow-x-auto rounded p-2 text-xs ${tc.error ? "bg-red-500/10" : "bg-muted"}`}
+                                                                    >
+                                                                        {tc.error ||
+                                                                            JSON.stringify(
+                                                                                tc.output,
+                                                                                null,
+                                                                                2
+                                                                            )}
+                                                                    </pre>
+                                                                </div>
                                                             </div>
-                                                        </div>
-                                                    </AccordionContent>
-                                                </AccordionItem>
-                                            ))}
-                                        </Accordion>
-                                    </div>
-                                )}
+                                                        </AccordionContent>
+                                                    </AccordionItem>
+                                                ))}
+                                            </Accordion>
+                                        </div>
+                                    )}
 
-                                {/* Output */}
-                                <div>
-                                    <p className="mb-1 text-sm font-medium">🤖 Output</p>
-                                    <div className="bg-primary/10 rounded-lg p-3">
-                                        <p className="text-sm">{selectedTrace.output}</p>
+                                    {/* Output */}
+                                    <div>
+                                        <p className="mb-1 text-sm font-medium">🤖 Output</p>
+                                        <div className="bg-primary/10 rounded-lg p-3">
+                                            <p className="text-sm">{selectedTrace.output}</p>
+                                        </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex gap-2 pt-2">
+                                        <Button variant="outline" size="sm">
+                                            ⏪ Replay from Start
+                                        </Button>
+                                        <Button variant="outline" size="sm">
+                                            🔄 Re-run
+                                        </Button>
+                                        <Button variant="outline" size="sm">
+                                            📤 Export
+                                        </Button>
                                     </div>
                                 </div>
-
-                                {/* Actions */}
-                                <div className="flex gap-2 pt-2">
-                                    <Button variant="outline" size="sm">
-                                        ⏪ Replay from Start
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                        🔄 Re-run
-                                    </Button>
-                                    <Button variant="outline" size="sm">
-                                        📤 Export
-                                    </Button>
-                                </div>
-                            </div>
-                        ) : (
-                            <div className="text-muted-foreground py-12 text-center">
-                                Select a trace from the list
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-            </div>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

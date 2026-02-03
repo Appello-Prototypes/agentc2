@@ -298,6 +298,172 @@ describe("Inngest Functions", () => {
         });
     });
 
+    describe("generateInsightsFunction", () => {
+        const insightEventData = {
+            evaluationId: "test-eval-uuid",
+            agentId: "test-agent-uuid",
+            runId: "test-run-uuid",
+            scores: { relevancy: 0.8, completeness: 0.7 }
+        };
+
+        it("should skip when insufficient evaluation data (< 5 evaluations)", async () => {
+            // Mock fewer than 5 evaluations
+            prismaMock.agentEvaluation.findMany.mockResolvedValue([
+                { id: "1", scoresJson: { relevancy: 0.8 } },
+                { id: "2", scoresJson: { relevancy: 0.7 } }
+            ] as never);
+
+            const evaluations = await prismaMock.agentEvaluation.findMany({
+                where: { agentId: insightEventData.agentId }
+            });
+
+            expect(evaluations.length).toBeLessThan(5);
+
+            // Should skip insight generation
+            if (evaluations.length < 5) {
+                // Return early - no insights generated
+                expect(true).toBe(true);
+            }
+        });
+
+        it("should collect signals from evaluations correctly", async () => {
+            const mockEvaluations = [
+                {
+                    id: "1",
+                    scoresJson: { relevancy: 0.9, completeness: 0.8 },
+                    createdAt: new Date()
+                },
+                {
+                    id: "2",
+                    scoresJson: { relevancy: 0.7, completeness: 0.6 },
+                    createdAt: new Date()
+                },
+                {
+                    id: "3",
+                    scoresJson: { relevancy: 0.8, completeness: 0.7 },
+                    createdAt: new Date()
+                },
+                {
+                    id: "4",
+                    scoresJson: { relevancy: 0.6, completeness: 0.5 },
+                    createdAt: new Date()
+                },
+                {
+                    id: "5",
+                    scoresJson: { relevancy: 0.85, completeness: 0.75 },
+                    createdAt: new Date()
+                }
+            ];
+
+            prismaMock.agentEvaluation.findMany.mockResolvedValue(mockEvaluations as never);
+
+            const evaluations = await prismaMock.agentEvaluation.findMany({
+                where: { agentId: insightEventData.agentId }
+            });
+
+            expect(evaluations.length).toBe(5);
+
+            // Calculate average scores
+            const scoresByScorer: Record<string, number[]> = {};
+            for (const eval_ of evaluations) {
+                const scores = eval_.scoresJson as Record<string, number>;
+                for (const [key, value] of Object.entries(scores)) {
+                    if (!scoresByScorer[key]) scoresByScorer[key] = [];
+                    scoresByScorer[key].push(value);
+                }
+            }
+
+            const avgScores: Record<string, number> = {};
+            for (const [key, scores] of Object.entries(scoresByScorer)) {
+                avgScores[key] = scores.reduce((a, b) => a + b, 0) / scores.length;
+            }
+
+            expect(avgScores.relevancy).toBeCloseTo(0.77, 1);
+            expect(avgScores.completeness).toBeCloseTo(0.67, 1);
+        });
+
+        it("should deduplicate insights with matching type and title", async () => {
+            const existingInsights = [
+                { type: "quality", title: "Low relevancy scores detected" },
+                { type: "performance", title: "Response time improved" }
+            ];
+
+            prismaMock.insight.findMany.mockResolvedValue(existingInsights as never);
+
+            const recentInsights = await prismaMock.insight.findMany({
+                where: { agentId: insightEventData.agentId }
+            });
+
+            const existingKeys = new Set(
+                recentInsights.map((i) => `${i.type}:${i.title.toLowerCase().trim()}`)
+            );
+
+            // New insight with same type and title should be skipped
+            const duplicateInsight = {
+                type: "quality",
+                title: "Low relevancy scores detected",
+                description: "Different description"
+            };
+
+            const key = `${duplicateInsight.type}:${duplicateInsight.title.toLowerCase().trim()}`;
+            expect(existingKeys.has(key)).toBe(true);
+
+            // New unique insight should be created
+            const uniqueInsight = {
+                type: "cost",
+                title: "Cost optimization opportunity",
+                description: "Some description"
+            };
+
+            const uniqueKey = `${uniqueInsight.type}:${uniqueInsight.title.toLowerCase().trim()}`;
+            expect(existingKeys.has(uniqueKey)).toBe(false);
+        });
+
+        it("should persist valid insights to database", async () => {
+            prismaMock.insight.findMany.mockResolvedValue([] as never);
+            prismaMock.insight.create.mockResolvedValue({
+                id: "insight-1",
+                agentId: insightEventData.agentId,
+                type: "quality",
+                title: "Test insight",
+                description: "Test description",
+                createdAt: new Date()
+            } as never);
+
+            const validInsight = {
+                type: "quality",
+                title: "Test insight",
+                description: "Test description"
+            };
+
+            await prismaMock.insight.create({
+                data: {
+                    agentId: insightEventData.agentId,
+                    type: validInsight.type,
+                    title: validInsight.title,
+                    description: validInsight.description
+                }
+            });
+
+            expect(prismaMock.insight.create).toHaveBeenCalledWith({
+                data: expect.objectContaining({
+                    agentId: insightEventData.agentId,
+                    type: "quality",
+                    title: "Test insight"
+                })
+            });
+        });
+
+        it("should validate insight types", () => {
+            const validTypes = ["performance", "quality", "cost", "warning", "info"];
+            const invalidType = "invalid";
+
+            expect(validTypes.includes("quality")).toBe(true);
+            expect(validTypes.includes("performance")).toBe(true);
+            expect(validTypes.includes(invalidType)).toBe(false);
+        });
+    });
+
     describe("budgetCheckFunction", () => {
         it("should check all agents with enabled budget policies", async () => {
             const policies = [

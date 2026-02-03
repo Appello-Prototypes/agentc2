@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import {
     Card,
@@ -37,50 +37,6 @@ interface LearningSession {
     avgScore: number | null;
     metadata: Record<string, unknown> | null;
     createdAt: string;
-    completedAt: string | null;
-}
-
-interface LearningSessionDetail {
-    id: string;
-    status: string;
-    runCount: number;
-    datasetHash: string | null;
-    baselineVersion: number | null;
-    scorerConfig: unknown;
-    metadata: Record<string, unknown> | null;
-    createdAt: string;
-    completedAt: string | null;
-}
-
-interface LearningSignal {
-    id: string;
-    type: string;
-    severity: string | null;
-    pattern: string;
-    frequency: number;
-    impact: number | null;
-    createdAt: string;
-}
-
-interface LearningProposal {
-    id: string;
-    proposalType: string;
-    title: string;
-    description: string;
-    instructionsDiff: string | null;
-    expectedImpact: string | null;
-    confidenceScore: number | null;
-    isSelected: boolean;
-    createdAt: string;
-}
-
-interface LearningExperiment {
-    id: string;
-    status: string;
-    winRate: number | null;
-    gatingResult: string | null;
-    baselineMetrics: { avgScore?: number } | null;
-    candidateMetrics: { avgScore?: number } | null;
     completedAt: string | null;
 }
 
@@ -144,6 +100,7 @@ const statusColors: Record<string, string> = {
 
 export default function LearningPage() {
     const params = useParams();
+    const router = useRouter();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
@@ -152,13 +109,6 @@ export default function LearningPage() {
     const [metrics, setMetrics] = useState<LearningMetrics | null>(null);
     const [activeTab, setActiveTab] = useState("overview");
     const [startingSession, setStartingSession] = useState(false);
-    const [selectedSession, setSelectedSession] = useState<string | null>(null);
-    const [sessionDetail, setSessionDetail] = useState<{
-        session: LearningSessionDetail;
-        signals: LearningSignal[];
-        proposals: LearningProposal[];
-        experiments: LearningExperiment[];
-    } | null>(null);
     const [approvalDialog, setApprovalDialog] = useState<{
         open: boolean;
         sessionId: string;
@@ -171,6 +121,17 @@ export default function LearningPage() {
     const [policy, setPolicy] = useState<LearningPolicy | null>(null);
     const [activeExperiments, setActiveExperiments] = useState<ActiveExperiment[]>([]);
     const [savingPolicy, setSavingPolicy] = useState(false);
+    const [cancellingSession, setCancellingSession] = useState(false);
+
+    // Navigate to session detail page
+    const navigateToSession = (sessionId: string) => {
+        router.push(`/workspace/${agentSlug}/learning/${sessionId}`);
+    };
+
+    // Get the active session if any
+    const activeSession = sessions.find((s) =>
+        ["COLLECTING", "ANALYZING", "PROPOSING", "TESTING", "AWAITING_APPROVAL"].includes(s.status)
+    );
 
     const fetchData = useCallback(async () => {
         try {
@@ -209,35 +170,6 @@ export default function LearningPage() {
             setLoading(false);
         }
     }, [agentSlug]);
-
-    const fetchSessionDetail = useCallback(
-        async (sessionId: string) => {
-            try {
-                const response = await fetch(
-                    `${getApiBase()}/api/agents/${agentSlug}/learning/${sessionId}`
-                );
-                const data = await response.json();
-
-                if (!data.success) {
-                    throw new Error(data.error || "Failed to fetch session details");
-                }
-
-                setSessionDetail({
-                    session: data.session,
-                    signals: data.signals || [],
-                    proposals: data.proposals || [],
-                    experiments: data.experiments || []
-                });
-                setSelectedSession(sessionId);
-            } catch (err) {
-                setStatusMessage({
-                    type: "error",
-                    message: err instanceof Error ? err.message : "Failed to load session"
-                });
-            }
-        },
-        [agentSlug]
-    );
 
     useEffect(() => {
         fetchData();
@@ -338,23 +270,64 @@ export default function LearningPage() {
                 throw new Error(data.error || "Failed to start learning session");
             }
 
-            setStatusMessage({
-                type: "success",
-                message: "Learning session started successfully"
-            });
-
-            // Refresh data
-            fetchData();
+            // Navigate to the session detail page for monitoring
+            if (data.sessionId) {
+                router.push(`/workspace/${agentSlug}/learning/${data.sessionId}`);
+            } else {
+                // Fallback: switch to sessions tab and refresh
+                setActiveTab("sessions");
+                fetchData();
+            }
         } catch (err) {
             setStatusMessage({
                 type: "error",
                 message: err instanceof Error ? err.message : "Failed to start session"
             });
-        } finally {
             setStartingSession(false);
             setTimeout(() => setStatusMessage(null), 5000);
         }
-    }, [agentSlug, fetchData]);
+    }, [agentSlug, fetchData, router]);
+
+    const cancelLearningSession = useCallback(
+        async (sessionId: string) => {
+            try {
+                setCancellingSession(true);
+                setStatusMessage(null);
+
+                const response = await fetch(
+                    `${getApiBase()}/api/agents/${agentSlug}/learning/${sessionId}`,
+                    {
+                        method: "DELETE",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ reason: "Cancelled via UI" })
+                    }
+                );
+
+                const data = await response.json();
+
+                if (!data.success) {
+                    throw new Error(data.error || "Failed to cancel session");
+                }
+
+                setStatusMessage({
+                    type: "success",
+                    message: "Learning session cancelled"
+                });
+
+                // Refresh data
+                fetchData();
+            } catch (err) {
+                setStatusMessage({
+                    type: "error",
+                    message: err instanceof Error ? err.message : "Failed to cancel session"
+                });
+            } finally {
+                setCancellingSession(false);
+                setTimeout(() => setStatusMessage(null), 5000);
+            }
+        },
+        [agentSlug, fetchData]
+    );
 
     const handleApprovalAction = useCallback(
         async (sessionId: string, action: "approve" | "reject", rationale?: string) => {
@@ -454,6 +427,25 @@ export default function LearningPage() {
                             {statusMessage.message}
                         </span>
                     )}
+                    {activeSession && (
+                        <>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => navigateToSession(activeSession.id)}
+                            >
+                                View Active Session
+                            </Button>
+                            <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => cancelLearningSession(activeSession.id)}
+                                disabled={cancellingSession}
+                            >
+                                {cancellingSession ? "Cancelling..." : "Cancel Session"}
+                            </Button>
+                        </>
+                    )}
                     <Button
                         onClick={startLearningSession}
                         disabled={startingSession || hasActiveSession}
@@ -550,7 +542,7 @@ export default function LearningPage() {
                                             <div
                                                 key={session.id}
                                                 className="hover:bg-muted/50 flex cursor-pointer items-center gap-3 rounded-lg border p-3"
-                                                onClick={() => fetchSessionDetail(session.id)}
+                                                onClick={() => navigateToSession(session.id)}
                                             >
                                                 <Badge
                                                     className={
@@ -734,7 +726,7 @@ export default function LearningPage() {
                                                             variant="ghost"
                                                             size="sm"
                                                             onClick={() =>
-                                                                fetchSessionDetail(session.id)
+                                                                navigateToSession(session.id)
                                                             }
                                                         >
                                                             View
@@ -791,7 +783,7 @@ export default function LearningPage() {
                                                         variant="outline"
                                                         size="sm"
                                                         onClick={() =>
-                                                            fetchSessionDetail(session.id)
+                                                            navigateToSession(session.id)
                                                         }
                                                     >
                                                         View Details
@@ -1038,215 +1030,6 @@ export default function LearningPage() {
                     )}
                 </TabsContent>
             </Tabs>
-
-            {/* Session Detail Dialog */}
-            <Dialog
-                open={selectedSession !== null}
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setSelectedSession(null);
-                        setSessionDetail(null);
-                    }
-                }}
-            >
-                <DialogContent className="max-h-[80vh] max-w-3xl overflow-y-auto">
-                    <DialogHeader>
-                        <DialogTitle>Learning Session Details</DialogTitle>
-                        <DialogDescription>
-                            {sessionDetail?.session.status} - {sessionDetail?.session.runCount} runs
-                            analyzed
-                        </DialogDescription>
-                    </DialogHeader>
-
-                    {sessionDetail && (
-                        <div className="space-y-6">
-                            {/* Signals */}
-                            <div>
-                                <h3 className="mb-2 font-medium">
-                                    Signals ({sessionDetail.signals.length})
-                                </h3>
-                                <div className="space-y-2">
-                                    {sessionDetail.signals.map((signal) => (
-                                        <div key={signal.id} className="rounded border p-3">
-                                            <div className="flex items-center gap-2">
-                                                <Badge variant="outline">{signal.type}</Badge>
-                                                <Badge
-                                                    variant={
-                                                        signal.severity === "high"
-                                                            ? "destructive"
-                                                            : "secondary"
-                                                    }
-                                                >
-                                                    {signal.severity}
-                                                </Badge>
-                                            </div>
-                                            <p className="text-muted-foreground mt-2 text-sm">
-                                                {signal.pattern}
-                                            </p>
-                                        </div>
-                                    ))}
-                                    {sessionDetail.signals.length === 0 && (
-                                        <p className="text-muted-foreground text-sm">
-                                            No signals extracted yet
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Proposals */}
-                            <div>
-                                <h3 className="mb-2 font-medium">
-                                    Proposals ({sessionDetail.proposals.length})
-                                </h3>
-                                <div className="space-y-2">
-                                    {sessionDetail.proposals.map((proposal) => (
-                                        <div
-                                            key={proposal.id}
-                                            className={`rounded border p-3 ${proposal.isSelected ? "border-primary" : ""}`}
-                                        >
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-medium">
-                                                    {proposal.title}
-                                                </span>
-                                                {proposal.isSelected && <Badge>Selected</Badge>}
-                                            </div>
-                                            <p className="text-muted-foreground mt-1 text-sm">
-                                                {proposal.description}
-                                            </p>
-                                            {proposal.confidenceScore && (
-                                                <p className="text-muted-foreground mt-2 text-xs">
-                                                    Confidence:{" "}
-                                                    {(proposal.confidenceScore * 100).toFixed(0)}%
-                                                </p>
-                                            )}
-                                            {proposal.instructionsDiff && (
-                                                <pre className="bg-muted mt-2 max-h-40 overflow-auto rounded p-2 text-xs">
-                                                    {proposal.instructionsDiff}
-                                                </pre>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {sessionDetail.proposals.length === 0 && (
-                                        <p className="text-muted-foreground text-sm">
-                                            No proposals generated yet
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Experiments */}
-                            <div>
-                                <h3 className="mb-2 font-medium">
-                                    Experiments ({sessionDetail.experiments.length})
-                                </h3>
-                                <div className="space-y-2">
-                                    {sessionDetail.experiments.map((exp) => (
-                                        <div key={exp.id} className="rounded border p-3">
-                                            <div className="flex items-center gap-2">
-                                                <Badge
-                                                    className={
-                                                        statusColors[exp.status] || "bg-gray-500/20"
-                                                    }
-                                                >
-                                                    {exp.status}
-                                                </Badge>
-                                                {exp.gatingResult && (
-                                                    <Badge
-                                                        variant={
-                                                            exp.gatingResult === "passed"
-                                                                ? "default"
-                                                                : "destructive"
-                                                        }
-                                                    >
-                                                        {exp.gatingResult}
-                                                    </Badge>
-                                                )}
-                                            </div>
-                                            {exp.winRate !== null && (
-                                                <p className="text-muted-foreground mt-2 text-sm">
-                                                    Win rate: {(exp.winRate * 100).toFixed(1)}%
-                                                </p>
-                                            )}
-                                            {exp.baselineMetrics && exp.candidateMetrics && (
-                                                <div className="mt-2 grid grid-cols-2 gap-4 text-sm">
-                                                    <div>
-                                                        <p className="text-muted-foreground">
-                                                            Baseline
-                                                        </p>
-                                                        <p className="font-mono">
-                                                            {(
-                                                                (exp.baselineMetrics.avgScore ||
-                                                                    0) * 100
-                                                            ).toFixed(1)}
-                                                            %
-                                                        </p>
-                                                    </div>
-                                                    <div>
-                                                        <p className="text-muted-foreground">
-                                                            Candidate
-                                                        </p>
-                                                        <p className="font-mono">
-                                                            {(
-                                                                (exp.candidateMetrics.avgScore ||
-                                                                    0) * 100
-                                                            ).toFixed(1)}
-                                                            %
-                                                        </p>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {sessionDetail.experiments.length === 0 && (
-                                        <p className="text-muted-foreground text-sm">
-                                            No experiments run yet
-                                        </p>
-                                    )}
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    <DialogFooter>
-                        {sessionDetail?.session.status === "AWAITING_APPROVAL" && (
-                            <>
-                                <Button
-                                    variant="destructive"
-                                    onClick={() =>
-                                        setApprovalDialog({
-                                            open: true,
-                                            sessionId: selectedSession!,
-                                            action: "reject"
-                                        })
-                                    }
-                                >
-                                    Reject
-                                </Button>
-                                <Button
-                                    onClick={() =>
-                                        setApprovalDialog({
-                                            open: true,
-                                            sessionId: selectedSession!,
-                                            action: "approve"
-                                        })
-                                    }
-                                >
-                                    Approve & Promote
-                                </Button>
-                            </>
-                        )}
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setSelectedSession(null);
-                                setSessionDetail(null);
-                            }}
-                        >
-                            Close
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
 
             {/* Approval Dialog */}
             <Dialog

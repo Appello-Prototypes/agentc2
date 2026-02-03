@@ -86,5 +86,6 @@ export const iconMap: Record<IconName, IconComponent> = {
     "chart-evaluation": ChartEvaluationIcon,
     dollar: Dollar01Icon,
     "git-branch": GitBranchIcon,
-    shield: Shield01Icon
+    shield: Shield01Icon,
+    "play-list": PlayCircleIcon
 };

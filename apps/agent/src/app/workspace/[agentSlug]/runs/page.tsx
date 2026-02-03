@@ -1,8 +1,9 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { getApiBase } from "@/lib/utils";
+import { calculateCost } from "@/lib/cost-calculator";
 import {
     Card,
     CardContent,
@@ -58,14 +59,18 @@ function StatusBadge({ status }: { status: Run["status"] }) {
 
 export default function RunsPage() {
     const params = useParams();
+    const router = useRouter();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
     const [runs, setRuns] = useState<Run[]>([]);
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
+    const [rerunning, setRerunning] = useState(false);
+    const [exporting, setExporting] = useState(false);
 
     // Filters
     const [statusFilter, setStatusFilter] = useState<string>("all");
+    const [sourceFilter, setSourceFilter] = useState<string>("all");
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
@@ -75,6 +80,12 @@ export default function RunsPage() {
                 const params = new URLSearchParams();
                 if (statusFilter !== "all") {
                     params.append("status", statusFilter.toUpperCase());
+                }
+                // Source filter: "all" shows everything, "production" excludes simulations, "simulation" shows only simulations
+                if (sourceFilter !== "all") {
+                    params.append("source", sourceFilter);
+                } else {
+                    params.append("source", "all");
                 }
                 if (searchQuery) {
                     params.append("search", searchQuery);
@@ -96,37 +107,52 @@ export default function RunsPage() {
                             outputText: string;
                             durationMs: number;
                             startedAt: string;
+                            modelProvider?: string;
                             modelName?: string;
+                            promptTokens?: number;
+                            completionTokens?: number;
                             totalTokens?: number;
                             costUsd?: number;
                             evaluation?: Record<string, number>;
                             feedback?: { thumbs?: boolean; rating?: number };
-                        }) => ({
-                            id: run.id,
-                            input: run.inputText,
-                            output: run.outputText || "",
-                            status: run.status.toLowerCase() as Run["status"],
-                            durationMs: run.durationMs || 0,
-                            promptTokens: 0,
-                            completionTokens: 0,
-                            totalTokens: run.totalTokens || 0,
-                            estimatedCost: run.costUsd || 0,
-                            modelName: run.modelName || "unknown",
-                            toolCalls: [],
-                            scores: run.evaluation || {},
-                            feedback: run.feedback
-                                ? {
-                                      thumbs:
-                                          run.feedback.thumbs === true
-                                              ? ("up" as const)
-                                              : run.feedback.thumbs === false
-                                                ? ("down" as const)
-                                                : undefined,
-                                      rating: run.feedback.rating
-                                  }
-                                : undefined,
-                            createdAt: run.startedAt
-                        })
+                        }) => {
+                            // Calculate cost from tokens if not provided
+                            const cost =
+                                run.costUsd ??
+                                calculateCost(
+                                    run.modelName || "gpt-4o",
+                                    run.modelProvider,
+                                    run.promptTokens,
+                                    run.completionTokens
+                                );
+
+                            return {
+                                id: run.id,
+                                input: run.inputText,
+                                output: run.outputText || "",
+                                status: run.status.toLowerCase() as Run["status"],
+                                durationMs: run.durationMs || 0,
+                                promptTokens: run.promptTokens || 0,
+                                completionTokens: run.completionTokens || 0,
+                                totalTokens: run.totalTokens || 0,
+                                estimatedCost: cost,
+                                modelName: run.modelName || "unknown",
+                                toolCalls: [],
+                                scores: run.evaluation || {},
+                                feedback: run.feedback
+                                    ? {
+                                          thumbs:
+                                              run.feedback.thumbs === true
+                                                  ? ("up" as const)
+                                                  : run.feedback.thumbs === false
+                                                    ? ("down" as const)
+                                                    : undefined,
+                                          rating: run.feedback.rating
+                                      }
+                                    : undefined,
+                                createdAt: run.startedAt
+                            };
+                        }
                     );
                     setRuns(transformedRuns);
                 } else {
@@ -143,7 +169,206 @@ export default function RunsPage() {
         };
 
         fetchRuns();
-    }, [agentSlug, statusFilter, searchQuery]);
+    }, [agentSlug, statusFilter, sourceFilter, searchQuery]);
+
+    // Handle viewing full trace
+    const handleViewTrace = (runId: string) => {
+        router.push(`/workspace/${agentSlug}/traces?runId=${runId}`);
+    };
+
+    // Handle re-running an agent execution
+    const handleRerun = async (runId: string) => {
+        try {
+            setRerunning(true);
+            const response = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/runs/${runId}/rerun`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" }
+                }
+            );
+
+            const result = await response.json();
+
+            if (result.success) {
+                // Refresh the runs list to show the new run
+                const params = new URLSearchParams();
+                if (statusFilter !== "all") {
+                    params.append("status", statusFilter.toUpperCase());
+                }
+                if (searchQuery) {
+                    params.append("search", searchQuery);
+                }
+
+                const refreshResponse = await fetch(
+                    `${getApiBase()}/api/agents/${agentSlug}/runs?${params.toString()}`
+                );
+                const refreshResult = await refreshResponse.json();
+
+                if (refreshResult.success) {
+                    const transformedRuns = refreshResult.runs.map(
+                        (run: {
+                            id: string;
+                            runType: string;
+                            status: string;
+                            inputText: string;
+                            outputText: string;
+                            durationMs: number;
+                            startedAt: string;
+                            modelProvider?: string;
+                            modelName?: string;
+                            promptTokens?: number;
+                            completionTokens?: number;
+                            totalTokens?: number;
+                            costUsd?: number;
+                            evaluation?: Record<string, number>;
+                            feedback?: { thumbs?: boolean; rating?: number };
+                        }) => {
+                            const cost =
+                                run.costUsd ??
+                                calculateCost(
+                                    run.modelName || "gpt-4o",
+                                    run.modelProvider,
+                                    run.promptTokens,
+                                    run.completionTokens
+                                );
+
+                            return {
+                                id: run.id,
+                                input: run.inputText,
+                                output: run.outputText || "",
+                                status: run.status.toLowerCase() as Run["status"],
+                                durationMs: run.durationMs || 0,
+                                promptTokens: run.promptTokens || 0,
+                                completionTokens: run.completionTokens || 0,
+                                totalTokens: run.totalTokens || 0,
+                                estimatedCost: cost,
+                                modelName: run.modelName || "unknown",
+                                toolCalls: [],
+                                scores: run.evaluation || {},
+                                feedback: run.feedback
+                                    ? {
+                                          thumbs:
+                                              run.feedback.thumbs === true
+                                                  ? ("up" as const)
+                                                  : run.feedback.thumbs === false
+                                                    ? ("down" as const)
+                                                    : undefined,
+                                          rating: run.feedback.rating
+                                      }
+                                    : undefined,
+                                createdAt: run.startedAt
+                            };
+                        }
+                    );
+                    setRuns(transformedRuns);
+
+                    // Select the new run
+                    const newRun = transformedRuns.find((r: Run) => r.id === result.newRunId);
+                    if (newRun) {
+                        setSelectedRun(newRun);
+                    }
+                }
+            } else {
+                console.error("Failed to re-run:", result.error);
+                alert(`Failed to re-run: ${result.error}`);
+            }
+        } catch (error) {
+            console.error("Error re-running:", error);
+            alert("Failed to re-run the agent execution");
+        } finally {
+            setRerunning(false);
+        }
+    };
+
+    // Handle exporting a single run
+    const handleExportRun = (run: Run) => {
+        const exportData = {
+            id: run.id,
+            input: run.input,
+            output: run.output,
+            status: run.status,
+            durationMs: run.durationMs,
+            promptTokens: run.promptTokens,
+            completionTokens: run.completionTokens,
+            totalTokens: run.totalTokens,
+            estimatedCost: run.estimatedCost,
+            modelName: run.modelName,
+            scores: run.scores,
+            feedback: run.feedback,
+            createdAt: run.createdAt
+        };
+
+        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
+            type: "application/json"
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `run-${run.id}.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+    };
+
+    // Handle exporting all runs
+    const handleExportAllRuns = () => {
+        setExporting(true);
+        try {
+            const headers = [
+                "ID",
+                "Input",
+                "Output",
+                "Status",
+                "Duration (ms)",
+                "Prompt Tokens",
+                "Completion Tokens",
+                "Total Tokens",
+                "Cost (USD)",
+                "Model",
+                "Helpfulness",
+                "Relevancy",
+                "Feedback",
+                "Created At"
+            ];
+
+            const rows = filteredRuns.map((run) => [
+                run.id,
+                `"${run.input.replace(/"/g, '""')}"`,
+                `"${run.output.replace(/"/g, '""')}"`,
+                run.status,
+                run.durationMs,
+                run.promptTokens,
+                run.completionTokens,
+                run.totalTokens,
+                run.estimatedCost.toFixed(6),
+                run.modelName,
+                run.scores.helpfulness !== undefined
+                    ? (run.scores.helpfulness * 100).toFixed(0) + "%"
+                    : "",
+                run.scores.relevancy !== undefined
+                    ? (run.scores.relevancy * 100).toFixed(0) + "%"
+                    : "",
+                run.feedback?.thumbs || "",
+                run.createdAt
+            ]);
+
+            const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
+
+            const blob = new Blob([csv], { type: "text/csv" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = `${agentSlug}-runs-${new Date().toISOString().split("T")[0]}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } finally {
+            setExporting(false);
+        }
+    };
 
     const filteredRuns = runs.filter((run) => {
         if (statusFilter !== "all" && run.status !== statusFilter) return false;
@@ -179,7 +404,13 @@ export default function RunsPage() {
                         All executions for this agent ({runs.length} total)
                     </p>
                 </div>
-                <Button variant="outline">Export</Button>
+                <Button
+                    variant="outline"
+                    onClick={handleExportAllRuns}
+                    disabled={exporting || filteredRuns.length === 0}
+                >
+                    {exporting ? "Exporting..." : "Export"}
+                </Button>
             </div>
 
             {/* Filters */}
@@ -202,12 +433,16 @@ export default function RunsPage() {
                         <SelectItem value="timeout">Timeout</SelectItem>
                     </SelectContent>
                 </Select>
-                <Button variant="outline" size="sm">
-                    Date Range
-                </Button>
-                <Button variant="outline" size="sm">
-                    More Filters
-                </Button>
+                <Select value={sourceFilter} onValueChange={(v) => v && setSourceFilter(v)}>
+                    <SelectTrigger className="w-40">
+                        <SelectValue placeholder="Source" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="all">All Sources</SelectItem>
+                        <SelectItem value="production">Production</SelectItem>
+                        <SelectItem value="simulation">Simulation</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
             {/* Runs List & Detail */}
@@ -391,13 +626,26 @@ export default function RunsPage() {
 
                                 {/* Actions */}
                                 <div className="flex gap-2">
-                                    <Button variant="outline" size="sm">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleViewTrace(selectedRun.id)}
+                                    >
                                         View Full Trace
                                     </Button>
-                                    <Button variant="outline" size="sm">
-                                        Re-run
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleRerun(selectedRun.id)}
+                                        disabled={rerunning}
+                                    >
+                                        {rerunning ? "Re-running..." : "Re-run"}
                                     </Button>
-                                    <Button variant="outline" size="sm">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleExportRun(selectedRun)}
+                                    >
                                         Export
                                     </Button>
                                 </div>

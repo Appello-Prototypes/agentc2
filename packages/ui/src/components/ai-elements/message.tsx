@@ -66,18 +66,18 @@ export const MessageAction = ({
     size = "icon-sm",
     ...props
 }: MessageActionProps) => {
-    const button = (
-        <Button size={size} type="button" variant={variant} {...props}>
-            {children}
-            <span className="sr-only">{label || tooltip}</span>
-        </Button>
-    );
-
     if (tooltip) {
         return (
             <TooltipProvider>
                 <Tooltip>
-                    <TooltipTrigger>{button}</TooltipTrigger>
+                    <TooltipTrigger
+                        render={
+                            <Button size={size} type="button" variant={variant} {...props}>
+                                {children}
+                                <span className="sr-only">{label || tooltip}</span>
+                            </Button>
+                        }
+                    />
                     <TooltipContent>
                         <p>{tooltip}</p>
                     </TooltipContent>
@@ -86,7 +86,12 @@ export const MessageAction = ({
         );
     }
 
-    return button;
+    return (
+        <Button size={size} type="button" variant={variant} {...props}>
+            {children}
+            <span className="sr-only">{label || tooltip}</span>
+        </Button>
+    );
 };
 
 interface MessageBranchContextType {

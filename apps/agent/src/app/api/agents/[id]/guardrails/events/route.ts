@@ -70,18 +70,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             events.pop();
         }
 
-        // Get event counts by type
-        const eventCounts = await prisma.guardrailEvent.groupBy({
-            by: ["type"],
-            where: {
-                agentId: agent.id,
-                createdAt: {
-                    gte: startDate,
-                    lte: endDate
+        // Get event counts by type and total runs in parallel
+        const [eventCounts, totalRuns] = await Promise.all([
+            prisma.guardrailEvent.groupBy({
+                by: ["type"],
+                where: {
+                    agentId: agent.id,
+                    createdAt: {
+                        gte: startDate,
+                        lte: endDate
+                    }
+                },
+                _count: true
+            }),
+            prisma.agentRun.count({
+                where: {
+                    agentId: agent.id,
+                    startedAt: {
+                        gte: startDate,
+                        lte: endDate
+                    }
                 }
-            },
-            _count: true
-        });
+            })
+        ]);
 
         const countsByType = eventCounts.reduce(
             (acc, e) => {
@@ -90,6 +101,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             },
             {} as Record<string, number>
         );
+
+        const blocked = countsByType["BLOCKED"] || 0;
+        const modified = countsByType["MODIFIED"] || 0;
+        const flagged = countsByType["FLAGGED"] || 0;
+        const totalEvents = blocked + modified + flagged;
 
         return NextResponse.json({
             success: true,
@@ -110,10 +126,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     : null
             })),
             summary: {
-                total: events.length,
-                blocked: countsByType["BLOCKED"] || 0,
-                modified: countsByType["MODIFIED"] || 0,
-                flagged: countsByType["FLAGGED"] || 0
+                totalRuns,
+                totalEvents,
+                blocked,
+                modified,
+                flagged
             },
             dateRange: {
                 from: startDate.toISOString(),

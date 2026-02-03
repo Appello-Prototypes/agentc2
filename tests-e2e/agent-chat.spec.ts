@@ -181,6 +181,69 @@ test.describe("Agent Chat", () => {
     });
 });
 
+test.describe("Agent Chat - Feedback", () => {
+    test.beforeEach(async ({ testPage }) => {
+        // Navigate to the test page
+        await testPage.goto(TEST_AGENT_SLUG);
+    });
+
+    test("should show feedback buttons on assistant message", async ({ testPage }) => {
+        // Send a message and wait for response
+        await testPage.sendMessage(SAMPLE_MESSAGES.greeting);
+        await testPage.waitForResponse(TIMEOUTS.response);
+
+        // Verify feedback buttons are visible
+        const feedbackVisible = await testPage.areFeedbackButtonsVisible();
+        expect(feedbackVisible).toBe(true);
+    });
+
+    test("should submit positive feedback", async ({ testPage }) => {
+        // Send a message and wait for response
+        await testPage.sendMessage(SAMPLE_MESSAGES.greeting);
+        await testPage.waitForResponse(TIMEOUTS.response);
+
+        // Submit positive feedback
+        await testPage.submitPositiveFeedback();
+
+        // Verify feedback was submitted (thumbs up should be green)
+        const isPositive = await testPage.isPositiveFeedbackSelected();
+        expect(isPositive).toBe(true);
+    });
+
+    test("should submit negative feedback", async ({ testPage }) => {
+        // Send a message and wait for response
+        await testPage.sendMessage(SAMPLE_MESSAGES.greeting);
+        await testPage.waitForResponse(TIMEOUTS.response);
+
+        // Submit negative feedback
+        await testPage.submitNegativeFeedback();
+
+        // Verify feedback was submitted (thumbs down should be red)
+        const isNegative = await testPage.isNegativeFeedbackSelected();
+        expect(isNegative).toBe(true);
+    });
+
+    test("should toggle feedback from positive to negative", async ({ testPage }) => {
+        // Send a message and wait for response
+        await testPage.sendMessage(SAMPLE_MESSAGES.greeting);
+        await testPage.waitForResponse(TIMEOUTS.response);
+
+        // Submit positive feedback first
+        await testPage.submitPositiveFeedback();
+        let isPositive = await testPage.isPositiveFeedbackSelected();
+        expect(isPositive).toBe(true);
+
+        // Toggle to negative feedback
+        await testPage.submitNegativeFeedback();
+        const isNegative = await testPage.isNegativeFeedbackSelected();
+        expect(isNegative).toBe(true);
+
+        // Positive should no longer be selected
+        isPositive = await testPage.isPositiveFeedbackSelected();
+        expect(isPositive).toBe(false);
+    });
+});
+
 test.describe("Agent Chat - Test Cases Tab", () => {
     test.beforeEach(async ({ testPage }) => {
         await testPage.goto(TEST_AGENT_SLUG);

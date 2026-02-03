@@ -117,6 +117,7 @@ This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorep
 ├── apps/
 │   ├── agent/          # AI Agent Next.js app (port 3001, basePath: /agent)
 │   ├── frontend/       # Main Next.js app (port 3000)
+│   ├── inngest/        # Inngest dev server (port 8288)
 │   └── ngrok/          # ngrok tunnel management
 │
 ├── packages/
@@ -677,6 +678,19 @@ Or create a dedicated Slack agent in the database with specific instructions.
 
 ## Background Jobs with Inngest
 
+### Local Development
+
+The Inngest dev server starts automatically with `bun run dev`. It runs on port 8288 and provides:
+
+- **Dashboard**: http://localhost:8288 - View events, function runs, and debug issues
+- **Event Processing**: Processes all Inngest events locally without needing Inngest Cloud
+
+The dev server is started via `apps/inngest/` which runs `scripts/start-inngest.sh`.
+
+**Note**: The Inngest endpoint is at `http://localhost:3001/api/inngest` (not `/agent/api/inngest`) because basePath is only used when running behind Caddy.
+
+**Important**: The learning page (`/workspace/{agent}/learning`) requires Inngest to process learning sessions. Without the Inngest dev server running, clicking "Start Learning Session" will send events that never get processed.
+
 ### Event Publishing
 
 ```typescript
@@ -692,6 +706,16 @@ await inngest.send({
 ### Function Registration
 
 Functions are registered in `apps/agent/src/lib/inngest-functions.ts` and served via `/api/inngest`.
+
+### Key Learning Events
+
+| Event                         | Purpose                        |
+| ----------------------------- | ------------------------------ |
+| `learning/session.start`      | Start a new learning session   |
+| `learning/signals.extract`    | Extract signals from runs      |
+| `learning/proposals.generate` | Generate improvement proposals |
+| `learning/experiment.run`     | Run A/B experiments            |
+| `learning/approval.request`   | Request human approval         |
 
 ---
 

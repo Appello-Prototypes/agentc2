@@ -72,6 +72,89 @@ model Verification {
     @@map("verification")
 }
 
+// ==============================
+// Multi-Tenant Organization Models
+// ==============================
+
+// Organization - Company or team boundary for multi-tenancy
+model Organization {
+    id          String   @id @default(cuid())
+    name        String
+    slug        String   @unique // URL-safe identifier
+    description String?
+    logoUrl     String?
+    metadata    Json?
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+
+    // Relations
+    workspaces  Workspace[]
+    memberships Membership[]
+    credentials ToolCredential[]
+
+    @@index([slug])
+    @@map("organization")
+}
+
+// Workspace - Environment within an org (dev/staging/prod)
+model Workspace {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    name           String
+    slug           String // URL-safe identifier within org
+    environment    String       @default("development") // "development", "staging", "production"
+    description    String?
+    isDefault      Boolean      @default(false)
+    metadata       Json?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    // Relations
+    agents    Agent[]
+    schedules AgentSchedule[]
+    triggers  AgentTrigger[]
+
+    @@unique([organizationId, slug])
+    @@index([organizationId])
+    @@map("workspace")
+}
+
+// Membership - User's role in an organization
+model Membership {
+    id             String       @id @default(cuid())
+    userId         String
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    role           String       @default("member") // "owner", "admin", "member", "viewer"
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@unique([userId, organizationId])
+    @@index([userId])
+    @@index([organizationId])
+    @@map("membership")
+}
+
+// ToolCredential - Scoped credentials for MCP/tool access per organization
+model ToolCredential {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    toolId         String // MCP server or tool key (e.g., "hubspot", "jira")
+    name           String
+    credentials    Json // Encrypted credentials
+    isActive       Boolean      @default(true)
+    lastUsedAt     DateTime?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+    createdBy      String?
+
+    @@unique([organizationId, toolId])
+    @@index([organizationId])
+    @@map("tool_credential")
+}
+
 // Agent Type Enum
 enum AgentType {
     SYSTEM // Seeded from code, protected from deletion
@@ -148,11 +231,17 @@ model Agent {
     scorers String[] @default([])
 
     // Permissions/tenancy
-    type     AgentType @default(USER)
-    tenantId String? // Multi-tenant isolation
-    ownerId  String?
-    owner    User?     @relation(fields: [ownerId], references: [id])
-    isPublic Boolean   @default(false)
+    type        AgentType  @default(USER)
+    tenantId    String? // Multi-tenant isolation (legacy, use workspaceId)
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    ownerId     String?
+    owner       User?      @relation(fields: [ownerId], references: [id])
+    isPublic    Boolean    @default(false)
+
+    // Policies
+    requiresApproval Boolean @default(false) // Require human approval for runs
+    maxSpendUsd      Float? // Max spend per run in USD
 
     // Metadata
     metadata Json?
@@ -193,8 +282,12 @@ model Agent {
     learningSessions       LearningSession[]
     learningMetricDaily    LearningMetricDaily[]
     learningPolicy         LearningPolicy?
+    simulationSessions     SimulationSession[]
+    schedules              AgentSchedule[]
+    triggers               AgentTrigger[]
 
     @@index([slug])
+    @@index([workspaceId])
     @@index([ownerId])
     @@index([tenantId])
     @@index([type])
@@ -235,6 +328,62 @@ model AgentVersion {
     @@unique([agentId, version])
     @@index([agentId, version])
     @@map("agent_version")
+}
+
+// Agent Schedule - Cron-based recurring execution
+model AgentSchedule {
+    id          String     @id @default(cuid())
+    agentId     String
+    agent       Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    name        String
+    description String?
+    cronExpr    String // Cron expression (e.g., "0 17 * * FRI")
+    timezone    String     @default("UTC")
+    inputJson   Json? // Default input for scheduled runs
+    isActive    Boolean    @default(true)
+    lastRunAt   DateTime?
+    nextRunAt   DateTime?
+    runCount    Int        @default(0)
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+    createdBy   String?
+
+    @@index([agentId])
+    @@index([workspaceId])
+    @@index([isActive, nextRunAt])
+    @@map("agent_schedule")
+}
+
+// Agent Trigger - Event-based invocation
+model AgentTrigger {
+    id              String     @id @default(cuid())
+    agentId         String
+    agent           Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workspaceId     String?
+    workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    name            String
+    description     String?
+    triggerType     String // "webhook", "event", "mcp"
+    eventName       String? // Event name to listen for
+    webhookPath     String? // Unique webhook path for this trigger
+    webhookSecret   String? // Secret for webhook validation
+    filterJson      Json? // Conditions to match before triggering
+    inputMapping    Json? // How to map trigger payload to agent input
+    isActive        Boolean    @default(true)
+    lastTriggeredAt DateTime?
+    triggerCount    Int        @default(0)
+    createdAt       DateTime   @default(now())
+    updatedAt       DateTime   @updatedAt
+    createdBy       String?
+
+    @@unique([webhookPath])
+    @@index([agentId])
+    @@index([workspaceId])
+    @@index([triggerType])
+    @@index([eventName])
+    @@map("agent_trigger")
 }
 
 // Legacy Stored Agents - Kept for backwards compatibility during migration
@@ -381,6 +530,11 @@ model AgentRun {
     experiment      LearningExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
     experimentGroup String? // "baseline" or "candidate" - which version this run used
 
+    // Production channel tracking
+    source    String? // "slack", "whatsapp", "voice", "telegram", "elevenlabs", "api", "test"
+    sessionId String? // Channel session ID for conversation grouping
+    threadId  String? // Thread/conversation ID within a channel
+
     // Relations
     trace           AgentTrace?
     toolCalls       AgentToolCall[]
@@ -395,6 +549,9 @@ model AgentRun {
     @@index([status])
     @@index([tenantId])
     @@index([experimentId])
+    @@index([source])
+    @@index([sessionId])
+    @@index([threadId])
     @@map("agent_run")
 }
 
@@ -1160,4 +1317,40 @@ model LearningMetricDaily {
     @@index([agentId, date])
     @@index([tenantId])
     @@map("learning_metric_daily")
+}
+
+// ==============================
+// Simulation System Models
+// ==============================
+
+// Simulation Session - Tracks a batch of simulated conversations for testing agents
+model SimulationSession {
+    id      String @id @default(cuid())
+    agentId String
+    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    theme   String @db.Text // "Customer service about timesheets"
+    status  String @default("PENDING") // PENDING, RUNNING, COMPLETED, FAILED, CANCELLED
+
+    // Configuration
+    targetCount Int @default(100)
+    concurrency Int @default(5)
+
+    // Progress
+    completedCount Int @default(0)
+    failedCount    Int @default(0)
+
+    // Results (computed when complete)
+    avgQualityScore Float?
+    avgDurationMs   Float?
+    successRate     Float?
+    totalCostUsd    Float?
+
+    // Timing
+    startedAt   DateTime?
+    completedAt DateTime?
+    createdAt   DateTime  @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([status])
+    @@map("simulation_session")
 }

@@ -9,6 +9,8 @@ const navItems = [
     { label: "Overview", href: "/demos" },
     { label: "Chat", href: "/chat" },
     { label: "Agents", href: "/demos/agents" },
+    { label: "Workspace", href: "/workspace" },
+    { label: "Live", href: "/live" },
     { label: "Workflows", href: "/demos/workflows" },
     { label: "Memory", href: "/demos/memory" },
     { label: "RAG", href: "/demos/rag" },

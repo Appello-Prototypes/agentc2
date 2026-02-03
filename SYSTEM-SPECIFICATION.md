@@ -4,6 +4,8 @@
 **Last Updated:** February 2026  
 **Status:** Production-Ready
 
+> **See also:** [Agent Platform Vision](./docs/agent-platform-vision.md) for the product narrative and strategic direction.
+
 ---
 
 ## Table of Contents

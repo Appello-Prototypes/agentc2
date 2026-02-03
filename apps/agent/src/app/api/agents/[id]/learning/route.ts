@@ -146,6 +146,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  *
  * Start a new learning session manually
  * Body: { triggerReason?: string }
+ *
+ * Creates the session synchronously so the client can immediately
+ * navigate to the session detail page for monitoring. Inngest continues
+ * processing the session asynchronously.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -189,11 +193,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Trigger learning session via Inngest
+        // Create session synchronously so client can navigate to it immediately
+        const session = await prisma.learningSession.create({
+            data: {
+                agentId: agent.id,
+                tenantId: agent.tenantId,
+                status: "COLLECTING",
+                baselineVersion: agent.version,
+                scorerConfig: { scorers: agent.scorers },
+                metadata: { triggerReason, triggerType: "manual" }
+            }
+        });
+
+        // Trigger Inngest to continue processing the session
         await inngest.send({
             name: "learning/session.start",
             data: {
                 agentId: agent.id,
+                sessionId: session.id,
                 triggerReason
             }
         });
@@ -201,6 +218,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         return NextResponse.json({
             success: true,
             message: "Learning session started",
+            sessionId: session.id,
             agentId: agent.id,
             triggerReason
         });

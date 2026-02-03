@@ -13,6 +13,7 @@ import {
     visionAgent,
     researchAgent,
     evaluatedAgent,
+    mcpAgent,
     openaiVoiceAgent,
     elevenlabsVoiceAgent,
     hybridVoiceAgent
@@ -91,7 +92,8 @@ function buildAgents(): Record<string, Agent> {
         structured: structuredAgent,
         vision: visionAgent,
         research: researchAgent,
-        evaluated: evaluatedAgent
+        evaluated: evaluatedAgent,
+        "mcp-agent": mcpAgent
     };
 
     // Only add voice agents if they were successfully created (API keys present)

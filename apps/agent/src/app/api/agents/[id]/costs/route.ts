@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { calculateCostBreakdown, calculateCost } from "@/lib/cost-calculator";
 
 /**
  * GET /api/agents/[id]/costs/summary
  *
  * Get cost summary for an agent
+ * Uses AgentRun data directly to ensure all runs are included,
+ * calculating costs from token usage when costUsd is not stored.
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -13,9 +16,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         const from = searchParams.get("from");
         const to = searchParams.get("to");
+        const source = searchParams.get("source"); // "production", "simulation", "all"
 
-        // Default to last 30 days if no date range provided
-        const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        // If no dates provided, show all time (no date filter)
+        // Otherwise use the provided range
+        const startDate = from ? new Date(from) : null;
         const endDate = to ? new Date(to) : new Date();
 
         // Find agent by slug or id
@@ -32,44 +37,100 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
-        // Get cost events
-        const costEvents = await prisma.costEvent.findMany({
+        // Build source filter
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let sourceFilter: any = undefined;
+        if (source === "production") {
+            sourceFilter = { source: { not: "simulation" } };
+        } else if (source === "simulation") {
+            sourceFilter = { source: "simulation" };
+        }
+        // "all" or undefined means no filter
+
+        // Get runs directly (not cost events) to ensure all runs are included
+        const runs = await prisma.agentRun.findMany({
             where: {
                 agentId: agent.id,
-                createdAt: {
-                    gte: startDate,
-                    lte: endDate
-                }
+                status: "COMPLETED",
+                // Only add date filter if dates are provided
+                ...(startDate || endDate
+                    ? {
+                          createdAt: {
+                              ...(startDate && { gte: startDate }),
+                              ...(endDate && { lte: endDate })
+                          }
+                      }
+                    : {}),
+                ...sourceFilter
+            },
+            select: {
+                id: true,
+                modelProvider: true,
+                modelName: true,
+                promptTokens: true,
+                completionTokens: true,
+                totalTokens: true,
+                costUsd: true,
+                createdAt: true
             },
             orderBy: { createdAt: "desc" }
         });
 
-        // Calculate totals
-        const totalCostUsd = costEvents.reduce((sum, e) => sum + (e.costUsd || 0), 0);
-        const totalPromptTokens = costEvents.reduce((sum, e) => sum + (e.promptTokens || 0), 0);
-        const totalCompletionTokens = costEvents.reduce(
-            (sum, e) => sum + (e.completionTokens || 0),
-            0
-        );
-        const totalTokens = costEvents.reduce((sum, e) => sum + (e.totalTokens || 0), 0);
+        // Calculate totals with cost calculation for runs missing costUsd
+        let totalCostUsd = 0;
+        let totalPromptTokens = 0;
+        let totalCompletionTokens = 0;
+        let totalTokens = 0;
+        let promptCostUsd = 0;
+        let completionCostUsd = 0;
 
-        // Group by model
+        // Group by model and day
         const byModel = new Map<string, { cost: number; tokens: number; runs: number }>();
-        for (const event of costEvents) {
-            const key = `${event.provider}/${event.modelName}`;
-            const existing = byModel.get(key) || { cost: 0, tokens: 0, runs: 0 };
-            byModel.set(key, {
-                cost: existing.cost + (event.costUsd || 0),
-                tokens: existing.tokens + (event.totalTokens || 0),
+        const byDay = new Map<string, number>();
+
+        for (const run of runs) {
+            const promptToks = run.promptTokens || 0;
+            const completionToks = run.completionTokens || 0;
+            const runTotalTokens = run.totalTokens || promptToks + completionToks;
+
+            totalPromptTokens += promptToks;
+            totalCompletionTokens += completionToks;
+            totalTokens += runTotalTokens;
+
+            // Calculate cost - use stored costUsd if available, otherwise calculate
+            let runCost = run.costUsd || 0;
+            if (!run.costUsd && run.modelName && (promptToks > 0 || completionToks > 0)) {
+                runCost = calculateCost(
+                    run.modelName,
+                    run.modelProvider || undefined,
+                    promptToks,
+                    completionToks
+                );
+            }
+            totalCostUsd += runCost;
+
+            // Calculate breakdown
+            const breakdown = calculateCostBreakdown(
+                run.modelName || "unknown",
+                run.modelProvider || undefined,
+                promptToks,
+                completionToks
+            );
+            promptCostUsd += breakdown.inputCost;
+            completionCostUsd += breakdown.outputCost;
+
+            // Group by model
+            const modelKey = `${run.modelProvider || "unknown"}/${run.modelName || "unknown"}`;
+            const existing = byModel.get(modelKey) || { cost: 0, tokens: 0, runs: 0 };
+            byModel.set(modelKey, {
+                cost: existing.cost + runCost,
+                tokens: existing.tokens + runTotalTokens,
                 runs: existing.runs + 1
             });
-        }
 
-        // Group by day
-        const byDay = new Map<string, number>();
-        for (const event of costEvents) {
-            const day = event.createdAt.toISOString().split("T")[0];
-            byDay.set(day, (byDay.get(day) || 0) + (event.costUsd || 0));
+            // Group by day
+            const day = run.createdAt.toISOString().split("T")[0];
+            byDay.set(day, (byDay.get(day) || 0) + runCost);
         }
 
         // Get budget for context
@@ -84,12 +145,14 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 totalTokens,
                 promptTokens: totalPromptTokens,
                 completionTokens: totalCompletionTokens,
-                runCount: costEvents.length
+                runCount: runs.length
             },
             tokenBreakdown: {
                 prompt: totalPromptTokens,
                 completion: totalCompletionTokens,
                 total: totalTokens,
+                promptCostUsd: Math.round(promptCostUsd * 1000000) / 1000000,
+                completionCostUsd: Math.round(completionCostUsd * 1000000) / 1000000,
                 promptPercentage:
                     totalTokens > 0 ? Math.round((totalPromptTokens / totalTokens) * 100) : 0
             },
@@ -116,7 +179,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                   }
                 : null,
             dateRange: {
-                from: startDate.toISOString(),
+                from: startDate ? startDate.toISOString() : "all-time",
                 to: endDate.toISOString()
             }
         });

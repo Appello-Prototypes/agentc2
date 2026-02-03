@@ -35,8 +35,20 @@ interface AgentStats {
     avgLatencyMs: number;
     completedRuns: number;
     failedRuns: number;
+    queuedRuns: number;
+    runningRuns: number;
+    cancelledRuns: number;
     totalTokens: number;
     totalCostUsd: number;
+    lastRunAt: string | null;
+    lastFailedAt: string | null;
+}
+
+interface AgentTrendPoint {
+    date: string;
+    runs: number;
+    costUsd: number;
+    avgLatencyMs: number;
 }
 
 interface Agent {
@@ -54,6 +66,7 @@ interface Agent {
     createdAt: string;
     updatedAt: string;
     stats: AgentStats;
+    trends?: AgentTrendPoint[];
 }
 
 interface WorkspaceSummary {
@@ -136,7 +149,90 @@ function getStatusBadgeVariant(
     }
 }
 
+function SparklineBars({
+    data,
+    labels,
+    height = 28,
+    color = "bg-primary",
+    valueFormatter
+}: {
+    data: number[];
+    labels?: string[];
+    height?: number;
+    color?: string;
+    valueFormatter?: (value: number, index: number) => string;
+}) {
+    const max = Math.max(...data, 0);
+
+    if (!data.length || max === 0) {
+        return (
+            <div
+                className="text-muted-foreground flex items-center justify-center"
+                style={{ height }}
+            >
+                <span className="text-[10px]">No data</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-end gap-0.5" style={{ height }}>
+            {data.map((value, i) => {
+                const label = labels?.[i];
+                const formatted = valueFormatter ? valueFormatter(value, i) : `${value}`;
+                const title = label ? `${label}: ${formatted}` : formatted;
+                return (
+                    <div
+                        key={i}
+                        className={`flex-1 ${color} rounded-sm opacity-80 transition-opacity hover:opacity-100`}
+                        style={{
+                            height: value > 0 ? `${Math.max((value / max) * 100, 4)}%` : "0%"
+                        }}
+                        title={title}
+                    />
+                );
+            })}
+        </div>
+    );
+}
+
+function SparklineMetric({
+    label,
+    data,
+    labels,
+    color,
+    valueFormatter
+}: {
+    label: string;
+    data: number[];
+    labels?: string[];
+    color?: string;
+    valueFormatter?: (value: number, index: number) => string;
+}) {
+    return (
+        <div className="space-y-1">
+            <p className="text-muted-foreground text-[10px] tracking-wide uppercase">{label}</p>
+            <SparklineBars
+                data={data}
+                labels={labels}
+                color={color}
+                valueFormatter={valueFormatter}
+            />
+        </div>
+    );
+}
+
 function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }) {
+    const trends = agent.trends ?? [];
+    const trendLabels = trends.map((point) => point.date);
+    const runTrend = trends.map((point) => point.runs);
+    const costTrend = trends.map((point) => point.costUsd);
+    const latencyTrend = trends.map((point) => point.avgLatencyMs);
+    const lastRunLabel = agent.stats.lastRunAt ? formatRelativeTime(agent.stats.lastRunAt) : "—";
+    const lastErrorLabel = agent.stats.lastFailedAt
+        ? formatRelativeTime(agent.stats.lastFailedAt)
+        : "—";
+
     return (
         <Card
             className="hover:border-primary cursor-pointer transition-all hover:shadow-md"
@@ -171,7 +267,7 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                 </div>
 
                 {/* Quick Stats */}
-                <div className="mb-3 grid grid-cols-3 gap-2">
+                <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
                     <div className="bg-muted rounded p-2 text-center">
                         <p className="text-muted-foreground text-xs">Runs</p>
                         <p className="font-medium">{agent.stats.runs}</p>
@@ -188,6 +284,48 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                         <p className="text-muted-foreground text-xs">Latency</p>
                         <p className="font-medium">{formatLatency(agent.stats.avgLatencyMs)}</p>
                     </div>
+                    <div className="bg-muted rounded p-2 text-center">
+                        <p className="text-muted-foreground text-xs">Cost</p>
+                        <p className="font-medium">${agent.stats.totalCostUsd.toFixed(2)}</p>
+                    </div>
+                </div>
+
+                {/* Trends */}
+                <div className="mb-3 grid grid-cols-3 gap-2">
+                    <SparklineMetric label="Runs" data={runTrend} labels={trendLabels} />
+                    <SparklineMetric
+                        label="Cost"
+                        data={costTrend}
+                        labels={trendLabels}
+                        color="bg-emerald-500"
+                        valueFormatter={(value) => `$${value.toFixed(2)}`}
+                    />
+                    <SparklineMetric
+                        label="Latency"
+                        data={latencyTrend}
+                        labels={trendLabels}
+                        color="bg-blue-500"
+                        valueFormatter={(value) => formatLatency(value)}
+                    />
+                </div>
+
+                {/* Status Strip */}
+                <div className="text-muted-foreground mb-3 flex flex-wrap items-center gap-2 text-xs">
+                    <span className="flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-full bg-blue-500" />
+                        {agent.stats.runningRuns} running
+                    </span>
+                    <span>•</span>
+                    <span className="flex items-center gap-1">
+                        <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                        {agent.stats.queuedRuns} queued
+                    </span>
+                    <span>•</span>
+                    <span>Last run {lastRunLabel}</span>
+                    <span>•</span>
+                    <span>
+                        {agent.stats.lastFailedAt ? `Last error ${lastErrorLabel}` : "No errors"}
+                    </span>
                 </div>
 
                 {/* Badges */}

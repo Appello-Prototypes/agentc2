@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import {
     Card,
@@ -14,7 +14,12 @@ import {
     Tabs,
     TabsContent,
     TabsList,
-    TabsTrigger
+    TabsTrigger,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 
@@ -64,6 +69,7 @@ interface TrendData {
 export default function EvaluationsPage() {
     const params = useParams();
     const agentSlug = params.agentSlug as string;
+    const router = useRouter();
 
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -79,13 +85,16 @@ export default function EvaluationsPage() {
         type: "success" | "error";
         message: string;
     } | null>(null);
+    const [sourceFilter, setSourceFilter] = useState<"all" | "production" | "simulation">("all");
 
     const fetchEvaluations = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
 
-            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/evaluations`);
+            const response = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/evaluations?source=${sourceFilter}`
+            );
             const result = await response.json();
 
             if (!result.success) {
@@ -123,7 +132,7 @@ export default function EvaluationsPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug]);
+    }, [agentSlug, sourceFilter]);
 
     useEffect(() => {
         fetchEvaluations();
@@ -310,6 +319,21 @@ export default function EvaluationsPage() {
                             {statusMessage.message}
                         </span>
                     )}
+                    <Select
+                        value={sourceFilter}
+                        onValueChange={(value) =>
+                            setSourceFilter(value as "all" | "production" | "simulation")
+                        }
+                    >
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Sources</SelectItem>
+                            <SelectItem value="production">Production</SelectItem>
+                            <SelectItem value="simulation">Simulation</SelectItem>
+                        </SelectContent>
+                    </Select>
                     <Button variant="outline" onClick={runEvaluations} disabled={runningEvals}>
                         {runningEvals ? "Running..." : "Run Evaluation"}
                     </Button>
@@ -483,7 +507,15 @@ export default function EvaluationsPage() {
                                                         {new Date(eval_.timestamp).toLocaleString()}
                                                     </p>
                                                 </div>
-                                                <Button variant="ghost" size="sm">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        router.push(
+                                                            `/workspace/${agentSlug}/runs?run=${eval_.runId}`
+                                                        )
+                                                    }
+                                                >
                                                     View
                                                 </Button>
                                             </div>

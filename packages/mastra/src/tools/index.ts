@@ -11,7 +11,8 @@ export {
     getToolsByNames,
     getToolsByNamesAsync,
     getToolByName,
-    hasToolInRegistry
+    hasToolInRegistry,
+    getAllMcpTools
 } from "./registry";
 export type { ToolInfo } from "./registry";
 

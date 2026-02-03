@@ -292,6 +292,13 @@ bun run dev:local  # Uses localhost URLs instead
 # Update .env: NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
 
+## Documentation
+
+- [Agent Platform Vision](./docs/agent-platform-vision.md) - Product vision and architecture
+- [System Specification](./SYSTEM-SPECIFICATION.md) - Technical implementation details
+- [Agent Workspace Plan](./agentworkspaceplan.md) - Workspace UI and API specification
+- [CLAUDE.md](./CLAUDE.md) - Development guidelines and procedures
+
 ## Learn More
 
 - [Next.js Documentation](https://nextjs.org/docs)

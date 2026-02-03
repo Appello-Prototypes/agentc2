@@ -8,6 +8,8 @@
 import { WhatsAppClient, type WhatsAppConfig, type MessageHandler } from "@repo/mastra/channels";
 import { agentResolver } from "@repo/mastra";
 import { prisma } from "@repo/database";
+import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
+import { calculateCost } from "@/lib/cost-calculator";
 
 let whatsappService: WhatsAppClient | null = null;
 let initialized = false;
@@ -32,7 +34,67 @@ function getConfig(): WhatsAppConfig {
 }
 
 /**
+ * Helper to execute agent and record run
+ */
+async function executeAgentWithRecording(
+    agentSlug: string,
+    input: string,
+    sessionId: string,
+    userId: string
+): Promise<string> {
+    // Resolve the agent
+    const { agent, record, source } = await agentResolver.resolve({ slug: agentSlug });
+    const agentId = record?.id || agentSlug;
+
+    // Start recording the run
+    const run = await startRun({
+        agentId,
+        agentSlug,
+        input,
+        source: "whatsapp",
+        userId,
+        sessionId,
+        threadId: `whatsapp-${sessionId}`
+    });
+
+    try {
+        const response = await agent.generate(input, { maxSteps: record?.maxSteps ?? 5 });
+
+        // Extract token usage and tool calls
+        const tokens = extractTokenUsage(response);
+        const toolCalls = extractToolCalls(response);
+
+        for (const tc of toolCalls) {
+            await run.addToolCall(tc);
+        }
+
+        // Calculate cost based on model and token usage
+        const costUsd = calculateCost(
+            record?.modelName || "unknown",
+            record?.modelProvider || "unknown",
+            tokens?.promptTokens || 0,
+            tokens?.completionTokens || 0
+        );
+
+        await run.complete({
+            output: response.text || "",
+            modelProvider: record?.modelProvider || "unknown",
+            modelName: record?.modelName || "unknown",
+            promptTokens: tokens?.promptTokens,
+            completionTokens: tokens?.completionTokens,
+            costUsd
+        });
+
+        return response.text || "I couldn't process that request.";
+    } catch (error) {
+        await run.fail(error instanceof Error ? error : new Error(String(error)));
+        throw error;
+    }
+}
+
+/**
  * Default message handler - routes messages to agents
+ * Records all runs in AgentRun for full observability
  */
 const messageHandler: MessageHandler = async (message, agent) => {
     console.log(`[WhatsApp] Handling message from ${message.from}: "${message.text}"`);
@@ -81,23 +143,27 @@ const messageHandler: MessageHandler = async (message, agent) => {
         const actualMessage = keywordMatch[2].trim();
 
         try {
-            const { agent: targetAgent } = await agentResolver.resolve({ slug: agentName });
-            const response = await targetAgent.generate(actualMessage, { maxSteps: 5 });
-            return response.text || "I couldn't process that request.";
+            return await executeAgentWithRecording(
+                agentName,
+                actualMessage,
+                session.id,
+                message.from
+            );
         } catch {
             // Agent not found, use default
             console.log(`[WhatsApp] Agent "${agentName}" not found, using session agent`);
         }
     }
 
-    // Use session agent or provided agent
-    const targetAgent =
-        session.agentSlug !== getConfig().defaultAgentSlug
-            ? (await agentResolver.resolve({ slug: session.agentSlug })).agent
-            : agent;
+    // Use session agent
+    const agentSlug = session.agentSlug || getConfig().defaultAgentSlug;
 
-    const response = await targetAgent.generate(message.text, { maxSteps: 5 });
-    return response.text || "I couldn't process that request.";
+    try {
+        return await executeAgentWithRecording(agentSlug, message.text, session.id, message.from);
+    } catch (error) {
+        console.error("[WhatsApp] Error processing message:", error);
+        return "I encountered an error processing your message. Please try again.";
+    }
 };
 
 /**

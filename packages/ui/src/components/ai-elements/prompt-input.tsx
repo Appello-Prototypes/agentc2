@@ -325,8 +325,11 @@ export const PromptInput = ({
     onError,
     onSubmit,
     children,
+    // Destructure and discard loading to prevent it from being spread to the form element
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    loading: _loading,
     ...props
-}: PromptInputProps) => {
+}: PromptInputProps & { loading?: boolean }) => {
     // Try to use a provider controller if present
     const controller = useOptionalPromptInputController();
     const usingProvider = !!controller;

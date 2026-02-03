@@ -18,6 +18,7 @@ import {
 } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { LiveChatPanel } from "@/components/LiveChatPanel";
 
 interface Agent {
     id: string;
@@ -60,7 +61,8 @@ const navItems: { id: string; label: string; icon: IconName }[] = [
     { id: "learning", label: "Learning", icon: "ai-network" },
     { id: "costs", label: "Costs", icon: "dollar" },
     { id: "versions", label: "Versions", icon: "git-branch" },
-    { id: "guardrails", label: "Guardrails", icon: "shield" }
+    { id: "guardrails", label: "Guardrails", icon: "shield" },
+    { id: "simulations", label: "Simulations", icon: "play-list" }
 ];
 
 export default function AgentWorkspaceLayout({ children }: { children: React.ReactNode }) {
@@ -72,6 +74,10 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
     const [agent, setAgent] = useState<Agent | null>(null);
     const [allAgents, setAllAgents] = useState<AgentListItem[]>([]);
     const [loading, setLoading] = useState(true);
+
+    // Mode toggle state: "workspace" or "live"
+    const [mode, setMode] = useState<"workspace" | "live">("workspace");
+    const [chatMinimized, setChatMinimized] = useState(false);
 
     // Determine active tab from pathname
     const activeTab = pathname.split("/").pop() || "overview";
@@ -148,6 +154,45 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
         <div className="flex h-screen overflow-hidden">
             {/* Sidebar */}
             <aside className="bg-muted/30 flex w-64 flex-col border-r">
+                {/* Mode Toggle Header */}
+                <div className="flex items-center justify-between border-b px-3 py-2">
+                    <div className="bg-muted flex rounded-lg p-0.5">
+                        <button
+                            onClick={() => setMode("workspace")}
+                            className={cn(
+                                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                                mode === "workspace"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            Workspace
+                        </button>
+                        <button
+                            onClick={() => {
+                                setMode("live");
+                                setChatMinimized(false);
+                            }}
+                            className={cn(
+                                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
+                                mode === "live"
+                                    ? "bg-green-500 text-white shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            )}
+                        >
+                            Live
+                        </button>
+                    </div>
+                    {mode === "live" && (
+                        <Badge
+                            variant="outline"
+                            className="h-5 bg-green-100 px-1.5 text-[10px] text-green-800 dark:bg-green-900/30 dark:text-green-300"
+                        >
+                            PROD
+                        </Badge>
+                    )}
+                </div>
+
                 {/* Agent Header with Switcher */}
                 <div className="border-b p-3">
                     {/* Agent Switcher Dropdown */}
@@ -256,9 +301,24 @@ export default function AgentWorkspaceLayout({ children }: { children: React.Rea
             </aside>
 
             {/* Main Content */}
-            <main className="flex-1 overflow-y-auto">
+            <main
+                className={cn(
+                    "flex-1 overflow-y-auto",
+                    mode === "live" && !chatMinimized && "mr-[420px]"
+                )}
+            >
                 <div className="p-6">{children}</div>
             </main>
+
+            {/* Live Mode Chat Panel */}
+            {mode === "live" && (
+                <LiveChatPanel
+                    initialAgentSlug={agentSlug}
+                    minimized={chatMinimized}
+                    onMinimizeToggle={() => setChatMinimized(!chatMinimized)}
+                    onClose={() => setMode("workspace")}
+                />
+            )}
         </div>
     );
 }

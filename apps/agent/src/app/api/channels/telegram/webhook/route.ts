@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { agentResolver } from "@repo/mastra";
 import { prisma } from "@repo/database";
+import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
+import { calculateCost } from "@/lib/cost-calculator";
 
 /**
  * Default agent slug for Telegram
@@ -104,16 +106,63 @@ export async function POST(request: NextRequest) {
             }
 
             // Resolve agent
-            const { agent } = await agentResolver.resolve({ slug: agentSlug });
+            const { agent, record } = await agentResolver.resolve({ slug: agentSlug });
+            const agentId = record?.id || agentSlug;
 
-            // Generate response
-            const response = await agent.generate(text, { maxSteps: 5 });
-            const responseText = response.text || "I'm sorry, I couldn't process that.";
+            // Start recording the run
+            const run = await startRun({
+                agentId,
+                agentSlug,
+                input: text,
+                source: "telegram",
+                userId,
+                sessionId: session.id,
+                threadId: `telegram-${chatId}`
+            });
 
-            // Send response
-            await sendTelegramMessage(chatId, responseText, messageId);
+            try {
+                // Generate response
+                const response = await agent.generate(text, { maxSteps: record?.maxSteps ?? 5 });
+                const responseText = response.text || "I'm sorry, I couldn't process that.";
 
-            console.log(`[Telegram] Sent response to ${chatId}`);
+                // Extract token usage and tool calls
+                const tokens = extractTokenUsage(response);
+                const toolCalls = extractToolCalls(response);
+
+                for (const tc of toolCalls) {
+                    await run.addToolCall(tc);
+                }
+
+                // Calculate cost based on model and token usage
+                const costUsd = calculateCost(
+                    record?.modelName || "unknown",
+                    record?.modelProvider || "unknown",
+                    tokens?.promptTokens || 0,
+                    tokens?.completionTokens || 0
+                );
+
+                await run.complete({
+                    output: responseText,
+                    modelProvider: record?.modelProvider || "unknown",
+                    modelName: record?.modelName || "unknown",
+                    promptTokens: tokens?.promptTokens,
+                    completionTokens: tokens?.completionTokens,
+                    costUsd
+                });
+
+                // Send response
+                await sendTelegramMessage(chatId, responseText, messageId);
+
+                console.log(`[Telegram] Sent response to ${chatId}`);
+            } catch (error) {
+                await run.fail(error instanceof Error ? error : new Error(String(error)));
+                await sendTelegramMessage(
+                    chatId,
+                    "I'm sorry, I encountered an error processing your message.",
+                    messageId
+                );
+                throw error;
+            }
         }
 
         // Handle callback queries (inline keyboard buttons)

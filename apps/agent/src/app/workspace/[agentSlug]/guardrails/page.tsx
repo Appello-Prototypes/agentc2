@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import {
     Card,
@@ -55,6 +55,8 @@ interface GuardrailEvent {
 }
 
 interface EventSummary {
+    totalRuns: number;
+    totalEvents: number;
     blocked: number;
     modified: number;
     flagged: number;
@@ -86,6 +88,7 @@ const defaultConfig: GuardrailConfig = {
 
 export default function GuardrailsPage() {
     const params = useParams();
+    const router = useRouter();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
@@ -94,6 +97,8 @@ export default function GuardrailsPage() {
     const [config, setConfig] = useState<GuardrailConfig>(defaultConfig);
     const [events, setEvents] = useState<GuardrailEvent[]>([]);
     const [eventSummary, setEventSummary] = useState<EventSummary>({
+        totalRuns: 0,
+        totalEvents: 0,
         blocked: 0,
         modified: 0,
         flagged: 0
@@ -142,7 +147,15 @@ export default function GuardrailsPage() {
                     })
                 );
                 setEvents(transformedEvents);
-                setEventSummary(eventsResult.summary || { blocked: 0, modified: 0, flagged: 0 });
+                setEventSummary(
+                    eventsResult.summary || {
+                        totalRuns: 0,
+                        totalEvents: 0,
+                        blocked: 0,
+                        modified: 0,
+                        flagged: 0
+                    }
+                );
             }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load guardrails");
@@ -205,11 +218,17 @@ export default function GuardrailsPage() {
         );
     }
 
-    const stats = {
-        blocked: eventSummary.blocked,
-        modified: eventSummary.modified,
-        flagged: eventSummary.flagged
-    };
+    // Calculate percentages
+    const totalRuns = eventSummary.totalRuns;
+    const blockedPct =
+        totalRuns > 0 ? ((eventSummary.blocked / totalRuns) * 100).toFixed(1) : "0.0";
+    const modifiedPct =
+        totalRuns > 0 ? ((eventSummary.modified / totalRuns) * 100).toFixed(1) : "0.0";
+    const flaggedPct =
+        totalRuns > 0 ? ((eventSummary.flagged / totalRuns) * 100).toFixed(1) : "0.0";
+
+    // Check if guardrails are actually enforced (no events = likely not enforced)
+    const noGuardrailEvents = eventSummary.totalEvents === 0 && totalRuns > 0;
 
     return (
         <div className="space-y-6">
@@ -242,24 +261,64 @@ export default function GuardrailsPage() {
                 </div>
             </div>
 
+            {/* Warning: Guardrails not enforced */}
+            {noGuardrailEvents && (
+                <Card className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20">
+                    <CardContent className="flex items-start gap-3 py-4">
+                        <span className="text-yellow-600">⚠️</span>
+                        <div>
+                            <p className="font-medium text-yellow-800 dark:text-yellow-200">
+                                Guardrails Not Enforced
+                            </p>
+                            <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                                No guardrail events have been triggered despite {totalRuns} runs.
+                                Guardrail configuration is saved but enforcement is not yet
+                                implemented in the agent execution pipeline.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Blocked (24h)</CardDescription>
-                        <CardTitle className="text-2xl text-red-600">{stats.blocked}</CardTitle>
+                        <CardDescription>Total Runs (7d)</CardDescription>
+                        <CardTitle className="text-2xl">{totalRuns}</CardTitle>
                     </CardHeader>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Modified (24h)</CardDescription>
-                        <CardTitle className="text-2xl text-yellow-600">{stats.modified}</CardTitle>
+                        <CardDescription>Blocked (7d)</CardDescription>
+                        <div className="flex items-baseline gap-2">
+                            <CardTitle className="text-2xl text-red-600">
+                                {eventSummary.blocked}
+                            </CardTitle>
+                            <span className="text-muted-foreground text-sm">({blockedPct}%)</span>
+                        </div>
                     </CardHeader>
                 </Card>
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Flagged (24h)</CardDescription>
-                        <CardTitle className="text-2xl text-blue-600">{stats.flagged}</CardTitle>
+                        <CardDescription>Modified (7d)</CardDescription>
+                        <div className="flex items-baseline gap-2">
+                            <CardTitle className="text-2xl text-yellow-600">
+                                {eventSummary.modified}
+                            </CardTitle>
+                            <span className="text-muted-foreground text-sm">({modifiedPct}%)</span>
+                        </div>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Flagged (7d)</CardDescription>
+                        <div className="flex items-baseline gap-2">
+                            <CardTitle className="text-2xl text-blue-600">
+                                {eventSummary.flagged}
+                            </CardTitle>
+                            <span className="text-muted-foreground text-sm">({flaggedPct}%)</span>
+                        </div>
                     </CardHeader>
                 </Card>
             </div>
@@ -685,7 +744,13 @@ export default function GuardrailsPage() {
                                 </div>
                             ))}
                         </div>
-                        <Button variant="outline" className="mt-4 w-full">
+                        <Button
+                            variant="outline"
+                            className="mt-4 w-full"
+                            onClick={() =>
+                                router.push(`/workspace/${agentSlug}/runs?filter=guardrail`)
+                            }
+                        >
                             View All Events
                         </Button>
                     </CardContent>

@@ -52,11 +52,22 @@ export async function GET(request: NextRequest) {
             select: {
                 agentId: true,
                 status: true,
+                startedAt: true,
                 durationMs: true,
                 totalTokens: true,
                 costUsd: true
             }
         });
+
+        const startDay = new Date(startDate);
+        startDay.setHours(0, 0, 0, 0);
+        const endDay = new Date(endDate);
+        endDay.setHours(0, 0, 0, 0);
+        const dateKeys: string[] = [];
+        for (let d = new Date(startDay); d <= endDay; d.setDate(d.getDate() + 1)) {
+            dateKeys.push(d.toISOString().split("T")[0]);
+        }
+        const trendDates = dateKeys.slice(-14);
 
         // Group runs by agent and calculate stats
         const statsByAgent = new Map<
@@ -65,10 +76,22 @@ export async function GET(request: NextRequest) {
                 totalRuns: number;
                 completedRuns: number;
                 failedRuns: number;
+                queuedRuns: number;
+                runningRuns: number;
+                cancelledRuns: number;
                 totalDurationMs: number;
                 totalTokens: number;
                 totalCostUsd: number;
+                lastRunAt: Date | null;
+                lastFailedAt: Date | null;
             }
+        >();
+        const dailyByAgent = new Map<
+            string,
+            Map<
+                string,
+                { runs: number; costUsd: number; latencyTotal: number; latencyCount: number }
+            >
         >();
 
         for (const run of runs) {
@@ -76,19 +99,58 @@ export async function GET(request: NextRequest) {
                 totalRuns: 0,
                 completedRuns: 0,
                 failedRuns: 0,
+                queuedRuns: 0,
+                runningRuns: 0,
+                cancelledRuns: 0,
                 totalDurationMs: 0,
                 totalTokens: 0,
-                totalCostUsd: 0
+                totalCostUsd: 0,
+                lastRunAt: null,
+                lastFailedAt: null
             };
+
+            const status = run.status?.toUpperCase();
+            const startedAt = run.startedAt;
 
             statsByAgent.set(run.agentId, {
                 totalRuns: existing.totalRuns + 1,
-                completedRuns: existing.completedRuns + (run.status === "COMPLETED" ? 1 : 0),
-                failedRuns: existing.failedRuns + (run.status === "FAILED" ? 1 : 0),
+                completedRuns: existing.completedRuns + (status === "COMPLETED" ? 1 : 0),
+                failedRuns: existing.failedRuns + (status === "FAILED" ? 1 : 0),
+                queuedRuns: existing.queuedRuns + (status === "QUEUED" ? 1 : 0),
+                runningRuns: existing.runningRuns + (status === "RUNNING" ? 1 : 0),
+                cancelledRuns: existing.cancelledRuns + (status === "CANCELLED" ? 1 : 0),
                 totalDurationMs: existing.totalDurationMs + (run.durationMs || 0),
                 totalTokens: existing.totalTokens + (run.totalTokens || 0),
-                totalCostUsd: existing.totalCostUsd + (run.costUsd || 0)
+                totalCostUsd: existing.totalCostUsd + (run.costUsd || 0),
+                lastRunAt:
+                    !existing.lastRunAt || startedAt > existing.lastRunAt
+                        ? startedAt
+                        : existing.lastRunAt,
+                lastFailedAt:
+                    status === "FAILED" &&
+                    (!existing.lastFailedAt || startedAt > existing.lastFailedAt)
+                        ? startedAt
+                        : existing.lastFailedAt
             });
+
+            const dayKey = startedAt.toISOString().split("T")[0];
+            const agentDaily = dailyByAgent.get(run.agentId) || new Map();
+            const daily = agentDaily.get(dayKey) || {
+                runs: 0,
+                costUsd: 0,
+                latencyTotal: 0,
+                latencyCount: 0
+            };
+
+            daily.runs += 1;
+            daily.costUsd += run.costUsd || 0;
+            if (run.durationMs) {
+                daily.latencyTotal += run.durationMs;
+                daily.latencyCount += 1;
+            }
+
+            agentDaily.set(dayKey, daily);
+            dailyByAgent.set(run.agentId, agentDaily);
         }
 
         // Build agent stats response
@@ -97,15 +159,40 @@ export async function GET(request: NextRequest) {
                 totalRuns: 0,
                 completedRuns: 0,
                 failedRuns: 0,
+                queuedRuns: 0,
+                runningRuns: 0,
+                cancelledRuns: 0,
                 totalDurationMs: 0,
                 totalTokens: 0,
-                totalCostUsd: 0
+                totalCostUsd: 0,
+                lastRunAt: null,
+                lastFailedAt: null
             };
 
             const successRate =
                 stats.totalRuns > 0 ? (stats.completedRuns / stats.totalRuns) * 100 : 0;
             const avgLatencyMs =
                 stats.completedRuns > 0 ? stats.totalDurationMs / stats.completedRuns : 0;
+            const agentDaily = dailyByAgent.get(agent.id);
+            const trends =
+                stats.totalRuns > 0 && agentDaily
+                    ? trendDates.map((date) => {
+                          const day = agentDaily.get(date) || {
+                              runs: 0,
+                              costUsd: 0,
+                              latencyTotal: 0,
+                              latencyCount: 0
+                          };
+                          const avgLatency =
+                              day.latencyCount > 0 ? day.latencyTotal / day.latencyCount : 0;
+                          return {
+                              date,
+                              runs: day.runs,
+                              costUsd: Math.round(day.costUsd * 10000) / 10000,
+                              avgLatencyMs: Math.round(avgLatency)
+                          };
+                      })
+                    : [];
 
             return {
                 id: agent.id,
@@ -127,9 +214,15 @@ export async function GET(request: NextRequest) {
                     avgLatencyMs: Math.round(avgLatencyMs),
                     completedRuns: stats.completedRuns,
                     failedRuns: stats.failedRuns,
+                    queuedRuns: stats.queuedRuns,
+                    runningRuns: stats.runningRuns,
+                    cancelledRuns: stats.cancelledRuns,
                     totalTokens: stats.totalTokens,
-                    totalCostUsd: Math.round(stats.totalCostUsd * 10000) / 10000
-                }
+                    totalCostUsd: Math.round(stats.totalCostUsd * 10000) / 10000,
+                    lastRunAt: stats.lastRunAt ? stats.lastRunAt.toISOString() : null,
+                    lastFailedAt: stats.lastFailedAt ? stats.lastFailedAt.toISOString() : null
+                },
+                trends
             };
         });
 

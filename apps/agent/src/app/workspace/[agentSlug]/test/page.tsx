@@ -41,7 +41,16 @@ import {
     ToolOutput,
     Loader
 } from "@repo/ui";
-import { MessageSquareIcon, CopyIcon, RefreshCwIcon, TrashIcon } from "lucide-react";
+import {
+    MessageSquareIcon,
+    CopyIcon,
+    RefreshCwIcon,
+    TrashIcon,
+    ThumbsUpIcon,
+    ThumbsDownIcon
+} from "lucide-react";
+import { useFeedback, extractRunIdFromMessage } from "@/hooks/useFeedback";
+import { cn } from "@/lib/utils";
 
 interface TestCase {
     id: string;
@@ -88,6 +97,9 @@ export default function TestPage() {
             }
         })
     });
+
+    // Feedback hook for thumbs up/down on assistant messages
+    const { getFeedback, submitFeedback } = useFeedback({ agentSlug });
 
     // Fetch test cases from API
     const fetchTestCases = useCallback(async () => {
@@ -334,6 +346,67 @@ export default function TestPage() {
                                                                                 >
                                                                                     <RefreshCwIcon className="size-3" />
                                                                                 </MessageAction>
+                                                                                {/* Feedback buttons */}
+                                                                                {(() => {
+                                                                                    const runId =
+                                                                                        extractRunIdFromMessage(
+                                                                                            message
+                                                                                        );
+                                                                                    if (!runId)
+                                                                                        return null;
+                                                                                    const feedback =
+                                                                                        getFeedback(
+                                                                                            runId
+                                                                                        );
+                                                                                    return (
+                                                                                        <>
+                                                                                            <MessageAction
+                                                                                                data-testid="feedback-thumbs-up"
+                                                                                                tooltip="Helpful"
+                                                                                                onClick={() =>
+                                                                                                    submitFeedback(
+                                                                                                        runId,
+                                                                                                        true
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    feedback.isSubmitting
+                                                                                                }
+                                                                                            >
+                                                                                                <ThumbsUpIcon
+                                                                                                    className={cn(
+                                                                                                        "size-3",
+                                                                                                        feedback.value ===
+                                                                                                            true &&
+                                                                                                            "text-green-500"
+                                                                                                    )}
+                                                                                                />
+                                                                                            </MessageAction>
+                                                                                            <MessageAction
+                                                                                                data-testid="feedback-thumbs-down"
+                                                                                                tooltip="Not helpful"
+                                                                                                onClick={() =>
+                                                                                                    submitFeedback(
+                                                                                                        runId,
+                                                                                                        false
+                                                                                                    )
+                                                                                                }
+                                                                                                disabled={
+                                                                                                    feedback.isSubmitting
+                                                                                                }
+                                                                                            >
+                                                                                                <ThumbsDownIcon
+                                                                                                    className={cn(
+                                                                                                        "size-3",
+                                                                                                        feedback.value ===
+                                                                                                            false &&
+                                                                                                            "text-red-500"
+                                                                                                    )}
+                                                                                                />
+                                                                                            </MessageAction>
+                                                                                        </>
+                                                                                    );
+                                                                                })()}
                                                                             </MessageActions>
                                                                         )}
                                                                 </Message>
@@ -410,7 +483,7 @@ export default function TestPage() {
                                                     m.parts?.some(
                                                         (p) => p.type === "text" && p.text
                                                     )
-                                            ) && <Loader />}
+                                            ) && <Loader data-testid="sending-indicator" />}
                                     </ConversationContent>
                                     <ConversationScrollButton />
                                 </Conversation>

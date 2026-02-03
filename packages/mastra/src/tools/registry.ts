@@ -151,3 +151,16 @@ export function hasToolInRegistry(name: string): boolean {
 export function getToolByName(name: string): any | undefined {
     return toolRegistry[name];
 }
+
+/**
+ * Get all available MCP tools (cached)
+ *
+ * Use this to attach all MCP tools to MCP-enabled agents.
+ * Returns an empty object if MCP is not available.
+ *
+ * @returns Record of MCP tool name to tool instance
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function getAllMcpTools(): Promise<Record<string, any>> {
+    return getMcpToolsCached();
+}

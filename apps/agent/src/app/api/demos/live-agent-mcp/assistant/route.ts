@@ -6,12 +6,12 @@ import {
     listMcpToolDefinitions
 } from "@repo/mastra";
 import {
-    storeTrace,
-    updateTrace,
-    type ConversationTrace,
-    type ToolCall,
-    type ExecutionStep
-} from "@/lib/trace-store";
+    startRun,
+    extractTokenUsage,
+    type ExecutionStep,
+    type ToolCallData
+} from "@/lib/run-recorder";
+import { calculateCost } from "@/lib/cost-calculator";
 
 /** Default agent slug for ElevenLabs requests */
 const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-agent";
@@ -40,7 +40,7 @@ function validateWebhookSecret(request: NextRequest): boolean {
  * POST /api/demos/live-agent-mcp/assistant
  *
  * Receives a question from ElevenLabs and passes it to a database-configured agent.
- * Captures full observability data: model, tools, reasoning, timing.
+ * Records all runs in AgentRun for unified observability.
  *
  * Query Parameters:
  * - agent: Agent slug to use (default: env ELEVENLABS_DEFAULT_AGENT_SLUG or "mcp-agent")
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     const steps: ExecutionStep[] = [];
     let stepCounter = 0;
 
-    const addStep = (type: ExecutionStep["type"], content: string, toolCall?: ToolCall) => {
+    const addStep = (type: ExecutionStep["type"], content: string, toolCall?: ToolCallData) => {
         steps.push({
             step: ++stepCounter,
             type,
@@ -68,6 +68,11 @@ export async function POST(request: NextRequest) {
     // Get agent slug from query parameter
     const { searchParams } = new URL(request.url);
     const agentSlug = searchParams.get("agent") || DEFAULT_AGENT_SLUG;
+
+    // Get conversation ID from ElevenLabs if available
+    const conversationId =
+        request.headers.get("x-elevenlabs-conversation-id") ||
+        `elevenlabs-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
     try {
         const body = await request.json();
@@ -94,8 +99,23 @@ export async function POST(request: NextRequest) {
 
         // Resolve agent from database
         const { agent, record, source } = await agentResolver.resolve({ slug: agentSlug });
+        const agentId = record?.id || agentSlug;
         const maxSteps = record?.maxSteps || 5;
         addStep("thinking", `Resolved agent "${agentSlug}" from ${source} (maxSteps: ${maxSteps})`);
+
+        // Start recording the run
+        const run = await startRun({
+            agentId,
+            agentSlug,
+            input: question,
+            source: "elevenlabs",
+            sessionId: conversationId,
+            threadId: conversationId,
+            metadata: {
+                elevenlabsAgentId: process.env.ELEVENLABS_AGENT_ID,
+                availableTools
+            }
+        });
 
         // Build prompt - agent's instructions are already set, just pass the question
         const prompt = `The user asked: "${question}"
@@ -120,14 +140,10 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
 
         console.log(`[Trace] Model: ${modelInfo.provider}/${modelInfo.name}`);
 
-        // Generate trace ID
-        const traceId =
-            response.traceId || `voice-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
         // Process tool calls with full details
         const rawToolCalls = response.toolCalls || [];
         const rawToolResults = response.toolResults || [];
-        const toolCalls: ToolCall[] = [];
+        const toolCallsData: ToolCallData[] = [];
 
         console.log(`[Trace] Tool calls: ${rawToolCalls.length}`);
 
@@ -141,15 +157,18 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
             const toolInput = tc.args || tc.input || {};
             const toolOutput = tr?.result || tr?.output || tr;
 
-            const toolCall: ToolCall = {
-                name: toolName,
+            const toolCall: ToolCallData = {
+                toolKey: toolName,
                 input: toolInput,
                 output: toolOutput,
                 success: !tr?.error,
                 error: tr?.error
             };
 
-            toolCalls.push(toolCall);
+            toolCallsData.push(toolCall);
+
+            // Record tool call in RunRecorder
+            await run.addToolCall(toolCall);
 
             // Add step for tool call
             addStep("tool_call", `Calling tool: ${toolName}`, toolCall);
@@ -172,71 +191,56 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
         console.log(`[Trace] Duration: ${durationMs}ms`);
         console.log(`[Trace] Response: "${response.text?.substring(0, 100)}..."`);
 
-        // Extract token usage if available
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const usageAny = response.usage as any;
-        const tokens = usageAny
-            ? {
-                  prompt: usageAny.promptTokens || usageAny.inputTokens || 0,
-                  completion: usageAny.completionTokens || usageAny.outputTokens || 0,
-                  total: usageAny.totalTokens || 0
-              }
-            : undefined;
+        // Extract token usage
+        const tokens = extractTokenUsage(response);
 
         if (tokens) {
-            console.log(`[Trace] Tokens: ${tokens.prompt} prompt, ${tokens.completion} completion`);
+            console.log(
+                `[Trace] Tokens: ${tokens.promptTokens} prompt, ${tokens.completionTokens} completion`
+            );
         }
 
         // Run evaluations
-        const scores: ConversationTrace["scores"] = {};
+        const scores: Record<string, number> = {};
         const helpfulnessResult = evaluateHelpfulness(question, response.text || "");
-        scores.helpfulness = {
-            score: helpfulnessResult.score,
-            reasoning: helpfulnessResult.reasoning
-        };
+        scores.helpfulness = helpfulnessResult.score;
         console.log(`[Trace] Helpfulness: ${(helpfulnessResult.score * 100).toFixed(0)}%`);
 
-        // Build full trace
-        const trace: ConversationTrace = {
-            traceId,
-            timestamp: new Date().toISOString(),
-            input: question,
-            output: response.text || "",
-            model: modelInfo,
-            availableTools,
-            toolCalls,
-            steps,
-            durationMs,
-            tokens,
-            scores,
-            metadata: {
-                source: "elevenlabs-voice",
-                agentSlug: agentSlug,
-                agentSource: source,
-                elevenlabsAgentId: process.env.ELEVENLABS_AGENT_ID,
-                maxSteps
-            }
-        };
+        // Calculate cost based on model and token usage
+        const costUsd = calculateCost(
+            modelInfo.name,
+            modelInfo.provider,
+            tokens?.promptTokens || 0,
+            tokens?.completionTokens || 0
+        );
 
-        // Store trace (async, don't block response)
-        storeTrace(trace).catch((err) => {
-            console.error("[Trace] Failed to store trace:", err);
+        // Complete the run with all data
+        await run.complete({
+            output: response.text || "",
+            modelProvider: modelInfo.provider,
+            modelName: modelInfo.name,
+            promptTokens: tokens?.promptTokens,
+            completionTokens: tokens?.completionTokens,
+            costUsd,
+            steps,
+            scores
         });
 
-        console.log(`[Trace] ◀ Complete (${steps.length} steps)`);
+        console.log(`[Trace] ◀ Complete (${steps.length} steps) - Run ID: ${run.runId}`);
         console.log(`${"═".repeat(70)}\n`);
 
-        // Run relevancy eval async
-        runRelevancyEvalAsync(traceId, question, response.text || "");
+        // Run relevancy eval async (updates the run)
+        runRelevancyEvalAsync(run.runId, question, response.text || "");
 
         // Return response for ElevenLabs
         return NextResponse.json({
             success: true,
             text: response.text || "I'm sorry, I couldn't find that information.",
-            traceId,
+            runId: run.runId,
+            traceId: run.traceId,
             durationMs,
             model: modelInfo,
-            toolsUsed: toolCalls.map((tc) => tc.name),
+            toolsUsed: toolCallsData.map((tc) => tc.toolKey),
             scores
         });
     } catch (error) {
@@ -258,9 +262,9 @@ Please help the user with their request. Keep responses concise (2-4 sentences) 
 }
 
 /**
- * Run relevancy eval asynchronously
+ * Run relevancy eval asynchronously and update the run
  */
-async function runRelevancyEvalAsync(traceId: string, input: string, output: string) {
+async function runRelevancyEvalAsync(runId: string, input: string, output: string) {
     try {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const scorer = relevancyScorer as any;
@@ -271,15 +275,24 @@ async function runRelevancyEvalAsync(traceId: string, input: string, output: str
 
         const score = result?.score ?? 0;
 
-        const updated = await updateTrace(traceId, {
-            scores: {
-                relevancy: { score }
+        // Update the evaluation record for this run
+        // Note: The score was already recorded in run.complete(), this adds relevancy
+        const { prisma } = await import("@repo/database");
+        await prisma.agentEvaluation.upsert({
+            where: { runId },
+            create: {
+                runId,
+                agentId: "", // Will be filled from the run
+                scoresJson: { relevancy: score }
+            },
+            update: {
+                scoresJson: {
+                    relevancy: score
+                }
             }
         });
 
-        if (updated) {
-            console.log(`[Trace] Relevancy for ${traceId}: ${(score * 100).toFixed(0)}%`);
-        }
+        console.log(`[Trace] Relevancy for ${runId}: ${(score * 100).toFixed(0)}%`);
     } catch (error) {
         console.error(`[Trace] Relevancy eval failed:`, error);
     }

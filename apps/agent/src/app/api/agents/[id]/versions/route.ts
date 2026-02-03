@@ -52,6 +52,111 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             }
         });
 
+        const versionIdSet = new Set(versions.map((v) => v.id));
+        const versionTimeline = versions
+            .map((v) => ({ id: v.id, createdAtMs: v.createdAt.getTime() }))
+            .sort((a, b) => a.createdAtMs - b.createdAtMs);
+
+        const resolveVersionIdForTime = (timeMs: number): string | null => {
+            let resolved: string | null = null;
+            for (const v of versionTimeline) {
+                if (v.createdAtMs <= timeMs) {
+                    resolved = v.id;
+                } else {
+                    break;
+                }
+            }
+            return resolved;
+        };
+
+        // Compute stats on-demand when stored version stats are missing
+        const runs = await prisma.agentRun.findMany({
+            where: { agentId: agent.id },
+            select: {
+                id: true,
+                status: true,
+                versionId: true,
+                startedAt: true
+            }
+        });
+
+        const runVersionMap = new Map<string, string>();
+        const runStatsByVersion = new Map<string, { total: number; completed: number }>();
+
+        for (const run of runs) {
+            let resolvedVersionId =
+                run.versionId && versionIdSet.has(run.versionId) ? run.versionId : null;
+
+            if (!resolvedVersionId) {
+                resolvedVersionId = resolveVersionIdForTime(run.startedAt.getTime());
+            }
+
+            if (!resolvedVersionId) {
+                continue;
+            }
+
+            runVersionMap.set(run.id, resolvedVersionId);
+            const stats = runStatsByVersion.get(resolvedVersionId) || { total: 0, completed: 0 };
+            stats.total += 1;
+            if (run.status === "COMPLETED") {
+                stats.completed += 1;
+            }
+            runStatsByVersion.set(resolvedVersionId, stats);
+        }
+
+        const evaluations = await prisma.agentEvaluation.findMany({
+            where: { agentId: agent.id },
+            select: {
+                runId: true,
+                scoresJson: true
+            }
+        });
+
+        const qualityTotalsByVersion = new Map<string, { total: number; count: number }>();
+        for (const evaluation of evaluations) {
+            const versionId = runVersionMap.get(evaluation.runId);
+            if (!versionId) {
+                continue;
+            }
+
+            const scores = evaluation.scoresJson as Record<string, number>;
+            const values = Object.values(scores).filter((value) => typeof value === "number");
+            if (values.length === 0) {
+                continue;
+            }
+
+            const avgScore = values.reduce((a, b) => a + b, 0) / values.length;
+            const existing = qualityTotalsByVersion.get(versionId) || { total: 0, count: 0 };
+            existing.total += avgScore;
+            existing.count += 1;
+            qualityTotalsByVersion.set(versionId, existing);
+        }
+
+        const computedStatsByVersion = new Map<
+            string,
+            { runs: number; successRate: number; avgQuality: number }
+        >();
+
+        for (const versionId of versionIdSet) {
+            const runStats = runStatsByVersion.get(versionId);
+            const qualityStats = qualityTotalsByVersion.get(versionId);
+
+            const totalRuns = runStats?.total ?? 0;
+            const completedRuns = runStats?.completed ?? 0;
+            const successRate =
+                totalRuns > 0 ? Math.round((completedRuns / totalRuns) * 10000) / 100 : 0;
+            const avgQuality =
+                qualityStats && qualityStats.count > 0
+                    ? Math.round((qualityStats.total / qualityStats.count) * 100) / 100
+                    : 0;
+
+            computedStatsByVersion.set(versionId, {
+                runs: totalRuns,
+                successRate,
+                avgQuality
+            });
+        }
+
         // Check if there are more results
         const hasMore = versions.length > limit;
         if (hasMore) {
@@ -60,18 +165,29 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         return NextResponse.json({
             success: true,
-            versions: versions.map((v) => ({
-                id: v.id,
-                version: v.version,
-                description: v.description,
-                modelProvider: v.modelProvider,
-                modelName: v.modelName,
-                changesJson: v.changesJson,
-                createdBy: v.createdBy,
-                createdAt: v.createdAt,
-                isActive: v.version === agent.version,
-                stats: v.versionStats[0] || null
-            })),
+            versions: versions.map((v) => {
+                const storedStats = v.versionStats[0] || null;
+                const computedStats = computedStatsByVersion.get(v.id);
+
+                return {
+                    id: v.id,
+                    version: v.version,
+                    description: v.description,
+                    instructions: v.instructions,
+                    modelProvider: v.modelProvider,
+                    modelName: v.modelName,
+                    changesJson: v.changesJson,
+                    snapshot: v.snapshot,
+                    createdBy: v.createdBy,
+                    createdAt: v.createdAt,
+                    isActive: v.version === agent.version,
+                    stats: {
+                        runs: storedStats?.runs ?? computedStats?.runs ?? 0,
+                        successRate: storedStats?.successRate ?? computedStats?.successRate ?? 0,
+                        avgQuality: storedStats?.avgQuality ?? computedStats?.avgQuality ?? 0
+                    }
+                };
+            }),
             currentVersion: agent.version,
             nextCursor: hasMore ? versions[versions.length - 1].version.toString() : null
         });

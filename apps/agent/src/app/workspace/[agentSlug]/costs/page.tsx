@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import {
     Card,
     CardContent,
@@ -12,9 +12,87 @@ import {
     Input,
     Label,
     Skeleton,
-    Switch
+    Switch,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+
+// Date range presets
+type DateRangePreset =
+    | "all-time"
+    | "today"
+    | "last-7-days"
+    | "last-30-days"
+    | "last-90-days"
+    | "this-month"
+    | "last-month"
+    | "this-year"
+    | "custom";
+
+interface DateRange {
+    from: Date | null;
+    to: Date | null;
+    label: string;
+}
+
+function getDateRangeFromPreset(preset: DateRangePreset): DateRange {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    switch (preset) {
+        case "all-time":
+            return { from: null, to: null, label: "All Time" };
+        case "today":
+            return { from: today, to: now, label: "Today" };
+        case "last-7-days":
+            return {
+                from: new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000),
+                to: now,
+                label: "Last 7 Days"
+            };
+        case "last-30-days":
+            return {
+                from: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000),
+                to: now,
+                label: "Last 30 Days"
+            };
+        case "last-90-days":
+            return {
+                from: new Date(today.getTime() - 90 * 24 * 60 * 60 * 1000),
+                to: now,
+                label: "Last 90 Days"
+            };
+        case "this-month":
+            return {
+                from: new Date(now.getFullYear(), now.getMonth(), 1),
+                to: now,
+                label: "This Month"
+            };
+        case "last-month": {
+            const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+            const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+            return { from: lastMonth, to: lastMonthEnd, label: "Last Month" };
+        }
+        case "this-year":
+            return {
+                from: new Date(now.getFullYear(), 0, 1),
+                to: now,
+                label: "This Year"
+            };
+        case "custom":
+            return { from: null, to: null, label: "Custom Range" };
+        default:
+            return {
+                from: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000),
+                to: now,
+                label: "Last 30 Days"
+            };
+    }
+}
 
 interface CostData {
     totalCost: number;
@@ -22,6 +100,7 @@ interface CostData {
     dailyAverage: number;
     projectedMonthly: number;
     costPerRun: number;
+    runCount: number;
     tokenBreakdown: {
         prompt: { tokens: number; cost: number };
         completion: { tokens: number; cost: number };
@@ -32,7 +111,8 @@ interface CostData {
         tokens: number;
         cost: number;
     }>;
-    byDay: number[];
+    byDay: Array<{ date: string; cost: number }>;
+    dateRange: { from: string; to: string };
 }
 
 export default function CostsPage() {
@@ -50,14 +130,45 @@ export default function CostsPage() {
         hardLimit: false
     });
 
+    // Date range state
+    const [datePreset, setDatePreset] = useState<DateRangePreset>("last-30-days");
+    const [customFromDate, setCustomFromDate] = useState<string>("");
+    const [customToDate, setCustomToDate] = useState<string>("");
+    const [sourceFilter, setSourceFilter] = useState<"all" | "production" | "simulation">("all");
+
+    // Compute effective date range
+    const effectiveDateRange = useMemo(() => {
+        if (datePreset === "custom" && customFromDate && customToDate) {
+            return {
+                from: new Date(customFromDate),
+                to: new Date(customToDate + "T23:59:59"),
+                label: `${customFromDate} to ${customToDate}`
+            };
+        }
+        return getDateRangeFromPreset(datePreset);
+    }, [datePreset, customFromDate, customToDate]);
+
     const fetchCostsAndBudget = useCallback(async () => {
         try {
             setLoading(true);
             setError(null);
 
+            // Build query params for date range and source
+            const params = new URLSearchParams();
+            if (effectiveDateRange.from) {
+                params.set("from", effectiveDateRange.from.toISOString());
+            }
+            if (effectiveDateRange.to) {
+                params.set("to", effectiveDateRange.to.toISOString());
+            }
+            params.set("source", sourceFilter);
+
+            const queryString = params.toString();
+            const costsUrl = `${getApiBase()}/api/agents/${agentSlug}/costs${queryString ? `?${queryString}` : ""}`;
+
             // Fetch costs and budget in parallel
             const [costsRes, budgetRes] = await Promise.all([
-                fetch(`${getApiBase()}/api/agents/${agentSlug}/costs`),
+                fetch(costsUrl),
                 fetch(`${getApiBase()}/api/agents/${agentSlug}/budget`)
             ]);
 
@@ -77,11 +188,22 @@ export default function CostsPage() {
                         ? dailyCosts.reduce((a: number, b: number) => a + b, 0) / dailyCosts.length
                         : 0;
 
-                // Get days remaining in month
+                // Get days remaining in month (for projected monthly)
                 const now = new Date();
                 const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
                 const dayOfMonth = now.getDate();
-                const projectedMonthly = (totalCost / dayOfMonth) * daysInMonth;
+
+                // Only show projected if we're looking at current month data
+                const isCurrentMonth =
+                    datePreset === "this-month" ||
+                    (effectiveDateRange.from &&
+                        effectiveDateRange.from.getMonth() === now.getMonth() &&
+                        effectiveDateRange.from.getFullYear() === now.getFullYear());
+                const projectedMonthly = isCurrentMonth
+                    ? dayOfMonth > 0
+                        ? (totalCost / dayOfMonth) * daysInMonth
+                        : 0
+                    : totalCost;
 
                 const transformedCostData: CostData = {
                     totalCost,
@@ -89,18 +211,15 @@ export default function CostsPage() {
                     dailyAverage,
                     projectedMonthly,
                     costPerRun: runCount > 0 ? totalCost / runCount : 0,
+                    runCount,
                     tokenBreakdown: {
                         prompt: {
                             tokens: costsResult.tokenBreakdown?.prompt || 0,
-                            cost:
-                                totalCost *
-                                ((costsResult.tokenBreakdown?.promptPercentage || 40) / 100)
+                            cost: costsResult.tokenBreakdown?.promptCostUsd || 0
                         },
                         completion: {
                             tokens: costsResult.tokenBreakdown?.completion || 0,
-                            cost:
-                                totalCost *
-                                (1 - (costsResult.tokenBreakdown?.promptPercentage || 40) / 100)
+                            cost: costsResult.tokenBreakdown?.completionCostUsd || 0
                         }
                     },
                     byModel: (costsResult.byModel || []).map(
@@ -111,7 +230,11 @@ export default function CostsPage() {
                             cost: m.costUsd
                         })
                     ),
-                    byDay: dailyCosts
+                    byDay: byDayData.map((d: { date: string; costUsd: number }) => ({
+                        date: d.date,
+                        cost: d.costUsd
+                    })),
+                    dateRange: costsResult.dateRange || { from: "", to: "" }
                 };
 
                 setCostData(transformedCostData);
@@ -130,7 +253,7 @@ export default function CostsPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug]);
+    }, [agentSlug, effectiveDateRange, sourceFilter]);
 
     const saveBudgetSettings = async () => {
         try {
@@ -209,12 +332,14 @@ export default function CostsPage() {
         dailyAverage: 0,
         projectedMonthly: 0,
         costPerRun: 0,
+        runCount: 0,
         tokenBreakdown: {
             prompt: { tokens: 0, cost: 0 },
             completion: { tokens: 0, cost: 0 }
         },
         byModel: [],
-        byDay: []
+        byDay: [] as Array<{ date: string; cost: number }>,
+        dateRange: { from: "", to: "" }
     };
 
     const budgetUsage =
@@ -222,18 +347,97 @@ export default function CostsPage() {
             ? (displayCostData.totalCost / displayCostData.monthlyBudget) * 100
             : 0;
 
+    // Format date for display
+    const formatDateRange = () => {
+        if (datePreset === "all-time") return "All Time";
+        if (costData?.dateRange) {
+            const from = new Date(costData.dateRange.from).toLocaleDateString();
+            const to = new Date(costData.dateRange.to).toLocaleDateString();
+            return `${from} - ${to}`;
+        }
+        return effectiveDateRange.label;
+    };
+
     return (
         <div className="space-y-6">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                     <h1 className="text-2xl font-bold">Cost Management</h1>
                     <p className="text-muted-foreground">
                         Track spending, set budgets, and optimize costs
                     </p>
                 </div>
-                <Button variant="outline">Export Report</Button>
+                <div className="flex flex-wrap items-center gap-2">
+                    <Select
+                        value={sourceFilter}
+                        onValueChange={(value) =>
+                            setSourceFilter(value as "all" | "production" | "simulation")
+                        }
+                    >
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Source" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All Sources</SelectItem>
+                            <SelectItem value="production">Production</SelectItem>
+                            <SelectItem value="simulation">Simulation</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    <Select
+                        value={datePreset}
+                        onValueChange={(value) => setDatePreset(value as DateRangePreset)}
+                    >
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all-time">All Time</SelectItem>
+                            <SelectItem value="today">Today</SelectItem>
+                            <SelectItem value="last-7-days">Last 7 Days</SelectItem>
+                            <SelectItem value="last-30-days">Last 30 Days</SelectItem>
+                            <SelectItem value="last-90-days">Last 90 Days</SelectItem>
+                            <SelectItem value="this-month">This Month</SelectItem>
+                            <SelectItem value="last-month">Last Month</SelectItem>
+                            <SelectItem value="this-year">This Year</SelectItem>
+                            <SelectItem value="custom">Custom Range</SelectItem>
+                        </SelectContent>
+                    </Select>
+
+                    {datePreset === "custom" && (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                type="date"
+                                value={customFromDate}
+                                onChange={(e) => setCustomFromDate(e.target.value)}
+                                className="w-[140px]"
+                            />
+                            <span className="text-muted-foreground">to</span>
+                            <Input
+                                type="date"
+                                value={customToDate}
+                                onChange={(e) => setCustomToDate(e.target.value)}
+                                className="w-[140px]"
+                            />
+                        </div>
+                    )}
+
+                    <Button variant="outline" size="sm">
+                        Export
+                    </Button>
+                </div>
             </div>
+
+            {/* Date Range Display */}
+            {costData && (
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
+                    <span>Showing data for:</span>
+                    <span className="text-foreground font-medium">{formatDateRange()}</span>
+                    <span>•</span>
+                    <span>{costData.runCount} runs</span>
+                </div>
+            )}
 
             {/* Budget Alert */}
             {budgetUsage >= budgetSettings.alertAt && (
@@ -257,23 +461,37 @@ export default function CostsPage() {
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>This Month</CardDescription>
+                        <CardDescription>
+                            {datePreset === "all-time"
+                                ? "Total Cost"
+                                : datePreset === "this-month"
+                                  ? "This Month"
+                                  : datePreset === "last-month"
+                                    ? "Last Month"
+                                    : "Period Total"}
+                        </CardDescription>
                         <CardTitle className="text-2xl">
                             ${displayCostData.totalCost.toFixed(2)}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex items-center gap-2">
-                            <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
-                                <div
-                                    className={`h-full ${budgetUsage >= 80 ? "bg-yellow-500" : "bg-primary"}`}
-                                    style={{ width: `${Math.min(budgetUsage, 100)}%` }}
-                                />
+                        {budgetSettings.enabled && datePreset === "this-month" ? (
+                            <div className="flex items-center gap-2">
+                                <div className="bg-muted h-2 flex-1 overflow-hidden rounded-full">
+                                    <div
+                                        className={`h-full ${budgetUsage >= 80 ? "bg-yellow-500" : "bg-primary"}`}
+                                        style={{ width: `${Math.min(budgetUsage, 100)}%` }}
+                                    />
+                                </div>
+                                <span className="text-muted-foreground text-xs">
+                                    {budgetUsage.toFixed(0)}%
+                                </span>
                             </div>
-                            <span className="text-muted-foreground text-xs">
-                                {budgetUsage.toFixed(0)}%
-                            </span>
-                        </div>
+                        ) : (
+                            <p className="text-muted-foreground text-xs">
+                                {displayCostData.runCount || 0} runs
+                            </p>
+                        )}
                     </CardContent>
                 </Card>
 
@@ -285,21 +503,38 @@ export default function CostsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-muted-foreground text-xs">Last 14 days</p>
+                        <p className="text-muted-foreground text-xs">
+                            {displayCostData.byDay?.length || 0} days with activity
+                        </p>
                     </CardContent>
                 </Card>
 
                 <Card>
                     <CardHeader className="pb-2">
-                        <CardDescription>Projected Monthly</CardDescription>
+                        <CardDescription>
+                            {datePreset === "this-month" ? "Projected Monthly" : "Total Tokens"}
+                        </CardDescription>
                         <CardTitle
-                            className={`text-2xl ${displayCostData.projectedMonthly > displayCostData.monthlyBudget ? "text-red-600" : ""}`}
+                            className={`text-2xl ${datePreset === "this-month" && displayCostData.projectedMonthly > displayCostData.monthlyBudget ? "text-red-600" : ""}`}
                         >
-                            ${displayCostData.projectedMonthly.toFixed(2)}
+                            {datePreset === "this-month" ? (
+                                `$${displayCostData.projectedMonthly.toFixed(2)}`
+                            ) : (
+                                <>
+                                    {(
+                                        (displayCostData.tokenBreakdown?.prompt?.tokens || 0) +
+                                        (displayCostData.tokenBreakdown?.completion?.tokens || 0)
+                                    ).toLocaleString()}
+                                </>
+                            )}
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-muted-foreground text-xs">Based on current usage</p>
+                        <p className="text-muted-foreground text-xs">
+                            {datePreset === "this-month"
+                                ? "Based on current usage"
+                                : "Input + Output tokens"}
+                        </p>
                     </CardContent>
                 </Card>
 
@@ -311,7 +546,7 @@ export default function CostsPage() {
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-muted-foreground text-xs">Average across all runs</p>
+                        <p className="text-muted-foreground text-xs">Average for selected period</p>
                     </CardContent>
                 </Card>
             </div>
@@ -321,34 +556,71 @@ export default function CostsPage() {
                 <Card className="lg:col-span-2">
                     <CardHeader>
                         <CardTitle>Daily Costs</CardTitle>
-                        <CardDescription>Last 14 days</CardDescription>
+                        <CardDescription>{effectiveDateRange.label}</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        {displayCostData.byDay.length > 0 ? (
+                        {displayCostData.byDay && displayCostData.byDay.length > 0 ? (
                             <>
                                 <div className="flex h-[200px] items-end gap-1">
-                                    {displayCostData.byDay.map((cost, i) => (
-                                        <div
-                                            key={i}
-                                            className="bg-primary group relative flex-1 rounded-t opacity-80 transition-opacity hover:opacity-100"
-                                            style={{
-                                                height: `${(cost / Math.max(...displayCostData.byDay, 1)) * 100}%`
-                                            }}
-                                        >
-                                            <div className="bg-foreground text-background absolute -top-8 left-1/2 -translate-x-1/2 rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
-                                                ${cost.toFixed(2)}
+                                    {displayCostData.byDay.map((day, i) => {
+                                        const cost = typeof day === "object" ? day.cost : day;
+                                        const date =
+                                            typeof day === "object" ? day.date : `Day ${i + 1}`;
+                                        const maxCost = Math.max(
+                                            ...displayCostData.byDay.map((d) =>
+                                                typeof d === "object" ? d.cost : d
+                                            ),
+                                            0.01
+                                        );
+                                        return (
+                                            <div
+                                                key={i}
+                                                className="bg-primary group relative flex-1 rounded-t opacity-80 transition-opacity hover:opacity-100"
+                                                style={{
+                                                    height: `${Math.max((cost / maxCost) * 100, 2)}%`,
+                                                    minHeight: cost > 0 ? "4px" : "0"
+                                                }}
+                                            >
+                                                <div className="bg-foreground text-background absolute -top-10 left-1/2 z-10 -translate-x-1/2 rounded px-2 py-1 text-xs whitespace-nowrap opacity-0 transition-opacity group-hover:opacity-100">
+                                                    <div className="font-medium">
+                                                        ${cost.toFixed(4)}
+                                                    </div>
+                                                    <div className="text-muted-foreground text-[10px]">
+                                                        {date}
+                                                    </div>
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        );
+                                    })}
                                 </div>
                                 <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                                    <span>14 days ago</span>
-                                    <span>Today</span>
+                                    <span>
+                                        {displayCostData.byDay[0] &&
+                                        typeof displayCostData.byDay[0] === "object"
+                                            ? new Date(
+                                                  displayCostData.byDay[0].date
+                                              ).toLocaleDateString()
+                                            : "Start"}
+                                    </span>
+                                    <span>
+                                        {displayCostData.byDay.length > 0 &&
+                                        typeof displayCostData.byDay[
+                                            displayCostData.byDay.length - 1
+                                        ] === "object"
+                                            ? new Date(
+                                                  (
+                                                      displayCostData.byDay[
+                                                          displayCostData.byDay.length - 1
+                                                      ] as { date: string }
+                                                  ).date
+                                              ).toLocaleDateString()
+                                            : "End"}
+                                    </span>
                                 </div>
                             </>
                         ) : (
                             <div className="text-muted-foreground flex h-[200px] items-center justify-center">
-                                No cost data available
+                                No cost data available for this period
                             </div>
                         )}
                     </CardContent>

@@ -7,6 +7,7 @@ import {
     toneScorer,
     evaluateHelpfulness
 } from "@repo/mastra";
+import { inngest } from "@/lib/inngest";
 
 /**
  * GET /api/agents/[id]/evaluations
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const to = searchParams.get("to");
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
         const cursor = searchParams.get("cursor");
+        const source = searchParams.get("source"); // "production", "simulation", "all"
 
         // Default to last 30 days if no date range provided
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -41,6 +43,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
+        // Build source filter for runs (evaluations are linked to runs)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let runSourceFilter: any = undefined;
+        if (source === "production") {
+            runSourceFilter = { source: { not: "simulation" } };
+        } else if (source === "simulation") {
+            runSourceFilter = { source: "simulation" };
+        }
+        // "all" or undefined means no filter
+
         // Build where clause
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = {
@@ -48,7 +60,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             createdAt: {
                 gte: startDate,
                 lte: endDate
-            }
+            },
+            ...(runSourceFilter && { run: runSourceFilter })
         };
 
         if (cursor) {
@@ -339,12 +352,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }
 
                 // Save evaluation to database
-                await prisma.agentEvaluation.create({
+                const evaluation = await prisma.agentEvaluation.create({
                     data: {
                         runId: run.id,
                         agentId: agent.id,
                         scoresJson: scores,
                         scorerVersion: "1.0"
+                    }
+                });
+
+                // Emit evaluation/completed event for insight generation
+                await inngest.send({
+                    name: "evaluation/completed",
+                    data: {
+                        evaluationId: evaluation.id,
+                        agentId: agent.id,
+                        runId: run.id,
+                        scores
                     }
                 });
 

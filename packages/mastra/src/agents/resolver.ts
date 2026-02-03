@@ -10,7 +10,7 @@ import { Memory } from "@mastra/memory";
 import { prisma, Prisma } from "@repo/database";
 import { mastra } from "../mastra";
 import { storage } from "../storage";
-import { getToolsByNamesAsync } from "../tools/registry";
+import { getToolsByNamesAsync, getAllMcpTools } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
 
 // Use Prisma namespace for types
@@ -184,7 +184,18 @@ export class AgentResolver {
 
         // Get tools from registry AND MCP (async)
         const toolNames = record.tools.map((t: { toolId: string }) => t.toolId);
-        const tools = await getToolsByNamesAsync(toolNames);
+        let tools = await getToolsByNamesAsync(toolNames);
+
+        // If agent is MCP-enabled, merge in all available MCP tools
+        const metadata = record.metadata as Record<string, unknown> | null;
+        if (metadata?.mcpEnabled) {
+            const mcpTools = await getAllMcpTools();
+            // Merge MCP tools without overwriting already-resolved tools
+            tools = { ...mcpTools, ...tools };
+            console.log(
+                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
+            );
+        }
 
         // Get scorers from registry
         const scorers = getScorersByNames(record.scorers);

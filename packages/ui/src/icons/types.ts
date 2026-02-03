@@ -41,7 +41,8 @@ export type IconName =
     | "chart-evaluation"
     | "dollar"
     | "git-branch"
-    | "shield";
+    | "shield"
+    | "play-list";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

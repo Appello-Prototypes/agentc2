@@ -75,6 +75,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const to = searchParams.get("to");
         const cursor = searchParams.get("cursor");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
+        // Source filter: "production" (default, excludes simulations), "simulation", or "all"
+        const source = searchParams.get("source") || "production";
 
         // Find agent by slug or id
         const agent = await prisma.agent.findFirst({
@@ -95,14 +97,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const where: any = { agentId: agent.id };
 
+        // Apply source filter
+        if (source === "production") {
+            // Exclude simulation runs - show only production data
+            where.AND = [
+                ...(where.AND || []),
+                { OR: [{ source: { not: "simulation" } }, { source: null }] }
+            ];
+        } else if (source === "simulation") {
+            // Show only simulation runs
+            where.source = "simulation";
+        }
+        // source === "all" shows everything (no filter)
+
         if (status) {
             where.status = status.toUpperCase();
         }
 
         if (search) {
-            where.OR = [
-                { inputText: { contains: search, mode: "insensitive" } },
-                { outputText: { contains: search, mode: "insensitive" } }
+            where.AND = [
+                ...(where.AND || []),
+                {
+                    OR: [
+                        { inputText: { contains: search, mode: "insensitive" } },
+                        { outputText: { contains: search, mode: "insensitive" } }
+                    ]
+                }
             ];
         }
 
@@ -129,6 +149,18 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 },
                 feedback: {
                     select: { thumbs: true, rating: true }
+                },
+                trace: {
+                    select: {
+                        tokensJson: true,
+                        scoresJson: true,
+                        modelJson: true,
+                        stepsJson: true, // Also get JSON-stored steps for counting
+                        _count: { select: { steps: true, toolCalls: true } }
+                    }
+                },
+                _count: {
+                    select: { guardrailEvents: true, toolCalls: true }
                 }
             }
         });
@@ -144,22 +176,53 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         return NextResponse.json({
             success: true,
-            runs: runs.map((run) => ({
-                id: run.id,
-                runType: run.runType,
-                status: run.status,
-                inputText: run.inputText,
-                outputText: run.outputText,
-                durationMs: run.durationMs,
-                startedAt: run.startedAt,
-                completedAt: run.completedAt,
-                modelProvider: run.modelProvider,
-                modelName: run.modelName,
-                totalTokens: run.totalTokens,
-                costUsd: run.costUsd,
-                evaluation: run.evaluation?.scoresJson,
-                feedback: run.feedback
-            })),
+            runs: runs.map((run) => {
+                // Count steps from relational data OR JSON array fallback
+                const stepsFromRelation = run.trace?._count.steps ?? 0;
+                const stepsFromJson = Array.isArray(run.trace?.stepsJson)
+                    ? (run.trace.stepsJson as unknown[]).length
+                    : 0;
+                const stepsCount = stepsFromRelation > 0 ? stepsFromRelation : stepsFromJson;
+
+                // Count tool calls from trace, run, or JSON
+                const toolCallsCount = run.trace?._count.toolCalls ?? run._count.toolCalls ?? 0;
+
+                // Get tokens from run fields (primary) or trace JSON (fallback)
+                const traceTokens = run.trace?.tokensJson as {
+                    prompt?: number;
+                    completion?: number;
+                    total?: number;
+                } | null;
+
+                return {
+                    id: run.id,
+                    runType: run.runType,
+                    status: run.status,
+                    inputText: run.inputText,
+                    outputText: run.outputText,
+                    durationMs: run.durationMs,
+                    startedAt: run.startedAt,
+                    completedAt: run.completedAt,
+                    modelProvider: run.modelProvider,
+                    modelName: run.modelName,
+                    // Tokens: prefer run fields, fall back to trace JSON
+                    promptTokens: run.promptTokens ?? traceTokens?.prompt ?? 0,
+                    completionTokens: run.completionTokens ?? traceTokens?.completion ?? 0,
+                    totalTokens: run.totalTokens ?? traceTokens?.total ?? 0,
+                    costUsd: run.costUsd,
+                    evaluation: run.evaluation?.scoresJson,
+                    feedback: run.feedback,
+                    traceTokens: run.trace?.tokensJson,
+                    traceScores: run.trace?.scoresJson,
+                    traceModel: run.trace?.modelJson,
+                    traceStepsCount: stepsCount,
+                    traceToolCallsCount: toolCallsCount,
+                    guardrailCount: run._count.guardrailEvents ?? 0,
+                    versionId: run.versionId,
+                    experimentGroup: run.experimentGroup,
+                    source: run.source
+                };
+            }),
             total,
             nextCursor: hasMore ? runs[runs.length - 1].id : null
         });

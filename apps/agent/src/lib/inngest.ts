@@ -101,6 +101,7 @@ export const inngest = new Inngest({
                 agentId: string;
                 triggerReason: string;
                 triggerType?: "threshold" | "scheduled" | "manual";
+                sessionId?: string; // If provided, use existing session instead of creating new
             };
         };
         "learning/session.scheduled": {
@@ -147,6 +148,53 @@ export const inngest = new Inngest({
         "metrics/daily.rollup": {
             data: {
                 date?: string; // ISO date string, defaults to yesterday
+            };
+        };
+        // Simulation Events
+        "simulation/session.start": {
+            data: {
+                sessionId: string;
+                agentId: string;
+                theme: string;
+                targetCount: number;
+                concurrency: number;
+            };
+        };
+        "simulation/batch.run": {
+            data: {
+                sessionId: string;
+                agentId: string;
+                theme: string;
+                batchIndex: number;
+                batchSize: number;
+            };
+        };
+        // Agent Invocation Events
+        "agent/invoke.async": {
+            data: {
+                runId: string;
+                agentId: string;
+                agentSlug: string;
+                input: string;
+                context?: Record<string, unknown>;
+                maxSteps?: number;
+                idempotencyKey?: string;
+            };
+        };
+        // Agent Schedule Events
+        "agent/schedule.trigger": {
+            data: {
+                scheduleId: string;
+                agentId: string;
+                input?: string;
+            };
+        };
+        // Agent Trigger Events
+        "agent/trigger.fire": {
+            data: {
+                triggerId: string;
+                agentId: string;
+                payload: Record<string, unknown>;
             };
         };
     }>()

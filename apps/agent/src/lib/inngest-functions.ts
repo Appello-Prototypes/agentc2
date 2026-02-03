@@ -1,7 +1,7 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
 import { prisma } from "@repo/database";
-import { evaluateHelpfulness } from "@repo/mastra";
+import { evaluateHelpfulness, mastra } from "@repo/mastra";
 import crypto from "crypto";
 import {
     SIGNAL_THRESHOLDS,
@@ -487,7 +487,18 @@ export const runEvaluationFunction = inngest.createFunction(
             });
         });
 
-        // Step 5: Check for low scores and emit signal event
+        // Step 5: Emit evaluation/completed event for downstream processing (insights, metrics)
+        await step.sendEvent("emit-evaluation-completed", {
+            name: "evaluation/completed",
+            data: {
+                evaluationId: evaluation.id,
+                agentId,
+                runId,
+                scores
+            }
+        });
+
+        // Step 6: Check for low scores and emit signal event
         await step.run("check-signals", async () => {
             const avgScore =
                 Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length;
@@ -784,10 +795,10 @@ export const learningSessionStartFunction = inngest.createFunction(
     },
     { event: "learning/session.start" },
     async ({ event, step }) => {
-        const { agentId, triggerReason, triggerType = "manual" } = event.data;
+        const { agentId, triggerReason, triggerType = "manual", sessionId } = event.data;
 
         console.log(
-            `[Inngest] Starting learning session for agent: ${agentId} (trigger: ${triggerType})`
+            `[Inngest] Starting learning session for agent: ${agentId} (trigger: ${triggerType})${sessionId ? ` [existing session: ${sessionId}]` : ""}`
         );
 
         // Step 1: Get agent and baseline version
@@ -808,8 +819,20 @@ export const learningSessionStartFunction = inngest.createFunction(
             throw new Error(`Agent not found: ${agentId}`);
         }
 
-        // Step 2: Create learning session
-        const session = await step.run("create-session", async () => {
+        // Step 2: Get existing session or create new one
+        const session = await step.run("get-or-create-session", async () => {
+            // If sessionId is provided, use the existing session (created by API)
+            if (sessionId) {
+                const existingSession = await prisma.learningSession.findUnique({
+                    where: { id: sessionId }
+                });
+                if (existingSession) {
+                    return existingSession;
+                }
+                // Fall through to create if not found (shouldn't happen)
+            }
+
+            // Create new session
             return prisma.learningSession.create({
                 data: {
                     agentId,
@@ -1338,9 +1361,27 @@ export const learningProposalGenerationFunction = inngest.createFunction(
             const selectedProposal = createdProposals[0];
             if (!selectedProposal) return null;
 
-            // Create new agent version
-            const newVersion = sessionData.agent.version + 1;
-            const currentInstructions = sessionData.agent.instructions;
+            // Get the latest version number to avoid unique constraint violations
+            const latestVersion = await prisma.agentVersion.findFirst({
+                where: { agentId },
+                orderBy: { version: "desc" },
+                select: { version: true }
+            });
+
+            // Also get the current agent version
+            const currentAgent = await prisma.agent.findUnique({
+                where: { id: agentId },
+                select: { version: true, instructions: true }
+            });
+
+            // Use the max of existing versions + 1
+            const maxExistingVersion = Math.max(
+                latestVersion?.version || 0,
+                currentAgent?.version || 0
+            );
+            const newVersion = maxExistingVersion + 1;
+            const currentInstructions =
+                currentAgent?.instructions || sessionData.agent.instructions;
 
             // Simple instruction enhancement (in production, would parse and apply diff)
             const enhancedInstructions =
@@ -2342,6 +2383,1107 @@ export const dailyMetricsRollupFunction = inngest.createFunction(
     }
 );
 
+// ==============================
+// AI Insights Generation
+// ==============================
+
+/**
+ * Insight types for categorization
+ */
+type InsightType = "performance" | "quality" | "cost" | "warning" | "info";
+
+/**
+ * Generated insight structure
+ */
+interface GeneratedInsight {
+    type: InsightType;
+    title: string;
+    description: string;
+}
+
+/**
+ * Signal data collected from evaluations
+ */
+interface InsightSignals {
+    avgScoreByScorer: Record<string, number>;
+    scoreTrends: Record<string, { current: number; previous: number; change: number }>;
+    lowScoreCount: number;
+    totalEvaluations: number;
+    feedbackSummary: { positive: number; negative: number };
+    costTotal: number;
+    guardrailHits: number;
+}
+
+/**
+ * Generate AI Insights Function
+ *
+ * Triggered after evaluations complete. Collects signals, uses LLM to synthesize
+ * actionable insights, and persists them to the database.
+ */
+export const generateInsightsFunction = inngest.createFunction(
+    {
+        id: "generate-ai-insights",
+        retries: 2,
+        // Rate limit to avoid generating too many insights in quick succession
+        rateLimit: {
+            key: "event.data.agentId",
+            limit: 1,
+            period: "5m" // Max 1 insight generation per agent per 5 minutes
+        }
+    },
+    { event: "evaluation/completed" },
+    async ({ event, step }) => {
+        const { agentId } = event.data;
+
+        console.log(`[Inngest] Generating AI insights for agent: ${agentId}`);
+
+        // Step 1: Collect recent evaluation data (last 14 days)
+        const signals = await step.run("collect-signals", async () => {
+            const windowStart = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+            const windowMid = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+            // Get recent evaluations
+            const evaluations = await prisma.agentEvaluation.findMany({
+                where: {
+                    agentId,
+                    createdAt: { gte: windowStart }
+                },
+                orderBy: { createdAt: "desc" },
+                take: 100
+            });
+
+            if (evaluations.length < 5) {
+                // Not enough data to generate meaningful insights
+                return null;
+            }
+
+            // Calculate average scores by scorer
+            const scoresByScorer: Record<string, number[]> = {};
+            for (const eval_ of evaluations) {
+                const scores = eval_.scoresJson as Record<string, number>;
+                if (scores) {
+                    for (const [key, value] of Object.entries(scores)) {
+                        if (typeof value === "number") {
+                            if (!scoresByScorer[key]) scoresByScorer[key] = [];
+                            scoresByScorer[key].push(value);
+                        }
+                    }
+                }
+            }
+
+            const avgScoreByScorer: Record<string, number> = {};
+            for (const [key, scores] of Object.entries(scoresByScorer)) {
+                avgScoreByScorer[key] =
+                    Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 100) / 100;
+            }
+
+            // Calculate trends (compare last 7 days to previous 7 days)
+            const recentEvals = evaluations.filter((e) => e.createdAt >= windowMid);
+            const olderEvals = evaluations.filter((e) => e.createdAt < windowMid);
+
+            const scoreTrends: Record<
+                string,
+                { current: number; previous: number; change: number }
+            > = {};
+
+            if (recentEvals.length > 0 && olderEvals.length > 0) {
+                for (const scorer of Object.keys(avgScoreByScorer)) {
+                    const recentScores = recentEvals
+                        .map((e) => (e.scoresJson as Record<string, number>)?.[scorer])
+                        .filter((s): s is number => typeof s === "number");
+                    const olderScores = olderEvals
+                        .map((e) => (e.scoresJson as Record<string, number>)?.[scorer])
+                        .filter((s): s is number => typeof s === "number");
+
+                    if (recentScores.length > 0 && olderScores.length > 0) {
+                        const current =
+                            recentScores.reduce((a, b) => a + b, 0) / recentScores.length;
+                        const previous =
+                            olderScores.reduce((a, b) => a + b, 0) / olderScores.length;
+                        scoreTrends[scorer] = {
+                            current: Math.round(current * 100) / 100,
+                            previous: Math.round(previous * 100) / 100,
+                            change: Math.round((current - previous) * 100) / 100
+                        };
+                    }
+                }
+            }
+
+            // Count low scores (below 0.5)
+            let lowScoreCount = 0;
+            for (const eval_ of evaluations) {
+                const scores = eval_.scoresJson as Record<string, number>;
+                if (scores) {
+                    const avg =
+                        Object.values(scores).reduce((a, b) => a + b, 0) /
+                        Object.values(scores).length;
+                    if (avg < 0.5) lowScoreCount++;
+                }
+            }
+
+            // Get feedback summary
+            const feedbackAgg = await prisma.agentFeedbackAggregateDaily.aggregate({
+                where: {
+                    agentId,
+                    date: { gte: windowStart }
+                },
+                _sum: {
+                    positiveCount: true,
+                    negativeCount: true
+                }
+            });
+
+            // Get cost total
+            const costAgg = await prisma.costEvent.aggregate({
+                where: {
+                    agentId,
+                    createdAt: { gte: windowStart }
+                },
+                _sum: { costUsd: true }
+            });
+
+            // Get guardrail hits
+            const guardrailHits = await prisma.guardrailEvent.count({
+                where: {
+                    agentId,
+                    createdAt: { gte: windowStart },
+                    type: "BLOCKED"
+                }
+            });
+
+            const signals: InsightSignals = {
+                avgScoreByScorer,
+                scoreTrends,
+                lowScoreCount,
+                totalEvaluations: evaluations.length,
+                feedbackSummary: {
+                    positive: feedbackAgg._sum.positiveCount || 0,
+                    negative: feedbackAgg._sum.negativeCount || 0
+                },
+                costTotal: costAgg._sum.costUsd || 0,
+                guardrailHits
+            };
+
+            return signals;
+        });
+
+        if (!signals) {
+            console.log(`[Inngest] Not enough data for insights, skipping agent: ${agentId}`);
+            return { agentId, skipped: true, reason: "insufficient data" };
+        }
+
+        // Step 2: Generate insights using LLM
+        const generatedInsights = await step.run("generate-insights-llm", async () => {
+            // Build a summary prompt for the LLM
+            const signalsSummary = buildSignalsSummary(signals);
+
+            // Get the structured agent for JSON output
+            const structuredAgent = mastra.getAgent("structured");
+            if (!structuredAgent) {
+                console.error("[Inngest] Structured agent not available for insight generation");
+                return [];
+            }
+
+            const prompt = `You are an AI agent quality analyst. Analyze the following evaluation metrics and generate 1-3 actionable insights.
+
+EVALUATION DATA (last 14 days):
+${signalsSummary}
+
+Generate insights as a JSON array. Each insight should have:
+- "type": one of "performance", "quality", "cost", "warning", "info"
+- "title": short title (max 60 chars)
+- "description": one paragraph explanation with specific recommendations (max 300 chars)
+
+Focus on:
+1. Significant score changes (>10% improvement or decline)
+2. Consistently low scores (<0.5) in any category
+3. High guardrail hit rates (>5%)
+4. Negative feedback trends
+5. Cost anomalies
+
+If metrics look healthy, generate a single "info" type insight acknowledging good performance.
+
+Return ONLY a valid JSON array of insights, no other text.`;
+
+            try {
+                const response = await structuredAgent.generate(prompt, { maxSteps: 1 });
+                const text = response.text || "";
+
+                // Parse the JSON response
+                const jsonMatch = text.match(/\[[\s\S]*\]/);
+                if (!jsonMatch) {
+                    console.error("[Inngest] No JSON array found in LLM response");
+                    return [];
+                }
+
+                const parsed = JSON.parse(jsonMatch[0]) as GeneratedInsight[];
+
+                // Validate and sanitize
+                const validInsights: GeneratedInsight[] = [];
+                const validTypes: InsightType[] = [
+                    "performance",
+                    "quality",
+                    "cost",
+                    "warning",
+                    "info"
+                ];
+
+                for (const insight of parsed) {
+                    if (
+                        insight.type &&
+                        validTypes.includes(insight.type) &&
+                        insight.title &&
+                        insight.description
+                    ) {
+                        validInsights.push({
+                            type: insight.type,
+                            title: insight.title.slice(0, 100),
+                            description: insight.description.slice(0, 500)
+                        });
+                    }
+                }
+
+                return validInsights.slice(0, 3); // Max 3 insights per generation
+            } catch (err) {
+                console.error("[Inngest] Error generating insights:", err);
+                return [];
+            }
+        });
+
+        if (generatedInsights.length === 0) {
+            console.log(`[Inngest] No insights generated for agent: ${agentId}`);
+            return { agentId, insightsCreated: 0 };
+        }
+
+        // Step 3: Deduplicate and persist insights
+        const persistedCount = await step.run("persist-insights", async () => {
+            const dedupeWindow = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+            // Get recent insights for deduplication
+            const recentInsights = await prisma.insight.findMany({
+                where: {
+                    agentId,
+                    createdAt: { gte: dedupeWindow }
+                },
+                select: { type: true, title: true }
+            });
+
+            // Create a set of existing insight keys for fast lookup
+            const existingKeys = new Set(
+                recentInsights.map((i) => `${i.type}:${i.title.toLowerCase().trim()}`)
+            );
+
+            let created = 0;
+            for (const insight of generatedInsights) {
+                const key = `${insight.type}:${insight.title.toLowerCase().trim()}`;
+                if (!existingKeys.has(key)) {
+                    await prisma.insight.create({
+                        data: {
+                            agentId,
+                            type: insight.type,
+                            title: insight.title,
+                            description: insight.description
+                        }
+                    });
+                    existingKeys.add(key); // Prevent duplicates within this batch
+                    created++;
+                }
+            }
+
+            return created;
+        });
+
+        console.log(`[Inngest] Generated ${persistedCount} insights for agent: ${agentId}`);
+
+        return { agentId, insightsCreated: persistedCount };
+    }
+);
+
+// ==============================
+// Simulation System Functions
+// ==============================
+
+/**
+ * Simulation Session Start Function
+ *
+ * Triggered when a new simulation session is created.
+ * Fans out to batch.run events for parallel processing.
+ */
+export const simulationSessionStartFunction = inngest.createFunction(
+    {
+        id: "simulation-session-start",
+        retries: 2
+    },
+    { event: "simulation/session.start" },
+    async ({ event, step }) => {
+        const { sessionId, agentId, theme, targetCount, concurrency } = event.data;
+
+        console.log(`[Simulation] Starting session ${sessionId} for agent ${agentId}`);
+
+        // Step 1: Mark session as RUNNING
+        await step.run("mark-running", async () => {
+            await prisma.simulationSession.update({
+                where: { id: sessionId },
+                data: {
+                    status: "RUNNING",
+                    startedAt: new Date()
+                }
+            });
+        });
+
+        // Step 2: Fan out to batch runs
+        const batchSize = 10; // Process 10 conversations per batch
+        const numBatches = Math.ceil(targetCount / batchSize);
+
+        await step.run("fan-out-batches", async () => {
+            const events = [];
+            for (let i = 0; i < numBatches; i++) {
+                events.push({
+                    name: "simulation/batch.run" as const,
+                    data: {
+                        sessionId,
+                        agentId,
+                        theme,
+                        batchIndex: i,
+                        batchSize: Math.min(batchSize, targetCount - i * batchSize)
+                    }
+                });
+            }
+
+            // Send events in chunks to avoid overwhelming Inngest
+            const chunkSize = concurrency;
+            for (let i = 0; i < events.length; i += chunkSize) {
+                const chunk = events.slice(i, i + chunkSize);
+                await inngest.send(chunk);
+            }
+        });
+
+        return { sessionId, batchesCreated: numBatches };
+    }
+);
+
+/**
+ * Simulation Batch Run Function
+ *
+ * Processes a batch of simulated conversations.
+ * Each conversation updates progress immediately for real-time feedback.
+ */
+export const simulationBatchRunFunction = inngest.createFunction(
+    {
+        id: "simulation-batch-run",
+        retries: 1,
+        concurrency: {
+            limit: 5 // Limit concurrent batches per session
+        }
+    },
+    { event: "simulation/batch.run" },
+    async ({ event, step }) => {
+        const { sessionId, agentId, theme, batchIndex, batchSize } = event.data;
+
+        console.log(
+            `[Simulation] Starting batch ${batchIndex} (${batchSize} convos) for session ${sessionId}`
+        );
+
+        // Step 1: Resolve agents
+        const agents = await step.run("resolve-agents", async () => {
+            const { agentResolver } = await import("@repo/mastra");
+
+            const [simulatorResult, targetResult] = await Promise.all([
+                agentResolver.resolve({ slug: "simulator" }),
+                agentResolver.resolve({ id: agentId })
+            ]);
+
+            if (!targetResult.record) {
+                throw new Error(`Target agent not found: ${agentId}`);
+            }
+
+            return {
+                simulatorRecord: simulatorResult.record,
+                targetRecord: targetResult.record
+            };
+        });
+
+        // Run each conversation as a separate step for real-time progress
+        let successCount = 0;
+        let failedCount = 0;
+        let totalDuration = 0;
+
+        for (let i = 0; i < batchSize; i++) {
+            const conversationIndex = batchIndex * 10 + i + 1;
+
+            const result = await step.run(`conversation-${i}`, async () => {
+                const { agentResolver } = await import("@repo/mastra");
+                const { startRun } = await import("./run-recorder");
+
+                // Re-resolve agents in each step (Inngest steps are isolated)
+                const [simulatorResult, targetResult] = await Promise.all([
+                    agentResolver.resolve({ slug: "simulator" }),
+                    agentResolver.resolve({ id: agentId })
+                ]);
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const simulatorAgent = simulatorResult.agent as any;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const targetAgent = targetResult.agent as any;
+                const targetRecord = targetResult.record;
+
+                if (!targetRecord) {
+                    throw new Error(`Target agent record not found: ${agentId}`);
+                }
+
+                try {
+                    // Generate DIVERSE prompt using simulator agent with randomized persona/scenario
+                    console.log(
+                        `[Simulation] Conversation ${conversationIndex}: Generating diverse prompt...`
+                    );
+                    const diversePrompt = generateDiverseSimulatorPrompt(theme, conversationIndex);
+                    const promptResult = await simulatorAgent.generate(diversePrompt, {
+                        maxSteps: 1
+                    });
+                    const userPrompt = promptResult.text.trim();
+
+                    if (!userPrompt) {
+                        console.log(
+                            `[Simulation] Conversation ${conversationIndex}: Empty prompt, skipping`
+                        );
+                        // Update failed count
+                        await prisma.simulationSession.update({
+                            where: { id: sessionId },
+                            data: { failedCount: { increment: 1 } }
+                        });
+                        return { success: false, error: "Empty prompt" };
+                    }
+
+                    console.log(
+                        `[Simulation] Conversation ${conversationIndex}: Prompt: "${userPrompt.substring(0, 50)}..."`
+                    );
+
+                    // Use run-recorder for FULL PIPELINE integration
+                    // This creates AgentRun + AgentTrace and emits run/completed event
+                    const runHandle = await startRun({
+                        agentId,
+                        agentSlug: targetRecord.slug,
+                        input: userPrompt,
+                        source: "simulation",
+                        sessionId
+                    });
+
+                    try {
+                        // Run through target agent
+                        console.log(
+                            `[Simulation] Conversation ${conversationIndex}: Running target agent...`
+                        );
+                        const response = await targetAgent.generate(userPrompt, {
+                            maxSteps: targetRecord.maxSteps ?? 5
+                        });
+
+                        // Debug: Log the full response structure to find usage data
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const resp = response as any;
+                        console.log(`[Simulation] Response keys: ${Object.keys(resp).join(", ")}`);
+                        console.log(`[Simulation] response.usage: ${JSON.stringify(resp.usage)}`);
+                        console.log(
+                            `[Simulation] response.totalUsage: ${JSON.stringify(resp.totalUsage)}`
+                        );
+                        console.log(
+                            `[Simulation] response.steps: ${resp.steps?.length || 0} steps`
+                        );
+
+                        // Use centralized utility to extract token usage
+                        const { extractTokenUsage } = await import("./run-recorder");
+                        const tokenUsage = extractTokenUsage(resp);
+
+                        const promptTokens = tokenUsage?.promptTokens || 0;
+                        const completionTokens = tokenUsage?.completionTokens || 0;
+                        const totalTokens = tokenUsage?.totalTokens || 0;
+
+                        console.log(
+                            `[Simulation] Extracted tokens - prompt: ${promptTokens}, completion: ${completionTokens}, total: ${totalTokens}`
+                        );
+
+                        // Calculate cost using cost calculator
+                        const { calculateCost } = await import("@/lib/cost-calculator");
+                        const costUsd = calculateCost(
+                            targetRecord.modelName,
+                            targetRecord.modelProvider,
+                            promptTokens,
+                            completionTokens
+                        );
+
+                        console.log(
+                            `[Simulation] Conversation ${conversationIndex}: Tokens: ${totalTokens} (${promptTokens} prompt + ${completionTokens} completion), Cost: $${costUsd.toFixed(6)}`
+                        );
+
+                        // Complete the run - this emits run/completed event for evaluations/learning
+                        await runHandle.complete({
+                            output: response.text,
+                            modelProvider: targetRecord.modelProvider,
+                            modelName: targetRecord.modelName,
+                            promptTokens,
+                            completionTokens,
+                            costUsd
+                        });
+
+                        // Update session progress
+                        await prisma.simulationSession.update({
+                            where: { id: sessionId },
+                            data: { completedCount: { increment: 1 } }
+                        });
+
+                        const qualityScore = calculateSimpleQualityScore(userPrompt, response.text);
+                        console.log(
+                            `[Simulation] Conversation ${conversationIndex}: Completed! Run: ${runHandle.runId}, Quality: ${(qualityScore * 100).toFixed(0)}%`
+                        );
+
+                        return {
+                            success: true,
+                            durationMs: Date.now() - Date.now(), // Will be calculated by run-recorder
+                            qualityScore,
+                            runId: runHandle.runId
+                        };
+                    } catch (agentError) {
+                        // Agent execution failed - mark run as failed
+                        await runHandle.fail(
+                            agentError instanceof Error ? agentError : String(agentError)
+                        );
+
+                        await prisma.simulationSession.update({
+                            where: { id: sessionId },
+                            data: { failedCount: { increment: 1 } }
+                        });
+
+                        console.error(
+                            `[Simulation] Conversation ${conversationIndex}: Agent failed:`,
+                            agentError
+                        );
+
+                        return {
+                            success: false,
+                            error: agentError instanceof Error ? agentError.message : "Agent error"
+                        };
+                    }
+                } catch (error) {
+                    console.error(`[Simulation] Conversation ${conversationIndex} failed:`, error);
+
+                    await prisma.simulationSession.update({
+                        where: { id: sessionId },
+                        data: { failedCount: { increment: 1 } }
+                    });
+
+                    return {
+                        success: false,
+                        error: error instanceof Error ? error.message : "Unknown error"
+                    };
+                }
+            });
+
+            if (result.success && "durationMs" in result) {
+                successCount++;
+                totalDuration += result.durationMs || 0;
+            } else {
+                failedCount++;
+            }
+        }
+
+        // Check if session is complete
+        await step.run("check-completion", async () => {
+            const session = await prisma.simulationSession.findUnique({
+                where: { id: sessionId }
+            });
+
+            if (!session) return;
+
+            const totalProcessed = session.completedCount + session.failedCount;
+            console.log(
+                `[Simulation] Batch ${batchIndex} done. Session progress: ${totalProcessed}/${session.targetCount}`
+            );
+
+            if (totalProcessed >= session.targetCount) {
+                // Calculate final aggregates
+                const runs = await prisma.agentRun.findMany({
+                    where: {
+                        source: "simulation",
+                        sessionId
+                    },
+                    select: {
+                        durationMs: true,
+                        status: true
+                    }
+                });
+
+                const completedRuns = runs.filter((r) => r.status === "COMPLETED");
+                const avgDuration =
+                    completedRuns.reduce((sum, r) => sum + (r.durationMs || 0), 0) /
+                        completedRuns.length || 0;
+                const successRate = completedRuns.length / runs.length;
+
+                await prisma.simulationSession.update({
+                    where: { id: sessionId },
+                    data: {
+                        status: "COMPLETED",
+                        completedAt: new Date(),
+                        avgDurationMs: avgDuration,
+                        successRate
+                    }
+                });
+
+                console.log(
+                    `[Simulation] Session ${sessionId} COMPLETED! Success rate: ${(successRate * 100).toFixed(0)}%, Avg duration: ${avgDuration.toFixed(0)}ms`
+                );
+            }
+        });
+
+        return {
+            sessionId,
+            batchIndex,
+            successCount,
+            failedCount,
+            avgDuration: successCount > 0 ? totalDuration / successCount : 0
+        };
+    }
+);
+
+/**
+ * Generate a diverse simulation prompt with randomized persona/scenario/mood
+ * This forces the simulator to generate varied questions instead of repetitive ones
+ */
+function generateDiverseSimulatorPrompt(theme: string, conversationIndex: number): string {
+    // Personas - who is asking
+    const personas = [
+        "a brand new user who just signed up",
+        "a frustrated long-time customer",
+        "a power user who knows the system well",
+        "a confused user who doesn't understand the basics",
+        "an executive who needs a quick answer",
+        "a tech-savvy developer",
+        "someone who's in a hurry",
+        "a detail-oriented person who wants specifics",
+        "an angry customer who had a bad experience",
+        "a curious user exploring features",
+        "someone who speaks English as a second language",
+        "a manager asking on behalf of their team"
+    ];
+
+    // Scenario types - what kind of interaction
+    const scenarios = [
+        "asking a simple question",
+        "reporting a problem or bug",
+        "requesting help with a task",
+        "expressing confusion about something",
+        "complaining about an issue",
+        "asking for step-by-step instructions",
+        "comparing options or asking for recommendations",
+        "following up on a previous issue",
+        "asking about best practices",
+        "requesting a feature or workaround",
+        "clarifying something they read in docs",
+        "asking about edge cases or limitations"
+    ];
+
+    // Communication styles
+    const styles = [
+        "very brief and to the point",
+        "detailed with lots of context",
+        "casual and friendly",
+        "formal and professional",
+        "slightly frustrated but polite",
+        "enthusiastic and positive",
+        "uncertain and asking for confirmation",
+        "direct and demanding"
+    ];
+
+    // Pick random elements using the conversation index as a seed
+    const persona = personas[conversationIndex % personas.length];
+    const scenario = scenarios[Math.floor(conversationIndex / personas.length) % scenarios.length];
+    const style = styles[Math.floor(conversationIndex * 7) % styles.length];
+
+    return `Generate a UNIQUE user message for testing. Be creative and avoid repetition.
+
+THEME: ${theme}
+
+For this specific message (#${conversationIndex}), generate as:
+- PERSONA: ${persona}
+- SCENARIO: ${scenario}  
+- STYLE: ${style}
+
+IMPORTANT: Make this message COMPLETELY DIFFERENT from typical questions. Don't start with "Hi there!" or common greetings. Be creative with the phrasing, problem, and details.
+
+Return ONLY the user message text, nothing else.`;
+}
+
+/**
+ * Calculate a simple quality score based on response characteristics
+ */
+function calculateSimpleQualityScore(input: string, output: string): number {
+    let score = 0.5; // Start at baseline
+
+    // Length check - response should be substantial but not too long
+    const outputLength = output.length;
+    if (outputLength > 50 && outputLength < 2000) {
+        score += 0.15;
+    } else if (outputLength > 20) {
+        score += 0.05;
+    }
+
+    // Relevancy - check for word overlap
+    const inputWords = new Set(
+        input
+            .toLowerCase()
+            .split(/\s+/)
+            .filter((w) => w.length > 3)
+    );
+    const outputWords = output
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 3);
+    const overlap = outputWords.filter((w) => inputWords.has(w)).length;
+    if (overlap > 0) {
+        score += Math.min(0.2, overlap * 0.05);
+    }
+
+    // Completeness - check for sentence structure
+    if (output.includes(".") || output.includes("!") || output.includes("?")) {
+        score += 0.1;
+    }
+
+    // Cap at 1.0
+    return Math.min(1.0, score);
+}
+
+/**
+ * Build a human-readable summary of signals for LLM consumption
+ */
+function buildSignalsSummary(signals: InsightSignals): string {
+    const lines: string[] = [];
+
+    lines.push(`Total evaluations: ${signals.totalEvaluations}`);
+    lines.push(
+        `Low score runs (avg < 0.5): ${signals.lowScoreCount} (${Math.round((signals.lowScoreCount / signals.totalEvaluations) * 100)}%)`
+    );
+    lines.push("");
+
+    lines.push("Average scores by category:");
+    for (const [scorer, avg] of Object.entries(signals.avgScoreByScorer)) {
+        lines.push(`  - ${scorer}: ${(avg * 100).toFixed(1)}%`);
+    }
+    lines.push("");
+
+    if (Object.keys(signals.scoreTrends).length > 0) {
+        lines.push("Score trends (last 7 days vs previous 7 days):");
+        for (const [scorer, trend] of Object.entries(signals.scoreTrends)) {
+            const direction = trend.change > 0 ? "↑" : trend.change < 0 ? "↓" : "→";
+            const changePercent = (trend.change * 100).toFixed(1);
+            lines.push(
+                `  - ${scorer}: ${(trend.current * 100).toFixed(1)}% ${direction} (${trend.change > 0 ? "+" : ""}${changePercent}% change)`
+            );
+        }
+        lines.push("");
+    }
+
+    lines.push(
+        `Feedback: ${signals.feedbackSummary.positive} positive, ${signals.feedbackSummary.negative} negative`
+    );
+    lines.push(`Total cost: $${signals.costTotal.toFixed(4)}`);
+    lines.push(`Guardrail blocks: ${signals.guardrailHits}`);
+
+    return lines.join("\n");
+}
+
+/**
+ * Async Agent Invoke Handler
+ *
+ * Executes agent invocations that were queued for background processing.
+ * Full observability via run recorder and event pipeline.
+ */
+export const asyncInvokeFunction = inngest.createFunction(
+    {
+        id: "agent-invoke-async",
+        retries: 2,
+        concurrency: {
+            limit: 10
+        }
+    },
+    { event: "agent/invoke.async" },
+    async ({ event, step }) => {
+        const { runId, agentId, agentSlug, input, context, maxSteps } = event.data;
+
+        console.log(`[Inngest] Executing async invoke for run: ${runId}`);
+
+        // Step 1: Update run status to RUNNING
+        await step.run("update-status-running", async () => {
+            await prisma.agentRun.update({
+                where: { id: runId },
+                data: { status: "RUNNING" }
+            });
+            await prisma.agentTrace.updateMany({
+                where: { runId },
+                data: { status: "RUNNING" }
+            });
+        });
+
+        // Step 2: Resolve and execute agent
+        const result = await step.run(
+            "execute-agent",
+            async (): Promise<{
+                success: boolean;
+                output?: string;
+                error?: string;
+                durationMs: number;
+                promptTokens?: number;
+                completionTokens?: number;
+                totalTokens?: number;
+                costUsd?: number;
+                modelProvider?: string;
+                modelName?: string;
+            }> => {
+                const { agentResolver } = await import("@repo/mastra");
+                const { calculateCost } = await import("./cost-calculator");
+
+                const { agent, record } = await agentResolver.resolve({
+                    slug: agentSlug,
+                    requestContext: context
+                });
+
+                if (!record) {
+                    throw new Error(`Agent '${agentSlug}' not found`);
+                }
+
+                const startTime = Date.now();
+
+                try {
+                    const response = await agent.generate(input, {
+                        maxSteps: maxSteps ?? record.maxSteps ?? 5
+                    });
+
+                    const durationMs = Date.now() - startTime;
+
+                    // Extract usage
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    const usage = (response as any).usage || (response as any).totalUsage;
+                    const promptTokens = usage?.inputTokens || usage?.promptTokens || 0;
+                    const completionTokens = usage?.outputTokens || usage?.completionTokens || 0;
+                    const totalTokens = promptTokens + completionTokens;
+
+                    const costUsd = calculateCost(
+                        record.modelName,
+                        record.modelProvider,
+                        promptTokens,
+                        completionTokens
+                    );
+
+                    return {
+                        success: true,
+                        output: response.text,
+                        durationMs,
+                        promptTokens,
+                        completionTokens,
+                        totalTokens,
+                        costUsd,
+                        modelProvider: record.modelProvider,
+                        modelName: record.modelName
+                    };
+                } catch (error) {
+                    const durationMs = Date.now() - startTime;
+                    return {
+                        success: false,
+                        error: error instanceof Error ? error.message : String(error),
+                        durationMs
+                    };
+                }
+            }
+        );
+
+        // Step 3: Update run with results
+        await step.run("update-run-results", async () => {
+            if (result.success && result.output) {
+                await prisma.agentRun.update({
+                    where: { id: runId },
+                    data: {
+                        status: "COMPLETED",
+                        outputText: result.output,
+                        durationMs: result.durationMs,
+                        completedAt: new Date(),
+                        modelProvider: result.modelProvider,
+                        modelName: result.modelName,
+                        promptTokens: result.promptTokens,
+                        completionTokens: result.completionTokens,
+                        totalTokens: result.totalTokens,
+                        costUsd: result.costUsd
+                    }
+                });
+
+                await prisma.agentTrace.updateMany({
+                    where: { runId },
+                    data: {
+                        status: "COMPLETED",
+                        outputText: result.output,
+                        durationMs: result.durationMs,
+                        tokensJson: {
+                            prompt: result.promptTokens || 0,
+                            completion: result.completionTokens || 0,
+                            total: result.totalTokens || 0
+                        }
+                    }
+                });
+            } else {
+                await prisma.agentRun.update({
+                    where: { id: runId },
+                    data: {
+                        status: "FAILED",
+                        outputText: `Error: ${result.error || "Unknown error"}`,
+                        durationMs: result.durationMs,
+                        completedAt: new Date()
+                    }
+                });
+
+                await prisma.agentTrace.updateMany({
+                    where: { runId },
+                    data: {
+                        status: "FAILED",
+                        outputText: `Error: ${result.error || "Unknown error"}`,
+                        durationMs: result.durationMs
+                    }
+                });
+            }
+        });
+
+        // Step 4: Trigger run/completed pipeline for cost tracking, evaluations, etc.
+        if (result.success) {
+            await step.sendEvent("trigger-run-completed", {
+                name: "run/completed",
+                data: {
+                    runId,
+                    agentId,
+                    status: "COMPLETED",
+                    durationMs: result.durationMs,
+                    totalTokens: result.totalTokens || 0,
+                    costUsd: result.costUsd || 0
+                }
+            });
+        }
+
+        return {
+            runId,
+            success: result.success,
+            durationMs: result.durationMs
+        };
+    }
+);
+
+/**
+ * Schedule Trigger Handler
+ *
+ * Cron job that checks for due schedules and triggers agent invocations.
+ * Runs every minute to check for schedules that need to run.
+ */
+export const scheduleTriggerFunction = inngest.createFunction(
+    {
+        id: "schedule-trigger",
+        retries: 2
+    },
+    { cron: "* * * * *" }, // Every minute
+    async ({ step }) => {
+        console.log("[Inngest] Checking for due schedules");
+
+        // Step 1: Find schedules that are due
+        const dueSchedules = await step.run("find-due-schedules", async () => {
+            const now = new Date();
+            return prisma.agentSchedule.findMany({
+                where: {
+                    isActive: true,
+                    nextRunAt: { lte: now }
+                },
+                include: {
+                    agent: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true
+                        }
+                    }
+                },
+                take: 50 // Process up to 50 schedules per minute
+            });
+        });
+
+        if (dueSchedules.length === 0) {
+            return { processed: 0 };
+        }
+
+        console.log(`[Inngest] Found ${dueSchedules.length} due schedules`);
+
+        // Step 2: Process each schedule
+        let processed = 0;
+        for (const schedule of dueSchedules) {
+            if (!schedule.agent.isActive) {
+                continue;
+            }
+
+            await step.run(`process-schedule-${schedule.id}`, async () => {
+                // Get input from schedule or use default
+                const inputJson = schedule.inputJson as Record<string, unknown> | null;
+                const input = (inputJson?.input as string) || `Scheduled run: ${schedule.name}`;
+
+                // Create a run record
+                const run = await prisma.agentRun.create({
+                    data: {
+                        agentId: schedule.agent.id,
+                        runType: "PROD",
+                        status: "QUEUED",
+                        inputText: input,
+                        source: "api", // Scheduled runs are API-initiated
+                        startedAt: new Date()
+                    }
+                });
+
+                // Create trace
+                await prisma.agentTrace.create({
+                    data: {
+                        runId: run.id,
+                        agentId: schedule.agent.id,
+                        status: "QUEUED",
+                        inputText: input
+                    }
+                });
+
+                // Calculate next run time (simplified - add 1 day for daily, etc.)
+                // In production, use a proper cron parser
+                const nextRunAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+                // Update schedule
+                await prisma.agentSchedule.update({
+                    where: { id: schedule.id },
+                    data: {
+                        lastRunAt: new Date(),
+                        nextRunAt,
+                        runCount: { increment: 1 }
+                    }
+                });
+
+                // Queue the async invoke
+                await inngest.send({
+                    name: "agent/invoke.async",
+                    data: {
+                        runId: run.id,
+                        agentId: schedule.agent.id,
+                        agentSlug: schedule.agent.slug,
+                        input,
+                        context: {
+                            scheduleId: schedule.id,
+                            scheduleName: schedule.name,
+                            scheduled: true
+                        }
+                    }
+                });
+
+                processed++;
+            });
+        }
+
+        return { processed, total: dueSchedules.length };
+    }
+);
+
 /**
  * All Inngest functions to register
  */
@@ -2353,6 +3495,12 @@ export const inngestFunctions = [
     evaluationCompletedFunction,
     guardrailEventFunction,
     budgetCheckFunction,
+    // Agent Invocation
+    asyncInvokeFunction,
+    // Scheduler
+    scheduleTriggerFunction,
+    // AI Insights generation
+    generateInsightsFunction,
     // Closed-Loop Learning functions
     runEvaluationFunction,
     learningSignalDetectorFunction,
@@ -2364,5 +3512,8 @@ export const inngestFunctions = [
     experimentEvaluationCheckerFunction, // Periodic experiment evaluation
     learningApprovalHandlerFunction,
     learningVersionPromotionFunction,
-    dailyMetricsRollupFunction
+    dailyMetricsRollupFunction,
+    // Simulation functions
+    simulationSessionStartFunction,
+    simulationBatchRunFunction
 ];

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { agentResolver } from "@repo/mastra";
+import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
+import { calculateCost } from "@/lib/cost-calculator";
 
 /**
  * Default agent to use for Slack conversations
@@ -147,6 +149,7 @@ async function sendSlackMessage(
 
 /**
  * Process a Slack message and generate a response
+ * Records the run in AgentRun for full observability
  */
 async function processMessage(
     text: string,
@@ -154,8 +157,6 @@ async function processMessage(
     channelId: string,
     threadTs: string
 ): Promise<string> {
-    const startTime = Date.now();
-
     console.log(`\n${"=".repeat(60)}`);
     console.log(`[Slack] Processing message at ${new Date().toISOString()}`);
     console.log(`[Slack] User: ${userId}`);
@@ -163,9 +164,14 @@ async function processMessage(
     console.log(`[Slack] Thread: ${threadTs}`);
     console.log(`[Slack] Message: ${text}`);
 
+    // Resolve the agent first to get agentId
+    let agentId: string;
+    let agent;
+    let record;
+    let source: string;
+
     try {
-        // Resolve the agent
-        const { agent, source } = await agentResolver.resolve({
+        const resolved = await agentResolver.resolve({
             slug: DEFAULT_AGENT_SLUG,
             requestContext: {
                 userId,
@@ -177,22 +183,69 @@ async function processMessage(
             }
         });
 
+        agent = resolved.agent;
+        record = resolved.record;
+        source = resolved.source;
+        agentId = record?.id || DEFAULT_AGENT_SLUG;
+
         console.log(`[Slack] Using agent "${DEFAULT_AGENT_SLUG}" from ${source}`);
+    } catch (error) {
+        console.error("[Slack] Failed to resolve agent:", error);
+        return "I encountered an error loading the agent. Please try again.";
+    }
 
-        // Generate response with memory thread based on Slack thread
-        const memoryThreadId = `slack-${channelId}-${threadTs}`;
+    // Start recording the run
+    const run = await startRun({
+        agentId,
+        agentSlug: DEFAULT_AGENT_SLUG,
+        input: text,
+        source: "slack",
+        userId,
+        threadId: `slack-${channelId}-${threadTs}`,
+        sessionId: channelId
+    });
 
+    try {
+        // Generate response
         const response = await agent.generate(text, {
-            maxSteps: 5
+            maxSteps: record?.maxSteps ?? 5
         });
 
-        const duration = Date.now() - startTime;
-        console.log(`[Slack] Response generated in ${duration}ms`);
+        // Extract token usage
+        const tokens = extractTokenUsage(response);
+
+        // Record tool calls
+        const toolCalls = extractToolCalls(response);
+        for (const tc of toolCalls) {
+            await run.addToolCall(tc);
+        }
+
+        // Calculate cost based on model and token usage
+        const costUsd = calculateCost(
+            record?.modelName || "unknown",
+            record?.modelProvider || "unknown",
+            tokens?.promptTokens || 0,
+            tokens?.completionTokens || 0
+        );
+
+        // Complete the run
+        await run.complete({
+            output: response.text || "",
+            modelProvider: record?.modelProvider || "unknown",
+            modelName: record?.modelName || "unknown",
+            promptTokens: tokens?.promptTokens,
+            completionTokens: tokens?.completionTokens,
+            costUsd
+        });
+
         console.log(`[Slack] Response preview: ${response.text?.substring(0, 200)}...`);
         console.log(`${"=".repeat(60)}\n`);
 
         return response.text || "I'm sorry, I couldn't generate a response.";
     } catch (error) {
+        // Record the failure
+        await run.fail(error instanceof Error ? error : new Error(String(error)));
+
         console.error("[Slack] Error processing message:", error);
         return "I encountered an error processing your message. Please try again.";
     }
