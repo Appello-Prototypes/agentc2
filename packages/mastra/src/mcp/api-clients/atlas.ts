@@ -78,38 +78,24 @@ export class AtlasApiClient implements McpApiClient {
 
     async listTools(): Promise<UnifiedToolDefinition[]> {
         // ATLAS/n8n tools are dynamically defined in n8n
-        // We provide a generic tool interface that forwards to n8n
+        // We provide a single generic tool that forwards requests to n8n
+        // The actual tool name will be passed through when executing
         return [
             {
-                name: "atlas-execute-workflow",
-                description: "Execute an n8n workflow with custom parameters",
+                name: "atlas-call",
+                description:
+                    "Execute an ATLAS/n8n workflow tool. Pass the tool name and arguments to forward to your n8n MCP endpoint.",
                 serverId: this.serverId,
                 parameters: {
-                    workflowId: { type: "string", description: "Workflow ID or name" },
-                    parameters: {
+                    toolName: {
+                        type: "string",
+                        description: "The n8n tool name to call",
+                        required: true
+                    },
+                    arguments: {
                         type: "object",
-                        description: "Parameters to pass to the workflow"
+                        description: "Arguments to pass to the n8n tool"
                     }
-                },
-                hasApiFallback: true
-            },
-            {
-                name: "atlas-trigger",
-                description: "Trigger an ATLAS automation with input data",
-                serverId: this.serverId,
-                parameters: {
-                    action: { type: "string", description: "Action to trigger", required: true },
-                    data: { type: "object", description: "Data to pass to the action" }
-                },
-                hasApiFallback: true
-            },
-            {
-                name: "atlas-query",
-                description: "Query ATLAS for information or status",
-                serverId: this.serverId,
-                parameters: {
-                    query: { type: "string", description: "Query string", required: true },
-                    context: { type: "object", description: "Additional context" }
                 },
                 hasApiFallback: true
             }
@@ -120,22 +106,17 @@ export class AtlasApiClient implements McpApiClient {
         const startTime = Date.now();
 
         try {
-            let result: { success: boolean; data?: unknown; error?: string };
+            // For atlas-call, extract the actual tool name and arguments
+            // For any other tool name, forward directly to n8n
+            const n8nToolName =
+                toolName === "atlas-call"
+                    ? (params.toolName as string)
+                    : toolName.replace("atlas-", "").replace("atlas_", "");
 
-            switch (toolName) {
-                case "atlas-execute-workflow":
-                    result = await this.executeWorkflow(params);
-                    break;
-                case "atlas-trigger":
-                    result = await this.trigger(params);
-                    break;
-                case "atlas-query":
-                    result = await this.query(params);
-                    break;
-                default:
-                    // For dynamic tools from n8n, forward the request
-                    result = await this.forwardToN8n(toolName, params);
-            }
+            const n8nArguments =
+                toolName === "atlas-call" ? (params.arguments as Record<string, unknown>) || {} : params;
+
+            const result = await this.forwardToN8n(n8nToolName, n8nArguments);
 
             return {
                 ...result,
@@ -158,56 +139,14 @@ export class AtlasApiClient implements McpApiClient {
         }
     }
 
-    private async executeWorkflow(params: ToolExecutionContext) {
+    private async forwardToN8n(toolName: string, args: Record<string, unknown>) {
+        // Forward tool call to n8n using JSON-RPC
         return this.apiRequest({
             jsonrpc: "2.0",
             method: "tools/call",
             params: {
-                name: "execute_workflow",
-                arguments: {
-                    workflowId: params.workflowId,
-                    parameters: params.parameters
-                }
-            },
-            id: Date.now()
-        });
-    }
-
-    private async trigger(params: ToolExecutionContext) {
-        return this.apiRequest({
-            jsonrpc: "2.0",
-            method: "tools/call",
-            params: {
-                name: params.action as string,
-                arguments: params.data || {}
-            },
-            id: Date.now()
-        });
-    }
-
-    private async query(params: ToolExecutionContext) {
-        return this.apiRequest({
-            jsonrpc: "2.0",
-            method: "tools/call",
-            params: {
-                name: "query",
-                arguments: {
-                    query: params.query,
-                    context: params.context
-                }
-            },
-            id: Date.now()
-        });
-    }
-
-    private async forwardToN8n(toolName: string, params: ToolExecutionContext) {
-        // Forward any tool call to n8n using JSON-RPC
-        return this.apiRequest({
-            jsonrpc: "2.0",
-            method: "tools/call",
-            params: {
-                name: toolName.replace("atlas-", ""),
-                arguments: params
+                name: toolName,
+                arguments: args
             },
             id: Date.now()
         });
