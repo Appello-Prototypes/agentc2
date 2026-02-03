@@ -10,7 +10,7 @@ import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
-import { mcpClient } from "../mcp/client";
+import { getMcpTools } from "../mcp/client";
 
 /**
  * Tool registry mapping names to tool instances.
@@ -47,7 +47,8 @@ async function getMcpToolsCached(): Promise<Record<string, any>> {
     }
 
     try {
-        cachedMcpTools = await mcpClient.listTools();
+        // Use getMcpTools() which includes API fallback tools in serverless mode
+        cachedMcpTools = await getMcpTools();
         mcpToolsLoadedAt = now;
         return cachedMcpTools;
     } catch (error) {
