@@ -16,17 +16,7 @@ import {
     Accordion,
     AccordionContent,
     AccordionItem,
-    AccordionTrigger,
-    Tool,
-    ToolHeader,
-    ToolContent,
-    ToolInput,
-    ToolOutput,
-    Loader,
-    ChainOfThought,
-    ChainOfThoughtHeader,
-    ChainOfThoughtStep,
-    ChainOfThoughtContent
+    AccordionTrigger
 } from "@repo/ui";
 
 // SSE stream consumer helper

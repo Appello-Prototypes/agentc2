@@ -14,7 +14,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const from = searchParams.get("from");
         const to = searchParams.get("to");
         // Type parameter reserved for future use (e.g., "summary", "detailed")
-        const _type = searchParams.get("type") || "summary";
+        // const type = searchParams.get("type") || "summary";
 
         // Default to last 30 days if no date range provided
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);

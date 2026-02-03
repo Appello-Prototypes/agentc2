@@ -17,23 +17,7 @@ import {
     AccordionContent,
     AccordionItem,
     AccordionTrigger,
-    Skeleton,
-    Tool,
-    ToolHeader,
-    ToolContent,
-    ToolInput,
-    ToolOutput,
-    Task,
-    TaskTrigger,
-    TaskContent,
-    TaskItem,
-    Loader,
-    CodeBlock,
-    CodeBlockHeader,
-    CodeBlockTitle,
-    CodeBlockFilename,
-    CodeBlockActions,
-    CodeBlockCopyButton
+    Skeleton
 } from "@repo/ui";
 
 /**

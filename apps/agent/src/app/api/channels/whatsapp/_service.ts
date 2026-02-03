@@ -43,7 +43,7 @@ async function executeAgentWithRecording(
     userId: string
 ): Promise<string> {
     // Resolve the agent
-    const { agent, record, source } = await agentResolver.resolve({ slug: agentSlug });
+    const { agent, record } = await agentResolver.resolve({ slug: agentSlug });
     const agentId = record?.id || agentSlug;
 
     // Start recording the run
@@ -96,7 +96,7 @@ async function executeAgentWithRecording(
  * Default message handler - routes messages to agents
  * Records all runs in AgentRun for full observability
  */
-const messageHandler: MessageHandler = async (message, agent) => {
+const messageHandler: MessageHandler = async (message) => {
     console.log(`[WhatsApp] Handling message from ${message.from}: "${message.text}"`);
 
     // Get or create session

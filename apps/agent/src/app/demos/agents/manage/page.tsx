@@ -385,7 +385,6 @@ function AgentManagePageContent() {
                 maxSteps: fullAgent.maxSteps ?? 5,
                 tools: getToolIds(fullAgent),
                 memoryEnabled: fullAgent.memoryEnabled ?? fullAgent.memory ?? false,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 memoryConfig: {
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
                     lastMessages: (fullAgent.memoryConfig as any)?.lastMessages ?? 10,

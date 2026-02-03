@@ -253,7 +253,7 @@ export default function CostsPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug, effectiveDateRange, sourceFilter]);
+    }, [agentSlug, effectiveDateRange, sourceFilter, datePreset]);
 
     const saveBudgetSettings = async () => {
         try {

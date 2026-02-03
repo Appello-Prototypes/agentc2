@@ -2784,8 +2784,8 @@ export const simulationBatchRunFunction = inngest.createFunction(
             `[Simulation] Starting batch ${batchIndex} (${batchSize} convos) for session ${sessionId}`
         );
 
-        // Step 1: Resolve agents
-        const agents = await step.run("resolve-agents", async () => {
+        // Step 1: Resolve agents (validate they exist before starting batch)
+        await step.run("resolve-agents", async () => {
             const { agentResolver } = await import("@repo/mastra");
 
             const [simulatorResult, targetResult] = await Promise.all([

@@ -23,7 +23,7 @@ export async function GET() {
         // Get production run stats per agent
         const agentStats = await Promise.all(
             agents.map(async (agent) => {
-                const [runs, latestRun, completed, failed] = await Promise.all([
+                const [runs, latestRun, completed] = await Promise.all([
                     // Aggregate stats for PROD runs
                     prisma.agentRun.aggregate({
                         where: {
@@ -49,10 +49,6 @@ export async function GET() {
                     // Completed count
                     prisma.agentRun.count({
                         where: { agentId: agent.id, runType: "PROD", status: "COMPLETED" }
-                    }),
-                    // Failed count
-                    prisma.agentRun.count({
-                        where: { agentId: agent.id, runType: "PROD", status: "FAILED" }
                     })
                 ]);
 

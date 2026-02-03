@@ -16,6 +16,7 @@ import {
     type NavigationItem
 } from "@repo/ui";
 import { HugeiconsIcon } from "@hugeicons/react";
+import Image from "next/image";
 import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 
@@ -62,7 +63,7 @@ export function AppSidebar() {
                             <div className="hover:bg-accent data-popup-open:bg-accent flex w-full items-center gap-3 rounded-lg p-2 text-left transition-colors outline-none">
                                 <div className="bg-muted flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full">
                                     {session.user.image ? (
-                                        <img
+                                        <Image
                                             src={session.user.image ?? ""}
                                             alt={session.user.name}
                                             width={32}

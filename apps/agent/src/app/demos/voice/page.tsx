@@ -18,10 +18,7 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Badge,
-    Message,
-    MessageContent,
-    Loader
+    Badge
 } from "@repo/ui";
 import { useElevenLabsAgent } from "@/hooks/useElevenLabsAgent";
 
