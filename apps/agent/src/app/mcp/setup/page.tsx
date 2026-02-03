@@ -117,19 +117,9 @@ export default function McpSetupPage() {
     // Detect the current instance URL
     useEffect(() => {
         if (typeof window !== "undefined") {
-            // Get the base URL without the /agent basePath
             const protocol = window.location.protocol;
             const host = window.location.host;
-
-            // Determine if we're behind a proxy (with basePath) or running directly
-            const basePath = getApiBase();
-            if (basePath.includes("/agent")) {
-                // Running behind proxy with basePath
-                setInstanceUrl(`${protocol}//${host}/agent`);
-            } else {
-                // Running directly
-                setInstanceUrl(`${protocol}//${host}`);
-            }
+            setInstanceUrl(`${protocol}//${host}`);
         }
     }, []);
 
