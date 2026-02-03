@@ -244,7 +244,20 @@ export async function getMcpTools(): Promise<Record<string, any>> {
                     const apiTools = await client.listTools();
                     for (const tool of apiTools) {
                         // Create an executable tool wrapper that matches MCP tool structure
-                        const toolName = `${serverId}_${tool.name}`;
+                        // Tool names from API clients may already have server prefix (e.g., "jira-search-issues")
+                        // Normalize to underscore format: "jira_search_issues"
+                        let toolName: string;
+                        if (
+                            tool.name.startsWith(`${serverId}-`) ||
+                            tool.name.startsWith(`${serverId}_`)
+                        ) {
+                            // Already has prefix, just normalize hyphens to underscores
+                            toolName = tool.name.replace(/-/g, "_");
+                        } else {
+                            // Add server prefix
+                            toolName = `${serverId}_${tool.name.replace(/-/g, "_")}`;
+                        }
+
                         tools[toolName] = {
                             description: tool.description,
                             parameters: tool.parameters,
@@ -303,9 +316,9 @@ export interface McpToolDefinition {
  * In local mode: Uses MCP server
  * In serverless mode: Uses API client fallback
  *
- * Tool names can be in either format:
- * - Underscore: "serverName_toolName" (e.g., "hubspot_hubspot-get-user-details")
- * - Dot: "serverName.toolName" (e.g., "hubspot.hubspot-get-user-details")
+ * Tool names can be in formats:
+ * - Normalized: "jira_search_issues" (underscores, single prefix)
+ * - MCP style: "jira.jira-search-issues" or "jira_jira-search-issues"
  */
 export async function executeMcpTool(
     toolName: string,
@@ -314,32 +327,49 @@ export async function executeMcpTool(
     const startTime = Date.now();
     const isServerless = isServerlessEnvironment();
 
-    // Parse server ID from tool name
+    // Parse server ID from tool name (first segment before _ or .)
     const parts = toolName.split(/[_.]/, 2);
     const serverId = parts[0];
-    const actualToolName = toolName.includes("_")
+
+    // Extract the tool name part after the server prefix
+    let actualToolName = toolName.includes("_")
         ? toolName.substring(toolName.indexOf("_") + 1)
         : toolName.includes(".")
           ? toolName.substring(toolName.indexOf(".") + 1)
           : toolName;
+
+    // Convert underscores back to hyphens for API client format
+    // e.g., "search_issues" -> "search-issues", then prepend server ID if needed
+    // API clients expect names like "jira-search-issues", "hubspot-get-contacts"
+    const hyphenatedToolName = actualToolName.replace(/_/g, "-");
+    const apiToolName = hyphenatedToolName.startsWith(`${serverId}-`)
+        ? hyphenatedToolName
+        : `${serverId}-${hyphenatedToolName}`;
 
     // In serverless mode, try API client first
     if (isServerless) {
         const apiClient = getApiClient(serverId);
         if (apiClient?.isConfigured()) {
             try {
-                const result = await apiClient.executeTool(actualToolName, parameters);
+                // Try the hyphenated format first (e.g., "jira-search-issues")
+                const result = await apiClient.executeTool(apiToolName, parameters);
                 return result;
             } catch (error) {
-                return {
-                    success: false,
-                    error: error instanceof Error ? error.message : "Unknown API error",
-                    metadata: {
-                        mode: "api",
-                        executionTime: Date.now() - startTime,
-                        serverId
-                    }
-                };
+                // If that fails, try the original format
+                try {
+                    const fallbackResult = await apiClient.executeTool(actualToolName, parameters);
+                    return fallbackResult;
+                } catch {
+                    return {
+                        success: false,
+                        error: error instanceof Error ? error.message : "Unknown API error",
+                        metadata: {
+                            mode: "api",
+                            executionTime: Date.now() - startTime,
+                            serverId
+                        }
+                    };
+                }
             }
         }
     }
