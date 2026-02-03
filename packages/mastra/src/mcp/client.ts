@@ -74,16 +74,9 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
         transport: "stdio",
         hasApiFallback: true
     },
-    {
-        id: "justcall",
-        name: "JustCall",
-        description: "Phone and SMS communication - call logs and messaging",
-        category: "communication",
-        requiresAuth: true,
-        envVars: ["JUSTCALL_AUTH_TOKEN"],
-        transport: "http",
-        hasApiFallback: false // Already uses HTTP, no fallback needed
-    },
+    // JustCall removed - their MCP server returns tools with invalid inputSchema
+    // that causes "custom.input_schema.type: Field required" errors with Anthropic
+    // TODO: Re-add when JustCall fixes their MCP server schemas
     {
         id: "atlas",
         name: "ATLAS",
@@ -112,18 +105,9 @@ function getMcpClient(): MCPClient {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const servers: Record<string, any> = {};
 
-        // JustCall MCP Server - Phone/SMS communication via HTTP/SSE
-        // Works in both local and serverless environments
-        if (process.env.JUSTCALL_AUTH_TOKEN) {
-            servers.justcall = {
-                url: new URL("https://mcp.justcall.host/mcp"),
-                requestInit: {
-                    headers: {
-                        Authorization: `Bearer ${process.env.JUSTCALL_AUTH_TOKEN}`
-                    }
-                }
-            };
-        }
+        // JustCall MCP Server removed - their MCP server returns tools with invalid inputSchema
+        // that causes "custom.input_schema.type: Field required" errors with Anthropic
+        // TODO: Re-add when JustCall fixes their MCP server schemas
 
         // Stdio-based servers only work in non-serverless environments
         if (!isServerless) {

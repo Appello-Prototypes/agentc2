@@ -192,52 +192,35 @@ export class AgentResolver {
         const metadata = record.metadata as Record<string, unknown> | null;
         if (metadata?.mcpEnabled) {
             const mcpTools = await getAllMcpTools();
-            
+
             // Filter out tools with invalid schemas to prevent agent creation errors
             // The error "tools.N.custom.input_schema.type: Field required" comes from
             // Anthropic's API when a tool's JSON schema doesn't have a 'type' field.
-            // 
+            //
             // Some MCP servers (like JustCall) return tools where inputSchema conversion
             // produces JSON without 'type'. We need to validate this before passing to Agent.
-            
-            // Known problematic tools from JustCall that have schema issues
-            // These tools have inputSchemas that don't convert properly to JSON for Anthropic
-            // TODO: Report to JustCall to fix their MCP server
-            const BLOCKED_TOOLS = new Set([
-                'justcall_import_salesdialer_contacts',
-                'justcall_add_salesdialer_contacts_dnca',
-                'justcall_remove_salesdialer_contacts_dnca',
-                'justcall_delete_salesdialer_contacts'
-            ]);
-            
+
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const validMcpTools: Record<string, any> = {};
             let skippedCount = 0;
             const skippedNames: string[] = [];
-            
+
             for (const [name, tool] of Object.entries(mcpTools)) {
-                // Explicitly block known problematic tools
-                if (BLOCKED_TOOLS.has(name)) {
-                    skippedCount++;
-                    skippedNames.push(`${name}(blocked)`);
-                    continue;
-                }
-                
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const t = tool as any;
-                
+
                 // Check multiple possible schema locations
                 // 1. API fallback tools (marked with _apiClient) should work
                 // 2. Tools with explicit JSON schema type
                 // 3. Zod schemas that are proper ZodObjects with properties
                 const isApiClient = t._apiClient === true;
-                const hasDirectType = t.inputSchema?.type === 'object';
-                
+                const hasDirectType = t.inputSchema?.type === "object";
+
                 // For Zod schemas, check if it's a proper object schema
-                const isZodSchema = t.inputSchema && typeof t.inputSchema.parse === 'function';
+                const isZodSchema = t.inputSchema && typeof t.inputSchema.parse === "function";
                 const zodTypeName = isZodSchema ? t.inputSchema._def?.typeName : null;
-                const isZodObject = zodTypeName === 'ZodObject';
-                
+                const isZodObject = zodTypeName === "ZodObject";
+
                 // Check if Zod object has any shape (empty objects can cause issues)
                 // An empty shape {} is actually fine - it becomes { type: "object", properties: {} }
                 // The issue is with schemas that aren't objects at all
@@ -251,22 +234,22 @@ export class AgentResolver {
                         hasValidShape = false;
                     }
                 }
-                
+
                 // Accept if: API client, direct JSON schema, or valid ZodObject
                 if (isApiClient || hasDirectType || (isZodObject && hasValidShape)) {
                     validMcpTools[name] = tool;
                 } else {
                     skippedCount++;
-                    skippedNames.push(`${name}(${zodTypeName || 'no-zod'})`);
+                    skippedNames.push(`${name}(${zodTypeName || "no-zod"})`);
                 }
             }
-            
+
             // Merge valid MCP tools without overwriting already-resolved tools
             tools = { ...validMcpTools, ...tools };
-            
+
             if (skippedCount > 0) {
                 console.warn(
-                    `[AgentResolver] Skipped ${skippedCount} tools with invalid schemas: ${skippedNames.slice(0, 5).join(', ')}${skippedCount > 5 ? '...' : ''}`
+                    `[AgentResolver] Skipped ${skippedCount} tools with invalid schemas: ${skippedNames.slice(0, 5).join(", ")}${skippedCount > 5 ? "..." : ""}`
                 );
             }
             console.log(
