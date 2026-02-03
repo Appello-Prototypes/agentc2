@@ -6,9 +6,9 @@ import { createHeadersConfig, sharedEnv, devIndicators } from "@repo/next-config
 // Load environment variables from root .env file
 config({ path: resolve(__dirname, "../../.env") });
 
-// Agent app now serves at root (no basePath needed)
-// All routes are served directly without /agent prefix
+// Agent app serves under /agent path in production
 const nextConfig: NextConfig = {
+    basePath: "/agent",
     env: sharedEnv,
     devIndicators,
     headers: createHeadersConfig(),
