@@ -192,68 +192,10 @@ export class AgentResolver {
         const metadata = record.metadata as Record<string, unknown> | null;
         if (metadata?.mcpEnabled) {
             const mcpTools = await getAllMcpTools();
-
-            // Filter out tools with invalid schemas to prevent agent creation errors
-            // The error "tools.N.custom.input_schema.type: Field required" comes from
-            // Anthropic's API when a tool's JSON schema doesn't have a 'type' field.
-            //
-            // Some MCP servers (like JustCall) return tools where inputSchema conversion
-            // produces JSON without 'type'. We need to validate this before passing to Agent.
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const validMcpTools: Record<string, any> = {};
-            let skippedCount = 0;
-            const skippedNames: string[] = [];
-
-            for (const [name, tool] of Object.entries(mcpTools)) {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const t = tool as any;
-
-                // Check multiple possible schema locations
-                // 1. API fallback tools (marked with _apiClient) should work
-                // 2. Tools with explicit JSON schema type
-                // 3. Zod schemas that are proper ZodObjects with properties
-                const isApiClient = t._apiClient === true;
-                const hasDirectType = t.inputSchema?.type === "object";
-
-                // For Zod schemas, check if it's a proper object schema
-                const isZodSchema = t.inputSchema && typeof t.inputSchema.parse === "function";
-                const zodTypeName = isZodSchema ? t.inputSchema._def?.typeName : null;
-                const isZodObject = zodTypeName === "ZodObject";
-
-                // Check if Zod object has any shape (empty objects can cause issues)
-                // An empty shape {} is actually fine - it becomes { type: "object", properties: {} }
-                // The issue is with schemas that aren't objects at all
-                let hasValidShape = false;
-                if (isZodObject) {
-                    try {
-                        // ZodObject should have a shape() method
-                        const shape = t.inputSchema._def?.shape?.();
-                        hasValidShape = shape !== undefined;
-                    } catch {
-                        hasValidShape = false;
-                    }
-                }
-
-                // Accept if: API client, direct JSON schema, or valid ZodObject
-                if (isApiClient || hasDirectType || (isZodObject && hasValidShape)) {
-                    validMcpTools[name] = tool;
-                } else {
-                    skippedCount++;
-                    skippedNames.push(`${name}(${zodTypeName || "no-zod"})`);
-                }
-            }
-
-            // Merge valid MCP tools without overwriting already-resolved tools
-            tools = { ...validMcpTools, ...tools };
-
-            if (skippedCount > 0) {
-                console.warn(
-                    `[AgentResolver] Skipped ${skippedCount} tools with invalid schemas: ${skippedNames.slice(0, 5).join(", ")}${skippedCount > 5 ? "..." : ""}`
-                );
-            }
+            // Merge MCP tools without overwriting already-resolved tools
+            tools = { ...mcpTools, ...tools };
             console.log(
-                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(validMcpTools).length} MCP tools (skipped ${skippedCount} invalid)`
+                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
             );
         }
 

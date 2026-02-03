@@ -82,77 +82,56 @@ interface McpResponse {
     error?: string;
 }
 
-// Updated types to match the new dual-mode architecture
-interface ServerConnectionStatus {
+interface McpToolInfo {
+    name: string;
+    description: string;
+    serverId: string;
+    inputSchema?: unknown;
+}
+
+interface McpServerStatus {
     id: string;
     name: string;
     description: string;
     category: string;
-    /** Whether MCP transport is active */
-    connected: boolean;
-    /** Whether tools are available (via MCP or API) */
-    available: boolean;
-    /** Whether using direct API instead of MCP */
-    usingApi: boolean;
-    /** Whether running in serverless environment */
-    serverless: boolean;
-    /** Number of tools accessible */
-    toolCount: number;
-    /** Error message if any */
+    status: "connected" | "disconnected" | "error" | "missing_config";
+    tools: McpToolInfo[];
     error?: string;
-    /** Required env vars for this server */
-    requiredEnvVars?: string[];
-    /** Missing env vars */
+    requiresAuth: boolean;
     missingEnvVars?: string[];
 }
 
 interface McpStatusResponse {
-    servers: ServerConnectionStatus[];
+    servers: McpServerStatus[];
     totalTools: number;
     connectedServers: number;
-    availableServers: number;
     timestamp: number;
-    isServerless: boolean;
-    mode: "mcp" | "api" | "hybrid";
 }
 
-// Status badge component - updated for dual-mode architecture
-function StatusBadge({ server }: { server: ServerConnectionStatus }) {
-    if (server.connected) {
-        return (
-            <span className="inline-flex items-center rounded-full border border-green-500/20 bg-green-500/10 px-2 py-0.5 text-xs font-medium text-green-600">
-                Connected (MCP)
-            </span>
-        );
-    }
+// Status badge component
+function StatusBadge({ status }: { status: McpServerStatus["status"] }) {
+    const variants: Record<McpServerStatus["status"], { label: string; className: string }> = {
+        connected: {
+            label: "Connected",
+            className: "bg-green-500/10 text-green-600 border-green-500/20"
+        },
+        disconnected: {
+            label: "Disconnected",
+            className: "bg-gray-500/10 text-gray-600 border-gray-500/20"
+        },
+        error: { label: "Error", className: "bg-red-500/10 text-red-600 border-red-500/20" },
+        missing_config: {
+            label: "Missing Config",
+            className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"
+        }
+    };
 
-    if (server.available && server.usingApi) {
-        return (
-            <span className="inline-flex items-center rounded-full border border-blue-500/20 bg-blue-500/10 px-2 py-0.5 text-xs font-medium text-blue-600">
-                Available (API)
-            </span>
-        );
-    }
-
-    if (server.missingEnvVars && server.missingEnvVars.length > 0) {
-        return (
-            <span className="inline-flex items-center rounded-full border border-yellow-500/20 bg-yellow-500/10 px-2 py-0.5 text-xs font-medium text-yellow-600">
-                Missing Config
-            </span>
-        );
-    }
-
-    if (server.error) {
-        return (
-            <span className="inline-flex items-center rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-xs font-medium text-red-600">
-                Error
-            </span>
-        );
-    }
-
+    const variant = variants[status];
     return (
-        <span className="inline-flex items-center rounded-full border border-gray-500/20 bg-gray-500/10 px-2 py-0.5 text-xs font-medium text-gray-600">
-            Disconnected
+        <span
+            className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${variant.className}`}
+        >
+            {variant.label}
         </span>
     );
 }
@@ -440,29 +419,6 @@ export default function McpDemoPage() {
                 </p>
             </div>
 
-            {/* Serverless Environment Banner - Updated for dual-mode */}
-            {serverStatus?.isServerless && (
-                <div className="rounded-lg border border-blue-500/30 bg-blue-500/10 p-4">
-                    <div className="flex items-start gap-3">
-                        <span className="text-xl">🔄</span>
-                        <div>
-                            <p className="font-medium text-blue-700 dark:text-blue-400">
-                                Running in API Fallback Mode (Serverless)
-                            </p>
-                            <p className="mt-1 text-sm text-blue-600 dark:text-blue-300">
-                                This app is running on Vercel. MCP servers using stdio transport are
-                                automatically replaced with direct API calls. Tools marked{" "}
-                                <span className="font-medium">&quot;Available (API)&quot;</span> are
-                                using HTTP API fallback. Mode:{" "}
-                                <code className="rounded bg-blue-200/50 px-1 dark:bg-blue-800/50">
-                                    {serverStatus.mode}
-                                </code>
-                            </p>
-                        </div>
-                    </div>
-                </div>
-            )}
-
             {/* Server Status Overview */}
             <Card>
                 <CardHeader className="pb-3">
@@ -473,28 +429,17 @@ export default function McpDemoPage() {
                         </div>
                         {serverStatus && (
                             <div className="flex items-center gap-4 text-sm">
-                                {serverStatus.connectedServers > 0 && (
-                                    <span className="text-muted-foreground">
-                                        <span className="font-medium text-green-600">
-                                            {serverStatus.connectedServers}
-                                        </span>{" "}
-                                        via MCP
+                                <span className="text-muted-foreground">
+                                    <span className="text-foreground font-medium">
+                                        {serverStatus.connectedServers}
                                     </span>
-                                )}
-                                {serverStatus.availableServers > serverStatus.connectedServers && (
-                                    <span className="text-muted-foreground">
-                                        <span className="font-medium text-blue-600">
-                                            {serverStatus.availableServers -
-                                                serverStatus.connectedServers}
-                                        </span>{" "}
-                                        via API
-                                    </span>
-                                )}
+                                    /{serverStatus.servers.length} servers connected
+                                </span>
                                 <span className="text-muted-foreground">
                                     <span className="text-foreground font-medium">
                                         {serverStatus.totalTools}
                                     </span>{" "}
-                                    tools total
+                                    tools available
                                 </span>
                             </div>
                         )}
@@ -525,14 +470,14 @@ export default function McpDemoPage() {
                                                             {server.name}
                                                         </span>
                                                         <CategoryBadge category={server.category} />
-                                                        <StatusBadge server={server} />
+                                                        <StatusBadge status={server.status} />
                                                     </div>
                                                     <p className="text-muted-foreground mt-0.5 text-sm">
                                                         {server.description}
                                                     </p>
                                                 </div>
                                                 <span className="text-muted-foreground text-sm">
-                                                    {server.toolCount} tools
+                                                    {server.tools.length} tools
                                                 </span>
                                             </div>
                                         </AccordionTrigger>
@@ -543,34 +488,28 @@ export default function McpDemoPage() {
                                                         {server.error}
                                                     </div>
                                                 )}
-                                                {server.usingApi && (
-                                                    <div className="mb-3 rounded-md bg-blue-500/10 p-2 text-sm text-blue-700 dark:text-blue-300">
-                                                        Using direct API calls (HTTP) instead of MCP
-                                                        stdio transport.
+                                                {server.tools.length > 0 ? (
+                                                    <div className="grid gap-2">
+                                                        {server.tools.map((tool) => (
+                                                            <div
+                                                                key={tool.name}
+                                                                className="bg-muted/30 rounded-md border p-2"
+                                                            >
+                                                                <code className="text-primary font-mono text-sm">
+                                                                    {server.id}_{tool.name}
+                                                                </code>
+                                                                <p className="text-muted-foreground mt-1 text-xs">
+                                                                    {tool.description}
+                                                                </p>
+                                                            </div>
+                                                        ))}
                                                     </div>
-                                                )}
-                                                {server.missingEnvVars &&
-                                                    server.missingEnvVars.length > 0 && (
-                                                        <div className="mb-3 rounded-md bg-yellow-500/10 p-2 text-sm text-yellow-700 dark:text-yellow-300">
-                                                            Missing environment variables:{" "}
-                                                            <code>
-                                                                {server.missingEnvVars.join(", ")}
-                                                            </code>
-                                                        </div>
-                                                    )}
-                                                {server.toolCount > 0 ? (
-                                                    <p className="text-muted-foreground text-sm">
-                                                        {server.toolCount} tools available.{" "}
-                                                        {server.usingApi
-                                                            ? "Using API fallback."
-                                                            : "Connected via MCP."}
-                                                    </p>
                                                 ) : (
                                                     <p className="text-muted-foreground text-sm">
                                                         No tools available.{" "}
-                                                        {server.missingEnvVars?.length
+                                                        {server.status === "missing_config"
                                                             ? "Configure the required environment variables to enable this server."
-                                                            : "Server may not be running or configured."}
+                                                            : "Server may not be running."}
                                                     </p>
                                                 )}
                                             </div>
@@ -687,7 +626,7 @@ export default function McpDemoPage() {
                                     const server = serverStatus?.servers.find(
                                         (s) => s.id === ex.server
                                     );
-                                    const isAvailable = server?.available || server?.connected;
+                                    const isAvailable = server?.status === "connected";
 
                                     return (
                                         <button
@@ -707,11 +646,6 @@ export default function McpDemoPage() {
                                                         {ex.description}
                                                     </p>
                                                 </div>
-                                                {server?.usingApi && (
-                                                    <span className="text-xs text-blue-600">
-                                                        API mode
-                                                    </span>
-                                                )}
                                                 {!isAvailable && (
                                                     <span className="text-xs text-yellow-600">
                                                         Not configured
