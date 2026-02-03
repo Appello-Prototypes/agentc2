@@ -194,7 +194,8 @@ export class AgentResolver {
             const mcpTools = await getAllMcpTools();
             
             // Filter out tools with invalid schemas to prevent agent creation errors
-            // Some MCP servers (like JustCall) return tools with missing inputSchema.type
+            // Some MCP servers (like JustCall) return tools with inputSchema that doesn't
+            // convert properly to JSON schema (missing 'type' field)
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const validMcpTools: Record<string, any> = {};
             let skippedCount = 0;
@@ -202,17 +203,23 @@ export class AgentResolver {
             for (const [name, tool] of Object.entries(mcpTools)) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const t = tool as any;
-                // Check if tool has valid schema - Mastra requires inputSchema.type or custom.input_schema.type
-                const hasValidSchema = 
-                    (t.inputSchema && typeof t.inputSchema.type === 'string') ||
-                    (t.custom?.input_schema && typeof t.custom.input_schema.type === 'string') ||
-                    (t.parameters !== undefined); // API fallback tools have parameters
                 
-                if (hasValidSchema || t._apiClient) {
+                // Check if tool has a valid schema that will work with Anthropic API
+                // Zod schemas have _def property and parse method
+                // API fallback tools have _apiClient flag
+                // Valid Zod schemas should have _def.typeName of 'ZodObject'
+                const isZodSchema = t.inputSchema && typeof t.inputSchema.parse === 'function';
+                const isZodObject = isZodSchema && t.inputSchema._def?.typeName === 'ZodObject';
+                const hasJsonSchema = t.inputSchema && typeof t.inputSchema.type === 'string';
+                const isApiClient = t._apiClient === true;
+                
+                // Only include tools with proper ZodObject schemas, JSON schemas with type, or API client tools
+                if (isZodObject || hasJsonSchema || isApiClient) {
                     validMcpTools[name] = tool;
                 } else {
                     skippedCount++;
-                    console.warn(`[AgentResolver] Skipping tool "${name}" - invalid schema`);
+                    const schemaType = isZodSchema ? t.inputSchema._def?.typeName : 'unknown';
+                    console.warn(`[AgentResolver] Skipping tool "${name}" - schema type: ${schemaType}`);
                 }
             }
             
