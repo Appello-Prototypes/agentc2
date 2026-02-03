@@ -192,10 +192,34 @@ export class AgentResolver {
         const metadata = record.metadata as Record<string, unknown> | null;
         if (metadata?.mcpEnabled) {
             const mcpTools = await getAllMcpTools();
-            // Merge MCP tools without overwriting already-resolved tools
-            tools = { ...mcpTools, ...tools };
+            
+            // Filter out tools with invalid schemas to prevent agent creation errors
+            // Some MCP servers (like JustCall) return tools with missing inputSchema.type
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const validMcpTools: Record<string, any> = {};
+            let skippedCount = 0;
+            
+            for (const [name, tool] of Object.entries(mcpTools)) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const t = tool as any;
+                // Check if tool has valid schema - Mastra requires inputSchema.type or custom.input_schema.type
+                const hasValidSchema = 
+                    (t.inputSchema && typeof t.inputSchema.type === 'string') ||
+                    (t.custom?.input_schema && typeof t.custom.input_schema.type === 'string') ||
+                    (t.parameters !== undefined); // API fallback tools have parameters
+                
+                if (hasValidSchema || t._apiClient) {
+                    validMcpTools[name] = tool;
+                } else {
+                    skippedCount++;
+                    console.warn(`[AgentResolver] Skipping tool "${name}" - invalid schema`);
+                }
+            }
+            
+            // Merge valid MCP tools without overwriting already-resolved tools
+            tools = { ...validMcpTools, ...tools };
             console.log(
-                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
+                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(validMcpTools).length} MCP tools (skipped ${skippedCount} invalid)`
             );
         }
 
