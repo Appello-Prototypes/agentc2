@@ -7,9 +7,11 @@
 
 import { Agent } from "@mastra/core/agent";
 import { Memory } from "@mastra/memory";
+import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { prisma, Prisma } from "@repo/database";
 import { mastra } from "../mastra";
 import { storage } from "../storage";
+import { vector } from "../vector";
 import { getToolsByNamesAsync, getAllMcpTools } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
 
@@ -288,10 +290,17 @@ export class AgentResolver {
 
     /**
      * Build a Memory instance from configuration
+     *
+     * When semanticRecall is enabled, includes vector store and embedder.
      */
     private buildMemory(config: MemoryConfig | null): Memory {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const memoryOptions: any = {};
+        // Check if semantic recall is enabled (it's an object when enabled, false when disabled)
+        const hasSemanticRecall =
+            config?.semanticRecall !== undefined &&
+            config.semanticRecall !== false &&
+            typeof config.semanticRecall === "object";
 
         if (config) {
             if (config.lastMessages !== undefined) {
@@ -307,10 +316,19 @@ export class AgentResolver {
             }
         }
 
-        return new Memory({
+        // Build memory config - include vector and embedder if semantic recall is enabled
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const memoryConfig: any = {
             storage,
             options: memoryOptions
-        });
+        };
+
+        if (hasSemanticRecall) {
+            memoryConfig.vector = vector;
+            memoryConfig.embedder = new ModelRouterEmbeddingModel("openai/text-embedding-3-small");
+        }
+
+        return new Memory(memoryConfig);
     }
 
     /**
