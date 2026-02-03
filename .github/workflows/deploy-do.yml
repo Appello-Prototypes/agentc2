@@ -85,6 +85,7 @@ jobs:
         run: bun run build
         env:
           # Minimal env vars for build
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
           NEXT_PUBLIC_APP_URL: "https://placeholder.com"
           BETTER_AUTH_SECRET: "placeholder-secret-for-build"
 
