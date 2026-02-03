@@ -199,12 +199,30 @@ export class AgentResolver {
             // 
             // Some MCP servers (like JustCall) return tools where inputSchema conversion
             // produces JSON without 'type'. We need to validate this before passing to Agent.
+            
+            // Known problematic tools from JustCall that have schema issues
+            // These tools have inputSchemas that don't convert properly to JSON for Anthropic
+            // TODO: Report to JustCall to fix their MCP server
+            const BLOCKED_TOOLS = new Set([
+                'justcall_import_salesdialer_contacts',
+                'justcall_add_salesdialer_contacts_dnca',
+                'justcall_remove_salesdialer_contacts_dnca',
+                'justcall_delete_salesdialer_contacts'
+            ]);
+            
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const validMcpTools: Record<string, any> = {};
             let skippedCount = 0;
             const skippedNames: string[] = [];
             
             for (const [name, tool] of Object.entries(mcpTools)) {
+                // Explicitly block known problematic tools
+                if (BLOCKED_TOOLS.has(name)) {
+                    skippedCount++;
+                    skippedNames.push(`${name}(blocked)`);
+                    continue;
+                }
+                
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const t = tool as any;
                 
