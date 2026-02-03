@@ -93,27 +93,34 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
     const agents = await fetchAgents();
 
     return {
-        tools: agents.map((agent) => ({
-            // Replace hyphens with underscores - Cursor has a bug where it ignores tools with hyphens
-            name: agent.name.replace(/-/g, "_"),
-            description:
-                agent.description || `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
-            inputSchema: {
-                type: "object",
-                properties: {
-                    input: {
-                        type: "string",
-                        description: "The message or task to send to the agent"
+        tools: agents.map((agent) => {
+            // Extract slug from agent.name (format: "agent.slug-name")
+            // Remove "agent." prefix and replace hyphens with underscores
+            // Cursor has issues with periods and hyphens in tool names
+            const rawName = agent.name.startsWith("agent.") ? agent.name.slice(6) : agent.name;
+            const toolName = rawName.replace(/-/g, "_");
+
+            return {
+                name: toolName,
+                description:
+                    agent.description || `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        input: {
+                            type: "string",
+                            description: "The message or task to send to the agent"
+                        },
+                        context: {
+                            type: "object",
+                            description: "Optional context variables",
+                            additionalProperties: true
+                        }
                     },
-                    context: {
-                        type: "object",
-                        description: "Optional context variables",
-                        additionalProperties: true
-                    }
-                },
-                required: ["input"]
-            }
-        }))
+                    required: ["input"]
+                }
+            };
+        })
     };
 });
 
@@ -121,10 +128,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
 
-    // Extract agent slug from tool name (format: agent.slug)
-    // Convert underscores back to hyphens since we replaced them for Cursor compatibility
-    const rawSlug = name.startsWith("agent.") ? name.slice(6) : name;
-    const agentSlug = rawSlug.replace(/_/g, "-");
+    // Tool name is now just the slug with underscores (e.g., "trip_budget")
+    // Convert underscores back to hyphens for the API call
+    const agentSlug = name.replace(/_/g, "-");
 
     try {
         const result = await invokeAgent(agentSlug, args.input, args.context);
