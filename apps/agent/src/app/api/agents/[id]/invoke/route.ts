@@ -204,12 +204,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 : undefined;
 
             // Extract tool calls from response
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rawToolCalls: any[] =
-                (response as any).toolCalls || (response as any).tool_calls || [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rawToolResults: any[] =
-                (response as any).toolResults || (response as any).tool_results || [];
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const rawToolCalls: any[] = (response as any).toolCalls || (response as any).tool_calls || [];
+            const rawToolResults: any[] = (response as any).toolResults || (response as any).tool_results || [];
+            /* eslint-enable @typescript-eslint/no-explicit-any */
 
             // Build execution steps and record tool calls
             interface ExecutionStep {

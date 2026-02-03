@@ -353,12 +353,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
             // Extract tool calls from result
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rawToolCalls: any[] =
-                (result as any).toolCalls || (result as any).tool_calls || [];
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rawToolResults: any[] =
-                (result as any).toolResults || (result as any).tool_results || [];
+            /* eslint-disable @typescript-eslint/no-explicit-any */
+            const rawToolCalls: any[] = (result as any).toolCalls || (result as any).tool_calls || [];
+            const rawToolResults: any[] = (result as any).toolResults || (result as any).tool_results || [];
+            /* eslint-enable @typescript-eslint/no-explicit-any */
 
             // Build execution steps
             interface ExecutionStep {
