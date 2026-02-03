@@ -22,10 +22,10 @@
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "^db:generate"]
     },
     "type-check": {
-      "dependsOn": ["^build"]
+      "dependsOn": ["^build", "^db:generate"]
     },
     "clean": {
       "cache": false
