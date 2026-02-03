@@ -105,15 +105,20 @@ jobs:
             NODE_ENV=production bun run build
 
             echo ""
-            echo "6. Restarting PM2 processes..."
+            echo "6. Updating Caddy configuration..."
+            sudo cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
+            sudo systemctl reload caddy || sudo systemctl restart caddy
+
+            echo ""
+            echo "7. Restarting PM2 processes..."
             pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
 
             echo ""
-            echo "7. Saving PM2 process list..."
+            echo "8. Saving PM2 process list..."
             pm2 save
 
             echo ""
-            echo "8. Application status:"
+            echo "9. Application status:"
             pm2 status
 
             echo ""
