@@ -213,6 +213,38 @@ export function getMcpMode(): "mcp" | "api" | "hybrid" {
 }
 
 /**
+ * Normalize a tool's input schema to ensure it has required fields
+ * Mastra's Agent class requires inputSchema.type to be present
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeToolSchema(tool: any): any {
+    if (!tool) return tool;
+    
+    // Ensure inputSchema exists and has a type
+    if (tool.inputSchema) {
+        if (!tool.inputSchema.type) {
+            tool.inputSchema.type = "object";
+        }
+    } else if (tool.parameters) {
+        // If using parameters instead of inputSchema, create inputSchema
+        tool.inputSchema = {
+            type: "object",
+            properties: tool.parameters,
+            required: []
+        };
+    } else {
+        // No schema at all, create a minimal one
+        tool.inputSchema = {
+            type: "object",
+            properties: {},
+            required: []
+        };
+    }
+    
+    return tool;
+}
+
+/**
  * Get all available MCP tools - unified interface
  *
  * In local mode: Returns tools from MCP servers
@@ -228,7 +260,10 @@ export async function getMcpTools(): Promise<Record<string, any>> {
     // Try to get MCP tools (works in local, may partially work in serverless for HTTP servers)
     try {
         const mcpTools = await mcpClient.listTools();
-        Object.assign(tools, mcpTools);
+        // Normalize each tool's schema to ensure required fields are present
+        for (const [name, tool] of Object.entries(mcpTools)) {
+            tools[name] = normalizeToolSchema(tool);
+        }
     } catch (error) {
         // In serverless, MCP tools may not be available - that's expected
         if (!isServerless) {
@@ -261,6 +296,12 @@ export async function getMcpTools(): Promise<Record<string, any>> {
                         tools[toolName] = {
                             description: tool.description,
                             parameters: tool.parameters,
+                            // Ensure inputSchema is present with required type field
+                            inputSchema: {
+                                type: "object",
+                                properties: tool.parameters || {},
+                                required: []
+                            },
                             // Create an execute function that calls the API client
                             execute: async (params: { context: ToolExecutionContext }) => {
                                 const result = await client.executeTool(tool.name, params.context);
