@@ -214,7 +214,9 @@ export function getMcpMode(): "mcp" | "api" | "hybrid" {
 
 /**
  * Normalize a tool's input schema to ensure it has required fields
- * Mastra's Agent class requires inputSchema.type to be present
+ * Mastra's Agent class requires inputSchema.type and custom.input_schema.type to be present
+ * The error "tools.N.custom.input_schema.type: Field required" comes from Anthropic's API
+ * when a tool schema is missing the required 'type' field
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function normalizeToolSchema(tool: any): any {
@@ -224,6 +226,10 @@ function normalizeToolSchema(tool: any): any {
     if (tool.inputSchema) {
         if (!tool.inputSchema.type) {
             tool.inputSchema.type = "object";
+        }
+        // Ensure properties exists
+        if (!tool.inputSchema.properties) {
+            tool.inputSchema.properties = {};
         }
     } else if (tool.parameters) {
         // If using parameters instead of inputSchema, create inputSchema
@@ -239,6 +245,25 @@ function normalizeToolSchema(tool: any): any {
             properties: {},
             required: []
         };
+    }
+    
+    // Also check custom.input_schema (used by Mastra when sending to AI providers)
+    if (tool.custom) {
+        if (tool.custom.input_schema) {
+            if (!tool.custom.input_schema.type) {
+                tool.custom.input_schema.type = "object";
+            }
+            if (!tool.custom.input_schema.properties) {
+                tool.custom.input_schema.properties = {};
+            }
+        } else {
+            // Create custom.input_schema from inputSchema
+            tool.custom.input_schema = {
+                type: "object",
+                properties: tool.inputSchema?.properties || {},
+                required: tool.inputSchema?.required || []
+            };
+        }
     }
     
     return tool;
