@@ -38,18 +38,41 @@ export type {
     AgentRecordWithTools
 } from "./agents";
 
-// MCP
+// MCP - Dual Mode Architecture (MCP + API fallback for serverless)
 export {
+    // Core MCP client
     mcpClient,
     getMcpTools,
     getMcpToolsets,
     disconnectMcp,
     executeMcpTool,
     listMcpToolDefinitions,
+    // Environment detection
+    isServerlessEnvironment,
+    getMcpMode,
+    getMcpServerStatus,
+    // Configuration
     MCP_SERVER_CONFIGS,
+    // API clients for serverless fallback
+    apiClientRegistry,
+    getApiClient,
+    getConfiguredApiClients,
+    hasApiClient,
+    hubspotApiClient,
+    firecrawlApiClient,
+    jiraApiClient,
+    atlasApiClient,
+    playwrightApiClient,
+    // Types
     type McpServerConfig,
     type McpToolExecutionResult,
-    type McpToolDefinition
+    type McpToolDefinition,
+    type ServerConnectionStatus,
+    type ToolExecutionContext,
+    type ToolResult,
+    type UnifiedToolDefinition,
+    type McpApiClient,
+    type TransportMode
 } from "./mcp";
 
 // Scorers
