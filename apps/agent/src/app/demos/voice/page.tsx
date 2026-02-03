@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -59,7 +60,7 @@ function LiveAgentTab() {
         let isMounted = true;
         const fetchAgents = async () => {
             try {
-                const res = await fetch("/api/demos/voice/signed-url?list=true");
+                const res = await fetch(`${getApiBase()}/api/demos/voice/signed-url?list=true`);
                 const data = await res.json();
                 if (isMounted && data.agents && data.agents.length > 0) {
                     setAvailableAgents(data.agents);
@@ -537,7 +538,7 @@ export default function VoiceDemoPage() {
         setTtsAudioUrl(null);
         setTtsError(null);
         try {
-            const res = await fetch("/api/demos/voice/tts", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/tts`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -636,7 +637,7 @@ export default function VoiceDemoPage() {
             const formData = new FormData();
             formData.append("audio", audioBlob, "recording.webm");
 
-            const res = await fetch("/api/demos/voice/stt", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/stt`, {
                 method: "POST",
                 body: formData
             });
@@ -699,7 +700,7 @@ export default function VoiceDemoPage() {
             const formData = new FormData();
             formData.append("audio", uploadedFile, uploadedFile.name);
 
-            const res = await fetch("/api/demos/voice/stt", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/stt`, {
                 method: "POST",
                 body: formData
             });
@@ -799,7 +800,7 @@ export default function VoiceDemoPage() {
             formData.append("provider", chatProvider);
             formData.append("speaker", chatSpeaker);
 
-            const res = await fetch("/api/demos/voice/chat", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/chat`, {
                 method: "POST",
                 body: formData
             });
@@ -1287,7 +1288,7 @@ export default function VoiceDemoPage() {
     const testTtsApi = async () => {
         setApiTestLoading("tts");
         try {
-            const res = await fetch("/api/demos/voice/tts", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/tts`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -1360,7 +1361,7 @@ export default function VoiceDemoPage() {
                 blobType: testAudioBlob.type
             });
 
-            const res = await fetch("/api/demos/voice/stt", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/stt`, {
                 method: "POST",
                 body: formData
             });
@@ -1427,7 +1428,7 @@ export default function VoiceDemoPage() {
                 blobType: testAudioBlob.type
             });
 
-            const res = await fetch("/api/demos/voice/chat", {
+            const res = await fetch(`${getApiBase()}/api/demos/voice/chat`, {
                 method: "POST",
                 body: formData
             });
@@ -1654,7 +1655,7 @@ export default function VoiceDemoPage() {
             formData.append("audio", audioBlob, "recording.webm");
             formData.append("provider", liveProvider);
 
-            const response = await fetch("/api/demos/voice/stream", {
+            const response = await fetch(`${getApiBase()}/api/demos/voice/stream`, {
                 method: "POST",
                 body: formData
             });

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -152,7 +153,7 @@ export default function EvalsDemoPage() {
     const handleEvaluate = async () => {
         setLoading(true);
         try {
-            const res = await fetch("/api/demos/evals", {
+            const res = await fetch(`${getApiBase()}/api/demos/evals`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ input, output })
@@ -168,7 +169,7 @@ export default function EvalsDemoPage() {
     const handleGenerate = async () => {
         setGenerating(true);
         try {
-            const res = await fetch("/api/demos/evals/generate", {
+            const res = await fetch(`${getApiBase()}/api/demos/evals/generate`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ input })

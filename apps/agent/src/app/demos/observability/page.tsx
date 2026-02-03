@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -222,7 +223,7 @@ export default function ObservabilityPage() {
 
     const fetchTools = useCallback(async () => {
         try {
-            const res = await fetch("/api/demos/live-agent-mcp/tools-list");
+            const res = await fetch(`${getApiBase()}/api/demos/live-agent-mcp/tools-list`);
             const data = await res.json();
             setTools(data);
         } catch (error) {
@@ -234,7 +235,7 @@ export default function ObservabilityPage() {
 
     const fetchTraces = useCallback(async () => {
         try {
-            const res = await fetch("/api/demos/live-agent-mcp/traces");
+            const res = await fetch(`${getApiBase()}/api/demos/live-agent-mcp/traces`);
             const data = await res.json();
             setTraces(data);
             // Update selected trace if it exists
@@ -295,7 +296,7 @@ export default function ObservabilityPage() {
                                 {traces?.traces[0]?.metadata.agentId || "mcp-agent"}
                             </span>
                             <a
-                                href={`/agent/demos/agents/manage?agent=${traces?.traces[0]?.metadata.agentId || "mcp-agent"}`}
+                                href={`/demos/agents/manage?agent=${traces?.traces[0]?.metadata.agentId || "mcp-agent"}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="hover:bg-primary/20 rounded p-1 transition-colors"

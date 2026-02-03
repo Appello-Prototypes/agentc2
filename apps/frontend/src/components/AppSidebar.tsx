@@ -98,23 +98,15 @@ const SidebarItemNode = ({
 }: {
     item: NavigationItem | NonNullable<NavigationItem["children"]>[number];
 }) => {
-    const isExternalApp = item.href === "/agent" || item.href.startsWith("/agent/");
     const hasIcon = "icon" in item;
 
     return (
         <SidebarMenuItem key={item.href}>
             <SidebarMenuButton>
-                {isExternalApp ? (
-                    <a href={item.href} className="flex items-center gap-2">
-                        {hasIcon && <HugeiconsIcon icon={item.icon!} strokeWidth={2} />}
-                        {item.label}
-                    </a>
-                ) : (
-                    <Link href={item.href} className="flex items-center gap-2">
-                        {hasIcon && <HugeiconsIcon icon={item.icon!} strokeWidth={2} />}
-                        {item.label}
-                    </Link>
-                )}
+                <Link href={item.href} className="flex items-center gap-2">
+                    {hasIcon && <HugeiconsIcon icon={item.icon!} strokeWidth={2} />}
+                    {item.label}
+                </Link>
             </SidebarMenuButton>
         </SidebarMenuItem>
     );

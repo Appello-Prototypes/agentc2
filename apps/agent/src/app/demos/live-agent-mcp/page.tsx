@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -65,14 +66,14 @@ function McpToolsPanel() {
     useEffect(() => {
         const fetchTools = async () => {
             try {
-                const res = await fetch("/api/demos/live-agent-mcp/tools");
+                const res = await fetch(`${getApiBase()}/api/demos/live-agent-mcp/tools`);
                 if (!res.ok) throw new Error("Failed to fetch tools");
                 const data = await res.json();
                 setToolsData(data);
 
                 // Construct webhook URL
                 const origin = window.location.origin;
-                setWebhookUrl(`${origin}/agent/api/demos/live-agent-mcp/tools`);
+                setWebhookUrl(`${origin}/api/demos/live-agent-mcp/tools`);
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Unknown error");
             } finally {
@@ -215,7 +216,9 @@ function VoiceAgentPanel() {
         let isMounted = true;
         const fetchAgents = async () => {
             try {
-                const res = await fetch("/api/demos/live-agent-mcp/signed-url?list=true");
+                const res = await fetch(
+                    `${getApiBase()}/api/demos/live-agent-mcp/signed-url?list=true`
+                );
                 const data = await res.json();
                 if (isMounted && data.agents && data.agents.length > 0) {
                     setAvailableAgents(data.agents);
@@ -577,7 +580,7 @@ export default function LiveAgentMcpPage() {
                                     <p className="text-muted-foreground text-sm">
                                         Go to{" "}
                                         <a
-                                            href="/agent/demos/agents/manage"
+                                            href="/demos/agents/manage"
                                             className="text-primary underline"
                                         >
                                             Agent Management
@@ -628,7 +631,7 @@ export default function LiveAgentMcpPage() {
                                             </li>
                                             <li>
                                                 <strong>URL:</strong>{" "}
-                                                https://your-domain/agent/api/demos/live-agent-mcp/assistant
+                                                https://your-domain/api/demos/live-agent-mcp/assistant
                                             </li>
                                             <li>
                                                 <strong>Auth:</strong> Bearer token (your

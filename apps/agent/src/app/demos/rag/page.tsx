@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -258,7 +259,7 @@ export default function RagDemoPage() {
     const loadDocuments = async () => {
         setDocumentsLoading(true);
         try {
-            const res = await fetch("/api/rag/documents");
+            const res = await fetch(`${getApiBase()}/api/rag/documents`);
             const data = await res.json();
             setDocuments(data.documents || []);
             setDocumentsLoaded(true);
@@ -278,7 +279,7 @@ export default function RagDemoPage() {
         setIngestLoading(true);
         setIngestResult(null);
         try {
-            const res = await fetch("/api/rag/ingest", {
+            const res = await fetch(`${getApiBase()}/api/rag/ingest`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -308,7 +309,7 @@ export default function RagDemoPage() {
         setQueryResult(null);
 
         try {
-            const res = await fetch("/api/rag/query", {
+            const res = await fetch(`${getApiBase()}/api/rag/query`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -370,7 +371,7 @@ export default function RagDemoPage() {
 
     const handleDeleteDocument = async (documentId: string) => {
         try {
-            await fetch("/api/rag/documents", {
+            await fetch(`${getApiBase()}/api/rag/documents`, {
                 method: "DELETE",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ documentId })

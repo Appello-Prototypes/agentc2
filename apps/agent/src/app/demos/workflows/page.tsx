@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -207,7 +208,7 @@ export default function WorkflowsDemoPage() {
         ]);
 
         try {
-            const res = await fetch("/api/demos/workflows", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -253,7 +254,7 @@ export default function WorkflowsDemoPage() {
         ]);
 
         try {
-            const res = await fetch("/api/demos/workflows", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -310,7 +311,7 @@ export default function WorkflowsDemoPage() {
                 .split(",")
                 .map((s) => s.trim())
                 .filter((s) => s);
-            const res = await fetch("/api/demos/workflows", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -342,7 +343,7 @@ export default function WorkflowsDemoPage() {
         ]);
 
         try {
-            const res = await fetch("/api/demos/workflows", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -384,7 +385,7 @@ export default function WorkflowsDemoPage() {
     ) => {
         setApprovalLoading(true);
         try {
-            const res = await fetch("/api/demos/workflows/resume", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows/resume`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -420,7 +421,7 @@ export default function WorkflowsDemoPage() {
     ) => {
         setApprovalLoading(true);
         try {
-            const res = await fetch("/api/demos/workflows/resume", {
+            const res = await fetch(`${getApiBase()}/api/demos/workflows/resume`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

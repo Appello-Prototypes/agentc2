@@ -6,17 +6,12 @@ import { createHeadersConfig, sharedEnv, devIndicators } from "@repo/next-config
 // Load environment variables from root .env file
 config({ path: resolve(__dirname, "../../.env") });
 
-// Use basePath only when running behind Caddy proxy (local dev with catalyst.localhost)
-// For standalone Vercel deployment, no basePath is needed
-const useBasePath = process.env.NEXT_PUBLIC_APP_URL?.includes("catalyst.localhost");
-
+// Agent app now serves at root (no basePath needed)
+// All routes are served directly without /agent prefix
 const nextConfig: NextConfig = {
     env: sharedEnv,
     devIndicators,
     headers: createHeadersConfig(),
-    // BasePath is required so Next.js prefixes all asset URLs with /agent
-    // This ensures assets load from https://catalyst.localhost/agent/_next/... instead of https://catalyst.localhost/_next/...
-    ...(useBasePath && { basePath: "/agent" }),
     // Externalize server-only packages that have Node.js-specific dependencies
     // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
     serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"]

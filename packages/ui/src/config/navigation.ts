@@ -17,58 +17,102 @@ export type NavigationItem = {
 };
 
 /**
- * Centralized navigation configuration for all apps
- * Used by: Sidebar, TopBar, and CommandPalette
+ * Centralized navigation configuration for AgentWorkplace
+ * Used by: TopBar and CommandPalette
  */
 export const navigationItems: NavigationItem[] = [
-    // Frontend navigation
+    // Primary navigation - AgentWorkplace
     {
-        label: "Dashboard",
+        label: "Workspace",
         icon: icons.dashboard,
-        href: "/dashboard",
-        app: "frontend",
-        keywords: ["home", "overview", "main"],
+        href: "/workspace",
+        app: "agent",
+        keywords: ["workspace", "agents", "manage", "monitor", "configure", "analytics", "home"]
+    },
+    {
+        label: "Live",
+        icon: icons.activity,
+        href: "/live",
+        app: "agent",
+        keywords: ["live", "production", "monitoring", "runs", "real-time"]
+    },
+    {
+        label: "MCP",
+        icon: icons["ai-network"],
+        href: "/mcp",
+        app: "agent",
+        keywords: ["mcp", "model context protocol", "tools", "servers", "connections"],
         children: [
             {
-                label: "Overview",
-                href: "/dashboard",
-                keywords: ["home", "overview", "main", "dashboard"]
+                label: "Connections",
+                href: "/mcp",
+                keywords: ["connections", "servers", "tools", "status"]
             },
             {
-                label: "Sales",
-                href: "/dashboard/sales",
-                keywords: ["sales", "revenue", "analytics"]
+                label: "Setup for Cursor",
+                href: "/mcp/setup",
+                keywords: ["setup", "cursor", "configure", "install", "ide"]
             }
         ]
     },
+    // Secondary navigation - Demos (accessible via command palette)
     {
-        label: "Examples",
+        label: "Demos",
         icon: icons["folder-open"],
-        href: "/examples",
-        app: "frontend",
-        keywords: ["demos", "samples", "examples"]
-    },
-    // Agent navigation (Mastra Playground)
-    {
-        label: "Overview",
-        icon: icons.home,
         href: "/demos",
         app: "agent",
-        keywords: ["home", "overview", "demos", "all"]
-    },
-    {
-        label: "Agent Workspace",
-        icon: icons.user,
-        href: "/workspace",
-        app: "agent",
-        keywords: [
-            "workspace",
-            "agents",
-            "manage",
-            "monitor",
-            "configure",
-            "analytics",
-            "digital employee"
+        keywords: ["demos", "examples", "playground"],
+        children: [
+            {
+                label: "Agents",
+                href: "/demos/agents",
+                keywords: ["agents", "structured", "vision", "research"]
+            },
+            {
+                label: "Agent Management",
+                href: "/demos/agents/manage",
+                keywords: ["agent", "manage", "config", "settings"]
+            },
+            {
+                label: "Agent Network",
+                href: "/demos/agent-network",
+                keywords: ["network", "multi-agent", "orchestration"]
+            },
+            {
+                label: "Workflows",
+                href: "/demos/workflows",
+                keywords: ["workflows", "parallel", "branch"]
+            },
+            {
+                label: "Memory",
+                href: "/demos/memory",
+                keywords: ["memory", "semantic", "recall"]
+            },
+            {
+                label: "RAG",
+                href: "/demos/rag",
+                keywords: ["rag", "retrieval", "documents"]
+            },
+            {
+                label: "Evals",
+                href: "/demos/evals",
+                keywords: ["evals", "evaluation", "scoring"]
+            },
+            {
+                label: "Voice",
+                href: "/demos/voice",
+                keywords: ["voice", "speech", "tts", "stt"]
+            },
+            {
+                label: "Live Agent (MCP)",
+                href: "/demos/live-agent-mcp",
+                keywords: ["live", "agent", "voice", "elevenlabs"]
+            },
+            {
+                label: "Observability",
+                href: "/demos/observability",
+                keywords: ["observability", "traces", "debugging"]
+            }
         ]
     },
     {
@@ -77,109 +121,6 @@ export const navigationItems: NavigationItem[] = [
         href: "/chat",
         app: "agent",
         keywords: ["chat", "assistant", "conversation", "ai"]
-    },
-    {
-        label: "Agent Network",
-        icon: icons["folder-open"],
-        href: "/demos/agent-network",
-        app: "agent",
-        keywords: [
-            "network",
-            "multi-agent",
-            "orchestration",
-            "trip",
-            "planner",
-            "routing",
-            "workflows"
-        ]
-    },
-    {
-        label: "Agents",
-        icon: icons["folder-open"],
-        href: "/demos/agents",
-        app: "agent",
-        keywords: ["agents", "structured", "vision", "research", "manage"],
-        children: [
-            {
-                label: "Agent Demos",
-                href: "/demos/agents",
-                keywords: ["agents", "structured", "vision", "research", "demo"]
-            },
-            {
-                label: "Agent Management",
-                href: "/demos/agents/manage",
-                keywords: ["agent", "manage", "config", "settings", "instructions", "tools"]
-            }
-        ]
-    },
-    {
-        label: "Workflows",
-        icon: icons["folder-open"],
-        href: "/demos/workflows",
-        app: "agent",
-        keywords: ["workflows", "parallel", "branch", "loop"]
-    },
-    {
-        label: "Memory",
-        icon: icons["folder-open"],
-        href: "/demos/memory",
-        app: "agent",
-        keywords: ["memory", "semantic", "recall", "working"]
-    },
-    {
-        label: "RAG",
-        icon: icons["folder-open"],
-        href: "/demos/rag",
-        app: "agent",
-        keywords: ["rag", "retrieval", "documents", "embeddings"]
-    },
-    {
-        label: "Evals",
-        icon: icons["folder-open"],
-        href: "/demos/evals",
-        app: "agent",
-        keywords: ["evals", "evaluation", "scoring", "metrics"]
-    },
-    {
-        label: "MCP",
-        icon: icons["folder-open"],
-        href: "/demos/mcp",
-        app: "agent",
-        keywords: ["mcp", "model context protocol", "tools"]
-    },
-    {
-        label: "Voice",
-        icon: icons["folder-open"],
-        href: "/demos/voice",
-        app: "agent",
-        keywords: ["voice", "speech", "tts", "stt", "audio", "elevenlabs"],
-        children: [
-            {
-                label: "Voice Agent",
-                href: "/demos/voice",
-                keywords: ["voice", "speech", "tts", "stt", "audio", "elevenlabs"]
-            },
-            {
-                label: "Live Agent (MCP)",
-                href: "/demos/live-agent-mcp",
-                keywords: ["live", "agent", "mcp", "voice", "elevenlabs", "realtime", "tools"]
-            }
-        ]
-    },
-    {
-        label: "Observability",
-        icon: icons["folder-open"],
-        href: "/demos/observability",
-        app: "agent",
-        keywords: [
-            "observability",
-            "traces",
-            "monitoring",
-            "debugging",
-            "tools",
-            "dashboard",
-            "tracing"
-        ]
     }
 ];
 

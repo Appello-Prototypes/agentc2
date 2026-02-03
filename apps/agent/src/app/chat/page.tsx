@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { getApiBase } from "@/lib/utils";
 import { DefaultChatTransport, type ToolUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
@@ -41,7 +42,7 @@ export default function ChatPage() {
     useEffect(() => {
         const fetchMessages = async () => {
             try {
-                const res = await fetch("/api/chat");
+                const res = await fetch(`${getApiBase()}/api/chat`);
                 if (res.ok) {
                     const data = await res.json();
                     if (data.length > 0) {

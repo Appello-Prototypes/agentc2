@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -241,7 +242,7 @@ export default function AgentNetworkPage() {
         setNetworkEvents([]);
 
         try {
-            const response = await fetch("/api/demos/agent-network/chat", {
+            const response = await fetch(`${getApiBase()}/api/demos/agent-network/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -364,7 +365,7 @@ export default function AgentNetworkPage() {
         if (!pendingApproval) return;
 
         try {
-            const response = await fetch("/api/demos/agent-network/workflow", {
+            const response = await fetch(`${getApiBase()}/api/demos/agent-network/workflow`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({

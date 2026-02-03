@@ -2,14 +2,16 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 
 /**
- * Check if running in standalone mode (not behind Caddy proxy)
- * When standalone, we allow demo access without authentication.
- * This is determined by checking the request host.
+ * Check if running in standalone mode (demo access without authentication)
+ *
+ * Standalone mode is enabled when:
+ * - STANDALONE_DEMO=true (explicit)
+ *
+ * By default, authentication is required.
  */
 export function isStandaloneDeployment(): boolean {
-    // On Vercel or other deployments not using catalyst.localhost, skip auth for demos
-    // We can't check headers in this context, so use environment variable
-    return process.env.VERCEL === "1" || process.env.STANDALONE_DEMO === "true";
+    // Explicit standalone mode
+    return process.env.STANDALONE_DEMO === "true";
 }
 
 /**

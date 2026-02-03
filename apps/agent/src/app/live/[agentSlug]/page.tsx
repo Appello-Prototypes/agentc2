@@ -1,19 +1,13 @@
-"use client";
-
-import { useParams, useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { redirect } from "next/navigation";
 
 /**
- * Redirect to runs page by default for live agent view
+ * Redirect to workspace - Live is just a reporting dashboard
  */
-export default function LiveAgentPage() {
-    const params = useParams();
-    const router = useRouter();
-    const agentSlug = params.agentSlug as string;
-
-    useEffect(() => {
-        router.replace(`/live/${agentSlug}/runs`);
-    }, [agentSlug, router]);
-
-    return null;
+export default async function LiveAgentPage({
+    params
+}: {
+    params: Promise<{ agentSlug: string }>;
+}) {
+    const { agentSlug } = await params;
+    redirect(`/workspace/${agentSlug}/overview`);
 }

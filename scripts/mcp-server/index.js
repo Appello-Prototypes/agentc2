@@ -103,7 +103,8 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             return {
                 name: toolName,
                 description:
-                    agent.description || `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
+                    agent.description ||
+                    `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
                 inputSchema: {
                     type: "object",
                     properties: {

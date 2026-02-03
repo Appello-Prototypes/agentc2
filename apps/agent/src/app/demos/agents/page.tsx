@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import Image from "next/image";
 import {
     Button,
@@ -105,7 +106,7 @@ export default function AgentsDemoPage() {
     const handleStructured = async () => {
         setStructuredLoading(true);
         try {
-            const res = await fetch("/api/demos/agents/structured", {
+            const res = await fetch(`${getApiBase()}/api/demos/agents/structured`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ prompt: structuredInput, schema: structuredSchema })
@@ -121,7 +122,7 @@ export default function AgentsDemoPage() {
     const handleVision = async () => {
         setVisionLoading(true);
         try {
-            const res = await fetch("/api/demos/agents/vision", {
+            const res = await fetch(`${getApiBase()}/api/demos/agents/vision`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ imageUrl: visionUrl })
@@ -139,7 +140,7 @@ export default function AgentsDemoPage() {
         setResearchResult(null);
 
         try {
-            const res = await fetch("/api/demos/agents/research", {
+            const res = await fetch(`${getApiBase()}/api/demos/agents/research`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: researchQuery, maxSteps: 5 })

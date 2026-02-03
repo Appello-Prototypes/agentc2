@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { getApiBase } from "@/lib/utils";
 import {
     Card,
     CardContent,
@@ -591,7 +592,7 @@ export default function WorkspacePage() {
     useEffect(() => {
         async function fetchWorkspaceStats() {
             try {
-                const res = await fetch("/api/workspace/stats");
+                const res = await fetch(`${getApiBase()}/api/workspace/stats`);
                 const data = await res.json();
                 if (data.success) {
                     setAgents(data.agents);
@@ -617,7 +618,7 @@ export default function WorkspacePage() {
                 if (runStatusFilter !== "all") {
                     params.set("status", runStatusFilter);
                 }
-                const res = await fetch(`/api/workspace/runs?${params.toString()}`);
+                const res = await fetch(`${getApiBase()}/api/workspace/runs?${params.toString()}`);
                 const data = await res.json();
                 if (data.success) {
                     setRuns(data.runs);

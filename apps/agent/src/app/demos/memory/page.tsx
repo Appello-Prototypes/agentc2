@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { getApiBase } from "@/lib/utils";
 import {
     Button,
     Card,
@@ -324,7 +325,7 @@ export default function MemoryDemoPage() {
     // Fetch working memory on mount and after chat
     const fetchWorkingMemory = useCallback(async () => {
         try {
-            const res = await fetch("/api/demos/memory/working");
+            const res = await fetch(`${getApiBase()}/api/demos/memory/working`);
             const data = await res.json();
             setWorkingMemory(data);
             if (data.workingMemory) {
@@ -352,7 +353,7 @@ export default function MemoryDemoPage() {
         setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
         try {
-            const res = await fetch("/api/demos/memory/chat", {
+            const res = await fetch(`${getApiBase()}/api/demos/memory/chat`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ message: userMessage.content })
@@ -434,7 +435,7 @@ export default function MemoryDemoPage() {
         if (query) setSearchQuery(query);
         setSearchLoading(true);
         try {
-            const res = await fetch("/api/demos/memory/semantic", {
+            const res = await fetch(`${getApiBase()}/api/demos/memory/semantic`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ query: searchText, threadId })

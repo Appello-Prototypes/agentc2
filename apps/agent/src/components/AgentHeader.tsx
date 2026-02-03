@@ -6,17 +6,9 @@ import { useSession, signOut } from "@repo/auth/client";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-    { label: "Overview", href: "/demos" },
-    { label: "Chat", href: "/chat" },
-    { label: "Agents", href: "/demos/agents" },
     { label: "Workspace", href: "/workspace" },
     { label: "Live", href: "/live" },
-    { label: "Workflows", href: "/demos/workflows" },
-    { label: "Memory", href: "/demos/memory" },
-    { label: "RAG", href: "/demos/rag" },
-    { label: "Evals", href: "/demos/evals" },
-    { label: "MCP", href: "/demos/mcp" },
-    { label: "Voice", href: "/demos/voice" }
+    { label: "MCP", href: "/mcp" }
 ];
 
 export function AgentHeader() {
@@ -25,19 +17,20 @@ export function AgentHeader() {
 
     const handleSignOut = async () => {
         await signOut();
-        window.location.replace("/");
+        window.location.replace("/login");
     };
 
     const isActive = (href: string) => {
-        if (href === "/") {
-            return pathname === "/";
+        if (href === "/workspace") {
+            // Workspace is active for root and /workspace paths
+            return pathname === "/" || pathname?.startsWith("/workspace");
         }
         return pathname?.startsWith(href);
     };
 
     return (
         <AppTopBar
-            title="Mastra Playground"
+            title="AgentWorkplace"
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

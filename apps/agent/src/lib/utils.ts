@@ -7,10 +7,9 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Returns the API base path.
- * When running behind Caddy (catalyst.localhost), the basePath is "/agent".
- * When running standalone (localhost:3001), there's no basePath.
+ * Agent app now serves at root without basePath, so this always returns empty string.
+ * Kept for backward compatibility with existing code.
  */
 export function getApiBase(): string {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "";
-    return appUrl.includes("catalyst.localhost") ? "/agent" : "";
+    return "";
 }

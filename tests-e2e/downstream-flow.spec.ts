@@ -199,7 +199,7 @@ test.describe("Navigation Flow", () => {
 test.describe("Error Handling", () => {
     test("should handle non-existent agent gracefully", async ({ page }) => {
         // Navigate to a non-existent agent
-        await page.goto("/agent/workspace/non-existent-agent-12345/test");
+        await page.goto("/workspace/non-existent-agent-12345/test");
 
         // Should show some error state or redirect
         // The exact behavior depends on implementation
@@ -212,7 +212,7 @@ test.describe("Error Handling", () => {
 
     test("should handle navigation to invalid workspace routes", async ({ page }) => {
         // Navigate to invalid route
-        await page.goto("/agent/workspace");
+        await page.goto("/workspace");
         await page.waitForTimeout(1000);
 
         // Page should load without crashing

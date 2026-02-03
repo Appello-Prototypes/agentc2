@@ -4,10 +4,22 @@ import { prisma } from "@repo/database";
 import { getAppUrl } from "./env";
 
 const appUrl = getAppUrl("http://localhost:3000");
+const isProduction = process.env.NODE_ENV === "production";
+
+// Build trusted origins based on environment
+const trustedOrigins = [appUrl];
+if (!isProduction) {
+    // Only include localhost URLs in development
+    trustedOrigins.push(
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "https://catalyst.localhost"
+    );
+}
 
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
-        provider: "mysql"
+        provider: "postgresql"
     }),
     emailAndPassword: {
         enabled: true,
@@ -23,14 +35,7 @@ export const auth = betterAuth({
     },
     secret: process.env.BETTER_AUTH_SECRET!,
     baseURL: appUrl,
-    trustedOrigins: [
-        appUrl,
-        // Keep localhost URLs for dev:local fallback
-        "http://localhost:3000",
-        "http://localhost:3001",
-        // Add HTTPS localhost if needed for testing
-        "https://catalyst.localhost"
-    ],
+    trustedOrigins,
     // Explicitly set advanced cookie options for cross-path sharing
     advanced: {
         cookiePrefix: "better-auth",

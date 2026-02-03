@@ -5,8 +5,8 @@ import { TIMEOUTS } from "../fixtures/test-data";
  * Workspace Page Object Model
  *
  * Encapsulates interactions with the Workspace pages:
- * - Agent list (/agent/workspace)
- * - Agent overview (/agent/workspace/[agentSlug]/overview)
+ * - Agent list (/workspace)
+ * - Agent overview (/workspace/[agentSlug]/overview)
  * - Navigation between workspace tabs
  */
 export class WorkspacePage {

@@ -116,18 +116,21 @@ function getMcpClient(): MCPClient {
                     : {}),
 
                 // Jira MCP Server - Project management and issue tracking
-                // https://www.npmjs.com/package/@timbreeding/jira-mcp-server
+                // Uses mcp-atlassian (Python) via uvx for better API compatibility
+                // https://github.com/sooperset/mcp-atlassian
                 ...(process.env.JIRA_API_TOKEN && process.env.JIRA_URL && process.env.JIRA_USERNAME
                     ? {
                           jira: {
-                              command: "npx",
-                              args: [
-                                  "-y",
-                                  "@timbreeding/jira-mcp-server@latest",
-                                  `--jira-base-url=${process.env.JIRA_URL}`,
-                                  `--jira-username=${process.env.JIRA_USERNAME}`,
-                                  `--jira-api-token=${process.env.JIRA_API_TOKEN}`
-                              ]
+                              command: "uvx",
+                              args: ["mcp-atlassian"],
+                              env: {
+                                  JIRA_URL: process.env.JIRA_URL,
+                                  JIRA_USERNAME: process.env.JIRA_USERNAME,
+                                  JIRA_API_TOKEN: process.env.JIRA_API_TOKEN,
+                                  ...(process.env.JIRA_PROJECTS_FILTER
+                                      ? { JIRA_PROJECTS_FILTER: process.env.JIRA_PROJECTS_FILTER }
+                                      : {})
+                              }
                           }
                       }
                     : {}),

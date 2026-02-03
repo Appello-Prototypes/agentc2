@@ -1,4 +1,4 @@
-import { Pool } from "pg";
+import { Pool, PoolConfig } from "pg";
 
 // Extend global type for Next.js HMR singleton pattern
 declare global {
@@ -6,7 +6,45 @@ declare global {
 }
 
 /**
+ * Determine SSL configuration based on environment
+ *
+ * SSL is enabled when:
+ * - DATABASE_SSL=true (explicit)
+ * - Connection string contains "supabase" (legacy support)
+ * - Connection string contains "sslmode=require"
+ */
+function getSslConfig(): PoolConfig["ssl"] {
+    const connectionString = process.env.DATABASE_URL || "";
+
+    // Explicit SSL environment variable
+    if (process.env.DATABASE_SSL === "true") {
+        return { rejectUnauthorized: false };
+    }
+
+    // Explicit disable
+    if (process.env.DATABASE_SSL === "false") {
+        return undefined;
+    }
+
+    // Auto-detect from connection string
+    if (
+        connectionString.includes("supabase") ||
+        connectionString.includes("sslmode=require") ||
+        connectionString.includes("sslmode=verify")
+    ) {
+        return { rejectUnauthorized: false };
+    }
+
+    return undefined;
+}
+
+/**
  * Get PostgreSQL pool for goal queries
+ *
+ * Pool configuration:
+ * - max: 10 connections (prevents connection exhaustion)
+ * - idleTimeoutMillis: 30 seconds
+ * - connectionTimeoutMillis: 10 seconds
  */
 function getPool(): Pool {
     if (!global.goalPool) {
@@ -15,9 +53,11 @@ function getPool(): Pool {
         }
         global.goalPool = new Pool({
             connectionString: process.env.DATABASE_URL,
-            ssl: process.env.DATABASE_URL.includes("supabase")
-                ? { rejectUnauthorized: false }
-                : undefined
+            ssl: getSslConfig(),
+            // Connection pool limits to prevent exhaustion
+            max: 10,
+            idleTimeoutMillis: 30000,
+            connectionTimeoutMillis: 10000
         });
     }
     return global.goalPool;

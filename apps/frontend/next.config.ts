@@ -40,18 +40,9 @@ const nextConfig: NextConfig = {
         return baseHeaders;
     },
     async rewrites() {
-        // These rewrites are used when accessing frontend directly (bun run dev:local)
-        // When using Caddy (bun run dev), Caddy handles the routing instead
-        return [
-            {
-                source: "/agent",
-                destination: "http://localhost:3001/agent"
-            },
-            {
-                source: "/agent/:path*",
-                destination: "http://localhost:3001/agent/:path*"
-            }
-        ];
+        // Frontend app is deprecated - all traffic now routes to agent app via Caddy
+        // These rewrites are kept for backward compatibility when running dev:local
+        return [];
     }
 };
 

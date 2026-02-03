@@ -1,31 +1,9 @@
 import { NextResponse } from "next/server";
 import { agentResolver } from "@repo/mastra";
+import { getRecentCalls } from "./_webhook-log";
 
 /** Default agent slug for ElevenLabs requests */
 const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-agent";
-
-// Store recent webhook calls for debugging
-const recentCalls: Array<{
-    timestamp: string;
-    tool: string;
-    parameters: Record<string, unknown>;
-    success: boolean;
-    response?: string;
-    error?: string;
-    duration?: number;
-}> = [];
-
-const MAX_CALLS = 20;
-
-/**
- * Add a call to the debug log (called from the main tools route)
- */
-export function logWebhookCall(call: (typeof recentCalls)[0]) {
-    recentCalls.unshift(call);
-    if (recentCalls.length > MAX_CALLS) {
-        recentCalls.pop();
-    }
-}
 
 /**
  * GET /api/demos/live-agent-mcp/debug
@@ -98,13 +76,13 @@ export async function GET() {
         elevenlabsTool: elevenlabsToolConfig,
         webhookSecret: process.env.ELEVENLABS_WEBHOOK_SECRET ? "configured" : "NOT configured",
         defaultAgent: defaultAgentStatus,
-        recentCalls: recentCalls,
+        recentCalls: getRecentCalls(),
         instructions: {
             howToTest:
-                "1. Go to http://localhost:3001/agent/demos/live-agent-mcp, select an agent, and connect",
+                "1. Go to http://localhost:3001/demos/live-agent-mcp, select an agent, and connect",
             whatToSay: "Ask: 'What is my HubSpot info?' or 'Search contacts for John'",
             agentSelection: `Webhook URLs support ?agent=<slug> parameter. Default: ${DEFAULT_AGENT_SLUG}`,
-            manageAgents: "Configure agents at /agent/demos/agents/manage",
+            manageAgents: "Configure agents at /demos/agents/manage",
             checkNgrok: "Visit http://127.0.0.1:4040 to see ngrok request inspector",
             checkLogs: "Look for [Live Agent MCP] in your terminal where bun run dev is running"
         }

@@ -59,7 +59,7 @@ export async function GET(request: NextRequest) {
 
         if (format === "elevenlabs") {
             // Return ElevenLabs-compatible tool configuration
-            const webhookUrl = `${request.headers.get("origin") || ""}/agent/api/demos/live-agent-mcp/tools`;
+            const webhookUrl = `${request.headers.get("origin") || ""}/api/demos/live-agent-mcp/tools`;
 
             const elevenlabsTools = tools.map((tool) => ({
                 name: tool.name,

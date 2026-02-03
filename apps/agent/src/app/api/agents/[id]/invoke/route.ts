@@ -203,14 +203,85 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                   )
                 : undefined;
 
-            // Complete the run with full metrics
+            // Extract tool calls from response
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rawToolCalls: any[] =
+                (response as any).toolCalls || (response as any).tool_calls || [];
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const rawToolResults: any[] =
+                (response as any).toolResults || (response as any).tool_results || [];
+
+            // Build execution steps and record tool calls
+            interface ExecutionStep {
+                step: number;
+                type: "thinking" | "tool_call" | "tool_result" | "response";
+                content: string;
+                timestamp: string;
+            }
+            const executionSteps: ExecutionStep[] = [];
+            let stepCounter = 0;
+
+            // Process tool calls
+            for (const [idx, tc] of rawToolCalls.entries()) {
+                const toolName = tc.toolName || tc.name || "unknown";
+                const args = tc.args || tc.input || {};
+
+                stepCounter++;
+                executionSteps.push({
+                    step: stepCounter,
+                    type: "tool_call",
+                    content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
+                    timestamp: new Date().toISOString()
+                });
+
+                // Get matching result
+                const tr = rawToolResults[idx];
+                if (tr) {
+                    stepCounter++;
+                    const resultPreview =
+                        typeof tr.result === "string"
+                            ? tr.result.slice(0, 500)
+                            : JSON.stringify(tr.result, null, 2).slice(0, 500);
+                    executionSteps.push({
+                        step: stepCounter,
+                        type: "tool_result",
+                        content: tr.error
+                            ? `Tool ${toolName} failed: ${tr.error}`
+                            : `Tool ${toolName} result:\n${resultPreview}`,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    // Record tool call
+                    await runHandle.addToolCall({
+                        toolKey: toolName,
+                        input: args,
+                        output: tr.result,
+                        success: !tr.error,
+                        error: tr.error
+                    });
+                }
+            }
+
+            // Add final response step
+            stepCounter++;
+            executionSteps.push({
+                step: stepCounter,
+                type: "response",
+                content:
+                    response.text?.slice(0, 2000) +
+                    (response.text && response.text.length > 2000 ? "..." : ""),
+                timestamp: new Date().toISOString()
+            });
+
+            // Complete the run with full metrics and steps
             await runHandle.complete({
                 output: response.text,
                 modelProvider: record.modelProvider,
                 modelName: record.modelName,
                 promptTokens: usage?.promptTokens,
                 completionTokens: usage?.completionTokens,
-                costUsd
+                costUsd,
+                steps: executionSteps
             });
 
             return NextResponse.json({
