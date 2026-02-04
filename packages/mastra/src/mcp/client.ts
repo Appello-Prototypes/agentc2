@@ -1,4 +1,6 @@
 import { MCPClient } from "@mastra/mcp";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 
 declare global {
     var mcpClient: MCPClient | undefined;
@@ -310,8 +312,12 @@ function getMcpClient(): MCPClient {
                           fathom: {
                               command: "node",
                               args: [
-                                  // Use path relative to project root, resolved at runtime
-                                  `${process.cwd()}/packages/fathom-mcp/index.js`
+                                  // Resolve path relative to this module, not process.cwd()
+                                  // This ensures it works in production where PM2 changes cwd
+                                  resolve(
+                                      dirname(fileURLToPath(import.meta.url)),
+                                      "../../../fathom-mcp/index.js"
+                                  )
                               ],
                               env: {
                                   FATHOM_API_KEY: process.env.FATHOM_API_KEY
