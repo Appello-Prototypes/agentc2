@@ -14,10 +14,69 @@ import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organ
  *
  * Protocol: Simplified MCP-like JSON-RPC
  *
+ * Authentication:
+ * - Session-based (cookies) for browser clients
+ * - API Key via X-API-Key or Authorization: Bearer header for MCP clients
+ *
  * Endpoints:
  * - GET /api/mcp - List available tools (agents)
  * - POST /api/mcp - Invoke a tool (agent)
  */
+
+/**
+ * Authenticate request via session or API key
+ * Returns { userId, organizationId } on success, or null on failure
+ */
+async function authenticateRequest(
+    request: NextRequest
+): Promise<{ userId: string; organizationId: string } | null> {
+    // Try API key authentication first (for MCP clients)
+    const apiKey =
+        request.headers.get("x-api-key") ||
+        request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+    if (apiKey) {
+        // Validate API key against environment variable
+        const validApiKey = process.env.MCP_API_KEY;
+        if (validApiKey && apiKey === validApiKey) {
+            // API key is valid - get organization from env or use default
+            const orgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
+            if (orgSlug) {
+                const org = await prisma.organization.findUnique({
+                    where: { slug: orgSlug },
+                    select: { id: true }
+                });
+                if (org) {
+                    // Get first member of org as the user context
+                    const membership = await prisma.membership.findFirst({
+                        where: { organizationId: org.id },
+                        select: { userId: true }
+                    });
+                    if (membership) {
+                        return { userId: membership.userId, organizationId: org.id };
+                    }
+                }
+            }
+        }
+        // Invalid API key
+        return null;
+    }
+
+    // Fall back to session authentication (for browser clients)
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
+    if (!session?.user) {
+        return null;
+    }
+
+    const organizationId = await getUserOrganizationId(session.user.id);
+    if (!organizationId) {
+        return null;
+    }
+
+    return { userId: session.user.id, organizationId };
+}
 
 /**
  * GET /api/mcp
@@ -27,20 +86,12 @@ import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organ
  */
 export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authResult = await authenticateRequest(request);
+        if (!authResult) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { organizationId } = authResult;
 
         const { searchParams } = new URL(request.url);
         const includeInactive = searchParams.get("includeInactive") === "true";
@@ -942,20 +993,12 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authResult = await authenticateRequest(request);
+        if (!authResult) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult;
 
         const body = await request.json();
         const { method, tool, params } = body;
@@ -1026,9 +1069,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const workspaceId = session.user
-                ? await getDefaultWorkspaceIdForUser(session.user.id)
-                : null;
+            const workspaceId = await getDefaultWorkspaceIdForUser(userId);
             const scopedParams = params && typeof params === "object" ? { ...params } : {};
 
             const applyDefaults = (target: Record<string, unknown>) => {
@@ -1040,8 +1081,8 @@ export async function POST(request: NextRequest) {
                 if (workspaceId && target.workspaceId === undefined) {
                     target.workspaceId = workspaceId;
                 }
-                if (target.ownerId === undefined && session.user?.id) {
-                    target.ownerId = session.user.id;
+                if (target.ownerId === undefined) {
+                    target.ownerId = userId;
                 }
             };
 
