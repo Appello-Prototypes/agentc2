@@ -19,6 +19,8 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprot
 // Default to production URL
 const API_URL = process.env.MASTRA_API_URL || "https://mastra.useappello.app";
 const API_KEY = process.env.MASTRA_API_KEY;
+const ORGANIZATION_SLUG =
+    process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
 
 // Cache for tools
 let toolsCache = null;
@@ -40,6 +42,9 @@ async function fetchTools() {
         };
         if (API_KEY) {
             headers["X-API-Key"] = API_KEY;
+        }
+        if (ORGANIZATION_SLUG) {
+            headers["X-Organization-Slug"] = ORGANIZATION_SLUG;
         }
         const response = await fetch(`${API_URL}/api/mcp`, { headers });
         const data = await response.json();
@@ -67,6 +72,9 @@ async function invokeTool(toolName, params) {
     };
     if (API_KEY) {
         headers["X-API-Key"] = API_KEY;
+    }
+    if (ORGANIZATION_SLUG) {
+        headers["X-Organization-Slug"] = ORGANIZATION_SLUG;
     }
     const response = await fetch(`${API_URL}/api/mcp`, {
         method: "POST",

@@ -52,6 +52,16 @@ interface McpApiResponse {
     total: number;
 }
 
+interface OrganizationInfo {
+    id: string;
+    name: string;
+    slug: string;
+}
+
+interface MembershipInfo {
+    role: string;
+}
+
 // Copy button with feedback
 function CopyButton({ text, className = "" }: { text: string; className?: string }) {
     const [copied, setCopied] = useState(false);
@@ -113,6 +123,13 @@ export default function McpSetupPage() {
     const [instanceUrl, setInstanceUrl] = useState("");
     const [nodePath, setNodePath] = useState("");
     const [serverScriptPath, setServerScriptPath] = useState("");
+    const [organization, setOrganization] = useState<OrganizationInfo | null>(null);
+    const [membership, setMembership] = useState<MembershipInfo | null>(null);
+    const [mcpApiKey, setMcpApiKey] = useState("");
+    const [mcpApiKeyActive, setMcpApiKeyActive] = useState(false);
+    const [mcpApiKeyLoading, setMcpApiKeyLoading] = useState(false);
+    const [mcpApiKeyError, setMcpApiKeyError] = useState<string | null>(null);
+    const [showMcpApiKey, setShowMcpApiKey] = useState(false);
 
     // Detect the current instance URL
     useEffect(() => {
@@ -131,7 +148,11 @@ export default function McpSetupPage() {
                 if (res.ok) {
                     const data: McpApiResponse = await res.json();
                     if (data.success) {
-                        setAgents(data.tools);
+                        // Filter to only include agent tools (they have agent-specific metadata)
+                        const agentTools = data.tools.filter(
+                            (tool) => tool.name.startsWith("agent.") && tool.metadata?.agent_slug
+                        );
+                        setAgents(agentTools);
                     }
                 }
             } catch (error) {
@@ -155,21 +176,134 @@ export default function McpSetupPage() {
         setServerScriptPath("~/mastra-mcp-server/index.js");
     }, []);
 
+    const loadMcpApiKey = useCallback(async (orgId: string) => {
+        setMcpApiKeyLoading(true);
+        setMcpApiKeyError(null);
+        try {
+            const res = await fetch(`${getApiBase()}/api/organizations/${orgId}/mcp-api-key`);
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setMcpApiKey(data.apiKey || "");
+                setMcpApiKeyActive(Boolean(data.isActive));
+            } else {
+                setMcpApiKey("");
+                setMcpApiKeyActive(false);
+                setMcpApiKeyError(data.error || "Failed to load MCP API key");
+            }
+        } catch (error) {
+            console.error("Failed to load MCP API key:", error);
+            setMcpApiKey("");
+            setMcpApiKeyActive(false);
+            setMcpApiKeyError("Failed to load MCP API key");
+        } finally {
+            setMcpApiKeyLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        const fetchOrganization = async () => {
+            try {
+                const res = await fetch(`${getApiBase()}/api/user/organization`);
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    setOrganization({
+                        id: data.organization.id,
+                        name: data.organization.name,
+                        slug: data.organization.slug
+                    });
+                    setMembership(data.membership);
+                }
+            } catch (error) {
+                console.error("Failed to fetch organization:", error);
+            }
+        };
+
+        fetchOrganization();
+    }, []);
+
+    useEffect(() => {
+        if (organization?.id) {
+            loadMcpApiKey(organization.id);
+        }
+    }, [organization?.id, loadMcpApiKey]);
+
+    const handleGenerateKey = async () => {
+        if (!organization?.id) {
+            return;
+        }
+        setMcpApiKeyLoading(true);
+        setMcpApiKeyError(null);
+        try {
+            const res = await fetch(
+                `${getApiBase()}/api/organizations/${organization.id}/mcp-api-key`,
+                {
+                    method: "POST"
+                }
+            );
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setMcpApiKey(data.apiKey || "");
+                setMcpApiKeyActive(true);
+                setShowMcpApiKey(true);
+            } else {
+                setMcpApiKeyError(data.error || "Failed to generate MCP API key");
+            }
+        } catch (error) {
+            console.error("Failed to generate MCP API key:", error);
+            setMcpApiKeyError("Failed to generate MCP API key");
+        } finally {
+            setMcpApiKeyLoading(false);
+        }
+    };
+
+    const handleRevokeKey = async () => {
+        if (!organization?.id) {
+            return;
+        }
+        setMcpApiKeyLoading(true);
+        setMcpApiKeyError(null);
+        try {
+            const res = await fetch(
+                `${getApiBase()}/api/organizations/${organization.id}/mcp-api-key`,
+                {
+                    method: "DELETE"
+                }
+            );
+            const data = await res.json();
+            if (res.ok && data.success) {
+                setMcpApiKey("");
+                setMcpApiKeyActive(false);
+                setShowMcpApiKey(false);
+            } else {
+                setMcpApiKeyError(data.error || "Failed to revoke MCP API key");
+            }
+        } catch (error) {
+            console.error("Failed to revoke MCP API key:", error);
+            setMcpApiKeyError("Failed to revoke MCP API key");
+        } finally {
+            setMcpApiKeyLoading(false);
+        }
+    };
+
     // Generate MCP configuration JSON
     const generateMcpConfig = useCallback(() => {
+        const apiKeyValue = mcpApiKey || "<GENERATE_MCP_API_KEY>";
+        const orgSlugValue = organization?.slug || "<ORG_SLUG>";
         const config = {
             mcpServers: {
                 "Mastra Agents": {
                     command: nodePath || "/usr/local/bin/node",
                     args: [serverScriptPath || "~/mastra-mcp-server/index.js"],
                     env: {
-                        MASTRA_API_URL: instanceUrl
+                        MASTRA_API_URL: instanceUrl,
+                        MASTRA_API_KEY: apiKeyValue,
+                        MASTRA_ORGANIZATION_SLUG: orgSlugValue
                     }
                 }
             }
         };
         return JSON.stringify(config, null, 2);
-    }, [instanceUrl, nodePath, serverScriptPath]);
+    }, [instanceUrl, nodePath, serverScriptPath, mcpApiKey, organization?.slug]);
 
     // Generate the server script download
     const serverScript = `#!/usr/bin/env node
@@ -184,31 +318,49 @@ export default function McpSetupPage() {
  *
  * Environment:
  *   MASTRA_API_URL - Base URL for the Mastra API
+ *   MASTRA_API_KEY - MCP API key
+ *   MASTRA_ORGANIZATION_SLUG - Organization slug for MCP access
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
+// Default to production URL
 const API_URL = process.env.MASTRA_API_URL || "${instanceUrl}";
+const API_KEY = process.env.MASTRA_API_KEY;
+const ORGANIZATION_SLUG =
+    process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
 
 // Cache for tools
 let toolsCache = null;
 let toolsCacheTime = 0;
 const CACHE_TTL = 60000; // 1 minute
 
-async function fetchAgents() {
+/**
+ * Fetch available tools from the Mastra API
+ */
+async function fetchTools() {
     const now = Date.now();
     if (toolsCache && now - toolsCacheTime < CACHE_TTL) {
         return toolsCache;
     }
 
     try {
-        const response = await fetch(\`\${API_URL}/api/mcp\`);
+        const headers = {
+            "Content-Type": "application/json"
+        };
+        if (API_KEY) {
+            headers["X-API-Key"] = API_KEY;
+        }
+        if (ORGANIZATION_SLUG) {
+            headers["X-Organization-Slug"] = ORGANIZATION_SLUG;
+        }
+        const response = await fetch(\`\${API_URL}/api/mcp\`, { headers });
         const data = await response.json();
 
         if (!data.success) {
-            console.error("Failed to fetch agents:", data.error);
+            console.error("Failed to fetch tools:", data.error);
             return [];
         }
 
@@ -216,71 +368,134 @@ async function fetchAgents() {
         toolsCacheTime = now;
         return data.tools;
     } catch (error) {
-        console.error("Error fetching agents:", error.message);
+        console.error("Error fetching tools:", error.message);
         return toolsCache || [];
     }
 }
 
-async function invokeAgent(agentSlug, input, context) {
-    const response = await fetch(\`\${API_URL}/api/agents/\${agentSlug}/invoke\`, {
+/**
+ * Invoke a tool via the Mastra MCP gateway
+ */
+async function invokeTool(toolName, params) {
+    const headers = {
+        "Content-Type": "application/json"
+    };
+    if (API_KEY) {
+        headers["X-API-Key"] = API_KEY;
+    }
+    if (ORGANIZATION_SLUG) {
+        headers["X-Organization-Slug"] = ORGANIZATION_SLUG;
+    }
+    const response = await fetch(\`\${API_URL}/api/mcp\`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input, context, mode: "sync" })
+        headers,
+        body: JSON.stringify({
+            method: "tools/call",
+            tool: toolName,
+            params
+        })
     });
 
     const data = await response.json();
+
     if (!data.success) {
-        throw new Error(data.error || "Agent invocation failed");
+        throw new Error(data.error || "Tool invocation failed");
     }
-    return data;
+
+    return data.result;
 }
 
+// Create server
 const server = new Server(
-    { name: "mastra-agents", version: "1.0.0" },
-    { capabilities: { tools: {} } }
+    {
+        name: "mastra-agents",
+        version: "1.0.0"
+    },
+    {
+        capabilities: {
+            tools: {}
+        }
+    }
 );
 
+// Handle list tools request
+const toolNameMap = new Map();
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const agents = await fetchAgents();
+    const tools = await fetchTools();
+    toolNameMap.clear();
+
     return {
-        tools: agents.map((agent) => {
-            const rawName = agent.name.startsWith("agent.") ? agent.name.slice(6) : agent.name;
-            const toolName = rawName.replace(/-/g, "_");
+        tools: tools.map((tool) => {
+            const safeName = tool.name.replace(/[.-]/g, "_");
+            toolNameMap.set(safeName, tool.name);
+
             return {
-                name: toolName,
-                description: agent.description || \`Invoke the \${agent.metadata?.agent_name || agent.name} agent\`,
-                inputSchema: {
+                name: safeName,
+                description: tool.description || \`Invoke \${tool.name}\`,
+                inputSchema: tool.inputSchema || {
                     type: "object",
-                    properties: {
-                        input: { type: "string", description: "The message or task to send to the agent" },
-                        context: { type: "object", description: "Optional context variables", additionalProperties: true }
-                    },
-                    required: ["input"]
-                }
+                    properties: {},
+                    required: []
+                },
+                outputSchema: tool.outputSchema
             };
         })
     };
 });
 
+// Handle tool call request
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-    const agentSlug = name.replace(/_/g, "-");
+    const originalName = toolNameMap.get(name) || name;
 
     try {
-        const result = await invokeAgent(agentSlug, args.input, args.context);
-        const content = [{ type: "text", text: result.output }];
-        if (result.usage || result.cost_usd || result.duration_ms) {
+        const result = await invokeTool(originalName, args || {});
+
+        let outputText = "";
+        if (typeof result === "string") {
+            outputText = result;
+        } else if (result?.output) {
+            outputText =
+                typeof result.output === "string"
+                    ? result.output
+                    : JSON.stringify(result.output, null, 2);
+        } else if (result?.outputText) {
+            outputText = result.outputText;
+        } else {
+            outputText = JSON.stringify(result, null, 2);
+        }
+
+        const content = [
+            {
+                type: "text",
+                text: outputText
+            }
+        ];
+
+        const runId = result?.runId || result?.run_id;
+        if (runId || result?.status || result?.duration_ms || result?.durationMs) {
             content.push({
                 type: "text",
-                text: \`\\n---\\nRun ID: \${result.run_id}\\nModel: \${result.model}\\nTokens: \${result.usage?.total_tokens || 0}\\nCost: $\${result.cost_usd?.toFixed(5) || 0}\\nDuration: \${result.duration_ms}ms\`
+                text: \`\\n---\\nRun ID: \${runId || "n/a"}\\nStatus: \${result?.status || "n/a"}\`
             });
         }
+
         return { content };
     } catch (error) {
-        return { content: [{ type: "text", text: \`Error invoking agent: \${error.message}\` }], isError: true };
+        return {
+            content: [
+                {
+                    type: "text",
+                    text: \`Error invoking tool: \${error.message}\`
+                }
+            ],
+            isError: true
+        };
     }
 });
 
+// Start server
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
@@ -327,6 +542,8 @@ main().catch(console.error);
         }, 500);
     };
 
+    const canManageKeys = membership?.role === "owner" || membership?.role === "admin";
+
     return (
         <div className="container mx-auto max-w-5xl space-y-6 p-6">
             {/* Header */}
@@ -337,6 +554,99 @@ main().catch(console.error);
                     Claude in Cursor to call your agents directly.
                 </p>
             </div>
+
+            {/* Organization MCP Access */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Organization MCP Access</CardTitle>
+                    <CardDescription>
+                        Use this slug and API key in your Cursor MCP configuration
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid gap-4 md:grid-cols-2">
+                        <div className="space-y-2">
+                            <Label htmlFor="orgName">Organization</Label>
+                            <Input
+                                id="orgName"
+                                value={organization?.name || ""}
+                                disabled
+                                className="bg-muted"
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label htmlFor="orgSlug">Organization Slug</Label>
+                            <div className="flex gap-2">
+                                <Input
+                                    id="orgSlug"
+                                    value={organization?.slug || ""}
+                                    disabled
+                                    className="bg-muted flex-1"
+                                />
+                                {organization?.slug && <CopyButton text={organization.slug} />}
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                                Use this for <code>MASTRA_ORGANIZATION_SLUG</code>
+                            </p>
+                        </div>
+                    </div>
+
+                    <Separator />
+
+                    <div className="space-y-2">
+                        <div className="flex items-center gap-2">
+                            <Label htmlFor="mcpApiKey">MCP API Key</Label>
+                            <Badge variant={mcpApiKeyActive ? "default" : "secondary"}>
+                                {mcpApiKeyActive ? "Active" : "Inactive"}
+                            </Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-2">
+                            <Input
+                                id="mcpApiKey"
+                                value={mcpApiKey}
+                                type={showMcpApiKey ? "text" : "password"}
+                                placeholder="No MCP API key generated yet"
+                                disabled
+                                className="bg-muted min-w-[240px] flex-1"
+                            />
+                            {mcpApiKey && <CopyButton text={mcpApiKey} />}
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowMcpApiKey((current) => !current)}
+                                disabled={!mcpApiKey}
+                            >
+                                {showMcpApiKey ? "Hide" : "Show"}
+                            </Button>
+                        </div>
+                        {mcpApiKeyError && (
+                            <p className="text-destructive text-xs">{mcpApiKeyError}</p>
+                        )}
+                        <div className="flex flex-wrap gap-2">
+                            {canManageKeys ? (
+                                <>
+                                    <Button onClick={handleGenerateKey} disabled={mcpApiKeyLoading}>
+                                        {mcpApiKey ? "Rotate Key" : "Generate Key"}
+                                    </Button>
+                                    {mcpApiKey && (
+                                        <Button
+                                            variant="destructive"
+                                            onClick={handleRevokeKey}
+                                            disabled={mcpApiKeyLoading}
+                                        >
+                                            Revoke Key
+                                        </Button>
+                                    )}
+                                </>
+                            ) : (
+                                <p className="text-muted-foreground text-xs">
+                                    Only organization owners or admins can manage MCP API keys.
+                                </p>
+                            )}
+                        </div>
+                    </div>
+                </CardContent>
+            </Card>
 
             {/* Instance Configuration */}
             <Card>
@@ -427,6 +737,26 @@ main().catch(console.error);
                                 <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
                                     2
                                 </span>
+                                Generate MCP API Key
+                            </CardTitle>
+                            <CardDescription>
+                                Create or rotate the key for this organization
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-muted-foreground text-sm">
+                                Use the controls above to generate your MCP API key, then copy the
+                                organization slug shown in the same section.
+                            </p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                    3
+                                </span>
                                 Install Dependencies
                             </CardTitle>
                             <CardDescription>
@@ -446,13 +776,14 @@ npm install`}
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    3
+                                    4
                                 </span>
                                 Add to Cursor MCP Config
                             </CardTitle>
                             <CardDescription>
                                 Add the following to your{" "}
-                                <code className="bg-muted rounded px-1">~/.cursor/mcp.json</code>
+                                <code className="bg-muted rounded px-1">~/.cursor/mcp.json</code>.
+                                It includes your organization slug and API key.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -468,7 +799,7 @@ npm install`}
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    4
+                                    5
                                 </span>
                                 Restart Cursor
                             </CardTitle>
@@ -609,6 +940,10 @@ npm install`}
                             <li>
                                 <strong>Tools not appearing:</strong> Make sure Cursor is fully
                                 restarted after editing mcp.json
+                            </li>
+                            <li>
+                                <strong>Unauthorized errors:</strong> Confirm your MCP API key and
+                                organization slug match the values shown above
                             </li>
                             <li>
                                 <strong>Connection errors:</strong> Verify your instance URL is

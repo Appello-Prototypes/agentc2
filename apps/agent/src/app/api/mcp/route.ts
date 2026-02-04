@@ -36,29 +36,69 @@ async function authenticateRequest(
         request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
     if (apiKey) {
-        // Validate API key against environment variable
+        const orgSlugHeader = request.headers.get("x-organization-slug")?.trim();
+        const resolveOrgContext = async (orgSlug: string) => {
+            const org = await prisma.organization.findUnique({
+                where: { slug: orgSlug },
+                select: { id: true }
+            });
+            if (!org) {
+                return null;
+            }
+
+            const membership = await prisma.membership.findFirst({
+                where: { organizationId: org.id },
+                select: { userId: true }
+            });
+            if (!membership) {
+                return null;
+            }
+
+            return { userId: membership.userId, organizationId: org.id };
+        };
+
         const validApiKey = process.env.MCP_API_KEY;
         if (validApiKey && apiKey === validApiKey) {
-            // API key is valid - get organization from env or use default
-            const orgSlug = process.env.MCP_API_ORGANIZATION_SLUG;
+            const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
             if (orgSlug) {
-                const org = await prisma.organization.findUnique({
-                    where: { slug: orgSlug },
-                    select: { id: true }
+                const context = await resolveOrgContext(orgSlug);
+                if (context) {
+                    return context;
+                }
+            }
+        }
+
+        if (orgSlugHeader) {
+            const org = await prisma.organization.findUnique({
+                where: { slug: orgSlugHeader },
+                select: { id: true }
+            });
+            if (org) {
+                const credential = await prisma.toolCredential.findUnique({
+                    where: {
+                        organizationId_toolId: {
+                            organizationId: org.id,
+                            toolId: "mastra-mcp-api"
+                        }
+                    },
+                    select: { credentials: true, isActive: true }
                 });
-                if (org) {
-                    // Get first member of org as the user context
-                    const membership = await prisma.membership.findFirst({
-                        where: { organizationId: org.id },
-                        select: { userId: true }
-                    });
-                    if (membership) {
-                        return { userId: membership.userId, organizationId: org.id };
+                const credentialPayload = credential?.credentials;
+                const storedKey =
+                    credentialPayload &&
+                    typeof credentialPayload === "object" &&
+                    !Array.isArray(credentialPayload)
+                        ? (credentialPayload as { apiKey?: string }).apiKey
+                        : undefined;
+                if (credential?.isActive && storedKey && storedKey === apiKey) {
+                    const context = await resolveOrgContext(orgSlugHeader);
+                    if (context) {
+                        return context;
                     }
                 }
             }
         }
-        // Invalid API key
+
         return null;
     }
 
