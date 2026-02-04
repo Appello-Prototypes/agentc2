@@ -8,7 +8,7 @@ export { cn } from "./lib/utils";
 export { useIsMobile } from "./hooks/use-mobile";
 
 // Export icons
-export { Icon, icons, HugeiconsIcon } from "./icons";
+export { Icon, icons, HugeiconsIcon, AgentC2Logo } from "./icons";
 export type { IconName, IconComponent, IconProps, HugeiconsProps } from "./icons";
 
 // Export configuration

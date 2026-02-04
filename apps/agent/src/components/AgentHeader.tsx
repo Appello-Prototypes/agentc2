@@ -1,6 +1,6 @@
 "use client";
 
-import { AppTopBar } from "@repo/ui";
+import { AppTopBar, AgentC2Logo } from "@repo/ui";
 import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 import { usePathname, useRouter } from "next/navigation";
@@ -39,6 +39,7 @@ export function AgentHeader() {
     return (
         <AppTopBar
             title="AgentC2"
+            logo={<AgentC2Logo size={28} />}
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

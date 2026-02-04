@@ -19,6 +19,7 @@ type NavItem = {
 
 type AppTopBarProps = {
     title: string;
+    logo?: React.ReactNode;
     session: Session | null;
     navItems?: NavItem[];
     onSignOut: () => void;
@@ -29,6 +30,7 @@ type AppTopBarProps = {
 
 export function AppTopBar({
     title,
+    logo,
     session,
     navItems = [],
     onSignOut,
@@ -40,7 +42,8 @@ export function AppTopBar({
         <header className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
             <div className="flex h-14 w-full items-center px-4">
                 {/* Logo */}
-                <div className="mr-8 flex items-center">
+                <div className="mr-8 flex items-center gap-2">
+                    {logo}
                     <span className="text-base font-semibold">{title}</span>
                 </div>
 

@@ -41,3 +41,6 @@ export const icons = iconMap;
 // Re-export types and HugeIcons components for backward compatibility
 export type { IconComponent, IconName, IconProps, HugeiconsProps };
 export { HugeiconsIcon };
+
+// Custom logo components
+export { AgentC2Logo } from "./agent-c2-logo";
