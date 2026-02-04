@@ -1,6 +1,8 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { ingestBimElementsToRag, ingestBimModel, uploadBimObject } from "@repo/mastra";
+import { inngest } from "@/lib/inngest";
+import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 function getExtension(filename: string) {
@@ -22,7 +24,10 @@ function detectSourceFormat(filename: string, explicit?: string | null) {
     if (ext === "json") {
         return "json";
     }
-    if (ext === "nwd" || ext === "rvt" || ext === "dwg") {
+    if (ext === "nwd") {
+        return "nwd";
+    }
+    if (ext === "rvt" || ext === "dwg") {
         return "speckle";
     }
     return ext || "json";
@@ -65,6 +70,10 @@ export async function POST(request: NextRequest) {
             const metadata = parseJsonField(formData.get("metadata"));
             const adapterInput = parseJsonField(formData.get("adapterInput"));
             const ingestToRag = (formData.get("ingestToRag") as string | null) === "true";
+            let resolvedWorkspaceId = workspaceId;
+            if (!resolvedWorkspaceId) {
+                resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+            }
 
             const buffer = Buffer.from(await file.arrayBuffer());
             const checksum = createHash("sha256").update(buffer).digest("hex");
@@ -76,12 +85,91 @@ export async function POST(request: NextRequest) {
                 contentType: file.type || "application/octet-stream"
             });
 
+            // Handle binary formats that need external conversion (NWD, RVT, etc.)
+            if (sourceFormat === "nwd") {
+                // NWD files are stored and queued for conversion
+                // They cannot be parsed directly - require Navisworks or conversion service
+                const { prisma } = await import("@repo/database");
+
+                // Create model with QUEUED status
+                const model = await prisma.bimModel.create({
+                    data: {
+                        name: modelName,
+                        workspaceId: resolvedWorkspaceId
+                    }
+                });
+
+                const version = await prisma.bimModelVersion.create({
+                    data: {
+                        modelId: model.id,
+                        version: 1,
+                        status: "QUEUED",
+                        sourceFormat: "nwd",
+                        checksum,
+                        sourceUri: `spaces://${uploadResult.bucket}/${uploadResult.key}`,
+                        metadata: metadata || {}
+                    }
+                });
+
+                return NextResponse.json({
+                    modelId: model.id,
+                    versionId: version.id,
+                    elementCount: 0,
+                    status: "QUEUED",
+                    message:
+                        "NWD file uploaded successfully. The file has been stored and queued for conversion. " +
+                        "NWD is a proprietary Navisworks format that requires external conversion to IFC or JSON before elements can be extracted."
+                });
+            }
+
             let resolvedAdapterInput = adapterInput;
             if (!resolvedAdapterInput) {
                 if (sourceFormat === "csv") {
                     resolvedAdapterInput = { csv: buffer.toString("utf-8") };
                 } else if (sourceFormat === "json") {
                     resolvedAdapterInput = JSON.parse(buffer.toString("utf-8"));
+                } else if (sourceFormat === "ifc") {
+                    // IFC files also need conversion - store and queue
+                    const { prisma } = await import("@repo/database");
+
+                    const model = await prisma.bimModel.create({
+                        data: {
+                            name: modelName,
+                            workspaceId: resolvedWorkspaceId
+                        }
+                    });
+
+                    const version = await prisma.bimModelVersion.create({
+                        data: {
+                            modelId: model.id,
+                            version: 1,
+                            status: "QUEUED",
+                            sourceFormat: "ifc",
+                            checksum,
+                            sourceUri: `spaces://${uploadResult.bucket}/${uploadResult.key}`,
+                            metadata: metadata || {}
+                        }
+                    });
+
+                    await inngest.send({
+                        name: "bim/ifc.parse",
+                        data: {
+                            modelId: model.id,
+                            versionId: version.id,
+                            sourceKey: uploadResult.key,
+                            sourceUri: `spaces://${uploadResult.bucket}/${uploadResult.key}`
+                        }
+                    });
+
+                    return NextResponse.json({
+                        modelId: model.id,
+                        versionId: version.id,
+                        elementCount: 0,
+                        status: "QUEUED",
+                        message:
+                            "IFC file uploaded successfully. The file has been stored and queued for parsing. " +
+                            "IFC parsing requires server-side processing to extract elements."
+                    });
                 } else {
                     return NextResponse.json(
                         {
@@ -94,7 +182,7 @@ export async function POST(request: NextRequest) {
 
             const result = await ingestBimModel({
                 modelName,
-                workspaceId: workspaceId || undefined,
+                workspaceId: resolvedWorkspaceId || undefined,
                 ownerId: ownerId || undefined,
                 sourceFormat,
                 sourceKey: uploadResult.key,
@@ -118,10 +206,14 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+        let resolvedWorkspaceId = body.workspaceId || null;
+        if (!resolvedWorkspaceId) {
+            resolvedWorkspaceId = await getDefaultWorkspaceIdForUser(session.user.id);
+        }
         const result = await ingestBimModel({
             modelId: body.modelId,
             modelName: body.modelName,
-            workspaceId: body.workspaceId,
+            workspaceId: resolvedWorkspaceId || undefined,
             ownerId: body.ownerId,
             sourceFormat: body.sourceFormat,
             sourceUri: body.sourceUri,

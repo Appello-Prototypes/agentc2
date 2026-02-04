@@ -6,11 +6,13 @@
  */
 import {
     Activity01Icon,
+    Add01Icon,
     AiNetworkIcon,
     AlertDiamondIcon,
     Analytics01Icon,
     ArrowLeft01Icon,
     ArrowRight01Icon,
+    Building01Icon,
     CalendarIcon,
     Cancel01Icon,
     ChartEvaluationIcon,
@@ -28,6 +30,7 @@ import {
     InformationCircleIcon,
     LockIcon,
     Logout03Icon,
+    MailSend01Icon,
     MessageMultiple01Icon,
     MoreHorizontalIcon,
     PlayCircleIcon,
@@ -41,6 +44,7 @@ import {
     TestTubeIcon,
     Tick02Icon,
     TriangleIcon,
+    UserGroupIcon,
     UserIcon
 } from "@hugeicons/core-free-icons";
 
@@ -87,5 +91,9 @@ export const iconMap: Record<IconName, IconComponent> = {
     dollar: Dollar01Icon,
     "git-branch": GitBranchIcon,
     shield: Shield01Icon,
-    "play-list": PlayCircleIcon
+    "play-list": PlayCircleIcon,
+    building: Building01Icon,
+    "user-group": UserGroupIcon,
+    "mail-send": MailSend01Icon,
+    add: Add01Icon
 };

@@ -164,6 +164,53 @@ async function persistElements(versionId: string, elements: BimElementNormalized
     }
 }
 
+export interface BimVersionIngestRequest {
+    versionId: string;
+    elements: BimElementNormalized[];
+    metadata?: Record<string, unknown>;
+}
+
+export async function ingestBimElementsForVersion(
+    request: BimVersionIngestRequest
+): Promise<BimIngestResult> {
+    const version = await prisma.bimModelVersion.findUnique({
+        where: { id: request.versionId }
+    });
+
+    if (!version) {
+        throw new Error(`BIM model version not found: ${request.versionId}`);
+    }
+
+    await prisma.bimElement.deleteMany({ where: { versionId: request.versionId } });
+
+    await persistElements(request.versionId, request.elements);
+
+    const existingMetadata =
+        version.metadata && typeof version.metadata === "object"
+            ? (version.metadata as Record<string, unknown>)
+            : {};
+    const mergedMetadata = {
+        ...existingMetadata,
+        ...(request.metadata ?? {}),
+        elementCount: request.elements.length
+    };
+
+    await prisma.bimModelVersion.update({
+        where: { id: request.versionId },
+        data: {
+            status: "READY",
+            metadata: toJsonValue(mergedMetadata)
+        }
+    });
+
+    return {
+        modelId: version.modelId,
+        versionId: version.id,
+        version: version.version,
+        elementsIngested: request.elements.length
+    };
+}
+
 export async function ingestBimModel(request: BimIngestRequest): Promise<BimIngestResult> {
     const adapter = resolveAdapter(request.sourceFormat);
     const parsed: BimParsedModel = await adapter.parse(request.adapterInput as never, {

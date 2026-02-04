@@ -59,11 +59,22 @@ export type AuditAction =
     // Organization
     | "ORG_CREATE"
     | "ORG_UPDATE"
+    | "ORG_DELETE"
     | "WORKSPACE_CREATE"
     | "WORKSPACE_UPDATE"
+    | "WORKSPACE_DELETE"
     | "MEMBERSHIP_CREATE"
     | "MEMBERSHIP_UPDATE"
-    | "MEMBERSHIP_DELETE";
+    | "MEMBERSHIP_DELETE"
+    // Member Management
+    | "MEMBER_ROLE_UPDATE"
+    | "MEMBER_REMOVE"
+    // Invites
+    | "INVITE_CREATE"
+    | "INVITE_REVOKE"
+    // Domains
+    | "DOMAIN_ADD"
+    | "DOMAIN_REMOVE";
 
 /**
  * Audit log entry options
@@ -73,6 +84,7 @@ export interface AuditLogOptions {
     entityType: string;
     entityId: string;
     actorId?: string;
+    userId?: string; // Alias for actorId for convenience
     tenantId?: string;
     metadata?: Record<string, unknown>;
 }
@@ -87,7 +99,7 @@ export async function createAuditLog(options: AuditLogOptions): Promise<void> {
                 action: options.action,
                 entityType: options.entityType,
                 entityId: options.entityId,
-                actorId: options.actorId,
+                actorId: options.actorId || options.userId,
                 tenantId: options.tenantId,
                 metadata: options.metadata as Prisma.InputJsonValue
             }

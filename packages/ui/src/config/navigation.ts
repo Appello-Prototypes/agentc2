@@ -51,6 +51,45 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["monitoring", "live", "production", "runs", "real-time"]
     },
     {
+        label: "BIM",
+        icon: icons.folder,
+        href: "/bim",
+        app: "agent",
+        keywords: [
+            "bim",
+            "building",
+            "model",
+            "ifc",
+            "navisworks",
+            "revit",
+            "takeoff",
+            "clash",
+            "construction"
+        ],
+        children: [
+            {
+                label: "Models",
+                href: "/bim",
+                keywords: ["models", "list", "versions", "upload"]
+            },
+            {
+                label: "Takeoffs",
+                href: "/bim/takeoffs",
+                keywords: ["takeoff", "quantities", "materials", "bom"]
+            },
+            {
+                label: "Clash Detection",
+                href: "/bim/clashes",
+                keywords: ["clash", "collision", "interference", "conflicts"]
+            },
+            {
+                label: "Version Diffs",
+                href: "/bim/diffs",
+                keywords: ["diff", "compare", "changes", "versions"]
+            }
+        ]
+    },
+    {
         label: "Integrations",
         icon: icons["ai-network"],
         href: "/mcp",
@@ -142,6 +181,21 @@ export const navigationItems: NavigationItem[] = [
         href: "/chat",
         app: "agent",
         keywords: ["chat", "assistant", "conversation", "ai"]
+    },
+    {
+        label: "Settings",
+        icon: icons.settings,
+        href: "/settings",
+        app: "agent",
+        keywords: [
+            "settings",
+            "account",
+            "profile",
+            "organization",
+            "members",
+            "invites",
+            "security"
+        ]
     }
 ];
 

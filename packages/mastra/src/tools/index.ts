@@ -3,6 +3,24 @@ export { webFetchTool } from "./web-fetch";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
+export {
+    agentCreateTool,
+    agentDeleteTool,
+    agentReadTool,
+    agentUpdateTool
+} from "./agent-crud-tools";
+export {
+    workflowCreateTool,
+    workflowDeleteTool,
+    workflowReadTool,
+    workflowUpdateTool
+} from "./workflow-crud-tools";
+export {
+    networkCreateTool,
+    networkDeleteTool,
+    networkReadTool,
+    networkUpdateTool
+} from "./network-crud-tools";
 export { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
 export { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
 export {

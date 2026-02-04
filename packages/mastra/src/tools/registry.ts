@@ -10,6 +10,24 @@ import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
+import {
+    agentCreateTool,
+    agentDeleteTool,
+    agentReadTool,
+    agentUpdateTool
+} from "./agent-crud-tools";
+import {
+    workflowCreateTool,
+    workflowDeleteTool,
+    workflowReadTool,
+    workflowUpdateTool
+} from "./workflow-crud-tools";
+import {
+    networkCreateTool,
+    networkDeleteTool,
+    networkReadTool,
+    networkUpdateTool
+} from "./network-crud-tools";
 import { workflowExecuteTool, workflowGetRunTool, workflowListRunsTool } from "./workflow-tools";
 import { networkExecuteTool, networkGetRunTool, networkListRunsTool } from "./network-tools";
 import {
@@ -37,6 +55,20 @@ export const toolRegistry: Record<string, any> = {
     "web-fetch": webFetchTool,
     "memory-recall": memoryRecallTool,
     "json-parser": jsonParserTool,
+
+    // CRUD tools
+    "agent-create": agentCreateTool,
+    "agent-read": agentReadTool,
+    "agent-update": agentUpdateTool,
+    "agent-delete": agentDeleteTool,
+    "workflow-create": workflowCreateTool,
+    "workflow-read": workflowReadTool,
+    "workflow-update": workflowUpdateTool,
+    "workflow-delete": workflowDeleteTool,
+    "network-create": networkCreateTool,
+    "network-read": networkReadTool,
+    "network-update": networkUpdateTool,
+    "network-delete": networkDeleteTool,
 
     // Workflow and network tools
     "workflow-execute": workflowExecuteTool,

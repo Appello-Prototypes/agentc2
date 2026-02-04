@@ -38,6 +38,101 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return fallback;
         };
 
+        const crudToolDetails: Record<
+            string,
+            {
+                description: string;
+                inputSchema: Record<string, unknown>;
+                outputSchema: Record<string, unknown>;
+            }
+        > = {
+            "agent-create": {
+                description: "Create a new agent with full configuration.",
+                inputSchema: {
+                    type: "object",
+                    description:
+                        "See docs/mcp-crud-tools-spec.json for full schema. Supports all agent configuration primitives.",
+                    additionalProperties: true
+                },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-read": {
+                description: "Retrieve agent definition/state by ID or slug.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-update": {
+                description: "Update an agent configuration with versioning and rollback support.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-delete": {
+                description: "Delete or archive an agent safely.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-create": {
+                description: "Create a workflow definition with full configuration.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-read": {
+                description: "Retrieve a workflow definition/state by ID or slug.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-update": {
+                description: "Update a workflow definition with versioning and rollback support.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-delete": {
+                description: "Delete or archive a workflow safely.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-create": {
+                description: "Create a network with routing instructions and primitives.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-read": {
+                description: "Retrieve a network definition/state by ID or slug.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-update": {
+                description:
+                    "Update a network topology or routing config with versioning and rollback support.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-delete": {
+                description: "Delete or archive a network safely.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            }
+        };
+
+        if (crudToolDetails[tool]) {
+            const definition = crudToolDetails[tool];
+            return NextResponse.json({
+                success: true,
+                tool: {
+                    name: tool,
+                    description: definition.description,
+                    version: "1.0.0",
+                    metadata: {
+                        tool_type: "crud",
+                        schema_ref: "docs/mcp-crud-tools-spec.json"
+                    },
+                    inputSchema: definition.inputSchema,
+                    outputSchema: definition.outputSchema,
+                    invoke_url: "/api/mcp"
+                }
+            });
+        }
+
         if (tool.startsWith("workflow-")) {
             const workflowSlug = tool.slice("workflow-".length);
             const workflow = await prisma.workflow.findFirst({

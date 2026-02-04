@@ -1,0 +1,793 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Appello MCP CRUD Tool Spec",
+    "version": "1.0.0",
+    "description": "MCP-native CRUD tool surface for full lifecycle management of agents, workflows, and networks."
+  },
+  "x-mcp": {
+    "toolNaming": {
+      "rule": "hyphen-only",
+      "allowedExamples": [
+        "agent-create",
+        "agent-read",
+        "agent-update",
+        "agent-delete",
+        "workflow-create",
+        "workflow-read",
+        "workflow-update",
+        "workflow-delete",
+        "network-create",
+        "network-read",
+        "network-update",
+        "network-delete"
+      ],
+      "disallowedExamples": ["agent.create", "workflow.read", "network.delete"]
+    },
+    "requirements": {
+      "fullPrimitiveExposure": true,
+      "developerInvestigation": "Before shipping, verify and include every configuration primitive already supported by the current runtime, database schema, and tool registry. No UI-only configuration should remain inaccessible via MCP tools.",
+      "notes": [
+        "If a configuration primitive exists in the database schema or runtime types, it must be surfaced in these tool schemas.",
+        "Use metadata for additional, forward-compatible configuration toggles that are not first-class fields yet.",
+        "Do not introduce dot notation in tool names."
+      ]
+    },
+    "tools": [
+      {
+        "name": "agent-create",
+        "summary": "Create a new agent with full configuration.",
+        "inputSchema": { "$ref": "#/components/schemas/AgentCreateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/AgentCrudResponse" }
+      },
+      {
+        "name": "agent-read",
+        "summary": "Fetch an agent definition/state by ID or slug.",
+        "inputSchema": { "$ref": "#/components/schemas/AgentReadInput" },
+        "outputSchema": { "$ref": "#/components/schemas/AgentReadResponse" }
+      },
+      {
+        "name": "agent-update",
+        "summary": "Update an agent configuration (supports versioning and rollback).",
+        "inputSchema": { "$ref": "#/components/schemas/AgentUpdateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/AgentCrudResponse" }
+      },
+      {
+        "name": "agent-delete",
+        "summary": "Delete or archive an agent safely.",
+        "inputSchema": { "$ref": "#/components/schemas/AgentDeleteInput" },
+        "outputSchema": { "$ref": "#/components/schemas/DeleteResponse" }
+      },
+      {
+        "name": "workflow-create",
+        "summary": "Create a workflow definition.",
+        "inputSchema": { "$ref": "#/components/schemas/WorkflowCreateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/WorkflowCrudResponse" }
+      },
+      {
+        "name": "workflow-read",
+        "summary": "Fetch a workflow definition/state by ID or slug.",
+        "inputSchema": { "$ref": "#/components/schemas/WorkflowReadInput" },
+        "outputSchema": { "$ref": "#/components/schemas/WorkflowReadResponse" }
+      },
+      {
+        "name": "workflow-update",
+        "summary": "Update workflow definition/parameters (supports versioning and rollback).",
+        "inputSchema": { "$ref": "#/components/schemas/WorkflowUpdateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/WorkflowCrudResponse" }
+      },
+      {
+        "name": "workflow-delete",
+        "summary": "Delete or archive a workflow cleanly.",
+        "inputSchema": { "$ref": "#/components/schemas/WorkflowDeleteInput" },
+        "outputSchema": { "$ref": "#/components/schemas/DeleteResponse" }
+      },
+      {
+        "name": "network-create",
+        "summary": "Create an agent network with routing and primitives.",
+        "inputSchema": { "$ref": "#/components/schemas/NetworkCreateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/NetworkCrudResponse" }
+      },
+      {
+        "name": "network-read",
+        "summary": "Fetch a network definition/topology by ID or slug.",
+        "inputSchema": { "$ref": "#/components/schemas/NetworkReadInput" },
+        "outputSchema": { "$ref": "#/components/schemas/NetworkReadResponse" }
+      },
+      {
+        "name": "network-update",
+        "summary": "Update a network topology or routing configuration (supports versioning and rollback).",
+        "inputSchema": { "$ref": "#/components/schemas/NetworkUpdateInput" },
+        "outputSchema": { "$ref": "#/components/schemas/NetworkCrudResponse" }
+      },
+      {
+        "name": "network-delete",
+        "summary": "Delete or decommission a network safely.",
+        "inputSchema": { "$ref": "#/components/schemas/NetworkDeleteInput" },
+        "outputSchema": { "$ref": "#/components/schemas/DeleteResponse" }
+      }
+    ]
+  },
+  "components": {
+    "schemas": {
+      "BaseResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "DeleteResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "message": { "type": "string" },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "ModelConfig": {
+        "type": "object",
+        "properties": {
+          "reasoning": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["enabled", "disabled"] }
+            },
+            "additionalProperties": true
+          },
+          "toolChoice": {
+            "oneOf": [
+              { "type": "string", "enum": ["auto", "required", "none"] },
+              {
+                "type": "object",
+                "properties": {
+                  "type": { "type": "string", "enum": ["tool"] },
+                  "toolName": { "type": "string" }
+                },
+                "required": ["type", "toolName"]
+              }
+            ]
+          },
+          "thinking": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["enabled", "disabled"] },
+              "budget_tokens": { "type": "number" }
+            },
+            "additionalProperties": true
+          },
+          "parallelToolCalls": { "type": "boolean" },
+          "reasoningEffort": { "type": "string", "enum": ["low", "medium", "high"] },
+          "cacheControl": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string", "enum": ["ephemeral"] }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "MemoryConfig": {
+        "type": "object",
+        "properties": {
+          "lastMessages": { "type": "number" },
+          "semanticRecall": {
+            "oneOf": [
+              { "type": "boolean", "enum": [false] },
+              {
+                "type": "object",
+                "properties": {
+                  "topK": { "type": "number" },
+                  "messageRange": { "type": "number" }
+                },
+                "additionalProperties": true
+              }
+            ]
+          },
+          "workingMemory": {
+            "type": "object",
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "template": { "type": "string" }
+            },
+            "additionalProperties": true
+          }
+        },
+        "additionalProperties": true
+      },
+      "AgentToolBindingConfig": {
+        "type": "object",
+        "properties": {
+          "inputSchema": { "type": "object", "additionalProperties": true },
+          "outputSchema": { "type": "object", "additionalProperties": true },
+          "description": { "type": "string" },
+          "metadata": { "type": "object", "additionalProperties": true }
+        },
+        "additionalProperties": true
+      },
+      "AgentToolBinding": {
+        "type": "object",
+        "properties": {
+          "toolId": { "type": "string" },
+          "config": { "$ref": "#/components/schemas/AgentToolBindingConfig" }
+        },
+        "required": ["toolId"]
+      },
+      "Agent": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "instructions": { "type": "string" },
+          "instructionsTemplate": { "type": "string" },
+          "modelProvider": { "type": "string" },
+          "modelName": { "type": "string" },
+          "temperature": { "type": "number" },
+          "maxTokens": { "type": "number" },
+          "modelConfig": { "$ref": "#/components/schemas/ModelConfig" },
+          "tools": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentToolBinding" }
+          },
+          "subAgents": { "type": "array", "items": { "type": "string" } },
+          "workflows": { "type": "array", "items": { "type": "string" } },
+          "memoryEnabled": { "type": "boolean" },
+          "memoryConfig": { "$ref": "#/components/schemas/MemoryConfig" },
+          "maxSteps": { "type": "number" },
+          "scorers": { "type": "array", "items": { "type": "string" } },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "tenantId": { "type": "string" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "isPublic": { "type": "boolean" },
+          "requiresApproval": { "type": "boolean" },
+          "maxSpendUsd": { "type": "number" },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "isActive": { "type": "boolean" },
+          "version": { "type": "number" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "createdBy": { "type": "string" }
+        }
+      },
+      "AgentCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "description": { "type": "string" },
+          "instructions": { "type": "string" },
+          "instructionsTemplate": { "type": "string" },
+          "modelProvider": { "type": "string" },
+          "modelName": { "type": "string" },
+          "temperature": { "type": "number" },
+          "maxTokens": { "type": "number" },
+          "modelConfig": { "$ref": "#/components/schemas/ModelConfig" },
+          "extendedThinking": { "type": "boolean" },
+          "thinkingBudget": { "type": "number" },
+          "parallelToolCalls": { "type": "boolean" },
+          "reasoningEffort": { "type": "string", "enum": ["low", "medium", "high"] },
+          "cacheControl": { "type": "boolean" },
+          "toolChoice": { "$ref": "#/components/schemas/ModelConfig/properties/toolChoice" },
+          "reasoning": { "$ref": "#/components/schemas/ModelConfig/properties/reasoning" },
+          "memoryEnabled": { "type": "boolean" },
+          "memoryConfig": { "$ref": "#/components/schemas/MemoryConfig" },
+          "maxSteps": { "type": "number" },
+          "subAgents": { "type": "array", "items": { "type": "string" } },
+          "workflows": { "type": "array", "items": { "type": "string" } },
+          "scorers": { "type": "array", "items": { "type": "string" } },
+          "toolIds": { "type": "array", "items": { "type": "string" } },
+          "tools": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AgentToolBinding" }
+          },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "tenantId": { "type": "string" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "isPublic": { "type": "boolean" },
+          "requiresApproval": { "type": "boolean" },
+          "maxSpendUsd": { "type": "number" },
+          "metadata": { "type": "object", "additionalProperties": true },
+          "isActive": { "type": "boolean" },
+          "createdBy": { "type": "string" }
+        },
+        "required": ["name", "instructions", "modelProvider", "modelName"],
+        "additionalProperties": true
+      },
+      "AgentReadInput": {
+        "type": "object",
+        "properties": {
+          "agentId": { "type": "string", "description": "Agent ID or slug" },
+          "include": {
+            "type": "object",
+            "properties": {
+              "tools": { "type": "boolean" },
+              "versions": { "type": "boolean" },
+              "runs": { "type": "boolean" },
+              "schedules": { "type": "boolean" },
+              "triggers": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["agentId"]
+      },
+      "AgentUpdateInput": {
+        "type": "object",
+        "properties": {
+          "agentId": { "type": "string", "description": "Agent ID or slug" },
+          "restoreVersionId": { "type": "string" },
+          "restoreVersion": { "type": "number" },
+          "versionDescription": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "data": { "$ref": "#/components/schemas/AgentCreateInput" }
+        },
+        "required": ["agentId"],
+        "additionalProperties": true
+      },
+      "AgentDeleteInput": {
+        "type": "object",
+        "properties": {
+          "agentId": { "type": "string", "description": "Agent ID or slug" },
+          "mode": { "type": "string", "enum": ["delete", "archive"] }
+        },
+        "required": ["agentId"]
+      },
+      "AgentCrudResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "agent": { "$ref": "#/components/schemas/Agent" },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "AgentReadResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "agent": { "$ref": "#/components/schemas/Agent" },
+          "versions": { "type": "array", "items": { "type": "object" } },
+          "runs": { "type": "array", "items": { "type": "object" } },
+          "schedules": { "type": "array", "items": { "type": "object" } },
+          "triggers": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "WorkflowStepType": {
+        "type": "string",
+        "enum": [
+          "agent",
+          "tool",
+          "workflow",
+          "branch",
+          "parallel",
+          "foreach",
+          "human",
+          "transform",
+          "delay"
+        ]
+      },
+      "WorkflowBranch": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "condition": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowStep" }
+          }
+        },
+        "required": ["condition", "steps"]
+      },
+      "WorkflowParallelBranch": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowStep" }
+          }
+        },
+        "required": ["steps"]
+      },
+      "WorkflowHumanConfig": {
+        "type": "object",
+        "properties": {
+          "prompt": { "type": "string" },
+          "formSchema": { "type": "object", "additionalProperties": true },
+          "timeout": { "type": "number" }
+        },
+        "additionalProperties": true
+      },
+      "WorkflowAgentConfig": {
+        "type": "object",
+        "properties": {
+          "agentSlug": { "type": "string" },
+          "promptTemplate": { "type": "string" },
+          "outputFormat": { "type": "string", "enum": ["text", "json"] },
+          "outputSchema": { "type": "object", "additionalProperties": true },
+          "maxSteps": { "type": "number" }
+        },
+        "required": ["agentSlug", "promptTemplate"],
+        "additionalProperties": true
+      },
+      "WorkflowToolConfig": {
+        "type": "object",
+        "properties": {
+          "toolId": { "type": "string" },
+          "parameters": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["toolId"],
+        "additionalProperties": true
+      },
+      "WorkflowCallConfig": {
+        "type": "object",
+        "properties": {
+          "workflowId": { "type": "string" },
+          "input": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["workflowId"],
+        "additionalProperties": true
+      },
+      "WorkflowForeachConfig": {
+        "type": "object",
+        "properties": {
+          "collectionPath": { "type": "string" },
+          "itemVar": { "type": "string" },
+          "concurrency": { "type": "number" },
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowStep" }
+          }
+        },
+        "required": ["collectionPath", "steps"],
+        "additionalProperties": true
+      },
+      "WorkflowDelayConfig": {
+        "type": "object",
+        "properties": {
+          "delayMs": { "type": "number" }
+        },
+        "additionalProperties": true
+      },
+      "WorkflowStepConfig": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/WorkflowAgentConfig" },
+          { "$ref": "#/components/schemas/WorkflowToolConfig" },
+          { "$ref": "#/components/schemas/WorkflowCallConfig" },
+          {
+            "type": "object",
+            "properties": {
+              "branches": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/WorkflowBranch" }
+              },
+              "defaultBranch": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/WorkflowStep" }
+              }
+            }
+          },
+          {
+            "type": "object",
+            "properties": {
+              "branches": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/WorkflowParallelBranch" }
+              }
+            }
+          },
+          { "$ref": "#/components/schemas/WorkflowForeachConfig" },
+          { "$ref": "#/components/schemas/WorkflowHumanConfig" },
+          { "$ref": "#/components/schemas/WorkflowDelayConfig" },
+          { "type": "object", "additionalProperties": true }
+        ]
+      },
+      "WorkflowStep": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/WorkflowStepType" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "inputMapping": { "type": "object", "additionalProperties": true },
+          "config": { "$ref": "#/components/schemas/WorkflowStepConfig" }
+        },
+        "required": ["id", "type"],
+        "additionalProperties": true
+      },
+      "WorkflowDefinition": {
+        "type": "object",
+        "properties": {
+          "steps": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/WorkflowStep" }
+          }
+        },
+        "required": ["steps"],
+        "additionalProperties": true
+      },
+      "Workflow": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "definitionJson": { "$ref": "#/components/schemas/WorkflowDefinition" },
+          "compiledJson": { "type": "object", "additionalProperties": true },
+          "compiledAt": { "type": "string", "format": "date-time" },
+          "compiledHash": { "type": "string" },
+          "inputSchemaJson": { "type": "object", "additionalProperties": true },
+          "outputSchemaJson": { "type": "object", "additionalProperties": true },
+          "maxSteps": { "type": "number" },
+          "timeout": { "type": "number" },
+          "retryConfig": { "type": "object", "additionalProperties": true },
+          "isPublished": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "version": { "type": "number" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "createdBy": { "type": "string" }
+        }
+      },
+      "WorkflowCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "description": { "type": "string" },
+          "definitionJson": { "$ref": "#/components/schemas/WorkflowDefinition" },
+          "compiledJson": { "type": "object", "additionalProperties": true },
+          "compiledAt": { "type": "string", "format": "date-time" },
+          "compiledHash": { "type": "string" },
+          "inputSchemaJson": { "type": "object", "additionalProperties": true },
+          "outputSchemaJson": { "type": "object", "additionalProperties": true },
+          "maxSteps": { "type": "number" },
+          "timeout": { "type": "number" },
+          "retryConfig": { "type": "object", "additionalProperties": true },
+          "isPublished": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "versionDescription": { "type": "string" },
+          "createdBy": { "type": "string" }
+        },
+        "required": ["name"],
+        "additionalProperties": true
+      },
+      "WorkflowReadInput": {
+        "type": "object",
+        "properties": {
+          "workflowId": { "type": "string", "description": "Workflow ID or slug" },
+          "include": {
+            "type": "object",
+            "properties": {
+              "versions": { "type": "boolean" },
+              "runs": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["workflowId"]
+      },
+      "WorkflowUpdateInput": {
+        "type": "object",
+        "properties": {
+          "workflowId": { "type": "string", "description": "Workflow ID or slug" },
+          "restoreVersionId": { "type": "string" },
+          "restoreVersion": { "type": "number" },
+          "versionDescription": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "data": { "$ref": "#/components/schemas/WorkflowCreateInput" }
+        },
+        "required": ["workflowId"],
+        "additionalProperties": true
+      },
+      "WorkflowDeleteInput": {
+        "type": "object",
+        "properties": {
+          "workflowId": { "type": "string", "description": "Workflow ID or slug" },
+          "mode": { "type": "string", "enum": ["delete", "archive"] }
+        },
+        "required": ["workflowId"]
+      },
+      "WorkflowCrudResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "workflow": { "$ref": "#/components/schemas/Workflow" },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "WorkflowReadResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "workflow": { "$ref": "#/components/schemas/Workflow" },
+          "versions": { "type": "array", "items": { "type": "object" } },
+          "runs": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "NetworkTopologyNode": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "type": { "type": "string" },
+          "position": { "type": "object", "additionalProperties": true },
+          "data": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["id"]
+      },
+      "NetworkTopologyEdge": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "source": { "type": "string" },
+          "target": { "type": "string" },
+          "type": { "type": "string" },
+          "data": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["id", "source", "target"]
+      },
+      "NetworkTopology": {
+        "type": "object",
+        "properties": {
+          "nodes": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NetworkTopologyNode" }
+          },
+          "edges": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NetworkTopologyEdge" }
+          },
+          "viewport": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["nodes", "edges"],
+        "additionalProperties": true
+      },
+      "NetworkPrimitive": {
+        "type": "object",
+        "properties": {
+          "primitiveType": { "type": "string", "enum": ["agent", "workflow", "tool"] },
+          "agentId": { "type": "string" },
+          "workflowId": { "type": "string" },
+          "toolId": { "type": "string" },
+          "description": { "type": "string" },
+          "position": { "type": "object", "additionalProperties": true }
+        },
+        "required": ["primitiveType"],
+        "additionalProperties": true
+      },
+      "Network": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string" },
+          "slug": { "type": "string" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "instructions": { "type": "string" },
+          "modelProvider": { "type": "string" },
+          "modelName": { "type": "string" },
+          "temperature": { "type": "number" },
+          "topologyJson": { "$ref": "#/components/schemas/NetworkTopology" },
+          "memoryConfig": { "$ref": "#/components/schemas/MemoryConfig" },
+          "maxSteps": { "type": "number" },
+          "isPublished": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "version": { "type": "number" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "primitives": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NetworkPrimitive" }
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "updatedAt": { "type": "string", "format": "date-time" },
+          "createdBy": { "type": "string" }
+        }
+      },
+      "NetworkCreateInput": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "slug": { "type": "string" },
+          "description": { "type": "string" },
+          "instructions": { "type": "string" },
+          "modelProvider": { "type": "string" },
+          "modelName": { "type": "string" },
+          "temperature": { "type": "number" },
+          "topologyJson": { "$ref": "#/components/schemas/NetworkTopology" },
+          "memoryConfig": { "$ref": "#/components/schemas/MemoryConfig" },
+          "maxSteps": { "type": "number" },
+          "isPublished": { "type": "boolean" },
+          "isActive": { "type": "boolean" },
+          "workspaceId": { "type": "string" },
+          "ownerId": { "type": "string" },
+          "type": { "type": "string", "enum": ["USER", "SYSTEM"] },
+          "primitives": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NetworkPrimitive" }
+          },
+          "versionDescription": { "type": "string" },
+          "createdBy": { "type": "string" }
+        },
+        "required": ["name", "instructions", "modelProvider", "modelName"],
+        "additionalProperties": true
+      },
+      "NetworkReadInput": {
+        "type": "object",
+        "properties": {
+          "networkId": { "type": "string", "description": "Network ID or slug" },
+          "include": {
+            "type": "object",
+            "properties": {
+              "primitives": { "type": "boolean" },
+              "versions": { "type": "boolean" },
+              "runs": { "type": "boolean" }
+            },
+            "additionalProperties": false
+          }
+        },
+        "required": ["networkId"]
+      },
+      "NetworkUpdateInput": {
+        "type": "object",
+        "properties": {
+          "networkId": { "type": "string", "description": "Network ID or slug" },
+          "restoreVersionId": { "type": "string" },
+          "restoreVersion": { "type": "number" },
+          "versionDescription": { "type": "string" },
+          "createdBy": { "type": "string" },
+          "data": { "$ref": "#/components/schemas/NetworkCreateInput" }
+        },
+        "required": ["networkId"],
+        "additionalProperties": true
+      },
+      "NetworkDeleteInput": {
+        "type": "object",
+        "properties": {
+          "networkId": { "type": "string", "description": "Network ID or slug" },
+          "mode": { "type": "string", "enum": ["delete", "archive"] }
+        },
+        "required": ["networkId"]
+      },
+      "NetworkCrudResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "network": { "$ref": "#/components/schemas/Network" },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      },
+      "NetworkReadResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean" },
+          "network": { "$ref": "#/components/schemas/Network" },
+          "versions": { "type": "array", "items": { "type": "object" } },
+          "runs": { "type": "array", "items": { "type": "object" } },
+          "error": { "type": "string" }
+        },
+        "required": ["success"]
+      }
+    }
+  }
+}

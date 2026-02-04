@@ -2,7 +2,13 @@ import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
 import { prisma } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
-import { evaluateHelpfulness, mastra } from "@repo/mastra";
+import {
+    evaluateHelpfulness,
+    getBimObjectBuffer,
+    ingestBimElementsForVersion,
+    mastra,
+    parseIfcBuffer
+} from "@repo/mastra";
 import crypto from "crypto";
 import {
     SIGNAL_THRESHOLDS,
@@ -2723,6 +2729,89 @@ Return ONLY a valid JSON array of insights, no other text.`;
 );
 
 // ==============================
+// BIM Processing Functions
+// ==============================
+
+/**
+ * BIM IFC Parse Function
+ *
+ * Parses IFC files with web-ifc and persists normalized elements.
+ */
+export const bimIfcParseFunction = inngest.createFunction(
+    {
+        id: "bim-ifc-parse",
+        retries: 1,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        onFailure: async ({ error, event }: { error: Error; event: any }) => {
+            const versionId = event?.data?.versionId as string | undefined;
+            if (!versionId) {
+                return;
+            }
+
+            const version = await prisma.bimModelVersion.findUnique({
+                where: { id: versionId }
+            });
+            if (!version) {
+                return;
+            }
+
+            const existingMetadata =
+                version.metadata && typeof version.metadata === "object"
+                    ? (version.metadata as Record<string, unknown>)
+                    : {};
+
+            await prisma.bimModelVersion.update({
+                where: { id: versionId },
+                data: {
+                    status: "FAILED",
+                    metadata: {
+                        ...existingMetadata,
+                        ifcParseError: error.message,
+                        failedAt: new Date().toISOString()
+                    }
+                }
+            });
+        }
+    },
+    { event: "bim/ifc.parse" },
+    async ({ event, step }) => {
+        const { versionId, sourceKey } = event.data;
+        if (!versionId || !sourceKey) {
+            throw new Error("Missing versionId or sourceKey for IFC parsing.");
+        }
+
+        await step.run("mark-processing", async () => {
+            await prisma.bimModelVersion.update({
+                where: { id: versionId },
+                data: { status: "PROCESSING" }
+            });
+        });
+
+        const bufferBase64 = await step.run("download-ifc", async () => {
+            const buffer = await getBimObjectBuffer({ key: sourceKey });
+            return buffer.toString("base64");
+        });
+
+        const parsed = await step.run("parse-ifc", async () => {
+            return parseIfcBuffer(Buffer.from(bufferBase64, "base64"));
+        });
+
+        const ingestResult = await step.run("persist-elements", async () => {
+            return ingestBimElementsForVersion({
+                versionId,
+                elements: parsed.elements,
+                metadata: parsed.metadata
+            });
+        });
+
+        return {
+            versionId,
+            elementsIngested: ingestResult.elementsIngested
+        };
+    }
+);
+
+// ==============================
 // Simulation System Functions
 // ==============================
 
@@ -3536,6 +3625,8 @@ export const inngestFunctions = [
     learningApprovalHandlerFunction,
     learningVersionPromotionFunction,
     dailyMetricsRollupFunction,
+    // BIM functions
+    bimIfcParseFunction,
     // Simulation functions
     simulationSessionStartFunction,
     simulationBatchRunFunction

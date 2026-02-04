@@ -136,6 +136,7 @@ export {
 // BIM
 export {
     ingestBimModel,
+    ingestBimElementsForVersion,
     queryBimElements,
     ingestBimElementsToRag,
     queryBimHybrid,
@@ -146,6 +147,7 @@ export {
     uploadBimObject,
     getBimObjectBuffer,
     headBimObject,
+    parseIfcBuffer,
     ifcAdapter,
     speckleAdapter,
     csvAdapter
@@ -156,7 +158,8 @@ export type {
     BimElementNormalized,
     BimGeometrySummary,
     BimParsedModel,
-    BimPropertyEntry
+    BimPropertyEntry,
+    IfcParseOptions
 } from "./bim";
 
 // Orchestrator (Background Agent)

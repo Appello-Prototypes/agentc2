@@ -424,10 +424,10 @@ export default function McpPage() {
                 </div>
                 <Link
                     href="/mcp/setup"
-                    className="border-border bg-background hover:bg-muted hover:text-foreground inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium transition-all"
+                    className="border-border bg-background hover:bg-muted hover:text-foreground inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap transition-all"
                 >
                     <SettingsIcon className="h-4 w-4" />
-                    Setup for Cursor
+                    Setup Cursor
                 </Link>
             </div>
 

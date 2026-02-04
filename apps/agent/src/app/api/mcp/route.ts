@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@repo/database";
+import { getToolByName } from "@repo/mastra";
 import { auth } from "@repo/auth";
-import { getUserOrganizationId } from "@/lib/organization";
+import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 
 /**
  * MCP Server Gateway
@@ -298,6 +299,457 @@ export async function GET(request: NextRequest) {
             invoke_url: `/api/networks/${network.slug}/execute`
         }));
 
+        const crudBaseResponseSchema = {
+            type: "object",
+            properties: {
+                success: { type: "boolean" },
+                error: { type: "string" }
+            }
+        };
+
+        const modelConfigSchema = {
+            type: "object",
+            properties: {
+                reasoning: {
+                    type: "object",
+                    properties: { type: { type: "string", enum: ["enabled", "disabled"] } }
+                },
+                toolChoice: {
+                    oneOf: [
+                        { type: "string", enum: ["auto", "required", "none"] },
+                        {
+                            type: "object",
+                            properties: {
+                                type: { type: "string", enum: ["tool"] },
+                                toolName: { type: "string" }
+                            },
+                            required: ["type", "toolName"]
+                        }
+                    ]
+                },
+                thinking: {
+                    type: "object",
+                    properties: {
+                        type: { type: "string", enum: ["enabled", "disabled"] },
+                        budget_tokens: { type: "number" }
+                    }
+                },
+                parallelToolCalls: { type: "boolean" },
+                reasoningEffort: { type: "string", enum: ["low", "medium", "high"] },
+                cacheControl: {
+                    type: "object",
+                    properties: { type: { type: "string", enum: ["ephemeral"] } }
+                }
+            },
+            additionalProperties: true
+        };
+
+        const memoryConfigSchema = {
+            type: "object",
+            properties: {
+                lastMessages: { type: "number" },
+                semanticRecall: {
+                    oneOf: [
+                        { type: "boolean", enum: [false] },
+                        {
+                            type: "object",
+                            properties: {
+                                topK: { type: "number" },
+                                messageRange: { type: "number" }
+                            },
+                            additionalProperties: true
+                        }
+                    ]
+                },
+                workingMemory: {
+                    type: "object",
+                    properties: {
+                        enabled: { type: "boolean" },
+                        template: { type: "string" }
+                    },
+                    additionalProperties: true
+                }
+            },
+            additionalProperties: true
+        };
+
+        const agentToolBindingSchema = {
+            type: "object",
+            properties: {
+                toolId: { type: "string" },
+                config: { type: "object", additionalProperties: true }
+            },
+            required: ["toolId"]
+        };
+
+        const workflowDefinitionSchema = {
+            type: "object",
+            properties: {
+                steps: { type: "array", items: { type: "object", additionalProperties: true } }
+            },
+            required: ["steps"],
+            additionalProperties: true
+        };
+
+        const networkTopologySchema = {
+            type: "object",
+            properties: {
+                nodes: { type: "array", items: { type: "object", additionalProperties: true } },
+                edges: { type: "array", items: { type: "object", additionalProperties: true } },
+                viewport: { type: "object", additionalProperties: true }
+            },
+            required: ["nodes", "edges"],
+            additionalProperties: true
+        };
+
+        const networkPrimitiveSchema = {
+            type: "object",
+            properties: {
+                primitiveType: { type: "string", enum: ["agent", "workflow", "tool"] },
+                agentId: { type: "string" },
+                workflowId: { type: "string" },
+                toolId: { type: "string" },
+                description: { type: "string" },
+                position: { type: "object", additionalProperties: true }
+            },
+            required: ["primitiveType"]
+        };
+
+        const agentCreateInputSchema = {
+            type: "object",
+            properties: {
+                name: { type: "string" },
+                slug: { type: "string" },
+                description: { type: "string" },
+                instructions: { type: "string" },
+                instructionsTemplate: { type: "string" },
+                modelProvider: { type: "string" },
+                modelName: { type: "string" },
+                temperature: { type: "number" },
+                maxTokens: { type: "number" },
+                modelConfig: modelConfigSchema,
+                extendedThinking: { type: "boolean" },
+                thinkingBudget: { type: "number" },
+                parallelToolCalls: { type: "boolean" },
+                reasoningEffort: { type: "string", enum: ["low", "medium", "high"] },
+                cacheControl: { type: "boolean" },
+                toolChoice: modelConfigSchema.properties?.toolChoice,
+                reasoning: modelConfigSchema.properties?.reasoning,
+                memoryEnabled: { type: "boolean" },
+                memoryConfig: memoryConfigSchema,
+                maxSteps: { type: "number" },
+                subAgents: { type: "array", items: { type: "string" } },
+                workflows: { type: "array", items: { type: "string" } },
+                scorers: { type: "array", items: { type: "string" } },
+                toolIds: { type: "array", items: { type: "string" } },
+                tools: { type: "array", items: agentToolBindingSchema },
+                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                tenantId: { type: "string" },
+                workspaceId: { type: "string" },
+                ownerId: { type: "string" },
+                isPublic: { type: "boolean" },
+                requiresApproval: { type: "boolean" },
+                maxSpendUsd: { type: "number" },
+                metadata: { type: "object", additionalProperties: true },
+                isActive: { type: "boolean" },
+                createdBy: { type: "string" }
+            },
+            required: ["name", "instructions", "modelProvider", "modelName"],
+            additionalProperties: true
+        };
+
+        const agentUpdateInputSchema = {
+            type: "object",
+            properties: {
+                agentId: { type: "string" },
+                restoreVersionId: { type: "string" },
+                restoreVersion: { type: "number" },
+                versionDescription: { type: "string" },
+                createdBy: { type: "string" },
+                data: agentCreateInputSchema
+            },
+            required: ["agentId"],
+            additionalProperties: true
+        };
+
+        const workflowCreateInputSchema = {
+            type: "object",
+            properties: {
+                name: { type: "string" },
+                slug: { type: "string" },
+                description: { type: "string" },
+                definitionJson: workflowDefinitionSchema,
+                compiledJson: { type: "object", additionalProperties: true },
+                compiledAt: { type: "string" },
+                compiledHash: { type: "string" },
+                inputSchemaJson: { type: "object", additionalProperties: true },
+                outputSchemaJson: { type: "object", additionalProperties: true },
+                maxSteps: { type: "number" },
+                timeout: { type: "number" },
+                retryConfig: { type: "object", additionalProperties: true },
+                isPublished: { type: "boolean" },
+                isActive: { type: "boolean" },
+                workspaceId: { type: "string" },
+                ownerId: { type: "string" },
+                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                versionDescription: { type: "string" },
+                createdBy: { type: "string" }
+            },
+            required: ["name"],
+            additionalProperties: true
+        };
+
+        const workflowUpdateInputSchema = {
+            type: "object",
+            properties: {
+                workflowId: { type: "string" },
+                restoreVersionId: { type: "string" },
+                restoreVersion: { type: "number" },
+                versionDescription: { type: "string" },
+                createdBy: { type: "string" },
+                data: workflowCreateInputSchema
+            },
+            required: ["workflowId"],
+            additionalProperties: true
+        };
+
+        const networkCreateInputSchema = {
+            type: "object",
+            properties: {
+                name: { type: "string" },
+                slug: { type: "string" },
+                description: { type: "string" },
+                instructions: { type: "string" },
+                modelProvider: { type: "string" },
+                modelName: { type: "string" },
+                temperature: { type: "number" },
+                topologyJson: networkTopologySchema,
+                memoryConfig: memoryConfigSchema,
+                maxSteps: { type: "number" },
+                isPublished: { type: "boolean" },
+                isActive: { type: "boolean" },
+                workspaceId: { type: "string" },
+                ownerId: { type: "string" },
+                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                primitives: { type: "array", items: networkPrimitiveSchema },
+                versionDescription: { type: "string" },
+                createdBy: { type: "string" }
+            },
+            required: ["name", "instructions", "modelProvider", "modelName"],
+            additionalProperties: true
+        };
+
+        const networkUpdateInputSchema = {
+            type: "object",
+            properties: {
+                networkId: { type: "string" },
+                restoreVersionId: { type: "string" },
+                restoreVersion: { type: "number" },
+                versionDescription: { type: "string" },
+                createdBy: { type: "string" },
+                data: networkCreateInputSchema
+            },
+            required: ["networkId"],
+            additionalProperties: true
+        };
+
+        const crudTools = [
+            {
+                name: "agent-create",
+                description: "Create a new agent with full configuration.",
+                inputSchema: agentCreateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: { ...crudBaseResponseSchema.properties, agent: { type: "object" } }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-read",
+                description: "Retrieve agent definition/state by ID or slug.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string" },
+                        include: {
+                            type: "object",
+                            properties: {
+                                tools: { type: "boolean" },
+                                versions: { type: "boolean" },
+                                runs: { type: "boolean" },
+                                schedules: { type: "boolean" },
+                                triggers: { type: "boolean" }
+                            }
+                        }
+                    },
+                    required: ["agentId"]
+                },
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: { ...crudBaseResponseSchema.properties, agent: { type: "object" } }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-update",
+                description: "Update an agent configuration with versioning and rollback support.",
+                inputSchema: agentUpdateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: { ...crudBaseResponseSchema.properties, agent: { type: "object" } }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-delete",
+                description: "Delete or archive an agent safely.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string" },
+                        mode: { type: "string", enum: ["delete", "archive"] }
+                    },
+                    required: ["agentId"]
+                },
+                outputSchema: crudBaseResponseSchema,
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-create",
+                description: "Create a workflow definition with full configuration.",
+                inputSchema: workflowCreateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        workflow: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-read",
+                description: "Retrieve a workflow definition/state by ID or slug.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        workflowId: { type: "string" },
+                        include: {
+                            type: "object",
+                            properties: {
+                                versions: { type: "boolean" },
+                                runs: { type: "boolean" }
+                            }
+                        }
+                    },
+                    required: ["workflowId"]
+                },
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        workflow: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-update",
+                description: "Update a workflow definition with versioning and rollback support.",
+                inputSchema: workflowUpdateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        workflow: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-delete",
+                description: "Delete or archive a workflow safely.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        workflowId: { type: "string" },
+                        mode: { type: "string", enum: ["delete", "archive"] }
+                    },
+                    required: ["workflowId"]
+                },
+                outputSchema: crudBaseResponseSchema,
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-create",
+                description: "Create a network with routing instructions and primitives.",
+                inputSchema: networkCreateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        network: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-read",
+                description: "Retrieve a network definition/state by ID or slug.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        networkId: { type: "string" },
+                        include: {
+                            type: "object",
+                            properties: {
+                                primitives: { type: "boolean" },
+                                versions: { type: "boolean" },
+                                runs: { type: "boolean" }
+                            }
+                        }
+                    },
+                    required: ["networkId"]
+                },
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        network: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-update",
+                description:
+                    "Update a network topology or routing config with versioning and rollback support.",
+                inputSchema: networkUpdateInputSchema,
+                outputSchema: {
+                    ...crudBaseResponseSchema,
+                    properties: {
+                        ...crudBaseResponseSchema.properties,
+                        network: { type: "object" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-delete",
+                description: "Delete or archive a network safely.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        networkId: { type: "string" },
+                        mode: { type: "string", enum: ["delete", "archive"] }
+                    },
+                    required: ["networkId"]
+                },
+                outputSchema: crudBaseResponseSchema,
+                invoke_url: "/api/mcp"
+            }
+        ];
+
         const workflowOpsTools = [
             {
                 name: "workflow.execute",
@@ -438,6 +890,7 @@ export async function GET(request: NextRequest) {
                 ...tools,
                 ...workflowTools,
                 ...networkTools,
+                ...crudTools,
                 ...workflowOpsTools,
                 ...networkOpsTools
             ],
@@ -445,6 +898,7 @@ export async function GET(request: NextRequest) {
                 tools.length +
                 workflowTools.length +
                 networkTools.length +
+                crudTools.length +
                 workflowOpsTools.length +
                 networkOpsTools.length
         });
@@ -547,6 +1001,67 @@ export async function POST(request: NextRequest) {
             delete sanitized.workflowSlug;
             return sanitized;
         };
+
+        const crudToolNames = new Set([
+            "agent-create",
+            "agent-read",
+            "agent-update",
+            "agent-delete",
+            "workflow-create",
+            "workflow-read",
+            "workflow-update",
+            "workflow-delete",
+            "network-create",
+            "network-read",
+            "network-update",
+            "network-delete"
+        ]);
+
+        if (crudToolNames.has(tool)) {
+            const crudTool = getToolByName(tool);
+            if (!crudTool || typeof crudTool.execute !== "function") {
+                return NextResponse.json(
+                    { success: false, error: `Tool not found: ${tool}` },
+                    { status: 404 }
+                );
+            }
+
+            const workspaceId = session.user
+                ? await getDefaultWorkspaceIdForUser(session.user.id)
+                : null;
+            const scopedParams = params && typeof params === "object" ? { ...params } : {};
+
+            const applyDefaults = (target: Record<string, unknown>) => {
+                if (tool.startsWith("agent-")) {
+                    if (organizationId && target.tenantId === undefined) {
+                        target.tenantId = organizationId;
+                    }
+                }
+                if (workspaceId && target.workspaceId === undefined) {
+                    target.workspaceId = workspaceId;
+                }
+                if (target.ownerId === undefined && session.user?.id) {
+                    target.ownerId = session.user.id;
+                }
+            };
+
+            if (tool.endsWith("-create")) {
+                applyDefaults(scopedParams as Record<string, unknown>);
+            }
+
+            try {
+                const result = await crudTool.execute(scopedParams);
+                return NextResponse.json({ success: true, result });
+            } catch (error) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: error instanceof Error ? error.message : "Failed to execute tool"
+                    },
+                    { status: 400 }
+                );
+            }
+        }
 
         if (tool.startsWith("agent.")) {
             const agentSlug = tool.slice(6);

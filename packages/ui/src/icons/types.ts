@@ -42,7 +42,11 @@ export type IconName =
     | "dollar"
     | "git-branch"
     | "shield"
-    | "play-list";
+    | "play-list"
+    | "building"
+    | "user-group"
+    | "mail-send"
+    | "add";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

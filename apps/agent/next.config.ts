@@ -11,9 +11,22 @@ const nextConfig: NextConfig = {
     env: sharedEnv,
     devIndicators,
     headers: createHeadersConfig(),
+    turbopack: {},
     // Externalize server-only packages that have Node.js-specific dependencies
     // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
-    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"]
+    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"],
+    webpack: (config, { isServer }) => {
+        if (isServer) {
+            config.resolve.alias = {
+                ...config.resolve.alias,
+                "@img/sharp-libvips-dev/include": false,
+                "@img/sharp-libvips-dev/cplusplus": false,
+                "@img/sharp-wasm32/versions": false
+            };
+        }
+
+        return config;
+    }
 };
 
 export default nextConfig;

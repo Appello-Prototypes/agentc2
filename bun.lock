@@ -183,6 +183,7 @@
         "pino": "^9.6.0",
         "qrcode-terminal": "^0.12.0",
         "twilio": "^5.5.1",
+        "web-ifc": "^0.0.74",
         "zod": "^3.24.0",
       },
       "devDependencies": {
@@ -3379,6 +3380,8 @@
     "vscode-languageserver-types": ["vscode-languageserver-types@3.17.5", "", {}, "sha512-Ld1VelNuX9pdF39h2Hgaeb5hEZM2Z3jUrrMgWQAu82jMtZp7p3vJT3BzToKtZI7NgQssZje5o0zryOrhQvzQAg=="],
 
     "vscode-uri": ["vscode-uri@3.0.8", "", {}, "sha512-AyFQ0EVmsOZOlAnxoFOGOq1SQDWAB7C6aqMGS23svWAllfOaxbuFvcT8D1i8z3Gyn8fraVeZNNmN6e9bxxXkKw=="],
+
+    "web-ifc": ["web-ifc@0.0.74", "", {}, "sha512-WFVxKrt81koT0mA1I5gVChc9/xsnqGZ1KzVxLhy+h43cs6z2hy8tuTtXuA/BPVUkzEzWn+EwNOozF+HHo6G6RA=="],
 
     "web-namespaces": ["web-namespaces@2.0.1", "", {}, "sha512-bKr1DkiNa2krS7qxNtdrtHAmzuYGFQLiQ13TsorsdT6ULTkPLKuu5+GsFpDlg6JFjUTwX2DyhMPG2be8uPrqsQ=="],
 

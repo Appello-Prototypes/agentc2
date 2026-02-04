@@ -22,6 +22,7 @@ type AppTopBarProps = {
     session: Session | null;
     navItems?: NavItem[];
     onSignOut: () => void;
+    onSettings?: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
 };
@@ -31,6 +32,7 @@ export function AppTopBar({
     session,
     navItems = [],
     onSignOut,
+    onSettings,
     isActive = () => false,
     renderNavLink
 }: AppTopBarProps) {
@@ -79,6 +81,7 @@ export function AppTopBar({
                         <UserMenu
                             align="end"
                             onSignOut={onSignOut}
+                            onSettings={onSettings}
                             trigger={
                                 <div className="hover:bg-accent data-popup-open:bg-accent relative flex size-9 items-center justify-center rounded-full transition-colors outline-none">
                                     <div className="bg-muted flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full">

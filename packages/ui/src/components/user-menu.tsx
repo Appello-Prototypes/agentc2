@@ -7,9 +7,7 @@ import {
     DropdownMenuSeparator,
     DropdownMenuTrigger
 } from "./dropdown-menu";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./dialog";
 import { userMenuItems } from "../config/user-menu";
-import { useState } from "react";
 
 type UserMenuProps = {
     trigger: React.ReactNode;
@@ -17,15 +15,26 @@ type UserMenuProps = {
     side?: "top" | "right" | "bottom" | "left";
     sideOffset?: number;
     onSignOut: () => void;
+    onSettings?: () => void;
 };
 
-export function UserMenu({ trigger, align = "end", side, sideOffset, onSignOut }: UserMenuProps) {
-    const [settingsOpen, setSettingsOpen] = useState(false);
-
+export function UserMenu({
+    trigger,
+    align = "end",
+    side,
+    sideOffset,
+    onSignOut,
+    onSettings
+}: UserMenuProps) {
     const handleMenuAction = (action: string) => {
         switch (action) {
             case "settings":
-                setSettingsOpen(true);
+                if (onSettings) {
+                    onSettings();
+                } else {
+                    // Default fallback: navigate to settings
+                    window.location.href = "/settings";
+                }
                 break;
             case "signout":
                 onSignOut();
@@ -34,41 +43,21 @@ export function UserMenu({ trigger, align = "end", side, sideOffset, onSignOut }
     };
 
     return (
-        <>
-            <DropdownMenu>
-                <DropdownMenuTrigger className="outline-none">{trigger}</DropdownMenuTrigger>
-                <DropdownMenuContent
-                    align={align}
-                    side={side}
-                    sideOffset={sideOffset}
-                    className="w-56"
-                >
-                    {userMenuItems.map((menuItem, index) => (
-                        <div key={menuItem.action}>
-                            {index > 0 && <DropdownMenuSeparator />}
-                            <DropdownMenuItem
-                                variant={menuItem.variant}
-                                onClick={() => handleMenuAction(menuItem.action)}
-                            >
-                                {menuItem.label}
-                            </DropdownMenuItem>
-                        </div>
-                    ))}
-                </DropdownMenuContent>
-            </DropdownMenu>
-
-            <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-                <DialogContent>
-                    <DialogHeader>
-                        <DialogTitle>Settings</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-4">
-                        <p className="text-muted-foreground text-sm">
-                            Settings functionality coming soon...
-                        </p>
+        <DropdownMenu>
+            <DropdownMenuTrigger className="outline-none">{trigger}</DropdownMenuTrigger>
+            <DropdownMenuContent align={align} side={side} sideOffset={sideOffset} className="w-56">
+                {userMenuItems.map((menuItem, index) => (
+                    <div key={menuItem.action}>
+                        {index > 0 && <DropdownMenuSeparator />}
+                        <DropdownMenuItem
+                            variant={menuItem.variant}
+                            onClick={() => handleMenuAction(menuItem.action)}
+                        >
+                            {menuItem.label}
+                        </DropdownMenuItem>
                     </div>
-                </DialogContent>
-            </Dialog>
-        </>
+                ))}
+            </DropdownMenuContent>
+        </DropdownMenu>
     );
 }

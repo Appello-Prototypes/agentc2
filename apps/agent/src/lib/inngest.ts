@@ -169,6 +169,15 @@ export const inngest = new Inngest({
                 batchSize: number;
             };
         };
+        // BIM Events
+        "bim/ifc.parse": {
+            data: {
+                modelId: string;
+                versionId: string;
+                sourceKey: string;
+                sourceUri?: string;
+            };
+        };
         // Agent Invocation Events
         "agent/invoke.async": {
             data: {
