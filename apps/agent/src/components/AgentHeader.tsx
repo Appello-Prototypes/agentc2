@@ -30,7 +30,7 @@ export function AgentHeader() {
 
     return (
         <AppTopBar
-            title="AgentWorkplace"
+            title="AgentC2"
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

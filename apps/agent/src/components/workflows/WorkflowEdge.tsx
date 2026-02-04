@@ -7,6 +7,7 @@ interface AnimatedEdgeProps extends EdgeProps {
     data?: {
         label?: string;
         status?: "active" | "completed" | "pending" | "error";
+        selected?: boolean;
     };
 }
 
@@ -33,6 +34,7 @@ function AnimatedEdgeComponent({
     });
 
     const status = data?.status || "active";
+    const isSelected = Boolean(data?.selected);
 
     const strokeColor = {
         active: "#3b82f6",
@@ -48,7 +50,7 @@ function AnimatedEdgeComponent({
                 id={`${id}-bg`}
                 className="react-flow__edge-path"
                 d={edgePath}
-                strokeWidth={3}
+                strokeWidth={isSelected ? 4 : 3}
                 stroke={strokeColor}
                 strokeOpacity={0.2}
                 fill="none"
@@ -58,7 +60,7 @@ function AnimatedEdgeComponent({
                 id={id}
                 className="react-flow__edge-path"
                 d={edgePath}
-                strokeWidth={2}
+                strokeWidth={isSelected ? 3 : 2}
                 stroke={strokeColor}
                 fill="none"
                 strokeDasharray="8 4"
@@ -76,7 +78,9 @@ function AnimatedEdgeComponent({
                             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                             pointerEvents: "all"
                         }}
-                        className="bg-background border-border text-muted-foreground rounded border px-1.5 py-0.5 text-xs"
+                        className={`bg-background border-border text-muted-foreground rounded border px-1.5 py-0.5 text-xs ${
+                            isSelected ? "border-primary/60 text-foreground" : ""
+                        }`}
                     >
                         {data.label}
                     </div>
@@ -120,13 +124,15 @@ function CompletedEdgeComponent({
         borderRadius: 8
     });
 
+    const isSelected = Boolean(data?.selected);
+
     return (
         <>
             <path
                 id={id}
                 className="react-flow__edge-path"
                 d={edgePath}
-                strokeWidth={2}
+                strokeWidth={isSelected ? 3 : 2}
                 stroke="#22c55e"
                 fill="none"
                 markerEnd={markerEnd}
@@ -139,7 +145,9 @@ function CompletedEdgeComponent({
                             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                             pointerEvents: "all"
                         }}
-                        className="rounded border border-green-500 bg-green-500/10 px-1.5 py-0.5 text-xs text-green-700 dark:text-green-300"
+                        className={`rounded border border-green-500 bg-green-500/10 px-1.5 py-0.5 text-xs text-green-700 dark:text-green-300 ${
+                            isSelected ? "border-primary/60 text-foreground" : ""
+                        }`}
                     >
                         {data.label}
                     </div>
@@ -173,13 +181,15 @@ function TemporaryEdgeComponent({
         borderRadius: 8
     });
 
+    const isSelected = Boolean(data?.selected);
+
     return (
         <>
             <path
                 id={id}
                 className="react-flow__edge-path"
                 d={edgePath}
-                strokeWidth={1.5}
+                strokeWidth={isSelected ? 2.5 : 1.5}
                 stroke="#71717a"
                 strokeDasharray="4 4"
                 strokeOpacity={0.5}
@@ -194,7 +204,9 @@ function TemporaryEdgeComponent({
                             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                             pointerEvents: "all"
                         }}
-                        className="bg-muted border-border text-muted-foreground rounded border px-1.5 py-0.5 text-xs"
+                        className={`bg-muted border-border text-muted-foreground rounded border px-1.5 py-0.5 text-xs ${
+                            isSelected ? "border-primary/60 text-foreground" : ""
+                        }`}
                     >
                         {data.label}
                     </div>
@@ -228,13 +240,15 @@ function ErrorEdgeComponent({
         borderRadius: 8
     });
 
+    const isSelected = Boolean(data?.selected);
+
     return (
         <>
             <path
                 id={id}
                 className="react-flow__edge-path"
                 d={edgePath}
-                strokeWidth={2}
+                strokeWidth={isSelected ? 3 : 2}
                 stroke="#ef4444"
                 fill="none"
                 strokeDasharray="6 3"
@@ -248,7 +262,9 @@ function ErrorEdgeComponent({
                             transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
                             pointerEvents: "all"
                         }}
-                        className="rounded border border-red-500 bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-300"
+                        className={`rounded border border-red-500 bg-red-500/10 px-1.5 py-0.5 text-xs text-red-700 dark:text-red-300 ${
+                            isSelected ? "border-primary/60 text-foreground" : ""
+                        }`}
                     >
                         {data.label}
                     </div>

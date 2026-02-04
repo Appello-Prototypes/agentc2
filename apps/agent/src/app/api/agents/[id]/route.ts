@@ -105,26 +105,73 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.modelName !== undefined) updateData.modelName = body.modelName;
             if (body.temperature !== undefined) updateData.temperature = body.temperature;
             if (body.maxTokens !== undefined) updateData.maxTokens = body.maxTokens;
+            if (body.subAgents !== undefined) updateData.subAgents = body.subAgents;
+            if (body.workflows !== undefined) updateData.workflows = body.workflows;
 
-            // Handle extended thinking settings
-            if (body.extendedThinking !== undefined) {
-                if (body.extendedThinking) {
-                    updateData.modelConfig = {
-                        ...(existing.modelConfig as object),
-                        thinking: {
+            const hasModelConfigUpdate =
+                body.extendedThinking !== undefined ||
+                body.modelConfig !== undefined ||
+                body.parallelToolCalls !== undefined ||
+                body.reasoningEffort !== undefined ||
+                body.cacheControl !== undefined ||
+                body.toolChoice !== undefined ||
+                body.reasoning !== undefined;
+
+            if (hasModelConfigUpdate) {
+                const baseConfig =
+                    (body.modelConfig !== undefined
+                        ? (body.modelConfig as Record<string, unknown> | null)
+                        : (existing.modelConfig as Record<string, unknown> | null)) || {};
+                const nextConfig: Record<string, unknown> = { ...baseConfig };
+
+                if (body.extendedThinking !== undefined) {
+                    if (body.extendedThinking) {
+                        nextConfig.thinking = {
                             type: "enabled",
                             budget_tokens: body.thinkingBudget || 10000
-                        }
-                    };
-                } else {
-                    // Remove thinking from modelConfig if disabled
-                    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-                    const { thinking, ...restConfig } =
-                        (existing.modelConfig as { thinking?: unknown }) || {};
-                    updateData.modelConfig = Object.keys(restConfig).length > 0 ? restConfig : null;
+                        };
+                    } else {
+                        delete nextConfig.thinking;
+                    }
                 }
-            } else if (body.modelConfig !== undefined) {
-                updateData.modelConfig = body.modelConfig;
+
+                if (body.parallelToolCalls !== undefined) {
+                    nextConfig.parallelToolCalls = body.parallelToolCalls;
+                }
+
+                if (body.reasoningEffort !== undefined) {
+                    if (body.reasoningEffort) {
+                        nextConfig.reasoningEffort = body.reasoningEffort;
+                    } else {
+                        delete nextConfig.reasoningEffort;
+                    }
+                }
+
+                if (body.cacheControl !== undefined) {
+                    if (body.cacheControl) {
+                        nextConfig.cacheControl = { type: "ephemeral" };
+                    } else {
+                        delete nextConfig.cacheControl;
+                    }
+                }
+
+                if (body.toolChoice !== undefined) {
+                    if (body.toolChoice) {
+                        nextConfig.toolChoice = body.toolChoice;
+                    } else {
+                        delete nextConfig.toolChoice;
+                    }
+                }
+
+                if (body.reasoning !== undefined) {
+                    if (body.reasoning) {
+                        nextConfig.reasoning = body.reasoning;
+                    } else {
+                        delete nextConfig.reasoning;
+                    }
+                }
+
+                updateData.modelConfig = Object.keys(nextConfig).length > 0 ? nextConfig : null;
             }
 
             if (body.memoryEnabled !== undefined) updateData.memoryEnabled = body.memoryEnabled;
@@ -172,6 +219,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.memoryConfig !== undefined) {
                 changes.push("Updated memory configuration");
             }
+            if (body.subAgents !== undefined) {
+                const existingSubAgents = existing.subAgents || [];
+                const newSubAgents = body.subAgents || [];
+                if (
+                    JSON.stringify(existingSubAgents.sort()) !== JSON.stringify(newSubAgents.sort())
+                ) {
+                    changes.push(
+                        `Sub-agents: ${existingSubAgents.length} → ${newSubAgents.length}`
+                    );
+                }
+            }
+            if (body.workflows !== undefined) {
+                const existingWorkflows = existing.workflows || [];
+                const newWorkflows = body.workflows || [];
+                if (
+                    JSON.stringify(existingWorkflows.sort()) !== JSON.stringify(newWorkflows.sort())
+                ) {
+                    changes.push(`Workflows: ${existingWorkflows.length} → ${newWorkflows.length}`);
+                }
+            }
             if (body.scorers !== undefined) {
                 const existingScorers = existing.scorers || [];
                 const newScorers = body.scorers || [];
@@ -194,6 +261,35 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     changes.push(
                         `Extended thinking: ${existingThinking ? "enabled" : "disabled"} → ${body.extendedThinking ? "enabled" : "disabled"}`
                     );
+                }
+            }
+            if (body.parallelToolCalls !== undefined) {
+                const existingParallel = (existing.modelConfig as { parallelToolCalls?: boolean })
+                    ?.parallelToolCalls;
+                if (body.parallelToolCalls !== existingParallel) {
+                    changes.push("Parallel tool calling updated");
+                }
+            }
+            if (body.reasoningEffort !== undefined) {
+                const existingEffort = (existing.modelConfig as { reasoningEffort?: string })
+                    ?.reasoningEffort;
+                if (body.reasoningEffort !== existingEffort) {
+                    changes.push("Reasoning effort updated");
+                }
+            }
+            if (body.cacheControl !== undefined) {
+                const existingCache =
+                    (existing.modelConfig as { cacheControl?: { type?: string } })?.cacheControl
+                        ?.type === "ephemeral";
+                if (body.cacheControl !== existingCache) {
+                    changes.push("Prompt cache control updated");
+                }
+            }
+            if (body.toolChoice !== undefined) {
+                const existingToolChoice = (existing.modelConfig as { toolChoice?: string })
+                    ?.toolChoice;
+                if (body.toolChoice !== existingToolChoice) {
+                    changes.push("Tool choice updated");
                 }
             }
             if (body.isActive !== undefined && body.isActive !== existing.isActive) {
@@ -231,6 +327,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     memoryEnabled: existing.memoryEnabled,
                     memoryConfig: existing.memoryConfig,
                     maxSteps: existing.maxSteps,
+                    subAgents: existing.subAgents,
+                    workflows: existing.workflows,
                     scorers: existing.scorers,
                     tools: existing.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
                     isPublic: existing.isPublic,

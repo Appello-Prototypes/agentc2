@@ -15,7 +15,12 @@ async function hashPassword(password: string): Promise<string> {
     const scryptAsync = promisify(scrypt);
 
     const salt = randomBytes(16).toString("hex");
-    const derivedKey = (await scryptAsync(password, salt, 64)) as Buffer;
+    const derivedKey = (await scryptAsync(password.normalize("NFKC"), salt, 64, {
+        N: 16384,
+        r: 16,
+        p: 1,
+        maxmem: 128 * 16384 * 16 * 2
+    })) as Buffer;
     return `${salt}:${derivedKey.toString("hex")}`;
 }
 
@@ -46,14 +51,17 @@ async function main() {
             if (existingAccount) {
                 await prisma.account.update({
                     where: { id: existingAccount.id },
-                    data: { password: hashedPassword }
+                    data: {
+                        password: hashedPassword,
+                        accountId: email
+                    }
                 });
                 console.log("Password updated for existing test user");
             } else {
                 // Create credential account
                 await prisma.account.create({
                     data: {
-                        accountId: existingUser.id,
+                        accountId: email,
                         providerId: "credential",
                         userId: existingUser.id,
                         password: hashedPassword

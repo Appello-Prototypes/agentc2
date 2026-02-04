@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
             where.id = { lt: cursor };
         }
 
-        // Query runs with agent info
+        // Query runs with agent info, tool call counts, and step counts
         const runs = await prisma.agentRun.findMany({
             where,
             orderBy: { startedAt: "desc" },
@@ -68,6 +68,22 @@ export async function GET(request: NextRequest) {
                 },
                 feedback: {
                     select: { thumbs: true, rating: true }
+                },
+                _count: {
+                    select: {
+                        toolCalls: true
+                    }
+                },
+                trace: {
+                    select: {
+                        stepsJson: true,
+                        _count: {
+                            select: {
+                                steps: true,
+                                toolCalls: true
+                            }
+                        }
+                    }
                 }
             }
         });
@@ -105,25 +121,42 @@ export async function GET(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            runs: runs.map((run) => ({
-                id: run.id,
-                agentId: run.agentId,
-                agentSlug: run.agent.slug,
-                agentName: run.agent.name,
-                runType: run.runType,
-                status: run.status,
-                inputText: run.inputText,
-                outputText: run.outputText,
-                durationMs: run.durationMs,
-                startedAt: run.startedAt,
-                completedAt: run.completedAt,
-                modelProvider: run.modelProvider,
-                modelName: run.modelName,
-                totalTokens: run.totalTokens,
-                costUsd: run.costUsd,
-                evaluation: run.evaluation?.scoresJson,
-                feedback: run.feedback
-            })),
+            runs: runs.map((run) => {
+                // Calculate tool call count from run or trace
+                const toolCallCount =
+                    run._count.toolCalls > 0
+                        ? run._count.toolCalls
+                        : (run.trace?._count?.toolCalls ?? 0);
+
+                // Calculate step count from trace steps or stepsJson
+                let stepCount = run.trace?._count?.steps ?? 0;
+                if (stepCount === 0 && run.trace?.stepsJson) {
+                    // Fall back to stepsJson array length if available
+                    stepCount = Array.isArray(run.trace.stepsJson) ? run.trace.stepsJson.length : 0;
+                }
+
+                return {
+                    id: run.id,
+                    agentId: run.agentId,
+                    agentSlug: run.agent.slug,
+                    agentName: run.agent.name,
+                    runType: run.runType,
+                    status: run.status,
+                    inputText: run.inputText,
+                    outputText: run.outputText,
+                    durationMs: run.durationMs,
+                    startedAt: run.startedAt,
+                    completedAt: run.completedAt,
+                    modelProvider: run.modelProvider,
+                    modelName: run.modelName,
+                    totalTokens: run.totalTokens,
+                    costUsd: run.costUsd,
+                    toolCallCount,
+                    stepCount,
+                    evaluation: run.evaluation?.scoresJson,
+                    feedback: run.feedback
+                };
+            }),
             counts,
             nextCursor: hasMore ? runs[runs.length - 1].id : null
         });

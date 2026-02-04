@@ -12,6 +12,23 @@
 export const TEST_AGENT_SLUG = process.env.TEST_AGENT_SLUG || "assistant";
 
 /**
+ * Seeded workflow/network slugs used in workspace validation tests
+ */
+export const SEEDED_WORKFLOW_SLUG = process.env.TEST_WORKFLOW_SLUG || "sample-cost-estimate";
+export const SEEDED_WORKFLOW_NAME = process.env.TEST_WORKFLOW_NAME || "Cost Estimate Calculator";
+export const SEEDED_NETWORK_SLUG = process.env.TEST_NETWORK_SLUG || "sample-ops-router";
+export const SEEDED_NETWORK_NAME = process.env.TEST_NETWORK_NAME || "Operations Support Router";
+
+/**
+ * Sample inputs for seeded workflow/network execution
+ */
+export const SAMPLE_WORKFLOW_INPUT = {
+    expression: "21 + 21"
+};
+
+export const SAMPLE_NETWORK_MESSAGE = "Can you calculate 1250 / 5 and share the result?";
+
+/**
  * Sample chat messages for testing
  */
 export const SAMPLE_MESSAGES = {

@@ -106,6 +106,18 @@ export {
     humanApprovalWorkflow
 } from "./workflows";
 
+export { buildNetworkAgent } from "./networks/runtime";
+
+export {
+    executeWorkflowDefinition,
+    type WorkflowDefinition,
+    type WorkflowStep,
+    type WorkflowExecutionResult,
+    type WorkflowExecutionStep,
+    type WorkflowExecutionContext,
+    type WorkflowResumeInput
+} from "./workflows/builder";
+
 // RAG
 export {
     createDocument,

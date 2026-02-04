@@ -45,7 +45,8 @@ export async function GET(
                 },
                 evaluation: true,
                 feedback: true,
-                costEvent: true
+                costEvent: true,
+                guardrailEvents: true
             }
         });
 
@@ -55,6 +56,22 @@ export async function GET(
                 { status: 404 }
             );
         }
+
+        const version = run.versionId
+            ? await prisma.agentVersion.findFirst({
+                  where: { id: run.versionId },
+                  select: {
+                      id: true,
+                      version: true,
+                      description: true,
+                      instructions: true,
+                      modelProvider: true,
+                      modelName: true,
+                      snapshot: true,
+                      createdAt: true
+                  }
+              })
+            : null;
 
         return NextResponse.json({
             success: true,
@@ -78,7 +95,9 @@ export async function GET(
                 trace: run.trace,
                 evaluation: run.evaluation,
                 feedback: run.feedback,
-                costEvent: run.costEvent
+                costEvent: run.costEvent,
+                guardrailEvents: run.guardrailEvents,
+                version
             }
         });
     } catch (error) {

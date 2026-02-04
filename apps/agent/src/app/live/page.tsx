@@ -1,66 +1,138 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
+    Badge,
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-    Badge,
-    Button,
+    HugeiconsIcon,
     Input,
-    Skeleton,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
+    Separator,
+    Skeleton,
     Table,
-    TableHeader,
     TableBody,
-    TableHead,
-    TableRow,
     TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
     Tabs,
+    TabsContent,
     TabsList,
     TabsTrigger,
-    TabsContent,
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    Separator,
-    icons,
-    HugeiconsIcon
+    icons
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 
-interface AgentProductionStats {
-    id: string;
-    slug: string;
-    name: string;
-    isActive: boolean;
-    prodRuns: number;
-    successRate: number;
-    avgLatencyMs: number;
-    totalTokens: number;
-    totalCostUsd: number;
-    sources: { source: string; count: number }[];
-    lastRunAt: string | null;
+interface LiveFilters {
+    agents: Array<{
+        id: string;
+        slug: string;
+        name: string;
+        isActive: boolean;
+        version: number;
+    }>;
+    versions: Array<{
+        id: string;
+        agentId: string;
+        version: number;
+        modelProvider: string;
+        modelName: string;
+        createdAt: string;
+    }>;
+    sources: Array<{ source: string | null; count: number }>;
+    models: Array<{ modelName: string | null; modelProvider: string | null; count: number }>;
+    tools: string[];
+    runTypes: Array<{ runType: string; count: number }>;
 }
 
-interface ProductionSummary {
-    totalProdRuns: number;
+interface LiveMetricsSummary {
+    totalRuns: number;
     completedRuns: number;
     failedRuns: number;
+    runningRuns: number;
+    queuedRuns: number;
+    cancelledRuns: number;
     successRate: number;
     avgLatencyMs: number;
+    avgToolCalls: number;
     totalTokens: number;
     totalCostUsd: number;
-    runsBySource: { source: string; count: number }[];
-    activeAgents: number;
+}
+
+interface LiveMetricsTopRun {
+    id: string;
+    agentId: string;
+    agentName: string;
+    agentSlug: string;
+    status: string;
+    durationMs: number | null;
+    modelName: string | null;
+    modelProvider: string | null;
+    startedAt: string;
+    costUsd: number | null;
+    totalTokens: number | null;
+}
+
+interface LiveMetrics {
+    summary: LiveMetricsSummary;
+    latency: {
+        p50: number;
+        p95: number;
+        sampleSize: number;
+    };
+    topRuns: {
+        slowest: LiveMetricsTopRun[];
+        mostExpensive: LiveMetricsTopRun[];
+    };
+    perAgent: Array<{
+        agentId: string;
+        agentName: string;
+        agentSlug: string;
+        totalRuns: number;
+        successRate: number;
+        failureRate: number;
+        avgLatencyMs: number;
+        avgToolCalls: number;
+        avgTokens: number;
+        avgCostUsd: number;
+    }>;
+    perVersion: Array<{
+        versionId: string | null;
+        agentId: string | null;
+        versionNumber: number | null;
+        modelProvider: string | null;
+        modelName: string | null;
+        createdAt: string | null;
+        totalRuns: number;
+        successRate: number;
+        failureRate: number;
+        avgLatencyMs: number;
+        avgTokens: number;
+        avgCostUsd: number;
+    }>;
+    modelUsage: Array<{
+        modelName: string | null;
+        modelProvider: string | null;
+        runs: number;
+        avgLatencyMs: number;
+        totalTokens: number;
+        totalCostUsd: number;
+        failureRate: number;
+    }>;
+    dateRange: {
+        from: string | null;
+        to: string | null;
+    };
 }
 
 interface Run {
@@ -80,8 +152,15 @@ interface Run {
     completedAt: string | null;
     modelProvider: string | null;
     modelName: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
     totalTokens: number | null;
     costUsd: number | null;
+    toolCallCount: number;
+    uniqueToolCount: number;
+    stepCount: number;
+    versionId: string | null;
+    versionNumber: number | null;
 }
 
 interface RunCounts {
@@ -93,12 +172,11 @@ interface RunCounts {
     cancelled: number;
 }
 
-// Detailed run data from the API
 interface TraceStep {
     id: string;
     stepNumber: number;
     type: string;
-    content: string;
+    content: unknown;
     timestamp: string;
     durationMs: number | null;
 }
@@ -131,15 +209,14 @@ interface Trace {
 
 interface Evaluation {
     id: string;
-    scorerKey: string;
-    score: number;
-    label: string | null;
-    reasoning: string | null;
+    scoresJson: Record<string, number>;
+    scorerVersion: string | null;
     createdAt: string;
 }
 
 interface Feedback {
     id: string;
+    thumbs: boolean | null;
     rating: number | null;
     comment: string | null;
     createdAt: string;
@@ -150,6 +227,27 @@ interface CostEvent {
     totalCostUsd: number;
     promptTokens: number;
     completionTokens: number;
+}
+
+interface GuardrailEvent {
+    id: string;
+    type: string;
+    guardrailKey: string;
+    reason: string;
+    inputSnippet: string | null;
+    outputSnippet: string | null;
+    createdAt: string;
+}
+
+interface VersionInfo {
+    id: string;
+    version: number;
+    description: string | null;
+    instructions: string;
+    modelProvider: string;
+    modelName: string;
+    snapshot: Record<string, unknown> | null;
+    createdAt: string;
 }
 
 interface RunDetail {
@@ -170,9 +268,11 @@ interface RunDetail {
     totalTokens: number | null;
     costUsd: number | null;
     trace: Trace | null;
-    evaluation: Evaluation[] | null;
-    feedback: Feedback[] | null;
+    evaluation: Evaluation | Evaluation[] | null;
+    feedback: Feedback | Feedback[] | null;
     costEvent: CostEvent | null;
+    guardrailEvents: GuardrailEvent[] | null;
+    version: VersionInfo | null;
 }
 
 function formatLatency(ms: number): string {
@@ -195,6 +295,82 @@ function formatRelativeTime(dateStr: string | null): string {
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+}
+
+function getDateRange(timeRange: string): { from: Date | null; to: Date | null } {
+    if (timeRange === "all") {
+        return { from: null, to: null };
+    }
+
+    const to = new Date();
+    const from = new Date();
+
+    switch (timeRange) {
+        case "24h":
+            from.setHours(from.getHours() - 24);
+            break;
+        case "7d":
+            from.setDate(from.getDate() - 7);
+            break;
+        case "30d":
+            from.setDate(from.getDate() - 30);
+            break;
+        case "90d":
+            from.setDate(from.getDate() - 90);
+            break;
+        default:
+            from.setDate(from.getDate() - 7);
+    }
+
+    return { from, to };
+}
+
+function formatCost(value: number | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    if (value === 0) return "$0.00";
+    return value < 1 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
+function formatTokens(value: number | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    return value.toLocaleString();
+}
+
+function formatModelLabel(modelName: string | null, modelProvider?: string | null): string {
+    if (!modelName) return "-";
+    const cleaned = modelName
+        .replace(/-\d{8}$/, "")
+        .replace(/^claude-/, "")
+        .replace(/^gpt-/, "");
+    return modelProvider ? `${cleaned} (${modelProvider})` : cleaned;
+}
+
+function resolveToolLabel(toolCall: ToolCall): string {
+    if (toolCall.toolKey && toolCall.toolKey !== "unknown") {
+        return toolCall.toolKey;
+    }
+
+    const input = toolCall.inputJson as Record<string, unknown> | null;
+    const output = toolCall.outputJson as Record<string, unknown> | null;
+    const payload = (output?.payload as Record<string, unknown> | undefined) || undefined;
+    const candidates = [
+        input?.toolName,
+        input?.tool,
+        input?.name,
+        (input?.function as Record<string, unknown> | undefined)?.name,
+        output?.toolName,
+        output?.tool,
+        output?.name,
+        payload?.toolName,
+        payload?.tool,
+        payload?.name,
+        (payload?.function as Record<string, unknown> | undefined)?.name
+    ];
+
+    const resolved = candidates.find(
+        (value): value is string => typeof value === "string" && value.trim().length > 0
+    );
+    return resolved || "Tool Call";
 }
 
 function getStatusBadgeVariant(
@@ -235,68 +411,140 @@ function getSourceBadgeColor(source: string | null): string {
 export default function LiveDashboardPage() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
-    const [agents, setAgents] = useState<AgentProductionStats[]>([]);
-    const [summary, setSummary] = useState<ProductionSummary | null>(null);
+    const [filtersLoading, setFiltersLoading] = useState(false);
+    const [metrics, setMetrics] = useState<LiveMetrics | null>(null);
+    const [filters, setFilters] = useState<LiveFilters | null>(null);
     const [runs, setRuns] = useState<Run[]>([]);
     const [runCounts, setRunCounts] = useState<RunCounts | null>(null);
     const [runsLoading, setRunsLoading] = useState(false);
+    const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
     const [searchQuery, setSearchQuery] = useState("");
-    const [sourceFilter, setSourceFilter] = useState<string>("all");
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [activeTab, setActiveTab] = useState("overview");
+    const [sourceFilter, setSourceFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [agentFilter, setAgentFilter] = useState("all");
+    const [versionFilter, setVersionFilter] = useState("all");
+    const [modelFilter, setModelFilter] = useState("all");
+    const [toolUsageFilter, setToolUsageFilter] = useState("all");
+    const [runTypeFilter, setRunTypeFilter] = useState("PROD");
+    const [timeRange, setTimeRange] = useState("24h");
+    const [groupBy, setGroupBy] = useState("none");
+    const [sortKey, setSortKey] = useState("startedAt");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [autoRefresh, setAutoRefresh] = useState(true);
 
-    // Run detail modal state
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
     const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
     const [runDetailLoading, setRunDetailLoading] = useState(false);
     const [detailTab, setDetailTab] = useState("overview");
 
-    // Fetch production stats
-    const fetchStats = useCallback(async () => {
+    const { from: rangeFrom, to: rangeTo } = useMemo(() => {
+        return getDateRange(timeRange);
+    }, [timeRange]);
+
+    const fetchFilters = useCallback(async () => {
+        setFiltersLoading(true);
         try {
-            const res = await fetch(`${getApiBase()}/api/live/stats`);
+            const params = new URLSearchParams();
+            params.set("runType", runTypeFilter);
+            if (rangeFrom) {
+                params.set("from", rangeFrom.toISOString());
+            }
+            if (rangeTo) {
+                params.set("to", rangeTo.toISOString());
+            }
+            const res = await fetch(`${getApiBase()}/api/live/filters?${params.toString()}`);
             const data = await res.json();
             if (data.success) {
-                setAgents(data.agents);
-                setSummary(data.summary);
+                setFilters(data.filters);
             }
         } catch (error) {
-            console.error("Failed to fetch production stats:", error);
+            console.error("Failed to fetch filters:", error);
         } finally {
-            setLoading(false);
+            setFiltersLoading(false);
         }
-    }, []);
+    }, [runTypeFilter, rangeFrom, rangeTo]);
 
-    // Fetch runs
+    const fetchMetrics = useCallback(async () => {
+        try {
+            const params = new URLSearchParams();
+            params.set("runType", runTypeFilter);
+            if (rangeFrom) {
+                params.set("from", rangeFrom.toISOString());
+            }
+            if (rangeTo) {
+                params.set("to", rangeTo.toISOString());
+            }
+            const res = await fetch(`${getApiBase()}/api/live/metrics?${params.toString()}`);
+            const data = await res.json();
+            if (data.success) {
+                setMetrics(data);
+            }
+        } catch (error) {
+            console.error("Failed to fetch metrics:", error);
+        }
+    }, [runTypeFilter, rangeFrom, rangeTo]);
+
     const fetchRuns = useCallback(async () => {
         setRunsLoading(true);
         try {
             const params = new URLSearchParams();
-            params.set("runType", "PROD"); // Only production runs
+            params.set("runType", runTypeFilter);
             if (statusFilter !== "all") {
                 params.set("status", statusFilter);
             }
             if (sourceFilter !== "all") {
                 params.set("source", sourceFilter);
             }
+            if (agentFilter !== "all") {
+                params.set("agentId", agentFilter);
+            }
+            if (versionFilter !== "all") {
+                params.set("versionId", versionFilter);
+            }
+            if (modelFilter !== "all") {
+                params.set("modelName", modelFilter);
+            }
+            if (toolUsageFilter !== "all") {
+                params.set("toolUsage", toolUsageFilter);
+            }
+            if (searchQuery) {
+                params.set("search", searchQuery);
+            }
+            if (rangeFrom) {
+                params.set("from", rangeFrom.toISOString());
+            }
+            if (rangeTo) {
+                params.set("to", rangeTo.toISOString());
+            }
             const res = await fetch(`${getApiBase()}/api/live/runs?${params.toString()}`);
             const data = await res.json();
             if (data.success) {
                 setRuns(data.runs);
                 setRunCounts(data.counts);
+                setLastUpdatedAt(new Date());
             }
         } catch (error) {
             console.error("Failed to fetch runs:", error);
         } finally {
             setRunsLoading(false);
         }
-    }, [statusFilter, sourceFilter]);
+    }, [
+        runTypeFilter,
+        statusFilter,
+        sourceFilter,
+        agentFilter,
+        versionFilter,
+        modelFilter,
+        toolUsageFilter,
+        searchQuery,
+        rangeFrom,
+        rangeTo
+    ]);
 
-    // Fetch run details
     const fetchRunDetail = useCallback(async (run: Run) => {
         setRunDetailLoading(true);
         setDetailTab("overview");
+        setRunDetail(null);
         try {
             const res = await fetch(`${getApiBase()}/api/agents/${run.agentSlug}/runs/${run.id}`);
             const data = await res.json();
@@ -310,80 +558,220 @@ export default function LiveDashboardPage() {
         }
     }, []);
 
-    // Initial fetch
     useEffect(() => {
-        fetchStats();
-    }, [fetchStats]);
+        Promise.all([fetchFilters(), fetchMetrics(), fetchRuns()]).finally(() => {
+            setLoading(false);
+        });
+    }, [fetchFilters, fetchMetrics, fetchRuns]);
 
-    // Fetch runs when tab changes
-    useEffect(() => {
-        if (activeTab === "runs") {
-            fetchRuns();
-        }
-    }, [activeTab, fetchRuns]);
-
-    // Auto-refresh every 30 seconds
     useEffect(() => {
         if (!autoRefresh) return;
 
         const interval = setInterval(() => {
-            fetchStats();
-            if (activeTab === "runs") {
-                fetchRuns();
-            }
+            fetchMetrics();
+            fetchRuns();
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefresh, activeTab, fetchStats, fetchRuns]);
+    }, [autoRefresh, fetchMetrics, fetchRuns]);
 
-    const filteredAgents = agents.filter((agent) => {
-        if (
-            searchQuery &&
-            !agent.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
-            !agent.slug.toLowerCase().includes(searchQuery.toLowerCase())
-        ) {
-            return false;
+    useEffect(() => {
+        if (loading) return;
+        fetchRuns();
+    }, [fetchRuns, loading]);
+
+    useEffect(() => {
+        if (loading) return;
+        fetchFilters();
+        fetchMetrics();
+    }, [fetchFilters, fetchMetrics, loading]);
+
+    useEffect(() => {
+        if (!selectedRun) return;
+        const updatedRun = runs.find((run) => run.id === selectedRun.id);
+        if (updatedRun) {
+            setSelectedRun(updatedRun);
         }
-        return true;
-    });
+    }, [runs, selectedRun]);
 
-    const handleAgentClick = (agent: AgentProductionStats) => {
-        // Navigate to workspace for agent management
-        router.push(`/workspace/${agent.slug}/overview`);
+    const handleAgentClick = (agentSlug: string) => {
+        router.push(`/workspace/${agentSlug}/overview`);
     };
 
     const handleRunClick = (run: Run) => {
-        // Open run detail modal
         setSelectedRun(run);
         fetchRunDetail(run);
     };
 
-    const closeRunModal = () => {
-        setSelectedRun(null);
-        setRunDetail(null);
-    };
+    const handleRunSelectById = useCallback(
+        (runId: string) => {
+            const run = runs.find((item) => item.id === runId);
+            if (run) {
+                setSelectedRun(run);
+                fetchRunDetail(run);
+            }
+        },
+        [runs, fetchRunDetail]
+    );
+
+    const slowRunIds = useMemo(() => {
+        return new Set(metrics?.topRuns.slowest.map((run) => run.id) || []);
+    }, [metrics]);
+
+    const expensiveRunIds = useMemo(() => {
+        return new Set(metrics?.topRuns.mostExpensive.map((run) => run.id) || []);
+    }, [metrics]);
+
+    const sortedRuns = useMemo(() => {
+        const sorted = [...runs];
+        const dir = sortDirection === "asc" ? 1 : -1;
+        sorted.sort((a, b) => {
+            switch (sortKey) {
+                case "durationMs":
+                    return ((a.durationMs || 0) - (b.durationMs || 0)) * dir;
+                case "costUsd":
+                    return ((a.costUsd || 0) - (b.costUsd || 0)) * dir;
+                case "totalTokens":
+                    return ((a.totalTokens || 0) - (b.totalTokens || 0)) * dir;
+                case "toolCallCount":
+                    return (a.toolCallCount - b.toolCallCount) * dir;
+                case "status":
+                    return a.status.localeCompare(b.status) * dir;
+                case "startedAt":
+                default:
+                    return (
+                        (new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()) * dir
+                    );
+            }
+        });
+        return sorted;
+    }, [runs, sortKey, sortDirection]);
+
+    const groupedRuns = useMemo(() => {
+        if (groupBy === "none") {
+            return [{ label: "All Runs", runs: sortedRuns }];
+        }
+
+        const groups = new Map<string, Run[]>();
+        const getGroupLabel = (run: Run) => {
+            switch (groupBy) {
+                case "agent":
+                    return run.agentName;
+                case "version":
+                    return run.versionNumber ? `v${run.versionNumber}` : "Unknown Version";
+                case "model":
+                    return run.modelName || "Unknown Model";
+                case "status":
+                    return run.status;
+                case "source":
+                    return run.source || "Unknown Source";
+                default:
+                    return "All Runs";
+            }
+        };
+
+        for (const run of sortedRuns) {
+            const label = getGroupLabel(run);
+            const list = groups.get(label) || [];
+            list.push(run);
+            groups.set(label, list);
+        }
+
+        return Array.from(groups.entries()).map(([label, runs]) => ({ label, runs }));
+    }, [sortedRuns, groupBy]);
+
+    const feedbackList = useMemo(() => {
+        const feedback = runDetail?.feedback;
+        if (!feedback) return [];
+        return Array.isArray(feedback) ? feedback : [feedback];
+    }, [runDetail]);
+
+    const evaluationScores = useMemo(() => {
+        const evaluation = runDetail?.evaluation;
+        const evaluationScoresJson = Array.isArray(evaluation)
+            ? evaluation[0]?.scoresJson
+            : evaluation?.scoresJson;
+        const traceScores =
+            typeof runDetail?.trace?.scoresJson === "object"
+                ? (runDetail?.trace?.scoresJson as Record<string, unknown>)
+                : null;
+        return evaluationScoresJson || traceScores;
+    }, [runDetail]);
+
+    const toolErrors = useMemo(() => {
+        return (runDetail?.trace?.toolCalls || []).filter((toolCall) => !toolCall.success);
+    }, [runDetail]);
+
+    const guardrailEvents = useMemo(() => {
+        return runDetail?.guardrailEvents || [];
+    }, [runDetail]);
+
+    const summary = metrics?.summary;
+    const hasActiveFilters =
+        searchQuery.length > 0 ||
+        statusFilter !== "all" ||
+        sourceFilter !== "all" ||
+        agentFilter !== "all" ||
+        versionFilter !== "all" ||
+        modelFilter !== "all" ||
+        toolUsageFilter !== "all" ||
+        runTypeFilter !== "PROD" ||
+        timeRange !== "24h";
+
+    const agentNameById = useMemo(() => {
+        return new Map((filters?.agents || []).map((agent) => [agent.id, agent.name]));
+    }, [filters]);
+
+    const perAgentSorted = useMemo(() => {
+        return [...(metrics?.perAgent || [])].sort((a, b) => b.totalRuns - a.totalRuns);
+    }, [metrics]);
+
+    const perVersionSorted = useMemo(() => {
+        return [...(metrics?.perVersion || [])].sort((a, b) => b.totalRuns - a.totalRuns);
+    }, [metrics]);
+
+    const modelUsageSorted = useMemo(() => {
+        return [...(metrics?.modelUsage || [])].sort((a, b) => b.runs - a.runs);
+    }, [metrics]);
+
+    const sourceOptions = useMemo(() => {
+        const sources = (filters?.sources || [])
+            .map((source) => source.source)
+            .filter((value): value is string => Boolean(value));
+        return sources.length > 0
+            ? sources
+            : ["slack", "whatsapp", "voice", "telegram", "elevenlabs", "api"];
+    }, [filters]);
+
+    const runTypeOptions = useMemo(() => {
+        const types = (filters?.runTypes || []).map((type) => type.runType);
+        return types.length > 0 ? types : ["PROD", "TEST", "AB"];
+    }, [filters]);
 
     if (loading) {
         return (
             <div className="container mx-auto space-y-6 py-6">
                 <Skeleton className="h-10 w-64" />
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
+                    {Array.from({ length: 8 }).map((_, i) => (
                         <Skeleton key={i} className="h-24" />
                     ))}
                 </div>
-                <Skeleton className="h-96" />
+                <Skeleton className="h-16 w-full" />
+                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                    <Skeleton className="h-[500px]" />
+                    <Skeleton className="h-[500px]" />
+                </div>
             </div>
         );
     }
 
     return (
         <div className="container mx-auto space-y-6 py-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div>
                     <div className="flex items-center gap-3">
-                        <h1 className="text-3xl font-bold">Live Production</h1>
+                        <h1 className="text-3xl font-bold">Live Runs</h1>
                         <Badge
                             variant="outline"
                             className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300"
@@ -392,303 +780,127 @@ export default function LiveDashboardPage() {
                         </Badge>
                     </div>
                     <p className="text-muted-foreground">
-                        Real-time monitoring of production agent runs
+                        Primary Debug + Monitoring Zone for agent executions.
                     </p>
+                    {lastUpdatedAt && (
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            Last updated {lastUpdatedAt.toLocaleTimeString()}
+                        </p>
+                    )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button
-                        variant={autoRefresh ? "default" : "outline"}
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                            fetchMetrics();
+                            fetchRuns();
+                        }}
+                    >
+                        <HugeiconsIcon icon={icons.refresh!} className="mr-2 size-4" />
+                        Refresh
+                    </Button>
+                    <Button
+                        variant="outline"
                         size="sm"
                         onClick={() => setAutoRefresh(!autoRefresh)}
                     >
-                        {autoRefresh ? "Pause" : "Resume"} Auto-refresh
+                        {autoRefresh ? "Pause Auto-refresh" : "Resume Auto-refresh"}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => router.push("/workspace")}>
+                        <HugeiconsIcon icon={icons["arrow-right"]!} className="mr-2 size-4" />
                         Workspace
                     </Button>
                 </div>
             </div>
 
-            {/* Production Summary */}
-            {summary && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-7">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Production Runs</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalProdRuns.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Active Agents</CardDescription>
-                            <CardTitle className="text-2xl text-green-600">
-                                {summary.activeAgents}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Success Rate</CardDescription>
-                            <CardTitle
-                                className={`text-2xl ${summary.successRate >= 90 ? "text-green-600" : summary.successRate >= 70 ? "text-yellow-600" : "text-red-600"}`}
-                            >
-                                {summary.successRate}%
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Avg Latency</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {formatLatency(summary.avgLatencyMs)}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Tokens</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalTokens.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Cost</CardDescription>
-                            <CardTitle className="text-2xl">
-                                ${summary.totalCostUsd.toFixed(2)}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Failed</CardDescription>
-                            <CardTitle className="text-2xl text-red-600">
-                                {summary.failedRuns}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                </div>
-            )}
-
-            {/* Source Breakdown */}
-            {summary && summary.runsBySource.length > 0 && (
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
                 <Card>
-                    <CardHeader>
-                        <CardTitle className="text-lg">Runs by Channel</CardTitle>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Runs</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {summary ? summary.totalRuns.toLocaleString() : "-"}
+                        </CardTitle>
                     </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-wrap gap-4">
-                            {summary.runsBySource.map((s) => (
-                                <div key={s.source} className="flex items-center gap-2">
-                                    <Badge className={getSourceBadgeColor(s.source)}>
-                                        {s.source || "unknown"}
-                                    </Badge>
-                                    <span className="font-medium">{s.count.toLocaleString()}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </CardContent>
                 </Card>
-            )}
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Running</CardDescription>
+                        <CardTitle className="text-2xl text-blue-600">
+                            {summary ? summary.runningRuns.toLocaleString() : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Failed</CardDescription>
+                        <CardTitle className="text-2xl text-red-600">
+                            {summary ? summary.failedRuns.toLocaleString() : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Success Rate</CardDescription>
+                        <CardTitle
+                            className={`text-2xl ${
+                                summary && summary.successRate >= 90
+                                    ? "text-green-600"
+                                    : summary && summary.successRate >= 70
+                                      ? "text-yellow-600"
+                                      : "text-red-600"
+                            }`}
+                        >
+                            {summary ? `${summary.successRate}%` : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Avg Latency</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {summary ? formatLatency(summary.avgLatencyMs) : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Avg Tool Calls</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {summary ? summary.avgToolCalls.toFixed(2) : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Tokens</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {summary ? summary.totalTokens.toLocaleString() : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Cost</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {summary ? formatCost(summary.totalCostUsd) : "-"}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+            </div>
 
-            {/* Tabs */}
-            <Tabs defaultValue="overview" value={activeTab} onValueChange={setActiveTab}>
-                <TabsList>
-                    <TabsTrigger value="overview">Agents Overview</TabsTrigger>
-                    <TabsTrigger value="runs">Recent Runs</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="overview">
-                    {/* Search */}
-                    <div className="mb-4">
+            <Card className="sticky top-4 z-10">
+                <CardContent className="flex flex-col gap-4 py-4">
+                    <div className="flex flex-wrap items-center gap-3">
                         <Input
-                            placeholder="Search agents..."
+                            placeholder="Search run ID or keyword in input/output..."
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
-                            className="max-w-sm"
+                            className="min-w-[240px] flex-1"
                         />
-                    </div>
-
-                    {/* Agents Table */}
-                    {filteredAgents.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">
-                                    No production data yet
-                                </p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Production runs from Slack, WhatsApp, Voice, Telegram, and
-                                    ElevenLabs will appear here
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <Card>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Agent</TableHead>
-                                        <TableHead className="text-right">Prod Runs</TableHead>
-                                        <TableHead className="text-right">Success</TableHead>
-                                        <TableHead className="text-right">Latency</TableHead>
-                                        <TableHead className="text-right">Tokens</TableHead>
-                                        <TableHead className="text-right">Cost</TableHead>
-                                        <TableHead>Channels</TableHead>
-                                        <TableHead>Last Run</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {filteredAgents.map((agent) => (
-                                        <TableRow
-                                            key={agent.id}
-                                            className="cursor-pointer"
-                                            onClick={() => handleAgentClick(agent)}
-                                        >
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <span
-                                                        className={`size-2 rounded-full ${agent.isActive ? "bg-green-500" : "bg-gray-400"}`}
-                                                    />
-                                                    <span className="font-medium">
-                                                        {agent.name}
-                                                    </span>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {agent.prodRuns.toLocaleString()}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <span
-                                                    className={
-                                                        agent.successRate >= 90
-                                                            ? "text-green-600"
-                                                            : agent.successRate >= 70
-                                                              ? "text-yellow-600"
-                                                              : "text-red-600"
-                                                    }
-                                                >
-                                                    {agent.successRate}%
-                                                </span>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {formatLatency(agent.avgLatencyMs)}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {agent.totalTokens.toLocaleString()}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                ${agent.totalCostUsd.toFixed(4)}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex flex-wrap gap-1">
-                                                    {agent.sources.slice(0, 3).map((s) => (
-                                                        <Badge
-                                                            key={s.source}
-                                                            variant="outline"
-                                                            className="text-xs"
-                                                        >
-                                                            {s.source}
-                                                        </Badge>
-                                                    ))}
-                                                    {agent.sources.length > 3 && (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-xs"
-                                                        >
-                                                            +{agent.sources.length - 3}
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {formatRelativeTime(agent.lastRunAt)}
-                                            </TableCell>
-                                        </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Card>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="runs">
-                    {/* Run Counts */}
-                    {runCounts && (
-                        <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-6">
-                            <Card className="cursor-pointer" onClick={() => setStatusFilter("all")}>
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Total</CardDescription>
-                                    <CardTitle className="text-xl">
-                                        {runCounts.total.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setStatusFilter("completed")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Completed</CardDescription>
-                                    <CardTitle className="text-xl text-green-600">
-                                        {runCounts.completed.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setStatusFilter("failed")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Failed</CardDescription>
-                                    <CardTitle className="text-xl text-red-600">
-                                        {runCounts.failed.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setStatusFilter("running")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Running</CardDescription>
-                                    <CardTitle className="text-xl text-blue-600">
-                                        {runCounts.running.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setStatusFilter("queued")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Queued</CardDescription>
-                                    <CardTitle className="text-xl text-yellow-600">
-                                        {runCounts.queued.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setStatusFilter("cancelled")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Cancelled</CardDescription>
-                                    <CardTitle className="text-xl text-gray-600">
-                                        {runCounts.cancelled.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Filters */}
-                    <div className="mb-4 flex items-center gap-4">
                         <Select
                             value={statusFilter}
-                            onValueChange={(v) => setStatusFilter(v ?? "all")}
+                            onValueChange={(value) => setStatusFilter(value ?? "all")}
                         >
                             <SelectTrigger className="w-40">
                                 <SelectValue placeholder="Status" />
@@ -704,421 +916,1176 @@ export default function LiveDashboardPage() {
                         </Select>
                         <Select
                             value={sourceFilter}
-                            onValueChange={(v) => setSourceFilter(v ?? "all")}
+                            onValueChange={(value) => setSourceFilter(value ?? "all")}
                         >
                             <SelectTrigger className="w-40">
-                                <SelectValue placeholder="Channel" />
+                                <SelectValue placeholder="Source" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Channels</SelectItem>
-                                <SelectItem value="slack">Slack</SelectItem>
-                                <SelectItem value="whatsapp">WhatsApp</SelectItem>
-                                <SelectItem value="voice">Voice</SelectItem>
-                                <SelectItem value="telegram">Telegram</SelectItem>
-                                <SelectItem value="elevenlabs">ElevenLabs</SelectItem>
-                                <SelectItem value="api">API</SelectItem>
+                                <SelectItem value="all">All Sources</SelectItem>
+                                {sourceOptions.map((source) => (
+                                    <SelectItem key={source} value={source}>
+                                        {source}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
-                        {(statusFilter !== "all" || sourceFilter !== "all") && (
+                        <Select
+                            value={agentFilter}
+                            onValueChange={(value) => setAgentFilter(value ?? "all")}
+                        >
+                            <SelectTrigger className="w-48">
+                                <SelectValue placeholder="Agent" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Agents</SelectItem>
+                                {(filters?.agents || [])
+                                    .slice()
+                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                    .map((agent) => (
+                                        <SelectItem key={agent.id} value={agent.id}>
+                                            {agent.name}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={versionFilter}
+                            onValueChange={(value) => setVersionFilter(value ?? "all")}
+                        >
+                            <SelectTrigger className="w-52">
+                                <SelectValue placeholder="Version" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Versions</SelectItem>
+                                {(filters?.versions || [])
+                                    .slice()
+                                    .sort((a, b) => b.version - a.version)
+                                    .map((version) => (
+                                        <SelectItem key={version.id} value={version.id}>
+                                            {`${agentNameById.get(version.agentId) || "Agent"} v${version.version}`}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={modelFilter}
+                            onValueChange={(value) => setModelFilter(value ?? "all")}
+                        >
+                            <SelectTrigger className="w-48">
+                                <SelectValue placeholder="Model" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Models</SelectItem>
+                                {(filters?.models || [])
+                                    .filter((model) => model.modelName)
+                                    .slice()
+                                    .sort((a, b) =>
+                                        `${a.modelProvider}-${a.modelName}`.localeCompare(
+                                            `${b.modelProvider}-${b.modelName}`
+                                        )
+                                    )
+                                    .map((model) => (
+                                        <SelectItem
+                                            key={`${model.modelProvider}-${model.modelName}`}
+                                            value={model.modelName as string}
+                                        >
+                                            {formatModelLabel(model.modelName, model.modelProvider)}
+                                        </SelectItem>
+                                    ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={toolUsageFilter}
+                            onValueChange={(value) => setToolUsageFilter(value ?? "all")}
+                        >
+                            <SelectTrigger className="w-44">
+                                <SelectValue placeholder="Tool Usage" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Tool Usage</SelectItem>
+                                <SelectItem value="with_tools">With Tools</SelectItem>
+                                <SelectItem value="without_tools">No Tools</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={runTypeFilter}
+                            onValueChange={(value) => setRunTypeFilter(value ?? "PROD")}
+                        >
+                            <SelectTrigger className="w-36">
+                                <SelectValue placeholder="Run Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {runTypeOptions.map((runType) => (
+                                    <SelectItem key={runType} value={runType}>
+                                        {runType}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={timeRange}
+                            onValueChange={(value) => setTimeRange(value ?? "24h")}
+                        >
+                            <SelectTrigger className="w-32">
+                                <SelectValue placeholder="Time Range" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="24h">Last 24h</SelectItem>
+                                <SelectItem value="7d">Last 7d</SelectItem>
+                                <SelectItem value="30d">Last 30d</SelectItem>
+                                <SelectItem value="90d">Last 90d</SelectItem>
+                                <SelectItem value="all">All Time</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={groupBy}
+                            onValueChange={(value) => setGroupBy(value ?? "none")}
+                        >
+                            <SelectTrigger className="w-32">
+                                <SelectValue placeholder="Group By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">No Group</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="version">Version</SelectItem>
+                                <SelectItem value="model">Model</SelectItem>
+                                <SelectItem value="status">Status</SelectItem>
+                                <SelectItem value="source">Source</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={sortKey}
+                            onValueChange={(value) => setSortKey(value ?? "startedAt")}
+                        >
+                            <SelectTrigger className="w-36">
+                                <SelectValue placeholder="Sort By" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="startedAt">Time</SelectItem>
+                                <SelectItem value="durationMs">Duration</SelectItem>
+                                <SelectItem value="costUsd">Cost</SelectItem>
+                                <SelectItem value="totalTokens">Tokens</SelectItem>
+                                <SelectItem value="toolCallCount">Tool Calls</SelectItem>
+                                <SelectItem value="status">Status</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
+                            value={sortDirection}
+                            onValueChange={(value) => setSortDirection(value as "asc" | "desc")}
+                        >
+                            <SelectTrigger className="w-28">
+                                <SelectValue placeholder="Order" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="desc">Desc</SelectItem>
+                                <SelectItem value="asc">Asc</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        {hasActiveFilters && (
                             <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => {
+                                    setSearchQuery("");
                                     setStatusFilter("all");
                                     setSourceFilter("all");
+                                    setAgentFilter("all");
+                                    setVersionFilter("all");
+                                    setModelFilter("all");
+                                    setToolUsageFilter("all");
+                                    setRunTypeFilter("PROD");
+                                    setTimeRange("24h");
+                                    setGroupBy("none");
+                                    setSortKey("startedAt");
+                                    setSortDirection("desc");
                                 }}
                             >
                                 Clear Filters
                             </Button>
                         )}
                     </div>
+                    {filtersLoading && (
+                        <p className="text-muted-foreground text-xs">Loading filter options...</p>
+                    )}
+                </CardContent>
+            </Card>
 
-                    {/* Runs Table */}
-                    {runsLoading ? (
-                        <div className="space-y-3">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <Skeleton key={i} className="h-16" />
-                            ))}
+            {runCounts && (
+                <div className="flex flex-wrap gap-2">
+                    <Badge
+                        variant={statusFilter === "all" ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("all")}
+                    >
+                        Total {runCounts.total.toLocaleString()}
+                    </Badge>
+                    <Badge
+                        variant={statusFilter === "completed" ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("completed")}
+                    >
+                        Completed {runCounts.completed.toLocaleString()}
+                    </Badge>
+                    <Badge
+                        variant={statusFilter === "failed" ? "destructive" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("failed")}
+                    >
+                        Failed {runCounts.failed.toLocaleString()}
+                    </Badge>
+                    <Badge
+                        variant={statusFilter === "running" ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("running")}
+                    >
+                        Running {runCounts.running.toLocaleString()}
+                    </Badge>
+                    <Badge
+                        variant={statusFilter === "queued" ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("queued")}
+                    >
+                        Queued {runCounts.queued.toLocaleString()}
+                    </Badge>
+                    <Badge
+                        variant={statusFilter === "cancelled" ? "default" : "outline"}
+                        className="cursor-pointer"
+                        onClick={() => setStatusFilter("cancelled")}
+                    >
+                        Cancelled {runCounts.cancelled.toLocaleString()}
+                    </Badge>
+                </div>
+            )}
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <CardTitle>Runs</CardTitle>
+                                <CardDescription>
+                                    {runs.length} shown
+                                    {runCounts
+                                        ? ` of ${runCounts.total.toLocaleString()} matching runs`
+                                        : ""}
+                                </CardDescription>
+                            </div>
+                            {runsLoading && (
+                                <p className="text-muted-foreground text-xs">Refreshing...</p>
+                            )}
                         </div>
-                    ) : runs.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
+                    </CardHeader>
+                    <CardContent>
+                        {runsLoading ? (
+                            <div className="space-y-3">
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-14 w-full" />
+                                ))}
+                            </div>
+                        ) : runs.length === 0 ? (
+                            <div className="py-12 text-center">
                                 <p className="text-muted-foreground text-lg">
-                                    No production runs found
+                                    No runs match the current filters
                                 </p>
                                 <p className="text-muted-foreground mt-2 text-sm">
-                                    Runs from production channels will appear here
+                                    Adjust filters or broaden the time range to see more runs
                                 </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <Card>
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Agent</TableHead>
-                                        <TableHead>Channel</TableHead>
-                                        <TableHead>Input</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead className="text-right">Duration</TableHead>
-                                        <TableHead className="text-right">Tokens</TableHead>
-                                        <TableHead className="text-right">Cost</TableHead>
-                                        <TableHead>Time</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {runs.map((run) => (
-                                        <TableRow
-                                            key={run.id}
-                                            className="cursor-pointer"
-                                            onClick={() => handleRunClick(run)}
-                                        >
-                                            <TableCell>
-                                                <p className="font-medium">{run.agentName}</p>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge className={getSourceBadgeColor(run.source)}>
-                                                    {run.source || "unknown"}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>
-                                                <p className="max-w-xs truncate text-sm">
-                                                    {run.inputText.slice(0, 100)}
-                                                    {run.inputText.length > 100 ? "..." : ""}
-                                                </p>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={getStatusBadgeVariant(run.status)}>
-                                                    {run.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {run.durationMs
-                                                    ? formatLatency(run.durationMs)
-                                                    : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {run.totalTokens?.toLocaleString() || "-"}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                {run.costUsd ? `$${run.costUsd.toFixed(4)}` : "-"}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-sm">
-                                                {formatRelativeTime(run.startedAt)}
-                                            </TableCell>
+                            </div>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead>Version</TableHead>
+                                            <TableHead>Model</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Source</TableHead>
+                                            <TableHead>Input</TableHead>
+                                            <TableHead className="text-right">Duration</TableHead>
+                                            <TableHead className="text-right">Tool Calls</TableHead>
+                                            <TableHead className="text-right">Tools</TableHead>
+                                            <TableHead className="text-right">Tokens</TableHead>
+                                            <TableHead className="text-right">Cost</TableHead>
+                                            <TableHead className="text-right">Time</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        </Card>
-                    )}
-                </TabsContent>
-            </Tabs>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {groupedRuns.map((group) => (
+                                            <Fragment key={group.label}>
+                                                {groupBy !== "none" && (
+                                                    <TableRow>
+                                                        <TableCell
+                                                            colSpan={12}
+                                                            className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
+                                                        >
+                                                            {group.label} ({group.runs.length})
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                                {group.runs.map((run) => {
+                                                    const isSelected = selectedRun?.id === run.id;
+                                                    const isSlow = slowRunIds.has(run.id);
+                                                    const isExpensive = expensiveRunIds.has(run.id);
+                                                    return (
+                                                        <TableRow
+                                                            key={run.id}
+                                                            className={`cursor-pointer ${
+                                                                isSelected ? "bg-muted/50" : ""
+                                                            } ${
+                                                                isSlow
+                                                                    ? "border-l-4 border-yellow-400"
+                                                                    : ""
+                                                            } ${
+                                                                isExpensive
+                                                                    ? "border-l-4 border-purple-400"
+                                                                    : ""
+                                                            }`}
+                                                            onClick={() => handleRunClick(run)}
+                                                        >
+                                                            <TableCell>
+                                                                <div>
+                                                                    <p className="font-medium">
+                                                                        {run.agentName}
+                                                                    </p>
+                                                                    <p className="text-muted-foreground text-xs">
+                                                                        {run.id}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {run.versionNumber
+                                                                    ? `v${run.versionNumber}`
+                                                                    : "-"}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {formatModelLabel(
+                                                                    run.modelName,
+                                                                    run.modelProvider
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <Badge
+                                                                    variant={getStatusBadgeVariant(
+                                                                        run.status
+                                                                    )}
+                                                                >
+                                                                    {run.status}
+                                                                </Badge>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {run.source ? (
+                                                                    <Badge
+                                                                        className={getSourceBadgeColor(
+                                                                            run.source
+                                                                        )}
+                                                                    >
+                                                                        {run.source}
+                                                                    </Badge>
+                                                                ) : (
+                                                                    "-"
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <p className="max-w-xs truncate">
+                                                                    {run.inputText}
+                                                                </p>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.durationMs
+                                                                    ? formatLatency(run.durationMs)
+                                                                    : "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.toolCallCount}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.uniqueToolCount}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {formatTokens(run.totalTokens)}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {formatCost(run.costUsd)}
+                                                            </TableCell>
+                                                            <TableCell className="text-muted-foreground text-right">
+                                                                <span
+                                                                    title={new Date(
+                                                                        run.startedAt
+                                                                    ).toLocaleString()}
+                                                                >
+                                                                    {formatRelativeTime(
+                                                                        run.startedAt
+                                                                    )}
+                                                                </span>
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    );
+                                                })}
+                                            </Fragment>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
-            {/* Run Detail Modal */}
-            <Dialog open={!!selectedRun} onOpenChange={(open) => !open && closeRunModal()}>
-                <DialogContent className="flex h-[90vh] w-[95vw] !max-w-[1400px] flex-col p-0">
-                    {selectedRun && (
-                        <>
-                            {/* Modal Header */}
-                            <DialogHeader className="shrink-0 border-b px-6 py-4">
-                                <div className="flex items-start justify-between">
-                                    <div className="space-y-1">
-                                        <DialogTitle className="flex items-center gap-3 text-xl">
-                                            <span>{selectedRun.agentName}</span>
-                                            <Badge
-                                                className={getSourceBadgeColor(selectedRun.source)}
-                                            >
-                                                {selectedRun.source || "unknown"}
-                                            </Badge>
-                                            <Badge
-                                                variant={getStatusBadgeVariant(selectedRun.status)}
-                                            >
-                                                {selectedRun.status}
-                                            </Badge>
-                                        </DialogTitle>
-                                        <p className="text-muted-foreground text-sm">
-                                            {new Date(selectedRun.startedAt).toLocaleString()} •{" "}
-                                            {selectedRun.durationMs
-                                                ? formatLatency(selectedRun.durationMs)
-                                                : "Running..."}
-                                        </p>
-                                    </div>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                            router.push(
-                                                `/workspace/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
-                                            )
-                                        }
-                                    >
-                                        Open in Workspace
-                                    </Button>
-                                </div>
-
-                                {/* Quick Stats */}
-                                <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-6">
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Duration</p>
-                                        <p className="text-xl font-bold">
-                                            {selectedRun.durationMs
-                                                ? formatLatency(selectedRun.durationMs)
-                                                : "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Tokens</p>
-                                        <p className="text-xl font-bold">
-                                            {selectedRun.totalTokens?.toLocaleString() || "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Cost</p>
-                                        <p className="text-xl font-bold">
-                                            {selectedRun.costUsd
-                                                ? `$${selectedRun.costUsd.toFixed(2)}`
-                                                : "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Provider</p>
-                                        <p className="text-lg font-bold capitalize">
-                                            {selectedRun.modelProvider || "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Model</p>
-                                        <p
-                                            className="text-sm font-bold"
-                                            title={selectedRun.modelName || ""}
-                                        >
-                                            {selectedRun.modelName
-                                                ?.replace(/-\d{8}$/, "")
-                                                .replace("claude-", "")
-                                                .replace("gpt-", "") || "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Tool Calls</p>
-                                        <p className="text-xl font-bold">
-                                            {runDetail?.trace?.toolCalls?.length ?? "0"}
-                                        </p>
-                                    </div>
-                                </div>
-                            </DialogHeader>
-
-                            {/* Modal Body */}
-                            <div className="flex min-h-0 flex-1 flex-col">
-                                <Tabs
-                                    defaultValue="overview"
-                                    value={detailTab}
-                                    onValueChange={setDetailTab}
-                                    className="flex flex-1 flex-col"
+                <Card className="flex flex-col">
+                    <CardHeader className="space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <CardTitle className="text-lg">
+                                    {selectedRun ? selectedRun.agentName : "Run Detail"}
+                                </CardTitle>
+                                <CardDescription>
+                                    {selectedRun
+                                        ? `Run ID: ${selectedRun.id}`
+                                        : "Select a run to inspect trace, tools, and context."}
+                                </CardDescription>
+                            </div>
+                            {selectedRun && (
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                        router.push(
+                                            `/workspace/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
+                                        )
+                                    }
                                 >
-                                    <TabsList className="mx-6 mt-4 w-fit shrink-0">
-                                        <TabsTrigger value="overview" className="gap-2">
-                                            <HugeiconsIcon icon={icons.file!} className="size-4" />
-                                            Overview
-                                        </TabsTrigger>
-                                        <TabsTrigger value="trace" className="gap-2">
-                                            <HugeiconsIcon
-                                                icon={icons.activity!}
-                                                className="size-4"
-                                            />
-                                            Trace
-                                        </TabsTrigger>
-                                        <TabsTrigger value="tools" className="gap-2">
-                                            <HugeiconsIcon
-                                                icon={icons.settings!}
-                                                className="size-4"
-                                            />
-                                            Tools ({runDetail?.trace?.toolCalls?.length ?? 0})
-                                        </TabsTrigger>
-                                        <TabsTrigger value="evals" className="gap-2">
-                                            <HugeiconsIcon
-                                                icon={icons["chart-evaluation"]!}
-                                                className="size-4"
-                                            />
-                                            Evaluations
-                                        </TabsTrigger>
-                                    </TabsList>
+                                    Open in Workspace
+                                </Button>
+                            )}
+                        </div>
+                        {selectedRun && (
+                            <div className="flex flex-wrap items-center gap-2">
+                                <Badge variant={getStatusBadgeVariant(selectedRun.status)}>
+                                    {selectedRun.status}
+                                </Badge>
+                                {selectedRun.source && (
+                                    <Badge className={getSourceBadgeColor(selectedRun.source)}>
+                                        {selectedRun.source}
+                                    </Badge>
+                                )}
+                                {selectedRun.versionNumber && (
+                                    <Badge variant="outline">v{selectedRun.versionNumber}</Badge>
+                                )}
+                                <Badge variant="outline">{selectedRun.runType}</Badge>
+                                <Badge variant="outline">
+                                    {formatModelLabel(
+                                        selectedRun.modelName,
+                                        selectedRun.modelProvider
+                                    )}
+                                </Badge>
+                            </div>
+                        )}
+                        {selectedRun && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="bg-muted/50 rounded-lg p-3">
+                                    <p className="text-muted-foreground text-xs">Duration</p>
+                                    <p className="text-base font-semibold">
+                                        {selectedRun.durationMs
+                                            ? formatLatency(selectedRun.durationMs)
+                                            : "-"}
+                                    </p>
+                                </div>
+                                <div className="bg-muted/50 rounded-lg p-3">
+                                    <p className="text-muted-foreground text-xs">Tokens</p>
+                                    <p className="text-base font-semibold">
+                                        {formatTokens(selectedRun.totalTokens)}
+                                    </p>
+                                </div>
+                                <div className="bg-muted/50 rounded-lg p-3">
+                                    <p className="text-muted-foreground text-xs">Cost</p>
+                                    <p className="text-base font-semibold">
+                                        {formatCost(selectedRun.costUsd)}
+                                    </p>
+                                </div>
+                                <div className="bg-muted/50 rounded-lg p-3">
+                                    <p className="text-muted-foreground text-xs">Tool Calls</p>
+                                    <p className="text-base font-semibold">
+                                        {selectedRun.toolCallCount}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-hidden">
+                        {!selectedRun ? (
+                            <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-12 text-center">
+                                <HugeiconsIcon icon={icons.activity!} className="size-10" />
+                                <p className="text-sm">
+                                    Select a run to view its trace, tools, and latency breakdown.
+                                </p>
+                            </div>
+                        ) : (
+                            <Tabs
+                                defaultValue="overview"
+                                value={detailTab}
+                                onValueChange={(value) => setDetailTab(value ?? "overview")}
+                                className="flex h-full flex-col"
+                            >
+                                <TabsList className="flex w-full flex-nowrap justify-start gap-2 overflow-x-auto">
+                                    <TabsTrigger value="overview" className="shrink-0 gap-2">
+                                        <HugeiconsIcon icon={icons.file!} className="size-4" />
+                                        Overview
+                                    </TabsTrigger>
+                                    <TabsTrigger value="trace" className="shrink-0 gap-2">
+                                        <HugeiconsIcon icon={icons.activity!} className="size-4" />
+                                        Trace
+                                    </TabsTrigger>
+                                    <TabsTrigger value="tools" className="shrink-0 gap-2">
+                                        <HugeiconsIcon icon={icons.settings!} className="size-4" />
+                                        Tools
+                                    </TabsTrigger>
+                                    <TabsTrigger value="errors" className="shrink-0 gap-2">
+                                        <HugeiconsIcon
+                                            icon={icons["alert-diamond"]!}
+                                            className="size-4"
+                                        />
+                                        Errors
+                                    </TabsTrigger>
+                                    <TabsTrigger value="latency" className="shrink-0 gap-2">
+                                        <HugeiconsIcon icon={icons.clock!} className="size-4" />
+                                        Latency
+                                    </TabsTrigger>
+                                </TabsList>
 
-                                    <div className="flex-1 overflow-y-auto px-6 py-4">
-                                        {runDetailLoading ? (
-                                            <div className="space-y-4">
-                                                <Skeleton className="h-32 w-full" />
-                                                <Skeleton className="h-48 w-full" />
-                                            </div>
-                                        ) : (
-                                            <>
-                                                {/* Overview Tab */}
-                                                <TabsContent
-                                                    value="overview"
-                                                    className="mt-0 space-y-6"
-                                                >
-                                                    {/* Input/Output side by side on larger screens */}
-                                                    <div className="grid gap-6 lg:grid-cols-2">
-                                                        {/* Input */}
-                                                        <div className="flex flex-col">
-                                                            <h3 className="mb-3 flex items-center gap-2 text-base font-semibold">
-                                                                <span className="flex size-7 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/30">
-                                                                    <HugeiconsIcon
-                                                                        icon={icons["arrow-right"]!}
-                                                                        className="size-4 text-blue-600 dark:text-blue-400"
-                                                                    />
-                                                                </span>
-                                                                User Input
-                                                            </h3>
-                                                            <div
-                                                                className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-4"
-                                                                style={{
-                                                                    minHeight: "300px",
-                                                                    maxHeight: "400px"
-                                                                }}
-                                                            >
-                                                                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap">
-                                                                    {selectedRun.inputText}
-                                                                </pre>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Output */}
-                                                        <div className="flex flex-col">
-                                                            <h3 className="mb-3 flex items-center gap-2 text-base font-semibold">
-                                                                <span className="flex size-7 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                                                                    <HugeiconsIcon
-                                                                        icon={icons["arrow-left"]!}
-                                                                        className="size-4 text-green-600 dark:text-green-400"
-                                                                    />
-                                                                </span>
-                                                                Agent Response
-                                                            </h3>
-                                                            <div
-                                                                className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-4"
-                                                                style={{
-                                                                    minHeight: "300px",
-                                                                    maxHeight: "400px"
-                                                                }}
-                                                            >
-                                                                <pre className="font-mono text-sm leading-relaxed whitespace-pre-wrap">
-                                                                    {selectedRun.outputText ||
-                                                                        runDetail?.outputText ||
-                                                                        "No output"}
-                                                                </pre>
-                                                            </div>
+                                <div className="mt-4 flex-1 overflow-y-auto">
+                                    {runDetailLoading ? (
+                                        <div className="space-y-4">
+                                            <Skeleton className="h-32 w-full" />
+                                            <Skeleton className="h-48 w-full" />
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <TabsContent
+                                                value="overview"
+                                                className="mt-0 space-y-6"
+                                            >
+                                                <div className="grid gap-4 lg:grid-cols-2">
+                                                    <div className="flex flex-col">
+                                                        <h3 className="mb-2 text-sm font-semibold">
+                                                            User Input
+                                                        </h3>
+                                                        <div className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-3">
+                                                            <pre className="font-mono text-xs whitespace-pre-wrap">
+                                                                {selectedRun.inputText}
+                                                            </pre>
                                                         </div>
                                                     </div>
+                                                    <div className="flex flex-col">
+                                                        <h3 className="mb-2 text-sm font-semibold">
+                                                            Agent Response
+                                                        </h3>
+                                                        <div className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-3">
+                                                            <pre className="font-mono text-xs whitespace-pre-wrap">
+                                                                {selectedRun.outputText ||
+                                                                    runDetail?.outputText ||
+                                                                    "No output"}
+                                                            </pre>
+                                                        </div>
+                                                    </div>
+                                                </div>
 
-                                                    {/* Session & Thread Info */}
-                                                    {(selectedRun.sessionId ||
-                                                        selectedRun.threadId) && (
-                                                        <div className="grid grid-cols-2 gap-4">
-                                                            {selectedRun.sessionId && (
-                                                                <div>
-                                                                    <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
-                                                                        Session ID
-                                                                    </h3>
-                                                                    <code className="bg-muted rounded px-2 py-1 text-xs">
-                                                                        {selectedRun.sessionId}
-                                                                    </code>
-                                                                </div>
-                                                            )}
-                                                            {selectedRun.threadId && (
-                                                                <div>
-                                                                    <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
-                                                                        Thread ID
-                                                                    </h3>
-                                                                    <code className="bg-muted rounded px-2 py-1 text-xs">
-                                                                        {selectedRun.threadId}
-                                                                    </code>
+                                                {(selectedRun.sessionId ||
+                                                    selectedRun.threadId) && (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        {selectedRun.sessionId && (
+                                                            <div>
+                                                                <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                                                    Session ID
+                                                                </h3>
+                                                                <code className="bg-muted rounded px-2 py-1 text-xs">
+                                                                    {selectedRun.sessionId}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                        {selectedRun.threadId && (
+                                                            <div>
+                                                                <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                                                    Thread ID
+                                                                </h3>
+                                                                <code className="bg-muted rounded px-2 py-1 text-xs">
+                                                                    {selectedRun.threadId}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div>
+                                                    <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                        Token Breakdown
+                                                    </h3>
+                                                    <div className="flex flex-wrap gap-4 text-sm">
+                                                        <span>
+                                                            Prompt:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.promptTokens ??
+                                                                        selectedRun.promptTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                        <span>
+                                                            Completion:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.completionTokens ??
+                                                                        selectedRun.completionTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                        <span>
+                                                            Total:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.totalTokens ??
+                                                                        selectedRun.totalTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                <div>
+                                                    <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                        System Context
+                                                    </h3>
+                                                    {runDetail?.version ? (
+                                                        <div className="bg-muted/20 rounded-lg border p-3">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Badge variant="outline">
+                                                                    v{runDetail.version.version}
+                                                                </Badge>
+                                                                <Badge variant="outline">
+                                                                    {formatModelLabel(
+                                                                        runDetail.version.modelName,
+                                                                        runDetail.version
+                                                                            .modelProvider
+                                                                    )}
+                                                                </Badge>
+                                                            </div>
+                                                            <pre className="bg-background mt-3 max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                {runDetail.version.instructions}
+                                                            </pre>
+                                                            {Array.isArray(
+                                                                runDetail.version.snapshot?.tools
+                                                            ) && (
+                                                                <div className="mt-3 flex flex-wrap gap-2">
+                                                                    {(
+                                                                        runDetail.version.snapshot
+                                                                            ?.tools as Array<
+                                                                            | string
+                                                                            | {
+                                                                                  toolId?: string;
+                                                                              }
+                                                                        >
+                                                                    ).map((tool, idx) => {
+                                                                        const label =
+                                                                            typeof tool === "string"
+                                                                                ? tool
+                                                                                : tool.toolId ||
+                                                                                  "unknown";
+                                                                        return (
+                                                                            <Badge
+                                                                                key={`${label}-${idx}`}
+                                                                                variant="outline"
+                                                                            >
+                                                                                {label}
+                                                                            </Badge>
+                                                                        );
+                                                                    })}
                                                                 </div>
                                                             )}
                                                         </div>
+                                                    ) : (
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No version snapshot available for this
+                                                            run.
+                                                        </p>
                                                     )}
+                                                </div>
 
-                                                    {/* Token Breakdown */}
-                                                    {runDetail &&
-                                                        (runDetail.promptTokens ||
-                                                            runDetail.completionTokens) && (
-                                                            <div>
-                                                                <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-                                                                    Token Breakdown
-                                                                </h3>
-                                                                <div className="flex gap-6">
-                                                                    <div>
-                                                                        <span className="text-muted-foreground text-sm">
-                                                                            Prompt:
-                                                                        </span>{" "}
-                                                                        <span className="font-medium">
-                                                                            {runDetail.promptTokens?.toLocaleString() ||
-                                                                                0}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-muted-foreground text-sm">
-                                                                            Completion:
-                                                                        </span>{" "}
-                                                                        <span className="font-medium">
-                                                                            {runDetail.completionTokens?.toLocaleString() ||
-                                                                                0}
-                                                                        </span>
-                                                                    </div>
-                                                                    <div>
-                                                                        <span className="text-muted-foreground text-sm">
-                                                                            Total:
-                                                                        </span>{" "}
-                                                                        <span className="font-medium">
-                                                                            {runDetail.totalTokens?.toLocaleString() ||
-                                                                                0}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                </TabsContent>
-
-                                                {/* Trace Tab */}
-                                                <TabsContent
-                                                    value="trace"
-                                                    className="mt-0 space-y-4"
-                                                >
-                                                    {/* Show steps from steps array or stepsJson */}
-                                                    {(() => {
-                                                        const steps = runDetail?.trace?.steps ?? [];
-                                                        const stepsJson = runDetail?.trace
-                                                            ?.stepsJson as unknown[] | null;
-                                                        const hasSteps = steps.length > 0;
-                                                        const hasStepsJson =
-                                                            Array.isArray(stepsJson) &&
-                                                            stepsJson.length > 0;
-
-                                                        if (hasSteps) {
-                                                            return (
-                                                                <div className="space-y-3">
-                                                                    {steps.map((step, idx) => (
+                                                {evaluationScores && (
+                                                    <div>
+                                                        <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                            Evaluation Scores
+                                                        </h3>
+                                                        <div className="grid gap-3 md:grid-cols-2">
+                                                            {Object.entries(evaluationScores).map(
+                                                                ([key, value]) => {
+                                                                    const score =
+                                                                        typeof value === "number"
+                                                                            ? value
+                                                                            : typeof value ===
+                                                                                    "object" &&
+                                                                                value &&
+                                                                                "score" in value
+                                                                              ? Number(
+                                                                                    (
+                                                                                        value as {
+                                                                                            score: number;
+                                                                                        }
+                                                                                    ).score
+                                                                                )
+                                                                              : 0;
+                                                                    return (
                                                                         <div
-                                                                            key={step.id}
-                                                                            className="bg-muted/30 relative rounded-lg border p-4"
+                                                                            key={key}
+                                                                            className="bg-muted/20 rounded-lg border p-3"
                                                                         >
-                                                                            <div className="mb-2 flex items-center justify-between">
-                                                                                <div className="flex items-center gap-3">
-                                                                                    <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
-                                                                                        {idx + 1}
-                                                                                    </span>
-                                                                                    <Badge variant="outline">
-                                                                                        {step.type}
-                                                                                    </Badge>
-                                                                                </div>
-                                                                                <span className="text-muted-foreground text-sm">
-                                                                                    {step.durationMs
-                                                                                        ? formatLatency(
-                                                                                              step.durationMs
-                                                                                          )
-                                                                                        : "-"}
+                                                                            <div className="flex items-center justify-between">
+                                                                                <span className="text-sm font-medium">
+                                                                                    {key}
+                                                                                </span>
+                                                                                <span className="text-sm font-semibold">
+                                                                                    {(
+                                                                                        score * 100
+                                                                                    ).toFixed(0)}
+                                                                                    %
                                                                                 </span>
                                                                             </div>
-                                                                            <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-sm whitespace-pre-wrap">
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {feedbackList.length > 0 && (
+                                                    <div>
+                                                        <Separator className="my-4" />
+                                                        <h3 className="mb-2 text-sm font-semibold">
+                                                            User Feedback
+                                                        </h3>
+                                                        <div className="space-y-3">
+                                                            {feedbackList.map((fb) => (
+                                                                <div
+                                                                    key={fb.id}
+                                                                    className="bg-muted/20 rounded-lg border p-3 text-sm"
+                                                                >
+                                                                    <div className="flex items-center gap-2">
+                                                                        {fb.rating !== null && (
+                                                                            <span>
+                                                                                Rating: {fb.rating}
+                                                                            </span>
+                                                                        )}
+                                                                        {fb.thumbs !== null && (
+                                                                            <span>
+                                                                                {fb.thumbs
+                                                                                    ? "Thumbs up"
+                                                                                    : "Thumbs down"}
+                                                                            </span>
+                                                                        )}
+                                                                        <span className="text-muted-foreground text-xs">
+                                                                            {new Date(
+                                                                                fb.createdAt
+                                                                            ).toLocaleString()}
+                                                                        </span>
+                                                                    </div>
+                                                                    {fb.comment && (
+                                                                        <p className="mt-2">
+                                                                            {fb.comment}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </TabsContent>
+
+                                            <TabsContent value="trace" className="mt-0 space-y-4">
+                                                {(() => {
+                                                    const steps = runDetail?.trace?.steps ?? [];
+                                                    const stepsJson = runDetail?.trace
+                                                        ?.stepsJson as unknown[] | null;
+                                                    const hasSteps = steps.length > 0;
+                                                    const hasStepsJson =
+                                                        Array.isArray(stepsJson) &&
+                                                        stepsJson.length > 0;
+
+                                                    if (hasSteps) {
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {steps.map((step, idx) => (
+                                                                    <div
+                                                                        key={step.id}
+                                                                        className="bg-muted/30 rounded-lg border p-4"
+                                                                    >
+                                                                        <div className="mb-2 flex items-center justify-between">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                    {idx + 1}
+                                                                                </span>
+                                                                                <Badge variant="outline">
+                                                                                    {step.type}
+                                                                                </Badge>
+                                                                            </div>
+                                                                            <span className="text-muted-foreground text-sm">
+                                                                                {step.durationMs
+                                                                                    ? formatLatency(
+                                                                                          step.durationMs
+                                                                                      )
+                                                                                    : "-"}
+                                                                            </span>
+                                                                        </div>
+                                                                        <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                            {typeof step.content ===
+                                                                            "string"
+                                                                                ? step.content
+                                                                                : JSON.stringify(
+                                                                                      step.content,
+                                                                                      null,
+                                                                                      2
+                                                                                  )}
+                                                                        </pre>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    if (hasStepsJson) {
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {stepsJson.map(
+                                                                    (
+                                                                        step: unknown,
+                                                                        idx: number
+                                                                    ) => {
+                                                                        const s = step as Record<
+                                                                            string,
+                                                                            unknown
+                                                                        >;
+                                                                        return (
+                                                                            <div
+                                                                                key={idx}
+                                                                                className="bg-muted/30 rounded-lg border p-4"
+                                                                            >
+                                                                                <div className="mb-2 flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                            {idx +
+                                                                                                1}
+                                                                                        </span>
+                                                                                        <Badge variant="outline">
+                                                                                            {String(
+                                                                                                s.type ||
+                                                                                                    "step"
+                                                                                            )}
+                                                                                        </Badge>
+                                                                                    </div>
+                                                                                    <span className="text-muted-foreground text-sm">
+                                                                                        {typeof s.durationMs ===
+                                                                                        "number"
+                                                                                            ? formatLatency(
+                                                                                                  s.durationMs
+                                                                                              )
+                                                                                            : "-"}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                                    {JSON.stringify(
+                                                                                        s,
+                                                                                        null,
+                                                                                        2
+                                                                                    )}
+                                                                                </pre>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="py-8 text-center">
+                                                            <p className="text-muted-foreground text-sm">
+                                                                No trace steps available for this
+                                                                run.
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </TabsContent>
+
+                                            <TabsContent value="tools" className="mt-0 space-y-4">
+                                                {runDetail?.trace?.toolCalls &&
+                                                runDetail.trace.toolCalls.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {runDetail.trace.toolCalls.map(
+                                                            (toolCall, idx) => (
+                                                                <div
+                                                                    key={toolCall.id}
+                                                                    className="bg-muted/30 rounded-lg border p-4"
+                                                                >
+                                                                    <div className="mb-3 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                {idx + 1}
+                                                                            </span>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-semibold">
+                                                                                        {resolveToolLabel(
+                                                                                            toolCall
+                                                                                        )}
+                                                                                    </span>
+                                                                                    {toolCall.mcpServerId && (
+                                                                                        <Badge
+                                                                                            variant="outline"
+                                                                                            className="text-xs"
+                                                                                        >
+                                                                                            {
+                                                                                                toolCall.mcpServerId
+                                                                                            }
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="text-muted-foreground text-xs">
+                                                                                    {toolCall.success ? (
+                                                                                        <span className="text-green-600">
+                                                                                            Success
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-red-600">
+                                                                                            Failed
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-muted-foreground text-sm">
+                                                                            {toolCall.durationMs
+                                                                                ? formatLatency(
+                                                                                      toolCall.durationMs
+                                                                                  )
+                                                                                : "-"}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid gap-4 md:grid-cols-2">
+                                                                        <div>
+                                                                            <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                                                Input
+                                                                            </h4>
+                                                                            <pre className="bg-background max-h-32 overflow-auto rounded border p-3 text-xs">
+                                                                                {JSON.stringify(
+                                                                                    toolCall.inputJson,
+                                                                                    null,
+                                                                                    2
+                                                                                )}
+                                                                            </pre>
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                                                Output
+                                                                            </h4>
+                                                                            {toolCall.success ? (
+                                                                                <pre className="bg-background max-h-32 overflow-auto rounded border p-3 text-xs">
+                                                                                    {JSON.stringify(
+                                                                                        toolCall.outputJson,
+                                                                                        null,
+                                                                                        2
+                                                                                    )}
+                                                                                </pre>
+                                                                            ) : (
+                                                                                <div className="rounded border border-red-200 bg-red-50 p-3 text-xs text-red-600 dark:border-red-900/30 dark:bg-red-900/10">
+                                                                                    {toolCall.error ||
+                                                                                        "Unknown error"}
+                                                                                </div>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-8 text-center">
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No tool calls for this run.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </TabsContent>
+
+                                            <TabsContent value="errors" className="mt-0 space-y-4">
+                                                {selectedRun.status === "FAILED" && (
+                                                    <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-700 dark:border-red-900/30 dark:bg-red-900/10">
+                                                        <p className="font-semibold">Run failed</p>
+                                                        <p className="mt-2">
+                                                            {runDetail?.outputText ||
+                                                                selectedRun.outputText ||
+                                                                "No error output captured."}
+                                                        </p>
+                                                    </div>
+                                                )}
+
+                                                {toolErrors.length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold">
+                                                            Tool Errors
+                                                        </h3>
+                                                        <div className="mt-2 space-y-3">
+                                                            {toolErrors.map((toolCall) => (
+                                                                <div
+                                                                    key={toolCall.id}
+                                                                    className="bg-muted/20 rounded-lg border p-3 text-sm"
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-medium">
+                                                                            {resolveToolLabel(
+                                                                                toolCall
+                                                                            )}
+                                                                        </span>
+                                                                        <span className="text-muted-foreground text-xs">
+                                                                            {toolCall.durationMs
+                                                                                ? formatLatency(
+                                                                                      toolCall.durationMs
+                                                                                  )
+                                                                                : "-"}
+                                                                        </span>
+                                                                    </div>
+                                                                    <p className="mt-2 text-xs text-red-600">
+                                                                        {toolCall.error ||
+                                                                            "Unknown error"}
+                                                                    </p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {guardrailEvents.length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-sm font-semibold">
+                                                            Guardrail Events
+                                                        </h3>
+                                                        <div className="mt-2 space-y-3">
+                                                            {guardrailEvents.map((event) => (
+                                                                <div
+                                                                    key={event.id}
+                                                                    className="bg-muted/20 rounded-lg border p-3 text-sm"
+                                                                >
+                                                                    <div className="flex items-center justify-between">
+                                                                        <span className="font-medium">
+                                                                            {event.guardrailKey}
+                                                                        </span>
+                                                                        <Badge variant="outline">
+                                                                            {event.type}
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <p className="text-muted-foreground mt-2 text-xs">
+                                                                        {event.reason}
+                                                                    </p>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {toolErrors.length === 0 &&
+                                                    guardrailEvents.length === 0 &&
+                                                    selectedRun.status !== "FAILED" && (
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No errors, retries, or guardrail events
+                                                            recorded for this run.
+                                                        </p>
+                                                    )}
+                                            </TabsContent>
+
+                                            <TabsContent value="latency" className="mt-0 space-y-4">
+                                                {(() => {
+                                                    const steps = runDetail?.trace?.steps ?? [];
+                                                    const stepsJson = runDetail?.trace
+                                                        ?.stepsJson as unknown[] | null;
+                                                    const rawSteps =
+                                                        steps.length > 0
+                                                            ? steps
+                                                            : Array.isArray(stepsJson)
+                                                              ? stepsJson
+                                                              : [];
+
+                                                    if (rawSteps.length === 0) {
+                                                        return (
+                                                            <p className="text-muted-foreground text-sm">
+                                                                No latency data available for this
+                                                                run.
+                                                            </p>
+                                                        );
+                                                    }
+
+                                                    const normalizedSteps = rawSteps.map(
+                                                        (step, idx) => {
+                                                            if (typeof step === "object" && step) {
+                                                                const s = step as Record<
+                                                                    string,
+                                                                    unknown
+                                                                >;
+                                                                return {
+                                                                    number: Number(
+                                                                        s.stepNumber ??
+                                                                            s.step ??
+                                                                            idx + 1
+                                                                    ),
+                                                                    type: String(s.type || "step"),
+                                                                    durationMs:
+                                                                        typeof s.durationMs ===
+                                                                        "number"
+                                                                            ? s.durationMs
+                                                                            : null,
+                                                                    content: s.content ?? s
+                                                                };
+                                                            }
+                                                            return {
+                                                                number: idx + 1,
+                                                                type: "step",
+                                                                durationMs: null,
+                                                                content: step
+                                                            };
+                                                        }
+                                                    );
+
+                                                    return (
+                                                        <Table>
+                                                            <TableHeader>
+                                                                <TableRow>
+                                                                    <TableHead>#</TableHead>
+                                                                    <TableHead>Type</TableHead>
+                                                                    <TableHead className="text-right">
+                                                                        Duration
+                                                                    </TableHead>
+                                                                    <TableHead>Details</TableHead>
+                                                                </TableRow>
+                                                            </TableHeader>
+                                                            <TableBody>
+                                                                {normalizedSteps.map((step) => (
+                                                                    <TableRow
+                                                                        key={`${step.type}-${step.number}`}
+                                                                    >
+                                                                        <TableCell>
+                                                                            {step.number}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            {step.type}
+                                                                        </TableCell>
+                                                                        <TableCell className="text-right">
+                                                                            {step.durationMs
+                                                                                ? formatLatency(
+                                                                                      step.durationMs
+                                                                                  )
+                                                                                : "-"}
+                                                                        </TableCell>
+                                                                        <TableCell>
+                                                                            <pre className="bg-muted/20 max-h-24 overflow-auto rounded border p-2 text-xs whitespace-pre-wrap">
                                                                                 {typeof step.content ===
                                                                                 "string"
                                                                                     ? step.content
@@ -1128,533 +2095,245 @@ export default function LiveDashboardPage() {
                                                                                           2
                                                                                       )}
                                                                             </pre>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            );
-                                                        }
+                                                                        </TableCell>
+                                                                    </TableRow>
+                                                                ))}
+                                                            </TableBody>
+                                                        </Table>
+                                                    );
+                                                })()}
+                                            </TabsContent>
+                                        </>
+                                    )}
+                                </div>
+                            </Tabs>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
 
-                                                        if (hasStepsJson) {
-                                                            return (
-                                                                <div className="space-y-3">
-                                                                    {stepsJson.map(
-                                                                        (
-                                                                            step: unknown,
-                                                                            idx: number
-                                                                        ) => {
-                                                                            const s =
-                                                                                step as Record<
-                                                                                    string,
-                                                                                    unknown
-                                                                                >;
-                                                                            return (
-                                                                                <div
-                                                                                    key={idx}
-                                                                                    className="bg-muted/30 relative rounded-lg border p-4"
-                                                                                >
-                                                                                    <div className="mb-2 flex items-center justify-between">
-                                                                                        <div className="flex items-center gap-3">
-                                                                                            <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
-                                                                                                {idx +
-                                                                                                    1}
-                                                                                            </span>
-                                                                                            <Badge variant="outline">
-                                                                                                {String(
-                                                                                                    s.type ||
-                                                                                                        s.role ||
-                                                                                                        "step"
-                                                                                                )}
-                                                                                            </Badge>
-                                                                                        </div>
-                                                                                        {s.durationMs !=
-                                                                                            null && (
-                                                                                            <span className="text-muted-foreground text-sm">
-                                                                                                {formatLatency(
-                                                                                                    Number(
-                                                                                                        s.durationMs
-                                                                                                    )
-                                                                                                )}
-                                                                                            </span>
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-sm whitespace-pre-wrap">
-                                                                                        {JSON.stringify(
-                                                                                            s,
-                                                                                            null,
-                                                                                            2
-                                                                                        )}
-                                                                                    </pre>
-                                                                                </div>
-                                                                            );
-                                                                        }
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        // Fallback: show raw trace data if available
-                                                        if (runDetail?.trace) {
-                                                            return (
-                                                                <div className="space-y-4">
-                                                                    <div className="bg-muted/30 rounded-lg border p-4">
-                                                                        <h4 className="mb-2 font-medium">
-                                                                            Trace Data
-                                                                        </h4>
-                                                                        <pre className="bg-background max-h-96 overflow-auto rounded border p-3 text-sm whitespace-pre-wrap">
-                                                                            {JSON.stringify(
-                                                                                {
-                                                                                    status: runDetail
-                                                                                        .trace
-                                                                                        .status,
-                                                                                    durationMs:
-                                                                                        runDetail
-                                                                                            .trace
-                                                                                            .durationMs,
-                                                                                    modelJson:
-                                                                                        runDetail
-                                                                                            .trace
-                                                                                            .modelJson,
-                                                                                    tokensJson:
-                                                                                        runDetail
-                                                                                            .trace
-                                                                                            .tokensJson,
-                                                                                    scoresJson:
-                                                                                        runDetail
-                                                                                            .trace
-                                                                                            .scoresJson,
-                                                                                    stepsJson:
-                                                                                        runDetail
-                                                                                            .trace
-                                                                                            .stepsJson
-                                                                                },
-                                                                                null,
-                                                                                2
-                                                                            )}
-                                                                        </pre>
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        return (
-                                                            <div className="py-12 text-center">
-                                                                <HugeiconsIcon
-                                                                    icon={icons.activity!}
-                                                                    className="text-muted-foreground mx-auto mb-3 size-12"
-                                                                />
-                                                                <p className="text-muted-foreground">
-                                                                    No trace data recorded
-                                                                </p>
-                                                            </div>
-                                                        );
-                                                    })()}
-                                                </TabsContent>
-
-                                                {/* Tools Tab */}
-                                                <TabsContent
-                                                    value="tools"
-                                                    className="mt-0 space-y-4"
-                                                >
-                                                    {runDetail?.trace?.toolCalls &&
-                                                    runDetail.trace.toolCalls.length > 0 ? (
-                                                        <div className="space-y-4">
-                                                            <div className="text-muted-foreground mb-2 text-sm">
-                                                                {runDetail.trace.toolCalls.length}{" "}
-                                                                tool call
-                                                                {runDetail.trace.toolCalls
-                                                                    .length !== 1
-                                                                    ? "s"
-                                                                    : ""}{" "}
-                                                                •{" "}
-                                                                {
-                                                                    runDetail.trace.toolCalls.filter(
-                                                                        (c) => c.success
-                                                                    ).length
-                                                                }{" "}
-                                                                succeeded •{" "}
-                                                                {
-                                                                    runDetail.trace.toolCalls.filter(
-                                                                        (c) => !c.success
-                                                                    ).length
-                                                                }{" "}
-                                                                failed
-                                                            </div>
-                                                            {runDetail.trace.toolCalls.map(
-                                                                (call) => (
-                                                                    <div
-                                                                        key={call.id}
-                                                                        className={`rounded-lg border p-5 ${
-                                                                            call.success
-                                                                                ? "border-green-200 bg-green-50/50 dark:border-green-900/30 dark:bg-green-900/10"
-                                                                                : "border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10"
-                                                                        }`}
-                                                                    >
-                                                                        <div className="mb-4 flex items-center justify-between">
-                                                                            <div className="flex items-center gap-3">
-                                                                                <span
-                                                                                    className={`size-3 rounded-full ${
-                                                                                        call.success
-                                                                                            ? "bg-green-500"
-                                                                                            : "bg-red-500"
-                                                                                    }`}
-                                                                                />
-                                                                                <code className="text-base font-semibold">
-                                                                                    {call.toolKey}
-                                                                                </code>
-                                                                                {call.mcpServerId && (
-                                                                                    <Badge variant="outline">
-                                                                                        MCP:{" "}
-                                                                                        {
-                                                                                            call.mcpServerId
-                                                                                        }
-                                                                                    </Badge>
-                                                                                )}
-                                                                                <Badge
-                                                                                    variant={
-                                                                                        call.success
-                                                                                            ? "default"
-                                                                                            : "destructive"
-                                                                                    }
-                                                                                >
-                                                                                    {call.success
-                                                                                        ? "Success"
-                                                                                        : "Failed"}
-                                                                                </Badge>
-                                                                            </div>
-                                                                            <span className="text-muted-foreground text-sm">
-                                                                                {call.durationMs
-                                                                                    ? formatLatency(
-                                                                                          call.durationMs
-                                                                                      )
-                                                                                    : "-"}
-                                                                            </span>
-                                                                        </div>
-
-                                                                        <div className="grid gap-4 md:grid-cols-2">
-                                                                            {/* Input */}
-                                                                            <div>
-                                                                                <p className="text-muted-foreground mb-2 text-sm font-medium">
-                                                                                    Input
-                                                                                </p>
-                                                                                <pre className="bg-background max-h-48 overflow-auto rounded-lg border p-3 text-sm">
-                                                                                    {JSON.stringify(
-                                                                                        call.inputJson,
-                                                                                        null,
-                                                                                        2
-                                                                                    )}
-                                                                                </pre>
-                                                                            </div>
-
-                                                                            {/* Output/Error */}
-                                                                            <div>
-                                                                                {call.error ? (
-                                                                                    <>
-                                                                                        <p className="mb-2 text-sm font-medium text-red-600">
-                                                                                            Error
-                                                                                        </p>
-                                                                                        <pre className="max-h-48 overflow-auto rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-400">
-                                                                                            {
-                                                                                                call.error
-                                                                                            }
-                                                                                        </pre>
-                                                                                    </>
-                                                                                ) : (
-                                                                                    <>
-                                                                                        <p className="text-muted-foreground mb-2 text-sm font-medium">
-                                                                                            Output
-                                                                                        </p>
-                                                                                        <pre className="bg-background max-h-48 overflow-auto rounded-lg border p-3 text-sm">
-                                                                                            {JSON.stringify(
-                                                                                                call.outputJson,
-                                                                                                null,
-                                                                                                2
-                                                                                            )}
-                                                                                        </pre>
-                                                                                    </>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    </div>
-                                                                )
-                                                            )}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="py-12 text-center">
-                                                            <HugeiconsIcon
-                                                                icon={icons.settings!}
-                                                                className="text-muted-foreground mx-auto mb-3 size-12"
-                                                            />
-                                                            <p className="text-muted-foreground text-lg">
-                                                                No tool calls in this run
-                                                            </p>
-                                                            <p className="text-muted-foreground mt-1 text-sm">
-                                                                This run completed without calling
-                                                                any external tools
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </TabsContent>
-
-                                                {/* Evaluations Tab */}
-                                                <TabsContent
-                                                    value="evals"
-                                                    className="mt-0 space-y-6"
-                                                >
-                                                    {(() => {
-                                                        const evaluations =
-                                                            runDetail?.evaluation ?? [];
-                                                        const scoresJson = runDetail?.trace
-                                                            ?.scoresJson as Record<
-                                                            string,
-                                                            unknown
-                                                        > | null;
-                                                        const hasEvaluations =
-                                                            evaluations.length > 0;
-                                                        const hasScoresJson =
-                                                            scoresJson &&
-                                                            Object.keys(scoresJson).length > 0;
-
-                                                        if (hasEvaluations) {
-                                                            return (
-                                                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                                                    {evaluations.map((evalItem) => (
-                                                                        <div
-                                                                            key={evalItem.id}
-                                                                            className={`rounded-lg border p-5 ${
-                                                                                evalItem.score >=
-                                                                                0.8
-                                                                                    ? "border-green-200 bg-green-50/30 dark:border-green-900/30 dark:bg-green-900/10"
-                                                                                    : evalItem.score >=
-                                                                                        0.5
-                                                                                      ? "border-yellow-200 bg-yellow-50/30 dark:border-yellow-900/30 dark:bg-yellow-900/10"
-                                                                                      : "border-red-200 bg-red-50/30 dark:border-red-900/30 dark:bg-red-900/10"
-                                                                            }`}
-                                                                        >
-                                                                            <div className="mb-3 flex items-center justify-between">
-                                                                                <h4 className="text-base font-semibold">
-                                                                                    {
-                                                                                        evalItem.scorerKey
-                                                                                    }
-                                                                                </h4>
-                                                                                <span
-                                                                                    className={`text-2xl font-bold ${
-                                                                                        evalItem.score >=
-                                                                                        0.8
-                                                                                            ? "text-green-600"
-                                                                                            : evalItem.score >=
-                                                                                                0.5
-                                                                                              ? "text-yellow-600"
-                                                                                              : "text-red-600"
-                                                                                    }`}
-                                                                                >
-                                                                                    {(
-                                                                                        evalItem.score *
-                                                                                        100
-                                                                                    ).toFixed(0)}
-                                                                                    %
-                                                                                </span>
-                                                                            </div>
-                                                                            {evalItem.label && (
-                                                                                <Badge
-                                                                                    className="mb-2"
-                                                                                    variant={
-                                                                                        evalItem.label ===
-                                                                                        "pass"
-                                                                                            ? "default"
-                                                                                            : evalItem.label ===
-                                                                                                "fail"
-                                                                                              ? "destructive"
-                                                                                              : "secondary"
-                                                                                    }
-                                                                                >
-                                                                                    {evalItem.label}
-                                                                                </Badge>
-                                                                            )}
-                                                                            {evalItem.reasoning && (
-                                                                                <p className="text-muted-foreground mt-2 text-sm">
-                                                                                    {
-                                                                                        evalItem.reasoning
-                                                                                    }
-                                                                                </p>
-                                                                            )}
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        if (hasScoresJson) {
-                                                            return (
-                                                                <div className="space-y-4">
-                                                                    <h4 className="font-medium">
-                                                                        Scores from Trace
-                                                                    </h4>
-                                                                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                                                        {Object.entries(
-                                                                            scoresJson
-                                                                        ).map(([key, value]) => {
-                                                                            const score =
-                                                                                typeof value ===
-                                                                                "number"
-                                                                                    ? value
-                                                                                    : typeof value ===
-                                                                                            "object" &&
-                                                                                        value &&
-                                                                                        "score" in
-                                                                                            value
-                                                                                      ? Number(
-                                                                                            (
-                                                                                                value as {
-                                                                                                    score: number;
-                                                                                                }
-                                                                                            ).score
-                                                                                        )
-                                                                                      : 0;
-                                                                            return (
-                                                                                <div
-                                                                                    key={key}
-                                                                                    className={`rounded-lg border p-5 ${
-                                                                                        score >= 0.8
-                                                                                            ? "border-green-200 bg-green-50/30 dark:border-green-900/30 dark:bg-green-900/10"
-                                                                                            : score >=
-                                                                                                0.5
-                                                                                              ? "border-yellow-200 bg-yellow-50/30 dark:border-yellow-900/30 dark:bg-yellow-900/10"
-                                                                                              : "border-red-200 bg-red-50/30 dark:border-red-900/30 dark:bg-red-900/10"
-                                                                                    }`}
-                                                                                >
-                                                                                    <div className="flex items-center justify-between">
-                                                                                        <h4 className="text-base font-semibold">
-                                                                                            {key}
-                                                                                        </h4>
-                                                                                        <span
-                                                                                            className={`text-2xl font-bold ${
-                                                                                                score >=
-                                                                                                0.8
-                                                                                                    ? "text-green-600"
-                                                                                                    : score >=
-                                                                                                        0.5
-                                                                                                      ? "text-yellow-600"
-                                                                                                      : "text-red-600"
-                                                                                            }`}
-                                                                                        >
-                                                                                            {(
-                                                                                                score *
-                                                                                                100
-                                                                                            ).toFixed(
-                                                                                                0
-                                                                                            )}
-                                                                                            %
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    {typeof value ===
-                                                                                        "object" && (
-                                                                                        <pre className="bg-background mt-2 max-h-24 overflow-auto rounded border p-2 text-xs">
-                                                                                            {JSON.stringify(
-                                                                                                value,
-                                                                                                null,
-                                                                                                2
-                                                                                            )}
-                                                                                        </pre>
-                                                                                    )}
-                                                                                </div>
-                                                                            );
-                                                                        })}
-                                                                    </div>
-                                                                </div>
-                                                            );
-                                                        }
-
-                                                        return (
-                                                            <div className="py-12 text-center">
-                                                                <HugeiconsIcon
-                                                                    icon={
-                                                                        icons["chart-evaluation"]!
-                                                                    }
-                                                                    className="text-muted-foreground mx-auto mb-3 size-12"
-                                                                />
-                                                                <p className="text-muted-foreground text-lg">
-                                                                    No evaluations for this run
-                                                                </p>
-                                                                <p className="text-muted-foreground mt-1 text-sm">
-                                                                    Configure scorers on your agent
-                                                                    to enable automatic evaluations
-                                                                </p>
-                                                            </div>
-                                                        );
-                                                    })()}
-
-                                                    {/* User Feedback */}
-                                                    {runDetail?.feedback &&
-                                                        runDetail.feedback.length > 0 && (
-                                                            <>
-                                                                <Separator className="my-6" />
-                                                                <h3 className="mb-3 font-medium">
-                                                                    User Feedback
-                                                                </h3>
-                                                                <div className="space-y-3">
-                                                                    {runDetail.feedback.map(
-                                                                        (fb) => (
-                                                                            <div
-                                                                                key={fb.id}
-                                                                                className="bg-muted/30 rounded-lg border p-4"
-                                                                            >
-                                                                                <div className="mb-2 flex items-center gap-3">
-                                                                                    {fb.rating !==
-                                                                                        null && (
-                                                                                        <div className="flex items-center gap-1">
-                                                                                            {[
-                                                                                                1,
-                                                                                                2,
-                                                                                                3,
-                                                                                                4, 5
-                                                                                            ].map(
-                                                                                                (
-                                                                                                    star
-                                                                                                ) => (
-                                                                                                    <span
-                                                                                                        key={
-                                                                                                            star
-                                                                                                        }
-                                                                                                        className={
-                                                                                                            star <=
-                                                                                                            fb.rating!
-                                                                                                                ? "text-yellow-500"
-                                                                                                                : "text-muted-foreground"
-                                                                                                        }
-                                                                                                    >
-                                                                                                        ★
-                                                                                                    </span>
-                                                                                                )
-                                                                                            )}
-                                                                                        </div>
-                                                                                    )}
-                                                                                    <span className="text-muted-foreground text-xs">
-                                                                                        {new Date(
-                                                                                            fb.createdAt
-                                                                                        ).toLocaleString()}
-                                                                                    </span>
-                                                                                </div>
-                                                                                {fb.comment && (
-                                                                                    <p className="text-sm">
-                                                                                        {fb.comment}
-                                                                                    </p>
-                                                                                )}
-                                                                            </div>
-                                                                        )
-                                                                    )}
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                </TabsContent>
-                                            </>
-                                        )}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Slowest Runs</CardTitle>
+                        <CardDescription>Highest latency in current window</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {(metrics?.topRuns.slowest || []).length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No slow runs recorded.</p>
+                        ) : (
+                            metrics?.topRuns.slowest.map((run) => (
+                                <div
+                                    key={run.id}
+                                    className="flex items-start justify-between gap-3"
+                                >
+                                    <div>
+                                        <button
+                                            className="text-left text-sm font-medium hover:underline"
+                                            onClick={() => handleRunSelectById(run.id)}
+                                        >
+                                            {run.agentName}
+                                        </button>
+                                        <p className="text-muted-foreground text-xs">{run.id}</p>
                                     </div>
-                                </Tabs>
+                                    <div className="text-right text-sm">
+                                        <p className="font-semibold">
+                                            {run.durationMs ? formatLatency(run.durationMs) : "-"}
+                                        </p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {formatModelLabel(run.modelName, run.modelProvider)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Most Expensive</CardTitle>
+                        <CardDescription>Highest cost runs in window</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {(metrics?.topRuns.mostExpensive || []).length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No expensive runs recorded.
+                            </p>
+                        ) : (
+                            metrics?.topRuns.mostExpensive.map((run) => (
+                                <div
+                                    key={run.id}
+                                    className="flex items-start justify-between gap-3"
+                                >
+                                    <div>
+                                        <button
+                                            className="text-left text-sm font-medium hover:underline"
+                                            onClick={() => handleRunSelectById(run.id)}
+                                        >
+                                            {run.agentName}
+                                        </button>
+                                        <p className="text-muted-foreground text-xs">{run.id}</p>
+                                    </div>
+                                    <div className="text-right text-sm">
+                                        <p className="font-semibold">{formatCost(run.costUsd)}</p>
+                                        <p className="text-muted-foreground text-xs">
+                                            {formatTokens(run.totalTokens)}
+                                        </p>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Model Usage</CardTitle>
+                        <CardDescription>Runs by model in window</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {modelUsageSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No model usage data available.
+                            </p>
+                        ) : (
+                            modelUsageSorted.slice(0, 6).map((model) => (
+                                <div
+                                    key={`${model.modelProvider}-${model.modelName}`}
+                                    className="flex items-center justify-between text-sm"
+                                >
+                                    <span className="font-medium">
+                                        {formatModelLabel(model.modelName, model.modelProvider)}
+                                    </span>
+                                    <span className="text-muted-foreground">{model.runs}</span>
+                                </div>
+                            ))
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Agent Performance</CardTitle>
+                        <CardDescription>Avg latency, tools, and failures</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {perAgentSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No agent performance data available.
+                            </p>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="text-right">Runs</TableHead>
+                                            <TableHead className="text-right">Success</TableHead>
+                                            <TableHead className="text-right">
+                                                Avg Latency
+                                            </TableHead>
+                                            <TableHead className="text-right">Avg Tools</TableHead>
+                                            <TableHead className="text-right">Avg Cost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {perAgentSorted.map((agent) => (
+                                            <TableRow
+                                                key={agent.agentId}
+                                                className="cursor-pointer"
+                                                onClick={() => handleAgentClick(agent.agentSlug)}
+                                            >
+                                                <TableCell className="font-medium">
+                                                    {agent.agentName}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.totalRuns}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.successRate}%
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatLatency(agent.avgLatencyMs)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.avgToolCalls.toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatCost(agent.avgCostUsd)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </div>
-                        </>
-                    )}
-                </DialogContent>
-            </Dialog>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Version Comparison</CardTitle>
+                        <CardDescription>Success rate by agent version</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {perVersionSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No version metrics available.
+                            </p>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Version</TableHead>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="text-right">Runs</TableHead>
+                                            <TableHead className="text-right">Success</TableHead>
+                                            <TableHead className="text-right">
+                                                Avg Latency
+                                            </TableHead>
+                                            <TableHead className="text-right">Avg Cost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {perVersionSorted.map((version) => (
+                                            <TableRow key={version.versionId || "unknown"}>
+                                                <TableCell>
+                                                    {version.versionNumber
+                                                        ? `v${version.versionNumber}`
+                                                        : "-"}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {version.agentId
+                                                        ? agentNameById.get(version.agentId) ||
+                                                          "Unknown"
+                                                        : "Unknown"}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {version.totalRuns}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {version.successRate}%
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatLatency(version.avgLatencyMs)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatCost(version.avgCostUsd)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

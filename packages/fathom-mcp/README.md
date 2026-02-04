@@ -11,7 +11,8 @@ Access Fathom meeting recordings, summaries, and transcripts directly in Cursor.
 2. **Open the folder in Cursor**
 
 3. **Ask the agent:**
-   > "Read AGENT.md and help me install the Fathom MCP"
+
+    > "Read AGENT.md and help me install the Fathom MCP"
 
 4. **Get the API key from Travis** when prompted
 

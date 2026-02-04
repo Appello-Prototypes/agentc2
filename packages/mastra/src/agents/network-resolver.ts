@@ -44,6 +44,8 @@ const TRIP_PLANNER_SUB_AGENTS = [
     "trip-itinerary"
 ] as const;
 
+const TRIP_PLANNER_ROUTER_SLUG = "trip-planner";
+
 /**
  * Trip Planner Memory Configuration
  *
@@ -177,6 +179,24 @@ export class NetworkResolver {
         }
 
         console.log("[NetworkResolver] Resolving Trip Planner sub-agents from database...");
+
+        try {
+            const { agent, record } = await agentResolver.resolve({
+                slug: TRIP_PLANNER_ROUTER_SLUG,
+                fallbackToSystem: false
+            });
+
+            if (record) {
+                this.cachedNetwork = agent;
+                this.cacheExpiry = now + this.cacheTTL;
+                console.log(
+                    "[NetworkResolver] Trip Planner routing agent loaded from database configuration"
+                );
+                return agent as Agent<any, any, any, any>;
+            }
+        } catch {
+            // Fall back to hardcoded trip planner network if no DB routing agent exists
+        }
 
         // Resolve all sub-agents from database
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

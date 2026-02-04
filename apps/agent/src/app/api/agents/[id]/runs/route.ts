@@ -2,6 +2,23 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
 import { TRAFFIC_SPLIT } from "@/lib/learning-config";
+import { extractToolCalls } from "@/lib/run-recorder";
+
+function formatToolResultPreview(result: unknown, maxLength = 500): string {
+    if (typeof result === "string") {
+        return result.slice(0, maxLength);
+    }
+
+    try {
+        const json = JSON.stringify(result, null, 2);
+        if (json === undefined) {
+            return String(result).slice(0, maxLength);
+        }
+        return json.slice(0, maxLength);
+    } catch {
+        return String(result).slice(0, maxLength);
+    }
+}
 
 /**
  * Experiment routing helper for shadow A/B testing.
@@ -353,12 +370,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
 
             // Extract tool calls from result
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            const rawToolCalls: any[] =
-                (result as any).toolCalls || (result as any).tool_calls || [];
-            const rawToolResults: any[] =
-                (result as any).toolResults || (result as any).tool_results || [];
-            /* eslint-enable @typescript-eslint/no-explicit-any */
+            const toolCalls = extractToolCalls(result);
 
             // Build execution steps
             interface ExecutionStep {
@@ -372,10 +384,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             let stepCounter = 0;
 
             // Add tool call steps
-            for (const [idx, tc] of rawToolCalls.entries()) {
+            for (const tc of toolCalls) {
                 stepCounter++;
-                const toolName = tc.toolName || tc.name || "unknown";
-                const args = tc.args || tc.input || {};
+                const toolName = tc.toolKey || "unknown";
+                const args = tc.input || {};
                 executionSteps.push({
                     step: stepCounter,
                     type: "tool_call",
@@ -384,38 +396,35 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 });
 
                 // Add tool result step if available
-                const tr = rawToolResults[idx];
-                if (tr) {
+                if (tc.output !== undefined || tc.error) {
                     stepCounter++;
-                    const resultPreview =
-                        typeof tr.result === "string"
-                            ? tr.result.slice(0, 500)
-                            : JSON.stringify(tr.result, null, 2).slice(0, 500);
+                    const resultPreview = formatToolResultPreview(tc.output, 500);
                     executionSteps.push({
                         step: stepCounter,
                         type: "tool_result",
-                        content: tr.error
-                            ? `Tool ${toolName} failed: ${tr.error}`
+                        content: tc.error
+                            ? `Tool ${toolName} failed: ${tc.error}`
                             : `Tool ${toolName} result:\n${resultPreview}`,
                         timestamp: new Date().toISOString()
                     });
-
-                    // Record tool call in database
-                    await prisma.agentToolCall.create({
-                        data: {
-                            runId: run.id,
-                            traceId: trace.id,
-                            toolKey: toolName,
-                            inputJson: args as Prisma.InputJsonValue,
-                            outputJson:
-                                tr.result !== undefined
-                                    ? (tr.result as Prisma.InputJsonValue)
-                                    : Prisma.JsonNull,
-                            success: !tr.error,
-                            error: tr.error || null
-                        }
-                    });
                 }
+
+                // Record tool call in database
+                await prisma.agentToolCall.create({
+                    data: {
+                        runId: run.id,
+                        traceId: trace.id,
+                        toolKey: toolName,
+                        inputJson: args as Prisma.InputJsonValue,
+                        outputJson:
+                            tc.output !== undefined
+                                ? (tc.output as Prisma.InputJsonValue)
+                                : Prisma.JsonNull,
+                        success: tc.success,
+                        error: tc.error || null,
+                        durationMs: tc.durationMs
+                    }
+                });
             }
 
             // Add final response step

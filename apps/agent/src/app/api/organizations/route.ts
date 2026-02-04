@@ -7,7 +7,7 @@ import { auditLog } from "@/lib/audit-log";
  *
  * List organizations for the current user
  */
-export async function GET(_request: NextRequest) {
+export async function GET() {
     try {
         // TODO: Get user ID from auth context
         // For now, list all organizations

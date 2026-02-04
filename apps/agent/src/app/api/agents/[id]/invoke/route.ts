@@ -1,10 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
-import { startRun, extractTokenUsage, type RunSource } from "@/lib/run-recorder";
+import { startRun, extractTokenUsage, extractToolCalls, type RunSource } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { inngest } from "@/lib/inngest";
 import { auditLog } from "@/lib/audit-log";
+
+function formatToolResultPreview(result: unknown, maxLength = 500): string {
+    if (typeof result === "string") {
+        return result.slice(0, maxLength);
+    }
+
+    try {
+        const json = JSON.stringify(result, null, 2);
+        if (json === undefined) {
+            return String(result).slice(0, maxLength);
+        }
+        return json.slice(0, maxLength);
+    } catch {
+        return String(result).slice(0, maxLength);
+    }
+}
 
 /**
  * POST /api/agents/[id]/invoke
@@ -185,9 +201,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-            const response = await agent.generate(input, {
-                maxSteps: effectiveMaxSteps
-            });
+            const generateOptions = {
+                maxSteps: effectiveMaxSteps,
+                ...(record.maxTokens ? { maxTokens: record.maxTokens } : {})
+            } as unknown as Parameters<typeof agent.generate>[1];
+
+            const response = await agent.generate(input, generateOptions);
 
             clearTimeout(timeoutId);
             const durationMs = Date.now() - startTime;
@@ -204,12 +223,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 : undefined;
 
             // Extract tool calls from response
-            /* eslint-disable @typescript-eslint/no-explicit-any */
-            const rawToolCalls: any[] =
-                (response as any).toolCalls || (response as any).tool_calls || [];
-            const rawToolResults: any[] =
-                (response as any).toolResults || (response as any).tool_results || [];
-            /* eslint-enable @typescript-eslint/no-explicit-any */
+            const toolCalls = extractToolCalls(response);
 
             // Build execution steps and record tool calls
             interface ExecutionStep {
@@ -222,9 +236,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             let stepCounter = 0;
 
             // Process tool calls
-            for (const [idx, tc] of rawToolCalls.entries()) {
-                const toolName = tc.toolName || tc.name || "unknown";
-                const args = tc.args || tc.input || {};
+            for (const tc of toolCalls) {
+                const toolName = tc.toolKey || "unknown";
+                const args = tc.input || {};
 
                 stepCounter++;
                 executionSteps.push({
@@ -234,32 +248,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     timestamp: new Date().toISOString()
                 });
 
-                // Get matching result
-                const tr = rawToolResults[idx];
-                if (tr) {
+                if (tc.output !== undefined || tc.error) {
                     stepCounter++;
-                    const resultPreview =
-                        typeof tr.result === "string"
-                            ? tr.result.slice(0, 500)
-                            : JSON.stringify(tr.result, null, 2).slice(0, 500);
+                    const resultPreview = formatToolResultPreview(tc.output, 500);
                     executionSteps.push({
                         step: stepCounter,
                         type: "tool_result",
-                        content: tr.error
-                            ? `Tool ${toolName} failed: ${tr.error}`
+                        content: tc.error
+                            ? `Tool ${toolName} failed: ${tc.error}`
                             : `Tool ${toolName} result:\n${resultPreview}`,
                         timestamp: new Date().toISOString()
                     });
-
-                    // Record tool call
-                    await runHandle.addToolCall({
-                        toolKey: toolName,
-                        input: args,
-                        output: tr.result,
-                        success: !tr.error,
-                        error: tr.error
-                    });
                 }
+
+                // Record tool call
+                await runHandle.addToolCall({
+                    toolKey: toolName,
+                    input: args,
+                    output: tc.output,
+                    success: tc.success,
+                    error: tc.error,
+                    durationMs: tc.durationMs
+                });
             }
 
             // Add final response step

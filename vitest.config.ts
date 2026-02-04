@@ -1,6 +1,12 @@
+import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+    resolve: {
+        alias: {
+            "@repo/database": path.resolve(__dirname, "packages/database/src/index.ts")
+        }
+    },
     test: {
         globals: true,
         environment: "node",

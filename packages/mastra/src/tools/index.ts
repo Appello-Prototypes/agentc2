@@ -3,6 +3,8 @@ export { webFetchTool } from "./web-fetch";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
+export { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
+export { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
 
 // Tool registry for stored agents
 export {
@@ -19,6 +21,8 @@ export type { ToolInfo } from "./registry";
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { jsonParserTool } from "./json-parser";
+import { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
+import { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
 
 // Extended tools bundle (includes web and parsing)
 export const extendedTools = {
@@ -26,5 +30,11 @@ export const extendedTools = {
     calculatorTool,
     generateIdTool,
     webFetchTool,
-    jsonParserTool
+    jsonParserTool,
+    workflowExecuteTool,
+    workflowListRunsTool,
+    workflowGetRunTool,
+    networkExecuteTool,
+    networkListRunsTool,
+    networkGetRunTool
 };

@@ -32,6 +32,10 @@ interface ModelConfig {
         type: "enabled" | "disabled";
         budget_tokens?: number;
     };
+    parallelToolCalls?: boolean;
+    reasoningEffort?: "low" | "medium" | "high";
+    cacheControl?: { type: "ephemeral" };
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
 }
 
 interface Agent {
@@ -47,6 +51,8 @@ interface Agent {
     maxTokens: number | null;
     maxSteps: number;
     tools: string[];
+    subAgents: string[];
+    workflows: string[];
     memoryEnabled: boolean;
     memoryConfig: {
         lastMessages: number;
@@ -99,6 +105,17 @@ export default function ConfigurePage() {
     // Extended thinking state (for form)
     const [extendedThinking, setExtendedThinking] = useState(false);
     const [thinkingBudget, setThinkingBudget] = useState(10000);
+    const [parallelToolCalls, setParallelToolCalls] = useState(false);
+    const [reasoningEffort, setReasoningEffort] = useState<string>("");
+    const [cacheControlEnabled, setCacheControlEnabled] = useState(false);
+    const [toolChoice, setToolChoice] = useState<string>("auto");
+
+    const [availableAgents, setAvailableAgents] = useState<
+        Array<{ id: string; slug: string; name: string }>
+    >([]);
+    const [availableWorkflows, setAvailableWorkflows] = useState<
+        Array<{ id: string; slug: string; name: string }>
+    >([]);
 
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
@@ -119,6 +136,21 @@ export default function ConfigurePage() {
             console.error("Failed to fetch tools:", err);
         } finally {
             setToolsLoading(false);
+        }
+    }, []);
+
+    const fetchAgentsAndWorkflows = useCallback(async () => {
+        try {
+            const [agentsRes, workflowsRes] = await Promise.all([
+                fetch(`${getApiBase()}/api/agents`),
+                fetch(`${getApiBase()}/api/workflows`)
+            ]);
+            const agentsData = await agentsRes.json();
+            const workflowsData = await workflowsRes.json();
+            setAvailableAgents(agentsData.agents || []);
+            setAvailableWorkflows(workflowsData.workflows || []);
+        } catch (err) {
+            console.error("Failed to fetch agents/workflows:", err);
         }
     }, []);
 
@@ -149,6 +181,8 @@ export default function ConfigurePage() {
                 maxTokens: agentData.maxTokens,
                 maxSteps: agentData.maxSteps ?? 5,
                 tools: (agentData.tools || []).map((t: { toolId: string }) => t.toolId),
+                subAgents: agentData.subAgents || [],
+                workflows: agentData.workflows || [],
                 memoryEnabled: agentData.memoryEnabled ?? false,
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
@@ -165,6 +199,12 @@ export default function ConfigurePage() {
             const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
             setExtendedThinking(hasExtendedThinking);
             setThinkingBudget(budget);
+            setParallelToolCalls(modelConfig?.parallelToolCalls ?? false);
+            setReasoningEffort(modelConfig?.reasoningEffort || "");
+            setCacheControlEnabled(modelConfig?.cacheControl?.type === "ephemeral");
+            setToolChoice(
+                typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
+            );
 
             setAgent(transformedAgent);
             setFormData(transformedAgent);
@@ -178,7 +218,8 @@ export default function ConfigurePage() {
     useEffect(() => {
         fetchAgent();
         fetchToolsAndScorers();
-    }, [fetchAgent, fetchToolsAndScorers]);
+        fetchAgentsAndWorkflows();
+    }, [fetchAgent, fetchToolsAndScorers, fetchAgentsAndWorkflows]);
 
     // Group tools by source for display
     const groupToolsBySource = (tools: ToolInfo[]) => {
@@ -254,7 +295,11 @@ export default function ConfigurePage() {
             const requestBody = {
                 ...formData,
                 extendedThinking,
-                thinkingBudget
+                thinkingBudget,
+                parallelToolCalls,
+                reasoningEffort: reasoningEffort || null,
+                cacheControl: cacheControlEnabled,
+                toolChoice: toolChoice || null
             };
 
             const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}`, {
@@ -284,6 +329,8 @@ export default function ConfigurePage() {
                 maxTokens: agentData.maxTokens,
                 maxSteps: agentData.maxSteps ?? 5,
                 tools: (agentData.tools || []).map((t: { toolId: string }) => t.toolId),
+                subAgents: agentData.subAgents || [],
+                workflows: agentData.workflows || [],
                 memoryEnabled: agentData.memoryEnabled ?? false,
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
@@ -300,6 +347,12 @@ export default function ConfigurePage() {
             const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
             setExtendedThinking(hasExtendedThinking);
             setThinkingBudget(budget);
+            setParallelToolCalls(modelConfig?.parallelToolCalls ?? false);
+            setReasoningEffort(modelConfig?.reasoningEffort || "");
+            setCacheControlEnabled(modelConfig?.cacheControl?.type === "ephemeral");
+            setToolChoice(
+                typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
+            );
 
             setAgent(updatedAgent);
             setFormData(updatedAgent);
@@ -317,6 +370,22 @@ export default function ConfigurePage() {
             ? tools.filter((t) => t !== toolId)
             : [...tools, toolId];
         handleChange("tools", newTools);
+    };
+
+    const toggleSubAgent = (slug: string) => {
+        const subAgents = formData.subAgents || [];
+        const newSubAgents = subAgents.includes(slug)
+            ? subAgents.filter((s) => s !== slug)
+            : [...subAgents, slug];
+        handleChange("subAgents", newSubAgents);
+    };
+
+    const toggleWorkflow = (workflowId: string) => {
+        const workflows = formData.workflows || [];
+        const newWorkflows = workflows.includes(workflowId)
+            ? workflows.filter((w) => w !== workflowId)
+            : [...workflows, workflowId];
+        handleChange("workflows", newWorkflows);
     };
 
     const toggleScorer = (scorerId: string) => {
@@ -411,6 +480,7 @@ export default function ConfigurePage() {
                     <TabsTrigger value="model">Model</TabsTrigger>
                     <TabsTrigger value="instructions">Instructions</TabsTrigger>
                     <TabsTrigger value="tools">Tools</TabsTrigger>
+                    <TabsTrigger value="orchestration">Orchestration</TabsTrigger>
                     <TabsTrigger value="memory">Memory</TabsTrigger>
                     <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
                 </TabsList>
@@ -522,6 +592,12 @@ export default function ConfigurePage() {
                                                 // Reset extended thinking if switching away from Anthropic
                                                 if (v !== "anthropic") {
                                                     setExtendedThinking(false);
+                                                    setCacheControlEnabled(false);
+                                                    setHasChanges(true);
+                                                }
+                                                if (v !== "openai") {
+                                                    setParallelToolCalls(false);
+                                                    setReasoningEffort("");
                                                     setHasChanges(true);
                                                 }
                                             }
@@ -681,6 +757,102 @@ export default function ConfigurePage() {
                                         )}
                                     </div>
                                 )}
+
+                            {formData.modelProvider === "openai" && (
+                                <div className="space-y-4 rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-base font-medium">
+                                                Parallel tool calls
+                                            </Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Allow OpenAI to call tools in parallel where
+                                                supported.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={parallelToolCalls}
+                                            onCheckedChange={(checked) => {
+                                                setParallelToolCalls(checked);
+                                                setHasChanges(true);
+                                            }}
+                                        />
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>Reasoning effort</Label>
+                                        <Select
+                                            value={reasoningEffort || "default"}
+                                            onValueChange={(value) => {
+                                                const nextValue = value ?? "default";
+                                                setReasoningEffort(
+                                                    nextValue === "default" ? "" : nextValue
+                                                );
+                                                setHasChanges(true);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="default">Default</SelectItem>
+                                                <SelectItem value="low">Low</SelectItem>
+                                                <SelectItem value="medium">Medium</SelectItem>
+                                                <SelectItem value="high">High</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <p className="text-muted-foreground text-xs">
+                                            Higher effort improves reasoning but can increase
+                                            latency and cost.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "anthropic" && (
+                                <div className="space-y-4 rounded-lg border p-4">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-base font-medium">
+                                                Prompt caching
+                                            </Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Use ephemeral cache control for repeated prompts.
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={cacheControlEnabled}
+                                            onCheckedChange={(checked) => {
+                                                setCacheControlEnabled(checked);
+                                                setHasChanges(true);
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="space-y-2">
+                                <Label>Tool choice</Label>
+                                <Select
+                                    value={toolChoice || "auto"}
+                                    onValueChange={(value) => {
+                                        setToolChoice(value ?? "auto");
+                                        setHasChanges(true);
+                                    }}
+                                >
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="auto">Auto</SelectItem>
+                                        <SelectItem value="required">Required</SelectItem>
+                                        <SelectItem value="none">None</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                                <p className="text-muted-foreground text-xs">
+                                    Control whether tools must be used in generation.
+                                </p>
+                            </div>
 
                             {/* Provider-specific options hint */}
                             {formData.modelProvider === "openai" && (
@@ -881,6 +1053,100 @@ export default function ConfigurePage() {
                                     )}
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Orchestration Tab */}
+                <TabsContent value="orchestration">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Orchestration</CardTitle>
+                            <CardDescription>
+                                Configure sub-agents and workflows for network routing.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label>Sub-agents</Label>
+                                    <span className="text-muted-foreground text-xs">
+                                        {formData.subAgents?.length || 0} selected
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {availableAgents
+                                        .filter((agentInfo) => agentInfo.slug !== agent?.slug)
+                                        .map((agentInfo) => (
+                                            <label
+                                                key={agentInfo.id}
+                                                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                    formData.subAgents?.includes(agentInfo.slug)
+                                                        ? "border-primary bg-primary/5"
+                                                        : "hover:bg-muted/50"
+                                                }`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={
+                                                        formData.subAgents?.includes(
+                                                            agentInfo.slug
+                                                        ) || false
+                                                    }
+                                                    onChange={() => toggleSubAgent(agentInfo.slug)}
+                                                    className="mt-0.5"
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium">
+                                                        {agentInfo.name}
+                                                    </p>
+                                                    <p className="text-muted-foreground text-xs">
+                                                        {agentInfo.slug}
+                                                    </p>
+                                                </div>
+                                            </label>
+                                        ))}
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <Label>Workflows</Label>
+                                    <span className="text-muted-foreground text-xs">
+                                        {formData.workflows?.length || 0} selected
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {availableWorkflows.map((workflow) => (
+                                        <label
+                                            key={workflow.id}
+                                            className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                formData.workflows?.includes(workflow.id)
+                                                    ? "border-primary bg-primary/5"
+                                                    : "hover:bg-muted/50"
+                                            }`}
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                checked={
+                                                    formData.workflows?.includes(workflow.id) ||
+                                                    false
+                                                }
+                                                onChange={() => toggleWorkflow(workflow.id)}
+                                                className="mt-0.5"
+                                            />
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium">
+                                                    {workflow.name}
+                                                </p>
+                                                <p className="text-muted-foreground text-xs">
+                                                    {workflow.slug}
+                                                </p>
+                                            </div>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

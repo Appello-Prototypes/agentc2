@@ -3,6 +3,28 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
+
+// Check if user has completed onboarding
+function useOnboardingRedirect() {
+    const router = useRouter();
+    const [checked] = useState(() => {
+        // Initialize from localStorage if available (SSR-safe check)
+        if (typeof window !== "undefined") {
+            return localStorage.getItem("agentc2_onboarding_complete") === "true";
+        }
+        return false;
+    });
+
+    useEffect(() => {
+        // Check localStorage for onboarding completion
+        const isComplete = localStorage.getItem("agentc2_onboarding_complete") === "true";
+        if (!isComplete) {
+            router.replace("/onboarding");
+        }
+    }, [router]);
+
+    return checked;
+}
 import {
     Card,
     CardContent,
@@ -100,6 +122,8 @@ interface Run {
     modelName: string | null;
     totalTokens: number | null;
     costUsd: number | null;
+    toolCallCount: number;
+    stepCount: number;
 }
 
 interface RunCounts {
@@ -511,6 +535,13 @@ function AgentTableView({
     );
 }
 
+function formatModelName(provider: string | null, model: string | null): string {
+    if (!model) return "-";
+    // Extract just the model name without provider prefix for cleaner display
+    const shortModel = model.replace(/^(openai\/|anthropic\/|google\/)/, "");
+    return shortModel;
+}
+
 function RunsTable({ runs, onRunClick }: { runs: Run[]; onRunClick: (run: Run) => void }) {
     return (
         <Card>
@@ -520,7 +551,9 @@ function RunsTable({ runs, onRunClick }: { runs: Run[]; onRunClick: (run: Run) =
                         <TableHead>Agent</TableHead>
                         <TableHead>Input</TableHead>
                         <TableHead>Status</TableHead>
-                        <TableHead>Type</TableHead>
+                        <TableHead>Model</TableHead>
+                        <TableHead className="text-right">Steps</TableHead>
+                        <TableHead className="text-right">Tools</TableHead>
                         <TableHead className="text-right">Duration</TableHead>
                         <TableHead className="text-right">Tokens</TableHead>
                         <TableHead className="text-right">Cost</TableHead>
@@ -549,9 +582,18 @@ function RunsTable({ runs, onRunClick }: { runs: Run[]; onRunClick: (run: Run) =
                                 </Badge>
                             </TableCell>
                             <TableCell>
-                                <Badge variant="outline" className="text-xs">
-                                    {run.runType}
-                                </Badge>
+                                <p
+                                    className="text-muted-foreground max-w-[120px] truncate font-mono text-xs"
+                                    title={`${run.modelProvider}/${run.modelName}`}
+                                >
+                                    {formatModelName(run.modelProvider, run.modelName)}
+                                </p>
+                            </TableCell>
+                            <TableCell className="text-right">
+                                {run.stepCount > 0 ? run.stepCount : "-"}
+                            </TableCell>
+                            <TableCell className="text-right">
+                                {run.toolCallCount > 0 ? run.toolCallCount : "-"}
                             </TableCell>
                             <TableCell className="text-right">
                                 {run.durationMs ? formatLatency(run.durationMs) : "-"}
@@ -575,6 +617,7 @@ function RunsTable({ runs, onRunClick }: { runs: Run[]; onRunClick: (run: Run) =
 
 export default function WorkspacePage() {
     const router = useRouter();
+    const onboardingChecked = useOnboardingRedirect();
     const [loading, setLoading] = useState(true);
     const [agents, setAgents] = useState<Agent[]>([]);
     const [summary, setSummary] = useState<WorkspaceSummary | null>(null);
@@ -664,6 +707,11 @@ export default function WorkspacePage() {
         router.push(`/workspace/${run.agentSlug}/runs`);
     };
 
+    // Show nothing while checking onboarding status
+    if (!onboardingChecked) {
+        return null;
+    }
+
     if (loading) {
         return (
             <div className="container mx-auto space-y-6 py-6">
@@ -687,8 +735,8 @@ export default function WorkspacePage() {
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>
-                    <h1 className="text-3xl font-bold">Agent Workspace</h1>
-                    <p className="text-muted-foreground">Manage and monitor your AI agents</p>
+                    <h1 className="text-3xl font-bold">Workspace</h1>
+                    <p className="text-muted-foreground">Build, run, and improve AI agents</p>
                 </div>
                 <Button onClick={() => router.push("/demos/agents/manage")}>+ Create Agent</Button>
             </div>
@@ -748,7 +796,7 @@ export default function WorkspacePage() {
             )}
 
             {/* Tabs */}
-            <Tabs defaultValue="agents" value={activeTab} onValueChange={setActiveTab}>
+            <Tabs defaultValue="agents" value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)}>
                 <div className="flex items-center justify-between">
                     <TabsList>
                         <TabsTrigger value="agents">Agents</TabsTrigger>
@@ -784,7 +832,7 @@ export default function WorkspacePage() {
 
                 <TabsContent value="agents">
                     {/* Filters */}
-                    <div className="flex flex-wrap items-center gap-4">
+                    <div className="mb-4 flex flex-wrap items-center gap-4">
                         <div className="min-w-64 flex-1">
                             <Input
                                 placeholder="Search agents..."
@@ -824,10 +872,10 @@ export default function WorkspacePage() {
                                 {agents.length === 0 ? (
                                     <div>
                                         <p className="text-muted-foreground text-lg">
-                                            No agents yet
+                                            Ready to build your first agent?
                                         </p>
                                         <p className="text-muted-foreground mt-2 text-sm">
-                                            Create your first agent to get started
+                                            Start with a template or build from scratch
                                         </p>
                                         <Button
                                             className="mt-4"

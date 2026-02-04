@@ -29,19 +29,20 @@ Open **Cursor Settings → MCP** and add this configuration:
 
 ```json
 {
-  "mcpServers": {
-    "Fathom": {
-      "command": "node",
-      "args": ["FULL_PATH_TO_INDEX_JS"],
-      "env": {
-        "FATHOM_API_KEY": "ASK_TRAVIS_FOR_API_KEY"
-      }
+    "mcpServers": {
+        "Fathom": {
+            "command": "node",
+            "args": ["FULL_PATH_TO_INDEX_JS"],
+            "env": {
+                "FATHOM_API_KEY": "ASK_TRAVIS_FOR_API_KEY"
+            }
+        }
     }
-  }
 }
 ```
 
 Replace:
+
 - `FULL_PATH_TO_INDEX_JS` with the actual path (e.g., `/Users/username/fathom-mcp/index.js`)
 - `ASK_TRAVIS_FOR_API_KEY` with the shared team API key
 
@@ -55,12 +56,12 @@ After restart, test by asking: "List my recent Fathom meetings"
 
 ## Available Tools After Installation
 
-| Tool | Description |
-|------|-------------|
-| `list_meetings` | List meetings with optional date filtering |
-| `get_meeting_summary` | Get AI summary for a meeting |
-| `get_meeting_transcript` | Get full transcript |
-| `get_meeting_details` | Get complete meeting info |
+| Tool                     | Description                                |
+| ------------------------ | ------------------------------------------ |
+| `list_meetings`          | List meetings with optional date filtering |
+| `get_meeting_summary`    | Get AI summary for a meeting               |
+| `get_meeting_transcript` | Get full transcript                        |
+| `get_meeting_details`    | Get complete meeting info                  |
 
 ## Troubleshooting
 
@@ -71,9 +72,9 @@ After restart, test by asking: "List my recent Fathom meetings"
 ## Notes for Agent
 
 When helping the user:
+
 1. First run `npm install` in this directory
 2. Get the absolute path to index.js using `pwd`
 3. Guide them to add the MCP config in Cursor Settings
 4. Remind them to get the API key from Travis
 5. Tell them to restart Cursor after configuring
-

@@ -11,6 +11,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { startRun, type RunSource, type ToolCallData } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 
+function formatToolResultPreview(result: unknown, maxLength = 500): string {
+    if (typeof result === "string") {
+        return result.slice(0, maxLength);
+    }
+
+    try {
+        const json = JSON.stringify(result, null, 2);
+        if (json === undefined) {
+            return String(result).slice(0, maxLength);
+        }
+        return json.slice(0, maxLength);
+    } catch {
+        return String(result).slice(0, maxLength);
+    }
+}
+
 /**
  * Run evaluations asynchronously after chat completes
  * This doesn't block the response to the user
@@ -327,10 +343,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                                 // Record execution step for time travel
                                 stepCounter++;
-                                const resultPreview =
-                                    typeof result === "string"
-                                        ? result.slice(0, 500)
-                                        : JSON.stringify(result, null, 2).slice(0, 500);
+                                const resultPreview = formatToolResultPreview(result, 500);
                                 executionSteps.push({
                                     step: stepCounter,
                                     type: "tool_result",

@@ -47,7 +47,7 @@ export default defineConfig({
 
     // Web server configuration - starts dev server if not already running
     webServer: {
-        command: "bun run dev:local",
+        command: "bunx turbo dev --filter=frontend --filter=agent",
         url: process.env.PLAYWRIGHT_BASE_URL || "http://localhost:3000",
         reuseExistingServer: true,
         timeout: 120000,

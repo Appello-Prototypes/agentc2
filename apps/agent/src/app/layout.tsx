@@ -1,9 +1,20 @@
+import type { Metadata } from "next";
 import { CommandPalette, type AppNavigationConfig } from "@repo/ui";
 import { getAppUrl } from "@repo/auth";
 
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
 import { AgentHeader } from "@/components/AgentHeader";
+
+export const metadata: Metadata = {
+    title: {
+        default: "AgentC2",
+        template: "%s | AgentC2"
+    },
+    description:
+        "Build, deploy, and improve AI agents with workflows, networks, and continuous learning.",
+    keywords: ["AI agents", "LLM orchestration", "AI workflows", "agent networks", "MCP"]
+};
 
 const appNavigation: AppNavigationConfig = {
     currentApp: "agent",

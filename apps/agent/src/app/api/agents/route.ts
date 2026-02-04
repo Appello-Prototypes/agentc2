@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
@@ -122,16 +122,32 @@ export async function POST(request: NextRequest) {
             }
 
             // Build modelConfig from extended thinking settings
-            let modelConfig = body.modelConfig || null;
+            const modelConfigBase = (body.modelConfig as Record<string, unknown> | null) || {};
             if (body.extendedThinking) {
-                modelConfig = {
-                    ...modelConfig,
-                    thinking: {
-                        type: "enabled",
-                        budget_tokens: body.thinkingBudget || 10000
-                    }
+                modelConfigBase.thinking = {
+                    type: "enabled",
+                    budget_tokens: body.thinkingBudget || 10000
                 };
             }
+            if (body.parallelToolCalls !== undefined) {
+                modelConfigBase.parallelToolCalls = body.parallelToolCalls;
+            }
+            if (body.reasoningEffort) {
+                modelConfigBase.reasoningEffort = body.reasoningEffort;
+            }
+            if (body.cacheControl) {
+                modelConfigBase.cacheControl = { type: "ephemeral" };
+            }
+            if (body.toolChoice) {
+                modelConfigBase.toolChoice = body.toolChoice;
+            }
+            if (body.reasoning) {
+                modelConfigBase.reasoning = body.reasoning;
+            }
+            const modelConfig =
+                Object.keys(modelConfigBase).length > 0
+                    ? (modelConfigBase as Prisma.InputJsonValue)
+                    : Prisma.DbNull;
 
             // Create the agent
             const agent = await prisma.agent.create({
@@ -147,12 +163,14 @@ export async function POST(request: NextRequest) {
                     maxTokens: body.maxTokens || null,
                     modelConfig,
                     memoryEnabled: body.memoryEnabled ?? body.memory ?? false,
-                    memoryConfig: body.memoryConfig || null,
+                    memoryConfig: body.memoryConfig ?? Prisma.DbNull,
                     maxSteps: body.maxSteps ?? 5,
+                    subAgents: body.subAgents || [],
+                    workflows: body.workflows || [],
                     scorers: body.scorers || [],
                     type: "USER",
                     isPublic: body.isPublic ?? false,
-                    metadata: body.metadata || null,
+                    metadata: body.metadata ?? Prisma.DbNull,
                     isActive: body.isActive ?? true
                 },
                 include: { tools: true }

@@ -41,6 +41,10 @@ export interface ModelConfig {
         type: "enabled" | "disabled";
         budget_tokens?: number;
     };
+    // OpenAI / Anthropic provider options
+    parallelToolCalls?: boolean;
+    reasoningEffort?: "low" | "medium" | "high";
+    cacheControl?: { type: "ephemeral" };
 }
 
 /**
@@ -59,6 +63,8 @@ export interface StoredAgentConfig {
     maxTokens?: number | null;
     modelConfig?: ModelConfig | null;
     tools: string[];
+    subAgents?: Record<string, Agent>;
+    workflows?: Record<string, unknown>;
     memoryEnabled?: boolean;
     memory?: boolean; // Legacy field for backwards compatibility
     memoryConfig?: MemoryConfig | null;
@@ -125,6 +131,62 @@ function buildMemory(config?: MemoryConfig | null): Memory {
 }
 
 /**
+ * Build provider-specific default options from modelConfig
+ */
+function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
+    const modelConfig = config.modelConfig;
+    if (!modelConfig) return undefined;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const options: any = {};
+
+    if (modelConfig.toolChoice !== undefined) {
+        options.toolChoice = modelConfig.toolChoice;
+    }
+
+    if (modelConfig.reasoning !== undefined) {
+        options.reasoning = modelConfig.reasoning;
+    }
+
+    if (config.modelProvider === "openai") {
+        const openaiOptions: Record<string, unknown> = {};
+        if (modelConfig.parallelToolCalls !== undefined) {
+            openaiOptions.parallelToolCalls = modelConfig.parallelToolCalls;
+        }
+        if (modelConfig.reasoningEffort) {
+            openaiOptions.reasoningEffort = modelConfig.reasoningEffort;
+        }
+        if (Object.keys(openaiOptions).length > 0) {
+            options.providerOptions = {
+                ...options.providerOptions,
+                openai: openaiOptions
+            };
+        }
+    }
+
+    if (config.modelProvider === "anthropic") {
+        const anthropicOptions: Record<string, unknown> = {};
+        if (modelConfig.thinking?.type === "enabled") {
+            anthropicOptions.thinking = {
+                type: "enabled",
+                budgetTokens: modelConfig.thinking.budget_tokens || 10000
+            };
+        }
+        if (modelConfig.cacheControl) {
+            anthropicOptions.cacheControl = modelConfig.cacheControl;
+        }
+        if (Object.keys(anthropicOptions).length > 0) {
+            options.providerOptions = {
+                ...options.providerOptions,
+                anthropic: anthropicOptions
+            };
+        }
+    }
+
+    return Object.keys(options).length > 0 ? options : undefined;
+}
+
+/**
  * Create an Agent instance from a stored agent configuration
  * (Sync version - only supports static registry tools)
  *
@@ -153,6 +215,8 @@ export function createAgentFromConfig(
     // Determine if memory is enabled (support both new and legacy fields)
     const memoryEnabled = config.memoryEnabled ?? config.memory ?? false;
 
+    const defaultOptions = buildDefaultOptions(config);
+
     // Build agent configuration - using any to bypass strict typing issues with Mastra's Agent constructor
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const agentConfig: any = {
@@ -177,25 +241,16 @@ export function createAgentFromConfig(
         agentConfig.scorers = scorers;
     }
 
-    // Add extended thinking configuration if present (Anthropic Claude 4+ models)
-    if (config.modelConfig?.thinking) {
-        const thinkingConfig = config.modelConfig.thinking as {
-            type: string;
-            budget_tokens?: number;
-        };
-        if (thinkingConfig.type === "enabled") {
-            agentConfig.defaultOptions = {
-                ...agentConfig.defaultOptions,
-                providerOptions: {
-                    anthropic: {
-                        thinking: {
-                            type: "enabled",
-                            budgetTokens: thinkingConfig.budget_tokens || 10000
-                        }
-                    }
-                }
-            };
-        }
+    if (defaultOptions) {
+        agentConfig.defaultOptions = defaultOptions;
+    }
+
+    if (config.subAgents && Object.keys(config.subAgents).length > 0) {
+        agentConfig.agents = config.subAgents;
+    }
+
+    if (config.workflows && Object.keys(config.workflows).length > 0) {
+        agentConfig.workflows = config.workflows;
     }
 
     return new Agent(agentConfig);
@@ -232,6 +287,8 @@ export async function createAgentFromConfigAsync(
     // Determine if memory is enabled (support both new and legacy fields)
     const memoryEnabled = config.memoryEnabled ?? config.memory ?? false;
 
+    const defaultOptions = buildDefaultOptions(config);
+
     // Build agent configuration - using any to bypass strict typing issues with Mastra's Agent constructor
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const agentConfig: any = {
@@ -256,25 +313,16 @@ export async function createAgentFromConfigAsync(
         agentConfig.scorers = scorers;
     }
 
-    // Add extended thinking configuration if present (Anthropic Claude 4+ models)
-    if (config.modelConfig?.thinking) {
-        const thinkingConfig = config.modelConfig.thinking as {
-            type: string;
-            budget_tokens?: number;
-        };
-        if (thinkingConfig.type === "enabled") {
-            agentConfig.defaultOptions = {
-                ...agentConfig.defaultOptions,
-                providerOptions: {
-                    anthropic: {
-                        thinking: {
-                            type: "enabled",
-                            budgetTokens: thinkingConfig.budget_tokens || 10000
-                        }
-                    }
-                }
-            };
-        }
+    if (defaultOptions) {
+        agentConfig.defaultOptions = defaultOptions;
+    }
+
+    if (config.subAgents && Object.keys(config.subAgents).length > 0) {
+        agentConfig.agents = config.subAgents;
+    }
+
+    if (config.workflows && Object.keys(config.workflows).length > 0) {
+        agentConfig.workflows = config.workflows;
     }
 
     return new Agent(agentConfig);

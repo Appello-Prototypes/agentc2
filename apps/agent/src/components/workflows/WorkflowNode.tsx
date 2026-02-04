@@ -2,7 +2,7 @@
 
 import { memo, ReactNode } from "react";
 import { Handle, Position } from "@xyflow/react";
-import { cn } from "@repo/ui";
+import { Badge, cn } from "@repo/ui";
 
 export type WorkflowNodeStatus = "pending" | "running" | "completed" | "error" | "suspended";
 
@@ -12,6 +12,7 @@ export interface WorkflowNodeData {
     content?: string;
     footer?: string;
     status?: WorkflowNodeStatus;
+    selected?: boolean;
     handles?: {
         top?: boolean;
         bottom?: boolean;
@@ -20,6 +21,7 @@ export interface WorkflowNodeData {
     };
     variant?: "default" | "decision" | "loop" | "human";
     icon?: ReactNode;
+    badges?: { label: string; variant?: "default" | "secondary" | "destructive" | "outline" }[];
 }
 
 // Props for node components - simplified to avoid ReactFlow generic issues
@@ -50,9 +52,11 @@ function WorkflowNodeComponent({ data }: WorkflowNodeProps) {
         content,
         footer,
         status = "pending",
+        selected = false,
         handles = { top: true, bottom: true },
         variant = "default",
-        icon
+        icon,
+        badges
     } = data;
 
     const isDecision = variant === "decision";
@@ -82,6 +86,7 @@ function WorkflowNodeComponent({ data }: WorkflowNodeProps) {
                 className={cn(
                     "max-w-[280px] min-w-[180px] rounded-lg border-2 shadow-sm transition-all",
                     statusStyles[status],
+                    selected && "ring-primary/40 border-primary/60 ring-2",
                     isDecision && "rotate-0", // Could make diamond shape with CSS transform
                     isLoop && "border-dashed",
                     isHuman && "border-amber-500"
@@ -99,6 +104,19 @@ function WorkflowNodeComponent({ data }: WorkflowNodeProps) {
                             </div>
                         )}
                     </div>
+                    {badges && badges.length > 0 && (
+                        <div className="flex flex-col items-end gap-1">
+                            {badges.map((badge, index) => (
+                                <Badge
+                                    key={`${label}-badge-${index}`}
+                                    variant={badge.variant || "outline"}
+                                    className="text-[10px]"
+                                >
+                                    {badge.label}
+                                </Badge>
+                            ))}
+                        </div>
+                    )}
                 </div>
 
                 {/* Content */}

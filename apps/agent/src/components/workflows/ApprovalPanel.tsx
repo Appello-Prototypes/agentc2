@@ -38,7 +38,6 @@ interface ApprovalPanelProps {
 export function ApprovalPanel({
     runId,
     step,
-    workflowType: _workflowType,
     suspendedData,
     onApprove,
     onReject,
@@ -287,8 +286,6 @@ interface CompactApprovalPanelProps {
 }
 
 export function CompactApprovalPanel({
-    runId: _runId,
-    step: _step,
     message,
     preview,
     onApprove,

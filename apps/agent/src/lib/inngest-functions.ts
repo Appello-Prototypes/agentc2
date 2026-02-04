@@ -1,6 +1,7 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
 import { prisma } from "@repo/database";
+import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import { evaluateHelpfulness, mastra } from "@repo/mastra";
 import crypto from "crypto";
 import {
@@ -2369,6 +2370,28 @@ export const dailyMetricsRollupFunction = inngest.createFunction(
                 console.log(
                     `[Inngest] Metrics rolled up for ${agent.slug}: ${sessionsStarted} sessions, ${proposalsGenerated} proposals`
                 );
+            });
+        }
+
+        // Step 3: Workflow metrics
+        const workflows = await step.run("get-workflows", async () => {
+            return prisma.workflow.findMany({ select: { id: true, slug: true } });
+        });
+
+        for (const workflow of workflows) {
+            await step.run(`workflow-metrics-${workflow.slug}`, async () => {
+                await refreshWorkflowMetrics(workflow.id, targetDate);
+            });
+        }
+
+        // Step 4: Network metrics
+        const networks = await step.run("get-networks", async () => {
+            return prisma.network.findMany({ select: { id: true, slug: true } });
+        });
+
+        for (const network of networks) {
+            await step.run(`network-metrics-${network.slug}`, async () => {
+                await refreshNetworkMetrics(network.id, targetDate);
             });
         }
 

@@ -114,6 +114,9 @@ model Workspace {
     agents    Agent[]
     schedules AgentSchedule[]
     triggers  AgentTrigger[]
+    workflows Workflow[]
+    networks  Network[]
+    bimModels BimModel[]
 
     @@unique([organizationId, slug])
     @@index([organizationId])
@@ -177,6 +180,47 @@ enum RunType {
     AB
 }
 
+// Run Environment Enum
+enum RunEnvironment {
+    DEVELOPMENT
+    STAGING
+    PRODUCTION
+}
+
+// Run Trigger Enum
+enum RunTriggerType {
+    MANUAL
+    API
+    SCHEDULED
+    WEBHOOK
+    TOOL
+    TEST
+    RETRY
+}
+
+// Workflow Type Enum
+enum WorkflowType {
+    SYSTEM // Code-defined, protected
+    USER // User-created
+}
+
+// Network Type Enum
+enum NetworkType {
+    SYSTEM
+    USER
+}
+
+// Deployment Status Enum
+enum DeploymentStatus {
+    DRAFT
+    TESTING
+    PENDING_REVIEW
+    APPROVED
+    DEPLOYED
+    DEPRECATED
+    ARCHIVED
+}
+
 // Alert Severity Enum
 enum AlertSeverity {
     INFO
@@ -219,6 +263,10 @@ model Agent {
 
     // Tool configuration (junction table)
     tools AgentTool[]
+
+    // Network orchestration
+    subAgents String[] @default([]) // Agent slugs this agent can delegate to
+    workflows String[] @default([]) // Workflow IDs
 
     // Memory configuration (Mastra Memory pattern)
     memoryEnabled Boolean @default(false)
@@ -285,6 +333,7 @@ model Agent {
     simulationSessions     SimulationSession[]
     schedules              AgentSchedule[]
     triggers               AgentTrigger[]
+    networkPrimitives      NetworkPrimitive[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -538,6 +587,7 @@ model AgentRun {
     // Relations
     trace           AgentTrace?
     toolCalls       AgentToolCall[]
+    workflowSteps   WorkflowRunStep[]
     evaluation      AgentEvaluation?
     feedback        AgentFeedback?
     costEvent       CostEvent?
@@ -1353,4 +1403,608 @@ model SimulationSession {
     @@index([agentId, createdAt])
     @@index([status])
     @@map("simulation_session")
+}
+
+// ==============================
+// Workflow + Network Workspace Models
+// ==============================
+
+// Workflow Definition
+model Workflow {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String? @db.Text
+
+    // Visual definition (React Flow compatible)
+    definitionJson Json // { nodes: [], edges: [], viewport: {} }
+
+    // Compiled representation (cached)
+    compiledJson Json?
+    compiledAt   DateTime?
+    compiledHash String?
+
+    // Schemas
+    inputSchemaJson  Json?
+    outputSchemaJson Json?
+
+    // Configuration
+    maxSteps    Int   @default(50)
+    timeout     Int?
+    retryConfig Json?
+
+    // Status
+    isPublished Boolean @default(false)
+    isActive    Boolean @default(true)
+    version     Int     @default(1)
+
+    // Tenancy
+    workspaceId String?
+    workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
+    ownerId     String?
+    type        WorkflowType @default(USER)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    // Relations
+    versions          WorkflowVersion[]
+    runs              WorkflowRun[]
+    networkPrimitives NetworkPrimitive[]
+    metrics           WorkflowMetricDaily[]
+
+    @@index([slug])
+    @@index([workspaceId])
+    @@index([isPublished])
+    @@map("workflow")
+}
+
+// Workflow Version History
+model WorkflowVersion {
+    id             String   @id @default(cuid())
+    workflowId     String
+    workflow       Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    version        Int
+    definitionJson Json
+    description    String?  @db.Text
+    createdAt      DateTime @default(now())
+    createdBy      String?
+
+    @@unique([workflowId, version])
+    @@index([workflowId])
+    @@map("workflow_version")
+}
+
+// Workflow Execution
+model WorkflowRun {
+    id         String    @id @default(cuid())
+    workflowId String
+    workflow   Workflow  @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    status     RunStatus @default(QUEUED)
+
+    // Input/Output
+    inputJson  Json
+    outputJson Json?
+
+    // Suspension (human-in-the-loop)
+    suspendedAt     DateTime?
+    suspendedStep   String?
+    suspendDataJson Json?
+    resumedAt       DateTime?
+    resumeDataJson  Json?
+
+    // Execution stats
+    durationMs  Int?
+    startedAt   DateTime  @default(now())
+    completedAt DateTime?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    // Version tracking
+    versionId String?
+
+    // Source tracking
+    source       String?
+    environment  RunEnvironment @default(DEVELOPMENT)
+    triggerType  RunTriggerType @default(API)
+    triggerId    String?
+    networkRunId String?
+    networkRun   NetworkRun?    @relation(fields: [networkRunId], references: [id])
+
+    // Relations
+    steps WorkflowRunStep[]
+
+    @@index([workflowId, createdAt])
+    @@index([workflowId, environment])
+    @@index([workflowId, triggerType])
+    @@index([status])
+    @@map("workflow_run")
+}
+
+// Workflow Step Execution
+model WorkflowRunStep {
+    id    String      @id @default(cuid())
+    runId String
+    run   WorkflowRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+    stepId   String
+    stepType String
+    stepName String?
+
+    status     RunStatus @default(QUEUED)
+    inputJson  Json?
+    outputJson Json?
+    errorJson  Json?
+
+    // For loops
+    iterationIndex Int?
+
+    // Timing
+    startedAt   DateTime?
+    completedAt DateTime?
+    durationMs  Int?
+
+    // Nested execution
+    agentRunId String?
+    agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+    @@index([runId])
+    @@index([stepId])
+    @@map("workflow_run_step")
+}
+
+// Network Definition
+model Network {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String? @db.Text
+
+    // Routing agent configuration
+    instructions  String @db.Text
+    modelProvider String
+    modelName     String
+    temperature   Float? @default(0.7)
+
+    // Visual topology
+    topologyJson Json
+
+    // Memory configuration (required for networks)
+    memoryConfig Json
+
+    // Execution settings
+    maxSteps Int @default(10)
+
+    // Status
+    isPublished Boolean @default(false)
+    isActive    Boolean @default(true)
+    version     Int     @default(1)
+
+    // Tenancy
+    workspaceId String?
+    workspace   Workspace?  @relation(fields: [workspaceId], references: [id])
+    ownerId     String?
+    type        NetworkType @default(USER)
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    // Relations
+    primitives NetworkPrimitive[]
+    versions   NetworkVersion[]
+    runs       NetworkRun[]
+    metrics    NetworkMetricDaily[]
+
+    @@index([slug])
+    @@index([workspaceId])
+    @@index([isPublished])
+    @@map("network")
+}
+
+// Network Primitive Junction
+model NetworkPrimitive {
+    id        String  @id @default(cuid())
+    networkId String
+    network   Network @relation(fields: [networkId], references: [id], onDelete: Cascade)
+
+    primitiveType String // "agent", "workflow", "tool"
+
+    // Reference (one of these will be set)
+    agentId    String?
+    agent      Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workflowId String?
+    workflow   Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    toolId     String?
+
+    // Override description for routing
+    description String? @db.Text
+
+    // Position in visual topology
+    position Json?
+
+    createdAt DateTime @default(now())
+
+    @@unique([networkId, agentId])
+    @@unique([networkId, workflowId])
+    @@unique([networkId, toolId])
+    @@index([networkId])
+    @@map("network_primitive")
+}
+
+// Network Version History
+model NetworkVersion {
+    id             String   @id @default(cuid())
+    networkId      String
+    network        Network  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+    version        Int
+    topologyJson   Json
+    primitivesJson Json
+    description    String?  @db.Text
+    createdAt      DateTime @default(now())
+    createdBy      String?
+
+    @@unique([networkId, version])
+    @@index([networkId])
+    @@map("network_version")
+}
+
+// Network Execution
+model NetworkRun {
+    id        String    @id @default(cuid())
+    networkId String
+    network   Network   @relation(fields: [networkId], references: [id], onDelete: Cascade)
+    status    RunStatus @default(QUEUED)
+
+    // Input/Output
+    inputText  String  @db.Text
+    outputText String? @db.Text
+    outputJson Json?
+
+    // Thread/Memory
+    threadId   String?
+    resourceId String?
+
+    // Stats
+    stepsExecuted Int?
+    durationMs    Int?
+    startedAt     DateTime  @default(now())
+    completedAt   DateTime?
+    createdAt     DateTime  @default(now())
+    updatedAt     DateTime  @updatedAt
+
+    // Token usage
+    totalTokens  Int?
+    totalCostUsd Float?
+
+    // Version tracking
+    versionId String?
+
+    // Source
+    source      String?
+    environment RunEnvironment @default(DEVELOPMENT)
+    triggerType RunTriggerType @default(API)
+
+    // Relations
+    steps        NetworkRunStep[]
+    workflowRuns WorkflowRun[]
+
+    @@index([networkId, createdAt])
+    @@index([networkId, environment])
+    @@index([networkId, triggerType])
+    @@index([status])
+    @@index([threadId])
+    @@map("network_run")
+}
+
+// Network Step Execution
+model NetworkRunStep {
+    id    String     @id @default(cuid())
+    runId String
+    run   NetworkRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+    stepNumber Int
+    stepType   String // "routing", "agent", "workflow", "tool"
+
+    // What was executed
+    primitiveType String?
+    primitiveId   String?
+
+    // Routing decision (for routing steps)
+    routingDecision Json?
+
+    // Execution details
+    inputJson  Json?
+    outputJson Json?
+    errorJson  Json?
+
+    status      RunStatus @default(QUEUED)
+    startedAt   DateTime?
+    completedAt DateTime?
+    durationMs  Int?
+
+    // Token usage for this step
+    tokens  Int?
+    costUsd Float?
+
+    @@index([runId])
+    @@index([stepNumber])
+    @@map("network_run_step")
+}
+
+// Workflow Daily Metrics
+model WorkflowMetricDaily {
+    id               String   @id @default(cuid())
+    workflowId       String
+    workflow         Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    date             DateTime @db.Date
+    runs             Int      @default(0)
+    successRate      Float?
+    avgDurationMs    Float?
+    suspensionRate   Float?
+    avgStepsExecuted Float?
+
+    @@unique([workflowId, date])
+    @@map("workflow_metric_daily")
+}
+
+// Network Daily Metrics
+model NetworkMetricDaily {
+    id                  String   @id @default(cuid())
+    networkId           String
+    network             Network  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+    date                DateTime @db.Date
+    runs                Int      @default(0)
+    successRate         Float?
+    avgDurationMs       Float?
+    avgStepsExecuted    Float?
+    avgRoutingDecisions Float?
+    totalCostUsd        Float?
+
+    // Primitive usage breakdown
+    agentCallCount    Int @default(0)
+    workflowCallCount Int @default(0)
+    toolCallCount     Int @default(0)
+
+    @@unique([networkId, date])
+    @@map("network_metric_daily")
+}
+
+// Deployment Lifecycle
+model Deployment {
+    id String @id @default(cuid())
+
+    // What is being deployed
+    entityType String // "agent", "workflow", "network"
+    entityId   String
+    versionId  String
+
+    // Environment
+    environment String
+    status      DeploymentStatus @default(DRAFT)
+
+    // Approval
+    approvedBy String?
+    approvedAt DateTime?
+
+    // Traffic
+    trafficPercent Float?
+
+    // Rollback
+    previousDeploymentId String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([entityType, entityId, environment])
+    @@index([entityType, entityId])
+    @@map("deployment")
+}
+
+// BIM Version Status Enum
+enum BimVersionStatus {
+    QUEUED
+    PROCESSING
+    READY
+    FAILED
+}
+
+// BIM Model
+model BimModel {
+    id           String   @id @default(cuid())
+    name         String
+    description  String?  @db.Text
+    sourceSystem String?
+    metadata     Json?
+
+    // Tenancy
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id])
+    ownerId     String?
+
+    // Relations
+    versions BimModelVersion[]
+    takeoffs BimTakeoff[]
+    diffs    BimDiffSummary[]
+    clashes  BimClash[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([workspaceId])
+    @@map("bim_model")
+}
+
+// BIM Model Version
+model BimModelVersion {
+    id String @id @default(cuid())
+
+    modelId String
+    model   BimModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
+
+    version      Int             @default(1)
+    status       BimVersionStatus @default(QUEUED)
+    sourceFormat String
+    sourceUri    String?
+    sourceKey    String?
+    checksum     String?
+    metadata     Json?
+
+    // Relations
+    elements BimElement[]
+    takeoffs BimTakeoff[]
+    clashes  BimClash[]
+    diffsFrom BimDiffSummary[] @relation("BimDiffFrom")
+    diffsTo   BimDiffSummary[] @relation("BimDiffTo")
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([modelId, version])
+    @@index([modelId])
+    @@index([status])
+    @@map("bim_model_version")
+}
+
+// BIM Element
+model BimElement {
+    id String @id @default(cuid())
+
+    versionId String
+    version   BimModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+    elementGuid String
+    name        String?
+    category    String?
+    type        String?
+    family      String?
+    system      String?
+    level       String?
+    phase       String?
+    description String? @db.Text
+    properties  Json?
+
+    geometrySummary BimGeometrySummary?
+    propertyEntries BimElementProperty[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([versionId, elementGuid])
+    @@index([versionId])
+    @@index([category])
+    @@index([system])
+    @@map("bim_element")
+}
+
+// BIM Element Geometry Summary
+model BimGeometrySummary {
+    id String @id @default(cuid())
+
+    elementId String   @unique
+    element   BimElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
+
+    bboxMin  Json?
+    bboxMax  Json?
+    centroid Json?
+    length   Float?
+    area     Float?
+    volume   Float?
+    units    String?
+    metadata Json?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([elementId])
+    @@map("bim_geometry_summary")
+}
+
+// BIM Element Properties (normalized)
+model BimElementProperty {
+    id String @id @default(cuid())
+
+    elementId String
+    element   BimElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
+
+    group        String?
+    name         String
+    valueString  String?
+    valueNumber  Float?
+    valueBoolean Boolean?
+    unit         String?
+    rawValue     Json?
+
+    createdAt DateTime @default(now())
+
+    @@index([elementId])
+    @@index([name])
+    @@map("bim_element_property")
+}
+
+// BIM Takeoff Results
+model BimTakeoff {
+    id String @id @default(cuid())
+
+    modelId String?
+    model   BimModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
+
+    versionId String
+    version   BimModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+    scope   String?
+    query   Json?
+    result  Json
+    createdBy String?
+
+    createdAt DateTime @default(now())
+
+    @@index([versionId])
+    @@map("bim_takeoff")
+}
+
+// BIM Clash Results
+model BimClash {
+    id String @id @default(cuid())
+
+    modelId String?
+    model   BimModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
+
+    versionId String
+    version   BimModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+
+    query     Json?
+    result    Json
+    createdBy String?
+
+    createdAt DateTime @default(now())
+
+    @@index([versionId])
+    @@map("bim_clash")
+}
+
+// BIM Diff Summary
+model BimDiffSummary {
+    id String @id @default(cuid())
+
+    modelId String?
+    model   BimModel? @relation(fields: [modelId], references: [id], onDelete: SetNull)
+
+    fromVersionId String
+    fromVersion   BimModelVersion @relation("BimDiffFrom", fields: [fromVersionId], references: [id], onDelete: Cascade)
+
+    toVersionId String
+    toVersion   BimModelVersion @relation("BimDiffTo", fields: [toVersionId], references: [id], onDelete: Cascade)
+
+    summary   Json
+    createdBy String?
+
+    createdAt DateTime @default(now())
+
+    @@index([fromVersionId])
+    @@index([toVersionId])
+    @@map("bim_diff_summary")
 }

@@ -57,6 +57,8 @@ export interface StartRunOptions {
     input: string;
     /** Source channel */
     source: RunSource;
+    /** Optional agent version ID */
+    versionId?: string;
     /** Optional user ID */
     userId?: string;
     /** Optional thread/conversation ID for grouping */
@@ -154,6 +156,21 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
 
     // Create the run and trace in a transaction
     const { run, trace } = await prisma.$transaction(async (tx) => {
+        const resolvedVersionId =
+            options.versionId ||
+            (await (async () => {
+                const agent = await tx.agent.findUnique({
+                    where: { id: options.agentId },
+                    select: { version: true }
+                });
+                if (!agent) return null;
+                const version = await tx.agentVersion.findFirst({
+                    where: { agentId: options.agentId, version: agent.version },
+                    select: { id: true }
+                });
+                return version?.id || null;
+            })());
+
         // Create AgentRun with RUNNING status
         const agentRun = await tx.agentRun.create({
             data: {
@@ -164,6 +181,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 inputText: options.input,
                 startedAt: new Date(),
                 userId: options.userId,
+                versionId: resolvedVersionId,
                 // New fields for source tracking
                 source: options.source,
                 sessionId: options.sessionId,
@@ -411,17 +429,169 @@ export function extractToolCalls(response: {
     toolCalls?: any[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     toolResults?: any[];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    steps?: any[];
 }): ToolCallData[] {
-    if (!response.toolCalls) return [];
+    const normalizeArgs = (value: unknown): Record<string, unknown> => {
+        if (!value || typeof value !== "object") return {};
+        return value as Record<string, unknown>;
+    };
 
-    return response.toolCalls.map((tc, i) => {
-        const tr = response.toolResults?.[i];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolveToolName = (value?: any) => {
+        return (
+            value?.toolName ||
+            value?.name ||
+            value?.tool ||
+            value?.function?.name ||
+            value?.payload?.toolName ||
+            value?.payload?.tool ||
+            value?.payload?.name ||
+            value?.payload?.function?.name
+        );
+    };
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolveArgs = (value?: any) => {
+        const args =
+            value?.args ||
+            value?.input ||
+            value?.arguments ||
+            value?.function?.arguments ||
+            value?.payload?.args ||
+            value?.payload?.arguments;
+        if (typeof args === "string") {
+            try {
+                return JSON.parse(args);
+            } catch {
+                return {};
+            }
+        }
+        return normalizeArgs(args);
+    };
+
+    const mapToolCalls = (
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        toolCalls?: any[],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        toolResults?: any[]
+    ): ToolCallData[] => {
+        if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
+
+        return toolCalls.map((tc, i) => {
+            const tr = toolResults?.[i];
+            const payload = tr?.payload;
+            return {
+                toolKey:
+                    resolveToolName(tc) ||
+                    resolveToolName(tr) ||
+                    resolveToolName(payload) ||
+                    "unknown",
+                input: resolveArgs(tc) || resolveArgs(payload),
+                output: tr?.result ?? tr?.output ?? payload?.result ?? tr,
+                success: !(tr?.error || payload?.error),
+                error: tr?.error || payload?.error
+            };
+        });
+    };
+
+    const directCalls = mapToolCalls(response.toolCalls, response.toolResults);
+    if (directCalls.length > 0) {
+        return directCalls;
+    }
+
+    if (!Array.isArray(response.steps) || response.steps.length === 0) {
+        return [];
+    }
+
+    const calls: Array<{ id?: string; toolKey: string; input: Record<string, unknown> }> = [];
+    const resultsById = new Map<
+        string,
+        { result?: unknown; error?: string; toolKey?: string; input?: Record<string, unknown> }
+    >();
+    const resultsByIndex: Array<{
+        result?: unknown;
+        error?: string;
+        toolKey?: string;
+        input?: Record<string, unknown>;
+    }> = [];
+
+    for (const step of response.steps) {
+        const stepToolCalls = Array.isArray(step?.toolCalls) ? step.toolCalls : [];
+        const stepToolResults = Array.isArray(step?.toolResults) ? step.toolResults : [];
+
+        for (const tc of stepToolCalls) {
+            calls.push({
+                id: tc?.toolCallId || tc?.id,
+                toolKey: resolveToolName(tc) || "unknown",
+                input: resolveArgs(tc)
+            });
+        }
+
+        for (const tr of stepToolResults) {
+            const id = tr?.toolCallId || tr?.id || tr?.payload?.toolCallId;
+            const entry = {
+                result: tr?.result ?? tr?.output ?? tr?.payload?.result ?? tr,
+                error: tr?.error || tr?.payload?.error,
+                toolKey: resolveToolName(tr) || resolveToolName(tr?.payload),
+                input: resolveArgs(tr) || resolveArgs(tr?.payload)
+            };
+            if (id) {
+                resultsById.set(id, entry);
+            } else {
+                resultsByIndex.push(entry);
+            }
+        }
+
+        if (step?.toolCall) {
+            const tc = step.toolCall;
+            calls.push({
+                id: tc?.toolCallId || tc?.id,
+                toolKey: resolveToolName(tc) || "unknown",
+                input: resolveArgs(tc)
+            });
+        }
+
+        if (step?.toolResult) {
+            const tr = step.toolResult;
+            const id = tr?.toolCallId || tr?.id || tr?.payload?.toolCallId;
+            const entry = {
+                result: tr?.result ?? tr?.output ?? tr?.payload?.result ?? tr,
+                error: tr?.error || tr?.payload?.error,
+                toolKey: resolveToolName(tr) || resolveToolName(tr?.payload),
+                input: resolveArgs(tr) || resolveArgs(tr?.payload)
+            };
+            if (id) {
+                resultsById.set(id, entry);
+            } else {
+                resultsByIndex.push(entry);
+            }
+        }
+    }
+
+    const resolvedCalls =
+        calls.length > 0
+            ? calls
+            : resultsByIndex.map((entry) => ({
+                  toolKey: entry.toolKey || "unknown",
+                  input: entry.input || {}
+              }));
+
+    return resolvedCalls.map((call, index) => {
+        const callId = "id" in call ? (call as { id?: string }).id : undefined;
+        const resultEntry = (callId && resultsById.get(callId)) || resultsByIndex[index];
         return {
-            toolKey: tc.toolName || tc.name || "unknown",
-            input: tc.args || tc.input || {},
-            output: tr?.result || tr?.output || tr,
-            success: !tr?.error,
-            error: tr?.error
+            toolKey:
+                call.toolKey === "unknown" && resultEntry?.toolKey
+                    ? resultEntry.toolKey
+                    : call.toolKey,
+            input:
+                Object.keys(call.input).length === 0 && resultEntry?.input
+                    ? resultEntry.input
+                    : call.input,
+            output: resultEntry?.result,
+            success: !resultEntry?.error,
+            error: resultEntry?.error
         };
     });
 }

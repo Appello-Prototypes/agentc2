@@ -10,6 +10,8 @@ import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
+import { workflowExecuteTool, workflowGetRunTool, workflowListRunsTool } from "./workflow-tools";
+import { networkExecuteTool, networkGetRunTool, networkListRunsTool } from "./network-tools";
 import { mcpClient } from "../mcp/client";
 
 /**
@@ -27,7 +29,15 @@ export const toolRegistry: Record<string, any> = {
     // Utility tools
     "web-fetch": webFetchTool,
     "memory-recall": memoryRecallTool,
-    "json-parser": jsonParserTool
+    "json-parser": jsonParserTool,
+
+    // Workflow and network tools
+    "workflow-execute": workflowExecuteTool,
+    "workflow-list-runs": workflowListRunsTool,
+    "workflow-get-run": workflowGetRunTool,
+    "network-execute": networkExecuteTool,
+    "network-list-runs": networkListRunsTool,
+    "network-get-run": networkGetRunTool
 };
 
 /**

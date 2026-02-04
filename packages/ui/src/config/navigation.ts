@@ -30,6 +30,20 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["workspace", "agents", "manage", "monitor", "configure", "analytics", "home"]
     },
     {
+        label: "Workflows",
+        icon: icons["git-branch"],
+        href: "/workflows",
+        app: "agent",
+        keywords: ["workflows", "builder", "automation", "steps", "runs", "traces"]
+    },
+    {
+        label: "Networks",
+        icon: icons["ai-network"],
+        href: "/networks",
+        app: "agent",
+        keywords: ["networks", "routing", "multi-agent", "orchestration", "topology"]
+    },
+    {
         label: "Live",
         icon: icons.activity,
         href: "/live",

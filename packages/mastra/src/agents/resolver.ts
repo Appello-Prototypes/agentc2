@@ -123,6 +123,21 @@ interface MemoryConfig {
 }
 
 /**
+ * Model configuration from database
+ */
+interface ModelConfig {
+    reasoning?: { type: "enabled" | "disabled" };
+    toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
+    thinking?: {
+        type: "enabled" | "disabled";
+        budget_tokens?: number;
+    };
+    parallelToolCalls?: boolean;
+    reasoningEffort?: "low" | "medium" | "high";
+    cacheControl?: { type: "ephemeral" };
+}
+
+/**
  * AgentResolver class
  *
  * Provides database-first agent resolution with fallback to code-defined agents.
@@ -205,6 +220,11 @@ export class AgentResolver {
         // Build model string
         const model = `${record.modelProvider}/${record.modelName}`;
 
+        const defaultOptions = this.buildDefaultOptions(record);
+
+        const subAgents = await this.loadSubAgents(record.subAgents, context);
+        const workflows = this.loadWorkflows(record.workflows);
+
         // Create agent - using any to bypass strict typing issues with Mastra's Agent constructor
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const agentConfig: any = {
@@ -225,6 +245,18 @@ export class AgentResolver {
 
         if (Object.keys(scorers).length > 0) {
             agentConfig.scorers = scorers;
+        }
+
+        if (defaultOptions) {
+            agentConfig.defaultOptions = defaultOptions;
+        }
+
+        if (Object.keys(subAgents).length > 0) {
+            agentConfig.agents = subAgents;
+        }
+
+        if (Object.keys(workflows).length > 0) {
+            agentConfig.workflows = workflows;
         }
 
         return new Agent(agentConfig);
@@ -329,6 +361,105 @@ export class AgentResolver {
         }
 
         return new Memory(memoryConfig);
+    }
+
+    /**
+     * Build provider-specific default options from modelConfig
+     */
+    private buildDefaultOptions(record: AgentRecordWithTools): object | undefined {
+        const modelConfig = record.modelConfig as ModelConfig | null;
+        if (!modelConfig) return undefined;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const options: any = {};
+
+        if (modelConfig.toolChoice !== undefined) {
+            options.toolChoice = modelConfig.toolChoice;
+        }
+
+        if (modelConfig.reasoning !== undefined) {
+            options.reasoning = modelConfig.reasoning;
+        }
+
+        if (record.modelProvider === "openai") {
+            const openaiOptions: Record<string, unknown> = {};
+            if (modelConfig.parallelToolCalls !== undefined) {
+                openaiOptions.parallelToolCalls = modelConfig.parallelToolCalls;
+            }
+            if (modelConfig.reasoningEffort) {
+                openaiOptions.reasoningEffort = modelConfig.reasoningEffort;
+            }
+            if (Object.keys(openaiOptions).length > 0) {
+                options.providerOptions = {
+                    ...options.providerOptions,
+                    openai: openaiOptions
+                };
+            }
+        }
+
+        if (record.modelProvider === "anthropic") {
+            const anthropicOptions: Record<string, unknown> = {};
+            if (modelConfig.thinking?.type === "enabled") {
+                anthropicOptions.thinking = {
+                    type: "enabled",
+                    budgetTokens: modelConfig.thinking.budget_tokens || 10000
+                };
+            }
+            if (modelConfig.cacheControl) {
+                anthropicOptions.cacheControl = modelConfig.cacheControl;
+            }
+            if (Object.keys(anthropicOptions).length > 0) {
+                options.providerOptions = {
+                    ...options.providerOptions,
+                    anthropic: anthropicOptions
+                };
+            }
+        }
+
+        return Object.keys(options).length > 0 ? options : undefined;
+    }
+
+    private async loadSubAgents(
+        slugs: string[] | null | undefined,
+        requestContext?: RequestContext
+    ): Promise<Record<string, Agent>> {
+        if (!slugs || slugs.length === 0) return {};
+
+        const agents: Record<string, Agent> = {};
+        for (const slug of slugs) {
+            try {
+                const { agent } = await this.resolve({
+                    slug,
+                    requestContext,
+                    fallbackToSystem: true
+                });
+                agents[slug] = agent;
+            } catch (error) {
+                console.warn(`[AgentResolver] Failed to load sub-agent: ${slug}`, error);
+            }
+        }
+
+        return agents;
+    }
+
+    private loadWorkflows(workflowIds: string[] | null | undefined): Record<string, unknown> {
+        if (!workflowIds || workflowIds.length === 0) return {};
+
+        const workflows: Record<string, unknown> = {};
+        for (const id of workflowIds) {
+            try {
+                const workflow = mastra.getWorkflow(id);
+                if (workflow) {
+                    workflows[id] = workflow;
+                } else {
+                    console.warn(`[AgentResolver] Workflow not found: ${id}`);
+                }
+            } catch (error) {
+                console.warn(`[AgentResolver] Failed to load workflow: ${id}`, error);
+            }
+        }
+
+        return workflows;
     }
 
     /**

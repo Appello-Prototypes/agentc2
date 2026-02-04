@@ -9,14 +9,15 @@
  *   node index.js
  *
  * Environment:
- *   MASTRA_API_URL - Base URL for the Mastra API (default: http://localhost:3001)
+ *   MASTRA_API_URL - Base URL for the Mastra API (default: production)
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
-const API_URL = process.env.MASTRA_API_URL || "http://localhost:3001";
+// Default to production URL
+const API_URL = process.env.MASTRA_API_URL || "https://mastra.useappello.app";
 
 // Cache for tools
 let toolsCache = null;
@@ -24,9 +25,9 @@ let toolsCacheTime = 0;
 const CACHE_TTL = 60000; // 1 minute
 
 /**
- * Fetch available agents from the Mastra API
+ * Fetch available tools from the Mastra API
  */
-async function fetchAgents() {
+async function fetchTools() {
     const now = Date.now();
     if (toolsCache && now - toolsCacheTime < CACHE_TTL) {
         return toolsCache;
@@ -37,7 +38,7 @@ async function fetchAgents() {
         const data = await response.json();
 
         if (!data.success) {
-            console.error("Failed to fetch agents:", data.error);
+            console.error("Failed to fetch tools:", data.error);
             return [];
         }
 
@@ -45,34 +46,34 @@ async function fetchAgents() {
         toolsCacheTime = now;
         return data.tools;
     } catch (error) {
-        console.error("Error fetching agents:", error.message);
+        console.error("Error fetching tools:", error.message);
         return toolsCache || [];
     }
 }
 
 /**
- * Invoke an agent via the Mastra API
+ * Invoke a tool via the Mastra MCP gateway
  */
-async function invokeAgent(agentSlug, input, context) {
-    const response = await fetch(`${API_URL}/api/agents/${agentSlug}/invoke`, {
+async function invokeTool(toolName, params) {
+    const response = await fetch(`${API_URL}/api/mcp`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            input,
-            context,
-            mode: "sync"
+            method: "tools/call",
+            tool: toolName,
+            params
         })
     });
 
     const data = await response.json();
 
     if (!data.success) {
-        throw new Error(data.error || "Agent invocation failed");
+        throw new Error(data.error || "Tool invocation failed");
     }
 
-    return data;
+    return data.result;
 }
 
 // Create server
@@ -89,37 +90,26 @@ const server = new Server(
 );
 
 // Handle list tools request
+const toolNameMap = new Map();
+
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-    const agents = await fetchAgents();
+    const tools = await fetchTools();
+    toolNameMap.clear();
 
     return {
-        tools: agents.map((agent) => {
-            // Extract slug from agent.name (format: "agent.slug-name")
-            // Remove "agent." prefix and replace hyphens with underscores
-            // Cursor has issues with periods and hyphens in tool names
-            const rawName = agent.name.startsWith("agent.") ? agent.name.slice(6) : agent.name;
-            const toolName = rawName.replace(/-/g, "_");
+        tools: tools.map((tool) => {
+            const safeName = tool.name.replace(/[.-]/g, "_");
+            toolNameMap.set(safeName, tool.name);
 
             return {
-                name: toolName,
-                description:
-                    agent.description ||
-                    `Invoke the ${agent.metadata?.agent_name || agent.name} agent`,
-                inputSchema: {
+                name: safeName,
+                description: tool.description || `Invoke ${tool.name}`,
+                inputSchema: tool.inputSchema || {
                     type: "object",
-                    properties: {
-                        input: {
-                            type: "string",
-                            description: "The message or task to send to the agent"
-                        },
-                        context: {
-                            type: "object",
-                            description: "Optional context variables",
-                            additionalProperties: true
-                        }
-                    },
-                    required: ["input"]
-                }
+                    properties: {},
+                    required: []
+                },
+                outputSchema: tool.outputSchema
             };
         })
     };
@@ -128,27 +118,37 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
 // Handle tool call request
 server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
-
-    // Tool name is now just the slug with underscores (e.g., "trip_budget")
-    // Convert underscores back to hyphens for the API call
-    const agentSlug = name.replace(/_/g, "-");
+    const originalName = toolNameMap.get(name) || name;
 
     try {
-        const result = await invokeAgent(agentSlug, args.input, args.context);
+        const result = await invokeTool(originalName, args || {});
 
-        // Format response with metadata
+        let outputText = "";
+        if (typeof result === "string") {
+            outputText = result;
+        } else if (result?.output) {
+            outputText =
+                typeof result.output === "string"
+                    ? result.output
+                    : JSON.stringify(result.output, null, 2);
+        } else if (result?.outputText) {
+            outputText = result.outputText;
+        } else {
+            outputText = JSON.stringify(result, null, 2);
+        }
+
         const content = [
             {
                 type: "text",
-                text: result.output
+                text: outputText
             }
         ];
 
-        // Add usage info as additional context
-        if (result.usage || result.cost_usd || result.duration_ms) {
+        const runId = result?.runId || result?.run_id;
+        if (runId || result?.status || result?.duration_ms || result?.durationMs) {
             content.push({
                 type: "text",
-                text: `\n---\nRun ID: ${result.run_id}\nModel: ${result.model}\nTokens: ${result.usage?.total_tokens || 0}\nCost: $${result.cost_usd?.toFixed(5) || 0}\nDuration: ${result.duration_ms}ms`
+                text: `\n---\nRun ID: ${runId || "n/a"}\nStatus: ${result?.status || "n/a"}`
             });
         }
 
@@ -158,7 +158,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
             content: [
                 {
                     type: "text",
-                    text: `Error invoking agent: ${error.message}`
+                    text: `Error invoking tool: ${error.message}`
                 }
             ],
             isError: true

@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useMemo, type MouseEvent } from "react";
 import {
     ReactFlow,
     Background,
@@ -32,6 +32,13 @@ interface WorkflowCanvasProps {
     showBackground?: boolean;
     panOnScroll?: boolean;
     zoomOnScroll?: boolean;
+    onNodeClick?: (event: MouseEvent, node: Node) => void;
+    onEdgeClick?: (event: MouseEvent, edge: Edge) => void;
+    selectedNodeIds?: string[];
+    selectedEdgeIds?: string[];
+    nodesDraggable?: boolean;
+    nodesConnectable?: boolean;
+    elementsSelectable?: boolean;
 }
 
 function WorkflowCanvasInner({
@@ -45,20 +52,64 @@ function WorkflowCanvasInner({
     showMiniMap = false,
     showBackground = true,
     panOnScroll = true,
-    zoomOnScroll = true
+    zoomOnScroll = true,
+    onNodeClick,
+    onEdgeClick,
+    selectedNodeIds,
+    selectedEdgeIds,
+    nodesDraggable = false,
+    nodesConnectable = false,
+    elementsSelectable = false
 }: WorkflowCanvasProps) {
-    const [nodes, , onNodesChange] = useNodesState(initialNodes);
-    const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+
+    // Sync state when props change (e.g., after data is fetched)
+    useEffect(() => {
+        setNodes(initialNodes);
+    }, [initialNodes, setNodes]);
+
+    useEffect(() => {
+        setEdges(initialEdges);
+    }, [initialEdges, setEdges]);
 
     const proOptions = { hideAttribution: true };
+    const selectedNodeSet = useMemo(() => new Set(selectedNodeIds || []), [selectedNodeIds]);
+    const selectedEdgeSet = useMemo(() => new Set(selectedEdgeIds || []), [selectedEdgeIds]);
+
+    const displayNodes = useMemo(
+        () =>
+            nodes.map((node) => ({
+                ...node,
+                data: {
+                    ...node.data,
+                    selected: selectedNodeSet.has(node.id)
+                }
+            })),
+        [nodes, selectedNodeSet]
+    );
+
+    const displayEdges = useMemo(
+        () =>
+            edges.map((edge) => ({
+                ...edge,
+                data: {
+                    ...edge.data,
+                    selected: selectedEdgeSet.has(edge.id)
+                }
+            })),
+        [edges, selectedEdgeSet]
+    );
 
     return (
         <div className={cn("bg-background h-[400px] w-full rounded-lg border", className)}>
             <ReactFlow
-                nodes={nodes}
-                edges={edges}
+                nodes={displayNodes}
+                edges={displayEdges}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
+                onNodeClick={onNodeClick}
+                onEdgeClick={onEdgeClick}
                 nodeTypes={nodeTypes}
                 edgeTypes={edgeTypes}
                 connectionLineType={ConnectionLineType.SmoothStep}
@@ -69,9 +120,9 @@ function WorkflowCanvasInner({
                 minZoom={0.5}
                 maxZoom={2}
                 proOptions={proOptions}
-                nodesDraggable={false}
-                nodesConnectable={false}
-                elementsSelectable={false}
+                nodesDraggable={nodesDraggable}
+                nodesConnectable={nodesConnectable}
+                elementsSelectable={elementsSelectable}
             >
                 {showBackground && (
                     <Background
