@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import {
     listAvailableTools,
     getAvailableModels,
     listAvailableScorers,
     listMcpToolDefinitions
 } from "@repo/mastra";
+import { auth } from "@repo/auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 /**
  * GET /api/agents/tools
@@ -14,13 +17,18 @@ import {
  */
 export async function GET() {
     try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        const organizationId = session?.user ? await getUserOrganizationId(session.user.id) : null;
+
         // Get static tools from registry
         const staticTools = listAvailableTools();
 
         // Get MCP tools (dynamic, from connected MCP servers)
         let mcpTools: { id: string; name: string; description: string; source: string }[] = [];
         try {
-            const mcpDefinitions = await listMcpToolDefinitions();
+            const mcpDefinitions = await listMcpToolDefinitions(organizationId);
             mcpTools = mcpDefinitions.map((def) => ({
                 id: def.name, // Full namespaced name: serverName_toolName
                 name: def.name,

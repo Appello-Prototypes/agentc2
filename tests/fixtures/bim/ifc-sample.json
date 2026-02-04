@@ -1,0 +1,54 @@
+{
+  "elements": [
+    {
+      "guid": "ifc-duct-001",
+      "name": "Supply Duct A",
+      "category": "Duct",
+      "type": "SupplyAir",
+      "system": "Supply",
+      "level": "Level 1",
+      "properties": {
+        "Length": 12.5,
+        "Insulation": "Yes"
+      },
+      "geometry": {
+        "length": 12.5,
+        "area": 3.2,
+        "volume": 1.1,
+        "bboxMin": [0, 0, 0],
+        "bboxMax": [1, 1, 1]
+      },
+      "propertyEntries": [
+        {
+          "name": "Insulation",
+          "value": "Yes"
+        }
+      ]
+    },
+    {
+      "guid": "ifc-pipe-002",
+      "name": "Chilled Water Pipe",
+      "category": "Pipe",
+      "type": "CHW",
+      "system": "ChilledWater",
+      "level": "Level 2",
+      "properties": {
+        "Length": 20.0,
+        "Insulation": "Yes"
+      },
+      "geometry": {
+        "length": 20.0,
+        "area": 4.5,
+        "volume": 1.8,
+        "bboxMin": [2, 2, 2],
+        "bboxMax": [3, 3, 3]
+      },
+      "propertyEntries": [
+        {
+          "name": "Insulation",
+          "value": "Yes"
+        }
+      ]
+    }
+  ]
+}

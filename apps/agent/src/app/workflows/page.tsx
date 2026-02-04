@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     Badge,
     Button,
@@ -355,7 +355,7 @@ export default function WorkflowsPage() {
         }
     }, [selectedWorkflow, workflows]);
 
-    const fetchRuns = async () => {
+    const fetchRuns = useCallback(async () => {
         if (!selectedWorkflow) return;
         try {
             setRunsLoading(true);
@@ -382,19 +382,12 @@ export default function WorkflowsPage() {
         } finally {
             setRunsLoading(false);
         }
-    };
+    }, [selectedWorkflow, runStatusFilter, runEnvironmentFilter, runTriggerFilter, runSearchQuery]);
 
     useEffect(() => {
         if (activeTab !== "runs") return;
         fetchRuns();
-    }, [
-        activeTab,
-        selectedWorkflow,
-        runStatusFilter,
-        runEnvironmentFilter,
-        runTriggerFilter,
-        runSearchQuery
-    ]);
+    }, [activeTab, fetchRuns]);
 
     const filteredWorkflows = useMemo(() => {
         return workflows.filter((workflow) => {

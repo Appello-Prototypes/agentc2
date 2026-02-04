@@ -31,4 +31,14 @@ function getPgVector(): PgVector {
     return global.pgVector;
 }
 
-export const vector = getPgVector();
+function createVectorProxy(): PgVector {
+    return new Proxy({} as PgVector, {
+        get(_target, prop) {
+            const vector = getPgVector();
+            const value = vector[prop as keyof PgVector];
+            return typeof value === "function" ? value.bind(vector) : value;
+        }
+    });
+}
+
+export const vector = createVectorProxy();

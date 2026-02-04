@@ -5,6 +5,13 @@ export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
 export { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
 export { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
+export {
+    bimQueryTool,
+    bimTakeoffTool,
+    bimDiffTool,
+    bimClashTool,
+    bimHandoverTool
+} from "./bim-tools";
 
 // Tool registry for stored agents
 export {
@@ -23,6 +30,13 @@ import { webFetchTool } from "./web-fetch";
 import { jsonParserTool } from "./json-parser";
 import { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
 import { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
+import {
+    bimQueryTool,
+    bimTakeoffTool,
+    bimDiffTool,
+    bimClashTool,
+    bimHandoverTool
+} from "./bim-tools";
 
 // Extended tools bundle (includes web and parsing)
 export const extendedTools = {
@@ -36,5 +50,10 @@ export const extendedTools = {
     workflowGetRunTool,
     networkExecuteTool,
     networkListRunsTool,
-    networkGetRunTool
+    networkGetRunTool,
+    bimQueryTool,
+    bimTakeoffTool,
+    bimDiffTool,
+    bimClashTool,
+    bimHandoverTool
 };

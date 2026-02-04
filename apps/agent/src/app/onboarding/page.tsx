@@ -231,10 +231,21 @@ export default function OnboardingPage() {
         setCurrentStep("success");
     };
 
-    const handleFinish = () => {
-        // Mark onboarding as complete
+    const handleFinish = async () => {
+        try {
+            await fetch(`${getApiBase()}/api/onboarding/complete`, { method: "POST" });
+        } catch (error) {
+            console.error("Failed to complete onboarding:", error);
+        }
+
+        // Transitional fallback for client-only checks
         localStorage.setItem("agentc2_onboarding_complete", "true");
-        router.push("/workspace");
+
+        if (data.createdAgentSlug) {
+            router.push(`/workspace/${data.createdAgentSlug}/configure`);
+        } else {
+            router.push("/workspace");
+        }
     };
 
     const goBack = () => {

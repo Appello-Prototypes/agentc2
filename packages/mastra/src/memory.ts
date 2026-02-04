@@ -57,4 +57,14 @@ function getMemory(): Memory {
     return global.mastraMemory;
 }
 
-export const memory = getMemory();
+function createMemoryProxy(): Memory {
+    return new Proxy({} as Memory, {
+        get(_target, prop) {
+            const memory = getMemory();
+            const value = memory[prop as keyof Memory];
+            return typeof value === "function" ? value.bind(memory) : value;
+        }
+    });
+}
+
+export const memory = createMemoryProxy();

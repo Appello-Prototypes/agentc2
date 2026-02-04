@@ -1,15 +1,7 @@
 "use client";
 
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuSeparator,
-    DropdownMenuTrigger
-} from "./dropdown-menu";
 import { Button } from "./button";
 import { UserMenu } from "./user-menu";
-import { navigationItems, type NavigationApp } from "../config/navigation";
 import { icons, HugeiconsIcon } from "../icons";
 
 type Session = {
@@ -32,7 +24,6 @@ type AppTopBarProps = {
     onSignOut: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
-    app?: NavigationApp;
 };
 
 export function AppTopBar({
@@ -41,56 +32,14 @@ export function AppTopBar({
     navItems = [],
     onSignOut,
     isActive = () => false,
-    renderNavLink,
-    app
+    renderNavLink
 }: AppTopBarProps) {
-    // Filter navigation items by app if specified
-    const filteredNavItems = app
-        ? navigationItems.filter((item) => item.app === app)
-        : navigationItems;
-
     return (
         <header className="border-border bg-background/95 supports-[backdrop-filter]:bg-background/60 sticky top-0 z-50 w-full border-b backdrop-blur">
             <div className="flex h-14 w-full items-center px-4">
-                {/* Logo with Dropdown */}
+                {/* Logo */}
                 <div className="mr-8 flex items-center">
-                    <DropdownMenu>
-                        <DropdownMenuTrigger className="hover:bg-accent data-popup-open:bg-accent flex items-center gap-2 rounded-lg px-2 py-2 text-left transition-colors outline-none">
-                            <span className="text-base font-semibold">{title}</span>
-                            <HugeiconsIcon icon={icons["chevron-down"]!} className="size-4" />
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-56">
-                            <div className="px-2 py-1.5 text-sm font-semibold">Navigation</div>
-                            <DropdownMenuSeparator />
-                            {filteredNavItems.map((item) =>
-                                item.children ? (
-                                    <div key={item.label}>
-                                        <div className="text-muted-foreground flex items-center gap-2 px-2 py-1.5 text-xs font-semibold">
-                                            <HugeiconsIcon icon={item.icon!} className="size-4" />
-                                            {item.label}
-                                        </div>
-                                        {item.children.map((child) => (
-                                            <DropdownMenuItem
-                                                key={child.href}
-                                                onClick={() => (window.location.href = child.href)}
-                                                className="ml-6"
-                                            >
-                                                {child.label}
-                                            </DropdownMenuItem>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <DropdownMenuItem
-                                        key={item.href}
-                                        onClick={() => (window.location.href = item.href)}
-                                    >
-                                        <HugeiconsIcon icon={item.icon!} className="size-4" />
-                                        {item.label}
-                                    </DropdownMenuItem>
-                                )
-                            )}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    <span className="text-base font-semibold">{title}</span>
                 </div>
 
                 {/* Center Navigation Links */}

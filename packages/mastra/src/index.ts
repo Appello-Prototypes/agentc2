@@ -133,6 +133,32 @@ export {
     type ChunkOptions
 } from "./rag";
 
+// BIM
+export {
+    ingestBimModel,
+    queryBimElements,
+    ingestBimElementsToRag,
+    queryBimHybrid,
+    computeTakeoff,
+    computeDiff,
+    computeClashes,
+    computeHandoverRegister,
+    uploadBimObject,
+    getBimObjectBuffer,
+    headBimObject,
+    ifcAdapter,
+    speckleAdapter,
+    csvAdapter
+} from "./bim";
+export type {
+    BimAdapter,
+    BimAdapterContext,
+    BimElementNormalized,
+    BimGeometrySummary,
+    BimParsedModel,
+    BimPropertyEntry
+} from "./bim";
+
 // Orchestrator (Background Agent)
 export {
     goalStore,

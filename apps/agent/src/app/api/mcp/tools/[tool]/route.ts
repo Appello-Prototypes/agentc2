@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { prisma } from "@repo/database";
+import { auth } from "@repo/auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 /**
  * GET /api/mcp/tools/[tool]
@@ -8,6 +11,21 @@ import { prisma } from "@repo/database";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ tool: string }> }) {
     try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Organization membership required" },
+                { status: 403 }
+            );
+        }
+
         const { tool } = await params;
 
         const normalizeSchema = (
@@ -24,7 +42,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const workflowSlug = tool.slice("workflow-".length);
             const workflow = await prisma.workflow.findFirst({
                 where: {
-                    OR: [{ slug: workflowSlug }, { id: workflowSlug }]
+                    OR: [{ slug: workflowSlug }, { id: workflowSlug }],
+                    workspace: { organizationId }
                 },
                 include: {
                     workspace: {
@@ -94,7 +113,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             const networkSlug = tool.slice("network-".length);
             const network = await prisma.network.findFirst({
                 where: {
-                    OR: [{ slug: networkSlug }, { id: networkSlug }]
+                    OR: [{ slug: networkSlug }, { id: networkSlug }],
+                    workspace: { organizationId }
                 },
                 include: {
                     workspace: {
@@ -166,7 +186,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         // Find agent
         const agent = await prisma.agent.findFirst({
             where: {
-                OR: [{ slug: agentSlug }, { id: agentSlug }]
+                OR: [{ slug: agentSlug }, { id: agentSlug }],
+                workspace: { organizationId }
             },
             include: {
                 tools: true,

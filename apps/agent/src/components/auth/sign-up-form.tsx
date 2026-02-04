@@ -1,19 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signUp } from "@repo/auth/client";
 import { Button, Input, Field, FieldError, FieldLabel, FieldDescription } from "@repo/ui";
 import Link from "next/link";
 
 export function SignUpForm() {
     const router = useRouter();
+    const searchParams = useSearchParams();
 
     const [name, setName] = useState("");
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
+    const [inviteCode, setInviteCode] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        const invite = searchParams.get("invite");
+        if (invite) {
+            setInviteCode(invite);
+        }
+    }, [searchParams]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -32,7 +41,21 @@ export function SignUpForm() {
                 return;
             }
 
-            router.push("/workspace");
+            const bootstrapResponse = await fetch("/api/auth/bootstrap", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    inviteCode: inviteCode.trim() || undefined
+                })
+            });
+
+            const bootstrapResult = await bootstrapResponse.json();
+            if (!bootstrapResponse.ok || !bootstrapResult.success) {
+                setError(bootstrapResult.error || "Failed to set up organization");
+                return;
+            }
+
+            router.push("/onboarding");
             router.refresh();
         } catch (err) {
             setError("An unexpected error occurred");
@@ -83,6 +106,18 @@ export function SignUpForm() {
                     minLength={8}
                 />
                 <FieldDescription>Password must be at least 8 characters long</FieldDescription>
+            </Field>
+
+            <Field>
+                <FieldLabel htmlFor="inviteCode">Invite Code (optional)</FieldLabel>
+                <Input
+                    id="inviteCode"
+                    type="text"
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    placeholder="Enter invite code"
+                    autoComplete="off"
+                />
             </Field>
 
             {error && <FieldError>{error}</FieldError>}

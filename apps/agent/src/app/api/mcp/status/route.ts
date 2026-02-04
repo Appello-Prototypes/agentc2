@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { MCP_SERVER_CONFIGS, getMcpTools, type McpServerConfig } from "@repo/mastra";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 export interface McpToolInfo {
     name: string;
@@ -52,7 +53,8 @@ export async function GET() {
         let connectionError: string | undefined;
 
         try {
-            mcpTools = await getMcpTools();
+            const organizationId = await getUserOrganizationId(session.user.id);
+            mcpTools = await getMcpTools(organizationId);
         } catch (error) {
             connectionError =
                 error instanceof Error ? error.message : "Failed to connect to MCP servers";

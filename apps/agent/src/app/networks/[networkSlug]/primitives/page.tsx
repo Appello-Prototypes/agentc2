@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import {
     Button,
@@ -23,16 +23,20 @@ interface Primitive {
     agentId?: string | null;
     workflowId?: string | null;
     toolId?: string | null;
+    agent?: { id: string; name: string; slug?: string | null } | null;
+    workflow?: { id: string; name: string; slug?: string | null } | null;
 }
 
 interface AgentOption {
     id: string;
     name: string;
+    slug?: string | null;
 }
 
 interface WorkflowOption {
     id: string;
     name: string;
+    slug?: string | null;
 }
 
 interface ToolOption {
@@ -50,6 +54,13 @@ export default function NetworkPrimitivesPage() {
     const [newType, setNewType] = useState("agent");
     const [newTarget, setNewTarget] = useState("");
     const [saving, setSaving] = useState(false);
+
+    const agentsById = useMemo(() => new Map(agents.map((agent) => [agent.id, agent])), [agents]);
+    const workflowsById = useMemo(
+        () => new Map(workflows.map((workflow) => [workflow.id, workflow])),
+        [workflows]
+    );
+    const toolsById = useMemo(() => new Map(tools.map((tool) => [tool.id, tool])), [tools]);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -75,9 +86,15 @@ export default function NetworkPrimitivesPage() {
                 : [];
 
             setPrimitives(networkData.network?.primitives || []);
-            setAgents(agentItems.map((agent) => ({ id: agent.id, name: agent.name })));
+            setAgents(
+                agentItems.map((agent) => ({ id: agent.id, name: agent.name, slug: agent.slug }))
+            );
             setWorkflows(
-                workflowItems.map((workflow) => ({ id: workflow.id, name: workflow.name }))
+                workflowItems.map((workflow) => ({
+                    id: workflow.id,
+                    name: workflow.name,
+                    slug: workflow.slug
+                }))
             );
             setTools(toolItems.map((tool) => ({ id: tool.id, name: tool.name })));
         };
@@ -120,6 +137,38 @@ export default function NetworkPrimitivesPage() {
         savePrimitives(updated);
     };
 
+    const resolvePrimitiveDetails = (primitive: Primitive) => {
+        if (primitive.primitiveType === "agent") {
+            const agent =
+                primitive.agent ||
+                (primitive.agentId ? agentsById.get(primitive.agentId) : undefined);
+            const reference = agent?.slug || primitive.agentId || "unknown-agent";
+            return {
+                label: agent?.name || primitive.agentId || "Unknown agent",
+                reference
+            };
+        }
+        if (primitive.primitiveType === "workflow") {
+            const workflow =
+                primitive.workflow ||
+                (primitive.workflowId ? workflowsById.get(primitive.workflowId) : undefined);
+            const reference = workflow?.slug || primitive.workflowId || "unknown-workflow";
+            return {
+                label: workflow?.name || primitive.workflowId || "Unknown workflow",
+                reference
+            };
+        }
+        if (primitive.primitiveType === "tool") {
+            const tool = primitive.toolId ? toolsById.get(primitive.toolId) : undefined;
+            const reference = primitive.toolId || "unknown-tool";
+            return {
+                label: tool?.name || primitive.toolId || "Unknown tool",
+                reference
+            };
+        }
+        return { label: "Unknown primitive", reference: "unknown-primitive" };
+    };
+
     const options = newType === "agent" ? agents : newType === "workflow" ? workflows : tools;
 
     return (
@@ -127,33 +176,45 @@ export default function NetworkPrimitivesPage() {
             <Card>
                 <CardHeader>
                     <CardTitle>Primitives</CardTitle>
-                    <CardDescription>Configure agents, workflows, and tools.</CardDescription>
+                    <CardDescription>
+                        Primitives define the agents, workflows, and tools this network can route
+                        to. Use the reference tokens in topology mappings.
+                    </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-3">
                     {primitives.length === 0 ? (
                         <div className="text-muted-foreground text-sm">No primitives yet.</div>
                     ) : (
-                        primitives.map((primitive, index) => (
-                            <div
-                                key={`${primitive.primitiveType}-${primitive.id}-${index}`}
-                                className="flex items-center justify-between gap-4 text-sm"
-                            >
-                                <div>
-                                    {primitive.primitiveType}:{" "}
-                                    {primitive.agentId ||
-                                        primitive.workflowId ||
-                                        primitive.toolId ||
-                                        "Unknown"}
-                                </div>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => removePrimitive(index)}
+                        primitives.map((primitive, index) => {
+                            const details = resolvePrimitiveDetails(primitive);
+                            const token = `{{${primitive.primitiveType}:${details.reference}}}`;
+                            return (
+                                <div
+                                    key={`${primitive.primitiveType}-${primitive.id}-${index}`}
+                                    className="flex items-center justify-between gap-4 text-sm"
                                 >
-                                    Remove
-                                </Button>
-                            </div>
-                        ))
+                                    <div className="space-y-1">
+                                        <div className="font-medium">
+                                            {details.label}{" "}
+                                            <span className="text-muted-foreground">
+                                                ({primitive.primitiveType})
+                                            </span>
+                                        </div>
+                                        <div className="text-muted-foreground text-xs">
+                                            Reference: <code>{token}</code>
+                                        </div>
+                                    </div>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={saving}
+                                        onClick={() => removePrimitive(index)}
+                                    >
+                                        Remove
+                                    </Button>
+                                </div>
+                            );
+                        })
                     )}
                 </CardContent>
             </Card>
@@ -166,7 +227,10 @@ export default function NetworkPrimitivesPage() {
                     <div className="grid gap-3 md:grid-cols-2">
                         <Select
                             value={newType}
-                            onValueChange={(value) => setNewType(value ?? "agent")}
+                            onValueChange={(value) => {
+                                setNewType(value ?? "agent");
+                                setNewTarget("");
+                            }}
                         >
                             <SelectTrigger>
                                 <SelectValue />
@@ -187,7 +251,9 @@ export default function NetworkPrimitivesPage() {
                             <SelectContent>
                                 {options.map((option) => (
                                     <SelectItem key={option.id} value={option.id}>
-                                        {option.name}
+                                        {"slug" in option && option.slug
+                                            ? `${option.name} (${option.slug})`
+                                            : option.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

@@ -143,13 +143,18 @@ async function executeAgentStep(
     };
 }
 
-async function executeToolStep(step: WorkflowStep, context: WorkflowExecutionContext) {
+async function executeToolStep(
+    step: WorkflowStep,
+    context: WorkflowExecutionContext,
+    requestContext?: RequestContext
+) {
     const config = (step.config || {}) as unknown as WorkflowToolConfig;
     if (!config.toolId) {
         throw new Error(`Tool step "${step.id}" missing toolId`);
     }
 
-    const tools = await getToolsByNamesAsync([config.toolId]);
+    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
+    const tools = await getToolsByNamesAsync([config.toolId], organizationId);
     const tool = tools[config.toolId];
     if (!tool) {
         throw new Error(`Tool "${config.toolId}" not found`);
@@ -252,7 +257,7 @@ async function executeSteps(
                     output = await executeAgentStep(step, context, options.requestContext);
                     break;
                 case "tool":
-                    output = await executeToolStep(step, context);
+                    output = await executeToolStep(step, context, options.requestContext);
                     break;
                 case "workflow": {
                     const result = await executeWorkflowStep(

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
+import { auth } from "@repo/auth";
+import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -89,6 +92,13 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        const workspaceId = session?.user
+            ? await getDefaultWorkspaceIdForUser(session.user.id)
+            : null;
+        const organizationId = session?.user ? await getUserOrganizationId(session.user.id) : null;
 
         // Validate required fields
         const { name, instructions, modelProvider, modelName } = body;
@@ -169,6 +179,8 @@ export async function POST(request: NextRequest) {
                     workflows: body.workflows || [],
                     scorers: body.scorers || [],
                     type: "USER",
+                    tenantId: organizationId,
+                    workspaceId,
                     isPublic: body.isPublic ?? false,
                     metadata: body.metadata ?? Prisma.DbNull,
                     isActive: body.isActive ?? true

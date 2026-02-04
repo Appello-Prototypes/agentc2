@@ -139,4 +139,14 @@ function getMastra(): Mastra {
     return global.mastraInstance;
 }
 
-export const mastra = getMastra();
+function createMastraProxy(): Mastra {
+    return new Proxy({} as Mastra, {
+        get(_target, prop) {
+            const instance = getMastra();
+            const value = instance[prop as keyof Mastra];
+            return typeof value === "function" ? value.bind(instance) : value;
+        }
+    });
+}
+
+export const mastra = createMastraProxy();

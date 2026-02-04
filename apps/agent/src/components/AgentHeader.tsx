@@ -6,9 +6,11 @@ import { useSession, signOut } from "@repo/auth/client";
 import { usePathname } from "next/navigation";
 
 const navItems = [
-    { label: "Workspace", href: "/workspace" },
-    { label: "Live", href: "/live" },
-    { label: "MCP", href: "/mcp" }
+    { label: "Agents", href: "/workspace" },
+    { label: "Workflows", href: "/workflows" },
+    { label: "Networks", href: "/networks" },
+    { label: "Monitoring", href: "/live" },
+    { label: "Integrations", href: "/mcp" }
 ];
 
 export function AgentHeader() {
@@ -35,7 +37,6 @@ export function AgentHeader() {
             navItems={navItems}
             onSignOut={handleSignOut}
             isActive={isActive}
-            app="agent"
             renderNavLink={(item, active) => (
                 <Link
                     href={item.href}

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
     Badge,
     Button,
@@ -376,7 +376,7 @@ export default function NetworksPage() {
         }
     }, [selectedNetwork, networks]);
 
-    const fetchRuns = async () => {
+    const fetchRuns = useCallback(async () => {
         if (!selectedNetwork) return;
         try {
             setRunsLoading(true);
@@ -403,19 +403,12 @@ export default function NetworksPage() {
         } finally {
             setRunsLoading(false);
         }
-    };
+    }, [selectedNetwork, runStatusFilter, runEnvironmentFilter, runTriggerFilter, runSearchQuery]);
 
     useEffect(() => {
         if (activeTab !== "runs") return;
         fetchRuns();
-    }, [
-        activeTab,
-        selectedNetwork,
-        runStatusFilter,
-        runEnvironmentFilter,
-        runTriggerFilter,
-        runSearchQuery
-    ]);
+    }, [activeTab, fetchRuns]);
 
     const filteredNetworks = useMemo(() => {
         return networks.filter((network) => {

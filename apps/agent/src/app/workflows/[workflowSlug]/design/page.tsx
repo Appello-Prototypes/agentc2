@@ -593,7 +593,11 @@ export default function WorkflowDesignPage() {
                                 </div>
                             )}
 
-                            <Tabs defaultValue="details" value={inspectorTab} onValueChange={setInspectorTab}>
+                            <Tabs
+                                defaultValue="details"
+                                value={inspectorTab}
+                                onValueChange={setInspectorTab}
+                            >
                                 <TabsList className="mb-3 w-full">
                                     <TabsTrigger value="details">Details</TabsTrigger>
                                     <TabsTrigger value="mappings">Mappings</TabsTrigger>

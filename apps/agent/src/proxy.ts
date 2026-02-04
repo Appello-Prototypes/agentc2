@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
+import { getUserMembership } from "@/lib/organization";
 
 /**
  * Check if running in standalone mode (not behind reverse proxy)
@@ -43,6 +44,16 @@ async function proxy(request: NextRequest) {
             url.pathname = "/login";
             // Preserve the original URL as callback
             url.searchParams.set("callbackUrl", request.nextUrl.pathname);
+            return NextResponse.redirect(url);
+        }
+
+        const membership = await getUserMembership(session.user.id);
+        const onboardingComplete = Boolean(membership?.onboardingCompletedAt);
+        const pathname = request.nextUrl.pathname;
+
+        if (!onboardingComplete && !pathname.startsWith("/onboarding")) {
+            const url = request.nextUrl.clone();
+            url.pathname = "/onboarding";
             return NextResponse.redirect(url);
         }
 

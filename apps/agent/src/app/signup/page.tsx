@@ -1,8 +1,11 @@
 import { SignUpForm } from "@/components/auth/sign-up-form";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
 import { auth } from "@repo/auth";
+import { prisma } from "@repo/database";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+
+export const dynamic = "force-dynamic";
 
 export default async function SignUpPage() {
     const session = await auth.api.getSession({
@@ -10,7 +13,16 @@ export default async function SignUpPage() {
     });
 
     if (session) {
-        redirect("/workspace");
+        const membership = await prisma.membership.findFirst({
+            where: { userId: session.user.id },
+            orderBy: { createdAt: "asc" }
+        });
+
+        if (membership?.onboardingCompletedAt) {
+            redirect("/workspace");
+        }
+
+        redirect("/onboarding");
     }
 
     return (

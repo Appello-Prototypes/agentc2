@@ -1,9 +1,180 @@
-import { MCPClient } from "@mastra/mcp";
+import { MCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
+import { prisma } from "@repo/database";
 
 declare global {
     var mcpClient: MCPClient | undefined;
+}
+
+const ORG_MCP_CACHE_TTL = 60000;
+const orgMcpClients = new Map<string, { client: MCPClient; loadedAt: number }>();
+
+function getCredentialValue(
+    credentials: Record<string, unknown> | undefined,
+    keys: string[]
+): string | undefined {
+    if (!credentials) return undefined;
+    for (const key of keys) {
+        const value = credentials[key];
+        if (typeof value === "string" && value.trim()) {
+            return value.trim();
+        }
+    }
+    return undefined;
+}
+
+function buildServerConfigs(options: {
+    credentialsByToolId: Map<string, Record<string, unknown>>;
+    allowEnvFallback?: boolean;
+}): Record<string, MastraMCPServerDefinition> {
+    const { credentialsByToolId, allowEnvFallback = false } = options;
+    const servers: Record<string, MastraMCPServerDefinition> = {
+        playwright: {
+            command: "npx",
+            args: ["-y", "@playwright/mcp@latest"]
+        }
+    };
+
+    const firecrawlKey =
+        getCredentialValue(credentialsByToolId.get("firecrawl"), ["FIRECRAWL_API_KEY"]) ||
+        (allowEnvFallback ? process.env.FIRECRAWL_API_KEY : undefined);
+    if (firecrawlKey) {
+        servers.firecrawl = {
+            command: "npx",
+            args: ["-y", "firecrawl-mcp"],
+            env: { FIRECRAWL_API_KEY: firecrawlKey }
+        };
+    }
+
+    const hubspotToken =
+        getCredentialValue(credentialsByToolId.get("hubspot"), [
+            "PRIVATE_APP_ACCESS_TOKEN",
+            "HUBSPOT_ACCESS_TOKEN"
+        ]) || (allowEnvFallback ? process.env.HUBSPOT_ACCESS_TOKEN : undefined);
+    if (hubspotToken) {
+        servers.hubspot = {
+            command: "npx",
+            args: ["-y", "@hubspot/mcp-server"],
+            env: { PRIVATE_APP_ACCESS_TOKEN: hubspotToken }
+        };
+    }
+
+    const jiraUrl =
+        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_URL"]) ||
+        (allowEnvFallback ? process.env.JIRA_URL : undefined);
+    const jiraUsername =
+        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_USERNAME"]) ||
+        (allowEnvFallback ? process.env.JIRA_USERNAME : undefined);
+    const jiraToken =
+        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_API_TOKEN"]) ||
+        (allowEnvFallback ? process.env.JIRA_API_TOKEN : undefined);
+    const jiraProjectsFilter =
+        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_PROJECTS_FILTER"]) ||
+        (allowEnvFallback ? process.env.JIRA_PROJECTS_FILTER : undefined);
+    if (jiraUrl && jiraUsername && jiraToken) {
+        servers.jira = {
+            command: "uvx",
+            args: ["mcp-atlassian"],
+            env: {
+                JIRA_URL: jiraUrl,
+                JIRA_USERNAME: jiraUsername,
+                JIRA_API_TOKEN: jiraToken,
+                ...(jiraProjectsFilter ? { JIRA_PROJECTS_FILTER: jiraProjectsFilter } : {})
+            }
+        };
+    }
+
+    const justcallToken =
+        getCredentialValue(credentialsByToolId.get("justcall"), ["JUSTCALL_AUTH_TOKEN"]) ||
+        (allowEnvFallback ? process.env.JUSTCALL_AUTH_TOKEN : undefined);
+    if (justcallToken) {
+        servers.justcall = {
+            url: new URL("https://mcp.justcall.host/mcp"),
+            requestInit: {
+                headers: { Authorization: `Bearer ${justcallToken}` }
+            }
+        };
+    }
+
+    const atlasUrl =
+        getCredentialValue(credentialsByToolId.get("atlas"), ["ATLAS_N8N_SSE_URL"]) ||
+        (allowEnvFallback ? process.env.ATLAS_N8N_SSE_URL : undefined);
+    if (atlasUrl) {
+        servers.atlas = {
+            command: "npx",
+            args: [
+                "-y",
+                "supergateway",
+                "--sse",
+                atlasUrl,
+                "--timeout",
+                "600000",
+                "--keep-alive-timeout",
+                "600000",
+                "--retry-after-disconnect",
+                "--reconnect-interval",
+                "1000"
+            ]
+        };
+    }
+
+    const fathomKey =
+        getCredentialValue(credentialsByToolId.get("fathom"), ["FATHOM_API_KEY"]) ||
+        (allowEnvFallback ? process.env.FATHOM_API_KEY : undefined);
+    if (fathomKey) {
+        servers.fathom = {
+            command: "node",
+            args: [
+                resolve(dirname(fileURLToPath(import.meta.url)), "../../../fathom-mcp/index.js")
+            ],
+            env: { FATHOM_API_KEY: fathomKey }
+        };
+    }
+
+    const slackToken =
+        getCredentialValue(credentialsByToolId.get("slack"), ["SLACK_BOT_TOKEN"]) ||
+        (allowEnvFallback ? process.env.SLACK_BOT_TOKEN : undefined);
+    const slackTeamId =
+        getCredentialValue(credentialsByToolId.get("slack"), ["SLACK_TEAM_ID"]) ||
+        (allowEnvFallback ? process.env.SLACK_TEAM_ID : undefined);
+    if (slackToken && slackTeamId) {
+        servers.slack = {
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-slack"],
+            env: { SLACK_BOT_TOKEN: slackToken, SLACK_TEAM_ID: slackTeamId }
+        };
+    }
+
+    const gdriveCredentialsPath =
+        getCredentialValue(credentialsByToolId.get("gdrive"), ["GDRIVE_CREDENTIALS_PATH"]) ||
+        (allowEnvFallback ? process.env.GDRIVE_CREDENTIALS_PATH : undefined);
+    const gdriveOauthPath =
+        getCredentialValue(credentialsByToolId.get("gdrive"), ["GDRIVE_OAUTH_PATH"]) ||
+        (allowEnvFallback ? process.env.GDRIVE_OAUTH_PATH : undefined);
+    if (gdriveCredentialsPath) {
+        servers.gdrive = {
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-gdrive"],
+            env: {
+                GDRIVE_CREDENTIALS_PATH: gdriveCredentialsPath,
+                ...(gdriveOauthPath ? { GDRIVE_OAUTH_PATH: gdriveOauthPath } : {})
+            }
+        };
+    }
+
+    const githubToken =
+        getCredentialValue(credentialsByToolId.get("github"), ["GITHUB_PERSONAL_ACCESS_TOKEN"]) ||
+        (allowEnvFallback ? process.env.GITHUB_PERSONAL_ACCESS_TOKEN : undefined);
+    if (githubToken) {
+        servers.github = {
+            command: "npx",
+            args: ["-y", "@modelcontextprotocol/server-github"],
+            env: { GITHUB_PERSONAL_ACCESS_TOKEN: githubToken }
+        };
+    }
+
+    return servers;
 }
 
 /**
@@ -208,175 +379,14 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
  */
 function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
+        const servers = buildServerConfigs({
+            credentialsByToolId: new Map(),
+            allowEnvFallback: true
+        });
+
         global.mcpClient = new MCPClient({
             id: "mastra-mcp-client",
-            servers: {
-                // Playwright MCP Server - Browser automation, no API key required
-                // https://www.npmjs.com/package/@playwright/mcp
-                playwright: {
-                    command: "npx",
-                    args: ["-y", "@playwright/mcp@latest"]
-                },
-
-                // Firecrawl MCP Server - Web scraping and crawling
-                // https://www.npmjs.com/package/firecrawl-mcp
-                ...(process.env.FIRECRAWL_API_KEY
-                    ? {
-                          firecrawl: {
-                              command: "npx",
-                              args: ["-y", "firecrawl-mcp"],
-                              env: {
-                                  FIRECRAWL_API_KEY: process.env.FIRECRAWL_API_KEY
-                              }
-                          }
-                      }
-                    : {}),
-
-                // HubSpot MCP Server - CRM integration
-                // https://www.npmjs.com/package/@hubspot/mcp-server
-                ...(process.env.HUBSPOT_ACCESS_TOKEN
-                    ? {
-                          hubspot: {
-                              command: "npx",
-                              args: ["-y", "@hubspot/mcp-server"],
-                              env: {
-                                  PRIVATE_APP_ACCESS_TOKEN: process.env.HUBSPOT_ACCESS_TOKEN
-                              }
-                          }
-                      }
-                    : {}),
-
-                // Jira MCP Server - Project management and issue tracking
-                // Uses mcp-atlassian (Python) via uvx for better API compatibility
-                // https://github.com/sooperset/mcp-atlassian
-                ...(process.env.JIRA_API_TOKEN && process.env.JIRA_URL && process.env.JIRA_USERNAME
-                    ? {
-                          jira: {
-                              command: "uvx",
-                              args: ["mcp-atlassian"],
-                              env: {
-                                  JIRA_URL: process.env.JIRA_URL,
-                                  JIRA_USERNAME: process.env.JIRA_USERNAME,
-                                  JIRA_API_TOKEN: process.env.JIRA_API_TOKEN,
-                                  ...(process.env.JIRA_PROJECTS_FILTER
-                                      ? { JIRA_PROJECTS_FILTER: process.env.JIRA_PROJECTS_FILTER }
-                                      : {})
-                              }
-                          }
-                      }
-                    : {}),
-
-                // JustCall MCP Server - Phone/SMS communication via HTTP/SSE
-                // https://mcp.justcall.host
-                ...(process.env.JUSTCALL_AUTH_TOKEN
-                    ? {
-                          justcall: {
-                              url: new URL("https://mcp.justcall.host/mcp"),
-                              requestInit: {
-                                  headers: {
-                                      Authorization: `Bearer ${process.env.JUSTCALL_AUTH_TOKEN}`
-                                  }
-                              }
-                          }
-                      }
-                    : {}),
-
-                // ATLAS MCP Server - Custom n8n workflow tools via SSE
-                // Uses supergateway to connect to n8n SSE endpoint
-                ...(process.env.ATLAS_N8N_SSE_URL
-                    ? {
-                          atlas: {
-                              command: "npx",
-                              args: [
-                                  "-y",
-                                  "supergateway",
-                                  "--sse",
-                                  process.env.ATLAS_N8N_SSE_URL,
-                                  "--timeout",
-                                  "600000",
-                                  "--keep-alive-timeout",
-                                  "600000",
-                                  "--retry-after-disconnect",
-                                  "--reconnect-interval",
-                                  "1000"
-                              ]
-                          }
-                      }
-                    : {}),
-
-                // Fathom AI MCP Server - Meeting recordings and transcripts
-                // Uses the JavaScript implementation from packages/fathom-mcp
-                // https://github.com/Dot-Fun/fathom-mcp
-                ...(process.env.FATHOM_API_KEY
-                    ? {
-                          fathom: {
-                              command: "node",
-                              args: [
-                                  // Resolve path relative to this module, not process.cwd()
-                                  // This ensures it works in production where PM2 changes cwd
-                                  resolve(
-                                      dirname(fileURLToPath(import.meta.url)),
-                                      "../../../fathom-mcp/index.js"
-                                  )
-                              ],
-                              env: {
-                                  FATHOM_API_KEY: process.env.FATHOM_API_KEY
-                              }
-                          }
-                      }
-                    : {}),
-
-                // Slack MCP Server - Workspace messaging and search
-                // https://github.com/modelcontextprotocol/servers/tree/main/src/slack
-                ...(process.env.SLACK_BOT_TOKEN && process.env.SLACK_TEAM_ID
-                    ? {
-                          slack: {
-                              command: "npx",
-                              args: ["-y", "@modelcontextprotocol/server-slack"],
-                              env: {
-                                  SLACK_BOT_TOKEN: process.env.SLACK_BOT_TOKEN,
-                                  SLACK_TEAM_ID: process.env.SLACK_TEAM_ID
-                              }
-                          }
-                      }
-                    : {}),
-
-                // Google Drive MCP Server - File storage and search
-                // https://github.com/modelcontextprotocol/servers-archived/tree/main/src/gdrive
-                // Requires:
-                // - GDRIVE_OAUTH_PATH: Path to OAuth client keys JSON (from Google Cloud Console)
-                // - GDRIVE_CREDENTIALS_PATH: Path where authenticated tokens will be saved
-                // First-time auth: npx @modelcontextprotocol/server-gdrive auth
-                ...(process.env.GDRIVE_CREDENTIALS_PATH
-                    ? {
-                          gdrive: {
-                              command: "npx",
-                              args: ["-y", "@modelcontextprotocol/server-gdrive"],
-                              env: {
-                                  GDRIVE_CREDENTIALS_PATH: process.env.GDRIVE_CREDENTIALS_PATH,
-                                  ...(process.env.GDRIVE_OAUTH_PATH
-                                      ? { GDRIVE_OAUTH_PATH: process.env.GDRIVE_OAUTH_PATH }
-                                      : {})
-                              }
-                          }
-                      }
-                    : {}),
-
-                // GitHub MCP Server - Repository management and code
-                // https://github.com/github/github-mcp-server
-                ...(process.env.GITHUB_PERSONAL_ACCESS_TOKEN
-                    ? {
-                          github: {
-                              command: "npx",
-                              args: ["-y", "@modelcontextprotocol/server-github"],
-                              env: {
-                                  GITHUB_PERSONAL_ACCESS_TOKEN:
-                                      process.env.GITHUB_PERSONAL_ACCESS_TOKEN
-                              }
-                          }
-                      }
-                    : {})
-            },
+            servers,
             timeout: 60000 // 60 second timeout
         });
     }
@@ -386,6 +396,43 @@ function getMcpClient(): MCPClient {
 
 export const mcpClient = getMcpClient();
 
+async function getMcpClientForOrganization(organizationId?: string | null): Promise<MCPClient> {
+    if (!organizationId) {
+        return mcpClient;
+    }
+
+    const cached = orgMcpClients.get(organizationId);
+    const now = Date.now();
+    if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
+        return cached.client;
+    }
+
+    const credentials = await prisma.toolCredential.findMany({
+        where: { organizationId, isActive: true }
+    });
+
+    const credentialsByToolId = new Map<string, Record<string, unknown>>(
+        credentials.map((credential) => [
+            credential.toolId,
+            (credential.credentials || {}) as Record<string, unknown>
+        ])
+    );
+
+    const servers = buildServerConfigs({
+        credentialsByToolId,
+        allowEnvFallback: true
+    });
+
+    const client = new MCPClient({
+        id: `mastra-mcp-client-${organizationId}`,
+        servers,
+        timeout: 60000
+    });
+
+    orgMcpClients.set(organizationId, { client, loadedAt: now });
+    return client;
+}
+
 /**
  * Get all available MCP tools
  * Use this when configuring an agent with static tools
@@ -393,8 +440,9 @@ export const mcpClient = getMcpClient();
  * Tools are sanitized to fix schema issues that cause validation failures
  * with strict LLM providers like OpenAI GPT-4o-mini.
  */
-export async function getMcpTools() {
-    const tools = await mcpClient.listTools();
+export async function getMcpTools(organizationId?: string | null) {
+    const client = await getMcpClientForOrganization(organizationId);
+    const tools = await client.listTools();
     return sanitizeMcpTools(tools);
 }
 
@@ -453,10 +501,12 @@ export interface McpToolDefinition {
  */
 export async function executeMcpTool(
     toolName: string,
-    parameters: Record<string, unknown>
+    parameters: Record<string, unknown>,
+    options?: { organizationId?: string | null }
 ): Promise<McpToolExecutionResult> {
     try {
-        const toolsets = await mcpClient.listToolsets();
+        const client = await getMcpClientForOrganization(options?.organizationId);
+        const toolsets = await client.listToolsets();
 
         // Try multiple name formats to find the tool
         // listToolsets() uses dot notation: serverName.toolName
@@ -519,8 +569,11 @@ export async function executeMcpTool(
  * Returns tool metadata suitable for configuring external systems
  * like ElevenLabs webhook tools.
  */
-export async function listMcpToolDefinitions(): Promise<McpToolDefinition[]> {
-    const tools = await mcpClient.listTools();
+export async function listMcpToolDefinitions(
+    organizationId?: string | null
+): Promise<McpToolDefinition[]> {
+    const client = await getMcpClientForOrganization(organizationId);
+    const tools = await client.listTools();
     const definitions: McpToolDefinition[] = [];
 
     for (const [name, tool] of Object.entries(tools)) {

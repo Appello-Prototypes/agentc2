@@ -18,6 +18,7 @@
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.23",
+    "@aws-sdk/client-s3": "^3.982.0",
     "@mastra/core": "latest",
     "@mastra/evals": "^1.0.1",
     "@mastra/mcp": "^1.0.0",

@@ -82,7 +82,10 @@ async function buildWorkflowWrapper(workflowId: string) {
 export async function buildNetworkAgent(networkId: string) {
     const network = await prisma.network.findUnique({
         where: { id: networkId },
-        include: { primitives: true }
+        include: {
+            primitives: true,
+            workspace: { select: { organizationId: true } }
+        }
     });
 
     if (!network) {
@@ -99,13 +102,18 @@ export async function buildNetworkAgent(networkId: string) {
     const toolIds = network.primitives
         .filter((primitive) => primitive.primitiveType === "tool" && primitive.toolId)
         .map((primitive) => primitive.toolId as string);
-    const resolvedTools = toolIds.length > 0 ? await getToolsByNamesAsync(toolIds) : {};
+    const organizationId = network.workspace?.organizationId || null;
+    const resolvedTools =
+        toolIds.length > 0 ? await getToolsByNamesAsync(toolIds, organizationId) : {};
 
     for (const primitive of network.primitives) {
         if (primitive.primitiveType === "agent" && primitive.agentId) {
             const { agent, record } = await agentResolver.resolve({
                 id: primitive.agentId,
-                fallbackToSystem: true
+                fallbackToSystem: true,
+                requestContext: organizationId
+                    ? { resource: { tenantId: organizationId } }
+                    : undefined
             });
             const key = record?.slug || primitive.agentId;
             agents[key] = agent;

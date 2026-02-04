@@ -279,7 +279,8 @@ export async function createAgentFromConfigAsync(
     const model = `${config.modelProvider}/${config.modelName}`;
 
     // Get tools from registry AND MCP (async)
-    const tools = await getToolsByNamesAsync(config.tools);
+    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
+    const tools = await getToolsByNamesAsync(config.tools, organizationId);
 
     // Get scorers from registry
     const scorers = config.scorers ? getScorersByNames(config.scorers) : {};

@@ -16,7 +16,9 @@ import { getToolsByNamesAsync, getAllMcpTools } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
 
 // Use Prisma namespace for types
-type AgentRecord = Prisma.AgentGetPayload<{ include: { tools: true } }>;
+type AgentRecord = Prisma.AgentGetPayload<{
+    include: { tools: true; workspace: { select: { organizationId: true } } };
+}>;
 type AgentToolRecord = Prisma.AgentToolGetPayload<object>;
 
 /**
@@ -160,7 +162,7 @@ export class AgentResolver {
         // Try database first
         const record = await prisma.agent.findFirst({
             where: slug ? { slug, isActive: true } : { id, isActive: true },
-            include: { tools: true }
+            include: { tools: true, workspace: { select: { organizationId: true } } }
         });
 
         if (record) {
@@ -201,12 +203,17 @@ export class AgentResolver {
 
         // Get tools from registry AND MCP (async)
         const toolNames = record.tools.map((t: { toolId: string }) => t.toolId);
-        let tools = await getToolsByNamesAsync(toolNames);
+        const organizationId =
+            context?.resource?.tenantId ||
+            context?.tenantId ||
+            record.workspace?.organizationId ||
+            record.tenantId;
+        let tools = await getToolsByNamesAsync(toolNames, organizationId);
 
         // If agent is MCP-enabled, merge in all available MCP tools
         const metadata = record.metadata as Record<string, unknown> | null;
         if (metadata?.mcpEnabled) {
-            const mcpTools = await getAllMcpTools();
+            const mcpTools = await getAllMcpTools(organizationId);
             // Merge MCP tools without overwriting already-resolved tools
             tools = { ...mcpTools, ...tools };
             console.log(
@@ -477,7 +484,7 @@ export class AgentResolver {
                     isActive: true,
                     OR: [{ type: "SYSTEM" }, { ownerId: userId }, { isPublic: true }]
                 },
-                include: { tools: true },
+                include: { tools: true, workspace: { select: { organizationId: true } } },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
         }
@@ -488,7 +495,7 @@ export class AgentResolver {
                 isActive: true,
                 OR: [{ type: "SYSTEM" }, { isPublic: true }]
             },
-            include: { tools: true },
+            include: { tools: true, workspace: { select: { organizationId: true } } },
             orderBy: [{ type: "asc" }, { name: "asc" }]
         });
     }
@@ -502,7 +509,7 @@ export class AgentResolver {
                 type: "SYSTEM",
                 isActive: true
             },
-            include: { tools: true },
+            include: { tools: true, workspace: { select: { organizationId: true } } },
             orderBy: { name: "asc" }
         });
     }
@@ -523,7 +530,7 @@ export class AgentResolver {
     async getRecord(slug: string): Promise<AgentRecordWithTools | null> {
         return prisma.agent.findUnique({
             where: { slug },
-            include: { tools: true }
+            include: { tools: true, workspace: { select: { organizationId: true } } }
         });
     }
 }

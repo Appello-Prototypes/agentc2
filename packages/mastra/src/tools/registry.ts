@@ -12,7 +12,14 @@ import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
 import { workflowExecuteTool, workflowGetRunTool, workflowListRunsTool } from "./workflow-tools";
 import { networkExecuteTool, networkGetRunTool, networkListRunsTool } from "./network-tools";
-import { mcpClient } from "../mcp/client";
+import {
+    bimQueryTool,
+    bimTakeoffTool,
+    bimDiffTool,
+    bimClashTool,
+    bimHandoverTool
+} from "./bim-tools";
+import { getMcpTools } from "../mcp/client";
 
 /**
  * Tool registry mapping names to tool instances.
@@ -37,7 +44,14 @@ export const toolRegistry: Record<string, any> = {
     "workflow-get-run": workflowGetRunTool,
     "network-execute": networkExecuteTool,
     "network-list-runs": networkListRunsTool,
-    "network-get-run": networkGetRunTool
+    "network-get-run": networkGetRunTool,
+
+    // BIM tools
+    "bim-query": bimQueryTool,
+    "bim-takeoff": bimTakeoffTool,
+    "bim-diff": bimDiffTool,
+    "bim-clash": bimClashTool,
+    "bim-handover": bimHandoverTool
 };
 
 /**
@@ -45,21 +59,22 @@ export const toolRegistry: Record<string, any> = {
  * Returns an empty object if MCP is not available
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-let cachedMcpTools: Record<string, any> | null = null;
-let mcpToolsLoadedAt: number = 0;
+const cachedMcpToolsByOrg = new Map<string, { tools: Record<string, any>; loadedAt: number }>();
 const MCP_CACHE_TTL = 60000; // 1 minute cache
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function getMcpToolsCached(): Promise<Record<string, any>> {
+async function getMcpToolsCached(organizationId?: string | null): Promise<Record<string, any>> {
+    const cacheKey = organizationId || "__default__";
     const now = Date.now();
-    if (cachedMcpTools && now - mcpToolsLoadedAt < MCP_CACHE_TTL) {
-        return cachedMcpTools;
+    const cached = cachedMcpToolsByOrg.get(cacheKey);
+    if (cached && now - cached.loadedAt < MCP_CACHE_TTL) {
+        return cached.tools;
     }
 
     try {
-        cachedMcpTools = await mcpClient.listTools();
-        mcpToolsLoadedAt = now;
-        return cachedMcpTools;
+        const tools = await getMcpTools(organizationId);
+        cachedMcpToolsByOrg.set(cacheKey, { tools, loadedAt: now });
+        return tools;
     } catch (error) {
         console.warn("[Tool Registry] Failed to load MCP tools:", error);
         return {};
@@ -118,7 +133,10 @@ export function getToolsByNames(names: string[]): Record<string, any> {
  * @returns Record of tool name to tool instance
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getToolsByNamesAsync(names: string[]): Promise<Record<string, any>> {
+export async function getToolsByNamesAsync(
+    names: string[],
+    organizationId?: string | null
+): Promise<Record<string, any>> {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result: Record<string, any> = {};
 
@@ -135,7 +153,7 @@ export async function getToolsByNamesAsync(names: string[]): Promise<Record<stri
 
     if (unresolvedNames.length > 0) {
         // Load MCP tools and check for matches
-        const mcpTools = await getMcpToolsCached();
+        const mcpTools = await getMcpToolsCached(organizationId);
 
         for (const name of unresolvedNames) {
             if (mcpTools[name]) {
@@ -171,6 +189,6 @@ export function getToolByName(name: string): any | undefined {
  * @returns Record of MCP tool name to tool instance
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function getAllMcpTools(): Promise<Record<string, any>> {
-    return getMcpToolsCached();
+export async function getAllMcpTools(organizationId?: string | null): Promise<Record<string, any>> {
+    return getMcpToolsCached(organizationId);
 }

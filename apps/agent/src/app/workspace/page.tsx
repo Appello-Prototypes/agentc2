@@ -7,20 +7,33 @@ import { getApiBase } from "@/lib/utils";
 // Check if user has completed onboarding
 function useOnboardingRedirect() {
     const router = useRouter();
-    const [checked] = useState(() => {
-        // Initialize from localStorage if available (SSR-safe check)
-        if (typeof window !== "undefined") {
-            return localStorage.getItem("agentc2_onboarding_complete") === "true";
-        }
-        return false;
-    });
+    const [checked, setChecked] = useState(false);
 
     useEffect(() => {
-        // Check localStorage for onboarding completion
-        const isComplete = localStorage.getItem("agentc2_onboarding_complete") === "true";
-        if (!isComplete) {
-            router.replace("/onboarding");
-        }
+        let isMounted = true;
+
+        const checkOnboarding = async () => {
+            try {
+                const response = await fetch(`${getApiBase()}/api/onboarding/status`);
+                const result = await response.json();
+                if (!result.success || !result.onboardingComplete) {
+                    router.replace("/onboarding");
+                }
+            } catch (error) {
+                console.error("Failed to check onboarding status:", error);
+                router.replace("/onboarding");
+            } finally {
+                if (isMounted) {
+                    setChecked(true);
+                }
+            }
+        };
+
+        checkOnboarding();
+
+        return () => {
+            isMounted = false;
+        };
     }, [router]);
 
     return checked;
@@ -796,7 +809,11 @@ export default function WorkspacePage() {
             )}
 
             {/* Tabs */}
-            <Tabs defaultValue="agents" value={activeTab} onValueChange={(val) => setActiveTab(val as typeof activeTab)}>
+            <Tabs
+                defaultValue="agents"
+                value={activeTab}
+                onValueChange={(val) => setActiveTab(val as typeof activeTab)}
+            >
                 <div className="flex items-center justify-between">
                     <TabsList>
                         <TabsTrigger value="agents">Agents</TabsTrigger>

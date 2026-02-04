@@ -91,6 +91,8 @@ model Organization {
     workspaces  Workspace[]
     memberships Membership[]
     credentials ToolCredential[]
+    invites     OrganizationInvite[]
+    domains     OrganizationDomain[]
 
     @@index([slug])
     @@map("organization")
@@ -125,18 +127,53 @@ model Workspace {
 
 // Membership - User's role in an organization
 model Membership {
-    id             String       @id @default(cuid())
-    userId         String
-    organizationId String
-    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-    role           String       @default("member") // "owner", "admin", "member", "viewer"
-    createdAt      DateTime     @default(now())
-    updatedAt      DateTime     @updatedAt
+    id                    String       @id @default(cuid())
+    userId                String
+    organizationId        String
+    organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    role                  String       @default("member") // "owner", "admin", "member", "viewer"
+    onboardingCompletedAt DateTime?
+    onboardingStep        String?
+    createdAt             DateTime     @default(now())
+    updatedAt             DateTime     @updatedAt
 
     @@unique([userId, organizationId])
     @@index([userId])
     @@index([organizationId])
     @@map("membership")
+}
+
+// Organization Invite - Code-based org join
+model OrganizationInvite {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    code           String       @unique
+    expiresAt      DateTime?
+    maxUses        Int?
+    usedCount      Int          @default(0)
+    isActive       Boolean      @default(true)
+    createdBy      String?
+    metadata       Json?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@index([organizationId])
+    @@map("organization_invite")
+}
+
+// Organization Domain - Email domain mapping to org
+model OrganizationDomain {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    domain         String       @unique
+    isPrimary      Boolean      @default(false)
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@index([organizationId])
+    @@map("organization_domain")
 }
 
 // ToolCredential - Scoped credentials for MCP/tool access per organization
@@ -1814,9 +1851,9 @@ enum BimVersionStatus {
 
 // BIM Model
 model BimModel {
-    id           String   @id @default(cuid())
+    id           String  @id @default(cuid())
     name         String
-    description  String?  @db.Text
+    description  String? @db.Text
     sourceSystem String?
     metadata     Json?
 
@@ -1845,7 +1882,7 @@ model BimModelVersion {
     modelId String
     model   BimModel @relation(fields: [modelId], references: [id], onDelete: Cascade)
 
-    version      Int             @default(1)
+    version      Int              @default(1)
     status       BimVersionStatus @default(QUEUED)
     sourceFormat String
     sourceUri    String?
@@ -1854,9 +1891,9 @@ model BimModelVersion {
     metadata     Json?
 
     // Relations
-    elements BimElement[]
-    takeoffs BimTakeoff[]
-    clashes  BimClash[]
+    elements  BimElement[]
+    takeoffs  BimTakeoff[]
+    clashes   BimClash[]
     diffsFrom BimDiffSummary[] @relation("BimDiffFrom")
     diffsTo   BimDiffSummary[] @relation("BimDiffTo")
 
@@ -1904,7 +1941,7 @@ model BimElement {
 model BimGeometrySummary {
     id String @id @default(cuid())
 
-    elementId String   @unique
+    elementId String     @unique
     element   BimElement @relation(fields: [elementId], references: [id], onDelete: Cascade)
 
     bboxMin  Json?
@@ -1955,9 +1992,9 @@ model BimTakeoff {
     versionId String
     version   BimModelVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
 
-    scope   String?
-    query   Json?
-    result  Json
+    scope     String?
+    query     Json?
+    result    Json
     createdBy String?
 
     createdAt DateTime @default(now())

@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { prisma } from "@repo/database";
+import { auth } from "@repo/auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 /**
  * MCP Server Gateway
@@ -23,6 +26,21 @@ import { prisma } from "@repo/database";
  */
 export async function GET(request: NextRequest) {
     try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Organization membership required" },
+                { status: 403 }
+            );
+        }
+
         const { searchParams } = new URL(request.url);
         const includeInactive = searchParams.get("includeInactive") === "true";
         const normalizeSchema = (
@@ -37,7 +55,10 @@ export async function GET(request: NextRequest) {
 
         // Get all agents from database
         const agents = await prisma.agent.findMany({
-            where: includeInactive ? {} : { isActive: true },
+            where: {
+                ...(includeInactive ? {} : { isActive: true }),
+                workspace: { organizationId }
+            },
             select: {
                 id: true,
                 slug: true,
@@ -67,7 +88,7 @@ export async function GET(request: NextRequest) {
         });
 
         const workflows = await prisma.workflow.findMany({
-            where: { isActive: true },
+            where: { isActive: true, workspace: { organizationId } },
             select: {
                 id: true,
                 slug: true,
@@ -95,7 +116,7 @@ export async function GET(request: NextRequest) {
         });
 
         const networks = await prisma.network.findMany({
-            where: { isActive: true },
+            where: { isActive: true, workspace: { organizationId } },
             select: {
                 id: true,
                 slug: true,
@@ -467,6 +488,21 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Organization membership required" },
+                { status: 403 }
+            );
+        }
+
         const body = await request.json();
         const { method, tool, params } = body;
 
@@ -521,6 +557,20 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            const agent = await prisma.agent.findFirst({
+                where: {
+                    OR: [{ slug: agentSlug }, { id: agentSlug }],
+                    workspace: { organizationId }
+                },
+                select: { id: true }
+            });
+            if (!agent) {
+                return NextResponse.json(
+                    { success: false, error: `Tool not found: ${tool}` },
+                    { status: 404 }
+                );
+            }
+
             const invokeUrl = new URL(`/api/agents/${agentSlug}/invoke`, request.url);
             const invokeResponse = await fetch(invokeUrl, {
                 method: "POST",
@@ -567,6 +617,20 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json(
                     { success: false, error: "Missing workflowSlug or input" },
                     { status: 400 }
+                );
+            }
+
+            const workflow = await prisma.workflow.findFirst({
+                where: {
+                    OR: [{ slug: params.workflowSlug }, { id: params.workflowSlug }],
+                    workspace: { organizationId }
+                },
+                select: { id: true }
+            });
+            if (!workflow) {
+                return NextResponse.json(
+                    { success: false, error: `Workflow not found: ${params.workflowSlug}` },
+                    { status: 404 }
                 );
             }
 
@@ -620,6 +684,20 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json(
                     { success: false, error: "Missing networkSlug or message" },
                     { status: 400 }
+                );
+            }
+
+            const network = await prisma.network.findFirst({
+                where: {
+                    OR: [{ slug: params.networkSlug }, { id: params.networkSlug }],
+                    workspace: { organizationId }
+                },
+                select: { id: true }
+            });
+            if (!network) {
+                return NextResponse.json(
+                    { success: false, error: `Network not found: ${params.networkSlug}` },
+                    { status: 404 }
                 );
             }
 

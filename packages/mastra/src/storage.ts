@@ -25,4 +25,14 @@ function getPgStore(): PostgresStore {
     return global.pgStore;
 }
 
-export const storage = getPgStore();
+function createStorageProxy(): PostgresStore {
+    return new Proxy({} as PostgresStore, {
+        get(_target, prop) {
+            const store = getPgStore();
+            const value = store[prop as keyof PostgresStore];
+            return typeof value === "function" ? value.bind(store) : value;
+        }
+    });
+}
+
+export const storage = createStorageProxy();

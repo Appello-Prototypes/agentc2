@@ -4,7 +4,15 @@ import { prisma } from "@repo/database";
 async function findNetwork(slug: string) {
     return prisma.network.findFirst({
         where: { OR: [{ slug }, { id: slug }] },
-        include: { primitives: true, _count: { select: { runs: true, primitives: true } } }
+        include: {
+            primitives: {
+                include: {
+                    agent: { select: { id: true, slug: true, name: true } },
+                    workflow: { select: { id: true, slug: true, name: true } }
+                }
+            },
+            _count: { select: { runs: true, primitives: true } }
+        }
     });
 }
 

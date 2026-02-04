@@ -23,11 +23,11 @@ export type NavigationItem = {
 export const navigationItems: NavigationItem[] = [
     // Primary navigation - AgentWorkplace
     {
-        label: "Workspace",
+        label: "Agents",
         icon: icons.dashboard,
         href: "/workspace",
         app: "agent",
-        keywords: ["workspace", "agents", "manage", "monitor", "configure", "analytics", "home"]
+        keywords: ["agents", "workspace", "manage", "monitor", "configure", "analytics", "home"]
     },
     {
         label: "Workflows",
@@ -44,18 +44,25 @@ export const navigationItems: NavigationItem[] = [
         keywords: ["networks", "routing", "multi-agent", "orchestration", "topology"]
     },
     {
-        label: "Live",
+        label: "Monitoring",
         icon: icons.activity,
         href: "/live",
         app: "agent",
-        keywords: ["live", "production", "monitoring", "runs", "real-time"]
+        keywords: ["monitoring", "live", "production", "runs", "real-time"]
     },
     {
-        label: "MCP",
+        label: "Integrations",
         icon: icons["ai-network"],
         href: "/mcp",
         app: "agent",
-        keywords: ["mcp", "model context protocol", "tools", "servers", "connections"],
+        keywords: [
+            "integrations",
+            "mcp",
+            "model context protocol",
+            "tools",
+            "servers",
+            "connections"
+        ],
         children: [
             {
                 label: "Connections",

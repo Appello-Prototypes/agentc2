@@ -44,6 +44,15 @@ interface ChatProposal {
     requiresConfirmation?: boolean;
 }
 
+interface NetworkPrimitive {
+    primitiveType?: string;
+    agentId?: string | null;
+    workflowId?: string | null;
+    toolId?: string | null;
+    agent?: { id: string; name: string; slug?: string | null } | null;
+    workflow?: { id: string; name: string; slug?: string | null } | null;
+}
+
 const SECTION_LABELS = ["Triggers", "Routers", "Actions", "Subflows", "Errors/Handlers"] as const;
 
 function normalizeTopology(input?: NetworkTopology | null): NetworkTopology {
@@ -70,11 +79,31 @@ function tryParseJson(value: string) {
     }
 }
 
+function resolvePrimitiveReference(primitive: NetworkPrimitive, index: number): string {
+    if (primitive.primitiveType === "agent") {
+        return primitive.agent?.slug || primitive.agentId || `agent-${index + 1}`;
+    }
+    if (primitive.primitiveType === "workflow") {
+        return primitive.workflow?.slug || primitive.workflowId || `workflow-${index + 1}`;
+    }
+    if (primitive.primitiveType === "tool") {
+        return primitive.toolId || `tool-${index + 1}`;
+    }
+    return (
+        primitive.agent?.slug ||
+        primitive.workflow?.slug ||
+        primitive.toolId ||
+        primitive.agentId ||
+        primitive.workflowId ||
+        `primitive-${index + 1}`
+    );
+}
+
 export default function NetworkTopologyPage() {
     const params = useParams();
     const networkSlug = params.networkSlug as string;
     const [topology, setTopology] = useState<NetworkTopology>({ nodes: [], edges: [] });
-    const [primitives, setPrimitives] = useState<Record<string, unknown>[]>([]);
+    const [primitives, setPrimitives] = useState<NetworkPrimitive[]>([]);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [aiPrompt, setAiPrompt] = useState("");
@@ -91,7 +120,7 @@ export default function NetworkTopologyPage() {
     const [chatProposals, setChatProposals] = useState<ChatProposal[]>([]);
     const [confirmedProposals, setConfirmedProposals] = useState<Record<string, boolean>>({});
     const [history, setHistory] = useState<
-        { topology: NetworkTopology; primitives: Record<string, unknown>[] }[]
+        { topology: NetworkTopology; primitives: NetworkPrimitive[] }[]
     >([]);
     const [mappingDraft, setMappingDraft] = useState("");
     const [configDraft, setConfigDraft] = useState("");
@@ -268,11 +297,7 @@ export default function NetworkTopologyPage() {
     const availableTokens = useMemo(() => {
         const tokens = primitives.map((primitive, index) => {
             const type = primitive.primitiveType || "primitive";
-            const ref =
-                primitive.agentId ||
-                primitive.workflowId ||
-                primitive.toolId ||
-                `primitive-${index + 1}`;
+            const ref = resolvePrimitiveReference(primitive, index);
             return `{{${type}:${ref}}}`;
         });
         tokens.unshift("{{input}}");
@@ -363,7 +388,7 @@ export default function NetworkTopologyPage() {
             const nextNetwork = applyJsonPatch(
                 { topologyJson: topology, primitives },
                 data.patch || []
-            ) as { topologyJson: NetworkTopology; primitives: Record<string, unknown>[] };
+            ) as { topologyJson: NetworkTopology; primitives: NetworkPrimitive[] };
             const proposalId =
                 typeof crypto !== "undefined" && "randomUUID" in crypto
                     ? crypto.randomUUID()
@@ -393,7 +418,7 @@ export default function NetworkTopologyPage() {
             const nextNetwork = applyJsonPatch(
                 { topologyJson: topology, primitives },
                 proposal.patch
-            ) as { topologyJson: NetworkTopology; primitives: Record<string, unknown>[] };
+            ) as { topologyJson: NetworkTopology; primitives: NetworkPrimitive[] };
             setHistory((prev) => [{ topology, primitives }, ...prev]);
             setTopology(normalizeTopology(nextNetwork.topologyJson));
             setPrimitives(Array.isArray(nextNetwork.primitives) ? nextNetwork.primitives : []);
@@ -510,7 +535,11 @@ export default function NetworkTopologyPage() {
                                 </div>
                             )}
 
-                            <Tabs defaultValue="details" value={inspectorTab} onValueChange={setInspectorTab}>
+                            <Tabs
+                                defaultValue="details"
+                                value={inspectorTab}
+                                onValueChange={setInspectorTab}
+                            >
                                 <TabsList className="mb-3 w-full">
                                     <TabsTrigger value="details">Details</TabsTrigger>
                                     <TabsTrigger value="mappings">Mappings</TabsTrigger>
