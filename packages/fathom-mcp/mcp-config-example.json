@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "Fathom": {
+      "command": "node",
+      "args": ["/Users/YOUR_USERNAME/fathom-mcp/index.js"],
+      "env": {
+        "FATHOM_API_KEY": "YOUR_SHARED_API_KEY_HERE"
+      }
+    }
+  }
+}
+

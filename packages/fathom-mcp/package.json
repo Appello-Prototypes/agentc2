@@ -1,0 +1,28 @@
+{
+  "name": "fathom-mcp",
+  "version": "1.0.0",
+  "description": "MCP server for accessing Fathom meeting recordings in Cursor",
+  "main": "index.js",
+  "bin": {
+    "fathom-mcp": "./index.js"
+  },
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "mcp",
+    "fathom",
+    "meetings",
+    "cursor"
+  ],
+  "license": "MIT",
+  "type": "commonjs",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0",
+    "zod": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
+
