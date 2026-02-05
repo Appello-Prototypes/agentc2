@@ -21,17 +21,26 @@ export function AgentC2Logo({ size = 24, className, ...props }: AgentC2LogoProps
             className={className}
             {...props}
         >
-            {/* Background rounded square */}
-            <rect x="2" y="2" width="28" height="28" rx="7" className="fill-foreground" />
+            {/* Border rounded square - pinstripe style */}
+            <rect
+                x="3"
+                y="3"
+                width="26"
+                height="26"
+                rx="6"
+                fill="none"
+                className="stroke-foreground"
+                strokeWidth="2"
+            />
             {/* C2 text */}
             <text
                 x="16"
-                y="21.5"
+                y="22"
                 textAnchor="middle"
-                className="fill-background"
+                className="fill-foreground"
                 style={{
-                    fontSize: "13px",
-                    fontWeight: 700,
+                    fontSize: "17px",
+                    fontWeight: 800,
                     fontFamily:
                         "ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, monospace",
                     letterSpacing: "-0.5px"

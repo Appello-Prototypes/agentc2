@@ -38,8 +38,13 @@ export function AgentHeader() {
 
     return (
         <AppTopBar
-            title="AgentC2"
-            logo={<AgentC2Logo size={28} />}
+            title=""
+            logo={
+                <div className="flex items-center gap-1.5">
+                    <span className="text-base font-semibold">Agent</span>
+                    <AgentC2Logo size={26} />
+                </div>
+            }
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

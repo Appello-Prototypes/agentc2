@@ -38,6 +38,9 @@
     "test:e2e:playwright:headed": "playwright test --headed",
     "test:e2e:playwright:debug": "playwright test --debug"
   },
+  "overrides": {
+    "@mastra/core": "^1.2.0"
+  },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",
     "@playwright/test": "^1.58.1",

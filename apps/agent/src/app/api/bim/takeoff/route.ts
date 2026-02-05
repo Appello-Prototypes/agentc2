@@ -10,20 +10,55 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { versionId, scope, filters, groupBy } = await request.json();
+        const {
+            modelId,
+            versionId: providedVersionId,
+            scope,
+            filters,
+            groupBy
+        } = await request.json();
+
+        // Resolve versionId: use provided versionId, or find latest version for modelId
+        let versionId = providedVersionId;
+        let resolvedModelId = modelId;
+
         if (!versionId) {
-            return NextResponse.json({ error: "versionId is required" }, { status: 400 });
+            if (!modelId) {
+                return NextResponse.json(
+                    { error: "modelId or versionId is required" },
+                    { status: 400 }
+                );
+            }
+
+            // Find the latest version for this model
+            const latestVersion = await prisma.bimModelVersion.findFirst({
+                where: { modelId },
+                orderBy: { createdAt: "desc" },
+                select: { id: true }
+            });
+
+            if (!latestVersion) {
+                return NextResponse.json(
+                    { error: "No versions found for this model" },
+                    { status: 404 }
+                );
+            }
+
+            versionId = latestVersion.id;
+        } else {
+            // If versionId provided, look up the modelId
+            const version = await prisma.bimModelVersion.findUnique({
+                where: { id: versionId },
+                select: { modelId: true }
+            });
+            resolvedModelId = version?.modelId;
         }
 
         const result = await computeTakeoff({ versionId, filters, groupBy });
-        const version = await prisma.bimModelVersion.findUnique({
-            where: { id: versionId },
-            select: { modelId: true }
-        });
 
         const record = await prisma.bimTakeoff.create({
             data: {
-                modelId: version?.modelId,
+                modelId: resolvedModelId,
                 versionId,
                 scope: scope || null,
                 query: { filters, groupBy },

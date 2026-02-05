@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getApiBase } from "@/lib/utils";
-import { DefaultChatTransport, type ToolUIPart } from "ai";
+import type { ToolUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
     Button,
@@ -32,10 +32,8 @@ import { MessageSquareIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
 export default function ChatPage() {
     const [input, setInput] = useState<string>("");
 
-    const { messages, setMessages, sendMessage, status, regenerate } = useChat({
-        transport: new DefaultChatTransport({
-            api: "/api/chat"
-        })
+    const { messages, setMessages, append, status, reload } = useChat({
+        api: "/api/chat"
     });
 
     // Load message history on mount
@@ -59,7 +57,7 @@ export default function ChatPage() {
     const handleSubmit = async () => {
         if (!input.trim()) return;
 
-        sendMessage({ text: input });
+        await append({ role: "user", content: input });
         setInput("");
     };
 
@@ -70,6 +68,14 @@ export default function ChatPage() {
     const handleCopyMessage = (text: string) => {
         navigator.clipboard.writeText(text);
     };
+
+    const visibleMessages = messages.filter(
+        (
+            message
+        ): message is (typeof messages)[number] & {
+            role: "user" | "assistant" | "system";
+        } => message.role !== "data"
+    );
 
     return (
         <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -87,21 +93,21 @@ export default function ChatPage() {
             {/* Conversation */}
             <Conversation className="flex-1">
                 <ConversationContent>
-                    {messages.length === 0 ? (
+                    {visibleMessages.length === 0 ? (
                         <ConversationEmptyState
                             icon={<MessageSquareIcon className="size-12" />}
                             title="Welcome to the AI Assistant"
                             description="Ask me anything! I can help with questions, calculations, and more."
                         />
                     ) : (
-                        messages.map((message, messageIndex) => (
+                        visibleMessages.map((message, messageIndex) => (
                             <div key={message.id} className="space-y-2">
                                 {message.parts?.map((part, i) => {
                                     // Handle text messages
                                     if (part.type === "text") {
                                         const isLastAssistantMessage =
                                             message.role === "assistant" &&
-                                            messageIndex === messages.length - 1;
+                                            messageIndex === visibleMessages.length - 1;
 
                                         return (
                                             <Message key={`${message.id}-${i}`} from={message.role}>
@@ -120,7 +126,7 @@ export default function ChatPage() {
                                                         </MessageAction>
                                                         <MessageAction
                                                             tooltip="Regenerate"
-                                                            onClick={() => regenerate()}
+                                                            onClick={() => reload()}
                                                         >
                                                             <RefreshCwIcon className="size-3" />
                                                         </MessageAction>
@@ -132,7 +138,7 @@ export default function ChatPage() {
 
                                     // Handle tool invocations
                                     if (part.type?.startsWith("tool-")) {
-                                        const toolPart = part as ToolUIPart;
+                                        const toolPart = part as unknown as ToolUIPart;
 
                                         // Hide internal memory management tools from the UI
                                         const internalTools = [

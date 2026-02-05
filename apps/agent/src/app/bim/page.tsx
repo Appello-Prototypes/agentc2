@@ -35,7 +35,7 @@ interface BimModel {
     workspaceId: string | null;
     createdAt: string;
     updatedAt: string;
-    _count: {
+    _count?: {
         versions: number;
     };
 }
@@ -206,8 +206,8 @@ export default function BimPage() {
                                                 </CardTitle>
                                             </div>
                                             <Badge variant="outline">
-                                                {model._count.versions} version
-                                                {model._count.versions !== 1 ? "s" : ""}
+                                                {model._count?.versions ?? 0} version
+                                                {(model._count?.versions ?? 0) !== 1 ? "s" : ""}
                                             </Badge>
                                         </div>
                                         <CardDescription className="text-xs">
@@ -249,7 +249,7 @@ export default function BimPage() {
                                     <div>
                                         <span className="text-muted-foreground">Versions:</span>
                                         <span className="ml-2">
-                                            {selectedModel._count.versions}
+                                            {selectedModel._count?.versions ?? 0}
                                         </span>
                                     </div>
                                     <div>

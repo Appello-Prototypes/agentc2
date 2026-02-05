@@ -2,7 +2,7 @@
 
 import { useParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import { DefaultChatTransport, type ToolUIPart } from "ai";
+import type { ToolUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
 import {
@@ -88,15 +88,21 @@ export default function TestPage() {
     const [runningTestId, setRunningTestId] = useState<string | null>(null);
 
     // Use the AI SDK's useChat hook for streaming
-    const { messages, setMessages, sendMessage, status, regenerate, stop } = useChat({
-        transport: new DefaultChatTransport({
-            api: `${getApiBase()}/api/agents/${agentSlug}/chat`,
-            body: {
-                threadId,
-                requestContext: contextVars
-            }
-        })
+    const { messages, setMessages, append, status, reload, stop } = useChat({
+        api: `${getApiBase()}/api/agents/${agentSlug}/chat`,
+        body: {
+            threadId,
+            requestContext: contextVars
+        }
     });
+
+    const visibleMessages = messages.filter(
+        (
+            message
+        ): message is (typeof messages)[number] & {
+            role: "user" | "assistant" | "system";
+        } => message.role !== "data"
+    );
 
     // Feedback hook for thumbs up/down on assistant messages
     const { getFeedback, submitFeedback } = useFeedback({ agentSlug });
@@ -146,7 +152,7 @@ export default function TestPage() {
 
     const handleSubmit = async () => {
         if (!input.trim() || status !== "ready") return;
-        sendMessage({ text: input });
+        await append({ role: "user", content: input });
         setInput("");
     };
 
@@ -293,14 +299,14 @@ export default function TestPage() {
                                         data-testid="messages-container"
                                         className="min-h-[400px]"
                                     >
-                                        {messages.length === 0 ? (
+                                        {visibleMessages.length === 0 ? (
                                             <ConversationEmptyState
                                                 icon={<MessageSquareIcon className="size-12" />}
                                                 title="Start a conversation"
                                                 description="Send a message to test the agent's responses. Messages are streamed in real-time."
                                             />
                                         ) : (
-                                            messages.map((message, messageIndex) => (
+                                            visibleMessages.map((message, messageIndex) => (
                                                 <div key={message.id} className="space-y-2">
                                                     {message.parts?.map((part, i) => {
                                                         // Handle text messages
@@ -308,7 +314,7 @@ export default function TestPage() {
                                                             const isLastAssistantMessage =
                                                                 message.role === "assistant" &&
                                                                 messageIndex ===
-                                                                    messages.length - 1;
+                                                                    visibleMessages.length - 1;
 
                                                             return (
                                                                 <Message
@@ -341,7 +347,7 @@ export default function TestPage() {
                                                                                 <MessageAction
                                                                                     tooltip="Regenerate"
                                                                                     onClick={() =>
-                                                                                        regenerate()
+                                                                                        reload()
                                                                                     }
                                                                                 >
                                                                                     <RefreshCwIcon className="size-3" />
@@ -415,7 +421,8 @@ export default function TestPage() {
 
                                                         // Handle tool invocations
                                                         if (part.type?.startsWith("tool-")) {
-                                                            const toolPart = part as ToolUIPart;
+                                                            const toolPart =
+                                                                part as unknown as ToolUIPart;
 
                                                             // Hide internal memory management tools from the UI
                                                             const internalTools = [

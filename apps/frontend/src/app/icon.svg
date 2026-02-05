@@ -1,0 +1,12 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Border rounded square - pinstripe style -->
+    <rect x="3" y="3" width="26" height="26" rx="6" fill="none" stroke="#fafafa" stroke-width="2"/>
+    <!-- C2 text -->
+    <text
+        x="16"
+        y="22"
+        text-anchor="middle"
+        fill="#fafafa"
+        style="font-size: 17px; font-weight: 800; font-family: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace; letter-spacing: -0.5px;"
+    >C2</text>
+</svg>

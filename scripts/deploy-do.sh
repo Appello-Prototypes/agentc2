@@ -21,9 +21,18 @@ set -euo pipefail
 
 # Configuration
 DROPLET_IP="${1:-${DO_HOST:-}}"
-SSH_USER="${2:-${DO_USER:-deploy}}"
+SSH_USER="${2:-${DO_USER:-${DO_USERNAME:-root}}}"
+SSH_KEY="${DO_SSH_KEY:-}"
 DEPLOY_PATH="/var/www/mastra"
 BRANCH="${DEPLOY_BRANCH:-main}"
+
+# Build SSH options
+SSH_OPTS="-o StrictHostKeyChecking=accept-new"
+if [ -n "$SSH_KEY" ]; then
+    # Expand tilde if present
+    SSH_KEY="${SSH_KEY/#\~/$HOME}"
+    SSH_OPTS="$SSH_OPTS -i $SSH_KEY"
+fi
 
 # Colors for output
 RED='\033[0;31m'
@@ -53,9 +62,12 @@ fi
 log_info "Starting deployment to $SSH_USER@$DROPLET_IP"
 log_info "Deploy path: $DEPLOY_PATH"
 log_info "Branch: $BRANCH"
+if [ -n "$SSH_KEY" ]; then
+    log_info "Using SSH key: $SSH_KEY"
+fi
 
 # Run deployment commands on the Droplet
-ssh -o StrictHostKeyChecking=accept-new "$SSH_USER@$DROPLET_IP" << ENDSSH
+ssh $SSH_OPTS "$SSH_USER@$DROPLET_IP" << ENDSSH
     set -euo pipefail
 
     echo "=========================================="

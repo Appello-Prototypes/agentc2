@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
 import {
@@ -61,17 +60,15 @@ export function LiveChatPanel({
     const [input, setInput] = useState("");
 
     // Use the AI SDK's useChat hook for streaming
-    const { messages, setMessages, sendMessage, status, stop } = useChat({
-        transport: new DefaultChatTransport({
-            api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
-            body: {
-                threadId,
-                requestContext: {
-                    userId: "live-user",
-                    mode: "live"
-                }
+    const { messages, setMessages, append, status, stop } = useChat({
+        api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
+        body: {
+            threadId,
+            requestContext: {
+                userId: "live-user",
+                mode: "live"
             }
-        })
+        }
     });
 
     // Fetch available agents
@@ -111,9 +108,9 @@ export function LiveChatPanel({
     const handleSend = useCallback(() => {
         if (!input.trim() || !selectedAgentSlug) return;
 
-        sendMessage({ text: input });
+        void append({ role: "user", content: input });
         setInput("");
-    }, [input, selectedAgentSlug, sendMessage]);
+    }, [append, input, selectedAgentSlug]);
 
     // Start new conversation
     const handleNewConversation = useCallback(() => {
@@ -265,62 +262,69 @@ export function LiveChatPanel({
                                 </div>
                             </ConversationEmptyState>
                         ) : (
-                            messages.map((message) => (
-                                <Message
-                                    key={message.id}
-                                    from={message.role as "user" | "assistant"}
-                                >
-                                    <MessageContent>
-                                        {message.parts && message.parts.length > 0 ? (
-                                            message.parts.map((part, index) => {
-                                                if (part.type === "text") {
-                                                    return (
-                                                        <MessageResponse key={index}>
-                                                            {part.text}
-                                                        </MessageResponse>
-                                                    );
-                                                }
+                            messages.map((message) => {
+                                if (message.role === "data") {
+                                    return null;
+                                }
 
-                                                if (part.type === "tool-invocation") {
-                                                    // Show tool calls as a simple badge
-                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                                    const toolPart = part as any;
-                                                    return (
-                                                        <div
-                                                            key={index}
-                                                            className="my-2 flex items-center gap-2"
-                                                        >
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="text-xs"
+                                return (
+                                    <Message key={message.id} from={message.role}>
+                                        <MessageContent>
+                                            {message.parts && message.parts.length > 0 ? (
+                                                message.parts.map((part, index) => {
+                                                    if (part.type === "text") {
+                                                        return (
+                                                            <MessageResponse key={index}>
+                                                                {part.text}
+                                                            </MessageResponse>
+                                                        );
+                                                    }
+
+                                                    if (part.type === "tool-invocation") {
+                                                        // Show tool calls as a simple badge
+                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                        const toolPart = part as any;
+                                                        return (
+                                                            <div
+                                                                key={index}
+                                                                className="my-2 flex items-center gap-2"
                                                             >
-                                                                Tool:{" "}
-                                                                {toolPart.toolInvocation?.toolName}
-                                                            </Badge>
-                                                            {"result" in
-                                                                (toolPart.toolInvocation || {}) && (
-                                                                <Badge className="bg-green-100 text-xs text-green-800">
-                                                                    Done
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    Tool:{" "}
+                                                                    {
+                                                                        toolPart.toolInvocation
+                                                                            ?.toolName
+                                                                    }
                                                                 </Badge>
-                                                            )}
-                                                        </div>
-                                                    );
-                                                }
+                                                                {"result" in
+                                                                    (toolPart.toolInvocation ||
+                                                                        {}) && (
+                                                                    <Badge className="bg-green-100 text-xs text-green-800">
+                                                                        Done
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
 
-                                                return null;
-                                            })
-                                        ) : (
-                                            <MessageResponse>
-                                                {/* Fallback for messages without parts */}
-                                                {String(
-                                                    (message as unknown as { content?: string })
-                                                        .content || ""
-                                                )}
-                                            </MessageResponse>
-                                        )}
-                                    </MessageContent>
-                                </Message>
-                            ))
+                                                    return null;
+                                                })
+                                            ) : (
+                                                <MessageResponse>
+                                                    {/* Fallback for messages without parts */}
+                                                    {String(
+                                                        (message as unknown as { content?: string })
+                                                            .content || ""
+                                                    )}
+                                                </MessageResponse>
+                                            )}
+                                        </MessageContent>
+                                    </Message>
+                                );
+                            })
                         )}
 
                         {isStreaming && (
