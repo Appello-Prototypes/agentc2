@@ -216,7 +216,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     });
 
                     // Send run metadata so client can associate feedback with this run
-                    // Using data-run-metadata as the type (data-${string} format)
+                    // AI SDK v5 requires 'data-<name>' format for custom data parts
                     writer.write({
                         type: "data-run-metadata",
                         data: { runId: run.runId, messageId }

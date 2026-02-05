@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
 import {
@@ -59,16 +60,25 @@ export function LiveChatPanel({
     const [threadId, setThreadId] = useState<string>(() => `live-${Date.now()}`);
     const [input, setInput] = useState("");
 
+    // Create transport for the chat API
+    const transport = useMemo(
+        () =>
+            new DefaultChatTransport({
+                api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
+                body: {
+                    threadId,
+                    requestContext: {
+                        userId: "live-user",
+                        mode: "live"
+                    }
+                }
+            }),
+        [selectedAgentSlug, threadId]
+    );
+
     // Use the AI SDK's useChat hook for streaming
-    const { messages, setMessages, append, status, stop } = useChat({
-        api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
-        body: {
-            threadId,
-            requestContext: {
-                userId: "live-user",
-                mode: "live"
-            }
-        }
+    const { messages, setMessages, sendMessage, status, stop } = useChat({
+        transport
     });
 
     // Fetch available agents
@@ -108,9 +118,9 @@ export function LiveChatPanel({
     const handleSend = useCallback(() => {
         if (!input.trim() || !selectedAgentSlug) return;
 
-        void append({ role: "user", content: input });
+        void sendMessage({ text: input });
         setInput("");
-    }, [append, input, selectedAgentSlug]);
+    }, [sendMessage, input, selectedAgentSlug]);
 
     // Start new conversation
     const handleNewConversation = useCallback(() => {
@@ -263,9 +273,7 @@ export function LiveChatPanel({
                             </ConversationEmptyState>
                         ) : (
                             messages.map((message) => {
-                                if (message.role === "data") {
-                                    return null;
-                                }
+                                // In AI SDK v6, messages are always user/assistant/system - no "data" role
 
                                 return (
                                     <Message key={message.id} from={message.role}>

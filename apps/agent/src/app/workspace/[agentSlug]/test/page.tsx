@@ -3,8 +3,10 @@
 import { useParams } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
 import type { ToolUIPart } from "ai";
+import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
+import { useMemo } from "react";
 import {
     Card,
     CardContent,
@@ -87,22 +89,36 @@ export default function TestPage() {
     const [runningTests, setRunningTests] = useState(false);
     const [runningTestId, setRunningTestId] = useState<string | null>(null);
 
+    // Create transport for the chat API
+    const transport = useMemo(
+        () =>
+            new DefaultChatTransport({
+                api: `${getApiBase()}/api/agents/${agentSlug}/chat`,
+                body: {
+                    threadId,
+                    requestContext: contextVars
+                }
+            }),
+        [agentSlug, threadId, contextVars]
+    );
+
     // Use the AI SDK's useChat hook for streaming
-    const { messages, setMessages, append, status, reload, stop } = useChat({
-        api: `${getApiBase()}/api/agents/${agentSlug}/chat`,
-        body: {
-            threadId,
-            requestContext: contextVars
+    const { messages, setMessages, sendMessage, status, regenerate, stop, error } = useChat({
+        transport,
+        onError: (error) => {
+            console.error("[useChat] Error:", error);
         }
     });
 
-    const visibleMessages = messages.filter(
-        (
-            message
-        ): message is (typeof messages)[number] & {
-            role: "user" | "assistant" | "system";
-        } => message.role !== "data"
-    );
+    // Log error to console for debugging
+    useEffect(() => {
+        if (error) {
+            console.error("[useChat] Current error:", error);
+        }
+    }, [error]);
+
+    // In AI SDK v6, messages are always user/assistant/system - no "data" role
+    const visibleMessages = messages;
 
     // Feedback hook for thumbs up/down on assistant messages
     const { getFeedback, submitFeedback } = useFeedback({ agentSlug });
@@ -152,7 +168,7 @@ export default function TestPage() {
 
     const handleSubmit = async () => {
         if (!input.trim() || status !== "ready") return;
-        await append({ role: "user", content: input });
+        await sendMessage({ text: input });
         setInput("");
     };
 
@@ -347,7 +363,7 @@ export default function TestPage() {
                                                                                 <MessageAction
                                                                                     tooltip="Regenerate"
                                                                                     onClick={() =>
-                                                                                        reload()
+                                                                                        regenerate()
                                                                                     }
                                                                                 >
                                                                                     <RefreshCwIcon className="size-3" />

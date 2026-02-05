@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getApiBase } from "@/lib/utils";
 import type { ToolUIPart } from "ai";
+import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import {
     Button,
@@ -32,8 +33,11 @@ import { MessageSquareIcon, CopyIcon, RefreshCwIcon } from "lucide-react";
 export default function ChatPage() {
     const [input, setInput] = useState<string>("");
 
-    const { messages, setMessages, append, status, reload } = useChat({
-        api: "/api/chat"
+    // Create transport for the chat API
+    const transport = useMemo(() => new DefaultChatTransport({ api: "/api/chat" }), []);
+
+    const { messages, setMessages, sendMessage, status, regenerate } = useChat({
+        transport
     });
 
     // Load message history on mount
@@ -57,7 +61,7 @@ export default function ChatPage() {
     const handleSubmit = async () => {
         if (!input.trim()) return;
 
-        await append({ role: "user", content: input });
+        await sendMessage({ text: input });
         setInput("");
     };
 
@@ -69,13 +73,8 @@ export default function ChatPage() {
         navigator.clipboard.writeText(text);
     };
 
-    const visibleMessages = messages.filter(
-        (
-            message
-        ): message is (typeof messages)[number] & {
-            role: "user" | "assistant" | "system";
-        } => message.role !== "data"
-    );
+    // In AI SDK v6, messages are always user/assistant/system - no "data" role
+    const visibleMessages = messages;
 
     return (
         <div className="flex h-[calc(100vh-4rem)] flex-col">
@@ -126,7 +125,7 @@ export default function ChatPage() {
                                                         </MessageAction>
                                                         <MessageAction
                                                             tooltip="Regenerate"
-                                                            onClick={() => reload()}
+                                                            onClick={() => regenerate()}
                                                         >
                                                             <RefreshCwIcon className="size-3" />
                                                         </MessageAction>

@@ -38,6 +38,8 @@ mastra.useappello.app {
                 read_timeout 300s
                 write_timeout 300s
             }
+            # CRITICAL: Disable buffering for SSE streams (real-time chat)
+            flush_interval -1
         }
     }
 

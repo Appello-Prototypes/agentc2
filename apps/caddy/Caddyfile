@@ -18,6 +18,9 @@ https://catalyst.localhost {
     # All traffic routes to agent app (now the primary app)
     # Agent app serves at root without basePath
     handle {
-        reverse_proxy localhost:3001
+        reverse_proxy localhost:3001 {
+            # Disable buffering for SSE streams (real-time chat)
+            flush_interval -1
+        }
     }
 }
