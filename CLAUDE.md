@@ -383,90 +383,45 @@ git push origin main
 
 ---
 
-## Vercel CLI Monitoring & Fixing
+## Production Deployment (Digital Ocean)
 
-### Monitor Vercel Deployments from Terminal
+**See [`DEPLOY.md`](./DEPLOY.md) for full deployment instructions.**
+
+### Quick Deploy
 
 ```bash
-# Install Vercel CLI if needed
-npm i -g vercel
-
-# Login to Vercel
-vercel login
-
-# Check deployment status
-vercel ls
-
-# View deployment logs
-vercel logs <deployment-url>
-
-# Tail logs in real-time
-vercel logs --follow <deployment-url>
-
-# Check for build errors
-vercel inspect <deployment-url>
+ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+cd /var/www/mastra
+git pull origin main
+bun install
+bun run build
+pm2 restart all
+pm2 status
 ```
 
-### Common Vercel Build Issues & Fixes
+### Server Details
 
-1. **Type Errors in Build**:
+- **Host:** 138.197.150.253
+- **Domain:** https://mastra.useappello.app
+- **SSH Key:** ~/.ssh/appello_digitalocean
+- **Process Manager:** PM2
+- **Reverse Proxy:** Caddy
 
-    ```bash
-    # Run locally first
-    bun run type-check
-    bun run build
-    ```
+### Useful Commands
 
-2. **Environment Variable Missing**:
+```bash
+# View logs
+pm2 logs
 
-    ```bash
-    # Check Vercel env vars
-    vercel env ls
+# Check status
+pm2 status
 
-    # Add missing env var
-    vercel env add <VAR_NAME>
-    ```
+# Restart apps
+pm2 restart all
 
-3. **Build Timeout**:
-    - Check for infinite loops in build-time code
-    - Reduce bundle size
-    - Check Prisma generate runs correctly
-
-4. **Memory Issues**:
-
-    ```bash
-    # Increase Node memory in vercel.json
-    {
-        "builds": [{
-            "config": {
-                "maxLambdaSize": "50mb"
-            }
-        }]
-    }
-    ```
-
-5. **Redeploy After Fix**:
-
-    ```bash
-    # Trigger new deployment
-    vercel --prod
-
-    # Or force redeploy
-    vercel --prod --force
-    ```
-
-### Vercel Logs Analysis
-
-When a deployment fails:
-
-1. Get the deployment URL from Vercel dashboard or `vercel ls`
-2. Run `vercel logs <url>` to see build logs
-3. Look for:
-    - TypeScript compilation errors
-    - Missing environment variables
-    - Failed Prisma generate
-    - Memory/timeout issues
-4. Fix locally, test with `bun run build`, then redeploy
+# Reload Caddy
+sudo systemctl reload caddy
+```
 
 ---
 
