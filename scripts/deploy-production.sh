@@ -5,7 +5,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BRANCH="${DEPLOY_BRANCH:-main}"
 REMOTE="${DEPLOY_REMOTE:-origin}"
 DO_HOST="${DO_HOST:-}"
-DO_USER="${DO_USER:-deploy}"
+DO_USER="${DO_USER:-${DO_USERNAME:-deploy}}"
 HEALTHCHECK_URL="${DEPLOY_HEALTHCHECK_URL:-}"
 HEALTHCHECK_TIMEOUT="${DEPLOY_HEALTHCHECK_TIMEOUT:-120}"
 HEALTHCHECK_INTERVAL="${DEPLOY_HEALTHCHECK_INTERVAL:-5}"
@@ -28,7 +28,7 @@ log_error() {
 trap 'log_error "Deployment failed. Check output above for details."' ERR
 
 if [ -z "$DO_HOST" ]; then
-    log_error "Missing DO_HOST. Set DO_HOST and optionally DO_USER."
+    log_error "Missing DO_HOST. Set DO_HOST and optionally DO_USERNAME."
     exit 1
 fi
 
