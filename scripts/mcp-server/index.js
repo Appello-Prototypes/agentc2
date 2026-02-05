@@ -127,8 +127,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
                     type: "object",
                     properties: {},
                     required: []
-                },
-                outputSchema: tool.outputSchema
+                }
+                // Note: outputSchema removed - MCP SDK requires structured content when outputSchema is defined,
+                // but we return text content for flexibility
             };
         })
     };

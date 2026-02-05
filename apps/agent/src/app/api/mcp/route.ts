@@ -1085,6 +1085,14 @@ export async function POST(request: NextRequest) {
             return sanitized;
         };
 
+        // Helper to get internal base URL - use localhost in production to avoid DNS/SSL issues
+        const getInternalBaseUrl = () => {
+            if (process.env.NODE_ENV === "production") {
+                return "http://localhost:3001";
+            }
+            return request.url.split("/api/")[0];
+        };
+
         const crudToolNames = new Set([
             "agent-create",
             "agent-read",
@@ -1167,7 +1175,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const invokeUrl = new URL(`/api/agents/${agentSlug}/invoke`, request.url);
+            const invokeUrl = new URL(`/api/agents/${agentSlug}/invoke`, getInternalBaseUrl());
             const invokeResponse = await fetch(invokeUrl, {
                 method: "POST",
                 headers: {
@@ -1230,7 +1238,10 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const execUrl = new URL(`/api/workflows/${params.workflowSlug}/execute`, request.url);
+            const execUrl = new URL(
+                `/api/workflows/${params.workflowSlug}/execute`,
+                getInternalBaseUrl()
+            );
             const execResponse = await fetch(execUrl, {
                 method: "POST",
                 headers: {
@@ -1257,7 +1268,7 @@ export async function POST(request: NextRequest) {
             if (execResult.runId) {
                 const runUrl = new URL(
                     `/api/workflows/${params.workflowSlug}/runs/${execResult.runId}`,
-                    request.url
+                    getInternalBaseUrl()
                 );
                 const runResponse = await fetch(runUrl, { headers: authHeaders });
                 runDetail = await runResponse.json();
@@ -1297,7 +1308,10 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const execUrl = new URL(`/api/networks/${params.networkSlug}/execute`, request.url);
+            const execUrl = new URL(
+                `/api/networks/${params.networkSlug}/execute`,
+                getInternalBaseUrl()
+            );
             const execResponse = await fetch(execUrl, {
                 method: "POST",
                 headers: {
@@ -1325,7 +1339,7 @@ export async function POST(request: NextRequest) {
             if (execResult.runId) {
                 const runUrl = new URL(
                     `/api/networks/${params.networkSlug}/runs/${execResult.runId}`,
-                    request.url
+                    getInternalBaseUrl()
                 );
                 const runResponse = await fetch(runUrl, { headers: authHeaders });
                 runDetail = await runResponse.json();
@@ -1353,7 +1367,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const execUrl = new URL(`/api/workflows/${workflowSlug}/execute`, request.url);
+            const execUrl = new URL(`/api/workflows/${workflowSlug}/execute`, getInternalBaseUrl());
             const execResponse = await fetch(execUrl, {
                 method: "POST",
                 headers: {
@@ -1380,7 +1394,7 @@ export async function POST(request: NextRequest) {
             if (execResult.runId) {
                 const runUrl = new URL(
                     `/api/workflows/${workflowSlug}/runs/${execResult.runId}`,
-                    request.url
+                    getInternalBaseUrl()
                 );
                 const runResponse = await fetch(runUrl, { headers: authHeaders });
                 runDetail = await runResponse.json();
@@ -1416,7 +1430,7 @@ export async function POST(request: NextRequest) {
 
             const listUrl = new URL(
                 `/api/workflows/${params.workflowSlug}/runs?${searchParams.toString()}`,
-                request.url
+                getInternalBaseUrl()
             );
             const listResponse = await fetch(listUrl, { headers: authHeaders });
             const listResult = await listResponse.json();
@@ -1432,7 +1446,7 @@ export async function POST(request: NextRequest) {
             }
             const runUrl = new URL(
                 `/api/workflows/${params.workflowSlug}/runs/${params.runId}`,
-                request.url
+                getInternalBaseUrl()
             );
             const runResponse = await fetch(runUrl, { headers: authHeaders });
             const runResult = await runResponse.json();
@@ -1449,7 +1463,7 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            const execUrl = new URL(`/api/networks/${networkSlug}/execute`, request.url);
+            const execUrl = new URL(`/api/networks/${networkSlug}/execute`, getInternalBaseUrl());
             const execResponse = await fetch(execUrl, {
                 method: "POST",
                 headers: {
@@ -1477,7 +1491,7 @@ export async function POST(request: NextRequest) {
             if (execResult.runId) {
                 const runUrl = new URL(
                     `/api/networks/${networkSlug}/runs/${execResult.runId}`,
-                    request.url
+                    getInternalBaseUrl()
                 );
                 const runResponse = await fetch(runUrl, { headers: authHeaders });
                 runDetail = await runResponse.json();
@@ -1513,7 +1527,7 @@ export async function POST(request: NextRequest) {
 
             const listUrl = new URL(
                 `/api/networks/${params.networkSlug}/runs?${searchParams.toString()}`,
-                request.url
+                getInternalBaseUrl()
             );
             const listResponse = await fetch(listUrl, { headers: authHeaders });
             const listResult = await listResponse.json();
@@ -1529,7 +1543,7 @@ export async function POST(request: NextRequest) {
             }
             const runUrl = new URL(
                 `/api/networks/${params.networkSlug}/runs/${params.runId}`,
-                request.url
+                getInternalBaseUrl()
             );
             const runResponse = await fetch(runUrl, { headers: authHeaders });
             const runResult = await runResponse.json();
