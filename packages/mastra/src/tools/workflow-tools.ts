@@ -43,6 +43,55 @@ const mapStepStatus = (status: "completed" | "failed" | "suspended") => {
     return RunStatus.COMPLETED;
 };
 
+const baseOutputSchema = z.object({ success: z.boolean() }).passthrough();
+
+const getInternalBaseUrl = () =>
+    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+
+const buildHeaders = () => {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+    };
+    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
+    if (apiKey) {
+        headers["X-API-Key"] = apiKey;
+    }
+    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    if (orgSlug) {
+        headers["X-Organization-Slug"] = orgSlug;
+    }
+    return headers;
+};
+
+const callInternalApi = async (
+    path: string,
+    options?: {
+        method?: string;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    }
+) => {
+    const url = new URL(path, getInternalBaseUrl());
+    if (options?.query) {
+        Object.entries(options.query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                url.searchParams.set(key, String(value));
+            }
+        });
+    }
+
+    const response = await fetch(url.toString(), {
+        method: options?.method ?? "GET",
+        headers: buildHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await response.json();
+    if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+    return data;
+};
+
 export const workflowExecuteTool = createTool({
     id: "workflow-execute",
     description: "Execute a workflow by slug or ID and return output plus run metadata.",
@@ -310,5 +359,65 @@ export const workflowGetRunTool = createTool({
         }
 
         return { success: true, run };
+    }
+});
+
+export const workflowResumeTool = createTool({
+    id: "workflow-resume",
+    description: "Resume a suspended workflow run.",
+    inputSchema: z.object({
+        workflowSlug: z.string().describe("Workflow slug or ID"),
+        runId: z.string().describe("Run ID"),
+        resumeData: z.record(z.any()).optional().describe("Resume payload"),
+        requestContext: z.record(z.any()).optional().describe("Optional request context")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ workflowSlug, runId, resumeData, requestContext }) => {
+        return callInternalApi(`/api/workflows/${workflowSlug}/runs/${runId}/resume`, {
+            method: "POST",
+            body: { resumeData, requestContext }
+        });
+    }
+});
+
+export const workflowMetricsTool = createTool({
+    id: "workflow-metrics",
+    description: "Get workflow metrics for a recent period.",
+    inputSchema: z.object({
+        workflowSlug: z.string().describe("Workflow slug or ID"),
+        days: z.number().optional().describe("Number of days to include")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ workflowSlug, days }) => {
+        return callInternalApi(`/api/workflows/${workflowSlug}/metrics`, {
+            query: { days }
+        });
+    }
+});
+
+export const workflowVersionsTool = createTool({
+    id: "workflow-versions",
+    description: "List workflow versions.",
+    inputSchema: z.object({
+        workflowSlug: z.string().describe("Workflow slug or ID")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ workflowSlug }) => {
+        return callInternalApi(`/api/workflows/${workflowSlug}/versions`);
+    }
+});
+
+export const workflowStatsTool = createTool({
+    id: "workflow-stats",
+    description: "Get workflow statistics across the workspace.",
+    inputSchema: z.object({
+        from: z.string().optional().describe("Start ISO timestamp"),
+        to: z.string().optional().describe("End ISO timestamp")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ from, to }) => {
+        return callInternalApi("/api/workflows/stats", {
+            query: { from, to }
+        });
     }
 });

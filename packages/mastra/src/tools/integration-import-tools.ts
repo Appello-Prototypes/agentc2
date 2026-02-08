@@ -59,6 +59,55 @@ type ImportItem = {
     };
 };
 
+const baseOutputSchema = z.object({ success: z.boolean() }).passthrough();
+
+const getInternalBaseUrl = () =>
+    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+
+const buildHeaders = () => {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+    };
+    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
+    if (apiKey) {
+        headers["X-API-Key"] = apiKey;
+    }
+    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    if (orgSlug) {
+        headers["X-Organization-Slug"] = orgSlug;
+    }
+    return headers;
+};
+
+const callInternalApi = async (
+    path: string,
+    options?: {
+        method?: string;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    }
+) => {
+    const url = new URL(path, getInternalBaseUrl());
+    if (options?.query) {
+        Object.entries(options.query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                url.searchParams.set(key, String(value));
+            }
+        });
+    }
+
+    const response = await fetch(url.toString(), {
+        method: options?.method ?? "GET",
+        headers: buildHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await response.json();
+    if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+    return data;
+};
+
 function normalizeValue(value: string) {
     return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
@@ -938,5 +987,50 @@ export const integrationConnectionTestTool = createTool({
         }
 
         return { success: true };
+    }
+});
+
+export const integrationProvidersListTool = createTool({
+    id: "integration-providers-list",
+    description: "List available integration providers with connection status.",
+    inputSchema: z.object({}),
+    outputSchema: baseOutputSchema,
+    execute: async () => {
+        return callInternalApi("/api/integrations/providers");
+    }
+});
+
+export const integrationConnectionsListTool = createTool({
+    id: "integration-connections-list",
+    description: "List integration connections for the organization.",
+    inputSchema: z.object({
+        providerKey: z.string().optional(),
+        scope: z.string().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ providerKey, scope }) => {
+        return callInternalApi("/api/integrations/connections", {
+            query: { providerKey, scope }
+        });
+    }
+});
+
+export const integrationConnectionCreateTool = createTool({
+    id: "integration-connection-create",
+    description: "Create a new integration connection.",
+    inputSchema: z.object({
+        providerKey: z.string(),
+        name: z.string(),
+        scope: z.string().optional(),
+        credentials: z.record(z.any()).optional(),
+        metadata: z.record(z.any()).optional(),
+        isDefault: z.boolean().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ providerKey, name, scope, credentials, metadata, isDefault }) => {
+        return callInternalApi("/api/integrations/connections", {
+            method: "POST",
+            body: { providerKey, name, scope, credentials, metadata, isDefault }
+        });
     }
 });

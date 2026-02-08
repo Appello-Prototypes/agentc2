@@ -11,6 +11,45 @@ import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
 import {
+    agentListTool,
+    agentOverviewTool,
+    agentAnalyticsTool,
+    agentCostsTool,
+    agentBudgetGetTool,
+    agentBudgetUpdateTool
+} from "./agent-operations-tools";
+import {
+    agentFeedbackSubmitTool,
+    agentFeedbackListTool,
+    agentGuardrailsGetTool,
+    agentGuardrailsUpdateTool,
+    agentGuardrailsEventsTool,
+    agentTestCasesListTool,
+    agentTestCasesCreateTool
+} from "./agent-quality-tools";
+import { agentRunCancelTool, agentRunRerunTool, agentRunTraceTool } from "./run-management-tools";
+import {
+    agentLearningSessionsTool,
+    agentLearningStartTool,
+    agentLearningSessionGetTool,
+    agentLearningProposalApproveTool,
+    agentLearningProposalRejectTool,
+    agentLearningExperimentsTool,
+    agentLearningMetricsTool,
+    agentLearningPolicyTool
+} from "./agent-learning-tools";
+import {
+    ragQueryTool,
+    ragIngestTool,
+    ragDocumentsListTool,
+    ragDocumentDeleteTool
+} from "./rag-tools";
+import {
+    agentSimulationsListTool,
+    agentSimulationsStartTool,
+    agentSimulationsGetTool
+} from "./simulation-tools";
+import {
     agentCreateTool,
     agentDeleteTool,
     agentReadTool,
@@ -37,14 +76,33 @@ import {
     networkReadTool,
     networkUpdateTool
 } from "./network-crud-tools";
-import { workflowExecuteTool, workflowGetRunTool, workflowListRunsTool } from "./workflow-tools";
-import { networkExecuteTool, networkGetRunTool, networkListRunsTool } from "./network-tools";
+import {
+    workflowExecuteTool,
+    workflowGetRunTool,
+    workflowListRunsTool,
+    workflowResumeTool,
+    workflowMetricsTool,
+    workflowVersionsTool,
+    workflowStatsTool
+} from "./workflow-tools";
+import {
+    networkExecuteTool,
+    networkGetRunTool,
+    networkListRunsTool,
+    networkMetricsTool,
+    networkVersionsTool,
+    networkStatsTool
+} from "./network-tools";
 import {
     metricsLiveSummaryTool,
     metricsAgentAnalyticsTool,
     metricsAgentRunsTool,
     metricsWorkflowDailyTool,
-    metricsNetworkDailyTool
+    metricsNetworkDailyTool,
+    liveRunsTool,
+    liveMetricsTool,
+    liveStatsTool,
+    auditLogsListTool
 } from "./metrics-tools";
 import {
     bimQueryTool,
@@ -58,8 +116,20 @@ import { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
 import {
     integrationImportMcpJsonTool,
     integrationMcpConfigTool,
-    integrationConnectionTestTool
+    integrationConnectionTestTool,
+    integrationProvidersListTool,
+    integrationConnectionsListTool,
+    integrationConnectionCreateTool
 } from "./integration-import-tools";
+import {
+    orgListTool,
+    orgGetTool,
+    orgMembersListTool,
+    orgMemberAddTool,
+    orgWorkspacesListTool,
+    orgWorkspaceCreateTool
+} from "./organization-tools";
+import { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -97,9 +167,16 @@ export const toolRegistry: Record<string, any> = {
     "workflow-execute": workflowExecuteTool,
     "workflow-list-runs": workflowListRunsTool,
     "workflow-get-run": workflowGetRunTool,
+    "workflow-resume": workflowResumeTool,
+    "workflow-metrics": workflowMetricsTool,
+    "workflow-versions": workflowVersionsTool,
+    "workflow-stats": workflowStatsTool,
     "network-execute": networkExecuteTool,
     "network-list-runs": networkListRunsTool,
     "network-get-run": networkGetRunTool,
+    "network-metrics": networkMetricsTool,
+    "network-versions": networkVersionsTool,
+    "network-stats": networkStatsTool,
 
     // Trigger tools
     "trigger-unified-list": triggerUnifiedListTool,
@@ -110,12 +187,59 @@ export const toolRegistry: Record<string, any> = {
     "trigger-unified-enable": triggerUnifiedEnableTool,
     "trigger-unified-disable": triggerUnifiedDisableTool,
 
+    // Agent operations
+    "agent-list": agentListTool,
+    "agent-overview": agentOverviewTool,
+    "agent-analytics": agentAnalyticsTool,
+    "agent-costs": agentCostsTool,
+    "agent-budget-get": agentBudgetGetTool,
+    "agent-budget-update": agentBudgetUpdateTool,
+
+    // Agent quality and safety
+    "agent-feedback-submit": agentFeedbackSubmitTool,
+    "agent-feedback-list": agentFeedbackListTool,
+    "agent-guardrails-get": agentGuardrailsGetTool,
+    "agent-guardrails-update": agentGuardrailsUpdateTool,
+    "agent-guardrails-events": agentGuardrailsEventsTool,
+    "agent-test-cases-list": agentTestCasesListTool,
+    "agent-test-cases-create": agentTestCasesCreateTool,
+
+    // Run management
+    "agent-run-cancel": agentRunCancelTool,
+    "agent-run-rerun": agentRunRerunTool,
+    "agent-run-trace": agentRunTraceTool,
+
+    // Learning system
+    "agent-learning-sessions": agentLearningSessionsTool,
+    "agent-learning-start": agentLearningStartTool,
+    "agent-learning-session-get": agentLearningSessionGetTool,
+    "agent-learning-proposal-approve": agentLearningProposalApproveTool,
+    "agent-learning-proposal-reject": agentLearningProposalRejectTool,
+    "agent-learning-experiments": agentLearningExperimentsTool,
+    "agent-learning-metrics": agentLearningMetricsTool,
+    "agent-learning-policy": agentLearningPolicyTool,
+
+    // RAG pipeline
+    "rag-query": ragQueryTool,
+    "rag-ingest": ragIngestTool,
+    "rag-documents-list": ragDocumentsListTool,
+    "rag-document-delete": ragDocumentDeleteTool,
+
+    // Simulations
+    "agent-simulations-list": agentSimulationsListTool,
+    "agent-simulations-start": agentSimulationsStartTool,
+    "agent-simulations-get": agentSimulationsGetTool,
+
     // Metrics tools
     "metrics-live-summary": metricsLiveSummaryTool,
     "metrics-agent-analytics": metricsAgentAnalyticsTool,
     "metrics-agent-runs": metricsAgentRunsTool,
     "metrics-workflow-daily": metricsWorkflowDailyTool,
     "metrics-network-daily": metricsNetworkDailyTool,
+    "live-runs": liveRunsTool,
+    "live-metrics": liveMetricsTool,
+    "live-stats": liveStatsTool,
+    "audit-logs-list": auditLogsListTool,
 
     // Workspace intent tools
     "workspace-intent-recommendation": workspaceIntentRecommendationTool,
@@ -134,7 +258,21 @@ export const toolRegistry: Record<string, any> = {
     // MCP import tools
     "integration-import-mcp-json": integrationImportMcpJsonTool,
     "integration-mcp-config": integrationMcpConfigTool,
-    "integration-connection-test": integrationConnectionTestTool
+    "integration-connection-test": integrationConnectionTestTool,
+    "integration-providers-list": integrationProvidersListTool,
+    "integration-connections-list": integrationConnectionsListTool,
+    "integration-connection-create": integrationConnectionCreateTool,
+
+    // Organization tools
+    "org-list": orgListTool,
+    "org-get": orgGetTool,
+    "org-members-list": orgMembersListTool,
+    "org-member-add": orgMemberAddTool,
+    "org-workspaces-list": orgWorkspacesListTool,
+    "org-workspace-create": orgWorkspaceCreateTool,
+    "goal-create": goalCreateTool,
+    "goal-list": goalListTool,
+    "goal-get": goalGetTool
 };
 
 /**

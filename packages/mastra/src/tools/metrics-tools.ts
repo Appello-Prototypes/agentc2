@@ -14,6 +14,55 @@ async function resolveAgent(agentId: string) {
     });
 }
 
+const baseOutputSchema = z.object({ success: z.boolean() }).passthrough();
+
+const getInternalBaseUrl = () =>
+    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+
+const buildHeaders = () => {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+    };
+    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
+    if (apiKey) {
+        headers["X-API-Key"] = apiKey;
+    }
+    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    if (orgSlug) {
+        headers["X-Organization-Slug"] = orgSlug;
+    }
+    return headers;
+};
+
+const callInternalApi = async (
+    path: string,
+    options?: {
+        method?: string;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    }
+) => {
+    const url = new URL(path, getInternalBaseUrl());
+    if (options?.query) {
+        Object.entries(options.query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                url.searchParams.set(key, String(value));
+            }
+        });
+    }
+
+    const response = await fetch(url.toString(), {
+        method: options?.method ?? "GET",
+        headers: buildHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await response.json();
+    if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+    return data;
+};
+
 export const metricsLiveSummaryTool = createTool({
     id: "metrics-live-summary",
     description: "Get live run metrics summary with latency and top runs.",
@@ -683,5 +732,102 @@ export const metricsNetworkDailyTool = createTool({
         });
 
         return { success: true, metrics };
+    }
+});
+
+export const liveRunsTool = createTool({
+    id: "live-runs",
+    description: "List live production runs with filters.",
+    inputSchema: z.object({
+        status: z.string().optional(),
+        source: z.string().optional(),
+        agentId: z.string().optional(),
+        versionId: z.string().optional(),
+        modelName: z.string().optional(),
+        runType: z.string().optional(),
+        toolUsage: z.string().optional(),
+        search: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        limit: z.number().optional(),
+        offset: z.number().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({
+        status,
+        source,
+        agentId,
+        versionId,
+        modelName,
+        runType,
+        toolUsage,
+        search,
+        from,
+        to,
+        limit,
+        offset
+    }) => {
+        return callInternalApi("/api/live/runs", {
+            query: {
+                status,
+                source,
+                agentId,
+                versionId,
+                modelName,
+                runType,
+                toolUsage,
+                search,
+                from,
+                to,
+                limit,
+                offset
+            }
+        });
+    }
+});
+
+export const liveMetricsTool = createTool({
+    id: "live-metrics",
+    description: "Get aggregate live performance metrics.",
+    inputSchema: z.object({
+        runType: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ runType, from, to }) => {
+        return callInternalApi("/api/live/metrics", {
+            query: { runType, from, to }
+        });
+    }
+});
+
+export const liveStatsTool = createTool({
+    id: "live-stats",
+    description: "Get live production stats for active agents.",
+    inputSchema: z.object({}),
+    outputSchema: baseOutputSchema,
+    execute: async () => {
+        return callInternalApi("/api/live/stats");
+    }
+});
+
+export const auditLogsListTool = createTool({
+    id: "audit-logs-list",
+    description: "Query audit logs with filtering and pagination.",
+    inputSchema: z.object({
+        entityType: z.string().optional(),
+        entityId: z.string().optional(),
+        action: z.string().optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
+        limit: z.number().optional(),
+        cursor: z.string().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ entityType, entityId, action, from, to, limit, cursor }) => {
+        return callInternalApi("/api/audit-logs", {
+            query: { entityType, entityId, action, from, to, limit, cursor }
+        });
     }
 });

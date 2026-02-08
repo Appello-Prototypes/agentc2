@@ -3,6 +3,46 @@ export { webFetchTool } from "./web-fetch";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
+export { mcpToolDefinitions, mcpToolRoutes } from "./mcp-schemas";
+export {
+    agentListTool,
+    agentOverviewTool,
+    agentAnalyticsTool,
+    agentCostsTool,
+    agentBudgetGetTool,
+    agentBudgetUpdateTool
+} from "./agent-operations-tools";
+export {
+    agentFeedbackSubmitTool,
+    agentFeedbackListTool,
+    agentGuardrailsGetTool,
+    agentGuardrailsUpdateTool,
+    agentGuardrailsEventsTool,
+    agentTestCasesListTool,
+    agentTestCasesCreateTool
+} from "./agent-quality-tools";
+export { agentRunCancelTool, agentRunRerunTool, agentRunTraceTool } from "./run-management-tools";
+export {
+    agentLearningSessionsTool,
+    agentLearningStartTool,
+    agentLearningSessionGetTool,
+    agentLearningProposalApproveTool,
+    agentLearningProposalRejectTool,
+    agentLearningExperimentsTool,
+    agentLearningMetricsTool,
+    agentLearningPolicyTool
+} from "./agent-learning-tools";
+export {
+    ragQueryTool,
+    ragIngestTool,
+    ragDocumentsListTool,
+    ragDocumentDeleteTool
+} from "./rag-tools";
+export {
+    agentSimulationsListTool,
+    agentSimulationsStartTool,
+    agentSimulationsGetTool
+} from "./simulation-tools";
 export {
     agentCreateTool,
     agentDeleteTool,
@@ -29,7 +69,11 @@ export {
     metricsAgentAnalyticsTool,
     metricsAgentRunsTool,
     metricsWorkflowDailyTool,
-    metricsNetworkDailyTool
+    metricsNetworkDailyTool,
+    liveRunsTool,
+    liveMetricsTool,
+    liveStatsTool,
+    auditLogsListTool
 } from "./metrics-tools";
 export { workspaceIntentRecommendationTool } from "./workspace-intent-tools";
 export {
@@ -38,8 +82,23 @@ export {
     networkReadTool,
     networkUpdateTool
 } from "./network-crud-tools";
-export { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
-export { networkExecuteTool, networkListRunsTool, networkGetRunTool } from "./network-tools";
+export {
+    workflowExecuteTool,
+    workflowListRunsTool,
+    workflowGetRunTool,
+    workflowResumeTool,
+    workflowMetricsTool,
+    workflowVersionsTool,
+    workflowStatsTool
+} from "./workflow-tools";
+export {
+    networkExecuteTool,
+    networkListRunsTool,
+    networkGetRunTool,
+    networkMetricsTool,
+    networkVersionsTool,
+    networkStatsTool
+} from "./network-tools";
 export {
     bimQueryTool,
     bimTakeoffTool,
@@ -51,8 +110,20 @@ export { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
 export {
     integrationImportMcpJsonTool,
     integrationMcpConfigTool,
-    integrationConnectionTestTool
+    integrationConnectionTestTool,
+    integrationProvidersListTool,
+    integrationConnectionsListTool,
+    integrationConnectionCreateTool
 } from "./integration-import-tools";
+export {
+    orgListTool,
+    orgGetTool,
+    orgMembersListTool,
+    orgMemberAddTool,
+    orgWorkspacesListTool,
+    orgWorkspaceCreateTool
+} from "./organization-tools";
+export { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
 
 // Tool registry for stored agents
 export {

@@ -99,6 +99,8 @@ export {
     jsonParserTool,
     extendedTools,
     // Tool registry for stored agents
+    mcpToolDefinitions,
+    mcpToolRoutes,
     toolRegistry,
     listAvailableTools,
     getToolsByNames,
