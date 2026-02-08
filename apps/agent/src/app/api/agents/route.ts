@@ -31,10 +31,14 @@ export async function GET(request: NextRequest) {
         const systemOnly = searchParams.get("system") === "true";
 
         if (USE_DB_AGENTS) {
+            const session = await auth.api.getSession({
+                headers: await headers()
+            });
+            const userId = session?.user?.id;
             // Use new Agent model via AgentResolver
             const agents = systemOnly
                 ? await agentResolver.listSystem()
-                : await agentResolver.listForUser();
+                : await agentResolver.listForUser(userId);
 
             return NextResponse.json({
                 success: true,

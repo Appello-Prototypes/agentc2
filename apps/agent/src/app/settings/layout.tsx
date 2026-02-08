@@ -113,9 +113,9 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
 
                 {/* Footer */}
                 <div className="border-t p-4">
-                    <Link href="/workspace" className="block">
+                    <Link href="/agents" className="block">
                         <Button variant="outline" size="sm" className="w-full">
-                            ← Back to Workspace
+                            ← Back to Agents
                         </Button>
                     </Link>
                 </div>

@@ -8,7 +8,12 @@ import {
 import { agentResolver, getScorersByNames } from "@repo/mastra";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
-import { startRun, type RunSource, type ToolCallData } from "@/lib/run-recorder";
+import {
+    startRun,
+    type RunSource,
+    type RunRecorderHandle,
+    type ToolCallData
+} from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
@@ -26,6 +31,51 @@ function formatToolResultPreview(result: unknown, maxLength = 500): string {
         return String(result).slice(0, maxLength);
     }
 }
+
+type ScorerRunner = {
+    run?: (options: {
+        input: { inputMessages: Array<{ role: string; content: string }> };
+        output: Array<{ role: string; content: string }>;
+    }) => Promise<{ score?: number; reason?: string }>;
+};
+
+type StreamChunk = {
+    type?: string;
+    payload?: Record<string, unknown>;
+    toolName?: string;
+    name?: string;
+    toolCallId?: string;
+    id?: string;
+    args?: Record<string, unknown>;
+    result?: unknown;
+    error?: string;
+    textDelta?: string;
+    text?: string;
+    delta?: string;
+    content?: string;
+    value?: unknown;
+};
+
+type UsageLike = {
+    promptTokens?: number;
+    inputTokens?: number;
+    completionTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+};
+
+type StreamResult = {
+    fullStream?: AsyncIterable<unknown>;
+    textStream: AsyncIterable<string>;
+    usage?: Promise<Record<string, unknown>>;
+};
+
+const normalizeChunk = (chunk: unknown): StreamChunk => {
+    if (chunk && typeof chunk === "object") {
+        return chunk as StreamChunk;
+    }
+    return {};
+};
 
 /**
  * Run evaluations asynchronously after chat completes
@@ -62,8 +112,7 @@ async function runEvaluationsAsync(
         // Run each scorer - Mastra scorers use .run() method
         for (const [name, config] of Object.entries(scorers)) {
             try {
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                const scorer = config.scorer as any;
+                const scorer = config.scorer as unknown as ScorerRunner;
 
                 // Mastra scorers have a .run() method
                 if (scorer && typeof scorer.run === "function") {
@@ -154,20 +203,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Get agent ID for recording - prefer database record ID, fallback to slug
-        const agentId = record?.id || id;
+        // Get agent ID for recording - prefer database record ID
+        // Fallback agents (code-defined, no DB record) cannot be recorded due to FK constraints
+        const agentId = record?.id || null;
 
-        // Start recording the run
-        const run = await startRun({
-            agentId,
-            agentSlug: id,
-            input: lastUserMessage,
-            source: runSource,
-            userId: resourceId,
-            threadId: userThreadId
-        });
-
-        console.log(`[Agent Chat] Started run ${run.runId} for agent ${id}`);
+        // Start recording the run (only if agent exists in database)
+        let run: RunRecorderHandle | null = null;
+        if (agentId) {
+            run = await startRun({
+                agentId,
+                agentSlug: id,
+                input: lastUserMessage,
+                source: runSource,
+                userId: resourceId,
+                threadId: userThreadId
+            });
+            console.log(`[Agent Chat] Started run ${run.runId} for agent ${id}`);
+        } else {
+            console.log(
+                `[Agent Chat] Skipping run recording for fallback agent '${id}' (no DB record)`
+            );
+        }
 
         // Use maxSteps from database record or default to 5 (matches production)
         const maxSteps = record?.maxSteps ?? 5;
@@ -217,37 +273,171 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                     // Send run metadata so client can associate feedback with this run
                     // AI SDK v5 requires 'data-<name>' format for custom data parts
-                    writer.write({
-                        type: "data-run-metadata",
-                        data: { runId: run.runId, messageId }
-                    });
+                    if (run) {
+                        writer.write({
+                            type: "data-run-metadata",
+                            data: { runId: run.runId, messageId }
+                        });
+                    }
 
                     // Use fullStream to capture ALL events including tool calls
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const fullStream = (responseStream as any).fullStream;
+                    const streamResult = responseStream as unknown as StreamResult;
+                    const fullStream = streamResult.fullStream;
+                    const textStream = streamResult.textStream;
                     let chunkCount = 0;
-                    if (fullStream) {
-                        for await (const chunk of fullStream) {
-                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                            const c = chunk as any;
-                            chunkCount++;
 
-                            // Log first few chunks and any non-text chunks for debugging
-                            if (chunkCount <= 3 || (c.type && c.type !== "text-delta")) {
+                    const handleToolChunk = (c: StreamChunk) => {
+                        // Log first few chunks and any non-text chunks for debugging
+                        if (chunkCount <= 3 || (c.type && c.type !== "text-delta")) {
+                            console.log(
+                                `[Agent Chat] Chunk #${chunkCount}: type=${c.type}, keys=${Object.keys(c).join(",")}`
+                            );
+                        }
+
+                        // Handle tool calls
+                        if (c.type === "tool-call") {
+                            console.log(
+                                `[Agent Chat] Tool call chunk:`,
+                                JSON.stringify(c).slice(0, 500)
+                            );
+                            const payload =
+                                c.payload &&
+                                typeof c.payload === "object" &&
+                                !Array.isArray(c.payload)
+                                    ? (c.payload as Record<string, unknown>)
+                                    : {};
+                            const toolName =
+                                (typeof payload.toolName === "string" && payload.toolName) ||
+                                (typeof payload.name === "string" && payload.name) ||
+                                (typeof c.toolName === "string" && c.toolName) ||
+                                (typeof c.name === "string" && c.name) ||
+                                "unknown";
+                            const toolCallId =
+                                (typeof payload.toolCallId === "string" && payload.toolCallId) ||
+                                (typeof payload.id === "string" && payload.id) ||
+                                (typeof c.toolCallId === "string" && c.toolCallId) ||
+                                (typeof c.id === "string" && c.id) ||
+                                `tool-${Date.now()}`;
+                            const args =
+                                (payload.args as Record<string, unknown> | undefined) ||
+                                (c.args as Record<string, unknown> | undefined) ||
+                                {};
+                            console.log(
+                                `[Agent Chat] Extracted tool: ${toolName}, id: ${toolCallId}`
+                            );
+                            toolCallMap.set(toolCallId, {
+                                toolName,
+                                args,
+                                startTime: Date.now()
+                            });
+
+                            stepCounter++;
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_call",
+                                content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
+                                timestamp: new Date().toISOString()
+                            });
+                            return;
+                        }
+
+                        // Handle tool results
+                        if (c.type === "tool-result") {
+                            console.log(
+                                `[Agent Chat] Tool result chunk:`,
+                                JSON.stringify(c).slice(0, 500)
+                            );
+                            const payload =
+                                c.payload &&
+                                typeof c.payload === "object" &&
+                                !Array.isArray(c.payload)
+                                    ? (c.payload as Record<string, unknown>)
+                                    : {};
+                            const toolCallId =
+                                (typeof payload.toolCallId === "string" && payload.toolCallId) ||
+                                (typeof payload.id === "string" && payload.id) ||
+                                (typeof c.toolCallId === "string" && c.toolCallId) ||
+                                c.id ||
+                                "";
+                            const toolName =
+                                (typeof payload.toolName === "string" && payload.toolName) ||
+                                (typeof c.toolName === "string" && c.toolName) ||
+                                "unknown";
+                            const result = payload.result ?? c.result;
+                            const error = (payload.error as string | undefined) ?? c.error;
+                            const call = toolCallMap.get(toolCallId);
+                            let durationMs: number | undefined;
+                            if (call) {
+                                durationMs = Date.now() - call.startTime;
+                                toolCalls.push({
+                                    toolKey: call.toolName,
+                                    input: call.args,
+                                    output: result,
+                                    success: !error,
+                                    error: error,
+                                    durationMs
+                                });
                                 console.log(
-                                    `[Agent Chat] Chunk #${chunkCount}: type=${c.type}, keys=${Object.keys(c).join(",")}`
+                                    `[Agent Chat] Matched tool result: ${call.toolName}, ${durationMs}ms`
                                 );
+                            } else {
+                                toolCalls.push({
+                                    toolKey: toolName,
+                                    input: {},
+                                    output: result,
+                                    success: !error,
+                                    error: error
+                                });
+                                console.log(`[Agent Chat] Unmatched tool result: ${toolName}`);
                             }
 
-                            // Handle text chunks
-                            // Mastra fullStream wraps data in payload: chunk.payload.text
+                            stepCounter++;
+                            const resultPreview = formatToolResultPreview(result, 500);
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_result",
+                                content: error
+                                    ? `Tool ${call?.toolName || toolName} failed: ${error}`
+                                    : `Tool ${call?.toolName || toolName} result:\n${resultPreview}${resultPreview.length >= 500 ? "..." : ""}`,
+                                timestamp: new Date().toISOString(),
+                                durationMs
+                            });
+                        }
+                    };
+
+                    if (fullStream && textStream) {
+                        const toolPromise = (async () => {
+                            for await (const chunk of fullStream) {
+                                const c = normalizeChunk(chunk);
+                                chunkCount++;
+                                handleToolChunk(c);
+                            }
+                        })();
+
+                        const textPromise = (async () => {
+                            for await (const chunk of textStream) {
+                                fullOutput += chunk;
+                                writer.write({
+                                    type: "text-delta",
+                                    id: messageId,
+                                    delta: chunk
+                                });
+                            }
+                        })();
+
+                        await Promise.all([toolPromise, textPromise]);
+                    } else if (fullStream) {
+                        for await (const chunk of fullStream) {
+                            const c = normalizeChunk(chunk);
+                            chunkCount++;
+
                             if (c.type === "text-delta") {
                                 const text =
-                                    c.payload?.text ||
-                                    c.textDelta ||
-                                    c.text ||
-                                    c.delta ||
-                                    c.content ||
+                                    (typeof c.payload?.text === "string" && c.payload.text) ||
+                                    (typeof c.textDelta === "string" && c.textDelta) ||
+                                    (typeof c.text === "string" && c.text) ||
+                                    (typeof c.delta === "string" && c.delta) ||
+                                    (typeof c.content === "string" && c.content) ||
                                     (typeof c.value === "string" ? c.value : "") ||
                                     "";
                                 if (text) {
@@ -258,106 +448,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                         delta: text
                                     });
                                 }
-                            }
-                            // Handle tool calls
-                            // Mastra fullStream: chunk.payload contains toolCallId, toolName, args
-                            else if (c.type === "tool-call") {
-                                // Log full structure to understand format
-                                console.log(
-                                    `[Agent Chat] Tool call chunk:`,
-                                    JSON.stringify(c).slice(0, 500)
-                                );
-                                // Mastra wraps tool call data in payload
-                                const payload = c.payload || c;
-                                const toolName =
-                                    payload.toolName ||
-                                    payload.name ||
-                                    c.toolName ||
-                                    c.name ||
-                                    "unknown";
-                                const toolCallId =
-                                    payload.toolCallId ||
-                                    payload.id ||
-                                    c.toolCallId ||
-                                    c.id ||
-                                    `tool-${Date.now()}`;
-                                const args = payload.args || c.args || {};
-                                console.log(
-                                    `[Agent Chat] Extracted tool: ${toolName}, id: ${toolCallId}`
-                                );
-                                toolCallMap.set(toolCallId, {
-                                    toolName,
-                                    args,
-                                    startTime: Date.now()
-                                });
-
-                                // Record execution step for time travel
-                                stepCounter++;
-                                executionSteps.push({
-                                    step: stepCounter,
-                                    type: "tool_call",
-                                    content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
-                                    timestamp: new Date().toISOString()
-                                });
-                            }
-                            // Handle tool results
-                            // Mastra fullStream: chunk.payload contains toolCallId, toolName, result, error
-                            else if (c.type === "tool-result") {
-                                // Log full structure
-                                console.log(
-                                    `[Agent Chat] Tool result chunk:`,
-                                    JSON.stringify(c).slice(0, 500)
-                                );
-                                // Mastra wraps tool result data in payload
-                                const payload = c.payload || c;
-                                const toolCallId =
-                                    payload.toolCallId || payload.id || c.toolCallId || c.id;
-                                const toolName = payload.toolName || c.toolName || "unknown";
-                                const result = payload.result || c.result;
-                                const error = payload.error || c.error;
-                                const call = toolCallMap.get(toolCallId);
-                                let durationMs: number | undefined;
-                                if (call) {
-                                    durationMs = Date.now() - call.startTime;
-                                    toolCalls.push({
-                                        toolKey: call.toolName,
-                                        input: call.args,
-                                        output: result,
-                                        success: !error,
-                                        error: error,
-                                        durationMs
-                                    });
-                                    console.log(
-                                        `[Agent Chat] Matched tool result: ${call.toolName}, ${durationMs}ms`
-                                    );
-                                } else {
-                                    toolCalls.push({
-                                        toolKey: toolName,
-                                        input: {},
-                                        output: result,
-                                        success: !error,
-                                        error: error
-                                    });
-                                    console.log(`[Agent Chat] Unmatched tool result: ${toolName}`);
-                                }
-
-                                // Record execution step for time travel
-                                stepCounter++;
-                                const resultPreview = formatToolResultPreview(result, 500);
-                                executionSteps.push({
-                                    step: stepCounter,
-                                    type: "tool_result",
-                                    content: error
-                                        ? `Tool ${call?.toolName || toolName} failed: ${error}`
-                                        : `Tool ${call?.toolName || toolName} result:\n${resultPreview}${resultPreview.length >= 500 ? "..." : ""}`,
-                                    timestamp: new Date().toISOString(),
-                                    durationMs
-                                });
+                            } else {
+                                handleToolChunk(c);
                             }
                         }
                     } else {
-                        // Fallback to textStream if fullStream not available
-                        for await (const chunk of responseStream.textStream) {
+                        for await (const chunk of textStream) {
                             fullOutput += chunk;
                             writer.write({
                                 type: "text-delta",
@@ -375,22 +471,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                     // Try to get final result with usage and tool calls
                     // MastraModelOutput provides promise-based access
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    const streamResult = responseStream as any;
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    let usage: any = null;
+                    let usage: UsageLike | null = null;
 
                     // Get usage data (Promise<LanguageModelUsage>)
                     try {
                         // Debug: Log available keys on stream result
-                        console.log(`[Agent Chat] Stream result keys:`, Object.keys(streamResult));
+                        if (streamResult && typeof streamResult === "object") {
+                            console.log(
+                                `[Agent Chat] Stream result keys:`,
+                                Object.keys(streamResult)
+                            );
+                        }
 
-                        if (streamResult.usage) {
-                            usage = await streamResult.usage;
+                        if (streamResult?.usage) {
+                            const resolvedUsage = await streamResult.usage;
+                            usage =
+                                resolvedUsage && typeof resolvedUsage === "object"
+                                    ? (resolvedUsage as UsageLike)
+                                    : null;
                             // Debug: Log full usage object structure
                             console.log(
                                 `[Agent Chat] Usage object:`,
-                                JSON.stringify(usage, null, 2)
+                                JSON.stringify(usage || {}, null, 2)
                             );
                             console.log(`[Agent Chat] Usage keys:`, Object.keys(usage || {}));
                         }
@@ -408,8 +510,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     }
 
                     // Record tool calls
-                    for (const tc of toolCalls) {
-                        await run.addToolCall(tc);
+                    if (run) {
+                        for (const tc of toolCalls) {
+                            await run.addToolCall(tc);
+                        }
                     }
 
                     // Extract token counts
@@ -446,36 +550,42 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     });
 
                     // Complete the run with the full output, cost, and execution steps
-                    await run.complete({
-                        output: fullOutput,
-                        modelProvider: record?.modelProvider || "unknown",
-                        modelName: record?.modelName || "unknown",
-                        promptTokens,
-                        completionTokens,
-                        costUsd,
-                        steps: executionSteps
-                    });
+                    if (run) {
+                        await run.complete({
+                            output: fullOutput,
+                            modelProvider: record?.modelProvider || "unknown",
+                            modelName: record?.modelName || "unknown",
+                            promptTokens,
+                            completionTokens,
+                            costUsd,
+                            steps: executionSteps
+                        });
 
-                    console.log(`[Agent Chat] Completed run ${run.runId}`);
+                        console.log(`[Agent Chat] Completed run ${run.runId}`);
+                    }
 
                     // Run evaluations asynchronously (don't await - fire and forget)
-                    const scorerNames = record?.scorers || [];
-                    if (scorerNames.length > 0) {
-                        runEvaluationsAsync(
-                            run.runId,
-                            agentId,
-                            scorerNames,
-                            lastUserMessage,
-                            fullOutput
-                        ).catch(console.error);
+                    if (run && agentId) {
+                        const scorerNames = record?.scorers || [];
+                        if (scorerNames.length > 0) {
+                            runEvaluationsAsync(
+                                run.runId,
+                                agentId,
+                                scorerNames,
+                                lastUserMessage,
+                                fullOutput
+                            ).catch(console.error);
+                        }
                     }
                 } catch (streamError) {
                     console.error("[Agent Chat] Stream error:", streamError);
 
                     // Record the failure
-                    await run.fail(
-                        streamError instanceof Error ? streamError : String(streamError)
-                    );
+                    if (run) {
+                        await run.fail(
+                            streamError instanceof Error ? streamError : String(streamError)
+                        );
+                    }
 
                     writer.write({
                         type: "error",
@@ -487,7 +597,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             onError: (error: unknown) => {
                 console.error("[Agent Chat] UIMessageStream error:", error);
                 // Record the failure
-                run.fail(error instanceof Error ? error : String(error)).catch(console.error);
+                if (run) {
+                    run.fail(error instanceof Error ? error : String(error)).catch(console.error);
+                }
                 return error instanceof Error ? error.message : "Stream failed";
             }
         });

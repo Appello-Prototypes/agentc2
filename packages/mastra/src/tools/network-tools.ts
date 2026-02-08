@@ -56,6 +56,18 @@ const inferPrimitive = (eventType: string, payload: Record<string, unknown>) => 
     return { type: undefined, id: undefined };
 };
 
+const tryParseJson = (value: string) => {
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+        }
+    } catch {
+        return null;
+    }
+    return null;
+};
+
 export const networkExecuteTool = createTool({
     id: "network-execute",
     description: "Execute a network by slug or ID and return output plus run metadata.",
@@ -138,6 +150,8 @@ export const networkExecuteTool = createTool({
         let stepNumber = 0;
         let outputText = "";
         let outputJson: Record<string, unknown> | undefined;
+        let lastResult: Record<string, unknown> | undefined;
+        let lastResultText: string | undefined;
 
         for await (const chunk of result) {
             const chunkAny = chunk as { type: string; payload?: Record<string, unknown> };
@@ -149,6 +163,21 @@ export const networkExecuteTool = createTool({
 
             if (chunkAny.type === "network-object-result") {
                 outputJson = payload as Record<string, unknown>;
+            }
+
+            if (
+                payload.result &&
+                typeof payload.result === "object" &&
+                !Array.isArray(payload.result)
+            ) {
+                lastResult = payload.result as Record<string, unknown>;
+            }
+            if (typeof payload.result === "string") {
+                lastResultText = payload.result;
+                const parsed = tryParseJson(payload.result);
+                if (parsed) {
+                    lastResult = parsed;
+                }
             }
 
             const stepType = inferStepType(chunkAny.type);
@@ -169,6 +198,17 @@ export const networkExecuteTool = createTool({
                     outputJson: payload.result as Record<string, unknown>,
                     status: RunStatus.COMPLETED
                 });
+            }
+        }
+
+        if (!outputJson && lastResult) {
+            outputJson = lastResult;
+        }
+        if (!outputText) {
+            if (lastResultText) {
+                outputText = lastResultText;
+            } else if (outputJson) {
+                outputText = JSON.stringify(outputJson, null, 2);
             }
         }
 

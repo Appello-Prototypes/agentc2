@@ -3,8 +3,14 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@repo/database";
 import { getAppUrl } from "./env";
 
-const appUrl = getAppUrl("http://localhost:3000");
 const isProduction = process.env.NODE_ENV === "production";
+const appUrl = isProduction ? getAppUrl("http://localhost:3000") : "http://localhost:3001";
+const googleClientId = process.env.GOOGLE_CLIENT_ID;
+const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const googleScopes = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send"
+];
 
 // Build trusted origins based on environment
 const trustedOrigins = [appUrl];
@@ -25,6 +31,18 @@ export const auth = betterAuth({
         enabled: true,
         requireEmailVerification: false
     },
+    socialProviders:
+        googleClientId && googleClientSecret
+            ? {
+                  google: {
+                      clientId: googleClientId,
+                      clientSecret: googleClientSecret,
+                      accessType: "offline",
+                      prompt: "consent",
+                      scope: googleScopes
+                  }
+              }
+            : undefined,
     session: {
         expiresIn: 60 * 60 * 24 * 7, // 7 days
         updateAge: 60 * 60 * 24, // Update every 24 hours
@@ -40,7 +58,7 @@ export const auth = betterAuth({
     advanced: {
         cookiePrefix: "better-auth",
         crossSubDomainCookies: {
-            enabled: true
+            enabled: isProduction
         }
     }
 });

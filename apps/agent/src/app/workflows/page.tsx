@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
     Badge,
     Button,
@@ -136,9 +137,20 @@ function getSuccessRate(stats: WorkflowStats) {
     return stats.totalRuns > 0 ? Math.round((stats.completedRuns / stats.totalRuns) * 100) : 0;
 }
 
+function isInteractiveTarget(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement | null;
+    return !!target?.closest("a,button");
+}
+
 function WorkflowCardView({ workflow }: { workflow: WorkflowSummaryItem }) {
+    const router = useRouter();
+    const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+        if (isInteractiveTarget(event)) return;
+        router.push(`/workflows/${workflow.slug}`);
+    };
+
     return (
-        <Card>
+        <Card className="cursor-pointer" onClick={handleCardClick}>
             <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                     <div>
@@ -212,8 +224,14 @@ function WorkflowCardView({ workflow }: { workflow: WorkflowSummaryItem }) {
 }
 
 function WorkflowListView({ workflow }: { workflow: WorkflowSummaryItem }) {
+    const router = useRouter();
+    const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+        if (isInteractiveTarget(event)) return;
+        router.push(`/workflows/${workflow.slug}`);
+    };
+
     return (
-        <Card>
+        <Card className="cursor-pointer" onClick={handleCardClick}>
             <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
                     <div className="flex items-center gap-2">

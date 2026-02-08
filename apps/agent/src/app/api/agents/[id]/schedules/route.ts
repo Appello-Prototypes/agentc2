@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { getNextRunAt } from "@/lib/schedule-utils";
 
 /**
  * GET /api/agents/[id]/schedules
@@ -70,7 +71,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const { id } = await params;
         const body = await request.json();
 
-        const { name, description, cronExpr, timezone, input, isActive } = body;
+        const {
+            name,
+            description,
+            cronExpr,
+            timezone,
+            input,
+            context,
+            maxSteps,
+            environment,
+            isActive
+        } = body;
 
         if (!name || !cronExpr) {
             return NextResponse.json(
@@ -79,17 +90,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Validate cron expression (basic validation)
-        const cronParts = cronExpr.split(" ");
-        if (cronParts.length < 5 || cronParts.length > 6) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: "Invalid cron expression. Expected 5 or 6 parts."
-                },
-                { status: 400 }
-            );
-        }
+        const resolvedTimezone = timezone || "UTC";
 
         // Find agent
         const agent = await prisma.agent.findFirst({
@@ -105,9 +106,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Calculate next run time (simplified - just use current time + 1 minute for now)
-        // In production, use a cron parser library
-        const nextRunAt = new Date(Date.now() + 60000);
+        let nextRunAt: Date;
+        try {
+            nextRunAt = getNextRunAt(cronExpr, resolvedTimezone, new Date());
+        } catch (error) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: error instanceof Error ? error.message : "Invalid schedule configuration"
+                },
+                { status: 400 }
+            );
+        }
+
+        const inputJson =
+            input !== undefined ||
+            context !== undefined ||
+            maxSteps !== undefined ||
+            environment !== undefined
+                ? { input, context, maxSteps, environment }
+                : null;
 
         // Create schedule
         const schedule = await prisma.agentSchedule.create({
@@ -117,8 +135,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 name,
                 description,
                 cronExpr,
-                timezone: timezone || "UTC",
-                inputJson: input ? JSON.parse(JSON.stringify(input)) : null,
+                timezone: resolvedTimezone,
+                inputJson: inputJson ? JSON.parse(JSON.stringify(inputJson)) : null,
                 isActive: isActive !== false,
                 nextRunAt
             }

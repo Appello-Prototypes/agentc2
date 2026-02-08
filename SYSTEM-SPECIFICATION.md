@@ -74,7 +74,7 @@ The **Mastra AI Agent Framework** is a production-grade Turborepo monorepo for b
 | `@mastra/evals`            | ^1.0.1  | Agent evaluation and scoring                |
 | `@mastra/voice-elevenlabs` | ^0.12.0 | ElevenLabs text-to-speech                   |
 | `@mastra/voice-openai`     | ^0.12.0 | OpenAI Realtime API                         |
-| `ai`                       | ^6.0.64 | Vercel AI SDK for streaming                 |
+| `ai`                       | ^6.0.64 | AI SDK for streaming                        |
 | `@ai-sdk/openai`           | ^3.0.23 | OpenAI provider                             |
 
 ### Database & ORM
@@ -1084,11 +1084,15 @@ The Overview page includes a Learning widget showing:
 
 ## Appendix: Deployment
 
-### Target: Vercel
+### Target: Digital Ocean
 
+- **Host:** 138.197.150.253
+- **Domain:** https://mastra.useappello.app
+- **Process Manager:** PM2
+- **Reverse Proxy:** Caddy
 - SSE for real-time (not WebSocket)
 - Inngest for long-running work
-- Edge functions where applicable
+- No serverless function timeout constraints
 
 ### Pre-Push Checklist
 

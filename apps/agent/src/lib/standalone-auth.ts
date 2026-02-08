@@ -35,7 +35,7 @@ export interface DemoSession {
 
 /**
  * Get session for demo routes.
- * In standalone mode (Vercel), returns a demo user.
+ * In standalone mode, returns a demo user.
  * In authenticated mode, requires a valid session.
  *
  * @returns Session with user, or null if unauthorized

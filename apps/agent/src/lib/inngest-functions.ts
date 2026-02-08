@@ -1,6 +1,6 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
-import { prisma } from "@repo/database";
+import { prisma, RunStatus, RunTriggerType, TriggerEventStatus } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import {
     evaluateHelpfulness,
@@ -21,12 +21,23 @@ import {
     type ProposalChangeAnalysis
 } from "./learning-config";
 import { alertAutoPromotion, alertExperimentTimeout } from "./alerts";
+import { getNextRunAt } from "./schedule-utils";
+import { matchesTriggerFilter, resolveTriggerInput } from "./trigger-utils";
+import {
+    extractTriggerConfig,
+    extractTriggerInputMapping,
+    resolveRunSource,
+    resolveRunTriggerType
+} from "./unified-triggers";
+import { getGmailClient, watchMailbox } from "./gmail";
+import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
+import { updateTriggerEventRecord } from "./trigger-events";
 
 /**
  * Execute Goal Function
  *
  * Uses Inngest step functions to break execution into resumable steps.
- * This bypasses Vercel's function timeout limits.
+ * This breaks execution into resumable, fault-tolerant steps.
  *
  * Flow:
  * 1. get-goal: Fetch goal and mark as running
@@ -254,6 +265,103 @@ export const runCompletedFunction = inngest.createFunction(
                     });
                 }
             }
+        });
+
+        // Step 4: Create approval requests for Tier 1 triggers
+        await step.run("create-approval-request", async () => {
+            const run = await prisma.agentRun.findUnique({
+                where: { id: runId },
+                include: {
+                    agent: {
+                        select: {
+                            requiresApproval: true,
+                            workspaceId: true,
+                            workspace: { select: { organizationId: true } }
+                        }
+                    },
+                    TriggerEvent: true
+                }
+            });
+
+            if (!run?.agent?.requiresApproval || !run.TriggerEvent) {
+                return null;
+            }
+
+            const integrationKey = run.TriggerEvent.integrationKey;
+            if (
+                !integrationKey ||
+                !["gmail", "hubspot", "slack", "fathom"].includes(integrationKey)
+            ) {
+                return null;
+            }
+
+            const existing = await prisma.approvalRequest.findFirst({
+                where: { triggerEventId: run.TriggerEvent.id }
+            });
+            if (existing) {
+                return existing;
+            }
+
+            const payload =
+                run.TriggerEvent.payloadJson && typeof run.TriggerEvent.payloadJson === "object"
+                    ? (run.TriggerEvent.payloadJson as Record<string, unknown>)
+                    : null;
+
+            const slackUserId =
+                typeof payload?._slackUserId === "string"
+                    ? (payload._slackUserId as string)
+                    : typeof payload?.slackUserId === "string"
+                      ? (payload.slackUserId as string)
+                      : null;
+            const gmailAddress =
+                integrationKey === "gmail" && typeof payload?.gmailAddress === "string"
+                    ? (payload.gmailAddress as string)
+                    : null;
+            const threadId =
+                integrationKey === "gmail" ? (payload?.threadId as string | null) : null;
+
+            const organizationId = run.agent.workspace?.organizationId;
+            if (!organizationId) {
+                return null;
+            }
+
+            const action =
+                integrationKey === "gmail" && gmailAddress
+                    ? extractGmailDraftAction({
+                          outputText: run.outputText,
+                          gmailAddress,
+                          threadId
+                      })
+                    : null;
+
+            const summary =
+                integrationKey === "gmail" && action
+                    ? "Gmail draft ready for approval"
+                    : "Run output requires approval";
+
+            return createApprovalRequest({
+                organizationId,
+                workspaceId: run.agent.workspaceId,
+                agentId: run.agentId,
+                triggerEventId: run.TriggerEvent.id,
+                sourceType: "integration",
+                sourceId: run.TriggerEvent.integrationId,
+                integrationConnectionId:
+                    typeof payload?.integrationConnectionId === "string"
+                        ? (payload.integrationConnectionId as string)
+                        : null,
+                slackUserId,
+                title: `${integrationKey.toUpperCase()} approval`,
+                summary,
+                payload: {
+                    integrationKey,
+                    inputText: run.inputText,
+                    outputText: run.outputText,
+                    triggerEventId: run.TriggerEvent.id,
+                    triggerPayload: payload
+                },
+                action: action ?? { type: "none" }
+            });
         });
 
         return { runId, processed: true };
@@ -3459,6 +3567,19 @@ export const asyncInvokeFunction = inngest.createFunction(
             }
         });
 
+        if (result.success && result.output && context?.slackUserId) {
+            await step.run("send-slack-dm", async () => {
+                try {
+                    const { sendSlackDM } = await import("./slack");
+                    const outputText =
+                        typeof result.output === "string" ? result.output : String(result.output);
+                    await sendSlackDM(String(context.slackUserId), outputText);
+                } catch (error) {
+                    console.error("[Inngest] Failed to send Slack DM:", error);
+                }
+            });
+        }
+
         // Step 4: Trigger run/completed pipeline for cost tracking, evaluations, etc.
         if (result.success) {
             await step.sendEvent("trigger-run-completed", {
@@ -3532,59 +3653,40 @@ export const scheduleTriggerFunction = inngest.createFunction(
             }
 
             await step.run(`process-schedule-${schedule.id}`, async () => {
-                // Get input from schedule or use default
-                const inputJson = schedule.inputJson as Record<string, unknown> | null;
-                const input = (inputJson?.input as string) || `Scheduled run: ${schedule.name}`;
+                const now = new Date();
+                let nextRunAt: Date;
 
-                // Create a run record
-                const run = await prisma.agentRun.create({
+                try {
+                    nextRunAt = getNextRunAt(schedule.cronExpr, schedule.timezone || "UTC", now);
+                } catch (error) {
+                    console.error(
+                        `[Inngest] Failed to calculate next run for schedule ${schedule.id}:`,
+                        error
+                    );
+                    return;
+                }
+
+                const updateResult = await prisma.agentSchedule.updateMany({
+                    where: {
+                        id: schedule.id,
+                        nextRunAt: schedule.nextRunAt ?? null
+                    },
                     data: {
-                        agentId: schedule.agent.id,
-                        runType: "PROD",
-                        status: "QUEUED",
-                        inputText: input,
-                        source: "api", // Scheduled runs are API-initiated
-                        startedAt: new Date()
-                    }
-                });
-
-                // Create trace
-                await prisma.agentTrace.create({
-                    data: {
-                        runId: run.id,
-                        agentId: schedule.agent.id,
-                        status: "QUEUED",
-                        inputText: input
-                    }
-                });
-
-                // Calculate next run time (simplified - add 1 day for daily, etc.)
-                // In production, use a proper cron parser
-                const nextRunAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
-
-                // Update schedule
-                await prisma.agentSchedule.update({
-                    where: { id: schedule.id },
-                    data: {
-                        lastRunAt: new Date(),
+                        lastRunAt: now,
                         nextRunAt,
                         runCount: { increment: 1 }
                     }
                 });
 
-                // Queue the async invoke
+                if (updateResult.count === 0) {
+                    return;
+                }
+
                 await inngest.send({
-                    name: "agent/invoke.async",
+                    name: "agent/schedule.trigger",
                     data: {
-                        runId: run.id,
-                        agentId: schedule.agent.id,
-                        agentSlug: schedule.agent.slug,
-                        input,
-                        context: {
-                            scheduleId: schedule.id,
-                            scheduleName: schedule.name,
-                            scheduled: true
-                        }
+                        scheduleId: schedule.id,
+                        agentId: schedule.agent.id
                     }
                 });
 
@@ -3593,6 +3695,377 @@ export const scheduleTriggerFunction = inngest.createFunction(
         }
 
         return { processed, total: dueSchedules.length };
+    }
+);
+
+/**
+ * Schedule Trigger Event Handler
+ *
+ * Creates a run and queues async invocation for scheduled executions.
+ */
+export const agentScheduleTriggerFunction = inngest.createFunction(
+    {
+        id: "agent-schedule-trigger",
+        retries: 2
+    },
+    { event: "agent/schedule.trigger" },
+    async ({ event, step }) => {
+        const { scheduleId } = event.data;
+
+        const schedule = await step.run("load-schedule", async () => {
+            return prisma.agentSchedule.findUnique({
+                where: { id: scheduleId },
+                include: {
+                    agent: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true
+                        }
+                    }
+                }
+            });
+        });
+
+        if (!schedule || !schedule.isActive || !schedule.agent.isActive) {
+            return { skipped: true };
+        }
+
+        const inputJson = schedule.inputJson as Record<string, unknown> | null;
+        const inputValue = inputJson?.input ?? `Scheduled run: ${schedule.name}`;
+        const input =
+            typeof inputValue === "string" ? inputValue : JSON.stringify(inputValue ?? {});
+        const environment =
+            typeof inputJson?.environment === "string" ? inputJson.environment : undefined;
+        const context =
+            inputJson?.context && typeof inputJson.context === "object"
+                ? {
+                      ...(inputJson.context as Record<string, unknown>),
+                      scheduleId: schedule.id,
+                      scheduleName: schedule.name,
+                      ...(environment ? { environment } : {})
+                  }
+                : {
+                      scheduleId: schedule.id,
+                      scheduleName: schedule.name,
+                      ...(environment ? { environment } : {})
+                  };
+        const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
+
+        const { startRun } = await import("./run-recorder");
+
+        const runHandle = await startRun({
+            agentId: schedule.agent.id,
+            agentSlug: schedule.agent.slug,
+            input,
+            source: "api",
+            triggerType: RunTriggerType.SCHEDULED,
+            triggerId: schedule.id,
+            metadata: {
+                scheduleId: schedule.id,
+                scheduleName: schedule.name
+            },
+            initialStatus: RunStatus.QUEUED
+        });
+
+        if (inputJson?.task === "gmail_watch_refresh" && inputJson?.integrationId) {
+            const integration = await prisma.gmailIntegration.findUnique({
+                where: { id: String(inputJson.integrationId) },
+                include: {
+                    workspace: { select: { organizationId: true } }
+                }
+            });
+
+            if (!integration?.workspace?.organizationId) {
+                await runHandle.complete({
+                    output: "Gmail watch refresh skipped: integration not found"
+                });
+                return { runId: runHandle.runId, refreshed: false };
+            }
+
+            const topicName = process.env.GMAIL_PUBSUB_TOPIC;
+            if (!topicName) {
+                await runHandle.complete({
+                    output: "Gmail watch refresh failed: missing GMAIL_PUBSUB_TOPIC"
+                });
+                return { runId: runHandle.runId, refreshed: false };
+            }
+
+            const gmail = await getGmailClient(
+                integration.workspace.organizationId,
+                integration.gmailAddress
+            );
+            const watchResult = await watchMailbox(gmail, topicName);
+
+            await prisma.gmailIntegration.update({
+                where: { id: integration.id },
+                data: {
+                    historyId: watchResult.historyId || integration.historyId,
+                    watchExpiration: watchResult.expiration || integration.watchExpiration
+                }
+            });
+
+            await runHandle.complete({
+                output: `Refreshed Gmail watch for ${integration.gmailAddress}`
+            });
+
+            return { runId: runHandle.runId, refreshed: true };
+        }
+
+        await step.sendEvent("invoke-scheduled", {
+            name: "agent/invoke.async",
+            data: {
+                runId: runHandle.runId,
+                agentId: schedule.agent.id,
+                agentSlug: schedule.agent.slug,
+                input,
+                context,
+                maxSteps
+            }
+        });
+
+        return { runId: runHandle.runId };
+    }
+);
+
+/**
+ * Gmail Follow-up Monitor
+ *
+ * Creates action items for email threads awaiting responses.
+ */
+export const gmailFollowUpFunction = inngest.createFunction(
+    {
+        id: "gmail-follow-up",
+        retries: 1
+    },
+    { cron: "0 * * * *" }, // hourly
+    async ({ step }) => {
+        const cutoff = new Date(Date.now() - 1000 * 60 * 60 * 24 * 2);
+
+        const threads = await step.run("find-stale-threads", async () => {
+            return prisma.emailThread.findMany({
+                where: {
+                    lastInboundAt: { lt: cutoff },
+                    integrationConnectionId: { not: null }
+                },
+                orderBy: { lastInboundAt: "asc" },
+                take: 50
+            });
+        });
+
+        let created = 0;
+        for (const thread of threads) {
+            if (!thread.lastInboundAt) {
+                continue;
+            }
+            if (thread.lastOutboundAt && thread.lastOutboundAt >= thread.lastInboundAt) {
+                continue;
+            }
+
+            const existing = await prisma.actionItem.findFirst({
+                where: {
+                    sourceType: "email",
+                    sourceId: thread.id,
+                    status: "open"
+                }
+            });
+
+            if (existing) {
+                continue;
+            }
+
+            const action = await prisma.actionItem.create({
+                data: {
+                    organizationId: thread.organizationId,
+                    workspaceId: thread.workspaceId,
+                    sourceType: "email",
+                    sourceId: thread.id,
+                    title: "Follow up on email thread",
+                    description: thread.subject || undefined,
+                    metadata: {
+                        threadId: thread.threadId,
+                        lastInboundAt: thread.lastInboundAt
+                    }
+                }
+            });
+
+            await prisma.crmAuditLog.create({
+                data: {
+                    organizationId: thread.organizationId,
+                    workspaceId: thread.workspaceId,
+                    integrationConnectionId: thread.integrationConnectionId,
+                    eventType: "gmail.follow_up",
+                    recordType: "action_item",
+                    recordId: action.id,
+                    sourceType: "gmail",
+                    sourceId: thread.threadId,
+                    payloadJson: {
+                        threadId: thread.threadId,
+                        lastInboundAt: thread.lastInboundAt,
+                        subject: thread.subject
+                    }
+                }
+            });
+
+            created += 1;
+        }
+
+        return { created, scanned: threads.length };
+    }
+);
+
+/**
+ * Agent Trigger Event Handler
+ *
+ * Handles webhook and event triggers.
+ */
+export const agentTriggerFireFunction = inngest.createFunction(
+    {
+        id: "agent-trigger-fire",
+        retries: 2
+    },
+    { event: "agent/trigger.fire" },
+    async ({ event, step }) => {
+        const { triggerId, payload, triggerEventId } = event.data as {
+            triggerId: string;
+            payload: unknown;
+            triggerEventId?: string;
+        };
+
+        const trigger = await step.run("load-trigger", async () => {
+            return prisma.agentTrigger.findUnique({
+                where: { id: triggerId },
+                include: {
+                    agent: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            isActive: true
+                        }
+                    }
+                }
+            });
+        });
+
+        if (!trigger || !trigger.isActive || !trigger.agent.isActive) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-skipped", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.SKIPPED,
+                        errorMessage: "Trigger or agent is disabled"
+                    });
+                });
+            }
+            return { skipped: true };
+        }
+
+        const payloadObj =
+            payload && typeof payload === "object" && !Array.isArray(payload)
+                ? payload
+                : { value: payload };
+        const slackUserId =
+            typeof (payloadObj as { _slackUserId?: string })._slackUserId === "string"
+                ? (payloadObj as { _slackUserId: string })._slackUserId
+                : typeof (payloadObj as { slackUserId?: string }).slackUserId === "string"
+                  ? (payloadObj as { slackUserId: string }).slackUserId
+                  : undefined;
+
+        if (
+            !matchesTriggerFilter(
+                payloadObj as Record<string, unknown>,
+                trigger.filterJson as Record<string, unknown> | null
+            )
+        ) {
+            if (triggerEventId) {
+                await step.run("mark-trigger-filtered", async () => {
+                    await updateTriggerEventRecord(triggerEventId, {
+                        status: TriggerEventStatus.FILTERED,
+                        errorMessage: "Trigger filter did not match payload"
+                    });
+                });
+            }
+            return { matched: false };
+        }
+
+        const triggerInputMapping = extractTriggerInputMapping(trigger.inputMapping);
+        const triggerConfig = extractTriggerConfig(triggerInputMapping);
+        const inputDefaults = triggerConfig?.defaults;
+        const input = resolveTriggerInput(
+            payloadObj as Record<string, unknown>,
+            triggerInputMapping as Record<string, string> | null,
+            trigger.name
+        );
+
+        const { startRun } = await import("./run-recorder");
+        const triggerType = resolveRunTriggerType(trigger.triggerType);
+        const source = resolveRunSource(trigger.triggerType);
+        const environment = triggerConfig?.environment ?? inputDefaults?.environment ?? undefined;
+        const maxSteps =
+            typeof inputDefaults?.maxSteps === "number" ? inputDefaults.maxSteps : undefined;
+        const contextDefaults =
+            inputDefaults?.context && typeof inputDefaults.context === "object"
+                ? (inputDefaults.context as Record<string, unknown>)
+                : {};
+
+        const runHandle = await startRun({
+            agentId: trigger.agent.id,
+            agentSlug: trigger.agent.slug,
+            input,
+            source,
+            triggerType,
+            triggerId: trigger.id,
+            metadata: {
+                triggerId: trigger.id,
+                triggerName: trigger.name,
+                triggerType: trigger.triggerType,
+                eventName: trigger.eventName
+            },
+            initialStatus: RunStatus.QUEUED
+        });
+
+        await prisma.agentTrigger.update({
+            where: { id: trigger.id },
+            data: {
+                lastTriggeredAt: new Date(),
+                triggerCount: { increment: 1 }
+            }
+        });
+
+        if (triggerEventId) {
+            await step.run("mark-trigger-queued", async () => {
+                await updateTriggerEventRecord(triggerEventId, {
+                    status: TriggerEventStatus.QUEUED,
+                    run: {
+                        connect: {
+                            id: runHandle.runId
+                        }
+                    }
+                });
+            });
+        }
+
+        await step.sendEvent("invoke-triggered", {
+            name: "agent/invoke.async",
+            data: {
+                runId: runHandle.runId,
+                agentId: trigger.agent.id,
+                agentSlug: trigger.agent.slug,
+                input,
+                context: {
+                    ...contextDefaults,
+                    triggerId: trigger.id,
+                    triggerName: trigger.name,
+                    triggerType: trigger.triggerType,
+                    eventName: trigger.eventName,
+                    payload: payloadObj,
+                    slackUserId,
+                    ...(environment ? { environment } : {})
+                },
+                maxSteps
+            }
+        });
+
+        return { runId: runHandle.runId };
     }
 );
 
@@ -3611,6 +4084,9 @@ export const inngestFunctions = [
     asyncInvokeFunction,
     // Scheduler
     scheduleTriggerFunction,
+    agentScheduleTriggerFunction,
+    gmailFollowUpFunction,
+    agentTriggerFireFunction,
     // AI Insights generation
     generateInsightsFunction,
     // Closed-Loop Learning functions

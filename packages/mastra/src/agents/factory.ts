@@ -186,6 +186,26 @@ function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
     return Object.keys(options).length > 0 ? options : undefined;
 }
 
+const MODEL_ALIASES: Record<string, Record<string, string>> = {
+    anthropic: {
+        "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
+        "claude-sonnet-4-5-20250514": "claude-sonnet-4-5-20250929",
+        "claude-opus-4-5": "claude-opus-4-5-20251101",
+        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101"
+    }
+};
+
+function resolveModelName(provider: string, modelName: string) {
+    const alias = MODEL_ALIASES[provider]?.[modelName];
+    if (alias) {
+        console.warn(
+            `[Agent Factory] Remapping model ${provider}/${modelName} -> ${provider}/${alias}`
+        );
+        return alias;
+    }
+    return modelName;
+}
+
 /**
  * Create an Agent instance from a stored agent configuration
  * (Sync version - only supports static registry tools)
@@ -204,7 +224,8 @@ export function createAgentFromConfig(
         : config.instructions;
 
     // Build model string in Mastra format: "provider/model"
-    const model = `${config.modelProvider}/${config.modelName}`;
+    const modelName = resolveModelName(config.modelProvider, config.modelName);
+    const model = `${config.modelProvider}/${modelName}`;
 
     // Get tools from registry
     const tools = getToolsByNames(config.tools);
@@ -276,7 +297,8 @@ export async function createAgentFromConfigAsync(
         : config.instructions;
 
     // Build model string in Mastra format: "provider/model"
-    const model = `${config.modelProvider}/${config.modelName}`;
+    const modelName = resolveModelName(config.modelProvider, config.modelName);
+    const model = `${config.modelProvider}/${modelName}`;
 
     // Get tools from registry AND MCP (async)
     const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
@@ -336,8 +358,8 @@ export const availableModels = {
     openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
     anthropic: [
         // Claude 4.5 models
-        "claude-opus-4-5-20250514",
-        "claude-sonnet-4-5-20250514",
+        "claude-opus-4-5-20251101",
+        "claude-sonnet-4-5-20250929",
         // Claude 4 models
         "claude-opus-4-20250514",
         "claude-sonnet-4-20250514",

@@ -23,6 +23,15 @@ import {
     workflowUpdateTool
 } from "./workflow-crud-tools";
 import {
+    triggerUnifiedListTool,
+    triggerUnifiedGetTool,
+    triggerUnifiedCreateTool,
+    triggerUnifiedUpdateTool,
+    triggerUnifiedDeleteTool,
+    triggerUnifiedEnableTool,
+    triggerUnifiedDisableTool
+} from "./trigger-tools";
+import {
     networkCreateTool,
     networkDeleteTool,
     networkReadTool,
@@ -31,12 +40,25 @@ import {
 import { workflowExecuteTool, workflowGetRunTool, workflowListRunsTool } from "./workflow-tools";
 import { networkExecuteTool, networkGetRunTool, networkListRunsTool } from "./network-tools";
 import {
+    metricsLiveSummaryTool,
+    metricsAgentAnalyticsTool,
+    metricsAgentRunsTool,
+    metricsWorkflowDailyTool,
+    metricsNetworkDailyTool
+} from "./metrics-tools";
+import {
     bimQueryTool,
     bimTakeoffTool,
     bimDiffTool,
     bimClashTool,
     bimHandoverTool
 } from "./bim-tools";
+import { workspaceIntentRecommendationTool } from "./workspace-intent-tools";
+import { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
+import {
+    integrationImportMcpJsonTool,
+    integrationConnectionTestTool
+} from "./integration-import-tools";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -78,12 +100,39 @@ export const toolRegistry: Record<string, any> = {
     "network-list-runs": networkListRunsTool,
     "network-get-run": networkGetRunTool,
 
+    // Trigger tools
+    "trigger-unified-list": triggerUnifiedListTool,
+    "trigger-unified-get": triggerUnifiedGetTool,
+    "trigger-unified-create": triggerUnifiedCreateTool,
+    "trigger-unified-update": triggerUnifiedUpdateTool,
+    "trigger-unified-delete": triggerUnifiedDeleteTool,
+    "trigger-unified-enable": triggerUnifiedEnableTool,
+    "trigger-unified-disable": triggerUnifiedDisableTool,
+
+    // Metrics tools
+    "metrics-live-summary": metricsLiveSummaryTool,
+    "metrics-agent-analytics": metricsAgentAnalyticsTool,
+    "metrics-agent-runs": metricsAgentRunsTool,
+    "metrics-workflow-daily": metricsWorkflowDailyTool,
+    "metrics-network-daily": metricsNetworkDailyTool,
+
+    // Workspace intent tools
+    "workspace-intent-recommendation": workspaceIntentRecommendationTool,
+
     // BIM tools
     "bim-query": bimQueryTool,
     "bim-takeoff": bimTakeoffTool,
     "bim-diff": bimDiffTool,
     "bim-clash": bimClashTool,
-    "bim-handover": bimHandoverTool
+    "bim-handover": bimHandoverTool,
+
+    // Webhook tools
+    "webhook-list-agents": webhookListAgentsTool,
+    "webhook-create": webhookCreateTool,
+
+    // MCP import tools
+    "integration-import-mcp-json": integrationImportMcpJsonTool,
+    "integration-connection-test": integrationConnectionTestTool
 };
 
 /**
@@ -93,6 +142,11 @@ export const toolRegistry: Record<string, any> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const cachedMcpToolsByOrg = new Map<string, { tools: Record<string, any>; loadedAt: number }>();
 const MCP_CACHE_TTL = 60000; // 1 minute cache
+
+export function invalidateMcpToolsCacheForOrg(organizationId?: string | null) {
+    const cacheKey = organizationId || "__default__";
+    cachedMcpToolsByOrg.delete(cacheKey);
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getMcpToolsCached(organizationId?: string | null): Promise<Record<string, any>> {

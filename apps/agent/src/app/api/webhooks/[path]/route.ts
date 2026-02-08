@@ -1,16 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, TriggerEventStatus } from "@repo/database";
 import { createHmac, timingSafeEqual } from "crypto";
 import { inngest } from "@/lib/inngest";
+import { checkRateLimit } from "@/lib/rate-limit";
+import {
+    buildTriggerPayloadSnapshot,
+    createTriggerEventRecord,
+    updateTriggerEventRecord
+} from "@/lib/trigger-events";
 
 /**
  * Verify webhook signature
  */
-function verifySignature(payload: string, signature: string | null, secret: string): boolean {
+function verifySignature(
+    payload: string,
+    signature: string | null,
+    secret: string,
+    timestamp?: string | null
+): boolean {
     if (!signature) return false;
 
     try {
-        const expectedSig = createHmac("sha256", secret).update(payload).digest("hex");
+        const signedPayload = timestamp ? `${timestamp}.${payload}` : payload;
+        const expectedSig = createHmac("sha256", secret).update(signedPayload).digest("hex");
 
         const sigBuffer = Buffer.from(signature, "hex");
         const expectedBuffer = Buffer.from(expectedSig, "hex");
@@ -58,34 +70,20 @@ export async function POST(
             );
         }
 
-        if (!trigger.isActive) {
+        const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
+        const clientId = forwardedFor || request.headers.get("x-real-ip") || "unknown";
+        const rate = checkRateLimit(`webhook:${path}:${clientId}`, { windowMs: 60000, max: 60 });
+        if (!rate.allowed) {
             return NextResponse.json(
-                { success: false, error: "Trigger is disabled" },
-                { status: 403 }
-            );
-        }
-
-        if (!trigger.agent.isActive) {
-            return NextResponse.json(
-                { success: false, error: "Agent is disabled" },
-                { status: 403 }
+                { success: false, error: "Rate limit exceeded" },
+                { status: 429 }
             );
         }
 
         // Get raw body for signature verification
         const rawBody = await request.text();
         const signature = request.headers.get("x-webhook-signature");
-
-        // Verify signature if secret is set
-        if (trigger.webhookSecret) {
-            if (!verifySignature(rawBody, signature, trigger.webhookSecret)) {
-                console.warn(`[Webhook] Invalid signature for trigger ${trigger.id}`);
-                return NextResponse.json(
-                    { success: false, error: "Invalid signature" },
-                    { status: 401 }
-                );
-            }
-        }
+        const timestampHeader = request.headers.get("x-webhook-timestamp");
 
         // Parse payload
         let payload: Record<string, unknown> = {};
@@ -96,47 +94,92 @@ export async function POST(
             payload = { raw: rawBody };
         }
 
-        // Apply filter if configured
-        if (trigger.filterJson) {
-            const filter = trigger.filterJson as Record<string, unknown>;
-            // Simple filter: check if all filter keys match payload
-            for (const [key, value] of Object.entries(filter)) {
-                if (payload[key] !== value) {
-                    return NextResponse.json({
-                        success: true,
-                        message: "Event filtered out",
-                        matched: false
+        const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
+
+        // Resolve workspaceId: use trigger's workspace, fall back to default workspace
+        let workspaceId = trigger.workspaceId;
+        if (!workspaceId) {
+            const defaultWorkspace = await prisma.workspace.findFirst({
+                where: { isDefault: true },
+                select: { id: true }
+            });
+            workspaceId = defaultWorkspace?.id ?? null;
+        }
+
+        const triggerEvent = await createTriggerEventRecord({
+            triggerId: trigger.id,
+            agentId: trigger.agent.id,
+            workspaceId,
+            status: TriggerEventStatus.RECEIVED,
+            sourceType: "webhook",
+            triggerType: trigger.triggerType,
+            webhookPath: trigger.webhookPath,
+            payload: normalizedPayload
+        });
+
+        if (!trigger.isActive) {
+            await updateTriggerEventRecord(triggerEvent.id, {
+                status: TriggerEventStatus.SKIPPED,
+                errorMessage: "Trigger is disabled"
+            });
+            return NextResponse.json(
+                { success: false, error: "Trigger is disabled" },
+                { status: 403 }
+            );
+        }
+
+        if (!trigger.agent.isActive) {
+            await updateTriggerEventRecord(triggerEvent.id, {
+                status: TriggerEventStatus.SKIPPED,
+                errorMessage: "Agent is disabled"
+            });
+            return NextResponse.json(
+                { success: false, error: "Agent is disabled" },
+                { status: 403 }
+            );
+        }
+
+        // Verify signature if secret is set
+        if (trigger.webhookSecret) {
+            let timestampMs: number | null = null;
+            if (timestampHeader) {
+                const parsed = Number(timestampHeader);
+                if (Number.isNaN(parsed)) {
+                    await updateTriggerEventRecord(triggerEvent.id, {
+                        status: TriggerEventStatus.REJECTED,
+                        errorMessage: "Invalid webhook timestamp"
                     });
+                    return NextResponse.json(
+                        { success: false, error: "Invalid webhook timestamp" },
+                        { status: 400 }
+                    );
+                }
+                timestampMs = parsed < 1e12 ? parsed * 1000 : parsed;
+                const driftMs = Math.abs(Date.now() - timestampMs);
+                if (driftMs > 5 * 60 * 1000) {
+                    await updateTriggerEventRecord(triggerEvent.id, {
+                        status: TriggerEventStatus.REJECTED,
+                        errorMessage: "Webhook timestamp expired"
+                    });
+                    return NextResponse.json(
+                        { success: false, error: "Webhook timestamp expired" },
+                        { status: 401 }
+                    );
                 }
             }
-        }
 
-        // Apply input mapping if configured
-        let input: string;
-        if (trigger.inputMapping) {
-            const mapping = trigger.inputMapping as Record<string, string>;
-            if (mapping.template) {
-                // Simple template replacement
-                input = mapping.template.replace(/\{\{(\w+)\}\}/g, (_, key) =>
-                    String(payload[key] || "")
+            if (!verifySignature(rawBody, signature, trigger.webhookSecret, timestampHeader)) {
+                console.warn(`[Webhook] Invalid signature for trigger ${trigger.id}`);
+                await updateTriggerEventRecord(triggerEvent.id, {
+                    status: TriggerEventStatus.REJECTED,
+                    errorMessage: "Invalid signature"
+                });
+                return NextResponse.json(
+                    { success: false, error: "Invalid signature" },
+                    { status: 401 }
                 );
-            } else if (mapping.field) {
-                input = String(payload[mapping.field] || JSON.stringify(payload));
-            } else {
-                input = JSON.stringify(payload);
             }
-        } else {
-            input = JSON.stringify(payload);
         }
-
-        // Update trigger stats
-        await prisma.agentTrigger.update({
-            where: { id: trigger.id },
-            data: {
-                lastTriggeredAt: new Date(),
-                triggerCount: { increment: 1 }
-            }
-        });
 
         // Queue agent invocation via Inngest
         await inngest.send({
@@ -144,30 +187,14 @@ export async function POST(
             data: {
                 triggerId: trigger.id,
                 agentId: trigger.agent.id,
+                triggerEventId: triggerEvent.id,
                 payload: {
-                    ...payload,
+                    ...normalizedPayload,
                     _trigger: {
                         id: trigger.id,
                         name: trigger.name,
                         type: trigger.triggerType
                     }
-                }
-            }
-        });
-
-        // Also queue immediate invocation
-        await inngest.send({
-            name: "agent/invoke.async",
-            data: {
-                runId: "", // Will be created by the handler
-                agentId: trigger.agent.id,
-                agentSlug: trigger.agent.slug,
-                input,
-                context: {
-                    triggerId: trigger.id,
-                    triggerName: trigger.name,
-                    triggerType: trigger.triggerType,
-                    webhookPayload: payload
                 }
             }
         });

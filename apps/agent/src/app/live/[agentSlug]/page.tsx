@@ -9,5 +9,5 @@ export default async function LiveAgentPage({
     params: Promise<{ agentSlug: string }>;
 }) {
     const { agentSlug } = await params;
-    redirect(`/workspace/${agentSlug}/overview`);
+    redirect(`/agents/${agentSlug}/overview`);
 }

@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma, Prisma } from "@repo/database";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "../networks/topology";
 
 const generateSlug = (name: string) =>
     name
@@ -90,11 +91,13 @@ export const networkCreateTool = createTool({
             throw new Error(`Network slug '${slug}' already exists`);
         }
 
-        const topologyJson = (input.topologyJson || {
-            nodes: [],
-            edges: []
-        }) as Prisma.InputJsonValue;
         const primitives = Array.isArray(input.primitives) ? input.primitives : [];
+        const baseTopology = input.topologyJson || { nodes: [], edges: [] };
+        const topologyJson = (
+            primitives.length > 0 && isNetworkTopologyEmpty(baseTopology)
+                ? buildNetworkTopologyFromPrimitives(primitives)
+                : baseTopology
+        ) as Prisma.InputJsonValue;
 
         const network = await prisma.network.create({
             data: {
@@ -237,12 +240,17 @@ export const networkUpdateTool = createTool({
         }
 
         const payload = { ...(data || {}) };
-        const nextTopology = (restoreTopology ||
-            payload.topologyJson ||
-            existing.topologyJson) as Prisma.InputJsonValue;
+        const topologySource = restoreTopology || payload.topologyJson || existing.topologyJson;
         const nextPrimitives =
             restorePrimitives ||
             (Array.isArray(payload.primitives) ? payload.primitives : existing.primitives);
+        const shouldAutoGenerate =
+            Array.isArray(nextPrimitives) &&
+            nextPrimitives.length > 0 &&
+            isNetworkTopologyEmpty(topologySource);
+        const nextTopology = (
+            shouldAutoGenerate ? buildNetworkTopologyFromPrimitives(nextPrimitives) : topologySource
+        ) as Prisma.InputJsonValue;
 
         const updateData: Record<string, unknown> = {
             name: payload.name ?? existing.name,
@@ -266,6 +274,7 @@ export const networkUpdateTool = createTool({
 
         const topologyChanged =
             restoreTopology !== null ||
+            shouldAutoGenerate ||
             (payload.topologyJson !== undefined &&
                 JSON.stringify(existing.topologyJson) !== JSON.stringify(payload.topologyJson));
 

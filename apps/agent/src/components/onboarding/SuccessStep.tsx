@@ -31,7 +31,7 @@ export function SuccessStep({ agentName, agentSlug, onFinish }: SuccessStepProps
                     <p className="font-medium">What&apos;s next?</p>
                     <div className="space-y-3">
                         <Link
-                            href={`/workspace/${agentSlug}/overview`}
+                            href={`/agents/${agentSlug}/overview`}
                             className="hover:bg-muted block rounded-lg border p-4 transition-colors"
                         >
                             <p className="font-medium">View your agent</p>
@@ -62,7 +62,7 @@ export function SuccessStep({ agentName, agentSlug, onFinish }: SuccessStepProps
 
                 {/* CTA */}
                 <Button size="lg" className="px-8" onClick={onFinish}>
-                    Go to Workspace
+                    Go to Agents
                 </Button>
             </CardContent>
         </Card>

@@ -11,6 +11,8 @@ import { getVoiceService } from "../_service";
  * - greeting?: string - Initial message to speak
  * - agentSlug?: string - Agent to handle the conversation
  * - maxDuration?: number - Maximum call duration in seconds
+ * - mode?: "gather" | "stream" - Call mode (default: "gather")
+ * - elevenlabsAgentId?: string - ElevenLabs agent ID for stream mode
  */
 export async function POST(request: NextRequest) {
     try {
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { to, greeting, agentSlug, maxDuration } = body;
+        const { to, greeting, agentSlug, maxDuration, mode, elevenlabsAgentId } = body;
 
         if (!to) {
             return NextResponse.json({ error: "Missing required field: to" }, { status: 400 });
@@ -49,7 +51,9 @@ export async function POST(request: NextRequest) {
             to,
             greeting: greeting || "Hello! I'm your AI assistant. How can I help you today?",
             agentSlug,
-            maxDuration
+            maxDuration,
+            mode: mode === "stream" ? "stream" : "gather",
+            elevenlabsAgentId
         });
 
         return NextResponse.json({

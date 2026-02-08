@@ -14,6 +14,6 @@ export default async function LiveAgentRunsPage({
     const { runId } = await searchParams;
 
     // Redirect to workspace runs, preserving the runId query param if present
-    const url = `/workspace/${agentSlug}/runs${runId ? `?runId=${runId}` : ""}`;
+    const url = `/agents/${agentSlug}/runs${runId ? `?runId=${runId}` : ""}`;
     redirect(url);
 }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra";
 
 function generateSlug(name: string): string {
     return name
@@ -69,8 +70,12 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const topologyJson = body.topologyJson || { nodes: [], edges: [] };
         const primitives = Array.isArray(body.primitives) ? body.primitives : [];
+        const baseTopology = body.topologyJson || { nodes: [], edges: [] };
+        const topologyJson =
+            primitives.length > 0 && isNetworkTopologyEmpty(baseTopology)
+                ? buildNetworkTopologyFromPrimitives(primitives)
+                : baseTopology;
 
         const network = await prisma.network.create({
             data: {

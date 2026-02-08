@@ -17,11 +17,23 @@ import { prisma } from "@repo/database";
  * - prompt?: string - Prompt for agent to generate message (if using agent)
  * - voiceGreeting?: string - Custom greeting for voice calls
  * - maxDuration?: number - Max duration for voice calls (seconds)
+ * - voiceMode?: "gather" | "stream" - Voice mode (default: "gather")
+ * - elevenlabsAgentId?: string - ElevenLabs agent ID for stream mode
  */
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { channel, to, message, agentSlug, prompt, voiceGreeting, maxDuration } = body;
+        const {
+            channel,
+            to,
+            message,
+            agentSlug,
+            prompt,
+            voiceGreeting,
+            maxDuration,
+            voiceMode,
+            elevenlabsAgentId
+        } = body;
 
         // Validate required fields
         if (!channel || !to) {
@@ -65,7 +77,13 @@ export async function POST(request: NextRequest) {
                 result = await sendTelegram(to, messageText!);
                 break;
             case "voice":
-                result = await initiateVoiceCall(to, voiceGreeting || messageText, maxDuration);
+                result = await initiateVoiceCall(
+                    to,
+                    voiceGreeting || messageText,
+                    maxDuration,
+                    voiceMode,
+                    elevenlabsAgentId
+                );
                 break;
             default:
                 return NextResponse.json({ error: "Channel not implemented" }, { status: 501 });
@@ -198,7 +216,9 @@ async function sendTelegram(chatId: string, text: string): Promise<SendResult> {
 async function initiateVoiceCall(
     to: string,
     greeting?: string,
-    maxDuration?: number
+    maxDuration?: number,
+    mode?: "gather" | "stream",
+    elevenlabsAgentId?: string
 ): Promise<SendResult> {
     const enabled = process.env.TWILIO_ENABLED === "true";
     if (!enabled) {
@@ -216,7 +236,9 @@ async function initiateVoiceCall(
         const call = await service.initiateCall({
             to,
             greeting,
-            maxDuration
+            maxDuration,
+            mode: mode === "stream" ? "stream" : "gather",
+            elevenlabsAgentId
         });
 
         return {

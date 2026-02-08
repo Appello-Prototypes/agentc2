@@ -1,18 +1,37 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mockDeep, mockReset } from "vitest-mock-extended";
 import type { PrismaClient } from "@prisma/client";
-import { createMockRequest, parseResponse, assertSuccess } from "../utils/api-helpers";
+import { createMockRequest, parseResponse, assertSuccess } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
+const getSessionMock = vi.fn();
+const getUserOrganizationIdMock = vi.fn();
+const getDefaultWorkspaceIdForUserMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock
+}));
+
+vi.mock("@repo/auth", () => ({
+    auth: {
+        api: {
+            getSession: getSessionMock
+        }
+    }
+}));
+
+vi.mock("@/lib/organization", () => ({
+    getUserOrganizationId: getUserOrganizationIdMock,
+    getDefaultWorkspaceIdForUser: getDefaultWorkspaceIdForUserMock
 }));
 
 describe("MCP Gateway API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
+        getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
+        getUserOrganizationIdMock.mockResolvedValue("org-1");
+        getDefaultWorkspaceIdForUserMock.mockResolvedValue("workspace-1");
     });
 
     afterEach(() => {
@@ -107,10 +126,9 @@ describe("MCP Gateway API", () => {
         const response = await POST(request);
         const parsed = await parseResponse(response);
 
-        expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining("/api/workflows/sample-workflow/execute"),
-            expect.any(Object)
-        );
+        expect(fetchMock).toHaveBeenCalled();
+        const [workflowUrl] = fetchMock.mock.calls[0];
+        expect(workflowUrl.toString()).toContain("/api/workflows/sample-workflow/execute");
         assertSuccess(parsed);
     });
 
@@ -136,9 +154,10 @@ describe("MCP Gateway API", () => {
         const response = await POST(request);
         const parsed = await parseResponse(response);
 
-        expect(fetchMock).toHaveBeenCalledWith(
-            expect.stringContaining("/api/networks/sample-network/execute"),
-            expect.any(Object)
+        expect(fetchMock).toHaveBeenCalled();
+        const calledUrls = fetchMock.mock.calls.map((call) => call[0].toString());
+        expect(calledUrls.some((url) => url.includes("/api/networks/sample-network/execute"))).toBe(
+            true
         );
         assertSuccess(parsed);
     });

@@ -12,16 +12,17 @@ datasource db {
 
 // Better Auth Models
 model User {
-    id            String    @id @default(cuid())
-    name          String
-    email         String    @unique
-    emailVerified Boolean   @default(false)
-    image         String?
-    createdAt     DateTime  @default(now())
-    updatedAt     DateTime  @updatedAt
-    sessions      Session[]
-    accounts      Account[]
-    agents        Agent[]
+    id                     String                  @id @default(cuid())
+    name                   String
+    email                  String                  @unique
+    emailVerified          Boolean                 @default(false)
+    image                  String?
+    createdAt              DateTime                @default(now())
+    updatedAt              DateTime                @updatedAt
+    sessions               Session[]
+    accounts               Account[]
+    agents                 Agent[]
+    integrationConnections IntegrationConnection[]
 
     @@map("user")
 }
@@ -88,11 +89,19 @@ model Organization {
     updatedAt   DateTime @updatedAt
 
     // Relations
-    workspaces  Workspace[]
-    memberships Membership[]
-    credentials ToolCredential[]
-    invites     OrganizationInvite[]
-    domains     OrganizationDomain[]
+    workspaces             Workspace[]
+    memberships            Membership[]
+    credentials            ToolCredential[]
+    integrationConnections IntegrationConnection[]
+    identityMappings       IdentityMapping[]
+    approvalRequests       ApprovalRequest[]
+    crmAuditLogs           CrmAuditLog[]
+    emailThreads           EmailThread[]
+    chatMessages           ChatMessage[]
+    meetingTranscripts     MeetingTranscript[]
+    actionItems            ActionItem[]
+    invites                OrganizationInvite[]
+    domains                OrganizationDomain[]
 
     @@index([slug])
     @@map("organization")
@@ -113,12 +122,20 @@ model Workspace {
     updatedAt      DateTime     @updatedAt
 
     // Relations
-    agents    Agent[]
-    schedules AgentSchedule[]
-    triggers  AgentTrigger[]
-    workflows Workflow[]
-    networks  Network[]
-    bimModels BimModel[]
+    agents            Agent[]
+    schedules         AgentSchedule[]
+    triggers          AgentTrigger[]
+    workflows         Workflow[]
+    networks          Network[]
+    bimModels         BimModel[]
+    GmailIntegration  GmailIntegration[]
+    TriggerEvent      TriggerEvent[]
+    EmailThread       EmailThread[]
+    ChatMessage       ChatMessage[]
+    MeetingTranscript MeetingTranscript[]
+    ActionItem        ActionItem[]
+    ApprovalRequest   ApprovalRequest[]
+    CrmAuditLog       CrmAuditLog[]
 
     @@unique([organizationId, slug])
     @@index([organizationId])
@@ -195,6 +212,283 @@ model ToolCredential {
     @@map("tool_credential")
 }
 
+// Integration Provider - Catalog of available integrations (built-in + custom)
+model IntegrationProvider {
+    id           String   @id @default(cuid())
+    key          String   @unique // Provider key (e.g., "hubspot", "gmail")
+    name         String
+    description  String?
+    category     String // "crm", "communication", "web", "knowledge", "automation", "productivity"
+    authType     String // "apiKey", "oauth", "none", "webhook", "custom"
+    providerType String // "mcp", "oauth", "webhook", "custom"
+    isActive     Boolean  @default(true)
+    configJson   Json? // Custom server config, required fields, etc.
+    actionsJson  Json? // Cached action metadata
+    triggersJson Json? // Cached trigger metadata
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    // Relations
+    connections IntegrationConnection[]
+
+    @@map("integration_provider")
+}
+
+// Integration Connection - Organization/User scoped connection instances
+model IntegrationConnection {
+    id             String              @id @default(cuid())
+    providerId     String
+    provider       IntegrationProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    userId         String?
+    user           User?               @relation(fields: [userId], references: [id], onDelete: SetNull)
+    scope          String              @default("org") // "org" or "user"
+    name           String
+    isDefault      Boolean             @default(false)
+    isActive       Boolean             @default(true)
+    credentials    Json?
+    metadata       Json?
+    lastUsedAt     DateTime?
+    lastTestedAt   DateTime?
+    errorMessage   String?             @db.Text
+    webhookPath    String?
+    webhookSecret  String?
+    agentTriggerId String?
+    agentTrigger   AgentTrigger?       @relation(fields: [agentTriggerId], references: [id], onDelete: SetNull)
+    createdAt      DateTime            @default(now())
+    updatedAt      DateTime            @updatedAt
+
+    // Relations
+    gmailIntegrations  GmailIntegration[]
+    emailThreads       EmailThread[]
+    chatMessages       ChatMessage[]
+    meetingTranscripts MeetingTranscript[]
+    crmAuditLogs       CrmAuditLog[]
+    EmailMessage       EmailMessage[]
+
+    @@index([organizationId])
+    @@index([providerId])
+    @@index([userId])
+    @@index([agentTriggerId])
+    @@map("integration_connection")
+}
+
+// Email Thread - Normalized email threads for Gmail/Outlook
+model EmailThread {
+    id                      String                 @id @default(cuid())
+    organizationId          String
+    organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId             String?
+    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    threadId                String
+    subject                 String?
+    participantsJson        Json?
+    lastMessageAt           DateTime?
+    lastInboundAt           DateTime?
+    lastOutboundAt          DateTime?
+    status                  String?
+    summary                 String?                @db.Text
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    // Relations
+    messages EmailMessage[]
+
+    @@unique([integrationConnectionId, threadId])
+    @@index([organizationId])
+    @@index([workspaceId])
+    @@map("email_thread")
+}
+
+// Email Message - Normalized email messages
+model EmailMessage {
+    id                      String                 @id @default(cuid())
+    threadId                String
+    thread                  EmailThread            @relation(fields: [threadId], references: [id], onDelete: Cascade)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    messageId               String
+    direction               String? // "inbound" | "outbound"
+    fromAddress             String?
+    toAddressesJson         Json?
+    ccAddressesJson         Json?
+    bccAddressesJson        Json?
+    subject                 String?
+    snippet                 String?
+    bodyText                String?                @db.Text
+    bodyHtml                String?                @db.Text
+    receivedAt              DateTime?
+    labelsJson              Json?
+    hasAttachments          Boolean                @default(false)
+    attachmentsJson         Json?
+    metadata                Json?
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    @@unique([integrationConnectionId, messageId])
+    @@index([threadId])
+    @@map("email_message")
+}
+
+// Chat Message - Normalized chat events (Slack, Teams, etc.)
+model ChatMessage {
+    id                      String                 @id @default(cuid())
+    organizationId          String
+    organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId             String?
+    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    channelId               String
+    messageTs               String
+    userId                  String?
+    text                    String?                @db.Text
+    isEdited                Boolean                @default(false)
+    isDeleted               Boolean                @default(false)
+    reactionsJson           Json?
+    attachmentsJson         Json?
+    metadata                Json?
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    @@unique([integrationConnectionId, messageTs])
+    @@index([organizationId])
+    @@index([workspaceId])
+    @@map("chat_message")
+}
+
+// Meeting Transcript - Normalized meeting transcripts (Fathom, Zoom, etc.)
+model MeetingTranscript {
+    id                      String                 @id @default(cuid())
+    organizationId          String
+    organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId             String?
+    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    meetingId               String
+    title                   String?
+    startedAt               DateTime?
+    endedAt                 DateTime?
+    participantsJson        Json?
+    transcriptText          String?                @db.Text
+    summaryText             String?                @db.Text
+    actionItemsJson         Json?
+    sentimentJson           Json?
+    metadata                Json?
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    @@unique([integrationConnectionId, meetingId])
+    @@index([organizationId])
+    @@index([workspaceId])
+    @@map("meeting_transcript")
+}
+
+// Action Item - Extracted tasks from emails/meetings/chats
+model ActionItem {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId    String?
+    workspace      Workspace?   @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    sourceType     String // "email" | "meeting" | "chat" | "crm"
+    sourceId       String?
+    title          String
+    description    String?      @db.Text
+    status         String       @default("open")
+    dueAt          DateTime?
+    assignee       String?
+    metadata       Json?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@index([organizationId])
+    @@index([workspaceId])
+    @@index([status])
+    @@map("action_item")
+}
+
+// Approval Request - Approval-first workflow tracking
+model ApprovalRequest {
+    id             String        @id @default(cuid())
+    organizationId String
+    organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId    String?
+    workspace      Workspace?    @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    agentId        String?
+    agent          Agent?        @relation(fields: [agentId], references: [id], onDelete: SetNull)
+    triggerEventId String?
+    triggerEvent   TriggerEvent? @relation(fields: [triggerEventId], references: [id], onDelete: SetNull)
+    workflowRunId  String?
+    workflowRun    WorkflowRun?  @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+    sourceType     String
+    sourceId       String?
+    status         String        @default("pending") // "pending" | "approved" | "rejected"
+    requestedBy    String?
+    requestedAt    DateTime      @default(now())
+    decidedBy      String?
+    decidedAt      DateTime?
+    decisionReason String?       @db.Text
+    payloadJson    Json?
+    slackChannelId String?
+    slackMessageTs String?
+    metadata       Json?
+    createdAt      DateTime      @default(now())
+    updatedAt      DateTime      @updatedAt
+
+    @@index([organizationId])
+    @@index([workspaceId])
+    @@index([agentId])
+    @@index([status])
+    @@map("approval_request")
+}
+
+// Identity Mapping - Cross-system identity resolution
+model IdentityMapping {
+    id               String       @id @default(cuid())
+    organizationId   String
+    organization     Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    email            String?
+    domain           String?
+    slackUserId      String?
+    hubspotContactId String?
+    hubspotCompanyId String?
+    metadata         Json?
+    createdAt        DateTime     @default(now())
+    updatedAt        DateTime     @updatedAt
+
+    @@unique([organizationId, email])
+    @@index([organizationId])
+    @@map("identity_mapping")
+}
+
+// CRM Audit Log - Track CRM mutations and notes
+model CrmAuditLog {
+    id                      String                 @id @default(cuid())
+    organizationId          String
+    organization            Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    workspaceId             String?
+    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    eventType               String
+    recordType              String?
+    recordId                String?
+    sourceType              String?
+    sourceId                String?
+    payloadJson             Json?
+    actorUserId             String?
+    createdAt               DateTime               @default(now())
+
+    @@index([organizationId])
+    @@index([recordType, recordId])
+    @@map("crm_audit_log")
+}
+
 // Agent Type Enum
 enum AgentType {
     SYSTEM // Seeded from code, protected from deletion
@@ -233,6 +527,16 @@ enum RunTriggerType {
     TOOL
     TEST
     RETRY
+}
+
+enum TriggerEventStatus {
+    RECEIVED
+    FILTERED
+    QUEUED
+    SKIPPED
+    REJECTED
+    NO_MATCH
+    ERROR
 }
 
 // Workflow Type Enum
@@ -371,6 +675,9 @@ model Agent {
     schedules              AgentSchedule[]
     triggers               AgentTrigger[]
     networkPrimitives      NetworkPrimitive[]
+    GmailIntegration       GmailIntegration[]
+    TriggerEvent           TriggerEvent[]
+    ApprovalRequest        ApprovalRequest[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -444,25 +751,27 @@ model AgentSchedule {
 
 // Agent Trigger - Event-based invocation
 model AgentTrigger {
-    id              String     @id @default(cuid())
-    agentId         String
-    agent           Agent      @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    workspaceId     String?
-    workspace       Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
-    name            String
-    description     String?
-    triggerType     String // "webhook", "event", "mcp"
-    eventName       String? // Event name to listen for
-    webhookPath     String? // Unique webhook path for this trigger
-    webhookSecret   String? // Secret for webhook validation
-    filterJson      Json? // Conditions to match before triggering
-    inputMapping    Json? // How to map trigger payload to agent input
-    isActive        Boolean    @default(true)
-    lastTriggeredAt DateTime?
-    triggerCount    Int        @default(0)
-    createdAt       DateTime   @default(now())
-    updatedAt       DateTime   @updatedAt
-    createdBy       String?
+    id                    String                  @id @default(cuid())
+    agentId               String
+    agent                 Agent                   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workspaceId           String?
+    workspace             Workspace?              @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    name                  String
+    description           String?
+    triggerType           String // "webhook", "event", "mcp"
+    eventName             String? // Event name to listen for
+    webhookPath           String? // Unique webhook path for this trigger
+    webhookSecret         String? // Secret for webhook validation
+    filterJson            Json? // Conditions to match before triggering
+    inputMapping          Json? // How to map trigger payload to agent input
+    isActive              Boolean                 @default(true)
+    lastTriggeredAt       DateTime?
+    triggerCount          Int                     @default(0)
+    createdAt             DateTime                @default(now())
+    updatedAt             DateTime                @updatedAt
+    createdBy             String?
+    TriggerEvent          TriggerEvent[]
+    IntegrationConnection IntegrationConnection[]
 
     @@unique([webhookPath])
     @@index([agentId])
@@ -470,6 +779,163 @@ model AgentTrigger {
     @@index([triggerType])
     @@index([eventName])
     @@map("agent_trigger")
+}
+
+// Trigger Event - Logged trigger executions and failures
+model TriggerEvent {
+    id               String             @id @default(cuid())
+    triggerId        String?
+    trigger          AgentTrigger?      @relation(fields: [triggerId], references: [id], onDelete: SetNull)
+    agentId          String?
+    agent            Agent?             @relation(fields: [agentId], references: [id], onDelete: SetNull)
+    workspaceId      String?
+    workspace        Workspace?         @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    runId            String?
+    run              AgentRun?          @relation(fields: [runId], references: [id], onDelete: SetNull)
+    status           TriggerEventStatus @default(RECEIVED)
+    sourceType       String // "webhook", "event", "integration"
+    triggerType      String? // "webhook", "event", "mcp"
+    integrationKey   String? // e.g., "gmail"
+    integrationId    String?
+    eventName        String?
+    webhookPath      String?
+    payloadJson      Json?
+    payloadPreview   String?            @db.Text
+    payloadTruncated Boolean            @default(false)
+    errorMessage     String?            @db.Text
+    metadata         Json?
+    createdAt        DateTime           @default(now())
+    updatedAt        DateTime           @updatedAt
+    ApprovalRequest  ApprovalRequest[]
+
+    @@unique([runId])
+    @@index([triggerId, createdAt])
+    @@index([agentId, createdAt])
+    @@index([workspaceId, createdAt])
+    @@index([status, createdAt])
+    @@index([eventName])
+    @@index([integrationKey])
+    @@map("trigger_event")
+}
+
+// Gmail Integration - Links Gmail accounts to agents and Slack notifications
+model GmailIntegration {
+    id                      String                 @id @default(cuid())
+    agentId                 String
+    agent                   Agent                  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workspaceId             String?
+    workspace               Workspace?             @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    gmailAddress            String
+    slackUserId             String
+    historyId               String?
+    watchExpiration         DateTime?
+    isActive                Boolean                @default(true)
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    @@unique([agentId, gmailAddress])
+    @@index([agentId])
+    @@index([workspaceId])
+    @@index([gmailAddress])
+    @@index([integrationConnectionId])
+    @@map("gmail_integration")
+}
+
+// Legacy Mastra tables (not managed by Prisma migrations)
+model MastraAiSpan {
+    traceId        String
+    spanId         String
+    name           String
+    spanType       String
+    isEvent        Boolean
+    startedAt      DateTime  @db.Timestamp(6)
+    parentSpanId   String?
+    entityType     String?
+    entityId       String?
+    entityName     String?
+    userId         String?
+    organizationId String?
+    resourceId     String?
+    runId          String?
+    sessionId      String?
+    threadId       String?
+    requestId      String?
+    environment    String?
+    source         String?
+    serviceName    String?
+    scope          Json?
+    metadata       Json?
+    tags           Json?
+    attributes     Json?
+    links          Json?
+    input          Json?
+    output         Json?
+    error          Json?
+    endedAt        DateTime? @db.Timestamp(6)
+    createdAt      DateTime  @db.Timestamp(6)
+    updatedAt      DateTime? @db.Timestamp(6)
+    startedAtZ     DateTime? @default(now()) @db.Timestamptz(6)
+    endedAtZ       DateTime? @default(now()) @db.Timestamptz(6)
+    createdAtZ     DateTime? @default(now()) @db.Timestamptz(6)
+    updatedAtZ     DateTime? @default(now()) @db.Timestamptz(6)
+
+    @@id([traceId, spanId], map: "public_mastra_ai_spans_traceid_spanid_pk")
+    @@index([entityType, entityId], map: "mastra_ai_spans_entitytype_entityid_idx")
+    @@index([entityType, entityName], map: "mastra_ai_spans_entitytype_entityname_idx")
+    @@index([metadata], map: "mastra_ai_spans_metadata_gin_idx", type: Gin)
+    @@index([name])
+    @@index([organizationId, userId], map: "mastra_ai_spans_orgid_userid_idx")
+    @@index([parentSpanId, startedAt(sort: Desc)], map: "mastra_ai_spans_parentspanid_startedat_idx")
+    @@index([spanType, startedAt(sort: Desc)], map: "mastra_ai_spans_spantype_startedat_idx")
+    @@index([tags], map: "mastra_ai_spans_tags_gin_idx", type: Gin)
+    @@index([traceId, startedAt(sort: Desc)], map: "mastra_ai_spans_traceid_startedat_idx")
+    @@map("mastra_ai_spans")
+    @@ignore
+}
+
+model MastraMessage {
+    id         String    @id
+    thread_id  String
+    content    String
+    role       String
+    type       String
+    createdAt  DateTime  @db.Timestamp(6)
+    resourceId String?
+    createdAtZ DateTime? @default(now()) @db.Timestamptz(6)
+
+    @@index([thread_id, createdAt(sort: Desc)], map: "mastra_messages_thread_id_createdat_idx")
+    @@map("mastra_messages")
+    @@ignore
+}
+
+model MastraResource {
+    id            String    @id
+    workingMemory String?
+    metadata      Json?
+    createdAt     DateTime  @db.Timestamp(6)
+    updatedAt     DateTime  @db.Timestamp(6)
+    createdAtZ    DateTime? @default(now()) @db.Timestamptz(6)
+    updatedAtZ    DateTime? @default(now()) @db.Timestamptz(6)
+
+    @@map("mastra_resources")
+    @@ignore
+}
+
+model MastraThread {
+    id         String    @id
+    resourceId String
+    title      String
+    metadata   Json?
+    createdAt  DateTime  @db.Timestamp(6)
+    updatedAt  DateTime  @db.Timestamp(6)
+    createdAtZ DateTime? @default(now()) @db.Timestamptz(6)
+    updatedAtZ DateTime? @default(now()) @db.Timestamptz(6)
+
+    @@index([resourceId, createdAt(sort: Desc)], map: "mastra_threads_resourceid_createdat_idx")
+    @@map("mastra_threads")
+    @@ignore
 }
 
 // Legacy Stored Agents - Kept for backwards compatibility during migration
@@ -617,9 +1083,11 @@ model AgentRun {
     experimentGroup String? // "baseline" or "candidate" - which version this run used
 
     // Production channel tracking
-    source    String? // "slack", "whatsapp", "voice", "telegram", "elevenlabs", "api", "test"
-    sessionId String? // Channel session ID for conversation grouping
-    threadId  String? // Thread/conversation ID within a channel
+    source      String? // "slack", "whatsapp", "voice", "telegram", "elevenlabs", "api", "test"
+    triggerType RunTriggerType @default(API)
+    triggerId   String?
+    sessionId   String? // Channel session ID for conversation grouping
+    threadId    String? // Thread/conversation ID within a channel
 
     // Relations
     trace           AgentTrace?
@@ -631,6 +1099,7 @@ model AgentRun {
     guardrailEvents GuardrailEvent[]
     conversation    AgentConversation?
     testRun         AgentTestRun?
+    TriggerEvent    TriggerEvent?
 
     @@index([agentId, createdAt])
     @@index([status])
@@ -1551,7 +2020,8 @@ model WorkflowRun {
     networkRun   NetworkRun?    @relation(fields: [networkRunId], references: [id])
 
     // Relations
-    steps WorkflowRunStep[]
+    steps           WorkflowRunStep[]
+    ApprovalRequest ApprovalRequest[]
 
     @@index([workflowId, createdAt])
     @@index([workflowId, environment])

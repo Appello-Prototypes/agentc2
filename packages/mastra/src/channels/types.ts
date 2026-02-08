@@ -217,4 +217,6 @@ export interface VoiceCallRequest {
     agentSlug?: string;
     greeting?: string;
     maxDuration?: number;
+    mode?: "gather" | "stream";
+    elevenlabsAgentId?: string;
 }

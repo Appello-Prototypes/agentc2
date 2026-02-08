@@ -15,6 +15,20 @@ vi.mock("@repo/database", () => ({
     Prisma: {
         JsonNull: "DbNull",
         DbNull: "DbNull"
+    },
+    RunEnvironment: {
+        DEVELOPMENT: "DEVELOPMENT",
+        STAGING: "STAGING",
+        PRODUCTION: "PRODUCTION"
+    },
+    RunTriggerType: {
+        API: "API",
+        MANUAL: "MANUAL",
+        SCHEDULED: "SCHEDULED",
+        WEBHOOK: "WEBHOOK",
+        TOOL: "TOOL",
+        TEST: "TEST",
+        RETRY: "RETRY"
     }
 }));
 

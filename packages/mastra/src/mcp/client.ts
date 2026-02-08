@@ -1,7 +1,13 @@
+import { createDecipheriv } from "crypto";
 import { MCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
-import { prisma } from "@repo/database";
+import {
+    prisma,
+    type IntegrationConnection,
+    type IntegrationProvider,
+    type Prisma
+} from "@repo/database";
 
 declare global {
     var mcpClient: MCPClient | undefined;
@@ -9,6 +15,419 @@ declare global {
 
 const ORG_MCP_CACHE_TTL = 60000;
 const orgMcpClients = new Map<string, { client: MCPClient; loadedAt: number }>();
+
+export function invalidateMcpCacheForOrg(organizationId: string) {
+    for (const key of orgMcpClients.keys()) {
+        if (key.startsWith(`${organizationId}:`)) {
+            orgMcpClients.delete(key);
+        }
+    }
+}
+
+type EncryptedPayload = {
+    __enc: "v1";
+    iv: string;
+    tag: string;
+    data: string;
+};
+
+const getEncryptionKey = () => {
+    const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
+    if (!key) return null;
+    const buffer = Buffer.from(key, "hex");
+    if (buffer.length !== 32) {
+        console.warn("[MCP] Invalid CREDENTIAL_ENCRYPTION_KEY length");
+        return null;
+    }
+    return buffer;
+};
+
+const isEncryptedPayload = (value: unknown): value is EncryptedPayload => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+    const payload = value as Record<string, unknown>;
+    return (
+        payload.__enc === "v1" &&
+        typeof payload.iv === "string" &&
+        typeof payload.tag === "string" &&
+        typeof payload.data === "string"
+    );
+};
+
+const decryptCredentials = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    if (!isEncryptedPayload(value)) return value;
+
+    const key = getEncryptionKey();
+    if (!key) return {};
+
+    try {
+        const iv = Buffer.from(value.iv, "base64");
+        const tag = Buffer.from(value.tag, "base64");
+        const encrypted = Buffer.from(value.data, "base64");
+        const decipher = createDecipheriv("aes-256-gcm", key, iv);
+        decipher.setAuthTag(tag);
+        const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+            "utf8"
+        );
+        return JSON.parse(decrypted) as Record<string, unknown>;
+    } catch (error) {
+        console.error("[MCP] Failed to decrypt credentials:", error);
+        return {};
+    }
+};
+
+type IntegrationProviderSeed = {
+    key: string;
+    name: string;
+    description: string;
+    category: IntegrationProvider["category"];
+    authType: IntegrationProvider["authType"];
+    providerType: IntegrationProvider["providerType"];
+    configJson?: Prisma.InputJsonValue;
+    actionsJson?: Prisma.InputJsonValue;
+    triggersJson?: Prisma.InputJsonValue;
+};
+
+const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
+    {
+        key: "playwright",
+        name: "Playwright",
+        description: "Browser automation - navigate, click, screenshot, interact with web pages",
+        category: "web",
+        authType: "none",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Playwright", "playwright"],
+                matchArgs: ["@playwright/mcp", "@playwright/mcp@latest"]
+            }
+        }
+    },
+    {
+        key: "firecrawl",
+        name: "Firecrawl",
+        description: "Web scraping and crawling - extract data from websites",
+        category: "web",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["FIRECRAWL_API_KEY"],
+            fieldDefinitions: {
+                FIRECRAWL_API_KEY: {
+                    label: "Firecrawl API key",
+                    description: "Create in the Firecrawl dashboard",
+                    placeholder: "fc-...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Firecrawl", "firecrawl"],
+                matchArgs: ["firecrawl-mcp"],
+                envAliases: {
+                    FIRECRAWL_API_KEY: "FIRECRAWL_API_KEY"
+                }
+            }
+        }
+    },
+    {
+        key: "hubspot",
+        name: "HubSpot",
+        description: "CRM integration - contacts, companies, deals, and pipeline",
+        category: "crm",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["HUBSPOT_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                HUBSPOT_ACCESS_TOKEN: {
+                    label: "HubSpot private app token",
+                    description: "Generate in HubSpot private app settings",
+                    placeholder: "pat-na1-...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Hubspot", "HubSpot", "hubspot"],
+                matchArgs: ["@hubspot/mcp-server"],
+                envAliases: {
+                    PRIVATE_APP_ACCESS_TOKEN: "HUBSPOT_ACCESS_TOKEN",
+                    HUBSPOT_ACCESS_TOKEN: "HUBSPOT_ACCESS_TOKEN"
+                }
+            }
+        }
+    },
+    {
+        key: "jira",
+        name: "Jira",
+        description: "Project management - issues, sprints, and project tracking",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"],
+            fieldDefinitions: {
+                JIRA_URL: {
+                    label: "Jira base URL",
+                    description: "Example: https://your-org.atlassian.net",
+                    placeholder: "https://your-org.atlassian.net",
+                    type: "url"
+                },
+                JIRA_USERNAME: {
+                    label: "Jira username",
+                    description: "Email address used to create the API token",
+                    placeholder: "email@example.com"
+                },
+                JIRA_API_TOKEN: {
+                    label: "Jira API token",
+                    description: "Create in Atlassian API tokens",
+                    placeholder: "ATATT3x...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Jira", "JIRA", "jira"],
+                matchArgs: ["mcp-atlassian", "jira-mcp", "jira-review-wrapper.js"],
+                envAliases: {
+                    JIRA_URL: "JIRA_URL",
+                    JIRA_USERNAME: "JIRA_USERNAME",
+                    JIRA_API_TOKEN: "JIRA_API_TOKEN",
+                    JIRA_PROJECTS_FILTER: "JIRA_PROJECTS_FILTER"
+                }
+            }
+        }
+    },
+    {
+        key: "justcall",
+        name: "JustCall",
+        description: "Phone and SMS communication - call logs and messaging",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["JUSTCALL_AUTH_TOKEN"],
+            fieldDefinitions: {
+                JUSTCALL_AUTH_TOKEN: {
+                    label: "JustCall auth token",
+                    description: "Format: api_key:api_secret",
+                    placeholder: "api_key:api_secret",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["JustCall", "justcall"],
+                matchUrls: ["mcp.justcall.host/mcp"],
+                headerAliases: {
+                    Authorization: "JUSTCALL_AUTH_TOKEN"
+                }
+            }
+        }
+    },
+    {
+        key: "twilio",
+        name: "Twilio",
+        description: "Outbound voice calls via Twilio and ElevenLabs streaming",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["TWILIO_MCP_API_URL"],
+            fieldDefinitions: {
+                TWILIO_MCP_API_URL: {
+                    label: "Twilio MCP API URL",
+                    description: "URL to the Twilio MCP service",
+                    placeholder: "https://...",
+                    type: "url"
+                }
+            },
+            importHints: {
+                matchNames: ["Twilio", "twilio"],
+                envAliases: {
+                    TWILIO_MCP_API_URL: "TWILIO_MCP_API_URL"
+                }
+            }
+        }
+    },
+    {
+        key: "atlas",
+        name: "ATLAS",
+        description: "Custom n8n workflow automation and business processes",
+        category: "automation",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["ATLAS_N8N_SSE_URL"],
+            fieldDefinitions: {
+                ATLAS_N8N_SSE_URL: {
+                    label: "ATLAS n8n SSE URL",
+                    description: "Streaming endpoint from ATLAS/n8n MCP",
+                    placeholder: "https://.../sse",
+                    type: "url"
+                }
+            },
+            importHints: {
+                matchNames: ["ATLAS", "atlas"],
+                matchArgs: ["supergateway", "--sse"],
+                argValueMap: {
+                    "--sse": "ATLAS_N8N_SSE_URL"
+                },
+                envAliases: {
+                    ATLAS_N8N_SSE_URL: "ATLAS_N8N_SSE_URL"
+                }
+            }
+        }
+    },
+    {
+        key: "fathom",
+        name: "Fathom",
+        description: "Meeting recordings, transcripts, and summaries from Fathom AI",
+        category: "knowledge",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["FATHOM_API_KEY"],
+            fieldDefinitions: {
+                FATHOM_API_KEY: {
+                    label: "Fathom API key",
+                    description: "From Fathom account settings",
+                    placeholder: "fathom_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Fathom", "fathom"],
+                matchArgs: ["fathom-mcp", "fathom-mcp-package"],
+                envAliases: {
+                    FATHOM_API_KEY: "FATHOM_API_KEY"
+                }
+            }
+        }
+    },
+    {
+        key: "slack",
+        name: "Slack",
+        description: "Workspace messaging - channels, messages, users, and search",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"],
+            fieldDefinitions: {
+                SLACK_BOT_TOKEN: {
+                    label: "Slack bot token",
+                    description: "Bot User OAuth token (xoxb-...)",
+                    placeholder: "xoxb-...",
+                    type: "password"
+                },
+                SLACK_TEAM_ID: {
+                    label: "Slack workspace ID",
+                    description: "Workspace ID (starts with T)",
+                    placeholder: "T01234567"
+                }
+            },
+            importHints: {
+                matchNames: ["Slack", "slack"],
+                matchArgs: ["@modelcontextprotocol/server-slack"],
+                envAliases: {
+                    SLACK_BOT_TOKEN: "SLACK_BOT_TOKEN",
+                    SLACK_TEAM_ID: "SLACK_TEAM_ID"
+                }
+            }
+        }
+    },
+    {
+        key: "gdrive",
+        name: "Google Drive",
+        description: "File storage - search, list, and read Google Drive files",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["GDRIVE_CREDENTIALS_PATH"],
+            fieldDefinitions: {
+                GDRIVE_CREDENTIALS_PATH: {
+                    label: "Google Drive credentials path",
+                    description: "Path to OAuth JSON credentials",
+                    placeholder: "./credentials/gdrive-oauth.json"
+                }
+            },
+            importHints: {
+                matchNames: ["Google Drive", "Google Workspace", "GDrive", "Google Suite"],
+                matchArgs: ["mcp-google-suite", "google-suite", "google-calendar-mcp"],
+                envAliases: {
+                    GOOGLE_OAUTH_CREDENTIALS: "GDRIVE_CREDENTIALS_PATH",
+                    GDRIVE_CREDENTIALS_PATH: "GDRIVE_CREDENTIALS_PATH"
+                }
+            }
+        }
+    },
+    {
+        key: "github",
+        name: "GitHub",
+        description: "Repository management - issues, PRs, code, and actions",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["GITHUB_PERSONAL_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                GITHUB_PERSONAL_ACCESS_TOKEN: {
+                    label: "GitHub personal access token",
+                    description: "PAT with repo access",
+                    placeholder: "ghp_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["GitHub", "github"],
+                matchArgs: ["@modelcontextprotocol/server-github"],
+                envAliases: {
+                    GITHUB_PERSONAL_ACCESS_TOKEN: "GITHUB_PERSONAL_ACCESS_TOKEN"
+                }
+            }
+        }
+    },
+    {
+        key: "gmail",
+        name: "Gmail",
+        description: "Email ingestion and draft approvals using Gmail OAuth",
+        category: "communication",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: [
+                "https://www.googleapis.com/auth/gmail.modify",
+                "https://www.googleapis.com/auth/gmail.send"
+            ],
+            oauthConfig: {
+                socialProvider: "google",
+                scopes: [
+                    "https://www.googleapis.com/auth/gmail.modify",
+                    "https://www.googleapis.com/auth/gmail.send"
+                ],
+                statusEndpoint: "/api/integrations/gmail/status",
+                syncEndpoint: "/api/integrations/gmail/sync"
+            },
+            setupUrl: "/mcp/gmail",
+            setupLabel: "Open OAuth Setup"
+        },
+        triggersJson: {
+            triggers: [
+                {
+                    key: "gmail.message.received",
+                    description: "New email received"
+                }
+            ]
+        }
+    },
+    {
+        key: "webhook",
+        name: "Incoming Webhook",
+        description: "Webhook connections that trigger agents via the unified trigger system",
+        category: "automation",
+        authType: "webhook",
+        providerType: "webhook"
+    }
+];
 
 function getCredentialValue(
     credentials: Record<string, unknown> | undefined,
@@ -24,154 +443,453 @@ function getCredentialValue(
     return undefined;
 }
 
+async function ensureIntegrationProviders() {
+    await Promise.all(
+        INTEGRATION_PROVIDER_SEEDS.map((seed) =>
+            prisma.integrationProvider.upsert({
+                where: { key: seed.key },
+                update: {
+                    name: seed.name,
+                    description: seed.description,
+                    category: seed.category,
+                    authType: seed.authType,
+                    providerType: seed.providerType,
+                    configJson: seed.configJson ?? undefined,
+                    actionsJson: seed.actionsJson ?? undefined,
+                    triggersJson: seed.triggersJson ?? undefined,
+                    isActive: true
+                },
+                create: {
+                    key: seed.key,
+                    name: seed.name,
+                    description: seed.description,
+                    category: seed.category,
+                    authType: seed.authType,
+                    providerType: seed.providerType,
+                    configJson: seed.configJson ?? undefined,
+                    actionsJson: seed.actionsJson ?? undefined,
+                    triggersJson: seed.triggersJson ?? undefined,
+                    isActive: true
+                }
+            })
+        )
+    );
+}
+
+export async function getIntegrationProviders() {
+    await ensureIntegrationProviders();
+    return prisma.integrationProvider.findMany({
+        where: { isActive: true },
+        orderBy: { name: "asc" }
+    });
+}
+
+type ConnectionWithProvider = IntegrationConnection & {
+    provider: IntegrationProvider;
+};
+
+async function getIntegrationConnections(options: {
+    organizationId?: string | null;
+    userId?: string | null;
+}) {
+    if (!options.organizationId) {
+        return [] as ConnectionWithProvider[];
+    }
+
+    await ensureIntegrationProviders();
+
+    const connections = await prisma.integrationConnection.findMany({
+        where: {
+            organizationId: options.organizationId,
+            isActive: true,
+            OR: [
+                { scope: "org" },
+                ...(options.userId ? [{ scope: "user", userId: options.userId }] : [])
+            ]
+        },
+        include: { provider: true },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+    });
+
+    if (connections.length > 0) {
+        return connections;
+    }
+
+    const legacyCredentials = await prisma.toolCredential.findMany({
+        where: { organizationId: options.organizationId, isActive: true }
+    });
+
+    if (legacyCredentials.length === 0) {
+        return connections;
+    }
+
+    const legacyKeys = legacyCredentials
+        .map((credential) => credential.toolId)
+        .filter((toolId) => toolId !== "mastra-mcp-api");
+
+    if (legacyKeys.length === 0) {
+        return connections;
+    }
+
+    const providers = await prisma.integrationProvider.findMany({
+        where: { key: { in: legacyKeys } }
+    });
+    const providersByKey = new Map(providers.map((provider) => [provider.key, provider]));
+
+    return legacyCredentials
+        .filter((credential) => providersByKey.has(credential.toolId))
+        .map((credential) => {
+            const provider = providersByKey.get(credential.toolId)!;
+            return {
+                id: credential.id,
+                providerId: provider.id,
+                provider,
+                organizationId: credential.organizationId,
+                userId: null,
+                scope: "org",
+                name: credential.name,
+                isDefault: true,
+                isActive: credential.isActive,
+                credentials:
+                    credential.credentials && typeof credential.credentials === "object"
+                        ? (credential.credentials as Record<string, unknown>)
+                        : null,
+                metadata: null,
+                lastUsedAt: credential.lastUsedAt,
+                lastTestedAt: null,
+                errorMessage: null,
+                webhookPath: null,
+                webhookSecret: null,
+                agentTriggerId: null,
+                createdAt: credential.createdAt,
+                updatedAt: credential.updatedAt
+            } as ConnectionWithProvider;
+        });
+}
+
+function resolveServerId(
+    providerKey: string,
+    connection: ConnectionWithProvider | null,
+    isDefault: boolean
+) {
+    if (!connection || isDefault) {
+        return providerKey;
+    }
+    return `${providerKey}__${connection.id.slice(0, 8)}`;
+}
+
+function buildCustomServerDefinition(
+    provider: IntegrationProvider,
+    connection: ConnectionWithProvider,
+    credentials: Record<string, unknown>
+): MastraMCPServerDefinition | null {
+    const config = provider.configJson as Record<string, unknown> | null;
+    if (!config) return null;
+
+    const transport = config.transport;
+    if (transport === "http") {
+        const urlValue = typeof config.url === "string" ? config.url : null;
+        if (!urlValue) return null;
+        const headers =
+            config.headerMapping && typeof config.headerMapping === "object"
+                ? Object.entries(config.headerMapping as Record<string, string>).reduce<
+                      Record<string, string>
+                  >((acc, [header, key]) => {
+                      const value = getCredentialValue(credentials, [key]);
+                      if (value) acc[header] = value;
+                      return acc;
+                  }, {})
+                : {};
+        return {
+            url: new URL(urlValue),
+            requestInit: {
+                headers
+            }
+        };
+    }
+
+    const command = typeof config.command === "string" ? config.command : null;
+    const args =
+        Array.isArray(config.args) && config.args.every((arg) => typeof arg === "string")
+            ? (config.args as string[])
+            : [];
+    if (!command) return null;
+
+    const env =
+        config.envMapping && typeof config.envMapping === "object"
+            ? Object.entries(config.envMapping as Record<string, string>).reduce<
+                  Record<string, string>
+              >((acc, [envKey, key]) => {
+                  const value = getCredentialValue(credentials, [key]);
+                  if (value) acc[envKey] = value;
+                  return acc;
+              }, {})
+            : {};
+
+    return { command, args, env };
+}
+
+function buildServerDefinitionForProvider(options: {
+    provider: IntegrationProvider;
+    connection?: ConnectionWithProvider | null;
+    credentials: Record<string, unknown>;
+    allowEnvFallback?: boolean;
+}): MastraMCPServerDefinition | null {
+    const { provider, credentials, allowEnvFallback = false, connection } = options;
+    const providerKey = provider.key;
+
+    if (provider.providerType === "custom") {
+        if (!connection) return null;
+        return buildCustomServerDefinition(provider, connection, credentials);
+    }
+
+    switch (providerKey) {
+        case "playwright":
+            return {
+                command: "npx",
+                args: ["-y", "@playwright/mcp@latest"]
+            };
+        case "firecrawl": {
+            const firecrawlKey =
+                getCredentialValue(credentials, ["FIRECRAWL_API_KEY"]) ||
+                (allowEnvFallback ? process.env.FIRECRAWL_API_KEY : undefined);
+            if (!firecrawlKey) return null;
+            return {
+                command: "npx",
+                args: ["-y", "firecrawl-mcp"],
+                env: { FIRECRAWL_API_KEY: firecrawlKey }
+            };
+        }
+        case "hubspot": {
+            const hubspotToken =
+                getCredentialValue(credentials, [
+                    "PRIVATE_APP_ACCESS_TOKEN",
+                    "HUBSPOT_ACCESS_TOKEN"
+                ]) || (allowEnvFallback ? process.env.HUBSPOT_ACCESS_TOKEN : undefined);
+            if (!hubspotToken) return null;
+            return {
+                command: "npx",
+                args: ["-y", "@hubspot/mcp-server"],
+                env: { PRIVATE_APP_ACCESS_TOKEN: hubspotToken }
+            };
+        }
+        case "jira": {
+            const jiraUrl =
+                getCredentialValue(credentials, ["JIRA_URL"]) ||
+                (allowEnvFallback ? process.env.JIRA_URL : undefined);
+            const jiraUsername =
+                getCredentialValue(credentials, ["JIRA_USERNAME"]) ||
+                (allowEnvFallback ? process.env.JIRA_USERNAME : undefined);
+            const jiraToken =
+                getCredentialValue(credentials, ["JIRA_API_TOKEN"]) ||
+                (allowEnvFallback ? process.env.JIRA_API_TOKEN : undefined);
+            const jiraProjectsFilter =
+                getCredentialValue(credentials, ["JIRA_PROJECTS_FILTER"]) ||
+                (allowEnvFallback ? process.env.JIRA_PROJECTS_FILTER : undefined);
+            if (!jiraUrl || !jiraUsername || !jiraToken) return null;
+            return {
+                command: "uvx",
+                args: ["mcp-atlassian"],
+                env: {
+                    JIRA_URL: jiraUrl,
+                    JIRA_USERNAME: jiraUsername,
+                    JIRA_API_TOKEN: jiraToken,
+                    ...(jiraProjectsFilter ? { JIRA_PROJECTS_FILTER: jiraProjectsFilter } : {})
+                }
+            };
+        }
+        case "justcall": {
+            const justcallToken =
+                getCredentialValue(credentials, ["JUSTCALL_AUTH_TOKEN"]) ||
+                (allowEnvFallback ? process.env.JUSTCALL_AUTH_TOKEN : undefined);
+            if (!justcallToken) return null;
+            return {
+                url: new URL("https://mcp.justcall.host/mcp"),
+                requestInit: {
+                    headers: { Authorization: `Bearer ${justcallToken}` }
+                }
+            };
+        }
+        case "twilio": {
+            const twilioMcpApiUrl =
+                getCredentialValue(credentials, ["TWILIO_MCP_API_URL", "MASTRA_API_URL"]) ||
+                (allowEnvFallback
+                    ? process.env.TWILIO_MCP_API_URL ||
+                      process.env.MASTRA_API_URL ||
+                      process.env.NEXT_PUBLIC_APP_URL
+                    : undefined);
+            if (!twilioMcpApiUrl) return null;
+            const twilioApiKey =
+                getCredentialValue(credentials, ["MASTRA_API_KEY"]) ||
+                (allowEnvFallback ? process.env.MASTRA_API_KEY : undefined);
+            const twilioOrgSlug =
+                getCredentialValue(credentials, [
+                    "MASTRA_ORGANIZATION_SLUG",
+                    "MCP_API_ORGANIZATION_SLUG"
+                ]) ||
+                (allowEnvFallback
+                    ? process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG
+                    : undefined);
+            return {
+                command: "node",
+                args: [
+                    resolve(dirname(fileURLToPath(import.meta.url)), "../../../twilio-mcp/index.js")
+                ],
+                env: {
+                    TWILIO_MCP_API_URL: twilioMcpApiUrl,
+                    ...(twilioApiKey ? { MASTRA_API_KEY: twilioApiKey } : {}),
+                    ...(twilioOrgSlug ? { MASTRA_ORGANIZATION_SLUG: twilioOrgSlug } : {})
+                }
+            };
+        }
+        case "atlas": {
+            const atlasUrl =
+                getCredentialValue(credentials, ["ATLAS_N8N_SSE_URL"]) ||
+                (allowEnvFallback ? process.env.ATLAS_N8N_SSE_URL : undefined);
+            if (!atlasUrl) return null;
+            return {
+                command: "npx",
+                args: [
+                    "-y",
+                    "supergateway",
+                    "--sse",
+                    atlasUrl,
+                    "--timeout",
+                    "600000",
+                    "--keep-alive-timeout",
+                    "600000",
+                    "--retry-after-disconnect",
+                    "--reconnect-interval",
+                    "1000"
+                ]
+            };
+        }
+        case "fathom": {
+            const fathomKey =
+                getCredentialValue(credentials, ["FATHOM_API_KEY"]) ||
+                (allowEnvFallback ? process.env.FATHOM_API_KEY : undefined);
+            if (!fathomKey) return null;
+            return {
+                command: "node",
+                args: [
+                    resolve(dirname(fileURLToPath(import.meta.url)), "../../../fathom-mcp/index.js")
+                ],
+                env: { FATHOM_API_KEY: fathomKey }
+            };
+        }
+        case "slack": {
+            const slackToken =
+                getCredentialValue(credentials, ["SLACK_BOT_TOKEN"]) ||
+                (allowEnvFallback ? process.env.SLACK_BOT_TOKEN : undefined);
+            const slackTeamId =
+                getCredentialValue(credentials, ["SLACK_TEAM_ID"]) ||
+                (allowEnvFallback ? process.env.SLACK_TEAM_ID : undefined);
+            if (!slackToken || !slackTeamId) return null;
+            return {
+                command: "npx",
+                args: ["-y", "@modelcontextprotocol/server-slack"],
+                env: { SLACK_BOT_TOKEN: slackToken, SLACK_TEAM_ID: slackTeamId }
+            };
+        }
+        case "gdrive": {
+            const gdriveCredentialsPath =
+                getCredentialValue(credentials, ["GDRIVE_CREDENTIALS_PATH"]) ||
+                (allowEnvFallback ? process.env.GDRIVE_CREDENTIALS_PATH : undefined);
+            const gdriveOauthPath =
+                getCredentialValue(credentials, ["GDRIVE_OAUTH_PATH"]) ||
+                (allowEnvFallback ? process.env.GDRIVE_OAUTH_PATH : undefined);
+            if (!gdriveCredentialsPath) return null;
+            return {
+                command: "npx",
+                args: ["-y", "@modelcontextprotocol/server-gdrive"],
+                env: {
+                    GDRIVE_CREDENTIALS_PATH: gdriveCredentialsPath,
+                    ...(gdriveOauthPath ? { GDRIVE_OAUTH_PATH: gdriveOauthPath } : {})
+                }
+            };
+        }
+        case "github": {
+            const githubToken =
+                getCredentialValue(credentials, ["GITHUB_PERSONAL_ACCESS_TOKEN"]) ||
+                (allowEnvFallback ? process.env.GITHUB_PERSONAL_ACCESS_TOKEN : undefined);
+            if (!githubToken) return null;
+            return {
+                command: "npx",
+                args: ["-y", "@modelcontextprotocol/server-github"],
+                env: { GITHUB_PERSONAL_ACCESS_TOKEN: githubToken }
+            };
+        }
+        default:
+            return null;
+    }
+}
+
 function buildServerConfigs(options: {
-    credentialsByToolId: Map<string, Record<string, unknown>>;
+    connections: ConnectionWithProvider[];
     allowEnvFallback?: boolean;
 }): Record<string, MastraMCPServerDefinition> {
-    const { credentialsByToolId, allowEnvFallback = false } = options;
-    const servers: Record<string, MastraMCPServerDefinition> = {
-        playwright: {
+    const { connections, allowEnvFallback = false } = options;
+    const servers: Record<string, MastraMCPServerDefinition> = {};
+
+    const connectionsByProvider = new Map<string, ConnectionWithProvider[]>();
+    for (const connection of connections) {
+        const list = connectionsByProvider.get(connection.provider.key) ?? [];
+        list.push(connection);
+        connectionsByProvider.set(connection.provider.key, list);
+    }
+
+    // Ensure Playwright is always available
+    const playwrightProvider = INTEGRATION_PROVIDER_SEEDS.find((seed) => seed.key === "playwright");
+    if (playwrightProvider) {
+        servers.playwright = {
             command: "npx",
             args: ["-y", "@playwright/mcp@latest"]
+        };
+    }
+
+    for (const [providerKey, providerConnections] of connectionsByProvider.entries()) {
+        const defaultConnection =
+            providerConnections.find((conn) => conn.isDefault) ?? providerConnections[0];
+
+        for (const connection of providerConnections) {
+            const isDefault = connection.id === defaultConnection?.id;
+            const serverId = resolveServerId(providerKey, connection, isDefault);
+            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const credentials =
+                decryptedCredentials &&
+                typeof decryptedCredentials === "object" &&
+                !Array.isArray(decryptedCredentials)
+                    ? (decryptedCredentials as Record<string, unknown>)
+                    : {};
+            const serverDefinition = buildServerDefinitionForProvider({
+                provider: connection.provider,
+                connection,
+                credentials,
+                allowEnvFallback
+            });
+            if (serverDefinition) {
+                servers[serverId] = serverDefinition;
+            }
         }
-    };
-
-    const firecrawlKey =
-        getCredentialValue(credentialsByToolId.get("firecrawl"), ["FIRECRAWL_API_KEY"]) ||
-        (allowEnvFallback ? process.env.FIRECRAWL_API_KEY : undefined);
-    if (firecrawlKey) {
-        servers.firecrawl = {
-            command: "npx",
-            args: ["-y", "firecrawl-mcp"],
-            env: { FIRECRAWL_API_KEY: firecrawlKey }
-        };
     }
 
-    const hubspotToken =
-        getCredentialValue(credentialsByToolId.get("hubspot"), [
-            "PRIVATE_APP_ACCESS_TOKEN",
-            "HUBSPOT_ACCESS_TOKEN"
-        ]) || (allowEnvFallback ? process.env.HUBSPOT_ACCESS_TOKEN : undefined);
-    if (hubspotToken) {
-        servers.hubspot = {
-            command: "npx",
-            args: ["-y", "@hubspot/mcp-server"],
-            env: { PRIVATE_APP_ACCESS_TOKEN: hubspotToken }
-        };
-    }
-
-    const jiraUrl =
-        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_URL"]) ||
-        (allowEnvFallback ? process.env.JIRA_URL : undefined);
-    const jiraUsername =
-        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_USERNAME"]) ||
-        (allowEnvFallback ? process.env.JIRA_USERNAME : undefined);
-    const jiraToken =
-        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_API_TOKEN"]) ||
-        (allowEnvFallback ? process.env.JIRA_API_TOKEN : undefined);
-    const jiraProjectsFilter =
-        getCredentialValue(credentialsByToolId.get("jira"), ["JIRA_PROJECTS_FILTER"]) ||
-        (allowEnvFallback ? process.env.JIRA_PROJECTS_FILTER : undefined);
-    if (jiraUrl && jiraUsername && jiraToken) {
-        servers.jira = {
-            command: "uvx",
-            args: ["mcp-atlassian"],
-            env: {
-                JIRA_URL: jiraUrl,
-                JIRA_USERNAME: jiraUsername,
-                JIRA_API_TOKEN: jiraToken,
-                ...(jiraProjectsFilter ? { JIRA_PROJECTS_FILTER: jiraProjectsFilter } : {})
+    // Env fallback for providers without connections
+    if (allowEnvFallback) {
+        const seededProviders = INTEGRATION_PROVIDER_SEEDS.filter(
+            (seed) => seed.providerType === "mcp"
+        );
+        for (const providerSeed of seededProviders) {
+            if (servers[providerSeed.key]) continue;
+            const serverDefinition = buildServerDefinitionForProvider({
+                provider: providerSeed as IntegrationProvider,
+                connection: null,
+                credentials: {},
+                allowEnvFallback
+            });
+            if (serverDefinition) {
+                servers[providerSeed.key] = serverDefinition;
             }
-        };
-    }
-
-    const justcallToken =
-        getCredentialValue(credentialsByToolId.get("justcall"), ["JUSTCALL_AUTH_TOKEN"]) ||
-        (allowEnvFallback ? process.env.JUSTCALL_AUTH_TOKEN : undefined);
-    if (justcallToken) {
-        servers.justcall = {
-            url: new URL("https://mcp.justcall.host/mcp"),
-            requestInit: {
-                headers: { Authorization: `Bearer ${justcallToken}` }
-            }
-        };
-    }
-
-    const atlasUrl =
-        getCredentialValue(credentialsByToolId.get("atlas"), ["ATLAS_N8N_SSE_URL"]) ||
-        (allowEnvFallback ? process.env.ATLAS_N8N_SSE_URL : undefined);
-    if (atlasUrl) {
-        servers.atlas = {
-            command: "npx",
-            args: [
-                "-y",
-                "supergateway",
-                "--sse",
-                atlasUrl,
-                "--timeout",
-                "600000",
-                "--keep-alive-timeout",
-                "600000",
-                "--retry-after-disconnect",
-                "--reconnect-interval",
-                "1000"
-            ]
-        };
-    }
-
-    const fathomKey =
-        getCredentialValue(credentialsByToolId.get("fathom"), ["FATHOM_API_KEY"]) ||
-        (allowEnvFallback ? process.env.FATHOM_API_KEY : undefined);
-    if (fathomKey) {
-        servers.fathom = {
-            command: "node",
-            args: [
-                resolve(dirname(fileURLToPath(import.meta.url)), "../../../fathom-mcp/index.js")
-            ],
-            env: { FATHOM_API_KEY: fathomKey }
-        };
-    }
-
-    const slackToken =
-        getCredentialValue(credentialsByToolId.get("slack"), ["SLACK_BOT_TOKEN"]) ||
-        (allowEnvFallback ? process.env.SLACK_BOT_TOKEN : undefined);
-    const slackTeamId =
-        getCredentialValue(credentialsByToolId.get("slack"), ["SLACK_TEAM_ID"]) ||
-        (allowEnvFallback ? process.env.SLACK_TEAM_ID : undefined);
-    if (slackToken && slackTeamId) {
-        servers.slack = {
-            command: "npx",
-            args: ["-y", "@modelcontextprotocol/server-slack"],
-            env: { SLACK_BOT_TOKEN: slackToken, SLACK_TEAM_ID: slackTeamId }
-        };
-    }
-
-    const gdriveCredentialsPath =
-        getCredentialValue(credentialsByToolId.get("gdrive"), ["GDRIVE_CREDENTIALS_PATH"]) ||
-        (allowEnvFallback ? process.env.GDRIVE_CREDENTIALS_PATH : undefined);
-    const gdriveOauthPath =
-        getCredentialValue(credentialsByToolId.get("gdrive"), ["GDRIVE_OAUTH_PATH"]) ||
-        (allowEnvFallback ? process.env.GDRIVE_OAUTH_PATH : undefined);
-    if (gdriveCredentialsPath) {
-        servers.gdrive = {
-            command: "npx",
-            args: ["-y", "@modelcontextprotocol/server-gdrive"],
-            env: {
-                GDRIVE_CREDENTIALS_PATH: gdriveCredentialsPath,
-                ...(gdriveOauthPath ? { GDRIVE_OAUTH_PATH: gdriveOauthPath } : {})
-            }
-        };
-    }
-
-    const githubToken =
-        getCredentialValue(credentialsByToolId.get("github"), ["GITHUB_PERSONAL_ACCESS_TOKEN"]) ||
-        (allowEnvFallback ? process.env.GITHUB_PERSONAL_ACCESS_TOKEN : undefined);
-    if (githubToken) {
-        servers.github = {
-            command: "npx",
-            args: ["-y", "@modelcontextprotocol/server-github"],
-            env: { GITHUB_PERSONAL_ACCESS_TOKEN: githubToken }
-        };
+        }
     }
 
     return servers;
@@ -289,87 +1007,19 @@ export interface McpServerConfig {
     envVars?: string[];
 }
 
-export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
-    {
-        id: "playwright",
-        name: "Playwright",
-        description: "Browser automation - navigate, click, screenshot, interact with web pages",
-        category: "web",
-        requiresAuth: false
-    },
-    {
-        id: "firecrawl",
-        name: "Firecrawl",
-        description: "Web scraping and crawling - extract data from websites",
-        category: "web",
-        requiresAuth: true,
-        envVars: ["FIRECRAWL_API_KEY"]
-    },
-    {
-        id: "hubspot",
-        name: "HubSpot",
-        description: "CRM integration - contacts, companies, deals, and pipeline",
-        category: "crm",
-        requiresAuth: true,
-        envVars: ["HUBSPOT_ACCESS_TOKEN"]
-    },
-    {
-        id: "jira",
-        name: "Jira",
-        description: "Project management - issues, sprints, and project tracking",
-        category: "productivity",
-        requiresAuth: true,
-        envVars: ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"]
-    },
-    {
-        id: "justcall",
-        name: "JustCall",
-        description: "Phone and SMS communication - call logs and messaging",
-        category: "communication",
-        requiresAuth: true,
-        envVars: ["JUSTCALL_AUTH_TOKEN"]
-    },
-    {
-        id: "atlas",
-        name: "ATLAS",
-        description: "Custom n8n workflow automation and business processes",
-        category: "automation",
-        requiresAuth: true,
-        envVars: ["ATLAS_N8N_SSE_URL"]
-    },
-    {
-        id: "fathom",
-        name: "Fathom",
-        description: "Meeting recordings, transcripts, and summaries from Fathom AI",
-        category: "knowledge",
-        requiresAuth: true,
-        envVars: ["FATHOM_API_KEY"]
-    },
-    {
-        id: "slack",
-        name: "Slack",
-        description: "Workspace messaging - channels, messages, users, and search",
-        category: "communication",
-        requiresAuth: true,
-        envVars: ["SLACK_BOT_TOKEN", "SLACK_TEAM_ID"]
-    },
-    {
-        id: "gdrive",
-        name: "Google Drive",
-        description: "File storage - search, list, and read Google Drive files",
-        category: "productivity",
-        requiresAuth: true,
-        envVars: ["GDRIVE_CREDENTIALS_PATH"]
-    },
-    {
-        id: "github",
-        name: "GitHub",
-        description: "Repository management - issues, PRs, code, and actions",
-        category: "productivity",
-        requiresAuth: true,
-        envVars: ["GITHUB_PERSONAL_ACCESS_TOKEN"]
-    }
-];
+export const MCP_SERVER_CONFIGS: McpServerConfig[] = INTEGRATION_PROVIDER_SEEDS.filter(
+    (seed) => seed.providerType === "mcp"
+).map((seed) => ({
+    id: seed.key,
+    name: seed.name,
+    description: seed.description,
+    category: seed.category as McpServerConfig["category"],
+    requiresAuth: seed.authType !== "none",
+    envVars:
+        seed.configJson && typeof seed.configJson === "object" && !Array.isArray(seed.configJson)
+            ? ((seed.configJson as { requiredFields?: string[] }).requiredFields ?? undefined)
+            : undefined
+}));
 
 /**
  * MCP Client Configuration
@@ -380,7 +1030,7 @@ export const MCP_SERVER_CONFIGS: McpServerConfig[] = [
 function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
         const servers = buildServerConfigs({
-            credentialsByToolId: new Map(),
+            connections: [],
             allowEnvFallback: true
         });
 
@@ -396,30 +1046,29 @@ function getMcpClient(): MCPClient {
 
 export const mcpClient = getMcpClient();
 
-async function getMcpClientForOrganization(organizationId?: string | null): Promise<MCPClient> {
+async function getMcpClientForOrganization(options?: {
+    organizationId?: string | null;
+    userId?: string | null;
+}): Promise<MCPClient> {
+    const organizationId = options?.organizationId;
     if (!organizationId) {
         return mcpClient;
     }
 
-    const cached = orgMcpClients.get(organizationId);
+    const cacheKey = `${organizationId}:${options?.userId || "org"}`;
+    const cached = orgMcpClients.get(cacheKey);
     const now = Date.now();
     if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
         return cached.client;
     }
 
-    const credentials = await prisma.toolCredential.findMany({
-        where: { organizationId, isActive: true }
+    const connections = await getIntegrationConnections({
+        organizationId,
+        userId: options?.userId
     });
 
-    const credentialsByToolId = new Map<string, Record<string, unknown>>(
-        credentials.map((credential) => [
-            credential.toolId,
-            (credential.credentials || {}) as Record<string, unknown>
-        ])
-    );
-
     const servers = buildServerConfigs({
-        credentialsByToolId,
+        connections,
         allowEnvFallback: true
     });
 
@@ -429,7 +1078,7 @@ async function getMcpClientForOrganization(organizationId?: string | null): Prom
         timeout: 60000
     });
 
-    orgMcpClients.set(organizationId, { client, loadedAt: now });
+    orgMcpClients.set(cacheKey, { client, loadedAt: now });
     return client;
 }
 
@@ -440,8 +1089,17 @@ async function getMcpClientForOrganization(organizationId?: string | null): Prom
  * Tools are sanitized to fix schema issues that cause validation failures
  * with strict LLM providers like OpenAI GPT-4o-mini.
  */
-export async function getMcpTools(organizationId?: string | null) {
-    const client = await getMcpClientForOrganization(organizationId);
+export async function getMcpTools(
+    organizationIdOrOptions?:
+        | string
+        | null
+        | { organizationId?: string | null; userId?: string | null }
+) {
+    const options =
+        organizationIdOrOptions && typeof organizationIdOrOptions === "object"
+            ? organizationIdOrOptions
+            : { organizationId: organizationIdOrOptions };
+    const client = await getMcpClientForOrganization(options);
     const tools = await client.listTools();
     return sanitizeMcpTools(tools);
 }
@@ -502,23 +1160,46 @@ export interface McpToolDefinition {
 export async function executeMcpTool(
     toolName: string,
     parameters: Record<string, unknown>,
-    options?: { organizationId?: string | null }
+    options?: {
+        organizationId?: string | null;
+        userId?: string | null;
+        connectionId?: string | null;
+    }
 ): Promise<McpToolExecutionResult> {
+    let resolvedToolName = toolName;
     try {
-        const client = await getMcpClientForOrganization(options?.organizationId);
+        if (options?.connectionId && !toolName.includes("_") && !toolName.includes(".")) {
+            const connection = await prisma.integrationConnection.findUnique({
+                where: { id: options.connectionId },
+                include: { provider: true }
+            });
+            if (connection) {
+                const serverId = resolveServerId(
+                    connection.provider.key,
+                    connection as ConnectionWithProvider,
+                    connection.isDefault
+                );
+                resolvedToolName = `${serverId}_${toolName}`;
+            }
+        }
+
+        const client = await getMcpClientForOrganization({
+            organizationId: options?.organizationId,
+            userId: options?.userId
+        });
         const toolsets = await client.listToolsets();
 
         // Try multiple name formats to find the tool
         // listToolsets() uses dot notation: serverName.toolName
         // listTools() uses underscore: serverName_toolName
         const namesToTry = [
-            toolName,
-            toolName.replace("_", "."), // Convert underscore to dot (first occurrence only for server name)
-            toolName.replace(".", "_") // Convert dot to underscore
+            resolvedToolName,
+            resolvedToolName.replace("_", "."), // Convert underscore to dot (first occurrence only for server name)
+            resolvedToolName.replace(".", "_") // Convert dot to underscore
         ];
 
         // For tools like "hubspot_hubspot-get-user-details", convert to "hubspot.hubspot-get-user-details"
-        const parts = toolName.split("_");
+        const parts = resolvedToolName.split("_");
         if (parts.length >= 2) {
             const serverName = parts[0];
             const restOfName = parts.slice(1).join("_");
@@ -540,14 +1221,47 @@ export async function executeMcpTool(
             const availableTools = Object.keys(toolsets).slice(0, 10).join(", ");
             return {
                 success: false,
-                toolName,
-                error: `Tool not found: ${toolName}. First 10 available: ${availableTools}...`
+                toolName: resolvedToolName,
+                error: `Tool not found: ${resolvedToolName}. First 10 available: ${availableTools}...`
             };
         }
 
         // Execute the tool - toolsets return Tool objects that are callable
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const result = await (tool as any).execute({ context: parameters });
+
+        if (options?.organizationId) {
+            const serverName = matchedName.includes("_")
+                ? matchedName.split("_")[0]
+                : matchedName.split(".")[0];
+            const now = new Date();
+            if (serverName.includes("__")) {
+                const [providerKey, idPrefix] = serverName.split("__");
+                void prisma.integrationConnection
+                    .updateMany({
+                        where: {
+                            organizationId: options.organizationId,
+                            provider: { key: providerKey },
+                            id: { startsWith: idPrefix },
+                            isActive: true
+                        },
+                        data: { lastUsedAt: now }
+                    })
+                    .catch(() => undefined);
+            } else {
+                void prisma.integrationConnection
+                    .updateMany({
+                        where: {
+                            organizationId: options.organizationId,
+                            provider: { key: serverName },
+                            isDefault: true,
+                            isActive: true
+                        },
+                        data: { lastUsedAt: now }
+                    })
+                    .catch(() => undefined);
+            }
+        }
 
         return {
             success: true,
@@ -557,7 +1271,7 @@ export async function executeMcpTool(
     } catch (error) {
         return {
             success: false,
-            toolName,
+            toolName: resolvedToolName,
             error: error instanceof Error ? error.message : "Unknown error executing tool"
         };
     }
@@ -570,9 +1284,16 @@ export async function executeMcpTool(
  * like ElevenLabs webhook tools.
  */
 export async function listMcpToolDefinitions(
-    organizationId?: string | null
+    organizationIdOrOptions?:
+        | string
+        | null
+        | { organizationId?: string | null; userId?: string | null }
 ): Promise<McpToolDefinition[]> {
-    const client = await getMcpClientForOrganization(organizationId);
+    const options =
+        organizationIdOrOptions && typeof organizationIdOrOptions === "object"
+            ? organizationIdOrOptions
+            : { organizationId: organizationIdOrOptions };
+    const client = await getMcpClientForOrganization(options);
     const tools = await client.listTools();
     const definitions: McpToolDefinition[] = [];
 

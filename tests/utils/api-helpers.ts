@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+type NextRequest = Request;
 
 /**
  * Create a mock NextRequest for testing API routes
@@ -32,7 +32,7 @@ export function createMockRequest(
         requestInit.body = JSON.stringify(body);
     }
 
-    return new NextRequest(urlObj, requestInit);
+    return new Request(urlObj, requestInit) as NextRequest;
 }
 
 /**

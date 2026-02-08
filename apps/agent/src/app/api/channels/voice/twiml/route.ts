@@ -13,19 +13,19 @@ export async function GET(request: NextRequest) {
             searchParams.get("greeting") ||
             "Hello! I'm your AI assistant. How can I help you today?";
         const callSid = searchParams.get("CallSid") || "unknown";
+        const mode = searchParams.get("mode") || "gather";
+        const agentId =
+            searchParams.get("agentId") ||
+            process.env.ELEVENLABS_MCP_AGENT_ID ||
+            process.env.ELEVENLABS_AGENT_ID ||
+            "";
 
-        const webhookUrl = process.env.VOICE_WEBHOOK_URL || "";
-        const gatherUrl = `${webhookUrl}/gather?callSid=${callSid}`;
-
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
-    <Gather input="speech" timeout="5" action="${gatherUrl}" method="POST">
-        <Say voice="Polly.Joanna">Please tell me what you need.</Say>
-    </Gather>
-    <Say voice="Polly.Joanna">I didn't hear anything. Goodbye!</Say>
-    <Hangup/>
-</Response>`;
+        const twiml = buildTwiml({
+            greeting,
+            callSid,
+            mode,
+            agentId
+        });
 
         return new NextResponse(twiml, {
             headers: { "Content-Type": "application/xml" }
@@ -53,19 +53,19 @@ export async function POST(request: NextRequest) {
         const greeting =
             searchParams.get("greeting") ||
             "Hello! I'm your AI assistant. How can I help you today?";
+        const mode = searchParams.get("mode") || "gather";
+        const agentId =
+            searchParams.get("agentId") ||
+            process.env.ELEVENLABS_MCP_AGENT_ID ||
+            process.env.ELEVENLABS_AGENT_ID ||
+            "";
 
-        const webhookUrl = process.env.VOICE_WEBHOOK_URL || "";
-        const gatherUrl = `${webhookUrl}/gather?callSid=${callSid}`;
-
-        const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say voice="Polly.Joanna">${escapeXml(greeting)}</Say>
-    <Gather input="speech" timeout="5" action="${gatherUrl}" method="POST">
-        <Say voice="Polly.Joanna">Please tell me what you need.</Say>
-    </Gather>
-    <Say voice="Polly.Joanna">I didn't hear anything. Goodbye!</Say>
-    <Hangup/>
-</Response>`;
+        const twiml = buildTwiml({
+            greeting,
+            callSid,
+            mode,
+            agentId
+        });
 
         return new NextResponse(twiml, {
             headers: { "Content-Type": "application/xml" }
@@ -89,4 +89,49 @@ function escapeXml(text: string): string {
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;")
         .replace(/'/g, "&apos;");
+}
+
+function buildTwiml(options: {
+    greeting: string;
+    callSid: string;
+    mode: string;
+    agentId: string;
+}): string {
+    if (options.mode === "stream") {
+        const streamUrl = process.env.VOICE_STREAM_WS_URL;
+        if (!streamUrl) {
+            return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">Voice streaming is not configured. Please try again later.</Say>
+    <Hangup/>
+</Response>`;
+        }
+
+        const streamName = options.callSid ? `voice-stream-${options.callSid}` : "voice-stream";
+        const authToken = process.env.VOICE_STREAM_AUTH_TOKEN || "";
+
+        return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Connect>
+        <Stream url="${escapeXml(streamUrl)}" name="${escapeXml(streamName)}">
+            ${options.agentId ? `<Parameter name="agentId" value="${escapeXml(options.agentId)}"/>` : ""}
+            ${options.callSid ? `<Parameter name="callSid" value="${escapeXml(options.callSid)}"/>` : ""}
+            ${authToken ? `<Parameter name="token" value="${escapeXml(authToken)}"/>` : ""}
+        </Stream>
+    </Connect>
+</Response>`;
+    }
+
+    const webhookUrl = process.env.VOICE_WEBHOOK_URL || "";
+    const gatherUrl = `${webhookUrl}/gather?callSid=${options.callSid}`;
+
+    return `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say voice="Polly.Joanna">${escapeXml(options.greeting)}</Say>
+    <Gather input="speech" timeout="5" action="${gatherUrl}" method="POST">
+        <Say voice="Polly.Joanna">Please tell me what you need.</Say>
+    </Gather>
+    <Say voice="Polly.Joanna">I didn't hear anything. Goodbye!</Say>
+    <Hangup/>
+</Response>`;
 }

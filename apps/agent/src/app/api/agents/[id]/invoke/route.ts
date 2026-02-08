@@ -5,6 +5,7 @@ import { startRun, extractTokenUsage, extractToolCalls, type RunSource } from "@
 import { calculateCost } from "@/lib/cost-calculator";
 import { inngest } from "@/lib/inngest";
 import { auditLog } from "@/lib/audit-log";
+import { resolveRunSource, resolveRunTriggerType } from "@/lib/unified-triggers";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -68,7 +69,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             mode = "sync",
             idempotencyKey,
             maxSteps: maxStepsOverride,
-            timeout = 30000
+            timeout = 30000,
+            triggerId
         } = body;
 
         // Validate input
@@ -125,7 +127,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const runSource: RunSource = "api";
+        let triggerRecord: { id: string; triggerType: string; isActive: boolean } | null = null;
+        if (triggerId && typeof triggerId === "string") {
+            triggerRecord = await prisma.agentTrigger.findFirst({
+                where: { id: triggerId, agentId: record.id },
+                select: { id: true, triggerType: true, isActive: true }
+            });
+            if (!triggerRecord) {
+                return NextResponse.json(
+                    { success: false, error: `Trigger '${triggerId}' not found` },
+                    { status: 404 }
+                );
+            }
+            if (!triggerRecord.isActive) {
+                return NextResponse.json(
+                    { success: false, error: "Trigger is disabled" },
+                    { status: 403 }
+                );
+            }
+        }
+
+        const runSource: RunSource = triggerRecord
+            ? (resolveRunSource(triggerRecord.triggerType) as RunSource)
+            : "api";
         const effectiveMaxSteps = maxStepsOverride ?? record.maxSteps ?? 5;
 
         // Handle async mode - queue the job and return immediately
@@ -138,7 +162,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     status: "QUEUED",
                     inputText: input,
                     source: runSource,
-                    startedAt: new Date()
+                    startedAt: new Date(),
+                    triggerType: triggerRecord
+                        ? resolveRunTriggerType(triggerRecord.triggerType)
+                        : undefined,
+                    triggerId: triggerRecord?.id
                 }
             });
 
@@ -180,6 +208,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             agentSlug: record.slug,
             input,
             source: runSource,
+            triggerType: triggerRecord
+                ? resolveRunTriggerType(triggerRecord.triggerType)
+                : undefined,
+            triggerId: triggerRecord?.id,
             userId: context?.userId,
             threadId: context?.threadId,
             sessionId: context?.sessionId,
@@ -416,6 +448,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     required: false,
                     default: agent.maxSteps || 5,
                     description: "Maximum tool-use steps"
+                },
+                triggerId: {
+                    type: "string",
+                    required: false,
+                    description:
+                        "Optional trigger ID to link this invocation to a configured trigger"
                 },
                 timeout: {
                     type: "number",

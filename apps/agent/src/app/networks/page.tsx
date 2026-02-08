@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { type MouseEvent, useCallback, useEffect, useMemo, useState } from "react";
 import {
     Badge,
     Button,
@@ -150,9 +151,20 @@ function formatModelLabel(modelName: string, modelProvider: string) {
     return `${cleaned} (${modelProvider})`;
 }
 
+function isInteractiveTarget(event: MouseEvent<HTMLElement>) {
+    const target = event.target as HTMLElement | null;
+    return !!target?.closest("a,button");
+}
+
 function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
+    const router = useRouter();
+    const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+        if (isInteractiveTarget(event)) return;
+        router.push(`/networks/${network.slug}`);
+    };
+
     return (
-        <Card>
+        <Card className="cursor-pointer" onClick={handleCardClick}>
             <CardHeader>
                 <div className="flex items-start justify-between gap-3">
                     <div>
@@ -211,7 +223,7 @@ function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
                         href={`/networks/${network.slug}/topology`}
                         className={buttonVariants({ variant: "outline", size: "sm" })}
                     >
-                        Topology
+                        Design
                     </Link>
                     <Link
                         href={`/networks/${network.slug}/runs`}
@@ -226,8 +238,14 @@ function NetworkCardView({ network }: { network: NetworkSummaryItem }) {
 }
 
 function NetworkListView({ network }: { network: NetworkSummaryItem }) {
+    const router = useRouter();
+    const handleCardClick = (event: MouseEvent<HTMLDivElement>) => {
+        if (isInteractiveTarget(event)) return;
+        router.push(`/networks/${network.slug}`);
+    };
+
     return (
-        <Card>
+        <Card className="cursor-pointer" onClick={handleCardClick}>
             <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
                 <div>
                     <div className="flex items-center gap-2">
@@ -256,7 +274,7 @@ function NetworkListView({ network }: { network: NetworkSummaryItem }) {
                         href={`/networks/${network.slug}/topology`}
                         className={buttonVariants({ variant: "outline", size: "sm" })}
                     >
-                        Topology
+                        Design
                     </Link>
                     <Link
                         href={`/networks/${network.slug}/runs`}

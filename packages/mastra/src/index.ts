@@ -41,10 +41,12 @@ export type {
 // MCP
 export {
     mcpClient,
+    getIntegrationProviders,
     getMcpTools,
     getMcpToolsets,
     disconnectMcp,
     executeMcpTool,
+    invalidateMcpCacheForOrg,
     listMcpToolDefinitions,
     MCP_SERVER_CONFIGS,
     type McpServerConfig,
@@ -92,7 +94,8 @@ export {
     getToolsByNamesAsync,
     getToolByName,
     hasToolInRegistry,
-    getAllMcpTools
+    getAllMcpTools,
+    invalidateMcpToolsCacheForOrg
 } from "./tools";
 export type { ToolInfo } from "./tools";
 
@@ -107,6 +110,12 @@ export {
 } from "./workflows";
 
 export { buildNetworkAgent } from "./networks/runtime";
+export {
+    buildNetworkTopologyFromPrimitives,
+    isNetworkTopologyEmpty,
+    type NetworkPrimitiveInput,
+    type NetworkTopology
+} from "./networks/topology";
 
 export {
     executeWorkflowDefinition,

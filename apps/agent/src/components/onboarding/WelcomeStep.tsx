@@ -4,9 +4,10 @@ import { Button, Card, CardContent } from "@repo/ui";
 
 interface WelcomeStepProps {
     onContinue: () => void;
+    onAiSetup: () => void;
 }
 
-export function WelcomeStep({ onContinue }: WelcomeStepProps) {
+export function WelcomeStep({ onContinue, onAiSetup }: WelcomeStepProps) {
     return (
         <Card className="border-0 shadow-none">
             <CardContent className="space-y-8 py-12 text-center">
@@ -19,8 +20,8 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
                 <div className="space-y-3">
                     <h1 className="text-4xl font-bold tracking-tight">Welcome to AgentC2</h1>
                     <p className="text-muted-foreground mx-auto max-w-md text-lg">
-                        Build AI agents that learn and improve over time. Let&apos;s create your
-                        first agent in under 2 minutes.
+                        Tell us when something happens and the outcome you want. We will build the
+                        system for you.
                     </p>
                 </div>
 
@@ -31,9 +32,9 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
                             1
                         </div>
                         <div>
-                            <p className="font-medium">Choose a template or start fresh</p>
+                            <p className="font-medium">Describe the trigger</p>
                             <p className="text-muted-foreground text-sm">
-                                Pre-built agents for common use cases
+                                Event, schedule, or on-demand
                             </p>
                         </div>
                     </div>
@@ -42,9 +43,9 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
                             2
                         </div>
                         <div>
-                            <p className="font-medium">Configure and test</p>
+                            <p className="font-medium">Describe the outcome</p>
                             <p className="text-muted-foreground text-sm">
-                                Customize instructions and try it out
+                                Review, analyze, act, notify, or chain steps
                             </p>
                         </div>
                     </div>
@@ -53,18 +54,23 @@ export function WelcomeStep({ onContinue }: WelcomeStepProps) {
                             3
                         </div>
                         <div>
-                            <p className="font-medium">Deploy and improve</p>
+                            <p className="font-medium">We build and monitor</p>
                             <p className="text-muted-foreground text-sm">
-                                Your agent learns from every interaction
+                                You get results and live performance visibility
                             </p>
                         </div>
                     </div>
                 </div>
 
                 {/* CTA */}
-                <Button size="lg" className="px-8" onClick={onContinue}>
-                    Get Started
-                </Button>
+                <div className="flex flex-col items-center gap-3">
+                    <Button size="lg" className="px-8" onClick={onAiSetup}>
+                        Set up with Workspace AI
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={onContinue}>
+                        Advanced setup
+                    </Button>
+                </div>
             </CardContent>
         </Card>
     );

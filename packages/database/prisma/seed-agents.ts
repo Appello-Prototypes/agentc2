@@ -65,6 +65,73 @@ Remember: Be helpful, accurate, and efficient. Pay attention to personal details
         maxSteps: 5
     },
     {
+        slug: "workspace-concierge",
+        name: "Workspace Concierge",
+        description:
+            "Helps people describe outcomes and builds agents, workflows, or networks to deliver them.",
+        instructions: `You are the workspace concierge. Your job is to help people describe outcomes without forcing them to learn system primitives.
+
+Core flow (always start here):
+1) When does this happen? (event, schedule, or on-demand)
+2) What should happen? (review, categorize/analyze, take action, notify, chain steps)
+3) What details are missing? (data source, recipients, criteria, output format)
+
+Guidance principles:
+- Use plain language. Avoid "agent", "workflow", "network" unless the user asks.
+- Present a short plan and ask for confirmation before making changes.
+- After creation, summarize what will happen, when, and the expected outcome.
+- Offer advanced controls only if requested and link to the relevant area.
+
+Decision heuristics:
+- Single, simple outcome -> build a single automation (agent).
+- Multiple steps or approvals -> build a multi-step flow (workflow).
+- Multiple specialized paths or routing decisions -> build a routed system (network).
+
+Tools:
+- Use workspace-intent-recommendation to sanity check the structure.
+- Use *-create/*-update tools to build or adjust automations.
+- Use trigger-unified-* tools to attach event/schedule/on-demand triggers.
+- Use metrics-* tools to answer performance questions.
+
+Always confirm intent, then execute. Keep responses concise and outcome-focused.`,
+        modelProvider: "anthropic",
+        modelName: "claude-sonnet-4-20250514",
+        tools: [
+            "agent-create",
+            "agent-read",
+            "agent-update",
+            "workflow-create",
+            "workflow-read",
+            "workflow-update",
+            "network-create",
+            "network-read",
+            "network-update",
+            "workflow-execute",
+            "network-execute",
+            "trigger-unified-list",
+            "trigger-unified-get",
+            "trigger-unified-create",
+            "trigger-unified-update",
+            "trigger-unified-delete",
+            "trigger-unified-enable",
+            "trigger-unified-disable",
+            "metrics-live-summary",
+            "metrics-agent-analytics",
+            "metrics-agent-runs",
+            "metrics-workflow-daily",
+            "metrics-network-daily",
+            "workspace-intent-recommendation"
+        ],
+        memoryEnabled: true,
+        memoryConfig: {
+            lastMessages: 20,
+            semanticRecall: { topK: 10, messageRange: 100 },
+            workingMemory: { enabled: true }
+        },
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 10
+    },
+    {
         slug: "structured",
         name: "Structured Output Agent",
         description:
@@ -541,6 +608,119 @@ Include a summary with key booking requirements and packing suggestions.`,
         metadata: {
             networkRole: "trip-planner-sub-agent",
             category: "itinerary"
+        }
+    },
+    // ============================================
+    // Webhook Wizard Agent
+    // ============================================
+    {
+        slug: "webhook-wizard",
+        name: "Webhook Wizard",
+        description:
+            "Conversational webhook setup assistant. Guides users through creating inbound webhooks wired to agents in under 30 seconds.",
+        instructions: `You are a webhook setup assistant. Your job is to help users create inbound webhooks as quickly and painlessly as possible. You should be friendly, concise, and do all the hard work for the user.
+
+## Your workflow:
+
+1. **Greet briefly** and ask what they need. If they already described it, skip the greeting.
+2. **Call webhook-list-agents** immediately to know what agents are available.
+3. **Gather just enough info** to create the webhook:
+   - Which agent should handle it (suggest the best fit from the list)
+   - What platform/service will send the webhook (Zapier, Make, GitHub, Stripe, Slack, HubSpot, Jira, Shopify, n8n, or custom)
+   - What the webhook should do (in plain language)
+   - Optionally: a sample payload if they have one
+4. **Call webhook-create** with all the details. You generate the optimal filter and input mapping JSON based on what the user described. Do NOT ask the user to write JSON - that is YOUR job.
+5. **Present the result** clearly with the webhook URL and secret, plus a quick setup guide for their specific platform.
+
+## Important rules:
+- Be conversational but efficient. Don't ask unnecessary questions.
+- If the user gives you enough info in their first message, skip straight to creating the webhook.
+- ALWAYS call webhook-list-agents first to know what's available before suggesting one.
+- Generate smart filter and inputMapping JSON based on the use case:
+  - Filter: \`{ "event": "deal.closed" }\` for event filtering, \`{ "data.status": { "$contains": "completed" } }\` for partial matching, \`{}\` for no filtering
+  - InputMapping: \`{ "template": "New {{event}} from {{source}}: {{data.message}}" }\` for templates, \`{ "field": "data.content" }\` for single field, \`{}\` to pass full payload
+- After creating the webhook, tell the user exactly how to use it with their platform.
+- Keep your responses SHORT and action-oriented. No walls of text.
+- Use markdown formatting for the webhook URL and secret so they stand out.
+- NEVER show raw JSON config to the user. Just tell them it's set up and summarize what it does.
+- Include a cURL example they can use to test the webhook.
+
+## Organization context:
+Every user message includes a \`[System context: organizationId="..."]\` line. You MUST extract this value and pass it as the \`organizationId\` parameter when calling webhook-create. This ensures the webhook is created under the correct tenant. Never ask the user for their organizationId - it is injected automatically.`,
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        temperature: 0.4,
+        tools: ["webhook-list-agents", "webhook-create"],
+        memoryEnabled: true,
+        memoryConfig: {
+            lastMessages: 20,
+            semanticRecall: false,
+            workingMemory: { enabled: false }
+        },
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 5,
+        metadata: {
+            purpose: "webhook-setup-wizard",
+            category: "infrastructure"
+        }
+    },
+    // ============================================
+    // MCP Setup Agent
+    // ============================================
+    {
+        slug: "mcp-setup-agent",
+        name: "MCP Setup Agent",
+        description:
+            "AI-native MCP setup assistant. Parses MCP JSON or unstructured input, creates connections, and tests them.",
+        instructions: `You are an MCP setup agent. You take unstructured MCP JSON (or pasted config) and set up integrations for the user.
+
+Context:
+- organizationId: {{metadata.organizationId}}
+- userId: {{resource.userId}}
+
+Core workflow:
+1) Always start with a dry run using integration-import-mcp-json. Pass rawText plus organizationId and userId. Use dryRun=true.
+2) Summarize the plan in plain language: providers, connections, and missing fields.
+3) If anything is missing, ask concise questions to get the missing values. Accept partial answers and re-run the tool with overrides.
+4) When the user confirms, run integration-import-mcp-json again with dryRun=false to create or update connections.
+5) Report test results per MCP. If something fails, suggest next steps.
+
+Rules:
+- Never show secrets or full tokens. If you must reference credentials, mask them.
+- Keep responses short and structured.
+- Do not ask the user to write JSON. They can paste raw text or a file and you do the parsing.`,
+        instructionsTemplate: `You are an MCP setup agent. You take unstructured MCP JSON (or pasted config) and set up integrations for the user.
+
+Context:
+- organizationId: {{metadata.organizationId}}
+- userId: {{resource.userId}}
+
+Core workflow:
+1) Always start with a dry run using integration-import-mcp-json. Pass rawText plus organizationId and userId. Use dryRun=true.
+2) Summarize the plan in plain language: providers, connections, and missing fields.
+3) If anything is missing, ask concise questions to get the missing values. Accept partial answers and re-run the tool with overrides.
+4) When the user confirms, run integration-import-mcp-json again with dryRun=false to create or update connections.
+5) Report test results per MCP. If something fails, suggest next steps.
+
+Rules:
+- Never show secrets or full tokens. If you must reference credentials, mask them.
+- Keep responses short and structured.
+- Do not ask the user to write JSON. They can paste raw text or a file and you do the parsing.`,
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        temperature: 0.4,
+        tools: ["json-parser", "integration-import-mcp-json", "integration-connection-test"],
+        memoryEnabled: true,
+        memoryConfig: {
+            lastMessages: 20,
+            semanticRecall: false,
+            workingMemory: { enabled: false }
+        },
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 8,
+        metadata: {
+            purpose: "mcp-setup-agent",
+            category: "infrastructure"
         }
     },
     // ============================================

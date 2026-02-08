@@ -21,7 +21,7 @@ interface NetworkDetail {
 
 const navItems: { id: string; label: string; icon: IconName; path: string }[] = [
     { id: "overview", label: "Overview", icon: "dashboard", path: "" },
-    { id: "topology", label: "Topology", icon: "ai-network", path: "/topology" },
+    { id: "topology", label: "Design", icon: "ai-network", path: "/topology" },
     { id: "primitives", label: "Primitives", icon: "folder", path: "/primitives" },
     { id: "test", label: "Test", icon: "test-tube", path: "/test" },
     { id: "runs", label: "Runs", icon: "play-circle", path: "/runs" },

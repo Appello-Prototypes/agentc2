@@ -9,17 +9,9 @@ import { getUserMembership } from "@/lib/organization";
  *
  * Standalone mode is determined by:
  * 1. STANDALONE_DEMO=true (explicit override)
- * 2. Not running on catalyst.localhost (dev)
  */
-function isStandaloneDeployment(request: NextRequest): boolean {
-    // Explicit standalone mode
-    if (process.env.STANDALONE_DEMO === "true") {
-        return true;
-    }
-
-    // Fallback: check hostname for local dev (catalyst.localhost = behind Caddy)
-    const host = request.headers.get("host") || "";
-    return !host.includes("catalyst.localhost");
+function isStandaloneDeployment(): boolean {
+    return process.env.STANDALONE_DEMO === "true";
 }
 
 /**
@@ -29,7 +21,7 @@ function isStandaloneDeployment(request: NextRequest): boolean {
  */
 async function proxy(request: NextRequest) {
     // In standalone mode, allow public access to demos
-    if (isStandaloneDeployment(request)) {
+    if (isStandaloneDeployment()) {
         return NextResponse.next();
     }
 

@@ -89,7 +89,7 @@ For complete details, refer to `/CLAUDE.md` which contains:
 - Workflow system documentation
 - RAG pipeline usage
 - Voice agent integration
-- Vercel deployment procedures
+- Digital Ocean deployment procedures
 - GitHub push procedures
 - Troubleshooting guides
 

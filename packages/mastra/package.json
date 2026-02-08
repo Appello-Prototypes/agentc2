@@ -31,6 +31,7 @@
     "@types/pg": "^8.16.0",
     "@whiskeysockets/baileys": "^6.7.16",
     "ai": "^6.0.64",
+    "cron-parser": "^5.5.0",
     "grammy": "^1.35.0",
     "pg": "^8.18.0",
     "pino": "^9.6.0",

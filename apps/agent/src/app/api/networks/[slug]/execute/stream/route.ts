@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { prisma, Prisma } from "@repo/database";
+import { prisma, Prisma, RunStatus } from "@repo/database";
 import { buildNetworkAgent } from "@repo/mastra";
 import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
@@ -22,6 +22,18 @@ function inferPrimitive(eventType: string, payload: Record<string, unknown>) {
         return { type: "workflow", id: payload.workflowId as string };
     if (eventType.includes("tool")) return { type: "tool", id: payload.toolName as string };
     return { type: undefined, id: undefined };
+}
+
+function tryParseJson(value: string) {
+    try {
+        const parsed = JSON.parse(value);
+        if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+            return parsed as Record<string, unknown>;
+        }
+    } catch {
+        return null;
+    }
+    return null;
 }
 
 export async function POST(
@@ -63,7 +75,7 @@ export async function POST(
                 const run = await prisma.networkRun.create({
                     data: {
                         networkId: network.id,
-                        status: "RUNNING",
+                        status: RunStatus.RUNNING,
                         inputText: message,
                         threadId: body.threadId || `thread-${Date.now()}`,
                         resourceId: body.resourceId || null,
@@ -98,11 +110,14 @@ export async function POST(
                     routingDecision?: Record<string, unknown>;
                     inputJson?: Record<string, unknown>;
                     outputJson?: Record<string, unknown>;
+                    status: RunStatus;
                 }> = [];
 
                 let stepNumber = 0;
                 let outputText = "";
                 let outputJson: Record<string, unknown> | undefined;
+                let lastResult: Record<string, unknown> | undefined;
+                let lastResultText: string | undefined;
 
                 for await (const chunk of result) {
                     const chunkAny = chunk as { type: string; payload?: Record<string, unknown> };
@@ -117,6 +132,21 @@ export async function POST(
 
                     if (chunkAny.type === "network-object-result") {
                         outputJson = payload as Record<string, unknown>;
+                    }
+
+                    if (
+                        payload.result &&
+                        typeof payload.result === "object" &&
+                        !Array.isArray(payload.result)
+                    ) {
+                        lastResult = payload.result as Record<string, unknown>;
+                    }
+                    if (typeof payload.result === "string") {
+                        lastResultText = payload.result;
+                        const parsed = tryParseJson(payload.result);
+                        if (parsed) {
+                            lastResult = parsed;
+                        }
                     }
 
                     const stepType = inferStepType(chunkAny.type);
@@ -134,8 +164,20 @@ export async function POST(
                             primitiveId: primitive.id,
                             routingDecision: stepType === "routing" ? payload : undefined,
                             inputJson: payload.input as Record<string, unknown>,
-                            outputJson: payload.result as Record<string, unknown>
+                            outputJson: payload.result as Record<string, unknown>,
+                            status: RunStatus.COMPLETED
                         });
+                    }
+                }
+
+                if (!outputJson && lastResult) {
+                    outputJson = lastResult;
+                }
+                if (!outputText) {
+                    if (lastResultText) {
+                        outputText = lastResultText;
+                    } else if (outputJson) {
+                        outputText = JSON.stringify(outputJson, null, 2);
                     }
                 }
 
@@ -150,8 +192,13 @@ export async function POST(
                             routingDecision: step.routingDecision
                                 ? (step.routingDecision as Prisma.InputJsonValue)
                                 : Prisma.DbNull,
-                            inputJson: step.inputJson as Prisma.InputJsonValue,
-                            outputJson: step.outputJson as Prisma.InputJsonValue
+                            inputJson: step.inputJson
+                                ? (step.inputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            outputJson: step.outputJson
+                                ? (step.outputJson as Prisma.InputJsonValue)
+                                : Prisma.DbNull,
+                            status: step.status
                         }))
                     });
                 }
@@ -159,9 +206,11 @@ export async function POST(
                 await prisma.networkRun.update({
                     where: { id: run.id },
                     data: {
-                        status: "COMPLETED",
+                        status: RunStatus.COMPLETED,
                         outputText,
-                        outputJson: outputJson as Prisma.InputJsonValue,
+                        outputJson: outputJson
+                            ? (outputJson as Prisma.InputJsonValue)
+                            : Prisma.DbNull,
                         completedAt: new Date(),
                         stepsExecuted: steps.length
                     }

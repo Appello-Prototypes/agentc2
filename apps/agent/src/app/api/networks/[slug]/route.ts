@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra";
 
 async function findNetwork(slug: string) {
     return prisma.network.findFirst({
@@ -69,15 +70,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.modelProvider !== undefined) updateData.modelProvider = body.modelProvider;
         if (body.modelName !== undefined) updateData.modelName = body.modelName;
         if (body.temperature !== undefined) updateData.temperature = body.temperature;
-        if (body.topologyJson !== undefined) updateData.topologyJson = body.topologyJson;
         if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
         if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
         if (body.isPublished !== undefined) updateData.isPublished = body.isPublished;
         if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
+        const nextPrimitives = Array.isArray(body.primitives)
+            ? body.primitives
+            : existing.primitives;
+        const topologySource =
+            body.topologyJson !== undefined ? body.topologyJson : existing.topologyJson;
+        const shouldAutoGenerate =
+            Array.isArray(nextPrimitives) &&
+            nextPrimitives.length > 0 &&
+            isNetworkTopologyEmpty(topologySource);
+        const nextTopology = shouldAutoGenerate
+            ? buildNetworkTopologyFromPrimitives(nextPrimitives)
+            : topologySource;
+
+        if (body.topologyJson !== undefined || shouldAutoGenerate) {
+            updateData.topologyJson = nextTopology;
+        }
+
         const topologyChanged =
-            body.topologyJson !== undefined &&
-            JSON.stringify(existing.topologyJson) !== JSON.stringify(body.topologyJson);
+            shouldAutoGenerate ||
+            (body.topologyJson !== undefined &&
+                JSON.stringify(existing.topologyJson) !== JSON.stringify(body.topologyJson));
 
         const primitivesChanged =
             body.primitives !== undefined &&
@@ -96,8 +114,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 data: {
                     networkId: existing.id,
                     version: nextVersion,
-                    topologyJson: body.topologyJson || existing.topologyJson,
-                    primitivesJson: body.primitives || existing.primitives,
+                    topologyJson: nextTopology,
+                    primitivesJson: nextPrimitives,
                     description: body.versionDescription || "Topology update",
                     createdBy: body.createdBy || null
                 }

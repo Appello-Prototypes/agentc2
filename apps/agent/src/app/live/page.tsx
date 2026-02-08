@@ -595,7 +595,7 @@ export default function LiveDashboardPage() {
     }, [runs, selectedRun]);
 
     const handleAgentClick = (agentSlug: string) => {
-        router.push(`/workspace/${agentSlug}/overview`);
+        router.push(`/agents/${agentSlug}/overview`);
     };
 
     const handleRunClick = (run: Run) => {
@@ -807,9 +807,9 @@ export default function LiveDashboardPage() {
                     >
                         {autoRefresh ? "Pause Auto-refresh" : "Resume Auto-refresh"}
                     </Button>
-                    <Button variant="outline" size="sm" onClick={() => router.push("/workspace")}>
+                    <Button variant="outline" size="sm" onClick={() => router.push("/agents")}>
                         <HugeiconsIcon icon={icons["arrow-right"]!} className="mr-2 size-4" />
-                        Workspace
+                        Agents
                     </Button>
                 </div>
             </div>
@@ -1351,11 +1351,11 @@ export default function LiveDashboardPage() {
                                     size="sm"
                                     onClick={() =>
                                         router.push(
-                                            `/workspace/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
+                                            `/agents/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
                                         )
                                     }
                                 >
-                                    Open in Workspace
+                                    Open in Agents
                                 </Button>
                             )}
                         </div>

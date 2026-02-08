@@ -1,5 +1,9 @@
 import { beforeAll, afterAll, afterEach, vi } from "vitest";
 
+vi.mock("next/headers", () => ({
+    headers: () => new Headers()
+}));
+
 // Set test environment variables
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";

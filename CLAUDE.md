@@ -58,7 +58,7 @@ This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorep
 | **Mastra Memory** | `@mastra/memory`                         | Conversation memory and semantic recall          |
 | **Mastra RAG**    | `@mastra/rag`                            | Document ingestion, chunking, vector search      |
 | **Mastra Evals**  | `@mastra/evals`                          | Agent evaluation and scoring                     |
-| **AI SDK**        | `ai`, `@ai-sdk/openai`, `@mastra/ai-sdk` | Vercel AI SDK for streaming and tools            |
+| **AI SDK**        | `ai`, `@ai-sdk/openai`, `@mastra/ai-sdk` | AI SDK for streaming and tools                   |
 
 ### Voice Capabilities
 

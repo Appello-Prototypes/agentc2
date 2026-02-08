@@ -242,9 +242,9 @@ export default function OnboardingPage() {
         localStorage.setItem("agentc2_onboarding_complete", "true");
 
         if (data.createdAgentSlug) {
-            router.push(`/workspace/${data.createdAgentSlug}/configure`);
+            router.push(`/agents/${data.createdAgentSlug}/configure`);
         } else {
-            router.push("/workspace");
+            router.push("/agents");
         }
     };
 
@@ -286,7 +286,10 @@ export default function OnboardingPage() {
 
             {/* Steps */}
             {currentStep === "welcome" && (
-                <WelcomeStep onContinue={() => setCurrentStep("template")} />
+                <WelcomeStep
+                    onContinue={() => setCurrentStep("template")}
+                    onAiSetup={() => router.push("/assistant")}
+                />
             )}
 
             {currentStep === "template" && (

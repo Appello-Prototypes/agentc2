@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { randomBytes } from "crypto";
+import { mergeTriggerInputMapping, validateTriggerInputMapping } from "@/lib/unified-triggers";
 
 /**
  * GET /api/agents/[id]/triggers
@@ -87,12 +88,51 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Validate trigger type
-        const validTypes = ["webhook", "event", "mcp"];
+        const validTypes = ["webhook", "event", "mcp", "api", "manual", "test"];
         if (!validTypes.includes(triggerType)) {
             return NextResponse.json(
                 {
                     success: false,
                     error: `Invalid triggerType. Must be one of: ${validTypes.join(", ")}`
+                },
+                { status: 400 }
+            );
+        }
+
+        if (triggerType === "event" && !eventName) {
+            return NextResponse.json(
+                { success: false, error: "Missing required field: eventName" },
+                { status: 400 }
+            );
+        }
+
+        if (
+            inputMapping !== undefined &&
+            inputMapping !== null &&
+            typeof inputMapping !== "object"
+        ) {
+            return NextResponse.json(
+                { success: false, error: "inputMapping must be an object" },
+                { status: 400 }
+            );
+        }
+
+        const shouldSetDefaultField = ["api", "manual", "test", "mcp"].includes(triggerType);
+        const mergedInputMapping = mergeTriggerInputMapping(
+            inputMapping && typeof inputMapping === "object"
+                ? (inputMapping as Record<string, unknown>)
+                : null,
+            null,
+            { setDefaultField: shouldSetDefaultField }
+        );
+        const mappingValidation = validateTriggerInputMapping(
+            mergedInputMapping as Record<string, unknown> | null
+        );
+        if (!mappingValidation.valid) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: mappingValidation.error || "Invalid inputMapping"
                 },
                 { status: 400 }
             );
@@ -133,7 +173,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 webhookPath,
                 webhookSecret,
                 filterJson: filter ? JSON.parse(JSON.stringify(filter)) : null,
-                inputMapping: inputMapping ? JSON.parse(JSON.stringify(inputMapping)) : null,
+                inputMapping: mergedInputMapping
+                    ? JSON.parse(JSON.stringify(mergedInputMapping))
+                    : null,
                 isActive: isActive !== false
             }
         });

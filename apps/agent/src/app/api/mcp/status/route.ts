@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { MCP_SERVER_CONFIGS, getMcpTools, type McpServerConfig } from "@repo/mastra";
+import { getIntegrationProviders, getMcpTools } from "@repo/mastra";
+import { prisma } from "@repo/database";
 import { getDemoSession } from "@/lib/standalone-auth";
 import { getUserOrganizationId } from "@/lib/organization";
+import { getConnectionMissingFields, resolveConnectionServerId } from "@/lib/integrations";
 
 export interface McpToolInfo {
     name: string;
@@ -29,18 +31,6 @@ export interface McpStatusResponse {
     timestamp: number;
 }
 
-/**
- * Check if required environment variables are set for a server
- */
-function checkEnvVars(config: McpServerConfig): { configured: boolean; missing: string[] } {
-    if (!config.envVars || config.envVars.length === 0) {
-        return { configured: true, missing: [] };
-    }
-
-    const missing = config.envVars.filter((envVar) => !process.env[envVar]);
-    return { configured: missing.length === 0, missing };
-}
-
 export async function GET() {
     try {
         const session = await getDemoSession();
@@ -48,32 +38,41 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        // Get all tools from MCP client
-        let mcpTools: Record<string, unknown> = {};
-        let connectionError: string | undefined;
-
-        try {
-            const organizationId = await getUserOrganizationId(session.user.id);
-            mcpTools = await getMcpTools(organizationId);
-        } catch (error) {
-            connectionError =
-                error instanceof Error ? error.message : "Failed to connect to MCP servers";
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { error: "Organization membership required" },
+                { status: 403 }
+            );
         }
 
-        // Map tools to their server IDs (tool names are prefixed with serverId_)
-        const toolsByServer: Record<string, McpToolInfo[]> = {};
+        let toolSnapshot: Record<string, unknown> = {};
+        try {
+            toolSnapshot = await getMcpTools({
+                organizationId,
+                userId: session.user.id
+            });
+        } catch (error) {
+            console.error("[MCP Status] Failed to load MCP tools:", error);
+        }
 
-        for (const [toolName, toolDef] of Object.entries(mcpTools)) {
-            // Tool names are formatted as serverId_toolName
+        const [providers, connections] = await Promise.all([
+            getIntegrationProviders(),
+            prisma.integrationConnection.findMany({
+                where: { organizationId },
+                include: { provider: true }
+            })
+        ]);
+
+        const toolsByServer: Record<string, McpToolInfo[]> = {};
+        for (const [toolName, toolDef] of Object.entries(toolSnapshot)) {
             const underscoreIndex = toolName.indexOf("_");
             if (underscoreIndex > 0) {
                 const serverId = toolName.substring(0, underscoreIndex);
                 const actualToolName = toolName.substring(underscoreIndex + 1);
-
                 if (!toolsByServer[serverId]) {
                     toolsByServer[serverId] = [];
                 }
-
                 toolsByServer[serverId].push({
                     name: actualToolName,
                     description:
@@ -85,42 +84,53 @@ export async function GET() {
             }
         }
 
-        // Build server status for each configured server
-        const servers: McpServerStatus[] = MCP_SERVER_CONFIGS.map((config) => {
-            const envCheck = checkEnvVars(config);
-            const serverTools = toolsByServer[config.id] || [];
+        const servers: McpServerStatus[] = providers.map((provider) => {
+            const providerConnections = connections.filter(
+                (connection) => connection.providerId === provider.id && connection.isActive
+            );
+            const defaultConnection =
+                providerConnections.find((connection) => connection.isDefault) ||
+                providerConnections[0];
 
-            let status: McpServerStatus["status"];
-            let error: string | undefined;
+            const missingFields = providerConnections.flatMap((connection) =>
+                getConnectionMissingFields(connection, provider)
+            );
 
-            if (!envCheck.configured) {
-                status = "missing_config";
-                error = `Missing environment variables: ${envCheck.missing.join(", ")}`;
-            } else if (connectionError) {
-                status = "error";
-                error = connectionError;
-            } else if (serverTools.length > 0) {
+            const hasMissing = missingFields.length > 0;
+            const hasConnections = providerConnections.length > 0;
+
+            let status: McpServerStatus["status"] = "disconnected";
+            if (provider.authType === "none") {
                 status = "connected";
-            } else {
+            } else if (!hasConnections) {
                 status = "disconnected";
+            } else if (hasMissing) {
+                status = "missing_config";
+            } else {
+                status = "connected";
             }
 
+            const serverId = defaultConnection
+                ? resolveConnectionServerId(provider.key, defaultConnection)
+                : provider.key;
+            const serverTools =
+                provider.providerType === "mcp" ? toolsByServer[serverId] || [] : [];
+
             return {
-                id: config.id,
-                name: config.name,
-                description: config.description,
-                category: config.category,
+                id: provider.key,
+                name: provider.name,
+                description: provider.description || "",
+                category: provider.category,
                 status,
                 tools: serverTools,
-                error,
-                requiresAuth: config.requiresAuth,
-                missingEnvVars: envCheck.missing.length > 0 ? envCheck.missing : undefined
+                requiresAuth: provider.authType !== "none",
+                missingEnvVars: hasMissing ? Array.from(new Set(missingFields)) : undefined
             };
         });
 
         const response: McpStatusResponse = {
             servers,
-            totalTools: Object.keys(mcpTools).length,
+            totalTools: Object.keys(toolSnapshot).length,
             connectedServers: servers.filter((s) => s.status === "connected").length,
             timestamp: Date.now()
         };

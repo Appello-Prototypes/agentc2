@@ -46,6 +46,91 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 outputSchema: Record<string, unknown>;
             }
         > = {
+            agent_schedule_create: {
+                description: "Create a schedule for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_schedule_list: {
+                description: "List schedules for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_schedule_update: {
+                description: "Update a schedule for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_schedule_delete: {
+                description: "Delete a schedule for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_create: {
+                description: "Create a trigger for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_list: {
+                description: "List triggers for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_update: {
+                description: "Update a trigger for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_delete: {
+                description: "Delete a trigger for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_list: {
+                description: "List unified execution triggers for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_get: {
+                description: "Get a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_create: {
+                description: "Create a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_update: {
+                description: "Update a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_delete: {
+                description: "Delete a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_enable: {
+                description: "Enable a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_unified_disable: {
+                description: "Disable a unified execution trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_test: {
+                description: "Dry-run a unified trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            agent_trigger_execute: {
+                description: "Execute a unified trigger.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
             "agent-create": {
                 description: "Create a new agent with full configuration.",
                 inputSchema: {
@@ -91,6 +176,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             },
+            "workflow-generate": {
+                description: "Generate a workflow definition from a prompt.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-validate": {
+                description: "Validate a workflow definition.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "workflow-designer-chat": {
+                description: "Generate a JSON Patch proposal for workflow updates.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
             "network-create": {
                 description: "Create a network with routing instructions and primitives.",
                 inputSchema: { type: "object", additionalProperties: true },
@@ -109,6 +209,56 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             },
             "network-delete": {
                 description: "Delete or archive a network safely.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-generate": {
+                description: "Generate a network topology from a prompt.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-validate": {
+                description: "Validate a network topology and primitives.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "network-designer-chat": {
+                description: "Generate a JSON Patch proposal for network updates.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-runs-list": {
+                description: "List agent runs with filters and time range.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-runs-get": {
+                description: "Fetch an agent run with trace, evaluation, and version.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "trigger-events-list": {
+                description: "List trigger monitoring events with filters and time range.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "trigger-events-get": {
+                description: "Fetch a trigger monitoring event detail.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-evaluations-list": {
+                description: "List evaluations for an agent with trends and insights.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-evaluations-run": {
+                description: "Run evaluations on unevaluated runs for an agent.",
+                inputSchema: { type: "object", additionalProperties: true },
+                outputSchema: { type: "object", additionalProperties: true }
+            },
+            "agent-versions-list": {
+                description: "List version history for an agent.",
                 inputSchema: { type: "object", additionalProperties: true },
                 outputSchema: { type: "object", additionalProperties: true }
             }

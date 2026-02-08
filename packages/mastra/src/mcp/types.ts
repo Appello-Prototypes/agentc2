@@ -2,7 +2,7 @@
  * MCP Dual-Mode Architecture Types
  *
  * Supports both stdio-based MCP servers (local development) and
- * direct API calls (serverless environments like Vercel).
+ * direct API calls (production environments).
  */
 
 /**

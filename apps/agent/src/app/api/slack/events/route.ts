@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { agentResolver } from "@repo/mastra";
+import { prisma, type Prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { resolveIdentity } from "@/lib/identity";
+import { handleSlackApprovalReaction } from "@/lib/approvals";
 
 /**
  * Default agent to use for Slack conversations
@@ -20,6 +23,7 @@ interface SlackEventBase {
     ts?: string;
     thread_ts?: string;
     text?: string;
+    subtype?: string;
 }
 
 interface SlackAppMentionEvent extends SlackEventBase {
@@ -38,6 +42,24 @@ interface SlackMessageEvent extends SlackEventBase {
     text: string;
     channel_type?: "im" | "channel" | "group";
     subtype?: string;
+    message?: {
+        text?: string;
+        ts?: string;
+    };
+    edited?: { user?: string; ts?: string };
+    deleted_ts?: string;
+    files?: unknown[];
+}
+
+interface SlackReactionEvent extends SlackEventBase {
+    type: "reaction_added";
+    user: string;
+    reaction: string;
+    item: {
+        type?: string;
+        channel: string;
+        ts: string;
+    };
 }
 
 interface SlackUrlVerificationPayload {
@@ -50,7 +72,7 @@ interface SlackEventCallbackPayload {
     type: "event_callback";
     token: string;
     team_id: string;
-    event: SlackAppMentionEvent | SlackMessageEvent;
+    event: SlackAppMentionEvent | SlackMessageEvent | SlackReactionEvent;
     event_id: string;
     event_time: number;
 }
@@ -147,6 +169,160 @@ async function sendSlackMessage(
     }
 }
 
+const resolveSlackWorkspaceContext = async () => {
+    const agentRecord = await prisma.agent.findFirst({
+        where: { slug: DEFAULT_AGENT_SLUG },
+        select: { id: true, workspaceId: true }
+    });
+
+    if (!agentRecord?.workspaceId) {
+        return {
+            agentId: agentRecord?.id || null,
+            workspaceId: null,
+            organizationId: null
+        };
+    }
+
+    const workspace = await prisma.workspace.findUnique({
+        where: { id: agentRecord.workspaceId },
+        select: { organizationId: true }
+    });
+
+    return {
+        agentId: agentRecord.id,
+        workspaceId: agentRecord.workspaceId,
+        organizationId: workspace?.organizationId || null
+    };
+};
+
+const resolveSlackConnection = async (organizationId: string | null) => {
+    if (!organizationId) return null;
+    const provider = await prisma.integrationProvider.findUnique({
+        where: { key: "slack" }
+    });
+    if (!provider) return null;
+    return prisma.integrationConnection.findFirst({
+        where: {
+            organizationId,
+            providerId: provider.id,
+            isActive: true
+        },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+    });
+};
+
+const upsertChatMessage = async (options: {
+    organizationId: string;
+    workspaceId: string | null;
+    integrationConnectionId: string | null;
+    channelId: string;
+    messageTs: string;
+    userId: string | null;
+    text: string | null;
+    isEdited?: boolean;
+    isDeleted?: boolean;
+    reactions?: unknown[];
+    attachments?: unknown[];
+    metadata?: Record<string, unknown>;
+}) => {
+    const integrationConnectionId = options.integrationConnectionId;
+    if (!integrationConnectionId) {
+        return null;
+    }
+    return prisma.chatMessage.upsert({
+        where: {
+            integrationConnectionId_messageTs: {
+                integrationConnectionId,
+                messageTs: options.messageTs
+            }
+        },
+        create: {
+            organizationId: options.organizationId,
+            workspaceId: options.workspaceId,
+            integrationConnectionId,
+            channelId: options.channelId,
+            messageTs: options.messageTs,
+            userId: options.userId,
+            text: options.text,
+            isEdited: options.isEdited ?? false,
+            isDeleted: options.isDeleted ?? false,
+            reactionsJson: options.reactions
+                ? (options.reactions as Prisma.InputJsonValue)
+                : undefined,
+            attachmentsJson: options.attachments
+                ? (options.attachments as Prisma.InputJsonValue)
+                : undefined,
+            metadata: options.metadata
+                ? (JSON.parse(JSON.stringify(options.metadata)) as Prisma.InputJsonValue)
+                : undefined
+        },
+        update: {
+            text: options.text,
+            isEdited: options.isEdited ?? false,
+            isDeleted: options.isDeleted ?? false,
+            reactionsJson: options.reactions
+                ? (options.reactions as Prisma.InputJsonValue)
+                : undefined,
+            attachmentsJson: options.attachments
+                ? (options.attachments as Prisma.InputJsonValue)
+                : undefined,
+            metadata: options.metadata
+                ? (JSON.parse(JSON.stringify(options.metadata)) as Prisma.InputJsonValue)
+                : undefined
+        }
+    });
+};
+
+const appendChatReaction = async (options: {
+    organizationId: string;
+    workspaceId: string | null;
+    integrationConnectionId: string | null;
+    channelId: string;
+    messageTs: string;
+    reaction: string;
+    userId: string;
+}) => {
+    const integrationConnectionId = options.integrationConnectionId;
+    if (!integrationConnectionId) {
+        return null;
+    }
+    const existing = await prisma.chatMessage.findUnique({
+        where: {
+            integrationConnectionId_messageTs: {
+                integrationConnectionId,
+                messageTs: options.messageTs
+            }
+        }
+    });
+
+    const reactions = Array.isArray(existing?.reactionsJson)
+        ? [...(existing?.reactionsJson as unknown[])]
+        : [];
+    const attachments = Array.isArray(existing?.attachmentsJson)
+        ? (existing?.attachmentsJson as unknown[])
+        : undefined;
+
+    reactions.push({
+        reaction: options.reaction,
+        userId: options.userId,
+        addedAt: new Date().toISOString()
+    });
+
+    return upsertChatMessage({
+        organizationId: options.organizationId,
+        workspaceId: options.workspaceId,
+        integrationConnectionId: options.integrationConnectionId,
+        channelId: options.channelId,
+        messageTs: options.messageTs,
+        userId: existing?.userId || options.userId,
+        text: existing?.text || null,
+        isEdited: existing?.isEdited || false,
+        isDeleted: existing?.isDeleted || false,
+        reactions,
+        attachments
+    });
+};
+
 /**
  * Process a Slack message and generate a response
  * Records the run in AgentRun for full observability
@@ -155,7 +331,8 @@ async function processMessage(
     text: string,
     userId: string,
     channelId: string,
-    threadTs: string
+    threadTs: string,
+    messageTs: string
 ): Promise<string> {
     console.log(`\n${"=".repeat(60)}`);
     console.log(`[Slack] Processing message at ${new Date().toISOString()}`);
@@ -192,6 +369,39 @@ async function processMessage(
     } catch (error) {
         console.error("[Slack] Failed to resolve agent:", error);
         return "I encountered an error loading the agent. Please try again.";
+    }
+
+    const workspaceId = record?.workspaceId || null;
+    const organizationId = workspaceId
+        ? (
+              await prisma.workspace.findUnique({
+                  where: { id: workspaceId },
+                  select: { organizationId: true }
+              })
+          )?.organizationId || null
+        : null;
+    const connection = await resolveSlackConnection(organizationId);
+
+    if (organizationId) {
+        await resolveIdentity({
+            organizationId,
+            slackUserId: userId
+        });
+    }
+
+    if (organizationId && messageTs) {
+        await upsertChatMessage({
+            organizationId,
+            workspaceId,
+            integrationConnectionId: connection?.id || null,
+            channelId,
+            messageTs,
+            userId,
+            text,
+            metadata: {
+                threadTs
+            }
+        });
     }
 
     // Start recording the run
@@ -326,7 +536,8 @@ export async function POST(request: NextRequest) {
                     cleanText,
                     mentionEvent.user,
                     mentionEvent.channel,
-                    threadTs
+                    threadTs,
+                    mentionEvent.ts
                 );
 
                 // Reply in the thread
@@ -337,32 +548,119 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
+        if (event.type === "reaction_added") {
+            const reactionEvent = event as SlackReactionEvent;
+
+            setImmediate(async () => {
+                const context = await resolveSlackWorkspaceContext();
+                const connection = await resolveSlackConnection(context.organizationId);
+
+                if (context.organizationId) {
+                    await resolveIdentity({
+                        organizationId: context.organizationId,
+                        slackUserId: reactionEvent.user
+                    });
+
+                    await appendChatReaction({
+                        organizationId: context.organizationId,
+                        workspaceId: context.workspaceId,
+                        integrationConnectionId: connection?.id || null,
+                        channelId: reactionEvent.item.channel,
+                        messageTs: reactionEvent.item.ts,
+                        reaction: reactionEvent.reaction,
+                        userId: reactionEvent.user
+                    });
+                }
+
+                await handleSlackApprovalReaction({
+                    channelId: reactionEvent.item.channel,
+                    messageTs: reactionEvent.item.ts,
+                    reaction: reactionEvent.reaction,
+                    slackUserId: reactionEvent.user
+                });
+            });
+
+            return NextResponse.json({ ok: true });
+        }
+
         // Handle direct message events
-        if (event.type === "message" && "channel_type" in event && event.channel_type === "im") {
+        if (event.type === "message") {
             const messageEvent = event as SlackMessageEvent;
 
-            // Skip messages from bots or with subtypes (edits, deletes, etc.)
+            if (messageEvent.subtype === "message_changed") {
+                setImmediate(async () => {
+                    const context = await resolveSlackWorkspaceContext();
+                    const connection = await resolveSlackConnection(context.organizationId);
+                    const changedMessage = messageEvent.message;
+                    const messageTs = changedMessage?.ts || messageEvent.ts;
+
+                    if (context.organizationId && messageTs) {
+                        await upsertChatMessage({
+                            organizationId: context.organizationId,
+                            workspaceId: context.workspaceId,
+                            integrationConnectionId: connection?.id || null,
+                            channelId: messageEvent.channel,
+                            messageTs,
+                            userId: messageEvent.user,
+                            text: changedMessage?.text || messageEvent.text || null,
+                            isEdited: true,
+                            metadata: {
+                                edited: messageEvent.edited || null
+                            }
+                        });
+                    }
+                });
+
+                return NextResponse.json({ ok: true });
+            }
+
+            if (messageEvent.subtype === "message_deleted") {
+                setImmediate(async () => {
+                    const context = await resolveSlackWorkspaceContext();
+                    const connection = await resolveSlackConnection(context.organizationId);
+                    const messageTs = messageEvent.deleted_ts || messageEvent.ts;
+
+                    if (context.organizationId && messageTs) {
+                        await upsertChatMessage({
+                            organizationId: context.organizationId,
+                            workspaceId: context.workspaceId,
+                            integrationConnectionId: connection?.id || null,
+                            channelId: messageEvent.channel,
+                            messageTs,
+                            userId: messageEvent.user,
+                            text: null,
+                            isDeleted: true
+                        });
+                    }
+                });
+
+                return NextResponse.json({ ok: true });
+            }
+
             if (messageEvent.subtype) {
                 console.log(`[Slack] Ignoring message with subtype: ${messageEvent.subtype}`);
                 return NextResponse.json({ ok: true });
             }
 
-            // Process asynchronously
-            setImmediate(async () => {
-                const threadTs = messageEvent.thread_ts || messageEvent.ts;
-                const response = await processMessage(
-                    messageEvent.text,
-                    messageEvent.user,
-                    messageEvent.channel,
-                    threadTs
-                );
+            if ("channel_type" in event && event.channel_type === "im") {
+                // Process asynchronously
+                setImmediate(async () => {
+                    const threadTs = messageEvent.thread_ts || messageEvent.ts;
+                    const response = await processMessage(
+                        messageEvent.text,
+                        messageEvent.user,
+                        messageEvent.channel,
+                        threadTs,
+                        messageEvent.ts
+                    );
 
-                // Reply in the thread for DMs too
-                await sendSlackMessage(messageEvent.channel, response, threadTs);
-            });
+                    // Reply in the thread for DMs too
+                    await sendSlackMessage(messageEvent.channel, response, threadTs);
+                });
 
-            // Acknowledge immediately
-            return NextResponse.json({ ok: true });
+                // Acknowledge immediately
+                return NextResponse.json({ ok: true });
+            }
         }
 
         console.log(`[Slack] Unhandled event type: ${event.type}`);

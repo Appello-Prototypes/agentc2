@@ -25,9 +25,9 @@ export const navigationItems: NavigationItem[] = [
     {
         label: "Agents",
         icon: icons.dashboard,
-        href: "/workspace",
+        href: "/agents",
         app: "agent",
-        keywords: ["agents", "workspace", "manage", "monitor", "configure", "analytics", "home"]
+        keywords: ["agents", "manage", "monitor", "configure", "analytics", "home"]
     },
     {
         label: "Workflows",
@@ -109,9 +109,19 @@ export const navigationItems: NavigationItem[] = [
                 keywords: ["connections", "servers", "tools", "status"]
             },
             {
+                label: "Webhooks",
+                href: "/mcp/webhooks",
+                keywords: ["webhooks", "inbound", "triggers", "zapier", "make"]
+            },
+            {
                 label: "Setup for Cursor",
                 href: "/mcp/setup",
                 keywords: ["setup", "cursor", "configure", "install", "ide"]
+            },
+            {
+                label: "Gmail",
+                href: "/mcp/gmail",
+                keywords: ["gmail", "email", "integration", "oauth"]
             }
         ]
     },

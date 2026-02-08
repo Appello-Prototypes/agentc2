@@ -1,16 +1,18 @@
 "use client";
 
-import { AppTopBar, AgentC2Logo } from "@repo/ui";
+import { AppTopBar } from "@repo/ui";
 import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 import { usePathname, useRouter } from "next/navigation";
+import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
-    { label: "Agents", href: "/workspace" },
+    { label: "Agents", href: "/agents" },
+    { label: "Workspace AI", href: "/assistant" },
     { label: "Workflows", href: "/workflows" },
     { label: "Networks", href: "/networks" },
-    { label: "Monitoring", href: "/live" },
-    { label: "BIM", href: "/bim" },
+    { label: "Live Runs", href: "/live" },
+    { label: "Triggers", href: "/triggers" },
     { label: "Integrations", href: "/mcp" }
 ];
 
@@ -18,6 +20,10 @@ export function AgentHeader() {
     const { data: session } = useSession();
     const pathname = usePathname();
     const router = useRouter();
+
+    if (!session?.user) {
+        return null;
+    }
 
     const handleSignOut = async () => {
         await signOut();
@@ -29,9 +35,9 @@ export function AgentHeader() {
     };
 
     const isActive = (href: string) => {
-        if (href === "/workspace") {
-            // Workspace is active for root and /workspace paths
-            return pathname === "/" || pathname?.startsWith("/workspace");
+        if (href === "/agents") {
+            // Agents is active for root and /agents paths
+            return pathname === "/" || pathname?.startsWith("/agents");
         }
         return pathname?.startsWith(href);
     };
@@ -39,12 +45,7 @@ export function AgentHeader() {
     return (
         <AppTopBar
             title=""
-            logo={
-                <div className="flex items-center gap-1.5">
-                    <span className="text-base font-semibold">Agent</span>
-                    <AgentC2Logo size={26} />
-                </div>
-            }
+            logo={<AgentBrand />}
             session={session}
             navItems={navItems}
             onSignOut={handleSignOut}

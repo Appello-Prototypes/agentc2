@@ -49,6 +49,11 @@ export type AuditAction =
     | "CREDENTIAL_UPDATE"
     | "CREDENTIAL_DELETE"
     | "CREDENTIAL_ACCESS"
+    // Integrations
+    | "INTEGRATION_CREATE"
+    | "INTEGRATION_UPDATE"
+    | "INTEGRATION_DELETE"
+    | "WEBHOOK_CREATE"
     // Policies
     | "BUDGET_POLICY_UPDATE"
     | "GUARDRAIL_POLICY_UPDATE"
@@ -231,6 +236,71 @@ export const auditLog = {
             actorId,
             tenantId,
             metadata: { toolId }
+        });
+    },
+
+    // Integrations
+    async integrationCreate(
+        connectionId: string,
+        actorId?: string,
+        tenantId?: string,
+        metadata?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "INTEGRATION_CREATE",
+            entityType: "IntegrationConnection",
+            entityId: connectionId,
+            actorId,
+            tenantId,
+            metadata
+        });
+    },
+
+    async integrationUpdate(
+        connectionId: string,
+        actorId?: string,
+        tenantId?: string,
+        changes?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "INTEGRATION_UPDATE",
+            entityType: "IntegrationConnection",
+            entityId: connectionId,
+            actorId,
+            tenantId,
+            metadata: { changes }
+        });
+    },
+
+    async integrationDelete(
+        connectionId: string,
+        actorId?: string,
+        tenantId?: string,
+        metadata?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "INTEGRATION_DELETE",
+            entityType: "IntegrationConnection",
+            entityId: connectionId,
+            actorId,
+            tenantId,
+            metadata
+        });
+    },
+
+    async webhookCreate(
+        triggerId: string,
+        actorId?: string,
+        tenantId?: string,
+        metadata?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "WEBHOOK_CREATE",
+            entityType: "AgentTrigger",
+            entityId: triggerId,
+            actorId,
+            tenantId,
+            metadata
         });
     },
 

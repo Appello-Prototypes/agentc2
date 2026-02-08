@@ -141,9 +141,11 @@ export class TwilioVoiceClient implements ChannelHandler {
             };
 
             // Build TwiML URL with greeting
-            const twimlUrl = this.buildTwimlUrl(
-                request.greeting || "Hello, this is your AI assistant."
-            );
+            const twimlUrl = this.buildTwimlUrl({
+                greeting: request.greeting || "Hello, this is your AI assistant.",
+                mode: request.mode,
+                elevenlabsAgentId: request.elevenlabsAgentId
+            });
 
             const call = await client.calls.create({
                 from: this.config.phoneNumber,
@@ -323,17 +325,27 @@ export class TwilioVoiceClient implements ChannelHandler {
     /**
      * Build TwiML URL for initial call
      */
-    private buildTwimlUrl(greeting: string): string {
+    private buildTwimlUrl(options: {
+        greeting: string;
+        mode?: VoiceCallRequest["mode"];
+        elevenlabsAgentId?: string;
+    }): string {
         // If we have a webhook URL, use it
         if (this.config.webhookUrl) {
-            const params = new URLSearchParams({ greeting });
+            const params = new URLSearchParams({ greeting: options.greeting });
+            if (options.mode) {
+                params.set("mode", options.mode);
+            }
+            if (options.elevenlabsAgentId) {
+                params.set("agentId", options.elevenlabsAgentId);
+            }
             return `${this.config.webhookUrl}/twiml?${params.toString()}`;
         }
 
         // Otherwise, use a static TwiML bin or inline TwiML
         // This is a fallback - in production you'd want the webhook
         const twiml = encodeURIComponent(
-            `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${greeting}</Say><Gather input="speech" timeout="5" action="/voice/gather"><Say>Please speak after the tone.</Say></Gather></Response>`
+            `<?xml version="1.0" encoding="UTF-8"?><Response><Say>${options.greeting}</Say><Gather input="speech" timeout="5" action="/voice/gather"><Say>Please speak after the tone.</Say></Gather></Response>`
         );
         return `http://twimlets.com/echo?Twiml=${twiml}`;
     }

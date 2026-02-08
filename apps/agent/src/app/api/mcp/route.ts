@@ -906,6 +906,176 @@ export async function GET(request: NextRequest) {
             }
         ];
 
+        const workflowConfigTools = [
+            {
+                name: "workflow-generate",
+                description: "Generate a workflow definition from a prompt.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        prompt: { type: "string", description: "Prompt to generate a workflow" }
+                    },
+                    required: ["prompt"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-validate",
+                description: "Validate a workflow definition.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        definitionJson: { type: "object", description: "Workflow definition JSON" }
+                    },
+                    required: ["definitionJson"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "workflow-designer-chat",
+                description: "Generate a JSON Patch proposal for workflow updates.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        workflowSlug: { type: "string", description: "Workflow slug or ID" },
+                        prompt: { type: "string", description: "Requested change" },
+                        definitionJson: {
+                            type: "object",
+                            description: "Current workflow definition JSON"
+                        },
+                        selected: { type: "object", description: "Optional selected node" }
+                    },
+                    required: ["workflowSlug", "prompt", "definitionJson"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
+        const agentOpsTools = [
+            {
+                name: "agent-runs-list",
+                description: "List agent runs with filters and time range.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        status: { type: "string", description: "Run status filter" },
+                        search: { type: "string", description: "Search text" },
+                        from: { type: "string", description: "Start ISO timestamp" },
+                        to: { type: "string", description: "End ISO timestamp" },
+                        cursor: { type: "string", description: "Pagination cursor" },
+                        limit: { type: "number", description: "Max runs to return" },
+                        source: {
+                            type: "string",
+                            description: "Source filter: production, simulation, or all"
+                        }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-runs-get",
+                description: "Fetch an agent run with trace, evaluation, and version.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        runId: { type: "string", description: "Run ID" }
+                    },
+                    required: ["agentId", "runId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "trigger-events-list",
+                description: "List trigger monitoring events with filters and time range.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        status: { type: "string", description: "Trigger event status" },
+                        sourceType: { type: "string", description: "Source type filter" },
+                        integrationKey: { type: "string", description: "Integration key filter" },
+                        triggerId: { type: "string", description: "Trigger ID filter" },
+                        agentId: { type: "string", description: "Agent ID filter" },
+                        eventName: { type: "string", description: "Event name filter" },
+                        search: { type: "string", description: "Search text" },
+                        from: { type: "string", description: "Start ISO timestamp" },
+                        to: { type: "string", description: "End ISO timestamp" },
+                        limit: { type: "number", description: "Max events to return" },
+                        offset: { type: "number", description: "Pagination offset" },
+                        workspaceId: { type: "string", description: "Workspace override" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "trigger-events-get",
+                description: "Fetch a trigger monitoring event detail.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        eventId: { type: "string", description: "Trigger event ID" },
+                        workspaceId: { type: "string", description: "Workspace override" }
+                    },
+                    required: ["eventId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-evaluations-list",
+                description: "List evaluations for an agent with trends and insights.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        from: { type: "string", description: "Start ISO timestamp" },
+                        to: { type: "string", description: "End ISO timestamp" },
+                        limit: { type: "number", description: "Max evaluations to return" },
+                        cursor: { type: "string", description: "Pagination cursor" },
+                        source: {
+                            type: "string",
+                            description: "Source filter: production, simulation, or all"
+                        }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-evaluations-run",
+                description: "Run evaluations on unevaluated runs for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        limit: { type: "number", description: "Max runs to evaluate" },
+                        runIds: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Optional specific run IDs to evaluate"
+                        }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent-versions-list",
+                description: "List version history for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        limit: { type: "number", description: "Max versions to return" },
+                        cursor: { type: "number", description: "Version cursor (numeric)" }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
         const networkOpsTools = [
             {
                 name: "network.execute",
@@ -969,6 +1139,337 @@ export async function GET(request: NextRequest) {
             }
         ];
 
+        const networkConfigTools = [
+            {
+                name: "network-generate",
+                description: "Generate a network topology from a prompt.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        prompt: { type: "string", description: "Prompt to generate a network" }
+                    },
+                    required: ["prompt"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-validate",
+                description: "Validate a network topology and primitives.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        topologyJson: { type: "object", description: "Network topology JSON" },
+                        primitives: { type: "array", items: { type: "object" } }
+                    },
+                    required: ["topologyJson"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "network-designer-chat",
+                description: "Generate a JSON Patch proposal for network updates.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        networkSlug: { type: "string", description: "Network slug or ID" },
+                        prompt: { type: "string", description: "Requested change" },
+                        topologyJson: {
+                            type: "object",
+                            description: "Current network topology JSON"
+                        },
+                        primitives: { type: "array", items: { type: "object" } },
+                        selected: { type: "object", description: "Optional selected node" }
+                    },
+                    required: ["networkSlug", "prompt", "topologyJson"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
+        const scheduleTools = [
+            {
+                name: "agent_schedule_create",
+                description: "Create a schedule for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        name: { type: "string", description: "Schedule name" },
+                        description: { type: "string" },
+                        cronExpr: { type: "string" },
+                        timezone: { type: "string" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "name", "cronExpr"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_schedule_list",
+                description: "List schedules for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_schedule_update",
+                description: "Update a schedule for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        scheduleId: { type: "string", description: "Schedule ID" },
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        cronExpr: { type: "string" },
+                        timezone: { type: "string" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "scheduleId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_schedule_delete",
+                description: "Delete a schedule for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        scheduleId: { type: "string", description: "Schedule ID" }
+                    },
+                    required: ["agentId", "scheduleId"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
+        const triggerTools = [
+            {
+                name: "agent_trigger_create",
+                description: "Create a trigger for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        triggerType: { type: "string", description: "webhook or event" },
+                        eventName: { type: "string" },
+                        filter: { type: "object" },
+                        inputMapping: { type: "object" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "name", "triggerType"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_list",
+                description: "List triggers for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_update",
+                description: "Update a trigger for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Trigger ID" },
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        eventName: { type: "string" },
+                        filter: { type: "object" },
+                        inputMapping: { type: "object" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_delete",
+                description: "Delete a trigger for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Trigger ID" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
+        const executionTriggerTools = [
+            {
+                name: "agent_trigger_unified_list",
+                description: "List all execution triggers for an agent.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" }
+                    },
+                    required: ["agentId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_get",
+                description: "Get a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_create",
+                description: "Create a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        type: { type: "string", description: "Trigger type" },
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        config: { type: "object" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        environment: { type: "string" },
+                        filter: { type: "object" },
+                        inputMapping: { type: "object" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "type", "name"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_update",
+                description: "Update a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" },
+                        name: { type: "string" },
+                        description: { type: "string" },
+                        config: { type: "object" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        environment: { type: "string" },
+                        filter: { type: "object" },
+                        inputMapping: { type: "object" },
+                        isActive: { type: "boolean" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_delete",
+                description: "Delete a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_enable",
+                description: "Enable a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_unified_disable",
+                description: "Disable a unified execution trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_test",
+                description: "Dry-run a unified trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" },
+                        payload: { type: "object" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        environment: { type: "string" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            },
+            {
+                name: "agent_trigger_execute",
+                description: "Execute a unified trigger.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        agentId: { type: "string", description: "Agent slug or ID" },
+                        triggerId: { type: "string", description: "Unified trigger ID" },
+                        payload: { type: "object" },
+                        input: { type: "string" },
+                        context: { type: "object" },
+                        maxSteps: { type: "number" },
+                        environment: { type: "string" }
+                    },
+                    required: ["agentId", "triggerId"]
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
         return NextResponse.json({
             success: true,
             protocol: "mcp-agent-gateway/1.0",
@@ -983,7 +1484,13 @@ export async function GET(request: NextRequest) {
                 ...networkTools,
                 ...crudTools,
                 ...workflowOpsTools,
-                ...networkOpsTools
+                ...workflowConfigTools,
+                ...networkOpsTools,
+                ...networkConfigTools,
+                ...agentOpsTools,
+                ...scheduleTools,
+                ...triggerTools,
+                ...executionTriggerTools
             ],
             total:
                 tools.length +
@@ -991,7 +1498,13 @@ export async function GET(request: NextRequest) {
                 networkTools.length +
                 crudTools.length +
                 workflowOpsTools.length +
-                networkOpsTools.length
+                workflowConfigTools.length +
+                networkOpsTools.length +
+                networkConfigTools.length +
+                agentOpsTools.length +
+                scheduleTools.length +
+                triggerTools.length +
+                executionTriggerTools.length
         });
     } catch (error) {
         console.error("[MCP Gateway] Error listing tools:", error);
@@ -1072,6 +1585,14 @@ export async function POST(request: NextRequest) {
         if (authorization) {
             authHeaders.Authorization = authorization;
         }
+        const apiKeyHeader = request.headers.get("x-api-key");
+        if (apiKeyHeader) {
+            authHeaders["X-API-Key"] = apiKeyHeader;
+        }
+        const orgSlugHeader = request.headers.get("x-organization-slug");
+        if (orgSlugHeader) {
+            authHeaders["X-Organization-Slug"] = orgSlugHeader;
+        }
         const resolveWorkflowInput = () => {
             if (!params) return null;
             if (params.input !== undefined) return params.input;
@@ -1107,6 +1628,58 @@ export async function POST(request: NextRequest) {
             "network-update",
             "network-delete"
         ]);
+
+        const scheduleToolNames = new Set([
+            "agent_schedule_create",
+            "agent_schedule_list",
+            "agent_schedule_update",
+            "agent_schedule_delete"
+        ]);
+
+        const triggerToolNames = new Set([
+            "agent_trigger_create",
+            "agent_trigger_list",
+            "agent_trigger_update",
+            "agent_trigger_delete"
+        ]);
+
+        const executionTriggerToolNames = new Set([
+            "agent_trigger_unified_list",
+            "agent_trigger_unified_get",
+            "agent_trigger_unified_create",
+            "agent_trigger_unified_update",
+            "agent_trigger_unified_delete",
+            "agent_trigger_unified_enable",
+            "agent_trigger_unified_disable",
+            "agent_trigger_test",
+            "agent_trigger_execute"
+        ]);
+
+        const callInternalApi = async (
+            url: URL,
+            method: string,
+            body?: Record<string, unknown>
+        ) => {
+            const response = await fetch(url.toString(), {
+                method,
+                headers: {
+                    "Content-Type": "application/json",
+                    ...authHeaders
+                },
+                body: body ? JSON.stringify(body) : undefined
+            });
+
+            const data = await response.json();
+            if (!response.ok || !data.success) {
+                return {
+                    ok: false,
+                    status: response.status,
+                    error: data.error || "Request failed"
+                };
+            }
+
+            return { ok: true, data };
+        };
 
         if (crudToolNames.has(tool)) {
             const crudTool = getToolByName(tool);
@@ -1149,6 +1722,324 @@ export async function POST(request: NextRequest) {
                     },
                     { status: 400 }
                 );
+            }
+        }
+
+        if (scheduleToolNames.has(tool)) {
+            const agentId = params?.agentId;
+            if (!agentId || typeof agentId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.agentId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_schedule_list") {
+                const url = new URL(`/api/agents/${agentId}/schedules`, getInternalBaseUrl());
+                const result = await callInternalApi(url, "GET");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_schedule_create") {
+                const url = new URL(`/api/agents/${agentId}/schedules`, getInternalBaseUrl());
+                const payload = { ...params };
+                delete payload.agentId;
+                const result = await callInternalApi(url, "POST", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            const scheduleId = params?.scheduleId;
+            if (!scheduleId || typeof scheduleId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.scheduleId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_schedule_update") {
+                const url = new URL(
+                    `/api/agents/${agentId}/schedules/${scheduleId}`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                delete payload.scheduleId;
+                const result = await callInternalApi(url, "PATCH", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_schedule_delete") {
+                const url = new URL(
+                    `/api/agents/${agentId}/schedules/${scheduleId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "DELETE");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+        }
+
+        if (triggerToolNames.has(tool)) {
+            const agentId = params?.agentId;
+            if (!agentId || typeof agentId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.agentId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_trigger_list") {
+                const url = new URL(`/api/agents/${agentId}/triggers`, getInternalBaseUrl());
+                const result = await callInternalApi(url, "GET");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_create") {
+                const url = new URL(`/api/agents/${agentId}/triggers`, getInternalBaseUrl());
+                const payload = { ...params };
+                delete payload.agentId;
+                const result = await callInternalApi(url, "POST", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            const triggerId = params?.triggerId;
+            if (!triggerId || typeof triggerId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.triggerId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_trigger_update") {
+                const url = new URL(
+                    `/api/agents/${agentId}/triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                delete payload.triggerId;
+                const result = await callInternalApi(url, "PATCH", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_delete") {
+                const url = new URL(
+                    `/api/agents/${agentId}/triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "DELETE");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+        }
+
+        if (executionTriggerToolNames.has(tool)) {
+            const agentId = params?.agentId;
+            if (!agentId || typeof agentId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.agentId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_trigger_unified_list") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "GET");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_unified_create") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                const result = await callInternalApi(url, "POST", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            const triggerId = params?.triggerId;
+            if (!triggerId || typeof triggerId !== "string") {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.triggerId" },
+                    { status: 400 }
+                );
+            }
+
+            if (tool === "agent_trigger_unified_get") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "GET");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_unified_update") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                delete payload.triggerId;
+                const result = await callInternalApi(url, "PATCH", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_unified_enable") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "PATCH", { isActive: true });
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_unified_disable") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "PATCH", { isActive: false });
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_unified_delete") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}`,
+                    getInternalBaseUrl()
+                );
+                const result = await callInternalApi(url, "DELETE");
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_test") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}/test`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                delete payload.triggerId;
+                const result = await callInternalApi(url, "POST", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
+            }
+
+            if (tool === "agent_trigger_execute") {
+                const url = new URL(
+                    `/api/agents/${agentId}/execution-triggers/${triggerId}/execute`,
+                    getInternalBaseUrl()
+                );
+                const payload = { ...params };
+                delete payload.agentId;
+                delete payload.triggerId;
+                const result = await callInternalApi(url, "POST", payload);
+                if (!result.ok) {
+                    return NextResponse.json(
+                        { success: false, error: result.error },
+                        { status: result.status }
+                    );
+                }
+                return NextResponse.json({ success: true, result: result.data });
             }
         }
 
@@ -1284,6 +2175,69 @@ export async function POST(request: NextRequest) {
                     run: runDetail?.run || null
                 }
             });
+        }
+
+        if (tool === "workflow-generate") {
+            if (!params?.prompt) {
+                return NextResponse.json(
+                    { success: false, error: "Missing prompt" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL("/api/workflows/generate", getInternalBaseUrl());
+            const result = await callInternalApi(url, "POST", { prompt: params.prompt });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
+        }
+
+        if (tool === "workflow-validate") {
+            if (!params?.definitionJson) {
+                return NextResponse.json(
+                    { success: false, error: "Missing definitionJson" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL("/api/workflows/validate", getInternalBaseUrl());
+            const result = await callInternalApi(url, "POST", {
+                definitionJson: params.definitionJson
+            });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
+        }
+
+        if (tool === "workflow-designer-chat") {
+            if (!params?.workflowSlug || !params?.prompt || !params?.definitionJson) {
+                return NextResponse.json(
+                    { success: false, error: "Missing workflowSlug, prompt, or definitionJson" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL(
+                `/api/workflows/${params.workflowSlug}/designer-chat`,
+                getInternalBaseUrl()
+            );
+            const result = await callInternalApi(url, "POST", {
+                prompt: params.prompt,
+                definitionJson: params.definitionJson,
+                selected: params.selected
+            });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
         }
 
         if (tool === "network.execute") {
@@ -1437,6 +2391,223 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: true, result: listResult });
         }
 
+        if (tool === "agent-runs-list") {
+            if (!params?.agentId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing agentId" },
+                    { status: 400 }
+                );
+            }
+            const searchParams = new URLSearchParams();
+            if (params.status) searchParams.set("status", String(params.status));
+            if (params.search) searchParams.set("search", String(params.search));
+            if (params.from) searchParams.set("from", String(params.from));
+            if (params.to) searchParams.set("to", String(params.to));
+            if (params.cursor) searchParams.set("cursor", String(params.cursor));
+            if (params.limit) searchParams.set("limit", String(params.limit));
+            if (params.source) searchParams.set("source", String(params.source));
+
+            const listUrl = new URL(
+                `/api/agents/${params.agentId}/runs?${searchParams.toString()}`,
+                getInternalBaseUrl()
+            );
+            const listResult = await callInternalApi(listUrl, "GET");
+            if (!listResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: listResult.error },
+                    { status: listResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: listResult.data });
+        }
+
+        if (tool === "agent-runs-get") {
+            if (!params?.agentId || !params?.runId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing agentId or runId" },
+                    { status: 400 }
+                );
+            }
+            const runUrl = new URL(
+                `/api/agents/${params.agentId}/runs/${params.runId}`,
+                getInternalBaseUrl()
+            );
+            const runResult = await callInternalApi(runUrl, "GET");
+            if (!runResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: runResult.error },
+                    { status: runResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: runResult.data });
+        }
+
+        if (tool === "trigger-events-list") {
+            const searchParams = new URLSearchParams();
+            if (params?.status) searchParams.set("status", String(params.status));
+            if (params?.sourceType) searchParams.set("sourceType", String(params.sourceType));
+            if (params?.integrationKey)
+                searchParams.set("integrationKey", String(params.integrationKey));
+            if (params?.triggerId) searchParams.set("triggerId", String(params.triggerId));
+            if (params?.agentId) searchParams.set("agentId", String(params.agentId));
+            if (params?.eventName) searchParams.set("eventName", String(params.eventName));
+            if (params?.search) searchParams.set("search", String(params.search));
+            if (params?.from) searchParams.set("from", String(params.from));
+            if (params?.to) searchParams.set("to", String(params.to));
+            if (params?.limit) searchParams.set("limit", String(params.limit));
+            if (params?.offset) searchParams.set("offset", String(params.offset));
+            if (params?.workspaceId) searchParams.set("workspaceId", String(params.workspaceId));
+
+            const listUrl = new URL(
+                `/api/live/triggers?${searchParams.toString()}`,
+                getInternalBaseUrl()
+            );
+            const listResult = await callInternalApi(listUrl, "GET");
+            if (!listResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: listResult.error },
+                    { status: listResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: listResult.data });
+        }
+
+        if (tool === "trigger-events-get") {
+            if (!params?.eventId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing eventId" },
+                    { status: 400 }
+                );
+            }
+
+            const searchParams = new URLSearchParams();
+            if (params?.workspaceId) searchParams.set("workspaceId", String(params.workspaceId));
+
+            const detailUrl = new URL(
+                `/api/live/triggers/${params.eventId}?${searchParams.toString()}`,
+                getInternalBaseUrl()
+            );
+            const detailResult = await callInternalApi(detailUrl, "GET");
+            if (!detailResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: detailResult.error },
+                    { status: detailResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: detailResult.data });
+        }
+
+        if (tool === "agent-evaluations-list") {
+            if (!params?.agentId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing agentId" },
+                    { status: 400 }
+                );
+            }
+            const searchParams = new URLSearchParams();
+            if (params.from) searchParams.set("from", String(params.from));
+            if (params.to) searchParams.set("to", String(params.to));
+            if (params.limit) searchParams.set("limit", String(params.limit));
+            if (params.cursor) searchParams.set("cursor", String(params.cursor));
+            if (params.source) searchParams.set("source", String(params.source));
+
+            const listUrl = new URL(
+                `/api/agents/${params.agentId}/evaluations?${searchParams.toString()}`,
+                getInternalBaseUrl()
+            );
+            const listResult = await callInternalApi(listUrl, "GET");
+            if (!listResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: listResult.error },
+                    { status: listResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: listResult.data });
+        }
+
+        if (tool === "agent-evaluations-run") {
+            if (!params?.agentId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing agentId" },
+                    { status: 400 }
+                );
+            }
+            const payload: Record<string, unknown> = {};
+            if (params.limit !== undefined) payload.limit = params.limit;
+            if (params.runIds !== undefined) payload.runIds = params.runIds;
+
+            const evalUrl = new URL(
+                `/api/agents/${params.agentId}/evaluations`,
+                getInternalBaseUrl()
+            );
+            const evalResult = await callInternalApi(evalUrl, "POST", payload);
+            if (!evalResult.ok) {
+                return NextResponse.json(
+                    { success: false, error: evalResult.error },
+                    { status: evalResult.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: evalResult.data });
+        }
+
+        if (tool === "agent-versions-list") {
+            if (!params?.agentId) {
+                return NextResponse.json(
+                    { success: false, error: "Missing agentId" },
+                    { status: 400 }
+                );
+            }
+
+            const agent = await prisma.agent.findFirst({
+                where: {
+                    OR: [{ slug: params.agentId }, { id: params.agentId }],
+                    workspace: { organizationId }
+                },
+                select: { id: true }
+            });
+            if (!agent) {
+                return NextResponse.json(
+                    { success: false, error: `Agent not found: ${params.agentId}` },
+                    { status: 404 }
+                );
+            }
+
+            const limit = Math.min(Number(params.limit ?? 20), 100);
+            const cursor =
+                params.cursor !== undefined && !Number.isNaN(Number(params.cursor))
+                    ? Number(params.cursor)
+                    : null;
+
+            const versions = await prisma.agentVersion.findMany({
+                where: {
+                    agentId: agent.id,
+                    ...(cursor ? { version: { lt: cursor } } : {})
+                },
+                orderBy: { version: "desc" },
+                take: limit,
+                select: {
+                    id: true,
+                    version: true,
+                    description: true,
+                    instructions: true,
+                    modelProvider: true,
+                    modelName: true,
+                    changesJson: true,
+                    snapshot: true,
+                    createdAt: true
+                }
+            });
+
+            return NextResponse.json({
+                success: true,
+                result: {
+                    versions,
+                    nextCursor:
+                        versions.length === limit ? versions[versions.length - 1].version : null
+                }
+            });
+        }
+
         if (tool === "workflow.get-run") {
             if (!params?.workflowSlug || !params?.runId) {
                 return NextResponse.json(
@@ -1451,6 +2622,71 @@ export async function POST(request: NextRequest) {
             const runResponse = await fetch(runUrl, { headers: authHeaders });
             const runResult = await runResponse.json();
             return NextResponse.json({ success: true, result: runResult });
+        }
+
+        if (tool === "network-generate") {
+            if (!params?.prompt) {
+                return NextResponse.json(
+                    { success: false, error: "Missing prompt" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL("/api/networks/generate", getInternalBaseUrl());
+            const result = await callInternalApi(url, "POST", { prompt: params.prompt });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
+        }
+
+        if (tool === "network-validate") {
+            if (!params?.topologyJson) {
+                return NextResponse.json(
+                    { success: false, error: "Missing topologyJson" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL("/api/networks/validate", getInternalBaseUrl());
+            const result = await callInternalApi(url, "POST", {
+                topologyJson: params.topologyJson,
+                primitives: params.primitives
+            });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
+        }
+
+        if (tool === "network-designer-chat") {
+            if (!params?.networkSlug || !params?.prompt || !params?.topologyJson) {
+                return NextResponse.json(
+                    { success: false, error: "Missing networkSlug, prompt, or topologyJson" },
+                    { status: 400 }
+                );
+            }
+            const url = new URL(
+                `/api/networks/${params.networkSlug}/designer-chat`,
+                getInternalBaseUrl()
+            );
+            const result = await callInternalApi(url, "POST", {
+                prompt: params.prompt,
+                topologyJson: params.topologyJson,
+                primitives: params.primitives,
+                selected: params.selected
+            });
+            if (!result.ok) {
+                return NextResponse.json(
+                    { success: false, error: result.error },
+                    { status: result.status }
+                );
+            }
+            return NextResponse.json({ success: true, result: result.data });
         }
 
         if (tool.startsWith("network-")) {

@@ -6,11 +6,13 @@
     "dev": "next dev -p 3001",
     "build": "next build --webpack",
     "start": "next start -p 3001",
+    "voice-bridge": "bun src/server/voice-bridge.ts",
     "lint": "eslint",
     "type-check": "tsc --noEmit",
     "clean": "rm -rf .next"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^3.0.25",
     "@ai-sdk/react": "^3.0.50",
     "@base-ui/react": "^1.1.0",
     "@hugeicons/core-free-icons": "^3.1.1",
@@ -27,10 +29,12 @@
     "ai": "^6.0.64",
     "bcryptjs": "^3.0.3",
     "better-auth": "^1.4.17",
-    "zod": "^3.25.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
+    "cron-parser": "^5.5.0",
+    "google-auth-library": "^10.5.0",
+    "googleapis": "^171.2.0",
     "inngest": "^3.50.0",
     "lucide-react": "^0.563.0",
     "next": "16.1.0",
@@ -39,7 +43,9 @@
     "react-dom": "19.2.3",
     "shadcn": "^3.7.0",
     "tailwind-merge": "^3.4.0",
-    "tw-animate-css": "^1.4.0"
+    "tw-animate-css": "^1.4.0",
+    "ws": "^8.19.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@repo/next-config": "workspace:*",
@@ -49,6 +55,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/ws": "^8.18.1",
     "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "16.1.0",

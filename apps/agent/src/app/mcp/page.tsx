@@ -1,119 +1,75 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { getApiBase } from "@/lib/utils";
+import WebhookChat from "@/components/webhooks/WebhookChat";
+import WebhookDetail from "@/components/webhooks/WebhookDetail";
+import type { WebhookTrigger } from "@/components/webhooks/types";
 import {
-    Button,
+    Badge,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-    Textarea,
-    Badge,
-    Collapsible,
-    CollapsibleContent,
-    CollapsibleTrigger,
-    Accordion,
-    AccordionContent,
-    AccordionItem,
-    AccordionTrigger
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger,
+    buttonVariants
 } from "@repo/ui";
-import { SettingsIcon } from "lucide-react";
 
-// SSE stream consumer helper
-async function consumeSSEStream(
-    response: Response,
-    onEvent: (event: string, data: unknown) => void
-): Promise<void> {
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("No response body");
+/* ================================================================== */
+/*  Types                                                             */
+/* ================================================================== */
 
-    const decoder = new TextDecoder();
-    let buffer = "";
+type ProviderStatus = "connected" | "disconnected" | "missing_auth";
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        let currentEvent = "";
-        for (const line of lines) {
-            if (line.startsWith("event: ")) {
-                currentEvent = line.slice(7);
-            } else if (line.startsWith("data: ") && currentEvent) {
-                try {
-                    const data = JSON.parse(line.slice(6));
-                    onEvent(currentEvent, data);
-                } catch {
-                    // Ignore parse errors
-                }
-                currentEvent = "";
-            }
-        }
-    }
-}
-
-// Types matching the API responses
-interface McpStep {
-    stepNumber: number;
-    type: "tool-call" | "text" | "tool-result";
-    toolName?: string;
-    toolArgs?: unknown;
-    toolResult?: unknown;
-    text?: string;
-    finishReason?: string;
-    timestamp: number;
-}
-
-interface McpResponse {
-    text: string;
-    steps: McpStep[];
-    toolCalls: Array<{ toolName: string; args: unknown }>;
-    toolResults: Array<{ toolName: string; result: unknown }>;
-    reasoning?: string;
-    usage?: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
-    };
-    finishReason: string;
-    error?: string;
-}
-
-interface McpToolInfo {
-    name: string;
-    description: string;
-    serverId: string;
-    inputSchema?: unknown;
-}
-
-interface McpServerStatus {
+type ConnectionSummary = {
     id: string;
     name: string;
-    description: string;
+    scope: string;
+    isDefault: boolean;
+    isActive: boolean;
+    connected: boolean;
+    missingFields: string[];
+};
+
+type IntegrationProvider = {
+    id: string;
+    key: string;
+    name: string;
+    description?: string | null;
     category: string;
-    status: "connected" | "disconnected" | "error" | "missing_config";
-    tools: McpToolInfo[];
+    authType: string;
+    providerType: string;
+    status: ProviderStatus;
+    connections: ConnectionSummary[];
+    toolCount?: number;
+    actions?: Record<string, unknown> | null;
+    triggers?: Record<string, unknown> | null;
+    config?: Record<string, unknown> | null;
+};
+
+type ProvidersResponse = {
+    success: boolean;
+    providers?: IntegrationProvider[];
     error?: string;
-    requiresAuth: boolean;
-    missingEnvVars?: string[];
-}
+};
 
-interface McpStatusResponse {
-    servers: McpServerStatus[];
-    totalTools: number;
-    connectedServers: number;
-    timestamp: number;
-}
+/* ================================================================== */
+/*  Shared components                                                 */
+/* ================================================================== */
 
-// Status badge component
-function StatusBadge({ status }: { status: McpServerStatus["status"] }) {
-    const variants: Record<McpServerStatus["status"], { label: string; className: string }> = {
+const StatusBadge = ({ status }: { status: ProviderStatus }) => {
+    const variants: Record<ProviderStatus, { label: string; className: string }> = {
         connected: {
             label: "Connected",
             className: "bg-green-500/10 text-green-600 border-green-500/20"
@@ -122,13 +78,11 @@ function StatusBadge({ status }: { status: McpServerStatus["status"] }) {
             label: "Disconnected",
             className: "bg-gray-500/10 text-gray-600 border-gray-500/20"
         },
-        error: { label: "Error", className: "bg-red-500/10 text-red-600 border-red-500/20" },
-        missing_config: {
-            label: "Missing Config",
-            className: "bg-yellow-500/10 text-yellow-600 border-yellow-500/20"
+        missing_auth: {
+            label: "Missing Auth",
+            className: "bg-yellow-500/10 text-yellow-700 border-yellow-500/20"
         }
     };
-
     const variant = variants[status];
     return (
         <span
@@ -137,10 +91,9 @@ function StatusBadge({ status }: { status: McpServerStatus["status"] }) {
             {variant.label}
         </span>
     );
-}
+};
 
-// Category badge component
-function CategoryBadge({ category }: { category: string }) {
+const CategoryBadge = ({ category }: { category: string }) => {
     const colors: Record<string, string> = {
         knowledge: "bg-blue-500/10 text-blue-600",
         web: "bg-purple-500/10 text-purple-600",
@@ -149,7 +102,6 @@ function CategoryBadge({ category }: { category: string }) {
         communication: "bg-pink-500/10 text-pink-600",
         automation: "bg-cyan-500/10 text-cyan-600"
     };
-
     return (
         <span
             className={`inline-flex items-center rounded px-1.5 py-0.5 text-xs font-medium ${colors[category] || "bg-gray-500/10 text-gray-600"}`}
@@ -157,521 +109,412 @@ function CategoryBadge({ category }: { category: string }) {
             {category}
         </span>
     );
-}
+};
 
-// Step visualization component
-function ExecutionStep({ step }: { step: McpStep }) {
-    const [isOpen, setIsOpen] = useState(false);
+const ConnectionBadge = ({ connected }: { connected: boolean }) => (
+    <Badge variant="outline" className={connected ? "text-green-600" : "text-gray-500"}>
+        {connected ? "Ready" : "Needs auth"}
+    </Badge>
+);
 
-    const getStepIcon = () => {
-        switch (step.type) {
-            case "tool-call":
-                return "🔧";
-            case "tool-result":
-                return "📥";
-            case "text":
-                return "💬";
-            default:
-                return "•";
-        }
-    };
+/* ================================================================== */
+/*  Provider table                                                    */
+/* ================================================================== */
 
-    const getStepColor = () => {
-        switch (step.type) {
-            case "tool-call":
-                return "border-l-blue-500 bg-blue-500/5";
-            case "tool-result":
-                return "border-l-green-500 bg-green-500/5";
-            case "text":
-                return "border-l-purple-500 bg-purple-500/5";
-            default:
-                return "border-l-gray-500 bg-gray-500/5";
-        }
-    };
+function ProviderTable({ providers }: { providers: IntegrationProvider[] }) {
+    if (providers.length === 0) {
+        return (
+            <Card>
+                <CardContent className="text-muted-foreground py-6 text-sm">
+                    No providers in this category yet.
+                </CardContent>
+            </Card>
+        );
+    }
 
     return (
-        <Collapsible open={isOpen} onOpenChange={setIsOpen}>
-            <CollapsibleTrigger className="w-full">
-                <div
-                    className={`hover:bg-muted/50 flex items-center gap-3 rounded-md border-l-4 p-3 transition-colors ${getStepColor()}`}
-                >
-                    <span className="text-lg">{getStepIcon()}</span>
-                    <div className="flex-1 text-left">
-                        <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs font-medium">
-                                Step {step.stepNumber}
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                                {step.type}
-                            </Badge>
-                            {step.toolName && (
-                                <code className="text-primary bg-muted rounded px-1.5 py-0.5 font-mono text-xs">
-                                    {step.toolName}
-                                </code>
+        <Table>
+            <TableHeader>
+                <TableRow>
+                    <TableHead>Provider</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Connections</TableHead>
+                    <TableHead>Auth</TableHead>
+                    <TableHead>Actions / Triggers</TableHead>
+                    <TableHead />
+                </TableRow>
+            </TableHeader>
+            <TableBody>
+                {providers.map((provider) => (
+                    <TableRow key={provider.id}>
+                        <TableCell className="whitespace-normal">
+                            <div className="font-medium">{provider.name}</div>
+                            <div className="text-muted-foreground text-xs">
+                                {provider.description}
+                            </div>
+                        </TableCell>
+                        <TableCell>
+                            <CategoryBadge category={provider.category} />
+                        </TableCell>
+                        <TableCell>
+                            <StatusBadge status={provider.status} />
+                        </TableCell>
+                        <TableCell className="whitespace-normal">
+                            {provider.connections.length === 0 ? (
+                                <span className="text-muted-foreground text-xs">
+                                    No connections
+                                </span>
+                            ) : (
+                                <div className="space-y-2">
+                                    {provider.connections.map((connection) => (
+                                        <div
+                                            key={connection.id}
+                                            className="flex flex-wrap items-center gap-2 text-xs"
+                                        >
+                                            <span className="font-medium">{connection.name}</span>
+                                            <span className="text-muted-foreground">
+                                                {connection.scope}
+                                                {connection.isDefault ? " · default" : ""}
+                                                {!connection.isActive ? " · disabled" : ""}
+                                            </span>
+                                            <ConnectionBadge connected={connection.connected} />
+                                            {connection.missingFields.length > 0 && (
+                                                <span className="text-yellow-600">
+                                                    Missing: {connection.missingFields.join(", ")}
+                                                </span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
                             )}
-                        </div>
-                        {step.text && (
-                            <p className="text-muted-foreground mt-1 line-clamp-1 text-sm">
-                                {step.text.substring(0, 100)}...
-                            </p>
-                        )}
-                    </div>
-                    <svg
-                        className={`h-4 w-4 transition-transform ${isOpen ? "rotate-180" : ""}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                    >
-                        <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M19 9l-7 7-7-7"
-                        />
-                    </svg>
-                </div>
-            </CollapsibleTrigger>
-            <CollapsibleContent>
-                <div className="bg-muted/30 mt-2 ml-8 rounded-md border p-3">
-                    {step.toolArgs !== undefined && (
-                        <div className="mb-3">
-                            <p className="text-muted-foreground mb-1 text-xs font-medium">
-                                Input Arguments:
-                            </p>
-                            <pre className="bg-background overflow-auto rounded p-2 text-xs">
-                                {JSON.stringify(step.toolArgs, null, 2)}
-                            </pre>
-                        </div>
-                    )}
-                    {step.toolResult !== undefined && (
-                        <div className="mb-3">
-                            <p className="text-muted-foreground mb-1 text-xs font-medium">
-                                Result:
-                            </p>
-                            <pre className="bg-background max-h-64 overflow-auto rounded p-2 text-xs">
-                                {typeof step.toolResult === "string"
-                                    ? step.toolResult
-                                    : JSON.stringify(step.toolResult, null, 2)}
-                            </pre>
-                        </div>
-                    )}
-                    {step.text && (
-                        <div>
-                            <p className="text-muted-foreground mb-1 text-xs font-medium">Text:</p>
-                            <p className="text-sm whitespace-pre-wrap">{step.text}</p>
-                        </div>
-                    )}
-                </div>
-            </CollapsibleContent>
-        </Collapsible>
+                        </TableCell>
+                        <TableCell className="text-xs uppercase">{provider.authType}</TableCell>
+                        <TableCell className="text-muted-foreground text-xs">
+                            {provider.toolCount ??
+                                (Array.isArray(provider.actions?.["actions"])
+                                    ? (provider.actions?.["actions"] as unknown[]).length
+                                    : provider.actions
+                                      ? Object.keys(provider.actions).length
+                                      : 0)}
+                            {" / "}
+                            {Array.isArray(provider.triggers?.["triggers"])
+                                ? (provider.triggers?.["triggers"] as unknown[]).length
+                                : provider.triggers
+                                  ? Object.keys(provider.triggers).length
+                                  : 0}
+                        </TableCell>
+                        <TableCell className="text-right">
+                            <Link
+                                href={`/mcp/providers/${provider.key}`}
+                                className={buttonVariants({ variant: "outline", size: "sm" })}
+                            >
+                                Manage
+                            </Link>
+                        </TableCell>
+                    </TableRow>
+                ))}
+            </TableBody>
+        </Table>
     );
 }
 
-export default function McpPage() {
-    const [query, setQuery] = useState("Navigate to https://example.com and describe what you see");
-    const [result, setResult] = useState<McpResponse | null>(null);
-    const [loading, setLoading] = useState(false);
-    const [serverStatus, setServerStatus] = useState<McpStatusResponse | null>(null);
-    const [statusLoading, setStatusLoading] = useState(true);
-    const [selectedServer, setSelectedServer] = useState<string | null>(null);
+/* ================================================================== */
+/*  Webhook detail panel                                              */
+/* ================================================================== */
 
-    // Fetch MCP server status on mount
+/* ================================================================== */
+/*  Webhooks tab (chat 1/3 + table 2/3)                               */
+/* ================================================================== */
+
+function WebhooksTab({
+    webhooks,
+    origin,
+    onRefresh
+}: {
+    webhooks: WebhookTrigger[];
+    origin: string;
+    onRefresh: () => void;
+}) {
+    const [selectedId, setSelectedId] = useState<string | null>(null);
+
+    const selectedWebhook = webhooks.find((wh) => wh.id === selectedId) || null;
+
+    const handleToggleActive = async (target: WebhookTrigger) => {
+        try {
+            await fetch(`${getApiBase()}/api/triggers/${target.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isActive: !target.isActive })
+            });
+            await onRefresh();
+        } catch (error) {
+            console.error("Failed to update webhook:", error);
+        }
+    };
+
+    const handleDelete = async (target: WebhookTrigger) => {
+        const confirmed = window.confirm(`Delete "${target.name}"? This cannot be undone.`);
+        if (!confirmed) return;
+        try {
+            await fetch(`${getApiBase()}/api/triggers/${target.id}`, { method: "DELETE" });
+            setSelectedId(null);
+            await onRefresh();
+        } catch (error) {
+            console.error("Failed to delete webhook:", error);
+        }
+    };
+
+    return (
+        <div className="flex gap-6" style={{ height: "calc(100vh - 18rem)" }}>
+            {/* Left 1/3: Chat */}
+            <WebhookChat
+                webhooksCount={webhooks.length}
+                onRefresh={onRefresh}
+                showHeader
+                headerTitle="Webhook Setup"
+                className="w-1/3"
+            />
+
+            {/* Right 2/3: Table + detail */}
+            <div className="flex w-2/3 flex-col gap-4 overflow-auto">
+                {/* Detail panel */}
+                {selectedWebhook && (
+                    <WebhookDetail
+                        webhook={selectedWebhook}
+                        origin={origin}
+                        onClose={() => setSelectedId(null)}
+                        onToggleActive={handleToggleActive}
+                        onDelete={handleDelete}
+                    />
+                )}
+
+                {/* Table */}
+                <Card className="flex-1">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-sm">All Webhooks</CardTitle>
+                            <button
+                                onClick={onRefresh}
+                                className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
+                            >
+                                Refresh
+                            </button>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="p-0">
+                        {webhooks.length === 0 ? (
+                            <div className="text-muted-foreground px-6 py-8 text-center text-sm">
+                                No webhooks yet. Use the chat to create one.
+                            </div>
+                        ) : (
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Agent</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Triggered</TableHead>
+                                        <TableHead>Created</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {webhooks.map((wh) => (
+                                        <TableRow
+                                            key={wh.id}
+                                            className={`cursor-pointer transition-colors ${selectedId === wh.id ? "bg-muted" : "hover:bg-muted/50"}`}
+                                            onClick={() =>
+                                                setSelectedId(selectedId === wh.id ? null : wh.id)
+                                            }
+                                        >
+                                            <TableCell className="text-xs font-medium whitespace-nowrap">
+                                                {wh.name}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-xs">
+                                                {wh.agent?.name || "Unknown"}
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    variant={wh.isActive ? "default" : "secondary"}
+                                                >
+                                                    {wh.isActive ? "Active" : "Disabled"}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-xs">
+                                                {wh.triggerCount > 0 ? `${wh.triggerCount}x` : "--"}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                                                {new Date(wh.createdAt).toLocaleDateString()}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+}
+
+/* ================================================================== */
+/*  Main page                                                         */
+/* ================================================================== */
+
+export default function IntegrationsHubPage() {
+    const [providers, setProviders] = useState<IntegrationProvider[]>([]);
+    const [webhooks, setWebhooks] = useState<WebhookTrigger[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+    const loadWebhooks = useCallback(async () => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/triggers?type=webhook`);
+            const data = await res.json();
+            if (data.success) {
+                setWebhooks(data.triggers || []);
+            }
+        } catch (err) {
+            console.error("Failed to load webhooks:", err);
+        }
+    }, []);
+
     useEffect(() => {
-        const fetchStatus = async () => {
+        const fetchProviders = async () => {
             try {
-                const res = await fetch(`${getApiBase()}/api/mcp/status`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setServerStatus(data);
+                const response = await fetch(`${getApiBase()}/api/integrations/providers`);
+                const data = (await response.json()) as ProvidersResponse;
+                if (!data.success) {
+                    setError(data.error || "Failed to load providers");
+                    return;
                 }
-            } catch (error) {
-                console.error("Failed to fetch MCP status:", error);
+                setProviders(data.providers || []);
+            } catch (err) {
+                setError(err instanceof Error ? err.message : "Failed to load providers");
             } finally {
-                setStatusLoading(false);
+                setLoading(false);
             }
         };
 
-        fetchStatus();
-    }, []);
+        fetchProviders();
+        loadWebhooks();
+    }, [loadWebhooks]);
 
-    const handleQuery = useCallback(async () => {
-        setLoading(true);
-        setResult(null);
+    const sortProviders = (list: IntegrationProvider[]) =>
+        [...list].sort((a, b) => {
+            const categoryCompare = a.category.localeCompare(b.category);
+            if (categoryCompare !== 0) return categoryCompare;
+            return a.name.localeCompare(b.name);
+        });
 
-        try {
-            const res = await fetch(`${getApiBase()}/api/mcp`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ message: query, maxSteps: 10 })
-            });
+    const mcpProviders = useMemo(
+        () =>
+            sortProviders(
+                providers.filter((p) => p.providerType === "mcp" || p.providerType === "custom")
+            ),
+        [providers]
+    );
 
-            if (!res.ok) {
-                const data = await res.json();
-                setResult({
-                    text: "",
-                    steps: [],
-                    toolCalls: [],
-                    toolResults: [],
-                    finishReason: "error",
-                    error: data.error || "Failed to query MCP agent"
-                });
-                setLoading(false);
-                return;
-            }
-
-            const steps: McpStep[] = [];
-            let currentText = "";
-
-            await consumeSSEStream(res, (event, data) => {
-                const d = data as McpStep & {
-                    chunk?: string;
-                    full?: string;
-                    text?: string;
-                    steps?: McpStep[];
-                    finishReason?: string;
-                    message?: string;
-                };
-
-                if (event === "text") {
-                    currentText = d.full || "";
-                    setResult({
-                        text: currentText,
-                        steps: [...steps],
-                        toolCalls: [],
-                        toolResults: [],
-                        finishReason: "streaming"
-                    });
-                } else if (event === "step") {
-                    steps.push(d);
-                    setResult({
-                        text: currentText,
-                        steps: [...steps],
-                        toolCalls: [],
-                        toolResults: [],
-                        finishReason: "streaming"
-                    });
-                } else if (event === "done") {
-                    setResult({
-                        text: d.text || currentText,
-                        steps: d.steps || steps,
-                        toolCalls: [],
-                        toolResults: [],
-                        finishReason: d.finishReason || "stop"
-                    });
-                } else if (event === "error") {
-                    setResult({
-                        text: currentText,
-                        steps,
-                        toolCalls: [],
-                        toolResults: [],
-                        finishReason: "error",
-                        error: d.message || "MCP request failed"
-                    });
-                }
-            });
-        } catch {
-            setResult({
-                text: "",
-                steps: [],
-                toolCalls: [],
-                toolResults: [],
-                finishReason: "error",
-                error: "Failed to query MCP agent"
-            });
-        }
-        setLoading(false);
-    }, [query]);
-
-    const examples = [
-        {
-            query: "Navigate to https://example.com and take a screenshot",
-            description: "Playwright browser automation",
-            server: "playwright"
-        },
-        {
-            query: "Scrape the content from https://example.com",
-            description: "Firecrawl web scraping",
-            server: "firecrawl"
-        },
-        {
-            query: "Get my recent HubSpot contacts",
-            description: "HubSpot CRM lookup",
-            server: "hubspot"
-        },
-        {
-            query: "Show me my recent Jira issues",
-            description: "Jira issue search",
-            server: "jira"
-        },
-        {
-            query: "List my recent JustCall calls",
-            description: "JustCall call logs",
-            server: "justcall"
-        }
-    ];
+    const oauthProviders = useMemo(
+        () => sortProviders(providers.filter((p) => p.providerType === "oauth")),
+        [providers]
+    );
 
     return (
-        <div className="container mx-auto max-w-7xl space-y-6 p-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
+        <div className="container mx-auto space-y-6 py-6">
+            <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
-                    <h1 className="mb-2 text-3xl font-bold">MCP Connections</h1>
+                    <h1 className="text-3xl font-bold">Integrations Hub</h1>
                     <p className="text-muted-foreground">
-                        Model Context Protocol (MCP) enables agents to use external tools. Monitor
-                        connected servers and test tool execution with full visibility into the
-                        execution chain.
+                        Manage MCP servers, webhooks, and OAuth integrations in one place.
                     </p>
                 </div>
-                <Link
-                    href="/mcp/setup"
-                    className="border-border bg-background hover:bg-muted hover:text-foreground inline-flex h-8 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-medium whitespace-nowrap transition-all"
-                >
-                    <SettingsIcon className="h-4 w-4" />
-                    Setup Cursor
-                </Link>
+                <div className="flex flex-wrap gap-2">
+                    <Link href="/mcp/setup-chat" className={buttonVariants({ variant: "outline" })}>
+                        MCP Setup Chat
+                    </Link>
+                    <Link href="/mcp/setup" className={buttonVariants({ variant: "outline" })}>
+                        Setup &amp; Debug
+                    </Link>
+                </div>
             </div>
 
-            {/* Server Status Overview */}
-            <Card>
-                <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <CardTitle className="text-lg">MCP Servers</CardTitle>
-                            <CardDescription>Connected servers and available tools</CardDescription>
-                        </div>
-                        {serverStatus && (
-                            <div className="flex items-center gap-4 text-sm">
-                                <span className="text-muted-foreground">
-                                    <span className="text-foreground font-medium">
-                                        {serverStatus.connectedServers}
-                                    </span>
-                                    /{serverStatus.servers.length} servers connected
-                                </span>
-                                <span className="text-muted-foreground">
-                                    <span className="text-foreground font-medium">
-                                        {serverStatus.totalTools}
-                                    </span>{" "}
-                                    tools available
-                                </span>
-                            </div>
-                        )}
-                    </div>
-                </CardHeader>
-                <CardContent>
-                    {statusLoading ? (
-                        <div className="flex items-center justify-center py-8">
-                            <div className="border-primary h-8 w-8 animate-spin rounded-full border-b-2" />
-                        </div>
-                    ) : serverStatus ? (
-                        <Accordion
-                            value={selectedServer ? [selectedServer] : []}
-                            onValueChange={(value) => setSelectedServer(value[0] ?? null)}
-                        >
-                            <div className="grid gap-2">
-                                {serverStatus.servers.map((server) => (
-                                    <AccordionItem
-                                        key={server.id}
-                                        value={server.id}
-                                        className="rounded-lg border"
-                                    >
-                                        <AccordionTrigger className="px-4 py-3 hover:no-underline">
-                                            <div className="flex flex-1 items-center gap-3">
-                                                <div className="flex-1 text-left">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="font-medium">
-                                                            {server.name}
-                                                        </span>
-                                                        <CategoryBadge category={server.category} />
-                                                        <StatusBadge status={server.status} />
-                                                    </div>
-                                                    <p className="text-muted-foreground mt-0.5 text-sm">
-                                                        {server.description}
-                                                    </p>
-                                                </div>
-                                                <span className="text-muted-foreground text-sm">
-                                                    {server.tools.length} tools
-                                                </span>
-                                            </div>
-                                        </AccordionTrigger>
-                                        <AccordionContent>
-                                            <div className="px-4 pb-3">
-                                                {server.error && (
-                                                    <div className="bg-destructive/10 text-destructive mb-3 rounded-md p-2 text-sm">
-                                                        {server.error}
-                                                    </div>
-                                                )}
-                                                {server.tools.length > 0 ? (
-                                                    <div className="grid gap-2">
-                                                        {server.tools.map((tool) => (
-                                                            <div
-                                                                key={tool.name}
-                                                                className="bg-muted/30 rounded-md border p-2"
-                                                            >
-                                                                <code className="text-primary font-mono text-sm">
-                                                                    {server.id}_{tool.name}
-                                                                </code>
-                                                                <p className="text-muted-foreground mt-1 text-xs">
-                                                                    {tool.description}
-                                                                </p>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                ) : (
-                                                    <p className="text-muted-foreground text-sm">
-                                                        No tools available.{" "}
-                                                        {server.status === "missing_config"
-                                                            ? "Configure the required environment variables to enable this server."
-                                                            : "Server may not be running."}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </AccordionContent>
-                                    </AccordionItem>
-                                ))}
-                            </div>
-                        </Accordion>
-                    ) : (
-                        <p className="text-muted-foreground py-4 text-center">
-                            Failed to load server status
-                        </p>
-                    )}
-                </CardContent>
-            </Card>
+            {loading && (
+                <div className="text-muted-foreground text-sm">Loading integrations...</div>
+            )}
 
-            {/* Query Section */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-                <div className="space-y-6 lg:col-span-2">
-                    {/* Query Input */}
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Query Agent</CardTitle>
-                            <CardDescription>
-                                Ask a question and watch the agent use MCP tools to find the answer.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <Textarea
-                                value={query}
-                                onChange={(e) => setQuery(e.target.value)}
-                                rows={3}
-                                placeholder="Ask a question..."
-                                className="resize-none"
-                            />
-                            <div className="flex items-center gap-4">
-                                <Button onClick={handleQuery} disabled={loading || !query.trim()}>
-                                    {loading ? (
-                                        <>
-                                            <div className="mr-2 h-4 w-4 animate-spin rounded-full border-b-2 border-white" />
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        "Run Query"
-                                    )}
-                                </Button>
-                                {result && (
-                                    <span className="text-muted-foreground text-sm">
-                                        {result.steps.length} steps executed
-                                        {result.usage && ` • ${result.usage.totalTokens} tokens`}
-                                    </span>
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+            {error && (
+                <Card>
+                    <CardContent className="py-4 text-sm text-red-500">{error}</CardContent>
+                </Card>
+            )}
 
-                    {/* Execution Chain */}
-                    {result && (
+            {!loading && !error && (
+                <Tabs defaultValue="webhooks" className="w-full">
+                    <TabsList className="grid w-full grid-cols-3">
+                        <TabsTrigger value="webhooks">
+                            Webhooks
+                            {webhooks.length > 0 && (
+                                <Badge variant="secondary" className="ml-2">
+                                    {webhooks.length}
+                                </Badge>
+                            )}
+                        </TabsTrigger>
+                        <TabsTrigger value="mcp">
+                            MCP Servers
+                            {mcpProviders.length > 0 && (
+                                <Badge variant="secondary" className="ml-2">
+                                    {mcpProviders.length}
+                                </Badge>
+                            )}
+                        </TabsTrigger>
+                        <TabsTrigger value="oauth">
+                            OAuth Platforms
+                            {oauthProviders.length > 0 && (
+                                <Badge variant="secondary" className="ml-2">
+                                    {oauthProviders.length}
+                                </Badge>
+                            )}
+                        </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="webhooks" className="mt-4">
+                        <WebhooksTab webhooks={webhooks} origin={origin} onRefresh={loadWebhooks} />
+                    </TabsContent>
+
+                    <TabsContent value="mcp" className="mt-4">
                         <Card>
                             <CardHeader>
-                                <CardTitle className="flex items-center gap-2">
-                                    Execution Chain
-                                    <Badge variant={result.error ? "destructive" : "default"}>
-                                        {result.finishReason}
-                                    </Badge>
-                                </CardTitle>
+                                <CardTitle>MCP Servers</CardTitle>
                                 <CardDescription>
-                                    Step-by-step visualization of how the agent processed your
-                                    query.
+                                    Model Context Protocol servers that provide tools to your
+                                    agents.
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                {result.error && (
-                                    <div className="bg-destructive/10 text-destructive mb-4 rounded-md p-3">
-                                        <p className="font-medium">Error</p>
-                                        <p className="text-sm">{result.error}</p>
-                                    </div>
-                                )}
-
-                                {result.steps.length > 0 ? (
-                                    <div className="space-y-2">
-                                        {result.steps.map((step, index) => (
-                                            <ExecutionStep key={index} step={step} />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-muted-foreground py-4 text-center">
-                                        No execution steps recorded.
-                                    </p>
-                                )}
-
-                                {/* Final Response */}
-                                {result.text && (
-                                    <div className="bg-primary/5 mt-6 rounded-lg border p-4">
-                                        <p className="mb-2 text-sm font-medium">Final Response:</p>
-                                        <p className="text-sm whitespace-pre-wrap">{result.text}</p>
-                                    </div>
-                                )}
+                                <ProviderTable providers={mcpProviders} />
                             </CardContent>
                         </Card>
-                    )}
-                </div>
+                    </TabsContent>
 
-                {/* Examples Sidebar */}
-                <div>
-                    <Card className="sticky top-4">
-                        <CardHeader>
-                            <CardTitle>Example Queries</CardTitle>
-                            <CardDescription>Click to try these examples.</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="space-y-2">
-                                {examples.map((ex, i) => {
-                                    const server = serverStatus?.servers.find(
-                                        (s) => s.id === ex.server
-                                    );
-                                    const isAvailable = server?.status === "connected";
-
-                                    return (
-                                        <button
-                                            key={i}
-                                            onClick={() => setQuery(ex.query)}
-                                            disabled={loading}
-                                            className={`w-full rounded-md border p-3 text-left transition-colors ${
-                                                isAvailable ? "hover:bg-muted" : "opacity-50"
-                                            }`}
-                                        >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="flex-1">
-                                                    <p className="text-sm leading-tight font-medium">
-                                                        {ex.query}
-                                                    </p>
-                                                    <p className="text-muted-foreground mt-1 text-xs">
-                                                        {ex.description}
-                                                    </p>
-                                                </div>
-                                                {!isAvailable && (
-                                                    <span className="text-xs text-yellow-600">
-                                                        Not configured
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
+                    <TabsContent value="oauth" className="mt-4">
+                        <Card>
+                            <CardHeader>
+                                <CardTitle>OAuth Platforms</CardTitle>
+                                <CardDescription>
+                                    One-click OAuth integrations that connect directly to platforms.
+                                </CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <ProviderTable providers={oauthProviders} />
+                            </CardContent>
+                        </Card>
+                    </TabsContent>
+                </Tabs>
+            )}
         </div>
     );
 }

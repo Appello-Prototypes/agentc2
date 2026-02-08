@@ -29,7 +29,7 @@
  * ```
  */
 
-import { prisma, Prisma } from "@repo/database";
+import { prisma, Prisma, RunStatus, RunTriggerType } from "@repo/database";
 import { inngest } from "./inngest";
 
 /**
@@ -42,8 +42,13 @@ export type RunSource =
     | "telegram"
     | "elevenlabs"
     | "api"
+    | "webhook"
     | "test"
-    | "simulation";
+    | "simulation"
+    | "event"
+    | "mcp"
+    | "manual"
+    | "schedule";
 
 /**
  * Options for starting a new run
@@ -69,6 +74,9 @@ export interface StartRunOptions {
     tenantId?: string;
     /** Additional metadata */
     metadata?: Record<string, unknown>;
+    triggerType?: RunTriggerType;
+    triggerId?: string;
+    initialStatus?: RunStatus;
 }
 
 /**
@@ -177,13 +185,15 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 agentId: options.agentId,
                 tenantId: options.tenantId,
                 runType: options.source === "test" ? "TEST" : "PROD",
-                status: "RUNNING",
+                status: options.initialStatus ?? RunStatus.RUNNING,
                 inputText: options.input,
                 startedAt: new Date(),
                 userId: options.userId,
                 versionId: resolvedVersionId,
                 // New fields for source tracking
                 source: options.source,
+                triggerType: options.triggerType,
+                triggerId: options.triggerId,
                 sessionId: options.sessionId,
                 threadId: options.threadId
             }

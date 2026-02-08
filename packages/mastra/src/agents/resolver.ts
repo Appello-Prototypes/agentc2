@@ -83,6 +83,26 @@ function normalizeRequestContext(context?: RequestContext): RequestContext {
     };
 }
 
+const MODEL_ALIASES: Record<string, Record<string, string>> = {
+    anthropic: {
+        "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
+        "claude-sonnet-4-5-20250514": "claude-sonnet-4-5-20250929",
+        "claude-opus-4-5": "claude-opus-4-5-20251101",
+        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101"
+    }
+};
+
+function resolveModelName(provider: string, modelName: string) {
+    const alias = MODEL_ALIASES[provider]?.[modelName];
+    if (alias) {
+        console.warn(
+            `[AgentResolver] Remapping model ${provider}/${modelName} -> ${provider}/${alias}`
+        );
+        return alias;
+    }
+    return modelName;
+}
+
 /**
  * Options for resolving an agent
  */
@@ -225,7 +245,8 @@ export class AgentResolver {
         const scorers = getScorersByNames(record.scorers);
 
         // Build model string
-        const model = `${record.modelProvider}/${record.modelName}`;
+        const modelName = resolveModelName(record.modelProvider, record.modelName);
+        const model = `${record.modelProvider}/${modelName}`;
 
         const defaultOptions = this.buildDefaultOptions(record);
 

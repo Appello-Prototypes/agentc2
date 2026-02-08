@@ -9,12 +9,13 @@ import Link from "next/link";
 export function SignInForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
-    const callbackUrl = searchParams.get("callbackUrl") || "/workspace";
+    const callbackUrl = searchParams.get("callbackUrl") || "/agents";
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [socialLoading, setSocialLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -42,8 +43,36 @@ export function SignInForm() {
         }
     };
 
+    const handleGoogleSignIn = async () => {
+        setError("");
+        setSocialLoading(true);
+
+        try {
+            await signIn.social({
+                provider: "google",
+                callbackURL: callbackUrl
+            });
+        } catch (err) {
+            setError("An unexpected error occurred");
+            console.error(err);
+            setSocialLoading(false);
+        }
+    };
+
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignIn}
+                disabled={loading || socialLoading}
+            >
+                {socialLoading ? "Connecting to Google..." : "Continue with Google"}
+            </Button>
+
+            <div className="text-muted-foreground text-center text-xs">or</div>
+
             <Field>
                 <FieldLabel htmlFor="email">Email</FieldLabel>
                 <Input
@@ -72,7 +101,7 @@ export function SignInForm() {
 
             {error && <FieldError>{error}</FieldError>}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || socialLoading}>
                 {loading ? "Signing in..." : "Sign In"}
             </Button>
 

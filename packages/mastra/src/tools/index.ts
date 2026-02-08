@@ -16,6 +16,23 @@ export {
     workflowUpdateTool
 } from "./workflow-crud-tools";
 export {
+    triggerUnifiedListTool,
+    triggerUnifiedGetTool,
+    triggerUnifiedCreateTool,
+    triggerUnifiedUpdateTool,
+    triggerUnifiedDeleteTool,
+    triggerUnifiedEnableTool,
+    triggerUnifiedDisableTool
+} from "./trigger-tools";
+export {
+    metricsLiveSummaryTool,
+    metricsAgentAnalyticsTool,
+    metricsAgentRunsTool,
+    metricsWorkflowDailyTool,
+    metricsNetworkDailyTool
+} from "./metrics-tools";
+export { workspaceIntentRecommendationTool } from "./workspace-intent-tools";
+export {
     networkCreateTool,
     networkDeleteTool,
     networkReadTool,
@@ -30,6 +47,11 @@ export {
     bimClashTool,
     bimHandoverTool
 } from "./bim-tools";
+export { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
+export {
+    integrationImportMcpJsonTool,
+    integrationConnectionTestTool
+} from "./integration-import-tools";
 
 // Tool registry for stored agents
 export {
@@ -39,7 +61,8 @@ export {
     getToolsByNamesAsync,
     getToolByName,
     hasToolInRegistry,
-    getAllMcpTools
+    getAllMcpTools,
+    invalidateMcpToolsCacheForOrg
 } from "./registry";
 export type { ToolInfo } from "./registry";
 
