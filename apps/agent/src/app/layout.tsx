@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Suspense } from "react";
 import { CommandPalette, type AppNavigationConfig } from "@repo/ui";
 import { getAppUrl } from "@repo/auth";
 
@@ -33,11 +34,13 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body>
-                <AppProvidersWrapper>
-                    <AgentHeader />
-                    {children}
-                    <CommandPalette appNavigation={appNavigation} />
-                </AppProvidersWrapper>
+                <Suspense fallback={null}>
+                    <AppProvidersWrapper>
+                        <AgentHeader />
+                        {children}
+                        <CommandPalette appNavigation={appNavigation} />
+                    </AppProvidersWrapper>
+                </Suspense>
             </body>
         </html>
     );

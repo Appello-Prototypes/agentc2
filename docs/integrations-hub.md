@@ -7,9 +7,9 @@ unified trigger pipeline.
 ## UI Entry Points
 
 - `/mcp` - Provider catalog and connection status overview
+- `/mcp/config` - MCP JSON editor (source of truth)
 - `/mcp/providers/[providerKey]` - Provider detail view (connections, actions/triggers, testing)
 - `/mcp/webhooks` - Create webhook connections wired to agent triggers
-- `/mcp/setup-chat` - MCP setup chat for importing and testing MCP JSON
 - `/mcp/setup` - Legacy setup/debug tooling
 - `/mcp/gmail` - Gmail OAuth setup and integration management
 
@@ -28,15 +28,10 @@ Webhook connections:
 - `POST /api/integrations/webhooks`
 - `POST /api/webhooks/{path}` (inbound trigger endpoint)
 
-## MCP JSON Import (Chat)
+## MCP JSON Editor
 
-The MCP setup chat accepts raw `mcp.json` (or unstructured text) and automatically:
-
-1. Parses MCP servers and matches them to known providers (via `importHints`)
-2. Creates or updates `IntegrationProvider` + `IntegrationConnection` records
-3. Runs tests and summarizes pass/fail per MCP
-
-The chat lives at `/mcp/setup-chat` and uses the `mcp-setup-agent` SYSTEM agent.
+The JSON editor is the source of truth for MCP servers. It accepts Cursor-style `mcp.json`
+and syncs connections directly to `IntegrationProvider` + `IntegrationConnection` records.
 
 Example input:
 

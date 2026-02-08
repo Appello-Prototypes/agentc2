@@ -43,15 +43,26 @@ export {
     mcpClient,
     getIntegrationProviders,
     getMcpTools,
+    getMcpToolsForServer,
+    exportMcpConfig,
+    importMcpConfig,
+    analyzeMcpConfigImpact,
+    testMcpServer,
     getMcpToolsets,
     disconnectMcp,
     executeMcpTool,
     invalidateMcpCacheForOrg,
+    resetMcpClients,
     listMcpToolDefinitions,
     MCP_SERVER_CONFIGS,
     type McpServerConfig,
+    type McpServerTestPhase,
+    type McpServerTestResult,
     type McpToolExecutionResult,
-    type McpToolDefinition
+    type McpToolDefinition,
+    type McpConfigImpact,
+    type McpConfigImpactAgent,
+    type McpConfigImpactServer
 } from "./mcp";
 
 // Scorers

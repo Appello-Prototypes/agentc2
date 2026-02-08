@@ -9,7 +9,7 @@ import { getGmailOAuthClient, GMAIL_REQUIRED_SCOPES, saveGmailCredentials } from
 const parseScopes = (scope?: string | null) =>
     new Set(
         (scope || "")
-            .split(" ")
+            .split(/[,\s]+/)
             .map((value) => value.trim())
             .filter(Boolean)
     );

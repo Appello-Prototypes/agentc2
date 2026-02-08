@@ -6,6 +6,11 @@ import { signIn } from "@repo/auth/client";
 import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
 import Link from "next/link";
 
+const GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send"
+];
+
 export function SignInForm() {
     const router = useRouter();
     const searchParams = useSearchParams();
@@ -50,7 +55,8 @@ export function SignInForm() {
         try {
             await signIn.social({
                 provider: "google",
-                callbackURL: callbackUrl
+                callbackURL: callbackUrl,
+                scopes: GMAIL_SCOPES
             });
         } catch (err) {
             setError("An unexpected error occurred");

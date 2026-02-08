@@ -26,6 +26,7 @@ export async function GET(request: NextRequest) {
                 description: true,
                 triggerType: true,
                 webhookPath: true,
+                webhookSecret: true,
                 isActive: true,
                 createdAt: true,
                 triggerCount: true,

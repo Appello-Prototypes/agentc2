@@ -1,0 +1,113 @@
+import { NextResponse } from "next/server";
+import { headers } from "next/headers";
+import { auth } from "@repo/auth";
+import { prisma } from "@repo/database";
+import { getMcpToolsForServer } from "@repo/mastra";
+import { getUserOrganizationId } from "@/lib/organization";
+import { resolveConnectionServerId } from "@/lib/integrations";
+
+/**
+ * GET /api/integrations/providers/[providerKey]/tools
+ *
+ * List tool counts for a single provider. Connects only to the provider's servers.
+ */
+export async function GET(
+    _request: Request,
+    { params }: { params: Promise<{ providerKey: string }> }
+) {
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Organization membership required" },
+                { status: 403 }
+            );
+        }
+
+        const { providerKey } = await params;
+        const provider = await prisma.integrationProvider.findFirst({
+            where: { key: providerKey, isActive: true }
+        });
+        if (!provider) {
+            return NextResponse.json(
+                { success: false, error: "Provider not found" },
+                { status: 404 }
+            );
+        }
+
+        const connections = await prisma.integrationConnection.findMany({
+            where: {
+                organizationId,
+                providerId: provider.id,
+                isActive: true,
+                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+            },
+            orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+        });
+
+        const results = [];
+        let totalTools = 0;
+
+        if (connections.length > 0) {
+            for (const connection of connections) {
+                const serverId = resolveConnectionServerId(provider.key, connection);
+                const tools = await getMcpToolsForServer({
+                    serverId,
+                    organizationId,
+                    userId: session.user.id,
+                    allowEnvFallback: false
+                }).catch(() => ({}));
+                const toolNames = Object.keys(tools);
+                const toolCount = toolNames.length;
+                totalTools += toolCount;
+                results.push({
+                    connectionId: connection.id,
+                    connectionName: connection.name,
+                    serverId,
+                    toolCount,
+                    sampleTools: toolNames.slice(0, 5)
+                });
+            }
+        } else if (provider.providerType === "mcp" || provider.providerType === "custom") {
+            const tools = await getMcpToolsForServer({
+                serverId: provider.key,
+                organizationId,
+                userId: session.user.id,
+                allowEnvFallback: true
+            }).catch(() => ({}));
+            const toolNames = Object.keys(tools);
+            const toolCount = toolNames.length;
+            totalTools += toolCount;
+            results.push({
+                connectionId: null,
+                connectionName: null,
+                serverId: provider.key,
+                toolCount,
+                sampleTools: toolNames.slice(0, 5)
+            });
+        }
+
+        return NextResponse.json({
+            success: true,
+            providerKey: provider.key,
+            totalTools,
+            servers: results
+        });
+    } catch (error) {
+        console.error("[Integrations Providers] Tool list error:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                error: error instanceof Error ? error.message : "Failed to list provider tools"
+            },
+            { status: 500 }
+        );
+    }
+}

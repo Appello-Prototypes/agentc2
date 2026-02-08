@@ -2,7 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { invalidateMcpCacheForOrg, invalidateMcpToolsCacheForOrg } from "@repo/mastra";
+import {
+    invalidateMcpCacheForOrg,
+    invalidateMcpToolsCacheForOrg,
+    resetMcpClients
+} from "@repo/mastra";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
@@ -163,6 +167,7 @@ export async function PATCH(
             metadataUpdated: metadata !== undefined
         });
 
+        resetMcpClients();
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
 
@@ -235,6 +240,7 @@ export async function DELETE(
             providerId: connection.providerId
         });
 
+        resetMcpClients();
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
 

@@ -2,7 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra";
+import {
+    getIntegrationProviders,
+    invalidateMcpCacheForOrg,
+    invalidateMcpToolsCacheForOrg,
+    resetMcpClients
+} from "@repo/mastra";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import { encryptCredentials } from "@/lib/credential-crypto";
@@ -183,6 +188,10 @@ export async function POST(request: NextRequest) {
             scope,
             name
         });
+
+        resetMcpClients();
+        invalidateMcpCacheForOrg(organizationId);
+        invalidateMcpToolsCacheForOrg(organizationId);
 
         return NextResponse.json({ success: true, connection });
     } catch (error) {

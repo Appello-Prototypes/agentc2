@@ -9,7 +9,7 @@ import {
     CardTitle,
     Label
 } from "@repo/ui";
-import { XIcon } from "lucide-react";
+import { EyeIcon, EyeOffIcon, XIcon } from "lucide-react";
 import type { WebhookTrigger } from "./types";
 
 function CopyButton({ text, label }: { text: string; label?: string }) {
@@ -30,6 +30,25 @@ function CopyButton({ text, label }: { text: string; label?: string }) {
     );
 }
 
+function WebhookSecretField({ secret }: { secret: string }) {
+    const [revealed, setRevealed] = useState(false);
+    const masked = secret.slice(0, 6) + "••••••••••••••••" + secret.slice(-4);
+
+    return (
+        <div className="bg-muted flex items-center gap-2 rounded-md border px-3 py-2">
+            <code className="flex-1 font-mono text-xs break-all">{revealed ? secret : masked}</code>
+            <button
+                onClick={() => setRevealed((prev) => !prev)}
+                className="text-muted-foreground hover:text-foreground shrink-0 transition-colors"
+                title={revealed ? "Hide secret" : "Reveal secret"}
+            >
+                {revealed ? <EyeOffIcon className="size-3.5" /> : <EyeIcon className="size-3.5" />}
+            </button>
+            <CopyButton text={secret} />
+        </div>
+    );
+}
+
 export default function WebhookDetail({
     webhook,
     origin,
@@ -46,7 +65,7 @@ export default function WebhookDetail({
     const fullUrl = webhook.webhookPath ? `${origin}/api/webhooks/${webhook.webhookPath}` : "";
 
     return (
-        <Card className="border-primary/20">
+        <Card className="border-primary/20 overflow-auto">
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                     <div>
@@ -73,9 +92,13 @@ export default function WebhookDetail({
 
                 <div className="space-y-1.5">
                     <Label className="text-muted-foreground text-xs">Webhook Secret</Label>
-                    <p className="text-muted-foreground text-xs">
-                        The secret was shown once at creation. If you lost it, create a new webhook.
-                    </p>
+                    {webhook.webhookSecret ? (
+                        <WebhookSecretField secret={webhook.webhookSecret} />
+                    ) : (
+                        <p className="text-muted-foreground text-xs">
+                            No secret found. Create a new webhook to generate one.
+                        </p>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-xs">

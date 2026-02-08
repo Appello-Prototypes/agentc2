@@ -3,6 +3,7 @@ export type WebhookTrigger = {
     name: string;
     description: string | null;
     webhookPath: string | null;
+    webhookSecret: string | null;
     isActive: boolean;
     createdAt: string;
     triggerCount: number;

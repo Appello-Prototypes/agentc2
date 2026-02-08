@@ -9,7 +9,7 @@ import { decryptCredentials } from "@/lib/credential-crypto";
 const parseScopes = (scope?: string | null) =>
     new Set(
         (scope || "")
-            .split(" ")
+            .split(/[,\s]+/)
             .map((value) => value.trim())
             .filter(Boolean)
     );

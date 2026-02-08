@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getMcpTools } from "@repo/mastra";
+import { testMcpServer, type McpServerTestResult } from "@repo/mastra";
 import { getUserOrganizationId } from "@/lib/organization";
 import {
     getConnectionMissingFields,
@@ -72,26 +72,25 @@ export async function POST(
             connection.provider.providerType === "custom"
         ) {
             const serverId = resolveConnectionServerId(connection.provider.key, connection);
-            const tools = await getMcpTools({
+            const testResult: McpServerTestResult = await testMcpServer({
+                serverId,
                 organizationId,
-                userId: session.user.id
+                userId: session.user.id,
+                allowEnvFallback: false,
+                timeoutMs: 10000
             });
-            const toolNames = Object.keys(tools).filter((name) => name.startsWith(`${serverId}_`));
-            const success = toolNames.length > 0;
+            const success = testResult.success;
+            const errorDetail = testResult.phases.find((phase) => phase.status === "fail")?.detail;
 
             await prisma.integrationConnection.update({
                 where: { id: connection.id },
                 data: {
                     lastTestedAt: new Date(),
-                    errorMessage: success ? null : "No tools available for this connection"
+                    errorMessage: success ? null : errorDetail || "Connection test failed"
                 }
             });
 
-            return NextResponse.json({
-                success,
-                toolCount: toolNames.length,
-                sampleTools: toolNames.slice(0, 5)
-            });
+            return NextResponse.json(testResult);
         }
 
         if (connection.provider.authType === "oauth") {

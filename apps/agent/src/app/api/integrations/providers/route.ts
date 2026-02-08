@@ -2,13 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma, type Prisma } from "@repo/database";
-import { getIntegrationProviders, getMcpTools } from "@repo/mastra";
+import { getIntegrationProviders } from "@repo/mastra";
 import { getUserOrganizationId } from "@/lib/organization";
-import {
-    getConnectionMissingFields,
-    getConnectionCredentials,
-    resolveConnectionServerId
-} from "@/lib/integrations";
+import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
 
 const resolveProviderStatus = (options: {
     authType: string;
@@ -68,14 +64,6 @@ export async function GET() {
             connectionsByProvider.set(connection.providerId, list);
         }
 
-        const shouldLoadTools = providers.some(
-            (provider) => provider.providerType === "mcp" || provider.providerType === "custom"
-        );
-        const mcpTools = shouldLoadTools
-            ? await getMcpTools({ organizationId, userId: session.user.id }).catch(() => ({}))
-            : {};
-        const toolNames = Object.keys(mcpTools);
-
         const response = providers.map((provider) => {
             const providerConnections = connectionsByProvider.get(provider.id) ?? [];
             const connectionDetails = providerConnections.map((connection) => {
@@ -107,17 +95,6 @@ export async function GET() {
                 hasMissing
             });
 
-            const toolCount =
-                provider.providerType === "mcp" || provider.providerType === "custom"
-                    ? providerConnections.reduce((count, connection) => {
-                          const serverId = resolveConnectionServerId(provider.key, connection);
-                          const connectionTools = toolNames.filter((name) =>
-                              name.startsWith(`${serverId}_`)
-                          );
-                          return count + connectionTools.length;
-                      }, 0)
-                    : 0;
-
             return {
                 id: provider.id,
                 key: provider.key,
@@ -128,7 +105,10 @@ export async function GET() {
                 providerType: provider.providerType,
                 status,
                 connections: connectionDetails,
-                toolCount,
+                toolCount:
+                    provider.providerType === "mcp" || provider.providerType === "custom"
+                        ? null
+                        : 0,
                 actions: provider.actionsJson,
                 triggers: provider.triggersJson,
                 config: provider.configJson

@@ -1,4 +1,4 @@
-import { createDecipheriv } from "crypto";
+import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
 import { MCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
@@ -22,6 +22,16 @@ export function invalidateMcpCacheForOrg(organizationId: string) {
             orgMcpClients.delete(key);
         }
     }
+}
+
+export function resetMcpClients() {
+    orgMcpClients.clear();
+    global.mcpClient = undefined;
+}
+
+async function invalidateMcpToolsCache(organizationId?: string | null) {
+    const { invalidateMcpToolsCacheForOrg } = await import("../tools/registry");
+    invalidateMcpToolsCacheForOrg(organizationId);
 }
 
 type EncryptedPayload = {
@@ -76,6 +86,25 @@ const decryptCredentials = (value: unknown) => {
     }
 };
 
+const encryptCredentials = (value: Record<string, unknown> | null) => {
+    if (!value || isEncryptedPayload(value)) return value;
+    const key = getEncryptionKey();
+    if (!key) return value;
+
+    const iv = randomBytes(12);
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+    const plaintext = JSON.stringify(value);
+    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+
+    return {
+        __enc: "v1",
+        iv: iv.toString("base64"),
+        tag: tag.toString("base64"),
+        data: encrypted.toString("base64")
+    };
+};
+
 type IntegrationProviderSeed = {
     key: string;
     name: string;
@@ -86,6 +115,40 @@ type IntegrationProviderSeed = {
     configJson?: Prisma.InputJsonValue;
     actionsJson?: Prisma.InputJsonValue;
     triggersJson?: Prisma.InputJsonValue;
+};
+
+type McpJsonServerConfig = {
+    command?: string;
+    args?: string[];
+    env?: Record<string, string>;
+    url?: string;
+    headers?: Record<string, string>;
+};
+
+type McpJsonConfigFile = {
+    mcpServers: Record<string, McpJsonServerConfig>;
+};
+
+export type McpConfigImpactAgent = {
+    id: string;
+    slug: string;
+    name: string;
+    toolCount: number;
+    reason: "explicit" | "mcpEnabled";
+};
+
+export type McpConfigImpactServer = {
+    serverKey: string;
+    serverName: string;
+    affectedAgents: McpConfigImpactAgent[];
+};
+
+export type McpConfigImpact = {
+    serversToDisable: McpConfigImpactServer[];
+    serversToAdd: string[];
+    serversToUpdate: string[];
+    totalAffectedAgents: number;
+    hasImpact: boolean;
 };
 
 const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
@@ -442,6 +505,224 @@ function getCredentialValue(
     }
     return undefined;
 }
+
+type ProviderImportHints = {
+    matchNames?: string[];
+    matchArgs?: string[];
+    matchUrls?: string[];
+    envAliases?: Record<string, string>;
+    headerAliases?: Record<string, string>;
+};
+
+const normalizeStringArray = (value: unknown) =>
+    Array.isArray(value) ? value.filter((item) => typeof item === "string") : [];
+
+const normalizeStringRecord = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return {};
+    }
+    return Object.entries(value as Record<string, unknown>).reduce<Record<string, string>>(
+        (acc, [key, val]) => {
+            if (typeof val === "string") {
+                acc[key] = val;
+                return acc;
+            }
+            if (val !== null && val !== undefined) {
+                acc[key] = String(val);
+            }
+            return acc;
+        },
+        {}
+    );
+};
+
+const getImportHints = (provider: IntegrationProvider | IntegrationProviderSeed) => {
+    const config = provider.configJson as Record<string, unknown> | null;
+    const hints = config?.importHints;
+    if (!hints || typeof hints !== "object" || Array.isArray(hints)) {
+        return {} as ProviderImportHints;
+    }
+    return {
+        matchNames: normalizeStringArray((hints as Record<string, unknown>).matchNames),
+        matchArgs: normalizeStringArray((hints as Record<string, unknown>).matchArgs),
+        matchUrls: normalizeStringArray((hints as Record<string, unknown>).matchUrls),
+        envAliases: normalizeStringRecord((hints as Record<string, unknown>).envAliases),
+        headerAliases: normalizeStringRecord((hints as Record<string, unknown>).headerAliases)
+    };
+};
+
+const normalizeMcpServerConfig = (value: unknown) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) {
+        return null;
+    }
+    const record = value as Record<string, unknown>;
+    const command = typeof record.command === "string" ? record.command : undefined;
+    const args = normalizeStringArray(record.args);
+    const env = normalizeStringRecord(record.env);
+    const url = typeof record.url === "string" ? record.url : undefined;
+    const headers = normalizeStringRecord(record.headers);
+
+    if (!command && !url) {
+        return null;
+    }
+
+    return { command, args, env, url, headers };
+};
+
+const scoreProviderMatch = (options: {
+    provider: IntegrationProvider;
+    serverName: string;
+    serverConfig: ReturnType<typeof normalizeMcpServerConfig>;
+}) => {
+    const { provider, serverName, serverConfig } = options;
+    const normalizedName = serverName.toLowerCase();
+    if (provider.key.toLowerCase() === normalizedName) {
+        return 100;
+    }
+
+    const hints = getImportHints(provider);
+    let score = 0;
+    if (hints.matchNames?.some((name) => name.toLowerCase() === normalizedName)) {
+        score += 3;
+    }
+    if (serverConfig?.args?.length && hints.matchArgs?.length) {
+        const normalizedArgs = serverConfig.args.map((arg) => arg.toLowerCase());
+        if (
+            hints.matchArgs.some((match) =>
+                normalizedArgs.some((arg) => arg.includes(match.toLowerCase()))
+            )
+        ) {
+            score += 1;
+        }
+    }
+    if (serverConfig?.url && hints.matchUrls?.length) {
+        const normalizedUrl = serverConfig.url.toLowerCase();
+        if (hints.matchUrls.some((match) => normalizedUrl.includes(match.toLowerCase()))) {
+            score += 2;
+        }
+    }
+    return score;
+};
+
+const resolveProviderForServer = (
+    providers: IntegrationProvider[],
+    serverName: string,
+    serverConfig: ReturnType<typeof normalizeMcpServerConfig>
+) => {
+    let best: { provider: IntegrationProvider; score: number } | null = null;
+
+    for (const provider of providers) {
+        if (provider.providerType !== "mcp" && provider.providerType !== "custom") {
+            continue;
+        }
+        const score = scoreProviderMatch({ provider, serverName, serverConfig });
+        if (score > 0 && (!best || score > best.score)) {
+            best = { provider, score };
+        }
+    }
+
+    return best?.provider ?? null;
+};
+
+const serverDefinitionToConfig = (
+    definition: MastraMCPServerDefinition
+): McpJsonServerConfig | null => {
+    if ("command" in definition) {
+        const env = normalizeStringRecord(definition.env);
+        return {
+            command: definition.command,
+            args: Array.isArray(definition.args) ? definition.args : [],
+            ...(Object.keys(env).length > 0 ? { env } : {})
+        };
+    }
+
+    if ("url" in definition) {
+        const headers = normalizeStringRecord(definition.requestInit?.headers);
+        return {
+            url: definition.url.toString(),
+            ...(Object.keys(headers).length > 0 ? { headers } : {})
+        };
+    }
+
+    return null;
+};
+
+const buildCustomProviderConfig = (
+    serverConfig: NonNullable<ReturnType<typeof normalizeMcpServerConfig>>
+) => {
+    if (serverConfig.url) {
+        const headerMapping = Object.keys(serverConfig.headers || {}).reduce<
+            Record<string, string>
+        >((acc, key) => {
+            acc[key] = key;
+            return acc;
+        }, {});
+        return {
+            transport: "http",
+            url: serverConfig.url,
+            ...(Object.keys(headerMapping).length > 0 ? { headerMapping } : {})
+        };
+    }
+
+    if (serverConfig.command) {
+        const envMapping = Object.keys(serverConfig.env || {}).reduce<Record<string, string>>(
+            (acc, key) => {
+                acc[key] = key;
+                return acc;
+            },
+            {}
+        );
+        return {
+            transport: "stdio",
+            command: serverConfig.command,
+            args: serverConfig.args,
+            ...(Object.keys(envMapping).length > 0 ? { envMapping } : {})
+        };
+    }
+
+    return null;
+};
+
+const buildCredentialsForProvider = (
+    provider: IntegrationProvider,
+    serverConfig: NonNullable<ReturnType<typeof normalizeMcpServerConfig>>
+) => {
+    const credentials: Record<string, unknown> = {};
+
+    if (provider.providerType === "custom") {
+        for (const [key, value] of Object.entries(serverConfig.env || {})) {
+            credentials[key] = value;
+        }
+        for (const [key, value] of Object.entries(serverConfig.headers || {})) {
+            credentials[key] = value;
+        }
+        return credentials;
+    }
+
+    const hints = getImportHints(provider);
+    const envAliases = hints.envAliases ?? {};
+    for (const [key, value] of Object.entries(serverConfig.env || {})) {
+        const alias = envAliases[key] ?? key;
+        credentials[alias] = value;
+    }
+
+    const headerAliases = hints.headerAliases ?? {};
+    for (const [key, value] of Object.entries(serverConfig.headers || {})) {
+        const alias = headerAliases[key];
+        if (!alias) continue;
+        let normalizedValue = value;
+        if (
+            key.toLowerCase() === "authorization" &&
+            typeof normalizedValue === "string" &&
+            normalizedValue.toLowerCase().startsWith("bearer ")
+        ) {
+            normalizedValue = normalizedValue.slice(7);
+        }
+        credentials[alias] = normalizedValue;
+    }
+
+    return credentials;
+};
 
 async function ensureIntegrationProviders() {
     await Promise.all(
@@ -838,15 +1119,6 @@ function buildServerConfigs(options: {
         connectionsByProvider.set(connection.provider.key, list);
     }
 
-    // Ensure Playwright is always available
-    const playwrightProvider = INTEGRATION_PROVIDER_SEEDS.find((seed) => seed.key === "playwright");
-    if (playwrightProvider) {
-        servers.playwright = {
-            command: "npx",
-            args: ["-y", "@playwright/mcp@latest"]
-        };
-    }
-
     for (const [providerKey, providerConnections] of connectionsByProvider.entries()) {
         const defaultConnection =
             providerConnections.find((conn) => conn.isDefault) ?? providerConnections[0];
@@ -1031,7 +1303,7 @@ function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
         const servers = buildServerConfigs({
             connections: [],
-            allowEnvFallback: true
+            allowEnvFallback: false
         });
 
         global.mcpClient = new MCPClient({
@@ -1069,7 +1341,7 @@ async function getMcpClientForOrganization(options?: {
 
     const servers = buildServerConfigs({
         connections,
-        allowEnvFallback: true
+        allowEnvFallback: false
     });
 
     const client = new MCPClient({
@@ -1102,6 +1374,705 @@ export async function getMcpTools(
     const client = await getMcpClientForOrganization(options);
     const tools = await client.listTools();
     return sanitizeMcpTools(tools);
+}
+
+async function resolveServerDefinitionById(options: {
+    serverId: string;
+    organizationId?: string | null;
+    userId?: string | null;
+    allowEnvFallback?: boolean;
+}) {
+    const { serverId, allowEnvFallback = true } = options;
+    const connections = await getIntegrationConnections({
+        organizationId: options.organizationId,
+        userId: options.userId
+    });
+
+    const connectionsByProvider = new Map<string, ConnectionWithProvider[]>();
+    for (const connection of connections) {
+        const list = connectionsByProvider.get(connection.provider.key) ?? [];
+        list.push(connection);
+        connectionsByProvider.set(connection.provider.key, list);
+    }
+
+    for (const [providerKey, providerConnections] of connectionsByProvider.entries()) {
+        const defaultConnection =
+            providerConnections.find((conn) => conn.isDefault) ?? providerConnections[0];
+
+        for (const connection of providerConnections) {
+            const isDefault = connection.id === defaultConnection?.id;
+            const resolvedServerId = resolveServerId(providerKey, connection, isDefault);
+            if (resolvedServerId !== serverId) continue;
+
+            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const credentials =
+                decryptedCredentials &&
+                typeof decryptedCredentials === "object" &&
+                !Array.isArray(decryptedCredentials)
+                    ? (decryptedCredentials as Record<string, unknown>)
+                    : {};
+            const serverDefinition = buildServerDefinitionForProvider({
+                provider: connection.provider,
+                connection,
+                credentials,
+                allowEnvFallback
+            });
+            if (!serverDefinition) {
+                return null;
+            }
+
+            return {
+                serverDefinition,
+                provider: connection.provider,
+                connection
+            };
+        }
+    }
+
+    if (allowEnvFallback && !serverId.includes("__")) {
+        const providerSeed = INTEGRATION_PROVIDER_SEEDS.find(
+            (seed) => seed.key === serverId && seed.providerType === "mcp"
+        );
+        if (providerSeed) {
+            const serverDefinition = buildServerDefinitionForProvider({
+                provider: providerSeed as IntegrationProvider,
+                connection: null,
+                credentials: {},
+                allowEnvFallback: true
+            });
+            if (!serverDefinition) {
+                return null;
+            }
+
+            return {
+                serverDefinition,
+                provider: providerSeed as IntegrationProvider,
+                connection: null
+            };
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Get MCP tools for a single server without connecting to all servers.
+ */
+export async function getMcpToolsForServer(options: {
+    serverId: string;
+    organizationId?: string | null;
+    userId?: string | null;
+    allowEnvFallback?: boolean;
+}) {
+    const { serverId } = options;
+    const resolved = await resolveServerDefinitionById(options);
+    if (!resolved?.serverDefinition) {
+        return {};
+    }
+
+    const client = new MCPClient({
+        id: `mastra-mcp-client-${serverId}`,
+        servers: { [serverId]: resolved.serverDefinition },
+        timeout: 60000
+    });
+
+    try {
+        const tools = await client.listTools();
+        return sanitizeMcpTools(tools);
+    } finally {
+        await client.disconnect();
+    }
+}
+
+export async function exportMcpConfig(options: {
+    organizationId: string;
+    userId?: string | null;
+}): Promise<McpJsonConfigFile> {
+    const connections = await getIntegrationConnections({
+        organizationId: options.organizationId,
+        userId: options.userId
+    });
+    const mcpServers: Record<string, McpJsonServerConfig> = {};
+
+    const connectionsByProvider = new Map<string, ConnectionWithProvider[]>();
+    for (const connection of connections) {
+        if (
+            connection.provider.providerType !== "mcp" &&
+            connection.provider.providerType !== "custom"
+        ) {
+            continue;
+        }
+        const list = connectionsByProvider.get(connection.provider.key) ?? [];
+        list.push(connection);
+        connectionsByProvider.set(connection.provider.key, list);
+    }
+
+    for (const [providerKey, providerConnections] of connectionsByProvider.entries()) {
+        const defaultConnection =
+            providerConnections.find((conn) => conn.isDefault) ?? providerConnections[0];
+
+        for (const connection of providerConnections) {
+            const isDefault = connection.id === defaultConnection?.id;
+            const serverId = resolveServerId(providerKey, connection, isDefault);
+            const decryptedCredentials = decryptCredentials(connection.credentials);
+            const credentials =
+                decryptedCredentials &&
+                typeof decryptedCredentials === "object" &&
+                !Array.isArray(decryptedCredentials)
+                    ? (decryptedCredentials as Record<string, unknown>)
+                    : {};
+            const serverDefinition = buildServerDefinitionForProvider({
+                provider: connection.provider,
+                connection,
+                credentials,
+                allowEnvFallback: false
+            });
+            if (!serverDefinition) {
+                continue;
+            }
+            const config = serverDefinitionToConfig(serverDefinition);
+            if (config) {
+                mcpServers[serverId] = config;
+            }
+        }
+    }
+
+    return { mcpServers };
+}
+
+export async function importMcpConfig(options: {
+    organizationId: string;
+    userId?: string | null;
+    config: McpJsonConfigFile;
+    mode?: "replace" | "merge";
+}) {
+    const { organizationId, userId, config, mode = "replace" } = options;
+    if (!config || typeof config !== "object" || !config.mcpServers) {
+        throw new Error("Invalid MCP config: missing mcpServers");
+    }
+    if (typeof config.mcpServers !== "object" || Array.isArray(config.mcpServers)) {
+        throw new Error("Invalid MCP config: mcpServers must be an object");
+    }
+
+    await ensureIntegrationProviders();
+
+    const providers = await prisma.integrationProvider.findMany({
+        where: { isActive: true }
+    });
+    const providersByKey = new Map(providers.map((provider) => [provider.key, provider]));
+
+    const existingConnections = await prisma.integrationConnection.findMany({
+        where: {
+            organizationId,
+            OR: [{ scope: "org" }, ...(userId ? [{ scope: "user", userId }] : [])],
+            provider: { providerType: { in: ["mcp", "custom"] } }
+        },
+        include: { provider: true },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+    });
+
+    const connectionMatchMap = new Map<string, ConnectionWithProvider>();
+    for (const connection of existingConnections) {
+        const metadata =
+            connection.metadata && typeof connection.metadata === "object"
+                ? (connection.metadata as Record<string, unknown>)
+                : null;
+        const serverName =
+            metadata && typeof metadata.mcpServerName === "string"
+                ? metadata.mcpServerName
+                : connection.name;
+        const matchKey = `${connection.provider.key}::${serverName.toLowerCase()}`;
+        if (!connectionMatchMap.has(matchKey)) {
+            connectionMatchMap.set(matchKey, connection);
+        }
+    }
+
+    const seenConnectionIds = new Set<string>();
+    const createdProviders: string[] = [];
+    const updatedProviders: string[] = [];
+    const createdConnections: string[] = [];
+    const updatedConnections: string[] = [];
+    const disabledConnections: string[] = [];
+    const warnings: string[] = [];
+
+    await prisma.$transaction(async (tx) => {
+        for (const [serverName, rawServerConfig] of Object.entries(config.mcpServers)) {
+            const serverConfig = normalizeMcpServerConfig(rawServerConfig);
+            if (!serverConfig) {
+                warnings.push(`Skipped '${serverName}': invalid server config`);
+                continue;
+            }
+
+            let provider =
+                providersByKey.get(serverName) ??
+                resolveProviderForServer(providers, serverName, serverConfig);
+
+            if (!provider) {
+                const isSafeKey = /^[a-zA-Z0-9_-]+$/.test(serverName);
+                const providerKey = isSafeKey
+                    ? serverName
+                    : `custom-${serverName
+                          .toLowerCase()
+                          .replace(/\s+/g, "-")
+                          .replace(/[^a-z0-9_-]/g, "")}`;
+                const customConfig = buildCustomProviderConfig(serverConfig);
+                const created = await tx.integrationProvider.create({
+                    data: {
+                        key: providerKey,
+                        name: serverName,
+                        description: null,
+                        category: "custom",
+                        authType: "custom",
+                        providerType: "custom",
+                        configJson: customConfig
+                            ? (customConfig as Prisma.InputJsonValue)
+                            : undefined,
+                        isActive: true
+                    }
+                });
+                providers.push(created);
+                providersByKey.set(created.key, created);
+                provider = created;
+                createdProviders.push(created.key);
+            } else if (provider.providerType === "custom") {
+                const customConfig = buildCustomProviderConfig(serverConfig);
+                if (customConfig) {
+                    await tx.integrationProvider.update({
+                        where: { id: provider.id },
+                        data: {
+                            configJson: customConfig as Prisma.InputJsonValue
+                        }
+                    });
+                    updatedProviders.push(provider.key);
+                }
+            }
+
+            if (!provider) {
+                warnings.push(`Skipped '${serverName}': unable to resolve provider`);
+                continue;
+            }
+
+            const credentials = buildCredentialsForProvider(provider, serverConfig);
+            const encryptedCredentials = encryptCredentials(credentials);
+            const isDefault = provider.key.toLowerCase() === serverName.toLowerCase();
+
+            if (isDefault) {
+                await tx.integrationConnection.updateMany({
+                    where: {
+                        organizationId,
+                        providerId: provider.id,
+                        scope: "org"
+                    },
+                    data: { isDefault: false }
+                });
+            }
+
+            const matchKey = `${provider.key}::${serverName.toLowerCase()}`;
+            const existing = connectionMatchMap.get(matchKey);
+
+            const metadata = {
+                ...(existing?.metadata && typeof existing.metadata === "object"
+                    ? (existing.metadata as Record<string, unknown>)
+                    : {}),
+                mcpServerName: serverName
+            };
+
+            if (existing) {
+                const updated = await tx.integrationConnection.update({
+                    where: { id: existing.id },
+                    data: {
+                        name: serverName,
+                        isDefault,
+                        isActive: true,
+                        credentials: encryptedCredentials
+                            ? JSON.parse(JSON.stringify(encryptedCredentials))
+                            : undefined,
+                        metadata: JSON.parse(JSON.stringify(metadata))
+                    }
+                });
+                updatedConnections.push(updated.id);
+                seenConnectionIds.add(updated.id);
+            } else {
+                const created = await tx.integrationConnection.create({
+                    data: {
+                        providerId: provider.id,
+                        organizationId,
+                        userId: null,
+                        scope: "org",
+                        name: serverName,
+                        isDefault,
+                        isActive: true,
+                        credentials: encryptedCredentials
+                            ? JSON.parse(JSON.stringify(encryptedCredentials))
+                            : undefined,
+                        metadata: JSON.parse(JSON.stringify(metadata))
+                    }
+                });
+                createdConnections.push(created.id);
+                seenConnectionIds.add(created.id);
+            }
+        }
+
+        if (mode === "replace") {
+            for (const connection of existingConnections) {
+                if (seenConnectionIds.has(connection.id)) {
+                    continue;
+                }
+                await tx.integrationConnection.update({
+                    where: { id: connection.id },
+                    data: { isActive: false, isDefault: false }
+                });
+                disabledConnections.push(connection.id);
+            }
+        }
+    });
+
+    resetMcpClients();
+    invalidateMcpCacheForOrg(organizationId);
+    await invalidateMcpToolsCache(organizationId);
+
+    return {
+        createdProviders,
+        updatedProviders,
+        createdConnections,
+        updatedConnections,
+        disabledConnections,
+        warnings
+    };
+}
+
+export async function analyzeMcpConfigImpact(options: {
+    organizationId: string;
+    userId?: string | null;
+    config: McpJsonConfigFile;
+    mode?: "replace" | "merge";
+}): Promise<McpConfigImpact> {
+    const { organizationId, userId, config, mode = "replace" } = options;
+    if (!config || typeof config !== "object" || !config.mcpServers) {
+        throw new Error("Invalid MCP config: missing mcpServers");
+    }
+    if (typeof config.mcpServers !== "object" || Array.isArray(config.mcpServers)) {
+        throw new Error("Invalid MCP config: mcpServers must be an object");
+    }
+
+    await ensureIntegrationProviders();
+
+    const providers = await prisma.integrationProvider.findMany({
+        where: { isActive: true }
+    });
+    const providersByKey = new Map(providers.map((provider) => [provider.key, provider]));
+
+    const existingConnections = await prisma.integrationConnection.findMany({
+        where: {
+            organizationId,
+            isActive: true,
+            OR: [{ scope: "org" }, ...(userId ? [{ scope: "user", userId }] : [])],
+            provider: { providerType: { in: ["mcp", "custom"] } }
+        },
+        include: { provider: true },
+        orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+    });
+
+    const connectionMatchMap = new Map<string, ConnectionWithProvider>();
+    for (const connection of existingConnections) {
+        const metadata =
+            connection.metadata && typeof connection.metadata === "object"
+                ? (connection.metadata as Record<string, unknown>)
+                : null;
+        const serverName =
+            metadata && typeof metadata.mcpServerName === "string"
+                ? metadata.mcpServerName
+                : connection.name;
+        const matchKey = `${connection.provider.key}::${serverName.toLowerCase()}`;
+        if (!connectionMatchMap.has(matchKey)) {
+            connectionMatchMap.set(matchKey, connection);
+        }
+    }
+
+    const seenConnectionIds = new Set<string>();
+    const serversToAdd = new Set<string>();
+    const serversToUpdate = new Set<string>();
+
+    for (const [serverName, rawServerConfig] of Object.entries(config.mcpServers)) {
+        const serverConfig = normalizeMcpServerConfig(rawServerConfig);
+        if (!serverConfig) {
+            continue;
+        }
+
+        let provider =
+            providersByKey.get(serverName) ??
+            resolveProviderForServer(providers, serverName, serverConfig);
+
+        if (!provider) {
+            serversToAdd.add(serverName);
+            continue;
+        }
+
+        const matchKey = `${provider.key}::${serverName.toLowerCase()}`;
+        const existing = connectionMatchMap.get(matchKey);
+
+        if (existing) {
+            seenConnectionIds.add(existing.id);
+            serversToUpdate.add(serverName);
+        } else {
+            serversToAdd.add(serverName);
+        }
+    }
+
+    const connectionsByProvider = new Map<string, ConnectionWithProvider[]>();
+    for (const connection of existingConnections) {
+        const list = connectionsByProvider.get(connection.provider.key) ?? [];
+        list.push(connection);
+        connectionsByProvider.set(connection.provider.key, list);
+    }
+
+    const connectionServerIds = new Map<string, string>();
+    for (const [providerKey, providerConnections] of connectionsByProvider.entries()) {
+        const defaultConnection =
+            providerConnections.find((conn) => conn.isDefault) ?? providerConnections[0];
+        for (const connection of providerConnections) {
+            const isDefault = connection.id === defaultConnection?.id;
+            connectionServerIds.set(
+                connection.id,
+                resolveServerId(providerKey, connection, isDefault)
+            );
+        }
+    }
+
+    const serversToDisable: McpConfigImpactServer[] =
+        mode === "replace"
+            ? existingConnections
+                  .filter((connection) => !seenConnectionIds.has(connection.id))
+                  .map((connection) => {
+                      const metadata =
+                          connection.metadata && typeof connection.metadata === "object"
+                              ? (connection.metadata as Record<string, unknown>)
+                              : null;
+                      const serverName =
+                          metadata && typeof metadata.mcpServerName === "string"
+                              ? metadata.mcpServerName
+                              : connection.name;
+                      return {
+                          serverKey:
+                              connectionServerIds.get(connection.id) ?? connection.provider.key,
+                          serverName,
+                          affectedAgents: []
+                      };
+                  })
+            : [];
+
+    const serverKeys = Array.from(new Set(serversToDisable.map((server) => server.serverKey)));
+    const agentScopeFilter = {
+        isActive: true,
+        OR: [{ workspace: { organizationId } }, { tenantId: organizationId }]
+    };
+
+    const toolMatches =
+        serverKeys.length > 0
+            ? await prisma.agentTool.findMany({
+                  where: {
+                      agent: agentScopeFilter,
+                      OR: serverKeys.map((serverKey) => ({
+                          toolId: { startsWith: `${serverKey}_` }
+                      }))
+                  },
+                  select: {
+                      toolId: true,
+                      agentId: true,
+                      agent: { select: { id: true, slug: true, name: true } }
+                  }
+              })
+            : [];
+
+    const explicitAgentsByServer = new Map<
+        string,
+        Map<string, { id: string; slug: string; name: string; toolCount: number }>
+    >();
+
+    for (const match of toolMatches) {
+        const serverKey = serverKeys.find((key) => match.toolId.startsWith(`${key}_`));
+        if (!serverKey) {
+            continue;
+        }
+        const agentsForServer = explicitAgentsByServer.get(serverKey) ?? new Map();
+        const existing = agentsForServer.get(match.agentId);
+        if (existing) {
+            existing.toolCount += 1;
+        } else {
+            agentsForServer.set(match.agentId, {
+                id: match.agent.id,
+                slug: match.agent.slug,
+                name: match.agent.name,
+                toolCount: 1
+            });
+        }
+        explicitAgentsByServer.set(serverKey, agentsForServer);
+    }
+
+    const mcpEnabledAgents = await prisma.agent.findMany({
+        where: {
+            ...agentScopeFilter,
+            metadata: { path: ["mcpEnabled"], equals: true }
+        },
+        select: { id: true, slug: true, name: true }
+    });
+
+    const totalAffectedAgentIds = new Set<string>();
+
+    for (const server of serversToDisable) {
+        const affectedAgents: McpConfigImpactAgent[] = [];
+        const explicitAgents = explicitAgentsByServer.get(server.serverKey);
+        if (explicitAgents) {
+            for (const agent of explicitAgents.values()) {
+                affectedAgents.push({
+                    id: agent.id,
+                    slug: agent.slug,
+                    name: agent.name,
+                    toolCount: agent.toolCount,
+                    reason: "explicit"
+                });
+                totalAffectedAgentIds.add(agent.id);
+            }
+        }
+
+        const explicitAgentIds = new Set(explicitAgents?.keys() ?? []);
+        for (const agent of mcpEnabledAgents) {
+            if (explicitAgentIds.has(agent.id)) {
+                continue;
+            }
+            affectedAgents.push({
+                id: agent.id,
+                slug: agent.slug,
+                name: agent.name,
+                toolCount: 0,
+                reason: "mcpEnabled"
+            });
+            totalAffectedAgentIds.add(agent.id);
+        }
+
+        server.affectedAgents = affectedAgents;
+    }
+
+    return {
+        serversToDisable,
+        serversToAdd: Array.from(serversToAdd),
+        serversToUpdate: Array.from(serversToUpdate),
+        totalAffectedAgents: totalAffectedAgentIds.size,
+        hasImpact: serversToDisable.length > 0 && totalAffectedAgentIds.size > 0
+    };
+}
+
+export type McpServerTestPhase = {
+    name: "config_validation" | "process_spawn" | "server_init" | "tool_list";
+    status: "pass" | "fail";
+    ms: number;
+    detail: string;
+};
+
+export type McpServerTestResult = {
+    success: boolean;
+    phases: McpServerTestPhase[];
+    toolCount?: number;
+    sampleTools?: string[];
+    totalMs: number;
+};
+
+const formatTestError = (error: unknown) => {
+    const message = error instanceof Error ? error.message : String(error);
+    const lower = message.toLowerCase();
+    if (lower.includes("enoent")) {
+        return `${message}. Command not found. Check that required binaries are installed.`;
+    }
+    if (lower.includes("timeout")) {
+        return `${message}. The server did not respond in time.`;
+    }
+    return message;
+};
+
+export async function testMcpServer(options: {
+    serverId: string;
+    organizationId?: string | null;
+    userId?: string | null;
+    timeoutMs?: number;
+    allowEnvFallback?: boolean;
+}): Promise<McpServerTestResult> {
+    const start = Date.now();
+    const phases: McpServerTestPhase[] = [];
+
+    const resolved = await resolveServerDefinitionById(options);
+    if (!resolved?.serverDefinition) {
+        phases.push({
+            name: "config_validation",
+            status: "fail",
+            ms: 0,
+            detail: "Server definition could not be resolved. Check credentials and config."
+        });
+        return {
+            success: false,
+            phases,
+            totalMs: Date.now() - start
+        };
+    }
+
+    phases.push({
+        name: "config_validation",
+        status: "pass",
+        ms: 0,
+        detail: "Server definition resolved"
+    });
+
+    const client = new MCPClient({
+        id: `mastra-mcp-test-${options.serverId}`,
+        servers: { [options.serverId]: resolved.serverDefinition },
+        timeout: options.timeoutMs ?? 10000
+    });
+
+    const listStart = Date.now();
+    try {
+        const tools = await client.listTools();
+        const listMs = Date.now() - listStart;
+        const toolNames = Object.keys(tools);
+        phases.push({
+            name: "process_spawn",
+            status: "pass",
+            ms: 0,
+            detail: "Process spawn initiated"
+        });
+        phases.push({
+            name: "server_init",
+            status: "pass",
+            ms: listMs,
+            detail: "MCP handshake complete"
+        });
+        phases.push({
+            name: "tool_list",
+            status: "pass",
+            ms: 0,
+            detail: `Found ${toolNames.length} tools`
+        });
+        return {
+            success: true,
+            phases,
+            toolCount: toolNames.length,
+            sampleTools: toolNames.slice(0, 5),
+            totalMs: Date.now() - start
+        };
+    } catch (error) {
+        const listMs = Date.now() - listStart;
+        phases.push({
+            name: "server_init",
+            status: "fail",
+            ms: listMs,
+            detail: formatTestError(error)
+        });
+        return {
+            success: false,
+            phases,
+            totalMs: Date.now() - start
+        };
+    } finally {
+        await client.disconnect();
+    }
 }
 
 /**

@@ -117,10 +117,10 @@ export default function WebhookWizardPage() {
                     className="w-1/2"
                 />
 
-                {/* Right: Webhook list + detail */}
-                <div className="flex w-1/2 flex-col gap-4 overflow-auto">
-                    {/* Detail panel (when a webhook is selected) */}
-                    {selectedWebhook && (
+                {/* Right: Webhook detail or list */}
+                <div className="flex min-h-0 w-1/2 flex-col gap-4 overflow-auto">
+                    {selectedWebhook ? (
+                        /* Detail panel (when a webhook is selected) */
                         <WebhookDetail
                             webhook={selectedWebhook}
                             origin={origin}
@@ -128,78 +128,82 @@ export default function WebhookWizardPage() {
                             onToggleActive={handleToggleActive}
                             onDelete={handleDelete}
                         />
-                    )}
-
-                    {/* Table */}
-                    <Card className="flex-1">
-                        <CardHeader className="pb-2">
-                            <div className="flex items-center justify-between">
-                                <CardTitle className="text-sm">All Webhooks</CardTitle>
-                                <button
-                                    onClick={loadWebhooks}
-                                    className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
-                                >
-                                    Refresh
-                                </button>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="p-0">
-                            {webhooks.length === 0 ? (
-                                <div className="text-muted-foreground px-6 py-8 text-center text-sm">
-                                    No webhooks yet. Create one using the chat.
+                    ) : (
+                        /* Table (when no webhook is selected) */
+                        <Card className="flex-1">
+                            <CardHeader className="pb-2">
+                                <div className="flex items-center justify-between">
+                                    <CardTitle className="text-sm">All Webhooks</CardTitle>
+                                    <button
+                                        onClick={loadWebhooks}
+                                        className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
+                                    >
+                                        Refresh
+                                    </button>
                                 </div>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Agent</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Triggered</TableHead>
-                                            <TableHead>Created</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {webhooks.map((wh) => (
-                                            <TableRow
-                                                key={wh.id}
-                                                className={`cursor-pointer transition-colors ${selectedId === wh.id ? "bg-muted" : "hover:bg-muted/50"}`}
-                                                onClick={() =>
-                                                    setSelectedId(
-                                                        selectedId === wh.id ? null : wh.id
-                                                    )
-                                                }
-                                            >
-                                                <TableCell className="text-xs font-medium whitespace-nowrap">
-                                                    {wh.name}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">
-                                                    {wh.agent?.name || "Unknown"}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge
-                                                        variant={
-                                                            wh.isActive ? "default" : "secondary"
-                                                        }
-                                                    >
-                                                        {wh.isActive ? "Active" : "Disabled"}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs">
-                                                    {wh.triggerCount > 0
-                                                        ? `${wh.triggerCount}x`
-                                                        : "--"}
-                                                </TableCell>
-                                                <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                                                    {new Date(wh.createdAt).toLocaleDateString()}
-                                                </TableCell>
+                            </CardHeader>
+                            <CardContent className="p-0">
+                                {webhooks.length === 0 ? (
+                                    <div className="text-muted-foreground px-6 py-8 text-center text-sm">
+                                        No webhooks yet. Create one using the chat.
+                                    </div>
+                                ) : (
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Agent</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Triggered</TableHead>
+                                                <TableHead>Created</TableHead>
                                             </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            )}
-                        </CardContent>
-                    </Card>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {webhooks.map((wh) => (
+                                                <TableRow
+                                                    key={wh.id}
+                                                    className={`cursor-pointer transition-colors ${selectedId === wh.id ? "bg-muted" : "hover:bg-muted/50"}`}
+                                                    onClick={() =>
+                                                        setSelectedId(
+                                                            selectedId === wh.id ? null : wh.id
+                                                        )
+                                                    }
+                                                >
+                                                    <TableCell className="text-xs font-medium whitespace-nowrap">
+                                                        {wh.name}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-xs">
+                                                        {wh.agent?.name || "Unknown"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge
+                                                            variant={
+                                                                wh.isActive
+                                                                    ? "default"
+                                                                    : "secondary"
+                                                            }
+                                                        >
+                                                            {wh.isActive ? "Active" : "Disabled"}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-xs">
+                                                        {wh.triggerCount > 0
+                                                            ? `${wh.triggerCount}x`
+                                                            : "--"}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                                                        {new Date(
+                                                            wh.createdAt
+                                                        ).toLocaleDateString()}
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
         </div>

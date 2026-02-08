@@ -2,17 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { PlusIcon } from "lucide-react";
 import { getApiBase } from "@/lib/utils";
 import WebhookChat from "@/components/webhooks/WebhookChat";
 import WebhookDetail from "@/components/webhooks/WebhookDetail";
 import type { WebhookTrigger } from "@/components/webhooks/types";
 import {
     Badge,
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
     Table,
     TableBody,
     TableCell,
@@ -62,6 +67,28 @@ type ProvidersResponse = {
     success: boolean;
     providers?: IntegrationProvider[];
     error?: string;
+};
+
+type McpTestPhase = {
+    name: string;
+    status: "pass" | "fail";
+    ms: number;
+    detail: string;
+};
+
+type McpTestResult = {
+    success: boolean;
+    phases: McpTestPhase[];
+    toolCount?: number;
+    sampleTools?: string[];
+    totalMs: number;
+};
+
+type DebugLogEntry = {
+    id: string;
+    timestamp: string;
+    level: "info" | "success" | "error";
+    message: string;
 };
 
 /* ================================================================== */
@@ -117,11 +144,26 @@ const ConnectionBadge = ({ connected }: { connected: boolean }) => (
     </Badge>
 );
 
+const getServerId = (providerKey: string, connection: ConnectionSummary) =>
+    connection.isDefault ? providerKey : `${providerKey}__${connection.id.slice(0, 8)}`;
+
 /* ================================================================== */
 /*  Provider table                                                    */
 /* ================================================================== */
 
-function ProviderTable({ providers }: { providers: IntegrationProvider[] }) {
+function ProviderTable({
+    providers,
+    onTest,
+    testResults,
+    testingServers,
+    showManage = true
+}: {
+    providers: IntegrationProvider[];
+    onTest?: (serverId: string, label: string) => void;
+    testResults?: Record<string, McpTestResult | undefined>;
+    testingServers?: Record<string, boolean>;
+    showManage?: boolean;
+}) {
     if (providers.length === 0) {
         return (
             <Card>
@@ -142,7 +184,7 @@ function ProviderTable({ providers }: { providers: IntegrationProvider[] }) {
                     <TableHead>Connections</TableHead>
                     <TableHead>Auth</TableHead>
                     <TableHead>Actions / Triggers</TableHead>
-                    <TableHead />
+                    {showManage && <TableHead className="text-right">Manage</TableHead>}
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -167,25 +209,78 @@ function ProviderTable({ providers }: { providers: IntegrationProvider[] }) {
                                 </span>
                             ) : (
                                 <div className="space-y-2">
-                                    {provider.connections.map((connection) => (
-                                        <div
-                                            key={connection.id}
-                                            className="flex flex-wrap items-center gap-2 text-xs"
-                                        >
-                                            <span className="font-medium">{connection.name}</span>
-                                            <span className="text-muted-foreground">
-                                                {connection.scope}
-                                                {connection.isDefault ? " · default" : ""}
-                                                {!connection.isActive ? " · disabled" : ""}
-                                            </span>
-                                            <ConnectionBadge connected={connection.connected} />
-                                            {connection.missingFields.length > 0 && (
-                                                <span className="text-yellow-600">
-                                                    Missing: {connection.missingFields.join(", ")}
+                                    {provider.connections.map((connection) => {
+                                        const serverId = getServerId(provider.key, connection);
+                                        const isTesting = Boolean(testingServers?.[serverId]);
+                                        const testResult = testResults?.[serverId];
+
+                                        return (
+                                            <div
+                                                key={connection.id}
+                                                className="flex flex-wrap items-center gap-2 text-xs"
+                                            >
+                                                <span className="font-medium">
+                                                    {connection.name}
                                                 </span>
-                                            )}
-                                        </div>
-                                    ))}
+                                                <span className="text-muted-foreground">
+                                                    {connection.scope}
+                                                    {connection.isDefault ? " · default" : ""}
+                                                    {!connection.isActive ? " · disabled" : ""}
+                                                </span>
+                                                <ConnectionBadge connected={connection.connected} />
+                                                {connection.missingFields.length > 0 && (
+                                                    <span className="text-yellow-600">
+                                                        Missing:{" "}
+                                                        {connection.missingFields.join(", ")}
+                                                    </span>
+                                                )}
+                                                {(provider.providerType === "mcp" ||
+                                                    provider.providerType === "custom") &&
+                                                    onTest && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            disabled={
+                                                                !connection.isActive ||
+                                                                connection.missingFields.length >
+                                                                    0 ||
+                                                                isTesting
+                                                            }
+                                                            onClick={() => {
+                                                                onTest(
+                                                                    serverId,
+                                                                    `${provider.name} · ${connection.name}`
+                                                                );
+                                                            }}
+                                                        >
+                                                            {isTesting ? "Testing..." : "Test"}
+                                                        </Button>
+                                                    )}
+                                                {(provider.providerType === "mcp" ||
+                                                    provider.providerType === "custom") &&
+                                                    testResult && (
+                                                        <div className="w-full space-y-1 text-xs">
+                                                            {testResult.phases.map((phase) => (
+                                                                <div
+                                                                    key={`${connection.id}-${phase.name}`}
+                                                                    className={
+                                                                        phase.status === "pass"
+                                                                            ? "text-emerald-600"
+                                                                            : "text-red-500"
+                                                                    }
+                                                                >
+                                                                    {phase.status === "pass"
+                                                                        ? "✓"
+                                                                        : "✕"}{" "}
+                                                                    {phase.name} ({phase.ms}ms) —{" "}
+                                                                    {phase.detail}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             )}
                         </TableCell>
@@ -204,14 +299,16 @@ function ProviderTable({ providers }: { providers: IntegrationProvider[] }) {
                                   ? Object.keys(provider.triggers).length
                                   : 0}
                         </TableCell>
-                        <TableCell className="text-right">
-                            <Link
-                                href={`/mcp/providers/${provider.key}`}
-                                className={buttonVariants({ variant: "outline", size: "sm" })}
-                            >
-                                Manage
-                            </Link>
-                        </TableCell>
+                        {showManage && (
+                            <TableCell className="text-right">
+                                <Link
+                                    href={`/mcp/providers/${provider.key}`}
+                                    className={buttonVariants({ variant: "outline", size: "sm" })}
+                                >
+                                    Manage
+                                </Link>
+                            </TableCell>
+                        )}
                     </TableRow>
                 ))}
             </TableBody>
@@ -276,10 +373,10 @@ function WebhooksTab({
                 className="w-1/3"
             />
 
-            {/* Right 2/3: Table + detail */}
-            <div className="flex w-2/3 flex-col gap-4 overflow-auto">
-                {/* Detail panel */}
-                {selectedWebhook && (
+            {/* Right 2/3: Detail or table */}
+            <div className="flex min-h-0 w-2/3 flex-col gap-4 overflow-auto">
+                {selectedWebhook ? (
+                    /* Detail panel (when a webhook is selected) */
                     <WebhookDetail
                         webhook={selectedWebhook}
                         origin={origin}
@@ -287,72 +384,78 @@ function WebhooksTab({
                         onToggleActive={handleToggleActive}
                         onDelete={handleDelete}
                     />
-                )}
-
-                {/* Table */}
-                <Card className="flex-1">
-                    <CardHeader className="pb-2">
-                        <div className="flex items-center justify-between">
-                            <CardTitle className="text-sm">All Webhooks</CardTitle>
-                            <button
-                                onClick={onRefresh}
-                                className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
-                            >
-                                Refresh
-                            </button>
-                        </div>
-                    </CardHeader>
-                    <CardContent className="p-0">
-                        {webhooks.length === 0 ? (
-                            <div className="text-muted-foreground px-6 py-8 text-center text-sm">
-                                No webhooks yet. Use the chat to create one.
+                ) : (
+                    /* Table (when no webhook is selected) */
+                    <Card className="flex-1">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center justify-between">
+                                <CardTitle className="text-sm">All Webhooks</CardTitle>
+                                <button
+                                    onClick={onRefresh}
+                                    className="text-muted-foreground hover:text-foreground text-xs underline transition-colors"
+                                >
+                                    Refresh
+                                </button>
                             </div>
-                        ) : (
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>Name</TableHead>
-                                        <TableHead>Agent</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Triggered</TableHead>
-                                        <TableHead>Created</TableHead>
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {webhooks.map((wh) => (
-                                        <TableRow
-                                            key={wh.id}
-                                            className={`cursor-pointer transition-colors ${selectedId === wh.id ? "bg-muted" : "hover:bg-muted/50"}`}
-                                            onClick={() =>
-                                                setSelectedId(selectedId === wh.id ? null : wh.id)
-                                            }
-                                        >
-                                            <TableCell className="text-xs font-medium whitespace-nowrap">
-                                                {wh.name}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-xs">
-                                                {wh.agent?.name || "Unknown"}
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    variant={wh.isActive ? "default" : "secondary"}
-                                                >
-                                                    {wh.isActive ? "Active" : "Disabled"}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-xs">
-                                                {wh.triggerCount > 0 ? `${wh.triggerCount}x` : "--"}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                                                {new Date(wh.createdAt).toLocaleDateString()}
-                                            </TableCell>
+                        </CardHeader>
+                        <CardContent className="p-0">
+                            {webhooks.length === 0 ? (
+                                <div className="text-muted-foreground px-6 py-8 text-center text-sm">
+                                    No webhooks yet. Use the chat to create one.
+                                </div>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Name</TableHead>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Triggered</TableHead>
+                                            <TableHead>Created</TableHead>
                                         </TableRow>
-                                    ))}
-                                </TableBody>
-                            </Table>
-                        )}
-                    </CardContent>
-                </Card>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {webhooks.map((wh) => (
+                                            <TableRow
+                                                key={wh.id}
+                                                className={`cursor-pointer transition-colors ${selectedId === wh.id ? "bg-muted" : "hover:bg-muted/50"}`}
+                                                onClick={() =>
+                                                    setSelectedId(
+                                                        selectedId === wh.id ? null : wh.id
+                                                    )
+                                                }
+                                            >
+                                                <TableCell className="text-xs font-medium whitespace-nowrap">
+                                                    {wh.name}
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">
+                                                    {wh.agent?.name || "Unknown"}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        variant={
+                                                            wh.isActive ? "default" : "secondary"
+                                                        }
+                                                    >
+                                                        {wh.isActive ? "Active" : "Disabled"}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs">
+                                                    {wh.triggerCount > 0
+                                                        ? `${wh.triggerCount}x`
+                                                        : "--"}
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                                                    {new Date(wh.createdAt).toLocaleDateString()}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
             </div>
         </div>
     );
@@ -367,8 +470,24 @@ export default function IntegrationsHubPage() {
     const [webhooks, setWebhooks] = useState<WebhookTrigger[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [testResults, setTestResults] = useState<Record<string, McpTestResult>>({});
+    const [testingServers, setTestingServers] = useState<Record<string, boolean>>({});
+    const [testAllRunning, setTestAllRunning] = useState(false);
+    const [debugLogs, setDebugLogs] = useState<DebugLogEntry[]>([]);
 
     const origin = typeof window !== "undefined" ? window.location.origin : "";
+
+    const appendLog = useCallback((level: DebugLogEntry["level"], message: string) => {
+        setDebugLogs((prev) => [
+            ...prev,
+            {
+                id: `${Date.now()}-${Math.random()}`,
+                timestamp: new Date().toLocaleTimeString(),
+                level,
+                message
+            }
+        ]);
+    }, []);
 
     const loadWebhooks = useCallback(async () => {
         try {
@@ -381,6 +500,37 @@ export default function IntegrationsHubPage() {
             console.error("Failed to load webhooks:", err);
         }
     }, []);
+
+    const handleTestServer = useCallback(
+        async (serverId: string, label: string) => {
+            setTestingServers((prev) => ({ ...prev, [serverId]: true }));
+            appendLog("info", `Testing ${label}`);
+            try {
+                const response = await fetch(
+                    `${getApiBase()}/api/integrations/servers/${serverId}/test`,
+                    { method: "POST" }
+                );
+                const data = await response.json();
+                if (!response.ok || !data) {
+                    throw new Error(data?.error || "Failed to test server");
+                }
+                const result = data as McpTestResult;
+                setTestResults((prev) => ({ ...prev, [serverId]: result }));
+                appendLog(
+                    result.success ? "success" : "error",
+                    `${label} ${result.success ? "passed" : "failed"} (${result.totalMs}ms)`
+                );
+            } catch (err) {
+                appendLog(
+                    "error",
+                    `${label} failed: ${err instanceof Error ? err.message : "Unknown error"}`
+                );
+            } finally {
+                setTestingServers((prev) => ({ ...prev, [serverId]: false }));
+            }
+        },
+        [appendLog]
+    );
 
     useEffect(() => {
         const fetchProviders = async () => {
@@ -410,18 +560,42 @@ export default function IntegrationsHubPage() {
             return a.name.localeCompare(b.name);
         });
 
-    const mcpProviders = useMemo(
-        () =>
-            sortProviders(
-                providers.filter((p) => p.providerType === "mcp" || p.providerType === "custom")
-            ),
-        [providers]
-    );
+    const mcpProviders = useMemo(() => {
+        const withConnections = providers
+            .filter(
+                (provider) => provider.providerType === "mcp" || provider.providerType === "custom"
+            )
+            .map((provider) => ({
+                ...provider,
+                connections: provider.connections.filter((connection) => connection.isActive)
+            }))
+            .filter((provider) => provider.connections.length > 0);
+        return sortProviders(withConnections);
+    }, [providers]);
 
     const oauthProviders = useMemo(
         () => sortProviders(providers.filter((p) => p.providerType === "oauth")),
         [providers]
     );
+
+    const handleTestAll = useCallback(async () => {
+        const targets = mcpProviders.flatMap((provider) =>
+            provider.connections.map((connection) => ({
+                serverId: getServerId(provider.key, connection),
+                label: `${provider.name} · ${connection.name}`
+            }))
+        );
+        if (targets.length === 0) {
+            appendLog("info", "No MCP servers available to test.");
+            return;
+        }
+        setTestAllRunning(true);
+        appendLog("info", `Testing ${targets.length} MCP servers...`);
+        for (const target of targets) {
+            await handleTestServer(target.serverId, target.label);
+        }
+        setTestAllRunning(false);
+    }, [appendLog, handleTestServer, mcpProviders]);
 
     return (
         <div className="container mx-auto space-y-6 py-6">
@@ -433,9 +607,6 @@ export default function IntegrationsHubPage() {
                     </p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                    <Link href="/mcp/setup-chat" className={buttonVariants({ variant: "outline" })}>
-                        MCP Setup Chat
-                    </Link>
                     <Link href="/mcp/setup" className={buttonVariants({ variant: "outline" })}>
                         Setup &amp; Debug
                     </Link>
@@ -453,7 +624,7 @@ export default function IntegrationsHubPage() {
             )}
 
             {!loading && !error && (
-                <Tabs defaultValue="webhooks" className="w-full">
+                <Tabs defaultValue="mcp" className="w-full">
                     <TabsList className="grid w-full grid-cols-3">
                         <TabsTrigger value="webhooks">
                             Webhooks
@@ -487,15 +658,38 @@ export default function IntegrationsHubPage() {
 
                     <TabsContent value="mcp" className="mt-4">
                         <Card>
-                            <CardHeader>
-                                <CardTitle>MCP Servers</CardTitle>
-                                <CardDescription>
-                                    Model Context Protocol servers that provide tools to your
-                                    agents.
-                                </CardDescription>
+                            <CardHeader className="flex flex-row items-start justify-between gap-4">
+                                <div>
+                                    <CardTitle>MCP Servers</CardTitle>
+                                    <CardDescription>
+                                        Model Context Protocol servers defined in your MCP JSON.
+                                    </CardDescription>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleTestAll}
+                                        disabled={testAllRunning}
+                                    >
+                                        {testAllRunning ? "Testing..." : "Test all"}
+                                    </Button>
+                                    <Link
+                                        href="/mcp/config"
+                                        className={buttonVariants({ variant: "default" })}
+                                    >
+                                        <PlusIcon className="mr-2 h-4 w-4" />
+                                        New MCP Server
+                                    </Link>
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                <ProviderTable providers={mcpProviders} />
+                                <ProviderTable
+                                    providers={mcpProviders}
+                                    onTest={handleTestServer}
+                                    testResults={testResults}
+                                    testingServers={testingServers}
+                                    showManage={false}
+                                />
                             </CardContent>
                         </Card>
                     </TabsContent>
@@ -514,6 +708,46 @@ export default function IntegrationsHubPage() {
                         </Card>
                     </TabsContent>
                 </Tabs>
+            )}
+
+            {debugLogs.length > 0 && (
+                <Collapsible defaultOpen className="mt-6">
+                    <Card className="border-dashed">
+                        <CollapsibleTrigger className="w-full">
+                            <CardHeader className="hover:bg-muted/50 flex cursor-pointer flex-row items-center justify-between py-4">
+                                <div className="text-left">
+                                    <CardTitle className="text-base">Debug log</CardTitle>
+                                    <CardDescription>
+                                        Recent MCP test activity and errors.
+                                    </CardDescription>
+                                </div>
+                                <Badge variant="outline" className="shrink-0">
+                                    {debugLogs.length} entries
+                                </Badge>
+                            </CardHeader>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <CardContent className="border-t pt-4">
+                                <div className="max-h-64 space-y-1 overflow-auto font-mono text-xs">
+                                    {debugLogs.map((entry) => (
+                                        <div
+                                            key={entry.id}
+                                            className={
+                                                entry.level === "error"
+                                                    ? "text-red-500"
+                                                    : entry.level === "success"
+                                                      ? "text-emerald-600"
+                                                      : "text-muted-foreground"
+                                            }
+                                        >
+                                            [{entry.timestamp}] {entry.message}
+                                        </div>
+                                    ))}
+                                </div>
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
             )}
         </div>
     );
