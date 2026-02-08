@@ -1,7 +1,13 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma, type Prisma } from "@repo/database";
-import { getIntegrationProviders, getMcpTools } from "../mcp/client";
+import {
+    analyzeMcpConfigImpact,
+    exportMcpConfig,
+    getIntegrationProviders,
+    getMcpTools,
+    importMcpConfig
+} from "../mcp/client";
 
 type McpServerConfig = {
     command?: string;
@@ -9,6 +15,10 @@ type McpServerConfig = {
     env?: Record<string, string>;
     url?: string;
     headers?: Record<string, string>;
+};
+
+type McpJsonConfigFile = {
+    mcpServers: Record<string, McpServerConfig>;
 };
 
 type ImportHints = {
@@ -105,6 +115,30 @@ function parseMcpServers(rawText: string) {
         };
         return acc;
     }, {});
+}
+
+function resolveMcpConfigInput(options: {
+    config?: unknown;
+    rawText?: string;
+}): McpJsonConfigFile | null {
+    if (options.config && typeof options.config === "object" && !Array.isArray(options.config)) {
+        const configRecord = options.config as Record<string, unknown>;
+        const mcpServers = configRecord.mcpServers;
+        if (mcpServers && typeof mcpServers === "object" && !Array.isArray(mcpServers)) {
+            return { mcpServers: mcpServers as Record<string, McpServerConfig> };
+        }
+        const servers = configRecord.servers;
+        if (servers && typeof servers === "object" && !Array.isArray(servers)) {
+            return { mcpServers: servers as Record<string, McpServerConfig> };
+        }
+        return { mcpServers: configRecord as Record<string, McpServerConfig> };
+    }
+
+    if (options.rawText) {
+        return { mcpServers: parseMcpServers(options.rawText) };
+    }
+
+    return null;
 }
 
 function getImportHints(configJson: unknown): ImportHints {
@@ -715,6 +749,114 @@ export const integrationImportMcpJsonTool = createTool({
             },
             items,
             errors: errors.length > 0 ? errors : undefined
+        };
+    }
+});
+
+export const integrationMcpConfigTool = createTool({
+    id: "integration-mcp-config",
+    description: "Read MCP config, preview impact, and apply updates with confirmation gating.",
+    inputSchema: z.object({
+        action: z.enum(["read", "plan", "apply"]).optional().default("read"),
+        config: z.record(z.any()).optional().describe("MCP config object"),
+        rawText: z.string().optional().describe("Raw MCP JSON or text containing MCP JSON"),
+        mode: z.enum(["replace", "merge"]).optional().default("replace"),
+        confirm: z.boolean().optional().describe("Require true to apply if impact exists"),
+        organizationId: z.string().optional(),
+        userId: z.string().optional()
+    }),
+    outputSchema: z.object({
+        success: z.boolean(),
+        action: z.enum(["read", "plan", "apply"]),
+        config: z.record(z.any()).optional(),
+        configText: z.string().optional(),
+        impact: z.record(z.any()).optional(),
+        requiresConfirmation: z.boolean().optional(),
+        result: z.record(z.any()).optional(),
+        error: z.string().optional()
+    }),
+    execute: async ({ action, config, rawText, mode, confirm, organizationId, userId }) => {
+        const resolvedAction = action ?? "read";
+        const resolvedMode = mode === "merge" ? "merge" : "replace";
+        const orgId = await resolveOrganizationId({ organizationId, userId });
+        if (!orgId) {
+            return {
+                success: false,
+                action: resolvedAction,
+                error: "Organization context is required"
+            };
+        }
+
+        if (resolvedAction === "read") {
+            const exported = await exportMcpConfig({ organizationId: orgId, userId });
+            return {
+                success: true,
+                action: resolvedAction,
+                config: exported as Record<string, unknown>,
+                configText: JSON.stringify(exported, null, 2)
+            };
+        }
+
+        let resolvedConfig: McpJsonConfigFile | null = null;
+        try {
+            resolvedConfig = resolveMcpConfigInput({ config, rawText });
+        } catch (error) {
+            return {
+                success: false,
+                action: resolvedAction,
+                error: error instanceof Error ? error.message : "Unable to parse MCP config"
+            };
+        }
+
+        if (!resolvedConfig) {
+            return {
+                success: false,
+                action: resolvedAction,
+                error: "MCP config is required for this action"
+            };
+        }
+
+        if (resolvedAction === "plan") {
+            const impact = await analyzeMcpConfigImpact({
+                organizationId: orgId,
+                userId,
+                config: resolvedConfig,
+                mode: resolvedMode
+            });
+            return {
+                success: true,
+                action: resolvedAction,
+                impact: impact as Record<string, unknown>
+            };
+        }
+
+        const impact = await analyzeMcpConfigImpact({
+            organizationId: orgId,
+            userId,
+            config: resolvedConfig,
+            mode: resolvedMode
+        });
+
+        if (impact.hasImpact && confirm !== true) {
+            return {
+                success: true,
+                action: resolvedAction,
+                requiresConfirmation: true,
+                impact: impact as Record<string, unknown>
+            };
+        }
+
+        const result = await importMcpConfig({
+            organizationId: orgId,
+            userId,
+            config: resolvedConfig,
+            mode: resolvedMode
+        });
+
+        return {
+            success: true,
+            action: resolvedAction,
+            result: result as Record<string, unknown>
         };
     }
 });

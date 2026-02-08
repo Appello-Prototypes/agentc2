@@ -57,6 +57,7 @@ import { workspaceIntentRecommendationTool } from "./workspace-intent-tools";
 import { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
 import {
     integrationImportMcpJsonTool,
+    integrationMcpConfigTool,
     integrationConnectionTestTool
 } from "./integration-import-tools";
 import { getMcpTools } from "../mcp/client";
@@ -132,6 +133,7 @@ export const toolRegistry: Record<string, any> = {
 
     // MCP import tools
     "integration-import-mcp-json": integrationImportMcpJsonTool,
+    "integration-mcp-config": integrationMcpConfigTool,
     "integration-connection-test": integrationConnectionTestTool
 };
 

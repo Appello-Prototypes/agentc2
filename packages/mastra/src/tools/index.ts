@@ -50,6 +50,7 @@ export {
 export { webhookListAgentsTool, webhookCreateTool } from "./webhook-tools";
 export {
     integrationImportMcpJsonTool,
+    integrationMcpConfigTool,
     integrationConnectionTestTool
 } from "./integration-import-tools";
 
