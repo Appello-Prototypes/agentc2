@@ -1470,6 +1470,47 @@ export async function GET(request: NextRequest) {
             }
         ];
 
+        const integrationTools = [
+            {
+                name: "integration-mcp-config",
+                description:
+                    "Read MCP config, preview impact, and apply updates with confirmation gating.",
+                inputSchema: {
+                    type: "object",
+                    properties: {
+                        action: {
+                            type: "string",
+                            enum: ["read", "plan", "apply"],
+                            description:
+                                "Action to perform. 'read' exports current config, 'plan' previews impact, 'apply' applies changes."
+                        },
+                        config: {
+                            type: "object",
+                            description: "MCP config object (with mcpServers key)"
+                        },
+                        rawText: {
+                            type: "string",
+                            description: "Raw MCP JSON or text containing MCP JSON"
+                        },
+                        mode: {
+                            type: "string",
+                            enum: ["replace", "merge"],
+                            description:
+                                "How to apply config. 'replace' removes unlisted servers, 'merge' keeps existing. Default: replace."
+                        },
+                        confirm: {
+                            type: "boolean",
+                            description:
+                                "Must be true to apply changes when impact is detected. Omit to get confirmation prompt."
+                        },
+                        organizationId: { type: "string" },
+                        userId: { type: "string" }
+                    }
+                },
+                invoke_url: "/api/mcp"
+            }
+        ];
+
         return NextResponse.json({
             success: true,
             protocol: "mcp-agent-gateway/1.0",
@@ -1490,7 +1531,8 @@ export async function GET(request: NextRequest) {
                 ...agentOpsTools,
                 ...scheduleTools,
                 ...triggerTools,
-                ...executionTriggerTools
+                ...executionTriggerTools,
+                ...integrationTools
             ],
             total:
                 tools.length +
@@ -1504,7 +1546,8 @@ export async function GET(request: NextRequest) {
                 agentOpsTools.length +
                 scheduleTools.length +
                 triggerTools.length +
-                executionTriggerTools.length
+                executionTriggerTools.length +
+                integrationTools.length
         });
     } catch (error) {
         console.error("[MCP Gateway] Error listing tools:", error);
@@ -1655,6 +1698,8 @@ export async function POST(request: NextRequest) {
             "agent_trigger_execute"
         ]);
 
+        const integrationToolNames = new Set(["integration-mcp-config"]);
+
         const callInternalApi = async (
             url: URL,
             method: string,
@@ -1721,6 +1766,41 @@ export async function POST(request: NextRequest) {
                         error: error instanceof Error ? error.message : "Failed to execute tool"
                     },
                     { status: 400 }
+                );
+            }
+        }
+
+        if (integrationToolNames.has(tool)) {
+            const integrationTool = getToolByName(tool);
+            if (!integrationTool || typeof integrationTool.execute !== "function") {
+                return NextResponse.json(
+                    { success: false, error: `Tool not found: ${tool}` },
+                    { status: 404 }
+                );
+            }
+
+            const scopedParams =
+                params && typeof params === "object" ? { ...params } : {};
+            if (organizationId && scopedParams.organizationId === undefined) {
+                scopedParams.organizationId = organizationId;
+            }
+            if (userId && scopedParams.userId === undefined) {
+                scopedParams.userId = userId;
+            }
+
+            try {
+                const result = await integrationTool.execute(scopedParams);
+                return NextResponse.json({ success: true, result });
+            } catch (error) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error:
+                            error instanceof Error
+                                ? error.message
+                                : "Failed to execute integration tool"
+                    },
+                    { status: 500 }
                 );
             }
         }
