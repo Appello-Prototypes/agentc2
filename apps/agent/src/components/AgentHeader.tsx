@@ -7,8 +7,8 @@ import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
+    { label: "Assistant", href: "/assistant" },
     { label: "Agents", href: "/agents" },
-    { label: "Workspace AI", href: "/assistant" },
     { label: "Workflows", href: "/workflows" },
     { label: "Networks", href: "/networks" },
     { label: "Live Runs", href: "/live" },

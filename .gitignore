@@ -74,3 +74,6 @@ data/
 packages/ui/storybook-static
 storybook-static
 .env*.local
+
+# DB dump snapshots
+scripts/dumps/
