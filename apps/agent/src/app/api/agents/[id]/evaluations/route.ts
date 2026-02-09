@@ -309,16 +309,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     return aliases[key] || key;
                 };
 
-                // Build scorer input in the format Mastra prebuilt scorers expect
+                // Build scorer input — Mastra prebuilt scorers expect plain strings
                 const scorerInput = {
-                    input: {
-                        inputMessages: [
-                            { role: "user" as const, content: run.inputText || "" }
-                        ]
-                    },
-                    output: [
-                        { role: "assistant" as const, content: run.outputText || "" }
-                    ]
+                    input: run.inputText || "",
+                    output: run.outputText || ""
                 };
 
                 // Scorer registry map

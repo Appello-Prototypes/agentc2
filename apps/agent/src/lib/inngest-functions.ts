@@ -3420,7 +3420,7 @@ export const asyncInvokeFunction = inngest.createFunction(
         id: "agent-invoke-async",
         retries: 2,
         concurrency: {
-            limit: 10
+            limit: 5
         }
     },
     { event: "agent/invoke.async" },

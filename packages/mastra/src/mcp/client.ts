@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "crypto";
-import { MCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
+import { MCPClient, InternalMastraMCPClient, type MastraMCPServerDefinition } from "@mastra/mcp";
 import { fileURLToPath } from "url";
 import { dirname, resolve } from "path";
 import {
@@ -11,6 +11,33 @@ import {
 
 declare global {
     var mcpClient: MCPClient | undefined;
+    var __mcpSchemaPatched: boolean | undefined;
+}
+
+/**
+ * Patch InternalMastraMCPClient.convertInputSchema to sanitize MCP server
+ * JSON schemas BEFORE they are converted to Zod. This fixes issues like
+ * HubSpot's `values` array having no `items` definition.
+ *
+ * Must happen before any MCPClient is created.
+ */
+if (!global.__mcpSchemaPatched) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const proto = InternalMastraMCPClient.prototype as any;
+    const originalConvert = proto.convertInputSchema;
+    proto.convertInputSchema = async function (inputSchema: unknown) {
+        // Only sanitize raw JSON Schema objects (not Zod schemas)
+        if (
+            inputSchema &&
+            typeof inputSchema === "object" &&
+            !Array.isArray(inputSchema) &&
+            !(inputSchema as Record<string, unknown>)._def // Not a Zod schema
+        ) {
+            inputSchema = sanitizeToolSchema(inputSchema);
+        }
+        return originalConvert.call(this, inputSchema);
+    };
+    global.__mcpSchemaPatched = true;
 }
 
 const ORG_MCP_CACHE_TTL = 60000;
