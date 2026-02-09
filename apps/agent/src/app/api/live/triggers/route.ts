@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         const to = searchParams.get("to");
         const requestedWorkspaceId = searchParams.get("workspaceId");
 
-        const workspaceContext = await requireMonitoringWorkspace(requestedWorkspaceId);
+        const workspaceContext = await requireMonitoringWorkspace(requestedWorkspaceId, request);
         if (!workspaceContext.ok) {
             return NextResponse.json(
                 { success: false, error: workspaceContext.error },

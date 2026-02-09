@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, TriggerEventStatus } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
 import { startRun, extractTokenUsage, extractToolCalls, type RunSource } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { inngest } from "@/lib/inngest";
 import { auditLog } from "@/lib/audit-log";
 import { resolveRunSource, resolveRunTriggerType } from "@/lib/unified-triggers";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -140,11 +141,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        let triggerRecord: { id: string; triggerType: string; isActive: boolean } | null = null;
+        let triggerRecord: {
+            id: string;
+            triggerType: string;
+            isActive: boolean;
+            webhookPath: string | null;
+        } | null = null;
         if (triggerId && typeof triggerId === "string") {
             triggerRecord = await prisma.agentTrigger.findFirst({
                 where: { id: triggerId, agentId: record.id },
-                select: { id: true, triggerType: true, isActive: true }
+                select: { id: true, triggerType: true, isActive: true, webhookPath: true }
             });
             if (!triggerRecord) {
                 return NextResponse.json(
@@ -352,6 +358,31 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 costUsd,
                 steps: executionSteps
             });
+
+            // Record trigger event and update trigger stats
+            if (triggerRecord) {
+                await Promise.all([
+                    prisma.agentTrigger.update({
+                        where: { id: triggerRecord.id },
+                        data: {
+                            lastTriggeredAt: new Date(),
+                            triggerCount: { increment: 1 }
+                        }
+                    }),
+                    createTriggerEventRecord({
+                        triggerId: triggerRecord.id,
+                        agentId: record.id,
+                        workspaceId: record.workspaceId,
+                        runId: runHandle.runId,
+                        status: TriggerEventStatus.RECEIVED,
+                        sourceType: triggerRecord.triggerType,
+                        triggerType: triggerRecord.triggerType,
+                        webhookPath: triggerRecord.webhookPath || undefined,
+                        payload: { input },
+                        metadata: { mode: "sync", source: "invoke" }
+                    })
+                ]);
+            }
 
             return NextResponse.json({
                 success: true,
