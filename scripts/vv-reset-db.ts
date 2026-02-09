@@ -15,9 +15,9 @@
  *   dotenv -e .env -- bun run scripts/vv-reset-db.ts
  */
 
-import { PrismaClient } from "@prisma/client"
+import { prisma } from "@repo/database"
 
-const prisma = new PrismaClient()
+// Using shared prisma instance from @repo/database
 
 async function resetDatabase() {
     console.log("=== V&V Database Reset ===")
@@ -219,8 +219,8 @@ async function resetDatabase() {
 }
 
 resetDatabase()
+    .then(() => process.exit(0))
     .catch((error) => {
         console.error("Reset failed:", error)
         process.exit(1)
     })
-    .finally(() => prisma.$disconnect())
