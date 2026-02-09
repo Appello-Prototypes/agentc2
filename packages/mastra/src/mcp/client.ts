@@ -1269,6 +1269,90 @@ function sanitizeToolSchema(schema: any): any {
 }
 
 /**
+ * Recursively fix Zod schemas that have ZodArray with ZodAny inner type.
+ * When the AI SDK converts z.array(z.any()) to JSON Schema, it produces
+ * { type: "array" } WITHOUT items, which fails validation. We replace
+ * z.any() inner types with z.record(z.any()) which produces valid JSON Schema.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeZodSchema(schema: any): any {
+    if (!schema || typeof schema !== "object" || !schema._def) {
+        return schema;
+    }
+
+    const typeName = schema._def?.typeName;
+
+    // ZodArray: check if inner type is ZodAny — replace if so
+    if (typeName === "ZodArray") {
+        const innerTypeName = schema._def?.type?._def?.typeName;
+        if (innerTypeName === "ZodAny" || innerTypeName === "ZodUnknown" || !schema._def?.type) {
+            // Import z dynamically to avoid circular deps
+            try {
+                const { z } = require("zod");
+                // Replace z.array(z.any()) with z.array(z.record(z.string(), z.any()))
+                // This produces valid JSON Schema: { type: "array", items: { type: "object" } }
+                return z.array(z.record(z.string(), z.any())).optional();
+            } catch {
+                return schema;
+            }
+        }
+        // Recursively fix the inner type
+        const fixedInner = sanitizeZodSchema(schema._def.type);
+        if (fixedInner !== schema._def.type) {
+            try {
+                const { z } = require("zod");
+                return z.array(fixedInner);
+            } catch {
+                return schema;
+            }
+        }
+        return schema;
+    }
+
+    // ZodObject: recursively fix all shape properties
+    if (typeName === "ZodObject" && schema._def?.shape) {
+        const shape =
+            typeof schema._def.shape === "function" ? schema._def.shape() : schema._def.shape;
+        let changed = false;
+        const newShape: Record<string, unknown> = {};
+        for (const [key, value] of Object.entries(shape)) {
+            const fixed = sanitizeZodSchema(value);
+            if (fixed !== value) changed = true;
+            newShape[key] = fixed;
+        }
+        if (changed) {
+            try {
+                const { z } = require("zod");
+                return z.object(newShape as Record<string, import("zod").ZodTypeAny>);
+            } catch {
+                return schema;
+            }
+        }
+        return schema;
+    }
+
+    // ZodOptional: unwrap and fix inner
+    if (typeName === "ZodOptional" && schema._def?.innerType) {
+        const fixed = sanitizeZodSchema(schema._def.innerType);
+        if (fixed !== schema._def.innerType) {
+            return fixed.optional?.() || schema;
+        }
+        return schema;
+    }
+
+    // ZodNullable: unwrap and fix inner
+    if (typeName === "ZodNullable" && schema._def?.innerType) {
+        const fixed = sanitizeZodSchema(schema._def.innerType);
+        if (fixed !== schema._def.innerType) {
+            return fixed.nullable?.() || schema;
+        }
+        return schema;
+    }
+
+    return schema;
+}
+
+/**
  * Sanitize all tools returned from MCP to ensure schema compatibility with all LLM providers.
  *
  * @param tools - Record of tool name to tool instance
@@ -1284,19 +1368,33 @@ function sanitizeMcpTools(tools: Record<string, any>): Record<string, any> {
             // Clone the tool
             const sanitizedTool = { ...tool };
 
-            // Sanitize inputSchema if present
+            // Sanitize inputSchema — may be JSON Schema or Zod schema
             if (sanitizedTool.inputSchema) {
-                sanitizedTool.inputSchema = sanitizeToolSchema(sanitizedTool.inputSchema);
+                if (sanitizedTool.inputSchema._def) {
+                    // Zod schema — use Zod-specific sanitizer
+                    sanitizedTool.inputSchema = sanitizeZodSchema(sanitizedTool.inputSchema);
+                } else {
+                    // JSON Schema — use JSON Schema sanitizer
+                    sanitizedTool.inputSchema = sanitizeToolSchema(sanitizedTool.inputSchema);
+                }
             }
 
             // Also check for schema property (some tools use this)
             if (sanitizedTool.schema) {
-                sanitizedTool.schema = sanitizeToolSchema(sanitizedTool.schema);
+                if (sanitizedTool.schema._def) {
+                    sanitizedTool.schema = sanitizeZodSchema(sanitizedTool.schema);
+                } else {
+                    sanitizedTool.schema = sanitizeToolSchema(sanitizedTool.schema);
+                }
             }
 
             // Check for parameters (another common property name)
             if (sanitizedTool.parameters) {
-                sanitizedTool.parameters = sanitizeToolSchema(sanitizedTool.parameters);
+                if (sanitizedTool.parameters._def) {
+                    sanitizedTool.parameters = sanitizeZodSchema(sanitizedTool.parameters);
+                } else {
+                    sanitizedTool.parameters = sanitizeToolSchema(sanitizedTool.parameters);
+                }
             }
 
             sanitized[name] = sanitizedTool;
