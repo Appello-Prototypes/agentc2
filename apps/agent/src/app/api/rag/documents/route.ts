@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { listDocuments, deleteDocument } from "@repo/mastra";
 import { getDemoSession } from "@/lib/standalone-auth";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
     try {
-        const session = await getDemoSession();
+        const session = await getDemoSession(req);
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
@@ -22,7 +22,7 @@ export async function GET() {
 
 export async function DELETE(req: NextRequest) {
     try {
-        const session = await getDemoSession();
+        const session = await getDemoSession(req);
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

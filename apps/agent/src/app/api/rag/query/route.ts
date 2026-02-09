@@ -6,7 +6,7 @@ export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
 
     try {
-        const session = await getDemoSession();
+        const session = await getDemoSession(req);
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

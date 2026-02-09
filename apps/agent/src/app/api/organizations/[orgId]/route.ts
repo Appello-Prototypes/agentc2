@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * Helper to check if user has required role in organization
@@ -52,17 +51,14 @@ export async function GET(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const { orgId } = await params;
 
-        const { membership, organization } = await checkMembership(session.user.id, orgId);
+        const { membership, organization } = await checkMembership(authContext.userId, orgId);
 
         if (!organization) {
             return NextResponse.json(
@@ -126,17 +122,14 @@ export async function PATCH(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const { orgId } = await params;
 
-        const { membership, organization } = await checkMembership(session.user.id, orgId, [
+        const { membership, organization } = await checkMembership(authContext.userId, orgId, [
             "owner",
             "admin"
         ]);
@@ -217,7 +210,7 @@ export async function PATCH(
             action: "ORG_UPDATE",
             entityType: "Organization",
             entityId: organization.id,
-            userId: session.user.id,
+            userId: authContext.userId,
             metadata: updateData
         });
 
@@ -255,17 +248,14 @@ export async function DELETE(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const { orgId } = await params;
 
-        const { membership, organization } = await checkMembership(session.user.id, orgId, [
+        const { membership, organization } = await checkMembership(authContext.userId, orgId, [
             "owner"
         ]);
 
@@ -293,7 +283,7 @@ export async function DELETE(
             action: "ORG_DELETE",
             entityType: "Organization",
             entityId: organization.id,
-            userId: session.user.id,
+            userId: authContext.userId,
             metadata: {}
         });
 

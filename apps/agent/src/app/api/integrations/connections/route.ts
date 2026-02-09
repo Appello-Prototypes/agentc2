@@ -1,6 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import {
     getIntegrationProviders,
@@ -9,9 +7,9 @@ import {
     resetMcpClients
 } from "@repo/mastra";
 import { auditLog } from "@/lib/audit-log";
-import { getUserOrganizationId } from "@/lib/organization";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/integrations/connections
@@ -20,20 +18,12 @@ import { getConnectionMissingFields } from "@/lib/integrations";
  */
 export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const { searchParams } = new URL(request.url);
         const providerKey = searchParams.get("providerKey");
@@ -44,7 +34,7 @@ export async function GET(request: NextRequest) {
                 organizationId,
                 ...(providerKey ? { provider: { key: providerKey } } : {}),
                 ...(scopeFilter ? { scope: scopeFilter } : {}),
-                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                    OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
             },
             include: { provider: true },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
@@ -89,23 +79,15 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id, organizationId }
+            where: { userId: authContext.userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(
@@ -150,7 +132,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const connectionUserId = scope === "user" ? session.user.id : null;
+        const connectionUserId = scope === "user" ? authContext.userId : null;
 
         if (isDefault) {
             await prisma.integrationConnection.updateMany({
@@ -183,7 +165,7 @@ export async function POST(request: NextRequest) {
             include: { provider: true }
         });
 
-        await auditLog.integrationCreate(connection.id, session.user.id, organizationId, {
+        await auditLog.integrationCreate(connection.id, authContext.userId, organizationId, {
             providerKey: provider.key,
             scope,
             name

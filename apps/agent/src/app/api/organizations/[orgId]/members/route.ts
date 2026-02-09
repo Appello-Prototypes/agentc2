@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const VALID_ROLES = ["owner", "admin", "member", "viewer"];
 
@@ -16,11 +15,8 @@ export async function GET(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
@@ -44,7 +40,7 @@ export async function GET(
         const membership = await prisma.membership.findUnique({
             where: {
                 userId_organizationId: {
-                    userId: session.user.id,
+                    userId: authContext.userId,
                     organizationId: organization.id
                 }
             }
@@ -115,11 +111,8 @@ export async function POST(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
@@ -161,7 +154,7 @@ export async function POST(
         const currentMembership = await prisma.membership.findUnique({
             where: {
                 userId_organizationId: {
-                    userId: session.user.id,
+                    userId: authContext.userId,
                     organizationId: organization.id
                 }
             }
@@ -214,7 +207,7 @@ export async function POST(
             action: "MEMBERSHIP_CREATE",
             entityType: "Membership",
             entityId: createdMembership.id,
-            userId: session.user.id,
+            userId: authContext.userId,
             metadata: { targetUserId: userId, role: requestedRole }
         });
 

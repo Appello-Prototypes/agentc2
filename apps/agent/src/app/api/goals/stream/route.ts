@@ -7,7 +7,7 @@ import { goalStore } from "@repo/mastra/orchestrator";
  * Server-Sent Events endpoint for real-time goal updates
  */
 export async function GET(request: NextRequest) {
-    const session = await getDemoSession();
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return new Response("Unauthorized", { status: 401 });
     }

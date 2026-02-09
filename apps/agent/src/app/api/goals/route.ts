@@ -8,7 +8,7 @@ import { getDemoSession } from "@/lib/standalone-auth";
  * Create a new goal and trigger background execution via Inngest
  */
 export async function POST(request: NextRequest) {
-    const session = await getDemoSession();
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
  * GET /api/goals
  * List all goals for the current user
  */
-export async function GET() {
-    const session = await getDemoSession();
+export async function GET(request: NextRequest) {
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

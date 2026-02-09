@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma, type Prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/mastra";
-import { getUserOrganizationId } from "@/lib/organization";
 import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
+import { authenticateRequest } from "@/lib/api-auth";
 
 const resolveProviderStatus = (options: {
     authType: string;
@@ -28,16 +26,14 @@ const resolveProviderStatus = (options: {
  *
  * List available integration providers with connection status.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
+        const organizationId = authContext.organizationId;
         if (!organizationId) {
             return NextResponse.json(
                 { success: false, error: "Organization membership required" },
@@ -50,7 +46,7 @@ export async function GET() {
             prisma.integrationConnection.findMany({
                 where: {
                     organizationId,
-                    OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+                    OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
                 },
                 include: { provider: true },
                 orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
@@ -135,23 +131,15 @@ export async function GET() {
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
+        const authContext = await authenticateRequest(request);
+        if (!authContext) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const organizationId = authContext.organizationId;
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id, organizationId }
+            where: { userId: authContext.userId, organizationId }
         });
         if (!membership || !["owner", "admin"].includes(membership.role)) {
             return NextResponse.json(

@@ -4,7 +4,7 @@ import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
     try {
-        const session = await getDemoSession();
+        const session = await getDemoSession(req);
         if (!session?.user) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }

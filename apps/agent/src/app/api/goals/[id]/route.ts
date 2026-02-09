@@ -12,7 +12,7 @@ interface RouteParams {
  * Get a single goal by ID
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
-    const session = await getDemoSession();
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -45,7 +45,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
  * Update a goal (retry, cancel)
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
-    const session = await getDemoSession();
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -117,7 +117,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
  * Delete a goal
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
-    const session = await getDemoSession();
+    const session = await getDemoSession(request);
     if (!session?.user) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

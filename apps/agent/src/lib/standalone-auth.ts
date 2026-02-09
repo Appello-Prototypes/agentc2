@@ -1,5 +1,7 @@
+import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
+import { prisma } from "@repo/database";
 
 /**
  * Check if running in standalone mode (demo access without authentication)
@@ -35,12 +37,82 @@ export interface DemoSession {
 
 /**
  * Get session for demo routes.
- * In standalone mode, returns a demo user.
- * In authenticated mode, requires a valid session.
+ * Supports API key auth (via X-API-Key header), standalone mode, and session cookies.
  *
+ * @param request - Optional NextRequest to check API key headers
  * @returns Session with user, or null if unauthorized
  */
-export async function getDemoSession(): Promise<DemoSession | null> {
+export async function getDemoSession(request?: NextRequest): Promise<DemoSession | null> {
+    // Try API key authentication first (for MCP clients)
+    if (request) {
+        const apiKey =
+            request.headers.get("x-api-key") ||
+            request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+        if (apiKey) {
+            const orgSlugHeader = request.headers.get("x-organization-slug")?.trim();
+
+            const resolveUser = async (orgSlug: string) => {
+                const org = await prisma.organization.findUnique({
+                    where: { slug: orgSlug },
+                    select: { id: true }
+                });
+                if (!org) return null;
+
+                const membership = await prisma.membership.findFirst({
+                    where: { organizationId: org.id },
+                    select: { userId: true }
+                });
+                if (!membership) return null;
+
+                return { id: membership.userId, email: "api@mcp", name: "MCP API" };
+            };
+
+            // Check against MCP_API_KEY env var
+            const validApiKey = process.env.MCP_API_KEY;
+            if (validApiKey && apiKey === validApiKey) {
+                const orgSlug = orgSlugHeader || process.env.MCP_API_ORGANIZATION_SLUG;
+                if (orgSlug) {
+                    const user = await resolveUser(orgSlug);
+                    if (user) return { user };
+                }
+            }
+
+            // Check against ToolCredential table
+            if (orgSlugHeader) {
+                const org = await prisma.organization.findUnique({
+                    where: { slug: orgSlugHeader },
+                    select: { id: true }
+                });
+                if (org) {
+                    const credential = await prisma.toolCredential.findUnique({
+                        where: {
+                            organizationId_toolId: {
+                                organizationId: org.id,
+                                toolId: "mastra-mcp-api"
+                            }
+                        },
+                        select: { credentials: true, isActive: true }
+                    });
+                    const credentialPayload = credential?.credentials;
+                    const storedKey =
+                        credentialPayload &&
+                        typeof credentialPayload === "object" &&
+                        !Array.isArray(credentialPayload)
+                            ? (credentialPayload as { apiKey?: string }).apiKey
+                            : undefined;
+                    if (credential?.isActive && storedKey && storedKey === apiKey) {
+                        const user = await resolveUser(orgSlugHeader);
+                        if (user) return { user };
+                    }
+                }
+            }
+
+            // API key provided but invalid
+            return null;
+        }
+    }
+
     // In standalone mode, return demo user without auth check
     if (isStandaloneDeployment()) {
         return { user: DEMO_USER };
