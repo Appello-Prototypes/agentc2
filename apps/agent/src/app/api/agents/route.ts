@@ -4,6 +4,7 @@ import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -31,10 +32,17 @@ export async function GET(request: NextRequest) {
         const systemOnly = searchParams.get("system") === "true";
 
         if (USE_DB_AGENTS) {
-            const session = await auth.api.getSession({
-                headers: await headers()
-            });
-            const userId = session?.user?.id;
+            // Support both API key and session cookie authentication
+            const apiAuth = await authenticateRequest(request);
+            let userId = apiAuth?.userId;
+
+            if (!userId) {
+                const session = await auth.api.getSession({
+                    headers: await headers()
+                });
+                userId = session?.user?.id;
+            }
+
             // Use new Agent model via AgentResolver
             const agents = systemOnly
                 ? await agentResolver.listSystem()

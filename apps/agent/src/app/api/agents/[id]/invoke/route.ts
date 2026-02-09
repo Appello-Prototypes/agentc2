@@ -96,10 +96,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Resolve agent from database
-        const { agent, record, source } = await agentResolver.resolve({
-            slug: id,
-            requestContext: context
-        });
+        let agent, record, source;
+        try {
+            ({ agent, record, source } = await agentResolver.resolve({
+                slug: id,
+                requestContext: context
+            }));
+        } catch (resolveError) {
+            const msg =
+                resolveError instanceof Error ? resolveError.message : String(resolveError);
+            if (msg.includes("not found")) {
+                return NextResponse.json(
+                    { success: false, error: `Agent '${id}' not found` },
+                    { status: 404 }
+                );
+            }
+            throw resolveError;
+        }
 
         if (!record) {
             return NextResponse.json(
@@ -233,9 +246,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
+            // Extract threadId and resourceId for memory persistence
+            const threadId = context?.threadId || context?.thread?.id;
+            const resourceId =
+                context?.userId || context?.resource?.userId || "default";
+
             const generateOptions = {
                 maxSteps: effectiveMaxSteps,
-                ...(record.maxTokens ? { maxTokens: record.maxTokens } : {})
+                ...(record.maxTokens ? { maxTokens: record.maxTokens } : {}),
+                // Add memory configuration if threadId is provided and agent has memory enabled
+                ...(threadId && record.memoryEnabled
+                    ? {
+                          memory: {
+                              thread: threadId,
+                              resource: resourceId
+                          }
+                      }
+                    : {})
             } as unknown as Parameters<typeof agent.generate>[1];
 
             const response = await agent.generate(input, generateOptions);

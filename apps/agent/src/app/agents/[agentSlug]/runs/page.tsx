@@ -25,7 +25,7 @@ interface Run {
     id: string;
     input: string;
     output: string;
-    status: "completed" | "failed" | "timeout" | "running";
+    status: "completed" | "failed" | "timeout" | "running" | "queued" | "cancelled";
     durationMs: number;
     promptTokens: number;
     completionTokens: number;
@@ -47,13 +47,15 @@ interface Run {
 }
 
 function StatusBadge({ status }: { status: Run["status"] }) {
-    const config = {
-        completed: { variant: "default" as const, label: "Completed" },
-        failed: { variant: "destructive" as const, label: "Failed" },
-        timeout: { variant: "secondary" as const, label: "Timeout" },
-        running: { variant: "outline" as const, label: "Running" }
+    const config: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; label: string }> = {
+        completed: { variant: "default", label: "Completed" },
+        failed: { variant: "destructive", label: "Failed" },
+        timeout: { variant: "secondary", label: "Timeout" },
+        running: { variant: "outline", label: "Running" },
+        queued: { variant: "secondary", label: "Queued" },
+        cancelled: { variant: "secondary", label: "Cancelled" }
     };
-    const { variant, label } = config[status];
+    const { variant, label } = config[status] || { variant: "secondary" as const, label: status };
     return <Badge variant={variant}>{label}</Badge>;
 }
 

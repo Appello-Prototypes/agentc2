@@ -1192,8 +1192,18 @@ function sanitizeToolSchema(schema: any): any {
     const result = { ...schema };
 
     // Fix: Array type missing items definition
-    if (result.type === "array" && !result.items) {
-        result.items = { type: "string" }; // Default to string array
+    // Handle both string type and array type (e.g., ["array", "null"])
+    const isArrayType =
+        result.type === "array" ||
+        (Array.isArray(result.type) && result.type.includes("array"));
+    if (isArrayType && !result.items) {
+        result.items = {}; // Default to any type (most permissive)
+    }
+
+    // Fix: Remove unsupported "default" values that cause schema validation errors
+    // Some MCP servers set defaults that are incompatible with the schema
+    if (result.type === "object" && result.default !== undefined) {
+        delete result.default;
     }
 
     // Recursively sanitize nested schemas
@@ -1218,6 +1228,13 @@ function sanitizeToolSchema(schema: any): any {
     for (const keyword of ["allOf", "anyOf", "oneOf"]) {
         if (Array.isArray(result[keyword])) {
             result[keyword] = result[keyword].map(sanitizeToolSchema);
+        }
+    }
+
+    // Handle if/then/else
+    for (const keyword of ["if", "then", "else"]) {
+        if (result[keyword] && typeof result[keyword] === "object") {
+            result[keyword] = sanitizeToolSchema(result[keyword]);
         }
     }
 

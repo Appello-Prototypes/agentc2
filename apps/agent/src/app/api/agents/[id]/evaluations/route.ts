@@ -300,51 +300,75 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 const scorerKeys =
                     agent.scorers.length > 0 ? agent.scorers : ["relevancy", "completeness"];
 
-                // Type-safe scorer input for Mastra prebuilt scorers
-                const scorerInput = {
-                    input: run.inputText,
-                    output: run.outputText
+                // Normalize scorer names (common aliases)
+                const normalizeKey = (key: string): string => {
+                    const aliases: Record<string, string> = {
+                        relevance: "relevancy",
+                        concise: "conciseness"
+                    };
+                    return aliases[key] || key;
                 };
 
-                for (const key of scorerKeys) {
+                // Build scorer input in the format Mastra prebuilt scorers expect
+                const scorerInput = {
+                    input: {
+                        inputMessages: [
+                            { role: "user" as const, content: run.inputText || "" }
+                        ]
+                    },
+                    output: [
+                        { role: "assistant" as const, content: run.outputText || "" }
+                    ]
+                };
+
+                // Scorer registry map
+                const scorerMap: Record<
+                    string,
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    { run: (input: any) => Promise<{ score: number }> } | null
+                > = {
+                    relevancy: relevancyScorer,
+                    toxicity: toxicityScorer,
+                    completeness: completenessScorer,
+                    tone: toneScorer
+                };
+
+                for (const rawKey of scorerKeys) {
+                    const key = normalizeKey(rawKey);
                     try {
                         let score: number | undefined;
 
-                        switch (key) {
-                            case "relevancy": {
-                                // Cast to any to work around strict Mastra scorer typing
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const result = await (relevancyScorer as any).run(scorerInput);
-                                score = result.score;
-                                break;
+                        if (key === "helpfulness") {
+                            const result = evaluateHelpfulness(
+                                run.inputText,
+                                run.outputText
+                            );
+                            score = result.score;
+                        } else if (key === "conciseness") {
+                            // Custom conciseness scorer: ratio of input length to output length
+                            // Shorter, more concise responses score higher
+                            const inputLen = (run.inputText || "").length;
+                            const outputLen = (run.outputText || "").length;
+                            if (outputLen > 0) {
+                                // Score 1.0 for responses shorter than input, decreasing as response gets longer
+                                const ratio = inputLen / outputLen;
+                                score = Math.min(1.0, Math.max(0.1, ratio));
+                            } else {
+                                score = 0;
                             }
-                            case "toxicity": {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const result = await (toxicityScorer as any).run(scorerInput);
-                                score = result.score;
-                                break;
-                            }
-                            case "completeness": {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const result = await (completenessScorer as any).run(scorerInput);
-                                score = result.score;
-                                break;
-                            }
-                            case "tone": {
-                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                const result = await (toneScorer as any).run(scorerInput);
-                                score = result.score;
-                                break;
-                            }
-                            case "helpfulness": {
-                                const result = evaluateHelpfulness(run.inputText, run.outputText);
-                                score = result.score;
-                                break;
-                            }
+                        } else if (scorerMap[key]) {
+                            const result = await (
+                                scorerMap[key] as {
+                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                    run: (input: any) => Promise<{ score: number }>;
+                                }
+                            ).run(scorerInput);
+                            score = result.score;
                         }
 
                         if (score !== undefined) {
-                            scores[key] = score;
+                            // Store with the original key name the user configured
+                            scores[rawKey] = score;
                         }
                     } catch (scorerError) {
                         console.error(`[Evaluation] Scorer ${key} failed:`, scorerError);
