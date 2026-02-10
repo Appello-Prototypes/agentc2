@@ -282,10 +282,10 @@ export const PromptInputActionAddAttachments = ({
     return (
         <DropdownMenuItem
             {...props}
-            onSelect={(e) => {
-                e.preventDefault();
+            onClick={() => {
                 attachments.openFileDialog();
             }}
+            closeOnClick={false}
         >
             <ImageIcon className="mr-2 size-4" /> {label}
         </DropdownMenuItem>

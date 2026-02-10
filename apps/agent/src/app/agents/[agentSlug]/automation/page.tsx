@@ -10,6 +10,12 @@ import {
     CardDescription,
     CardHeader,
     CardTitle,
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
     Input,
     Label,
     Select,
@@ -126,6 +132,12 @@ export default function AutomationPage() {
         runId: string;
     } | null>(null);
 
+    /* ----- dialog state ----- */
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [aiPrompt, setAiPrompt] = useState("");
+    const [generating, setGenerating] = useState(false);
+    const [generateError, setGenerateError] = useState<string | null>(null);
+
     /* ----- data fetching ----- */
 
     const fetchExecutionTriggers = useCallback(async () => {
@@ -171,7 +183,7 @@ export default function AutomationPage() {
     /* ----- helpers ----- */
 
     const formatDate = (value: string | null | undefined) => {
-        if (!value) return "—";
+        if (!value) return "\u2014";
         return new Date(value).toLocaleString();
     };
 
@@ -181,6 +193,61 @@ export default function AutomationPage() {
         setWebhookInfo(null);
         setSchedulePreview([]);
         setSchedulePreviewError(null);
+        setAiPrompt("");
+        setGenerateError(null);
+    };
+
+    const openCreateDialog = () => {
+        resetForm();
+        setDialogOpen(true);
+    };
+
+    const closeDialog = () => {
+        setDialogOpen(false);
+        resetForm();
+    };
+
+    /* ----- AI generate ----- */
+
+    const generateTriggerConfig = async () => {
+        if (!aiPrompt.trim()) return;
+        setGenerating(true);
+        setGenerateError(null);
+        try {
+            const res = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/execution-triggers/generate`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt: aiPrompt })
+                }
+            );
+            const data = await res.json();
+            if (!data.success) {
+                setGenerateError(data.error || "Failed to generate trigger configuration");
+                return;
+            }
+            const config = data.config;
+            setFormState((prev) => ({
+                ...prev,
+                type: config.type || prev.type,
+                name: config.name || prev.name,
+                description: config.description || prev.description,
+                cronExpr: config.cronExpr || prev.cronExpr,
+                timezone: config.timezone || prev.timezone,
+                eventName: config.eventName || prev.eventName,
+                input: config.input || prev.input,
+                maxSteps: config.maxSteps ? String(config.maxSteps) : prev.maxSteps,
+                environment: config.environment || prev.environment,
+                isActive: config.isActive !== undefined ? config.isActive : prev.isActive
+            }));
+        } catch (err) {
+            setGenerateError(
+                err instanceof Error ? err.message : "Failed to generate trigger configuration"
+            );
+        } finally {
+            setGenerating(false);
+        }
     };
 
     /* ----- schedule preview ----- */
@@ -235,6 +302,9 @@ export default function AutomationPage() {
                 : "",
             isActive: trigger.isActive
         });
+        setAiPrompt("");
+        setGenerateError(null);
+        setDialogOpen(true);
     };
 
     /* ----- create / update ----- */
@@ -284,7 +354,7 @@ export default function AutomationPage() {
             if (data.webhook?.path && data.webhook?.secret) {
                 setWebhookInfo({ path: data.webhook.path, secret: data.webhook.secret });
             }
-            resetForm();
+            closeDialog();
             await fetchExecutionTriggers();
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to save execution trigger");
@@ -378,11 +448,15 @@ export default function AutomationPage() {
 
     return (
         <div className="space-y-6 p-6">
-            <div>
-                <h1 className="text-2xl font-semibold">Execution Triggers</h1>
-                <p className="text-muted-foreground text-sm">
-                    Configure every way this agent can be invoked.
-                </p>
+            {/* ---- Page Header ---- */}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-semibold">Execution Triggers</h1>
+                    <p className="text-muted-foreground text-sm">
+                        Configure every way this agent can be invoked.
+                    </p>
+                </div>
+                <Button onClick={openCreateDialog}>+ Create Trigger</Button>
             </div>
 
             {error && (
@@ -391,272 +465,23 @@ export default function AutomationPage() {
                 </Card>
             )}
 
-            {/* ---- Create / Edit Form ---- */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>{editingTriggerId ? "Edit Trigger" : "Create Trigger"}</CardTitle>
-                    <CardDescription>
-                        Define schedules, webhooks, API triggers, and on-demand runs.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="trigger-name">Name</Label>
-                            <Input
-                                id="trigger-name"
-                                value={formState.name}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({ ...prev, name: event.target.value }))
-                                }
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="trigger-type">Type</Label>
-                            <Select
-                                value={formState.type}
-                                onValueChange={(value) => {
-                                    if (!value) return;
-                                    setFormState((prev) => ({
-                                        ...prev,
-                                        type: value,
-                                        eventName: value === "event" ? prev.eventName : "",
-                                        cronExpr: value === "scheduled" ? prev.cronExpr : "",
-                                        timezone: value === "scheduled" ? prev.timezone : "UTC"
-                                    }));
-                                }}
-                                disabled={Boolean(editingTriggerId)}
-                            >
-                                <SelectTrigger id="trigger-type">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {TRIGGER_TYPES.map((option) => (
-                                        <SelectItem key={option.value} value={option.value}>
-                                            {option.label}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    </div>
+            {/* ---- Webhook Info (shown after webhook creation) ---- */}
+            {webhookInfo && (
+                <Card className="bg-muted/40">
+                    <CardHeader>
+                        <CardTitle className="text-base">Webhook Details</CardTitle>
+                        <CardDescription>
+                            Save this secret now. It will not be shown again.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-2 text-sm">
+                        <div>Path: {webhookInfo.path}</div>
+                        <div>Secret: {webhookInfo.secret}</div>
+                    </CardContent>
+                </Card>
+            )}
 
-                    <div className="space-y-2">
-                        <Label htmlFor="trigger-description">Description</Label>
-                        <Input
-                            id="trigger-description"
-                            value={formState.description}
-                            onChange={(event) =>
-                                setFormState((prev) => ({
-                                    ...prev,
-                                    description: event.target.value
-                                }))
-                            }
-                        />
-                    </div>
-
-                    {formState.type === "scheduled" && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="schedule-cron">Cron Expression</Label>
-                                <Input
-                                    id="schedule-cron"
-                                    value={formState.cronExpr}
-                                    onChange={(event) =>
-                                        setFormState((prev) => ({
-                                            ...prev,
-                                            cronExpr: event.target.value
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="schedule-timezone">Timezone</Label>
-                                <Input
-                                    id="schedule-timezone"
-                                    value={formState.timezone}
-                                    onChange={(event) =>
-                                        setFormState((prev) => ({
-                                            ...prev,
-                                            timezone: event.target.value
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {formState.type === "event" && (
-                        <div className="space-y-2">
-                            <Label htmlFor="event-name">Event Name</Label>
-                            <Input
-                                id="event-name"
-                                value={formState.eventName}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({
-                                        ...prev,
-                                        eventName: event.target.value
-                                    }))
-                                }
-                            />
-                        </div>
-                    )}
-
-                    {formState.type !== "scheduled" && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <div className="space-y-2">
-                                <Label htmlFor="filter-json">Filter JSON</Label>
-                                <Textarea
-                                    id="filter-json"
-                                    value={formState.filterJson}
-                                    onChange={(event) =>
-                                        setFormState((prev) => ({
-                                            ...prev,
-                                            filterJson: event.target.value
-                                        }))
-                                    }
-                                    rows={3}
-                                    placeholder='{"type":"lead"}'
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label htmlFor="input-mapping-json">Input Mapping JSON</Label>
-                                <Textarea
-                                    id="input-mapping-json"
-                                    value={formState.inputMappingJson}
-                                    onChange={(event) =>
-                                        setFormState((prev) => ({
-                                            ...prev,
-                                            inputMappingJson: event.target.value
-                                        }))
-                                    }
-                                    rows={3}
-                                    placeholder='{"template":"Lead {{name}}"}'
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="default-input">Default Input</Label>
-                            <Textarea
-                                id="default-input"
-                                value={formState.input}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({ ...prev, input: event.target.value }))
-                                }
-                                rows={3}
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="default-context">Default Context (JSON)</Label>
-                            <Textarea
-                                id="default-context"
-                                value={formState.contextJson}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({
-                                        ...prev,
-                                        contextJson: event.target.value
-                                    }))
-                                }
-                                rows={3}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-4 md:grid-cols-3">
-                        <div className="space-y-2">
-                            <Label htmlFor="default-max-steps">Max Steps</Label>
-                            <Input
-                                id="default-max-steps"
-                                value={formState.maxSteps}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({
-                                        ...prev,
-                                        maxSteps: event.target.value
-                                    }))
-                                }
-                            />
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="default-environment">Environment</Label>
-                            <Input
-                                id="default-environment"
-                                value={formState.environment}
-                                onChange={(event) =>
-                                    setFormState((prev) => ({
-                                        ...prev,
-                                        environment: event.target.value
-                                    }))
-                                }
-                                placeholder="development | staging | production"
-                            />
-                        </div>
-                        <div className="flex items-center gap-2 pt-6">
-                            <Switch
-                                checked={formState.isActive}
-                                onCheckedChange={(checked) =>
-                                    setFormState((prev) => ({ ...prev, isActive: checked }))
-                                }
-                            />
-                            <span className="text-sm">Active</span>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                        {formState.type === "scheduled" && (
-                            <Button
-                                variant="outline"
-                                onClick={previewSchedule}
-                                disabled={!schedulePreviewEnabled}
-                            >
-                                Preview Schedule
-                            </Button>
-                        )}
-                        <Button onClick={submitTrigger} disabled={saving}>
-                            {saving
-                                ? "Saving..."
-                                : editingTriggerId
-                                  ? "Update Trigger"
-                                  : "Create Trigger"}
-                        </Button>
-                        {editingTriggerId && (
-                            <Button variant="ghost" onClick={resetForm}>
-                                Cancel
-                            </Button>
-                        )}
-                    </div>
-
-                    {schedulePreviewError && (
-                        <div className="text-sm text-red-500">{schedulePreviewError}</div>
-                    )}
-                    {schedulePreview.length > 0 && (
-                        <div className="space-y-1 text-sm">
-                            {schedulePreview.map((run) => (
-                                <div key={run}>{new Date(run).toLocaleString()}</div>
-                            ))}
-                        </div>
-                    )}
-
-                    {webhookInfo && (
-                        <Card className="bg-muted/40">
-                            <CardHeader>
-                                <CardTitle className="text-base">Webhook Details</CardTitle>
-                                <CardDescription>
-                                    Save this secret now. It will not be shown again.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent className="space-y-2 text-sm">
-                                <div>Path: {webhookInfo.path}</div>
-                                <div>Secret: {webhookInfo.secret}</div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* ---- Trigger List ---- */}
+            {/* ---- Trigger List (primary content) ---- */}
             <Card>
                 <CardHeader>
                     <CardTitle>Execution Triggers</CardTitle>
@@ -727,15 +552,15 @@ export default function AutomationPage() {
                                     </div>
                                     <div className="text-muted-foreground text-xs">
                                         {trigger.type === "scheduled" &&
-                                            `Cron: ${trigger.config.cronExpr || "—"} (${trigger.config.timezone || "UTC"})`}
+                                            `Cron: ${trigger.config.cronExpr || "\u2014"} (${trigger.config.timezone || "UTC"})`}
                                         {trigger.type === "webhook" &&
-                                            `Webhook: ${trigger.config.webhookPath || "—"}`}
+                                            `Webhook: ${trigger.config.webhookPath || "\u2014"}`}
                                         {trigger.type === "event" &&
-                                            `Event: ${trigger.config.eventName || "—"}`}
+                                            `Event: ${trigger.config.eventName || "\u2014"}`}
                                         {trigger.type === "mcp" &&
                                             `Tool: ${trigger.config.toolName || "agent"}`}
                                         {trigger.type === "api" &&
-                                            `Endpoint: ${trigger.config.apiEndpoint || "—"}`}
+                                            `Endpoint: ${trigger.config.apiEndpoint || "\u2014"}`}
                                         {trigger.type === "manual" && "Manual trigger"}
                                         {trigger.type === "test" && "Test trigger"}
                                     </div>
@@ -805,7 +630,7 @@ export default function AutomationPage() {
                             </div>
                             <div className="text-muted-foreground grid gap-2 text-xs md:grid-cols-4">
                                 <div>Last run: {formatDate(trigger.lastRun?.startedAt)}</div>
-                                <div>Status: {trigger.lastRun?.status || "—"}</div>
+                                <div>Status: {trigger.lastRun?.status || "\u2014"}</div>
                                 <div>Next: {formatDate(trigger.stats?.nextRunAt)}</div>
                                 <div>
                                     Count:{" "}
@@ -854,6 +679,303 @@ export default function AutomationPage() {
                     </CardContent>
                 </Card>
             )}
+
+            {/* ---- Create / Edit Dialog ---- */}
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogContent className="sm:max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {editingTriggerId ? "Edit Trigger" : "Create Trigger"}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {editingTriggerId
+                                ? "Update the trigger configuration."
+                                : "Describe what you want in plain language, or fill in the form manually."}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {/* ---- AI Prompt Zone ---- */}
+                    {!editingTriggerId && (
+                        <div className="space-y-2">
+                            <Label htmlFor="ai-prompt">Describe your trigger</Label>
+                            <div className="flex gap-2">
+                                <Textarea
+                                    id="ai-prompt"
+                                    value={aiPrompt}
+                                    onChange={(event) => setAiPrompt(event.target.value)}
+                                    placeholder='e.g. "Run every 3 minutes in America/Toronto timezone" or "Webhook trigger for incoming emails"'
+                                    rows={2}
+                                    className="flex-1"
+                                    disabled={generating}
+                                />
+                                <Button
+                                    variant="outline"
+                                    onClick={generateTriggerConfig}
+                                    disabled={generating || !aiPrompt.trim()}
+                                    className="shrink-0 self-end"
+                                >
+                                    {generating ? "Generating..." : "Generate"}
+                                </Button>
+                            </div>
+                            {generateError && (
+                                <div className="text-sm text-red-500">{generateError}</div>
+                            )}
+                            <div className="border-b pt-2" />
+                        </div>
+                    )}
+
+                    {/* ---- Form Fields (scrollable) ---- */}
+                    <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-1">
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="trigger-name">Name</Label>
+                                <Input
+                                    id="trigger-name"
+                                    value={formState.name}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            name: event.target.value
+                                        }))
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="trigger-type">Type</Label>
+                                <Select
+                                    value={formState.type}
+                                    onValueChange={(value) => {
+                                        if (!value) return;
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            type: value,
+                                            eventName: value === "event" ? prev.eventName : "",
+                                            cronExpr: value === "scheduled" ? prev.cronExpr : "",
+                                            timezone: value === "scheduled" ? prev.timezone : "UTC"
+                                        }));
+                                    }}
+                                    disabled={Boolean(editingTriggerId)}
+                                >
+                                    <SelectTrigger id="trigger-type">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {TRIGGER_TYPES.map((option) => (
+                                            <SelectItem key={option.value} value={option.value}>
+                                                {option.label}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="trigger-description">Description</Label>
+                            <Input
+                                id="trigger-description"
+                                value={formState.description}
+                                onChange={(event) =>
+                                    setFormState((prev) => ({
+                                        ...prev,
+                                        description: event.target.value
+                                    }))
+                                }
+                            />
+                        </div>
+
+                        {formState.type === "scheduled" && (
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="schedule-cron">Cron Expression</Label>
+                                    <Input
+                                        id="schedule-cron"
+                                        value={formState.cronExpr}
+                                        onChange={(event) =>
+                                            setFormState((prev) => ({
+                                                ...prev,
+                                                cronExpr: event.target.value
+                                            }))
+                                        }
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="schedule-timezone">Timezone</Label>
+                                    <Input
+                                        id="schedule-timezone"
+                                        value={formState.timezone}
+                                        onChange={(event) =>
+                                            setFormState((prev) => ({
+                                                ...prev,
+                                                timezone: event.target.value
+                                            }))
+                                        }
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {formState.type === "event" && (
+                            <div className="space-y-2">
+                                <Label htmlFor="event-name">Event Name</Label>
+                                <Input
+                                    id="event-name"
+                                    value={formState.eventName}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            eventName: event.target.value
+                                        }))
+                                    }
+                                />
+                            </div>
+                        )}
+
+                        {formState.type !== "scheduled" && (
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="filter-json">Filter JSON</Label>
+                                    <Textarea
+                                        id="filter-json"
+                                        value={formState.filterJson}
+                                        onChange={(event) =>
+                                            setFormState((prev) => ({
+                                                ...prev,
+                                                filterJson: event.target.value
+                                            }))
+                                        }
+                                        rows={3}
+                                        placeholder='{"type":"lead"}'
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="input-mapping-json">Input Mapping JSON</Label>
+                                    <Textarea
+                                        id="input-mapping-json"
+                                        value={formState.inputMappingJson}
+                                        onChange={(event) =>
+                                            setFormState((prev) => ({
+                                                ...prev,
+                                                inputMappingJson: event.target.value
+                                            }))
+                                        }
+                                        rows={3}
+                                        placeholder='{"template":"Lead {{name}}"}'
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid gap-4 md:grid-cols-2">
+                            <div className="space-y-2">
+                                <Label htmlFor="default-input">Default Input</Label>
+                                <Textarea
+                                    id="default-input"
+                                    value={formState.input}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            input: event.target.value
+                                        }))
+                                    }
+                                    rows={3}
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="default-context">Default Context (JSON)</Label>
+                                <Textarea
+                                    id="default-context"
+                                    value={formState.contextJson}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            contextJson: event.target.value
+                                        }))
+                                    }
+                                    rows={3}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 md:grid-cols-3">
+                            <div className="space-y-2">
+                                <Label htmlFor="default-max-steps">Max Steps</Label>
+                                <Input
+                                    id="default-max-steps"
+                                    value={formState.maxSteps}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            maxSteps: event.target.value
+                                        }))
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="default-environment">Environment</Label>
+                                <Input
+                                    id="default-environment"
+                                    value={formState.environment}
+                                    onChange={(event) =>
+                                        setFormState((prev) => ({
+                                            ...prev,
+                                            environment: event.target.value
+                                        }))
+                                    }
+                                    placeholder="development | staging | production"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2 pt-6">
+                                <Switch
+                                    checked={formState.isActive}
+                                    onCheckedChange={(checked) =>
+                                        setFormState((prev) => ({ ...prev, isActive: checked }))
+                                    }
+                                />
+                                <span className="text-sm">Active</span>
+                            </div>
+                        </div>
+
+                        {formState.type === "scheduled" && (
+                            <div className="space-y-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={previewSchedule}
+                                    disabled={!schedulePreviewEnabled}
+                                >
+                                    Preview Schedule
+                                </Button>
+                                {schedulePreviewError && (
+                                    <div className="text-sm text-red-500">
+                                        {schedulePreviewError}
+                                    </div>
+                                )}
+                                {schedulePreview.length > 0 && (
+                                    <div className="space-y-1 text-sm">
+                                        {schedulePreview.map((run) => (
+                                            <div key={run}>{new Date(run).toLocaleString()}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeDialog}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitTrigger} disabled={saving || !formState.name.trim()}>
+                            {saving
+                                ? "Saving..."
+                                : editingTriggerId
+                                  ? "Update Trigger"
+                                  : "Create Trigger"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     );
 }

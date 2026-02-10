@@ -19,6 +19,7 @@ import { workflowConfigToolDefinitions, workflowConfigToolRoutes } from "./workf
 import { workflowOpsToolDefinitions, workflowOpsToolRoutes } from "./workflow-ops";
 import { documentToolDefinitions, documentToolRoutes } from "./documents";
 import { skillToolDefinitions, skillToolRoutes } from "./skills";
+import { canvasToolDefinitions, canvasToolRoutes } from "./canvas";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -45,7 +46,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...executionTriggerToolDefinitions,
     ...integrationToolDefinitions,
     ...documentToolDefinitions,
-    ...skillToolDefinitions
+    ...skillToolDefinitions,
+    ...canvasToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -69,5 +71,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...executionTriggerToolRoutes,
     ...integrationToolRoutes,
     ...documentToolRoutes,
-    ...skillToolRoutes
+    ...skillToolRoutes,
+    ...canvasToolRoutes
 ];

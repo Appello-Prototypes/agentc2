@@ -36,6 +36,7 @@ export function TabsBlock({ config }: { config: any }) {
                                 : "text-muted-foreground hover:text-foreground"
                         )}
                     >
+                        {tab.icon && <span className="mr-1.5">{tab.icon}</span>}
                         {tab.label}
                     </button>
                 ))}

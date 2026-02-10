@@ -23,7 +23,12 @@ export function FormBlock({ config }: { config: any }) {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        // In a full implementation, this would trigger the submitAction
+        const action = config.submitAction;
+        if (action?.type === "link" && action.href) {
+            window.open(action.href, "_blank");
+        } else if (action?.type === "navigate" && action.target) {
+            window.location.href = action.target;
+        }
         setSubmitted(true);
         setTimeout(() => setSubmitted(false), 2000);
     };
@@ -74,6 +79,23 @@ export function FormBlock({ config }: { config: any }) {
                                     onChange={(e) => handleChange(field.name, e.target.checked)}
                                     className="size-4 rounded border"
                                 />
+                            </div>
+                        ) : field.type === "radio" ? (
+                            <div className="mt-1 space-y-1">
+                                {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                {(field.options || []).map((opt: any) => (
+                                    <label key={opt.value} className="flex items-center gap-2 text-sm">
+                                        <input
+                                            type="radio"
+                                            name={field.name}
+                                            value={opt.value}
+                                            checked={values[field.name] === opt.value}
+                                            onChange={() => handleChange(field.name, opt.value)}
+                                            className="size-4"
+                                        />
+                                        {opt.label}
+                                    </label>
+                                ))}
                             </div>
                         ) : (
                             <input

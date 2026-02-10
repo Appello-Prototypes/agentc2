@@ -1,6 +1,7 @@
 // Canvas Schema
 export {
     CanvasSchemaSpec,
+    CanvasThemeSchema,
     DataQuerySchema,
     DataQuerySourceSchema,
     CanvasComponentSchema,
@@ -25,6 +26,11 @@ export {
     AccordionBlockSchema,
     SparklineBlockSchema,
     FunnelBlockSchema,
+    ProgressBarBlockSchema,
+    MetricRowBlockSchema,
+    StatCardBlockSchema,
+    DividerBlockSchema,
+    ImageBlockSchema,
     ColumnFormatSchema,
     TableColumnSchema,
     ActionSchema,
@@ -36,6 +42,7 @@ export type {
     DataQuerySource,
     CanvasComponent,
     CanvasLayout,
+    CanvasTheme,
     ColumnFormat,
     TableColumn,
     Action,
@@ -56,6 +63,11 @@ export type {
     ActionButtonBlock,
     SparklineBlock,
     FunnelBlock,
+    ProgressBarBlock,
+    MetricRowBlock,
+    StatCardBlock,
+    DividerBlock,
+    ImageBlock,
     BlockTypeInfo
 } from "./schema";
 

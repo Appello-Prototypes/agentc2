@@ -42,6 +42,7 @@ export function ActionButtonBlock({ config }: { config: any }) {
                     config.fullWidth && "w-full"
                 )}
             >
+                {action.icon && <span className="mr-1.5">{action.icon}</span>}
                 {action.label || "Action"}
             </button>
         </div>

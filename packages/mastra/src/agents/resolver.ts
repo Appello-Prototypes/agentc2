@@ -568,7 +568,8 @@ export class AgentResolver {
      * List all agents accessible by a user
      *
      * Includes:
-     * - All SYSTEM agents
+     * - All SYSTEM agents (core platform agents)
+     * - All DEMO agents (examples & templates)
      * - User's own agents
      * - Public agents from other users
      */
@@ -577,18 +578,23 @@ export class AgentResolver {
             return prisma.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { ownerId: userId }, { isPublic: true }]
+                    OR: [
+                        { type: "SYSTEM" },
+                        { type: "DEMO" },
+                        { ownerId: userId },
+                        { isPublic: true }
+                    ]
                 },
                 include: { tools: true, workspace: { select: { organizationId: true } } },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
         }
 
-        // No user - only SYSTEM and public agents
+        // No user - only SYSTEM, DEMO, and public agents
         return prisma.agent.findMany({
             where: {
                 isActive: true,
-                OR: [{ type: "SYSTEM" }, { isPublic: true }]
+                OR: [{ type: "SYSTEM" }, { type: "DEMO" }, { isPublic: true }]
             },
             include: { tools: true, workspace: { select: { organizationId: true } } },
             orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -596,7 +602,7 @@ export class AgentResolver {
     }
 
     /**
-     * List all SYSTEM agents
+     * List all SYSTEM agents (core platform agents only, excludes DEMO)
      */
     async listSystem(): Promise<AgentRecordWithTools[]> {
         return prisma.agent.findMany({

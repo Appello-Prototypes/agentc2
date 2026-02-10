@@ -62,8 +62,9 @@ import {
     TableBody,
     TableHead,
     TableRow,
-    TableCell
+    TableCell,
 } from "@repo/ui";
+import { FlaskConicalIcon } from "lucide-react";
 
 interface AgentStats {
     runs: number;
@@ -95,7 +96,7 @@ interface Agent {
     modelProvider: string;
     modelName: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
     toolCount?: number;
     memoryEnabled?: boolean;
     scorers?: string[];
@@ -714,6 +715,11 @@ export default function AgentsPage() {
         return true;
     });
 
+    // Primary agents (USER + SYSTEM) are shown prominently; DEMO agents are collapsible
+    const primaryAgents = filteredAgents.filter((a) => a.type === "USER" || a.type === "SYSTEM");
+    const demoAgents = filteredAgents.filter((a) => a.type === "DEMO");
+    const [examplesOpen, setExamplesOpen] = useState(false);
+
     const handleAgentClick = (agent: Agent) => {
         router.push(`/agents/${agent.slug || agent.id}/overview`);
     };
@@ -746,6 +752,7 @@ export default function AgentsPage() {
     }
 
     return (
+        <div className="h-full overflow-y-auto">
         <div className="container mx-auto space-y-6 py-6">
             {/* Header */}
             <div className="flex items-start justify-between">
@@ -753,7 +760,23 @@ export default function AgentsPage() {
                     <h1 className="text-3xl font-bold">Agents</h1>
                     <p className="text-muted-foreground">Build, run, and improve AI agents</p>
                 </div>
-                <Button onClick={() => router.push("/demos/agents/manage")}>+ Create Agent</Button>
+                <div className="flex items-center gap-2">
+                    {demoAgents.length > 0 && (
+                        <Button
+                            variant={examplesOpen ? "secondary" : "outline"}
+                            onClick={() => setExamplesOpen(!examplesOpen)}
+                        >
+                            <FlaskConicalIcon className="mr-1.5 size-4" />
+                            Examples
+                            <Badge variant="secondary" className="ml-1.5">
+                                {demoAgents.length}
+                            </Badge>
+                        </Button>
+                    )}
+                    <Button onClick={() => router.push("/demos/agents/manage")}>
+                        + Create Agent
+                    </Button>
+                </div>
             </div>
 
             {/* Summary Stats */}
@@ -865,8 +888,9 @@ export default function AgentsPage() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Types</SelectItem>
-                                <SelectItem value="SYSTEM">System</SelectItem>
                                 <SelectItem value="USER">User</SelectItem>
+                                <SelectItem value="SYSTEM">System</SelectItem>
+                                <SelectItem value="DEMO">Demo</SelectItem>
                             </SelectContent>
                         </Select>
                         <Select
@@ -884,8 +908,8 @@ export default function AgentsPage() {
                         </Select>
                     </div>
 
-                    {/* Agent Views */}
-                    {filteredAgents.length === 0 ? (
+                    {/* Agents */}
+                    {primaryAgents.length === 0 && demoAgents.length === 0 ? (
                         <Card>
                             <CardContent className="py-12 text-center">
                                 {agents.length === 0 ? (
@@ -923,27 +947,94 @@ export default function AgentsPage() {
                                 )}
                             </CardContent>
                         </Card>
-                    ) : viewMode === "table" ? (
-                        <AgentTableView agents={filteredAgents} onAgentClick={handleAgentClick} />
-                    ) : viewMode === "list" ? (
-                        <div className="space-y-3">
-                            {filteredAgents.map((agent) => (
-                                <AgentListView
-                                    key={agent.id}
-                                    agent={agent}
-                                    onClick={() => handleAgentClick(agent)}
-                                />
-                            ))}
-                        </div>
                     ) : (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredAgents.map((agent) => (
-                                <AgentCardView
-                                    key={agent.id}
-                                    agent={agent}
-                                    onClick={() => handleAgentClick(agent)}
-                                />
-                            ))}
+                        <div className="space-y-6">
+                            {/* Primary section: User + System agents */}
+                            {primaryAgents.length > 0 ? (
+                                viewMode === "table" ? (
+                                    <AgentTableView
+                                        agents={primaryAgents}
+                                        onAgentClick={handleAgentClick}
+                                    />
+                                ) : viewMode === "list" ? (
+                                    <div className="space-y-3">
+                                        {primaryAgents.map((agent) => (
+                                            <AgentListView
+                                                key={agent.id}
+                                                agent={agent}
+                                                onClick={() => handleAgentClick(agent)}
+                                            />
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                        {primaryAgents.map((agent) => (
+                                            <AgentCardView
+                                                key={agent.id}
+                                                agent={agent}
+                                                onClick={() => handleAgentClick(agent)}
+                                            />
+                                        ))}
+                                    </div>
+                                )
+                            ) : typeFilter === "all" ? (
+                                <Card>
+                                    <CardContent className="py-8 text-center">
+                                        <p className="text-muted-foreground text-lg">
+                                            No agents yet
+                                        </p>
+                                        <p className="text-muted-foreground mt-1 text-sm">
+                                            Create your first agent, or try one of the examples
+                                            below
+                                        </p>
+                                        <Button
+                                            className="mt-4"
+                                            onClick={() => router.push("/demos/agents/manage")}
+                                        >
+                                            Create Agent
+                                        </Button>
+                                    </CardContent>
+                                </Card>
+                            ) : null}
+
+                            {/* Demo/example agents -- shown when Examples button is active */}
+                            {examplesOpen && demoAgents.length > 0 && (
+                                <div>
+                                    <div className="mb-4 flex items-center gap-2">
+                                        <FlaskConicalIcon className="text-muted-foreground size-4" />
+                                        <span className="text-muted-foreground text-sm font-medium">
+                                            Examples &amp; Templates
+                                        </span>
+                                        <div className="bg-border h-px flex-1" />
+                                    </div>
+                                    {viewMode === "table" ? (
+                                        <AgentTableView
+                                            agents={demoAgents}
+                                            onAgentClick={handleAgentClick}
+                                        />
+                                    ) : viewMode === "list" ? (
+                                        <div className="space-y-3">
+                                            {demoAgents.map((agent) => (
+                                                <AgentListView
+                                                    key={agent.id}
+                                                    agent={agent}
+                                                    onClick={() => handleAgentClick(agent)}
+                                                />
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                            {demoAgents.map((agent) => (
+                                                <AgentCardView
+                                                    key={agent.id}
+                                                    agent={agent}
+                                                    onClick={() => handleAgentClick(agent)}
+                                                />
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     )}
                 </TabsContent>
@@ -1071,6 +1162,7 @@ export default function AgentsPage() {
                     )}
                 </TabsContent>
             </Tabs>
+        </div>
         </div>
     );
 }

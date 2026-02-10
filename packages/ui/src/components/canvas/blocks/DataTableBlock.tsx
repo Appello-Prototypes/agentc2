@@ -164,29 +164,62 @@ export function DataTableBlock({ config }: { config: any }) {
                 </TableBody>
             </Table>
 
-            {/* Pagination */}
-            {totalPages > 1 && (
+            {/* Pagination and Export */}
+            {(totalPages > 1 || sorted.length > 0) && (
                 <div className="mt-3 flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">{sorted.length} results</span>
-                    <div className="flex gap-1">
-                        <button
-                            onClick={() => setPage((p) => Math.max(0, p - 1))}
-                            disabled={page === 0}
-                            className="rounded border px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                            Prev
-                        </button>
-                        <span className="px-2 py-1 text-xs">
-                            {page + 1} / {totalPages}
-                        </span>
-                        <button
-                            onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                            disabled={page >= totalPages - 1}
-                            className="rounded border px-2 py-1 text-xs disabled:opacity-50"
-                        >
-                            Next
-                        </button>
+                    <div className="flex items-center gap-3">
+                        <span className="text-muted-foreground">{sorted.length} results</span>
+                        {sorted.length > 0 && (
+                            <button
+                                onClick={() => {
+                                    const visibleCols = columns.filter((c: { hidden?: boolean }) => !c.hidden);
+                                    const header = visibleCols.map((c: { label: string }) => c.label).join(",");
+                                    const rows = sorted.map((row: Record<string, unknown>) =>
+                                        visibleCols
+                                            .map((col: { key: string }) => {
+                                                const val = String(row[col.key] ?? "");
+                                                return val.includes(",") || val.includes('"')
+                                                    ? `"${val.replace(/"/g, '""')}"`
+                                                    : val;
+                                            })
+                                            .join(",")
+                                    );
+                                    const csv = [header, ...rows].join("\n");
+                                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                                    const url = URL.createObjectURL(blob);
+                                    const a = document.createElement("a");
+                                    a.href = url;
+                                    a.download = `${config.title || "data"}.csv`;
+                                    a.click();
+                                    URL.revokeObjectURL(url);
+                                }}
+                                className="text-muted-foreground hover:text-foreground text-xs underline"
+                            >
+                                Export CSV
+                            </button>
+                        )}
                     </div>
+                    {totalPages > 1 && (
+                        <div className="flex gap-1">
+                            <button
+                                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                                disabled={page === 0}
+                                className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                                Prev
+                            </button>
+                            <span className="px-2 py-1 text-xs">
+                                {page + 1} / {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                                disabled={page >= totalPages - 1}
+                                className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
         </BlockWrapper>

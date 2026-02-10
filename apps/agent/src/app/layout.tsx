@@ -33,11 +33,13 @@ export default function RootLayout({
 }>) {
     return (
         <html lang="en" suppressHydrationWarning>
-            <body className="flex h-dvh flex-col overflow-hidden">
+            <body className="h-dvh overflow-hidden">
                 <Suspense fallback={null}>
                     <AppProvidersWrapper>
-                        <AgentHeader />
-                        <div className="flex-1 overflow-y-auto">{children}</div>
+                        <div className="flex h-full flex-col">
+                            <AgentHeader />
+                            <div className="min-h-0 flex-1">{children}</div>
+                        </div>
                         <CommandPalette appNavigation={appNavigation} />
                     </AppProvidersWrapper>
                 </Suspense>

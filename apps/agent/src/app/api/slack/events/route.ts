@@ -331,10 +331,11 @@ function parseAgentDirective(text: string): {
 
 /**
  * List active agents from the database and format as a Slack message.
+ * Excludes DEMO agents -- only SYSTEM and USER agents are shown.
  */
 async function listActiveAgents(): Promise<string> {
     const agents = await prisma.agent.findMany({
-        where: { isActive: true },
+        where: { isActive: true, type: { in: ["SYSTEM", "USER"] } },
         select: { slug: true, name: true, description: true },
         orderBy: { name: "asc" }
     });
@@ -734,6 +735,15 @@ async function processMessage(
         record = resolved.record;
         source = resolved.source;
         agentId = record?.id || slug;
+
+        // Block DEMO agents from being used via Slack
+        if (record?.type === "DEMO") {
+            console.log(`[Slack] Blocked DEMO agent "${slug}"`);
+            return {
+                text: `\`${slug}\` is a demo agent and isn't available in Slack. Use \`help\` to see available agents.`,
+                identity: {}
+            };
+        }
 
         console.log(`[Slack] Using agent "${slug}" from ${source}`);
     } catch (error) {

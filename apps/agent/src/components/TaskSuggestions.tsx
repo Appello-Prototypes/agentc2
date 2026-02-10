@@ -85,7 +85,7 @@ interface AgentResponse {
     name: string;
     description: string | null;
     isActive: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
     toolCount: number;
     updatedAt: string;
 }
@@ -204,18 +204,29 @@ async function buildSuggestionsFromPlatform(apiBase: string): Promise<Suggestion
         agents.find((a) => a.isActive)?.slug ||
         "assistant";
 
-    // ── Tier 1: Agent-derived cards ──────────────────────────────────────
-    const activeAgents = agents
-        .filter((a) => a.isActive)
-        .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    // ── Tier 1: Agent-derived cards (USER > SYSTEM > DEMO priority) ────
+    const activeAgents = agents.filter((a) => a.isActive);
+    const byRecent = (a: AgentResponse, b: AgentResponse) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+    const activeUserAgents = activeAgents.filter((a) => a.type === "USER").sort(byRecent);
+    const activeSystemAgents = activeAgents.filter((a) => a.type === "SYSTEM").sort(byRecent);
+    const activeDemoAgents = activeAgents.filter((a) => a.type === "DEMO").sort(byRecent);
 
-    const agentCards: SuggestionCard[] = activeAgents.slice(0, 6).map((agent) => ({
+    const toCard = (agent: AgentResponse): SuggestionCard => ({
         title: agent.name,
         description: truncate(agent.description, 45) || `${agent.toolCount} tools available`,
         prompt: deriveAgentPrompt(agent.name, agent.description),
         agentSlug: agent.slug,
         icon: deriveIcon(agent.name, agent.description, "agent")
-    }));
+    });
+
+    // Prioritize: user agents, then system, then demo to fill remaining slots (max 6)
+    const userCards = activeUserAgents.slice(0, 6).map(toCard);
+    const systemSlots = Math.max(0, 6 - userCards.length);
+    const systemCards = activeSystemAgents.slice(0, systemSlots).map(toCard);
+    const demoSlots = Math.max(0, 6 - userCards.length - systemCards.length);
+    const demoCards = activeDemoAgents.slice(0, demoSlots).map(toCard);
+    const agentCards: SuggestionCard[] = [...userCards, ...systemCards, ...demoCards];
 
     // ── Tier 2: Workflow-derived cards ───────────────────────────────────
     const publishedWorkflows = workflows.filter((w) => w.isActive && w.isPublished);

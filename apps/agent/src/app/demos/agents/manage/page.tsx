@@ -70,7 +70,7 @@ interface StoredAgent {
     } | null;
     maxSteps?: number | null;
     scorers?: string[];
-    type?: "SYSTEM" | "USER";
+    type?: "SYSTEM" | "USER" | "DEMO";
     ownerId?: string | null;
     isPublic?: boolean;
     metadata: Record<string, unknown> | null;

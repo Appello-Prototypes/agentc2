@@ -2,21 +2,14 @@
 
 import * as React from "react";
 import { useResolvedData } from "../use-resolved-data";
+import { useChartColors } from "../use-chart-colors";
 import { BlockWrapper } from "./BlockWrapper";
-
-const DEFAULT_COLORS = [
-    "hsl(221 83% 53%)",
-    "hsl(221 73% 60%)",
-    "hsl(221 63% 67%)",
-    "hsl(221 53% 74%)",
-    "hsl(221 43% 81%)"
-];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function FunnelBlock({ config }: { config: any }) {
     const rawData = useResolvedData(config.data);
     const data = Array.isArray(rawData) ? rawData : [];
-    const colors = config.colors || DEFAULT_COLORS;
+    const colors = useChartColors(config.colors);
 
     // Find max value for width calculation
     const maxValue =

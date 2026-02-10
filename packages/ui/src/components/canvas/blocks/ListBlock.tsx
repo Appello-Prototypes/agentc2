@@ -45,6 +45,27 @@ export function ListBlock({ config }: { config: any }) {
                                     {String(item[config.badgeKey])}
                                 </span>
                             )}
+                            {config.actions && config.actions.length > 0 && (
+                                <div className="flex gap-1">
+                                    {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+                                    {config.actions.map((action: any, actionIdx: number) => (
+                                        <button
+                                            key={actionIdx}
+                                            onClick={() => {
+                                                if (action.type === "link" && action.href) {
+                                                    window.open(action.href, "_blank");
+                                                } else if (action.type === "navigate" && action.target) {
+                                                    window.location.href = action.target;
+                                                }
+                                            }}
+                                            className="text-primary text-xs hover:underline"
+                                        >
+                                            {action.icon && <span className="mr-0.5">{action.icon}</span>}
+                                            {action.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     ))}
                 </div>

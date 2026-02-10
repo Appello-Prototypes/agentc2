@@ -63,7 +63,7 @@ interface Agent {
     scorers: string[];
     isActive: boolean;
     isPublic: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
     version: number;
 }
 
@@ -554,8 +554,16 @@ export default function ConfigurePage() {
                             {agent?.type === "SYSTEM" && (
                                 <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">
                                     <p className="text-sm text-yellow-600">
-                                        ⚠️ This is a SYSTEM agent. Some configuration options may be
+                                        This is a system agent. Some configuration options may be
                                         restricted.
+                                    </p>
+                                </div>
+                            )}
+                            {agent?.type === "DEMO" && (
+                                <div className="rounded-lg border border-blue-500/20 bg-blue-500/10 p-4">
+                                    <p className="text-sm text-blue-600">
+                                        This is a demo agent. Changes may be overwritten when the
+                                        platform is re-seeded.
                                     </p>
                                 </div>
                             )}

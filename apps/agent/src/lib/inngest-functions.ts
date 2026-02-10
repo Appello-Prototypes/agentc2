@@ -3752,92 +3752,139 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                   };
         const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
 
-        const { startRun } = await import("./run-recorder");
-        const { createTriggerEventRecord } = await import("./trigger-events");
+        // Gmail watch refresh is a special short-circuit path that doesn't need async invoke
+        if (inputJson?.task === "gmail_watch_refresh" && inputJson?.integrationId) {
+            const gmailResult = await step.run("gmail-watch-refresh", async () => {
+                const { startRun } = await import("./run-recorder");
+                const { createTriggerEventRecord } = await import("./trigger-events");
 
-        const runHandle = await startRun({
-            agentId: schedule.agent.id,
-            agentSlug: schedule.agent.slug,
-            input,
-            source: "api",
-            triggerType: RunTriggerType.SCHEDULED,
-            triggerId: schedule.id,
-            metadata: {
-                scheduleId: schedule.id,
-                scheduleName: schedule.name
-            },
-            initialStatus: RunStatus.QUEUED
-        });
+                const handle = await startRun({
+                    agentId: schedule.agent.id,
+                    agentSlug: schedule.agent.slug,
+                    input,
+                    source: "api",
+                    triggerType: RunTriggerType.SCHEDULED,
+                    triggerId: schedule.id,
+                    metadata: {
+                        scheduleId: schedule.id,
+                        scheduleName: schedule.name
+                    },
+                    initialStatus: RunStatus.QUEUED
+                });
 
-        // Record trigger event for unified triggers dashboard
-        try {
-            await createTriggerEventRecord({
+                try {
+                    await createTriggerEventRecord({
+                        agentId: schedule.agent.id,
+                        workspaceId: schedule.workspaceId || null,
+                        runId: handle.runId,
+                        sourceType: "schedule",
+                        triggerType: "schedule",
+                        entityType: "agent",
+                        eventName: `schedule.${schedule.name}`,
+                        payload: { input, cronExpr: schedule.cronExpr },
+                        metadata: {
+                            scheduleId: schedule.id,
+                            scheduleName: schedule.name,
+                            cronExpr: schedule.cronExpr
+                        }
+                    });
+                } catch (e) {
+                    console.warn("[Schedule Trigger] Failed to record trigger event:", e);
+                }
+
+                const integration = await prisma.gmailIntegration.findUnique({
+                    where: { id: String(inputJson.integrationId) },
+                    include: {
+                        workspace: { select: { organizationId: true } }
+                    }
+                });
+
+                if (!integration?.workspace?.organizationId) {
+                    await handle.complete({
+                        output: "Gmail watch refresh skipped: integration not found"
+                    });
+                    return { runId: handle.runId, refreshed: false };
+                }
+
+                const topicName = process.env.GMAIL_PUBSUB_TOPIC;
+                if (!topicName) {
+                    await handle.complete({
+                        output: "Gmail watch refresh failed: missing GMAIL_PUBSUB_TOPIC"
+                    });
+                    return { runId: handle.runId, refreshed: false };
+                }
+
+                const gmail = await getGmailClient(
+                    integration.workspace.organizationId,
+                    integration.gmailAddress
+                );
+                const watchResult = await watchMailbox(gmail, topicName);
+
+                await prisma.gmailIntegration.update({
+                    where: { id: integration.id },
+                    data: {
+                        historyId: watchResult.historyId || integration.historyId,
+                        watchExpiration: watchResult.expiration || integration.watchExpiration
+                    }
+                });
+
+                await handle.complete({
+                    output: `Refreshed Gmail watch for ${integration.gmailAddress}`
+                });
+
+                return { runId: handle.runId, refreshed: true };
+            });
+
+            return { runId: gmailResult.runId, refreshed: gmailResult.refreshed };
+        }
+
+        // Standard schedule path: create run + trigger event, then queue async invoke
+        const runResult = await step.run("create-run", async () => {
+            const { startRun } = await import("./run-recorder");
+            const { createTriggerEventRecord } = await import("./trigger-events");
+
+            const handle = await startRun({
                 agentId: schedule.agent.id,
-                workspaceId: schedule.workspaceId || null,
-                runId: runHandle.runId,
-                sourceType: "schedule",
-                triggerType: "schedule",
-                entityType: "agent",
-                eventName: `schedule.${schedule.name}`,
-                payload: { input, cronExpr: schedule.cronExpr },
+                agentSlug: schedule.agent.slug,
+                input,
+                source: "api",
+                triggerType: RunTriggerType.SCHEDULED,
+                triggerId: schedule.id,
                 metadata: {
                     scheduleId: schedule.id,
-                    scheduleName: schedule.name,
-                    cronExpr: schedule.cronExpr
-                }
-            });
-        } catch (e) {
-            console.warn("[Schedule Trigger] Failed to record trigger event:", e);
-        }
-
-        if (inputJson?.task === "gmail_watch_refresh" && inputJson?.integrationId) {
-            const integration = await prisma.gmailIntegration.findUnique({
-                where: { id: String(inputJson.integrationId) },
-                include: {
-                    workspace: { select: { organizationId: true } }
-                }
+                    scheduleName: schedule.name
+                },
+                initialStatus: RunStatus.QUEUED
             });
 
-            if (!integration?.workspace?.organizationId) {
-                await runHandle.complete({
-                    output: "Gmail watch refresh skipped: integration not found"
+            // Record trigger event for unified triggers dashboard
+            try {
+                await createTriggerEventRecord({
+                    agentId: schedule.agent.id,
+                    workspaceId: schedule.workspaceId || null,
+                    runId: handle.runId,
+                    sourceType: "schedule",
+                    triggerType: "schedule",
+                    entityType: "agent",
+                    eventName: `schedule.${schedule.name}`,
+                    payload: { input, cronExpr: schedule.cronExpr },
+                    metadata: {
+                        scheduleId: schedule.id,
+                        scheduleName: schedule.name,
+                        cronExpr: schedule.cronExpr
+                    }
                 });
-                return { runId: runHandle.runId, refreshed: false };
+            } catch (e) {
+                console.warn("[Schedule Trigger] Failed to record trigger event:", e);
             }
 
-            const topicName = process.env.GMAIL_PUBSUB_TOPIC;
-            if (!topicName) {
-                await runHandle.complete({
-                    output: "Gmail watch refresh failed: missing GMAIL_PUBSUB_TOPIC"
-                });
-                return { runId: runHandle.runId, refreshed: false };
-            }
-
-            const gmail = await getGmailClient(
-                integration.workspace.organizationId,
-                integration.gmailAddress
-            );
-            const watchResult = await watchMailbox(gmail, topicName);
-
-            await prisma.gmailIntegration.update({
-                where: { id: integration.id },
-                data: {
-                    historyId: watchResult.historyId || integration.historyId,
-                    watchExpiration: watchResult.expiration || integration.watchExpiration
-                }
-            });
-
-            await runHandle.complete({
-                output: `Refreshed Gmail watch for ${integration.gmailAddress}`
-            });
-
-            return { runId: runHandle.runId, refreshed: true };
-        }
+            return { runId: handle.runId };
+        });
 
         await step.sendEvent("invoke-scheduled", {
             name: "agent/invoke.async",
             data: {
-                runId: runHandle.runId,
+                runId: runResult.runId,
                 agentId: schedule.agent.id,
                 agentSlug: schedule.agent.slug,
                 input,
@@ -3846,7 +3893,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             }
         });
 
-        return { runId: runHandle.runId };
+        return { runId: runResult.runId };
     }
 );
 
@@ -4018,9 +4065,6 @@ export const agentTriggerFireFunction = inngest.createFunction(
             trigger.name
         );
 
-        const { startRun } = await import("./run-recorder");
-        const triggerType = resolveRunTriggerType(trigger.triggerType);
-        const source = resolveRunSource(trigger.triggerType);
         const environment = triggerConfig?.environment ?? inputDefaults?.environment ?? undefined;
         const maxSteps =
             typeof inputDefaults?.maxSteps === "number" ? inputDefaults.maxSteps : undefined;
@@ -4029,28 +4073,36 @@ export const agentTriggerFireFunction = inngest.createFunction(
                 ? (inputDefaults.context as Record<string, unknown>)
                 : {};
 
-        const runHandle = await startRun({
-            agentId: trigger.agent.id,
-            agentSlug: trigger.agent.slug,
-            input,
-            source,
-            triggerType,
-            triggerId: trigger.id,
-            metadata: {
-                triggerId: trigger.id,
-                triggerName: trigger.name,
-                triggerType: trigger.triggerType,
-                eventName: trigger.eventName
-            },
-            initialStatus: RunStatus.QUEUED
-        });
+        const runResult = await step.run("create-run", async () => {
+            const { startRun } = await import("./run-recorder");
+            const triggerType = resolveRunTriggerType(trigger.triggerType);
+            const source = resolveRunSource(trigger.triggerType);
 
-        await prisma.agentTrigger.update({
-            where: { id: trigger.id },
-            data: {
-                lastTriggeredAt: new Date(),
-                triggerCount: { increment: 1 }
-            }
+            const handle = await startRun({
+                agentId: trigger.agent.id,
+                agentSlug: trigger.agent.slug,
+                input,
+                source,
+                triggerType,
+                triggerId: trigger.id,
+                metadata: {
+                    triggerId: trigger.id,
+                    triggerName: trigger.name,
+                    triggerType: trigger.triggerType,
+                    eventName: trigger.eventName
+                },
+                initialStatus: RunStatus.QUEUED
+            });
+
+            await prisma.agentTrigger.update({
+                where: { id: trigger.id },
+                data: {
+                    lastTriggeredAt: new Date(),
+                    triggerCount: { increment: 1 }
+                }
+            });
+
+            return { runId: handle.runId };
         });
 
         if (triggerEventId) {
@@ -4059,7 +4111,7 @@ export const agentTriggerFireFunction = inngest.createFunction(
                     status: TriggerEventStatus.QUEUED,
                     run: {
                         connect: {
-                            id: runHandle.runId
+                            id: runResult.runId
                         }
                     }
                 });
@@ -4069,7 +4121,7 @@ export const agentTriggerFireFunction = inngest.createFunction(
         await step.sendEvent("invoke-triggered", {
             name: "agent/invoke.async",
             data: {
-                runId: runHandle.runId,
+                runId: runResult.runId,
                 agentId: trigger.agent.id,
                 agentSlug: trigger.agent.slug,
                 input,
@@ -4087,7 +4139,7 @@ export const agentTriggerFireFunction = inngest.createFunction(
             }
         });
 
-        return { runId: runHandle.runId };
+        return { runId: runResult.runId };
     }
 );
 

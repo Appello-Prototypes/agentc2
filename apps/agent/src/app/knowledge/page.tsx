@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
+import { UploadDocumentDialog } from "./components/upload-document-dialog";
 import {
     Badge,
     Button,
@@ -63,6 +64,12 @@ export default function KnowledgePage() {
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
     const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+    const [refreshKey, setRefreshKey] = useState(0);
+
+    const handleUploadSuccess = useCallback(() => {
+        setRefreshKey((k) => k + 1);
+    }, []);
 
     useEffect(() => {
         async function fetchDocuments() {
@@ -86,7 +93,7 @@ export default function KnowledgePage() {
             }
         }
         fetchDocuments();
-    }, [categoryFilter, typeFilter]);
+    }, [categoryFilter, typeFilter, refreshKey]);
 
     // Client-side name/slug search filtering
     const filtered = search
@@ -112,7 +119,7 @@ export default function KnowledgePage() {
                         search
                     </p>
                 </div>
-                <Button variant="outline" disabled>
+                <Button variant="outline" onClick={() => setUploadDialogOpen(true)}>
                     Add Document
                 </Button>
             </div>
@@ -165,7 +172,7 @@ export default function KnowledgePage() {
                         <p className="text-muted-foreground text-lg">No documents found</p>
                         <p className="text-muted-foreground mt-1 text-sm">
                             {total === 0
-                                ? "Create a document via the API or MCP tools to get started."
+                                ? 'Click "Add Document" to upload a file or paste content.'
                                 : "Try adjusting your search or filters."}
                         </p>
                     </CardContent>
@@ -245,6 +252,12 @@ export default function KnowledgePage() {
                     ))}
                 </div>
             )}
+
+            <UploadDocumentDialog
+                open={uploadDialogOpen}
+                onOpenChange={setUploadDialogOpen}
+                onSuccess={handleUploadSuccess}
+            />
         </div>
     );
 }

@@ -27,7 +27,7 @@ interface Agent {
     modelProvider: string;
     modelName: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
 }
 
 interface AgentListItem {
@@ -35,7 +35,7 @@ interface AgentListItem {
     slug: string;
     name: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
 }
 
 /** Format model name for display (e.g., "claude-sonnet-4-20250514" -> "Claude Sonnet 4") */
@@ -178,12 +178,12 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                                             )}
                                         />
                                         <span className="whitespace-nowrap">{a.name}</span>
-                                        {a.type === "SYSTEM" && (
+                                        {a.type !== "USER" && (
                                             <Badge
                                                 variant="outline"
                                                 className="text-muted-foreground h-4 shrink-0 px-1 text-[9px] font-normal"
                                             >
-                                                System
+                                                {a.type === "DEMO" ? "Demo" : "System"}
                                             </Badge>
                                         )}
                                     </div>
@@ -202,12 +202,12 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                     </div>
 
                     {/* Type Badge */}
-                    {agent.type === "SYSTEM" && (
+                    {agent.type !== "USER" && (
                         <Badge
                             variant="outline"
                             className="text-muted-foreground h-5 px-1.5 text-[10px] font-normal"
                         >
-                            System Agent
+                            {agent.type === "DEMO" ? "Demo Agent" : "System Agent"}
                         </Badge>
                     )}
                 </div>

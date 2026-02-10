@@ -49,10 +49,13 @@ export function ConversationSidebar({
         setConversations(listConversations());
     }, []);
 
-    // Hydrate from localStorage on mount and when activeId changes
+    // Re-read from localStorage when activeId changes (conversation saved)
     useEffect(() => {
-        refreshConversations();
-    }, [activeId, refreshConversations]);
+        const id = requestAnimationFrame(() => {
+            setConversations(listConversations());
+        });
+        return () => cancelAnimationFrame(id);
+    }, [activeId]);
 
     const filtered = searchQuery
         ? conversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))

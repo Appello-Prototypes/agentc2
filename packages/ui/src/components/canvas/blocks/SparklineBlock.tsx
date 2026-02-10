@@ -3,12 +3,14 @@
 import * as React from "react";
 import { LineChart, Line, BarChart, Bar, AreaChart, Area, ResponsiveContainer } from "recharts";
 import { useResolvedData } from "../use-resolved-data";
+import { useChartColors } from "../use-chart-colors";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function SparklineBlock({ config }: { config: any }) {
     const rawData = useResolvedData(config.data);
     const arr = Array.isArray(rawData) ? rawData : [];
-    const color = config.color || "hsl(221 83% 53%)";
+    const chartColors = useChartColors(config.color ? [config.color] : undefined);
+    const color = chartColors[0]!;
     const height = config.height || 40;
     const width = config.width || 120;
     const chartType = config.chartType || "line";

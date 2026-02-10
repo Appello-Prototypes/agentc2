@@ -231,6 +231,21 @@ export const canvasQueryPreviewTool = createTool({
     }
 });
 
+export const canvasExecuteQueriesTool = createTool({
+    id: "canvas-execute-queries",
+    description:
+        "Execute all data queries for a canvas and return the results. " +
+        "Runs the canvas's dataQueries server-side (MCP tools, SQL, RAG, APIs, etc.) " +
+        "and returns results keyed by query ID.",
+    inputSchema: z.object({
+        slug: z.string().describe("Canvas slug to execute queries for")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ slug }) => {
+        return callInternalApi(`/api/canvases/${slug}/data`);
+    }
+});
+
 export const canvasListBlocksTool = createTool({
     id: "canvas-list-blocks",
     description:

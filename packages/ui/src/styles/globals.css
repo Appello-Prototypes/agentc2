@@ -129,3 +129,23 @@
         @apply bg-background text-foreground;
     }
 }
+
+/* Canvas responsive grid breakpoints */
+@media (max-width: 767px) {
+    .canvas-grid {
+        grid-template-columns: 1fr !important;
+    }
+    .canvas-grid > .canvas-grid-cell {
+        grid-column: span 1 / span 1 !important;
+    }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+    .canvas-grid {
+        grid-template-columns: repeat(12, minmax(0, 1fr)) !important;
+    }
+    .canvas-grid > .canvas-grid-cell {
+        /* Blocks with span <= 4 get bumped to span 6 on tablet */
+        min-width: 0;
+    }
+}

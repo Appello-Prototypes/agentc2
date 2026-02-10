@@ -16,6 +16,18 @@ export interface CanvasLayout {
     maxWidth?: string;
 }
 
+export interface CanvasThemeForRenderer {
+    primaryColor?: string;
+    backgroundColor?: string;
+    cardBackground?: string;
+    cardBorder?: string;
+    textColor?: string;
+    mutedTextColor?: string;
+    chartColors?: string[];
+    borderRadius?: "none" | "sm" | "md" | "lg" | "xl";
+    density?: "compact" | "default" | "spacious";
+}
+
 export interface CanvasSchemaForRenderer {
     title: string;
     description?: string;
@@ -24,10 +36,7 @@ export interface CanvasSchemaForRenderer {
     dataQueries?: any[];
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     components: any[];
-    theme?: {
-        primaryColor?: string;
-        backgroundColor?: string;
-    };
+    theme?: CanvasThemeForRenderer;
 }
 
 export interface CanvasDataContextValue {
@@ -39,6 +48,8 @@ export interface CanvasDataContextValue {
     setFilter: (filterId: string, value: unknown) => void;
     /** Trigger a data refresh */
     onRefresh?: () => void;
+    /** Theme configuration */
+    theme?: CanvasThemeForRenderer;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -48,7 +59,8 @@ export interface CanvasDataContextValue {
 export const CanvasDataContext = React.createContext<CanvasDataContextValue>({
     queries: {},
     filters: {},
-    setFilter: () => {}
+    setFilter: () => {},
+    theme: undefined
 });
 
 export function useCanvasData() {
@@ -66,6 +78,44 @@ export interface CanvasRendererProps {
     className?: string;
 }
 
+// Map border radius tokens to CSS values
+const RADIUS_MAP: Record<string, string> = {
+    none: "0px",
+    sm: "0.25rem",
+    md: "0.45rem",
+    lg: "0.75rem",
+    xl: "1rem"
+};
+
+// Map density tokens to padding multipliers
+const DENSITY_PADDING: Record<string, number> = {
+    compact: 3,
+    default: 4,
+    spacious: 6
+};
+
+function buildThemeStyle(theme?: CanvasThemeForRenderer): React.CSSProperties {
+    if (!theme) return {};
+    const vars: Record<string, string> = {};
+
+    if (theme.primaryColor) vars["--canvas-primary"] = theme.primaryColor;
+    if (theme.backgroundColor) vars["--canvas-bg"] = theme.backgroundColor;
+    if (theme.cardBackground) vars["--canvas-card-bg"] = theme.cardBackground;
+    if (theme.cardBorder) vars["--canvas-card-border"] = theme.cardBorder;
+    if (theme.textColor) vars["--canvas-text"] = theme.textColor;
+    if (theme.mutedTextColor) vars["--canvas-muted"] = theme.mutedTextColor;
+    if (theme.borderRadius) vars["--canvas-radius"] = RADIUS_MAP[theme.borderRadius] || "0.45rem";
+
+    // Set chart color overrides
+    if (theme.chartColors) {
+        theme.chartColors.forEach((color, idx) => {
+            vars[`--chart-${idx + 1}`] = color;
+        });
+    }
+
+    return vars as React.CSSProperties;
+}
+
 export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRendererProps) {
     const [filters, setFilters] = React.useState<Record<string, unknown>>({});
 
@@ -78,17 +128,20 @@ export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRen
             queries: data,
             filters,
             setFilter,
-            onRefresh
+            onRefresh,
+            theme: schema.theme
         }),
-        [data, filters, setFilter, onRefresh]
+        [data, filters, setFilter, onRefresh, schema.theme]
     );
 
     const layout = schema.layout || {};
     const columns = layout.columns || 12;
-    const gap = layout.gap ?? 4;
-    const padding = layout.padding ?? 4;
+    const density = schema.theme?.density || "default";
+    const gap = layout.gap ?? DENSITY_PADDING[density]!;
+    const padding = layout.padding ?? DENSITY_PADDING[density]!;
     const maxWidth = layout.maxWidth || "1400px";
     const layoutType = layout.type || "grid";
+    const themeStyles = buildThemeStyle(schema.theme);
 
     const visibleComponents = (schema.components || []).filter(
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -102,9 +155,11 @@ export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRen
                 style={{
                     maxWidth,
                     padding: `${padding * 4}px`,
+                    ...themeStyles,
                     ...(schema.theme?.backgroundColor
                         ? { backgroundColor: schema.theme.backgroundColor }
-                        : {})
+                        : {}),
+                    ...(schema.theme?.textColor ? { color: schema.theme.textColor } : {})
                 }}
             >
                 {/* Canvas title */}
@@ -112,7 +167,12 @@ export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRen
                     <div className="mb-6">
                         <h1 className="text-2xl font-semibold tracking-tight">{schema.title}</h1>
                         {schema.description && (
-                            <p className="text-muted-foreground mt-1 text-sm">
+                            <p
+                                className="mt-1 text-sm"
+                                style={{
+                                    color: schema.theme?.mutedTextColor || undefined
+                                }}
+                            >
                                 {schema.description}
                             </p>
                         )}
@@ -122,7 +182,7 @@ export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRen
                 {/* Layout */}
                 {layoutType === "grid" ? (
                     <div
-                        className="grid"
+                        className="canvas-grid grid"
                         style={{
                             gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
                             gap: `${gap * 4}px`
@@ -133,6 +193,7 @@ export function CanvasRenderer({ schema, data, onRefresh, className }: CanvasRen
                             (component: any) => (
                                 <div
                                     key={component.id}
+                                    className="canvas-grid-cell"
                                     style={{
                                         gridColumn: `span ${Math.min(component.span || 12, columns)} / span ${Math.min(component.span || 12, columns)}`
                                     }}

@@ -31,11 +31,11 @@
     font-size: 0.8125rem;
 }
 
-/* CoWork-style soft background wash */
+/* CoWork-style grid background */
 .cowork-bg {
-    background: radial-gradient(
-        ellipse 80% 60% at 50% 100%,
-        hsl(var(--muted) / 0.4) 0%,
-        transparent 70%
-    );
+    background-image:
+        linear-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.05) 1px, transparent 1px) !important;
+    background-size: 48px 48px !important;
+    background-position: center center !important;
 }

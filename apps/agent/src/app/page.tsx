@@ -6,11 +6,7 @@ import { useSession } from "@repo/auth/client";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
-import {
-    saveConversation,
-    loadConversation,
-    generateTitle,
-} from "@/lib/conversation-store";
+import { saveConversation, loadConversation, generateTitle } from "@/lib/conversation-store";
 import {
     Badge,
     Button,
@@ -153,10 +149,10 @@ function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => vo
                 <PromptInputActionMenuContent className="w-56">
                     {/* Upload any file */}
                     <PromptInputActionMenuItem
-                        onSelect={(e) => {
-                            e.preventDefault();
+                        onClick={() => {
                             attachments.openFileDialog();
                         }}
+                        closeOnClick={false}
                     >
                         <PaperclipIcon className="mr-2 size-4 opacity-60" />
                         Upload files
@@ -164,10 +160,10 @@ function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => vo
 
                     {/* Upload image (filtered to image/*) */}
                     <PromptInputActionMenuItem
-                        onSelect={(e) => {
-                            e.preventDefault();
+                        onClick={() => {
                             imageInputRef.current?.click();
                         }}
+                        closeOnClick={false}
                     >
                         <ImageIcon className="mr-2 size-4 opacity-60" />
                         Upload image
@@ -175,7 +171,7 @@ function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => vo
 
                     {/* Search knowledge base -- sends a prompt */}
                     <PromptInputActionMenuItem
-                        onSelect={() => {
+                        onClick={() => {
                             const query = window.prompt("What would you like to search for?");
                             if (query?.trim()) {
                                 onSendPrompt(`Search the knowledge base for: ${query.trim()}`);
@@ -188,7 +184,7 @@ function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => vo
 
                     {/* Fetch from URL -- prompts for URL then sends */}
                     <PromptInputActionMenuItem
-                        onSelect={() => {
+                        onClick={() => {
                             const url = window.prompt("Enter the URL to fetch:");
                             if (url?.trim()) {
                                 onSendPrompt(
@@ -550,7 +546,7 @@ export default function UnifiedChatPage() {
                 onSelect={handleLoadConversation}
                 onNewConversation={handleNewConversation}
             />
-            <div className="flex flex-1 flex-col">
+            <div className="cowork-bg relative flex flex-1 flex-col">
                 {/* Context bar */}
                 <div className="flex items-center justify-between border-b px-4 py-2">
                     <div className="flex items-center gap-2">

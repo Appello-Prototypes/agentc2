@@ -98,7 +98,39 @@ Use \`{{ }}\` expressions to bind data:
 - \`{{ sum(queries.deals, 'amount') }}\` — Aggregate functions (sum, count, avg, min, max)
 - \`{{ groupBy(queries.deals, 'stage') }}\` — Transform data
 - \`{{ formatCurrency(sum(queries.deals, 'amount')) }}\` — Format values
+- \`{{ formatNumber(avg(queries.stats, 'score')) }}\` — Format numbers cleanly
+- \`{{ formatPercent(avg(queries.stats, 'rate')) }}\` — Format as percentage
 - \`{{ count(queries.deals) }}\` — Count records
+- \`{{ round(avg(queries.stats, 'value'), 1) }}\` — Round to N decimal places
+
+## KPI Card Formatting Rules (CRITICAL)
+KPI cards MUST always have proper formatting. Never display raw unformatted numbers.
+
+**Always set \`format\` on KPI cards:**
+- Use \`"format": "currency"\` for money values (renders as $1,234.56)
+- Use \`"format": "number"\` for counts/quantities (renders as 1,234)
+- Use \`"format": "percent"\` for rates/percentages (renders as 94.9%)
+
+**Always use formatting expressions for computed values:**
+- GOOD: \`"value": "{{ formatNumber(count(queries.agents)) }}"\`
+- GOOD: \`"value": "{{ formatPercent(avg(queries.stats, 'successRate')) }}"\`
+- GOOD: \`"value": "{{ formatCurrency(sum(queries.deals, 'amount')) }}"\`
+- GOOD: \`"value": "{{ round(avg(queries.stats, 'score'), 1) }}"\` with \`"suffix": "%"\`
+- BAD: \`"value": "{{ avg(queries.stats, 'successRate') }}"\` (shows 94.94999999999)
+- BAD: \`"value": "{{ sum(queries.deals, 'amount') }}"\` without format (shows 1234567.89)
+
+**Use prefix/suffix for units:**
+- \`"prefix": "$"\` for currency symbols
+- \`"suffix": "%"\` for percentages
+- \`"suffix": " ms"\` for durations
+
+## New Block Types
+In addition to the core blocks, these are also available:
+- **progress-bar** — Horizontal progress/completion bar with label and percentage
+- **metric-row** — Horizontal row of small metrics, great for summary strips
+- **stat-card** — Enhanced KPI card with icon support and optional inline sparkline
+- **divider** — Visual separator with optional label
+- **image** — Display images from URLs or expressions
 
 ## Important Rules
 - Always use canvas-query-preview FIRST to check the data shape before building components
@@ -107,7 +139,9 @@ Use \`{{ }}\` expressions to bind data:
 - KPI cards typically use span of 3 (4 per row) or 4 (3 per row)
 - Charts typically use span of 6 (half-width) or 12 (full-width)
 - Data tables typically use span of 12 (full-width)
-- Always include a title and description for the canvas`,
+- Always include a title and description for the canvas
+- NEVER leave numeric KPI values unformatted — always use format, prefix/suffix, or formatting expressions
+- When using static data for charts, ensure data is an array of objects with consistent keys`,
     modelProvider: "anthropic",
     modelName: "claude-sonnet-4-20250514",
     temperature: 0.3,

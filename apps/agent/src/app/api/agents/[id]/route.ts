@@ -472,12 +472,12 @@ export async function DELETE(
                 );
             }
 
-            // SYSTEM agents cannot be deleted
-            if (existing.type === "SYSTEM") {
+            // SYSTEM and DEMO agents cannot be deleted (they are seeded)
+            if (existing.type === "SYSTEM" || existing.type === "DEMO") {
                 return NextResponse.json(
                     {
                         success: false,
-                        error: "SYSTEM agents cannot be deleted"
+                        error: `${existing.type} agents cannot be deleted`
                     },
                     { status: 403 }
                 );

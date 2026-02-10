@@ -226,27 +226,32 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        // Calculate workspace-wide summary
-        const totalRuns = runs.length;
-        const completedRuns = runs.filter((r) => r.status === "COMPLETED").length;
-        const failedRuns = runs.filter((r) => r.status === "FAILED").length;
+        // Calculate workspace-wide summary (excluding DEMO agents)
+        const productionAgents = agents.filter((a) => a.type !== "DEMO");
+        const productionAgentIds = new Set(productionAgents.map((a) => a.id));
+        const productionRuns = runs.filter((r) => productionAgentIds.has(r.agentId));
+
+        const totalRuns = productionRuns.length;
+        const completedRuns = productionRuns.filter((r) => r.status === "COMPLETED").length;
+        const failedRuns = productionRuns.filter((r) => r.status === "FAILED").length;
         const successRate = totalRuns > 0 ? (completedRuns / totalRuns) * 100 : 0;
 
-        const durations = runs.filter((r) => r.durationMs).map((r) => r.durationMs!);
+        const durations = productionRuns.filter((r) => r.durationMs).map((r) => r.durationMs!);
         const avgLatencyMs =
             durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : 0;
 
-        const totalTokens = runs.reduce((sum, r) => sum + (r.totalTokens || 0), 0);
-        const totalCostUsd = runs.reduce((sum, r) => sum + (r.costUsd || 0), 0);
+        const totalTokens = productionRuns.reduce((sum, r) => sum + (r.totalTokens || 0), 0);
+        const totalCostUsd = productionRuns.reduce((sum, r) => sum + (r.costUsd || 0), 0);
 
         return NextResponse.json({
             success: true,
             agents: agentStats,
             summary: {
-                totalAgents: agents.length,
-                activeAgents: agents.filter((a) => a.isActive).length,
-                systemAgents: agents.filter((a) => a.type === "SYSTEM").length,
-                userAgents: agents.filter((a) => a.type === "USER").length,
+                totalAgents: productionAgents.length,
+                activeAgents: productionAgents.filter((a) => a.isActive).length,
+                systemAgents: productionAgents.filter((a) => a.type === "SYSTEM").length,
+                userAgents: productionAgents.filter((a) => a.type === "USER").length,
+                demoAgents: agents.filter((a) => a.type === "DEMO").length,
                 totalRuns,
                 completedRuns,
                 failedRuns,

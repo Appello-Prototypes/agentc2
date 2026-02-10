@@ -159,7 +159,8 @@ import {
     canvasDeleteTool,
     canvasListTool,
     canvasQueryPreviewTool,
-    canvasListBlocksTool
+    canvasListBlocksTool,
+    canvasExecuteQueriesTool
 } from "./canvas-tools";
 import { askQuestionsTool } from "./ask-questions";
 import { getMcpTools } from "../mcp/client";
@@ -338,6 +339,7 @@ export const toolRegistry: Record<string, any> = {
     "canvas-list": canvasListTool,
     "canvas-query-preview": canvasQueryPreviewTool,
     "canvas-list-blocks": canvasListBlocksTool,
+    "canvas-execute-queries": canvasExecuteQueriesTool,
 
     // Interactive UI tools
     "ask-questions": askQuestionsTool

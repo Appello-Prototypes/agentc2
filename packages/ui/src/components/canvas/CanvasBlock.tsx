@@ -21,6 +21,11 @@ import { FunnelBlock } from "./blocks/FunnelBlock";
 import { SearchBlock } from "./blocks/SearchBlock";
 import { TabsBlock } from "./blocks/TabsBlock";
 import { AccordionBlock } from "./blocks/AccordionBlock";
+import { ProgressBarBlock } from "./blocks/ProgressBarBlock";
+import { MetricRowBlock } from "./blocks/MetricRowBlock";
+import { StatCardBlock } from "./blocks/StatCardBlock";
+import { DividerBlock } from "./blocks/DividerBlock";
+import { ImageBlock } from "./blocks/ImageBlock";
 
 /**
  * Block dispatcher - routes to the correct block component based on type.
@@ -68,6 +73,16 @@ export function CanvasBlock({ component }: { component: any }) {
             return <TabsBlock config={component} />;
         case "accordion":
             return <AccordionBlock config={component} />;
+        case "progress-bar":
+            return <ProgressBarBlock config={component} />;
+        case "metric-row":
+            return <MetricRowBlock config={component} />;
+        case "stat-card":
+            return <StatCardBlock config={component} />;
+        case "divider":
+            return <DividerBlock config={component} />;
+        case "image":
+            return <ImageBlock config={component} />;
         default:
             return (
                 <div className="rounded-lg border border-dashed p-4 text-center">

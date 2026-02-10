@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { buildMcpServer } from "@/lib/mcp-server";
 import { getPublicBaseUrl } from "@/lib/mcp-oauth";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { toReqRes, toFetchResponse } from "fetch-to-node";
 
 export const dynamic = "force-dynamic";
@@ -127,6 +128,10 @@ function unauthorizedResponse(request: NextRequest, orgSlug: string): Response {
 
 /**
  * Handle MCP Streamable HTTP requests.
+ *
+ * Uses @modelcontextprotocol/sdk Server + StreamableHTTPServerTransport
+ * directly in stateless/serverless mode. Each request gets a fresh
+ * transport that is discarded after the response.
  */
 async function handleMcpRequest(request: NextRequest, context: RouteContext): Promise<Response> {
     const { orgSlug } = await context.params;
@@ -140,24 +145,21 @@ async function handleMcpRequest(request: NextRequest, context: RouteContext): Pr
     try {
         const { organizationId, authHeaders } = authResult;
 
-        // Build the MCPServer with tools for this organization
-        const mcpServer = await buildMcpServer(organizationId, authHeaders);
+        // Build the MCP Server with tools for this organization
+        const { server } = await buildMcpServer(organizationId, authHeaders);
 
         // Convert the Next.js Request to Node.js req/res
         const { req: nodeReq, res: nodeRes } = toReqRes(request);
 
-        const url = new URL(request.url);
-
-        // Start the Streamable HTTP handler in serverless mode
-        await mcpServer.startHTTP({
-            url,
-            httpPath: url.pathname,
-            req: nodeReq,
-            res: nodeRes,
-            options: {
-                serverless: true
-            }
+        // Create a stateless transport (serverless mode -- no session management)
+        const transport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+            enableJsonResponse: true
         });
+
+        // Connect the server to the transport and handle the request
+        await server.connect(transport);
+        await transport.handleRequest(nodeReq, nodeRes);
 
         return await toFetchResponse(nodeRes);
     } catch (error) {

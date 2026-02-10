@@ -106,7 +106,13 @@ const BlockBaseSchema = z.object({
     title: z.string().optional().describe("Block title/header"),
     description: z.string().optional().describe("Subtitle or description"),
     hidden: z.boolean().optional().default(false),
-    className: z.string().optional().describe("Additional CSS classes")
+    className: z.string().optional().describe("Additional CSS classes"),
+    row: z
+        .string()
+        .optional()
+        .describe(
+            "Optional row group identifier. Components with the same row value are rendered together in the same visual row."
+        )
 });
 
 /** DataTable block - sortable, filterable table */
@@ -453,6 +459,81 @@ export const FunnelBlockSchema = BlockBaseSchema.extend({
 
 export type FunnelBlock = z.infer<typeof FunnelBlockSchema>;
 
+/** ProgressBar block - horizontal progress indicator */
+export const ProgressBarBlockSchema = BlockBaseSchema.extend({
+    type: z.literal("progress-bar"),
+    value: z.string().describe("Expression for current value"),
+    max: z.number().optional().default(100).describe("Maximum value"),
+    label: z.string().optional(),
+    color: z.string().optional().describe("Bar fill color"),
+    showPercentage: z.boolean().optional().default(true),
+    height: z.number().optional().default(8).describe("Bar height in pixels")
+});
+
+export type ProgressBarBlock = z.infer<typeof ProgressBarBlockSchema>;
+
+/** MetricRow block - horizontal row of small metrics */
+export const MetricRowBlockSchema = BlockBaseSchema.extend({
+    type: z.literal("metric-row"),
+    metrics: z.array(
+        z.object({
+            label: z.string(),
+            value: z.string().describe("Expression for the metric value"),
+            format: ColumnFormatSchema.optional().default("text"),
+            prefix: z.string().optional(),
+            suffix: z.string().optional(),
+            icon: z.string().optional()
+        })
+    )
+});
+
+export type MetricRowBlock = z.infer<typeof MetricRowBlockSchema>;
+
+/** StatCard block - enhanced KPI card with icon and sparkline */
+export const StatCardBlockSchema = BlockBaseSchema.extend({
+    type: z.literal("stat-card"),
+    value: z.string().describe("Expression for the main value"),
+    format: ColumnFormatSchema.optional().default("text"),
+    prefix: z.string().optional(),
+    suffix: z.string().optional(),
+    trend: z
+        .object({
+            value: z.string().describe("Expression for trend value"),
+            direction: z.enum(["up", "down", "neutral"]).optional(),
+            label: z.string().optional()
+        })
+        .optional(),
+    icon: z.string().optional().describe("Emoji or icon character"),
+    color: z
+        .enum(["default", "blue", "green", "red", "yellow", "purple"])
+        .optional()
+        .default("default"),
+    sparklineData: z.string().optional().describe("Expression for sparkline data array"),
+    sparklineType: z.enum(["line", "bar", "area"]).optional().default("line")
+});
+
+export type StatCardBlock = z.infer<typeof StatCardBlockSchema>;
+
+/** Divider block - visual separator */
+export const DividerBlockSchema = BlockBaseSchema.extend({
+    type: z.literal("divider"),
+    orientation: z.enum(["horizontal", "vertical"]).optional().default("horizontal"),
+    label: z.string().optional().describe("Optional centered label on the divider")
+});
+
+export type DividerBlock = z.infer<typeof DividerBlockSchema>;
+
+/** Image block - display images */
+export const ImageBlockSchema = BlockBaseSchema.extend({
+    type: z.literal("image"),
+    src: z.string().describe("Image URL or expression"),
+    alt: z.string().optional().default(""),
+    fit: z.enum(["cover", "contain", "fill"]).optional().default("cover"),
+    height: z.number().optional().default(200).describe("Image height in pixels")
+});
+
+export type ImageBlock = z.infer<typeof ImageBlockSchema>;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Union of all block types
 // ─────────────────────────────────────────────────────────────────────────────
@@ -477,7 +558,12 @@ export const CanvasComponentSchema: z.ZodType = z.discriminatedUnion("type", [
     TabsBlockSchema,
     AccordionBlockSchema,
     SparklineBlockSchema,
-    FunnelBlockSchema
+    FunnelBlockSchema,
+    ProgressBarBlockSchema,
+    MetricRowBlockSchema,
+    StatCardBlockSchema,
+    DividerBlockSchema,
+    ImageBlockSchema
 ]);
 
 export type CanvasComponent = z.infer<typeof CanvasComponentSchema>;
@@ -496,6 +582,36 @@ export const CanvasLayoutSchema = z.object({
 
 export type CanvasLayout = z.infer<typeof CanvasLayoutSchema>;
 
+export const CanvasThemeSchema = z
+    .object({
+        primaryColor: z.string().optional().describe("Primary accent color (any valid CSS color)"),
+        backgroundColor: z
+            .string()
+            .optional()
+            .describe("Canvas background color override"),
+        cardBackground: z.string().optional().describe("Card/block background color"),
+        cardBorder: z.string().optional().describe("Card/block border color"),
+        textColor: z.string().optional().describe("Primary text color"),
+        mutedTextColor: z.string().optional().describe("Secondary/muted text color"),
+        chartColors: z
+            .array(z.string())
+            .optional()
+            .describe("Custom color palette for charts (array of CSS colors)"),
+        borderRadius: z
+            .enum(["none", "sm", "md", "lg", "xl"])
+            .optional()
+            .default("md")
+            .describe("Border radius for cards and blocks"),
+        density: z
+            .enum(["compact", "default", "spacious"])
+            .optional()
+            .default("default")
+            .describe("Spacing density — compact reduces padding, spacious increases it")
+    })
+    .optional();
+
+export type CanvasTheme = z.infer<typeof CanvasThemeSchema>;
+
 export const CanvasSchemaSpec = z.object({
     title: z.string().describe("Canvas title"),
     description: z.string().optional(),
@@ -505,12 +621,7 @@ export const CanvasSchemaSpec = z.object({
         .default([])
         .describe("Data queries to execute server-side"),
     components: z.array(CanvasComponentSchema).describe("UI components to render"),
-    theme: z
-        .object({
-            primaryColor: z.string().optional(),
-            backgroundColor: z.string().optional()
-        })
-        .optional()
+    theme: CanvasThemeSchema
 });
 
 export type CanvasSchemaSpec = z.infer<typeof CanvasSchemaSpec>;
@@ -656,5 +767,38 @@ export const BLOCK_TYPES: BlockTypeInfo[] = [
         name: "Funnel",
         description: "Funnel chart for visualizing conversion or pipeline stages.",
         category: "chart"
+    },
+    {
+        type: "progress-bar",
+        name: "Progress Bar",
+        description:
+            "Horizontal progress/completion bar with label and percentage. Great for showing completion status.",
+        category: "kpi"
+    },
+    {
+        type: "metric-row",
+        name: "Metric Row",
+        description:
+            "Horizontal row of small metrics. Perfect for summary strips at the top of a dashboard.",
+        category: "kpi"
+    },
+    {
+        type: "stat-card",
+        name: "Stat Card",
+        description:
+            "Enhanced KPI card with icon support and optional inline sparkline. Use for prominent metrics.",
+        category: "kpi"
+    },
+    {
+        type: "divider",
+        name: "Divider",
+        description: "Visual separator with optional centered label for organizing sections.",
+        category: "layout"
+    },
+    {
+        type: "image",
+        name: "Image",
+        description: "Display an image from a URL. Supports cover, contain, and fill modes.",
+        category: "data"
     }
 ];

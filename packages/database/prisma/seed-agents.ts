@@ -11,7 +11,7 @@ import { PrismaClient, AgentType } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-// SYSTEM agents configuration - matching code-defined agents
+// Agent configuration - SYSTEM agents are core platform agents, DEMO agents are examples
 const systemAgents = [
     {
         slug: "assistant",
@@ -273,6 +273,7 @@ When users ask you to do something directly (look up a contact, check a calendar
     },
     {
         slug: "structured",
+        type: AgentType.DEMO,
         name: "Structured Output Agent",
         description:
             "Returns typed JSON objects instead of plain text. Useful for API responses, data extraction, and programmatic processing.",
@@ -292,6 +293,7 @@ Always provide accurate, well-structured responses.`,
     },
     {
         slug: "vision",
+        type: AgentType.DEMO,
         name: "Vision Analyst",
         description:
             "Analyzes images and extracts information. Supports image URLs and base64-encoded images.",
@@ -314,6 +316,7 @@ Be thorough but concise. Structure your analysis clearly.`,
     },
     {
         slug: "research",
+        type: AgentType.DEMO,
         name: "Research Assistant",
         description:
             "Multi-step research agent with web search and note-taking tools. Demonstrates tool chaining and systematic information gathering.",
@@ -337,6 +340,7 @@ After gathering information, provide a comprehensive answer.`,
     },
     {
         slug: "evaluated",
+        type: AgentType.DEMO,
         name: "Fully Evaluated Agent",
         description:
             "Agent with comprehensive scoring enabled. Responses are evaluated for relevancy, toxicity, completeness, and tone.",
@@ -357,6 +361,7 @@ Strive to provide excellent responses that score well on all metrics.`,
     },
     {
         slug: "openai-voice",
+        type: AgentType.DEMO,
         name: "OpenAI Voice Agent",
         description:
             "Voice assistant using OpenAI for both text-to-speech and speech-to-text. Good balance of quality and cost.",
@@ -380,6 +385,7 @@ since they will be spoken aloud. Aim for 1-3 sentences unless more detail is req
     },
     {
         slug: "elevenlabs-voice",
+        type: AgentType.DEMO,
         name: "ElevenLabs Voice Agent",
         description:
             "Voice assistant using ElevenLabs for premium text-to-speech quality. Best for production voice experiences.",
@@ -401,6 +407,7 @@ Keep responses conversational and engaging. Aim for 1-3 sentences.`,
     },
     {
         slug: "hybrid-voice",
+        type: AgentType.DEMO,
         name: "Hybrid Voice Agent",
         description:
             "Voice assistant combining OpenAI Whisper for speech recognition with ElevenLabs for premium text-to-speech.",
@@ -423,6 +430,7 @@ Keep responses natural and conversational.`,
     },
     {
         slug: "mcp-agent",
+        type: AgentType.DEMO,
         name: "MCP-Enabled Agent",
         description:
             "Voice assistant with access to external tools via MCP (Model Context Protocol). Used by ElevenLabs for CRM, project management, web scraping, and more.",
@@ -487,6 +495,7 @@ You have real-time access to these external tools. Use them to provide accurate,
     // ============================================
     {
         slug: "trip-destination",
+        type: AgentType.DEMO,
         name: "Destination Research Agent",
         description:
             "Researches destination information including climate, culture, visa requirements, safety, and best times to visit. Use when the user asks about a destination or needs help choosing where to go.",
@@ -520,6 +529,7 @@ Format your responses clearly with headers and bullet points for easy reading.`,
     },
     {
         slug: "trip-transport",
+        type: AgentType.DEMO,
         name: "Transport Agent",
         description:
             "Searches for transportation options including flights, trains, buses, and car rentals. Compares prices and travel times. Use when the user needs to book or research travel between locations.",
@@ -561,6 +571,7 @@ Always provide multiple options when available, from budget to premium.`,
     },
     {
         slug: "trip-accommodation",
+        type: AgentType.DEMO,
         name: "Accommodation Agent",
         description:
             "Finds accommodation options including hotels, vacation rentals, and hostels. Considers location, amenities, and budget. Use when the user needs lodging recommendations.",
@@ -602,6 +613,7 @@ Provide 3-5 options across different price points when possible.`,
     },
     {
         slug: "trip-activities",
+        type: AgentType.DEMO,
         name: "Activities Agent",
         description:
             "Discovers attractions, restaurants, tours, and local experiences. Considers user interests and trip duration. Use when the user wants activity or dining recommendations.",
@@ -647,6 +659,7 @@ Match recommendations to the trip duration and pace preferences.`,
     },
     {
         slug: "trip-budget",
+        type: AgentType.DEMO,
         name: "Budget Planner Agent",
         description:
             "Calculates trip costs, optimizes spending across categories, and tracks budget. Provides cost breakdowns and savings tips. Use when the user asks about costs or needs budget planning.",
@@ -693,6 +706,7 @@ Always present costs in a clear, organized format with totals.`,
     },
     {
         slug: "trip-itinerary",
+        type: AgentType.DEMO,
         name: "Itinerary Writer Agent",
         description:
             "Creates detailed day-by-day itineraries from research findings. Optimizes timing and logistics. Use when the user wants a complete trip plan or schedule.",
@@ -911,7 +925,8 @@ async function seedAgents() {
     let updated = 0;
 
     for (const agentData of systemAgents) {
-        const { tools, ...agentFields } = agentData;
+        const { tools, type: agentType, ...agentFields } = agentData;
+        const resolvedType = agentType ?? AgentType.SYSTEM;
 
         // Upsert agent
         const existing = await prisma.agent.findUnique({
@@ -922,12 +937,12 @@ async function seedAgents() {
             where: { slug: agentData.slug },
             update: {
                 ...agentFields,
-                type: AgentType.SYSTEM,
+                type: resolvedType,
                 isActive: true
             },
             create: {
                 ...agentFields,
-                type: AgentType.SYSTEM,
+                type: resolvedType,
                 isActive: true
             }
         });
@@ -962,7 +977,7 @@ async function validateSeed() {
     console.log("\nValidating seed data...\n");
 
     const agents = await prisma.agent.findMany({
-        where: { type: AgentType.SYSTEM },
+        where: { type: { in: [AgentType.SYSTEM, AgentType.DEMO] } },
         include: { tools: true }
     });
 
@@ -983,8 +998,9 @@ async function validateSeed() {
         const expected = systemAgents.find((a) => a.slug === agent.slug);
         if (!expected) continue;
 
+        const expectedType = expected.type ?? AgentType.SYSTEM;
         const checks = [
-            { name: "type", actual: agent.type, expected: AgentType.SYSTEM },
+            { name: "type", actual: agent.type, expected: expectedType },
             { name: "toolCount", actual: agent.tools.length, expected: expected.tools.length },
             {
                 name: "memoryEnabled",

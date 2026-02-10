@@ -494,8 +494,9 @@ model CrmAuditLog {
 
 // Agent Type Enum
 enum AgentType {
-    SYSTEM // Seeded from code, protected from deletion
+    SYSTEM // Seeded from code, protected from deletion (core platform agents)
     USER // User-created, fully editable
+    DEMO // Example/demo agents, discoverable but not production
 }
 
 // Run Status Enum

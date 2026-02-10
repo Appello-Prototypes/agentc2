@@ -1,23 +1,30 @@
 /**
- * MCPServer Factory for Claude CoWork (Remote Streamable HTTP)
+ * MCP Server Factory for Claude CoWork (Remote Streamable HTTP)
  *
- * Creates an MCPServer instance that exposes the same tools as the
+ * Creates an MCP Server instance that exposes the same tools as the
  * "Mastra Agents" MCP server in Cursor -- platform management tools
  * (agent_, workflow_, network_, rag_, integration_, etc.) plus
  * database agents, workflows, and networks.
  *
  * Tools are fetched from the /api/mcp gateway and execution delegates
- * back to the same gateway. This is the server-side equivalent of
- * scripts/mcp-server/index.js (the Cursor stdio MCP server).
+ * back to the same gateway.
+ *
+ * IMPORTANT: This uses @modelcontextprotocol/sdk Server directly and
+ * passes JSON Schema from the gateway without any Zod roundtrip.
+ * This mirrors scripts/mcp-server/index.js (the Cursor stdio server)
+ * exactly, avoiding the JSON Schema -> Zod -> AI SDK Schema -> JSON
+ * Schema conversion that was causing empty schemas in production.
  *
  * External MCP tools (HubSpot, Jira, Slack, GitHub, etc.) are NOT
  * included here -- those are separate MCP servers that users configure
  * independently in their Cursor mcp.json or as separate Claude connectors.
  */
 
-import { createTool } from "@mastra/core/tools";
-import { MCPServer } from "@mastra/mcp";
-import { z, ZodTypeAny } from "zod";
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import {
+    CallToolRequestSchema,
+    ListToolsRequestSchema
+} from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * Internal base URL for calling the /api/mcp gateway.
@@ -34,89 +41,6 @@ interface GatewayTool {
     name: string;
     description?: string;
     inputSchema?: Record<string, unknown>;
-}
-
-/**
- * Convert a JSON Schema property definition to a Zod type.
- */
-function jsonSchemaPropertyToZod(prop: Record<string, unknown>): ZodTypeAny {
-    const type = prop.type as string | undefined;
-    const description = prop.description as string | undefined;
-    const enumValues = prop.enum as string[] | undefined;
-
-    let schema: ZodTypeAny;
-
-    if (enumValues && type === "string") {
-        schema = z.enum(enumValues as [string, ...string[]]);
-    } else if (type === "string") {
-        schema = z.string();
-    } else if (type === "number" || type === "integer") {
-        schema = z.number();
-    } else if (type === "boolean") {
-        schema = z.boolean();
-    } else if (type === "array") {
-        const items = prop.items as Record<string, unknown> | undefined;
-        if (items) {
-            schema = z.array(jsonSchemaPropertyToZod(items));
-        } else {
-            schema = z.array(z.unknown());
-        }
-    } else if (type === "object") {
-        const properties = prop.properties as Record<string, Record<string, unknown>> | undefined;
-        if (properties) {
-            schema = jsonSchemaToZod(prop);
-        } else if (prop.additionalProperties) {
-            schema = z.record(z.string(), z.unknown());
-        } else {
-            schema = z.record(z.string(), z.unknown());
-        }
-    } else if (prop.oneOf) {
-        // For oneOf, accept unknown (these are complex union types)
-        schema = z.unknown();
-    } else {
-        schema = z.unknown();
-    }
-
-    if (description) {
-        schema = schema.describe(description);
-    }
-
-    return schema;
-}
-
-/**
- * Convert a JSON Schema object to a Zod object schema.
- * Handles the simple schemas used by MCP tool definitions:
- * { type: "object", properties: { ... }, required: [...] }
- */
-function jsonSchemaToZod(
-    jsonSchema: Record<string, unknown>
-): z.ZodObject<Record<string, ZodTypeAny>> {
-    const properties = jsonSchema.properties as Record<string, Record<string, unknown>> | undefined;
-    const required = (jsonSchema.required as string[]) || [];
-
-    if (!properties || Object.keys(properties).length === 0) {
-        // Empty schema -- no properties
-        return z.object({});
-    }
-
-    const shape: Record<string, ZodTypeAny> = {};
-
-    for (const [key, prop] of Object.entries(properties)) {
-        let fieldSchema = jsonSchemaPropertyToZod(prop);
-
-        if (!required.includes(key)) {
-            fieldSchema = fieldSchema.optional();
-        }
-
-        shape[key] = fieldSchema;
-    }
-
-    if (jsonSchema.additionalProperties) {
-        return z.object(shape).passthrough();
-    }
-
-    return z.object(shape);
 }
 
 /**
@@ -188,11 +112,22 @@ function formatResult(result: unknown): string {
 }
 
 /**
- * Build an MCPServer from the /api/mcp gateway tool list.
+ * Result type returned by buildMcpServer().
+ * Contains the raw @modelcontextprotocol/sdk Server and the tool name mapping.
+ */
+export interface BuiltMcpServer {
+    server: Server;
+    toolNameMap: Map<string, string>;
+    toolCount: number;
+}
+
+/**
+ * Build an MCP Server from the /api/mcp gateway tool list.
  *
- * This is the server-side equivalent of scripts/mcp-server/index.js.
- * Same tools, same invocation path, just over Streamable HTTP instead
- * of stdio.
+ * Uses @modelcontextprotocol/sdk Server directly (same as the Cursor
+ * stdio server in scripts/mcp-server/index.js). JSON Schema from the
+ * gateway is passed through to MCP clients without any conversion,
+ * avoiding the Zod roundtrip that was causing empty schemas.
  *
  * @param organizationId - The organization ID (for logging)
  * @param authHeaders - Headers to forward to the /api/mcp gateway
@@ -200,44 +135,89 @@ function formatResult(result: unknown): string {
 export async function buildMcpServer(
     organizationId: string,
     authHeaders: Record<string, string>
-): Promise<MCPServer> {
+): Promise<BuiltMcpServer> {
     const gatewayTools = await fetchToolsFromGateway(authHeaders);
+    const toolNameMap = new Map<string, string>();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools: Record<string, any> = {};
-
-    for (const gwTool of gatewayTools) {
-        // Sanitize name (same as Cursor stdio server does)
-        const safeName = gwTool.name.replace(/[.-]/g, "_");
-        const originalName = gwTool.name;
-
-        const inputSchema = gwTool.inputSchema ? jsonSchemaToZod(gwTool.inputSchema) : z.object({});
-
-        tools[safeName] = createTool({
-            id: safeName,
-            description: gwTool.description || `Invoke ${originalName}`,
-            inputSchema,
-            execute: async (inputData) => {
-                const result = await invokeMcpGatewayTool(
-                    originalName,
-                    inputData as Record<string, unknown>,
-                    authHeaders
-                );
-                return formatResult(result);
+    const server = new Server(
+        {
+            name: "Mastra Agents",
+            version: "1.0.0"
+        },
+        {
+            capabilities: {
+                tools: {}
             }
-        });
-    }
-
-    console.log(
-        `[MCP Server] Built server for org ${organizationId}: ${Object.keys(tools).length} tools`
+        }
     );
 
-    return new MCPServer({
-        id: "mastra-remote-mcp",
-        name: "Mastra Agents",
-        version: "1.0.0",
-        description:
-            "Mastra AI Agent platform tools - agents, workflows, networks, and platform operations",
-        tools
+    // Handle tools/list -- pass JSON Schema from gateway directly (no Zod conversion)
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
+        return {
+            tools: gatewayTools.map((tool) => {
+                const safeName = tool.name.replace(/[.-]/g, "_");
+                toolNameMap.set(safeName, tool.name);
+
+                return {
+                    name: safeName,
+                    description: tool.description || `Invoke ${tool.name}`,
+                    inputSchema: tool.inputSchema || {
+                        type: "object" as const,
+                        properties: {}
+                    }
+                };
+            })
+        };
     });
+
+    // Handle tools/call -- delegate to the /api/mcp gateway
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
+        const { name, arguments: args } = request.params;
+        const originalName = toolNameMap.get(name) || name;
+
+        try {
+            const result = await invokeMcpGatewayTool(originalName, args || {}, authHeaders);
+
+            let outputText = "";
+            if (typeof result === "string") {
+                outputText = result;
+            } else {
+                outputText = formatResult(result);
+            }
+
+            const content: Array<{ type: "text"; text: string }> = [
+                {
+                    type: "text",
+                    text: outputText
+                }
+            ];
+
+            const r = result as Record<string, unknown> | null;
+            const runId = r?.runId || r?.run_id;
+            if (runId || r?.status || r?.duration_ms || r?.durationMs) {
+                content.push({
+                    type: "text",
+                    text: `\n---\nRun ID: ${runId || "n/a"}\nStatus: ${r?.status || "n/a"}`
+                });
+            }
+
+            return { content };
+        } catch (error) {
+            return {
+                content: [
+                    {
+                        type: "text",
+                        text: `Error invoking tool: ${error instanceof Error ? error.message : String(error)}`
+                    }
+                ],
+                isError: true
+            };
+        }
+    });
+
+    console.log(
+        `[MCP Server] Built server for org ${organizationId}: ${gatewayTools.length} tools`
+    );
+
+    return { server, toolNameMap, toolCount: gatewayTools.length };
 }

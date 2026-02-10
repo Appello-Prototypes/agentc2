@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { Button, Badge, Skeleton } from "@repo/ui";
-import { PlusIcon, SearchIcon, LayoutDashboardIcon, TrashIcon } from "lucide-react";
+import { PlusIcon, SearchIcon, LayoutDashboardIcon, TrashIcon, PencilIcon } from "lucide-react";
 import Link from "next/link";
 
 interface CanvasSummary {
@@ -29,6 +29,7 @@ export default function CanvasGalleryPage() {
     const [loading, setLoading] = useState(true);
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("");
+    const [deleteArmedSlug, setDeleteArmedSlug] = useState<string | null>(null);
 
     useEffect(() => {
         fetchCanvases();
@@ -48,13 +49,20 @@ export default function CanvasGalleryPage() {
         }
     }
 
-    async function handleDelete(slug: string) {
-        if (!confirm(`Delete canvas "${slug}"?`)) return;
+    async function handleDeleteClick(slug: string) {
+        if (deleteArmedSlug !== slug) {
+            setDeleteArmedSlug(slug);
+            // Auto-disarm after 3 seconds if user doesn't confirm
+            setTimeout(() => setDeleteArmedSlug((prev) => (prev === slug ? null : prev)), 3000);
+            return;
+        }
         try {
             await fetch(`${getApiBase()}/api/canvases/${slug}`, { method: "DELETE" });
             setCanvases((prev) => prev.filter((c) => c.slug !== slug));
+            setDeleteArmedSlug(null);
         } catch (err) {
             console.error("Failed to delete canvas:", err);
+            setDeleteArmedSlug(null);
         }
     }
 
@@ -171,15 +179,35 @@ export default function CanvasGalleryPage() {
                                             </p>
                                         )}
                                     </div>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleDelete(canvas.slug);
-                                        }}
-                                        className="text-muted-foreground hover:text-destructive ml-2 opacity-0 transition-opacity group-hover:opacity-100"
-                                    >
-                                        <TrashIcon className="size-4" />
-                                    </button>
+                                    <div className="ml-2 flex items-center gap-1">
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                router.push(`/canvas/${canvas.slug}/edit`);
+                                            }}
+                                            className="text-muted-foreground hover:text-foreground rounded p-1 transition-colors"
+                                        >
+                                            <PencilIcon className="size-3.5" />
+                                        </button>
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleDeleteClick(canvas.slug);
+                                            }}
+                                            className={`rounded p-1 transition-colors ${
+                                                deleteArmedSlug === canvas.slug
+                                                    ? "bg-destructive text-destructive-foreground"
+                                                    : "text-muted-foreground hover:text-destructive"
+                                            }`}
+                                            title={
+                                                deleteArmedSlug === canvas.slug
+                                                    ? "Click again to confirm delete"
+                                                    : "Delete"
+                                            }
+                                        >
+                                            <TrashIcon className="size-3.5" />
+                                        </button>
+                                    </div>
                                 </div>
 
                                 {/* Tags and metadata */}

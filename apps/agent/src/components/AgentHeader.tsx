@@ -8,14 +8,14 @@ import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
     { label: "Chat", href: "/" },
+    { label: "Canvas", href: "/canvas" },
     { label: "Agents", href: "/agents" },
     { label: "Workflows", href: "/workflows" },
     { label: "Networks", href: "/networks" },
     { label: "Live Runs", href: "/live" },
-    { label: "Triggers", href: "/triggers" },
+    { label: "Automations", href: "/triggers" },
     { label: "Knowledge", href: "/knowledge" },
-    { label: "Integrations", href: "/mcp" },
-    { label: "Channels", href: "/channels/test" }
+    { label: "Integrations", href: "/mcp" }
 ];
 
 export function AgentHeader() {

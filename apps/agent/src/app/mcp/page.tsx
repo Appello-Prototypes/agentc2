@@ -7,6 +7,7 @@ import { getApiBase } from "@/lib/utils";
 import WebhookChat from "@/components/webhooks/WebhookChat";
 import WebhookDetail from "@/components/webhooks/WebhookDetail";
 import type { WebhookTrigger } from "@/components/webhooks/types";
+import { ChannelsTab } from "@/components/channels/ChannelsTab";
 import {
     Badge,
     Button,
@@ -625,7 +626,7 @@ export default function IntegrationsHubPage() {
 
             {!loading && !error && (
                 <Tabs defaultValue="mcp" className="w-full">
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="grid w-full grid-cols-4">
                         <TabsTrigger value="webhooks">
                             Webhooks
                             {webhooks.length > 0 && (
@@ -650,6 +651,7 @@ export default function IntegrationsHubPage() {
                                 </Badge>
                             )}
                         </TabsTrigger>
+                        <TabsTrigger value="channels">Channels</TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="webhooks" className="mt-4">
@@ -706,6 +708,10 @@ export default function IntegrationsHubPage() {
                                 <ProviderTable providers={oauthProviders} />
                             </CardContent>
                         </Card>
+                    </TabsContent>
+
+                    <TabsContent value="channels" className="mt-4">
+                        <ChannelsTab />
                     </TabsContent>
                 </Tabs>
             )}

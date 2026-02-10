@@ -1,22 +1,52 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { CanvasRenderer, type CanvasSchemaForRenderer } from "@repo/ui/components/canvas";
 import { getApiBase } from "@/lib/utils";
-import { Skeleton, Button } from "@repo/ui";
-import { RefreshCwIcon, ArrowLeftIcon, Share2Icon } from "lucide-react";
+import { Skeleton, Button, Badge } from "@repo/ui";
+import {
+    RefreshCwIcon,
+    ArrowLeftIcon,
+    Share2Icon,
+    PencilIcon,
+    TrashIcon,
+    CodeIcon,
+    XIcon
+} from "lucide-react";
 import Link from "next/link";
+
+type DebugTab = "schema" | "data" | "info";
+
+interface CanvasMeta {
+    id: string;
+    slug: string;
+    version: number;
+    isPublished: boolean;
+    isActive: boolean;
+    isPublic: boolean;
+    tags: string[];
+    category: string | null;
+    agentId: string | null;
+    createdAt: string;
+    updatedAt: string;
+}
 
 export default function CanvasViewerPage() {
     const params = useParams();
+    const router = useRouter();
     const slug = params.slug as string;
 
     const [schema, setSchema] = useState<CanvasSchemaForRenderer | null>(null);
+    const [canvasMeta, setCanvasMeta] = useState<CanvasMeta | null>(null);
     const [data, setData] = useState<Record<string, unknown>>({});
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [refreshing, setRefreshing] = useState(false);
+    const [debugOpen, setDebugOpen] = useState(false);
+    const [debugTab, setDebugTab] = useState<DebugTab>("schema");
+    const [deleting, setDeleting] = useState(false);
+    const [deleteArmed, setDeleteArmed] = useState(false);
 
     // Fetch canvas schema
     useEffect(() => {
@@ -26,6 +56,19 @@ export default function CanvasViewerPage() {
                 if (!res.ok) throw new Error("Canvas not found");
                 const canvas = await res.json();
                 setSchema(canvas.schemaJson as CanvasSchemaForRenderer);
+                setCanvasMeta({
+                    id: canvas.id,
+                    slug: canvas.slug,
+                    version: canvas.version,
+                    isPublished: canvas.isPublished,
+                    isActive: canvas.isActive,
+                    isPublic: canvas.isPublic,
+                    tags: canvas.tags,
+                    category: canvas.category,
+                    agentId: canvas.agentId,
+                    createdAt: canvas.createdAt,
+                    updatedAt: canvas.updatedAt
+                });
             } catch (err) {
                 setError(err instanceof Error ? err.message : "Failed to load canvas");
             }
@@ -33,15 +76,24 @@ export default function CanvasViewerPage() {
         fetchCanvas();
     }, [slug]);
 
-    // Fetch data
-    const fetchData = useCallback(async () => {
+    // Fetch data with SWR-style caching: show stale data during refresh
+    const fetchData = useCallback(async (isBackground = false) => {
         try {
+            if (!isBackground) setRefreshing(true);
             const res = await fetch(`${getApiBase()}/api/canvases/${slug}/data`);
             if (!res.ok) throw new Error("Failed to load data");
             const result = await res.json();
-            setData(result.queries || {});
+            const queryData = result.queries || {};
+            // Extract data from QueryExecutionResult format if present
+            const extracted: Record<string, unknown> = {};
+            for (const [key, val] of Object.entries(queryData)) {
+                const typed = val as { data?: unknown };
+                extracted[key] = typed?.data !== undefined ? typed.data : val;
+            }
+            setData(extracted);
         } catch (err) {
             console.error("Canvas data error:", err);
+            // On background refresh failure, keep existing data (SWR pattern)
         } finally {
             setLoading(false);
             setRefreshing(false);
@@ -64,7 +116,7 @@ export default function CanvasViewerPage() {
         for (const query of queries as { refreshInterval?: number }[]) {
             if (query.refreshInterval && query.refreshInterval > 0) {
                 const interval = setInterval(() => {
-                    fetchData();
+                    fetchData(true); // Background refresh - keep showing stale data
                 }, query.refreshInterval);
                 intervals.push(interval);
             }
@@ -78,8 +130,25 @@ export default function CanvasViewerPage() {
     }, [schema, fetchData]);
 
     const handleRefresh = () => {
-        setRefreshing(true);
-        fetchData();
+        fetchData(false); // Foreground refresh - shows refreshing indicator
+    };
+
+    const handleDeleteClick = async () => {
+        if (!deleteArmed) {
+            setDeleteArmed(true);
+            // Auto-disarm after 3 seconds if user doesn't confirm
+            setTimeout(() => setDeleteArmed(false), 3000);
+            return;
+        }
+        setDeleting(true);
+        try {
+            await fetch(`${getApiBase()}/api/canvases/${slug}`, { method: "DELETE" });
+            router.push("/canvas");
+        } catch (err) {
+            console.error("Failed to delete canvas:", err);
+            setDeleting(false);
+            setDeleteArmed(false);
+        }
     };
 
     if (error) {
@@ -115,36 +184,197 @@ export default function CanvasViewerPage() {
     }
 
     return (
-        <div className="h-full overflow-auto">
-            {/* Top bar */}
-            <div className="bg-background/80 sticky top-0 z-10 flex items-center justify-between border-b px-4 py-2 backdrop-blur">
-                <div className="flex items-center gap-3">
-                    <Link href="/canvas" className="text-muted-foreground hover:text-foreground">
-                        <ArrowLeftIcon className="size-4" />
-                    </Link>
-                    <span className="text-sm font-medium">{schema.title}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="sm" onClick={handleRefresh} disabled={refreshing}>
-                        <RefreshCwIcon
-                            className={`mr-1 size-4 ${refreshing ? "animate-spin" : ""}`}
-                        />
-                        Refresh
-                    </Button>
-                    <Link href={`/canvas/${slug}/versions`}>
-                        <Button variant="ghost" size="sm">
-                            Versions
+        <div className="flex h-full overflow-hidden">
+            {/* Main content area */}
+            <div className="flex min-w-0 flex-1 flex-col overflow-auto">
+                {/* Top bar */}
+                <div className="bg-background/80 sticky top-0 z-10 flex items-center justify-between border-b px-4 py-2 backdrop-blur">
+                    <div className="flex items-center gap-3">
+                        <Link
+                            href="/canvas"
+                            className="text-muted-foreground hover:text-foreground"
+                        >
+                            <ArrowLeftIcon className="size-4" />
+                        </Link>
+                        <span className="text-sm font-medium">{schema.title}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleRefresh}
+                            disabled={refreshing}
+                        >
+                            <RefreshCwIcon
+                                className={`mr-1 size-4 ${refreshing ? "animate-spin" : ""}`}
+                            />
+                            Refresh
                         </Button>
-                    </Link>
-                    <Button variant="ghost" size="sm">
-                        <Share2Icon className="mr-1 size-4" />
-                        Share
-                    </Button>
+                        <Link href={`/canvas/${slug}/edit`}>
+                            <Button variant="ghost" size="sm">
+                                <PencilIcon className="mr-1 size-4" />
+                                Edit
+                            </Button>
+                        </Link>
+                        <Link href={`/canvas/${slug}/versions`}>
+                            <Button variant="ghost" size="sm">
+                                Versions
+                            </Button>
+                        </Link>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDebugOpen(!debugOpen)}
+                            className={debugOpen ? "bg-muted" : ""}
+                        >
+                            <CodeIcon className="mr-1 size-4" />
+                            Debug
+                        </Button>
+                        <Button variant="ghost" size="sm">
+                            <Share2Icon className="mr-1 size-4" />
+                            Share
+                        </Button>
+                        <Button
+                            variant={deleteArmed ? "destructive" : "ghost"}
+                            size="sm"
+                            onClick={handleDeleteClick}
+                            disabled={deleting}
+                            className={deleteArmed ? "" : "text-destructive hover:text-destructive"}
+                        >
+                            <TrashIcon className="mr-1 size-4" />
+                            {deleting ? "Deleting..." : deleteArmed ? "Confirm Delete?" : "Delete"}
+                        </Button>
+                    </div>
                 </div>
+
+                {/* Canvas renderer */}
+                <CanvasRenderer schema={schema} data={data} onRefresh={handleRefresh} />
             </div>
 
-            {/* Canvas renderer */}
-            <CanvasRenderer schema={schema} data={data} onRefresh={handleRefresh} />
+            {/* Debug Panel */}
+            {debugOpen && (
+                <div className="flex w-[480px] min-w-[480px] flex-col overflow-hidden border-l">
+                    {/* Debug header */}
+                    <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
+                        <span className="text-sm font-medium">Debug Inspector</span>
+                        <button
+                            onClick={() => setDebugOpen(false)}
+                            className="text-muted-foreground hover:text-foreground"
+                        >
+                            <XIcon className="size-4" />
+                        </button>
+                    </div>
+
+                    {/* Tab bar */}
+                    <div className="flex shrink-0 border-b">
+                        {(["schema", "data", "info"] as DebugTab[]).map((tab) => (
+                            <button
+                                key={tab}
+                                onClick={() => setDebugTab(tab)}
+                                className={`flex-1 px-3 py-2 text-xs font-medium capitalize transition-colors ${
+                                    debugTab === tab
+                                        ? "border-primary text-foreground border-b-2"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                            >
+                                {tab}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Tab content */}
+                    <div className="flex-1 overflow-auto p-4">
+                        {debugTab === "schema" && (
+                            <pre className="bg-muted rounded-md p-3 text-xs leading-relaxed break-all whitespace-pre-wrap">
+                                {JSON.stringify(schema, null, 2)}
+                            </pre>
+                        )}
+
+                        {debugTab === "data" && (
+                            <div className="space-y-4">
+                                {Object.keys(data).length === 0 ? (
+                                    <p className="text-muted-foreground text-sm">
+                                        No data queries returned results.
+                                    </p>
+                                ) : (
+                                    Object.entries(data).map(([queryId, queryData]) => (
+                                        <div key={queryId}>
+                                            <div className="mb-1 flex items-center gap-2">
+                                                <span className="text-xs font-semibold">
+                                                    {queryId}
+                                                </span>
+                                                <Badge variant="outline" className="text-xs">
+                                                    {Array.isArray(queryData)
+                                                        ? `${queryData.length} rows`
+                                                        : typeof queryData}
+                                                </Badge>
+                                            </div>
+                                            <pre className="bg-muted rounded-md p-3 text-xs leading-relaxed break-all whitespace-pre-wrap">
+                                                {JSON.stringify(queryData, null, 2)}
+                                            </pre>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+
+                        {debugTab === "info" && canvasMeta && (
+                            <div className="space-y-3">
+                                {[
+                                    { label: "ID", value: canvasMeta.id },
+                                    { label: "Slug", value: canvasMeta.slug },
+                                    {
+                                        label: "Version",
+                                        value: `v${canvasMeta.version}`
+                                    },
+                                    {
+                                        label: "Published",
+                                        value: canvasMeta.isPublished ? "Yes" : "No"
+                                    },
+                                    {
+                                        label: "Active",
+                                        value: canvasMeta.isActive ? "Yes" : "No"
+                                    },
+                                    {
+                                        label: "Public",
+                                        value: canvasMeta.isPublic ? "Yes" : "No"
+                                    },
+                                    {
+                                        label: "Category",
+                                        value: canvasMeta.category || "None"
+                                    },
+                                    {
+                                        label: "Tags",
+                                        value:
+                                            canvasMeta.tags.length > 0
+                                                ? canvasMeta.tags.join(", ")
+                                                : "None"
+                                    },
+                                    {
+                                        label: "Agent ID",
+                                        value: canvasMeta.agentId || "None"
+                                    },
+                                    {
+                                        label: "Created",
+                                        value: new Date(canvasMeta.createdAt).toLocaleString()
+                                    },
+                                    {
+                                        label: "Updated",
+                                        value: new Date(canvasMeta.updatedAt).toLocaleString()
+                                    }
+                                ].map((item) => (
+                                    <div key={item.label} className="flex items-start gap-3">
+                                        <span className="text-muted-foreground w-24 shrink-0 text-xs font-medium">
+                                            {item.label}
+                                        </span>
+                                        <span className="text-xs break-all">{item.value}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

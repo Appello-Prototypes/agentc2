@@ -2,14 +2,24 @@
 
 import { useState, useEffect, useRef } from "react";
 import { getApiBase } from "@/lib/utils";
-import { Badge, cn, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
+import {
+    cn,
+    Select,
+    SelectContent,
+    SelectGroup,
+    SelectItem,
+    SelectLabel,
+    SelectSeparator,
+    SelectTrigger,
+    SelectValue
+} from "@repo/ui";
 
 export interface AgentInfo {
     id: string;
     slug: string;
     name: string;
     isActive: boolean;
-    type: "SYSTEM" | "USER";
+    type: "SYSTEM" | "USER" | "DEMO";
     description?: string;
     modelProvider: string;
     modelName: string;
@@ -96,27 +106,60 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                 </SelectValue>
             </SelectTrigger>
             <SelectContent>
-                {agents.map((agent) => (
-                    <SelectItem key={agent.slug} value={agent.slug}>
-                        <div className="flex items-center gap-2">
-                            <span
-                                className={cn(
-                                    "size-2 rounded-full",
-                                    agent.isActive ? "bg-green-500" : "bg-muted-foreground"
-                                )}
-                            />
-                            <span>{agent.name}</span>
-                            {agent.type === "SYSTEM" && (
-                                <Badge
-                                    variant="outline"
-                                    className="text-muted-foreground h-4 px-1 text-[9px]"
-                                >
-                                    System
-                                </Badge>
-                            )}
+                {(() => {
+                    const userAgents = agents.filter((a) => a.type === "USER");
+                    const systemAgents = agents.filter((a) => a.type === "SYSTEM");
+                    const demoAgents = agents.filter((a) => a.type === "DEMO");
+                    const groups: { label: string; items: AgentInfo[]; muted?: boolean }[] = [];
+
+                    if (userAgents.length > 0) {
+                        groups.push({ label: "Your Agents", items: userAgents });
+                    }
+                    if (systemAgents.length > 0) {
+                        groups.push({ label: "System", items: systemAgents });
+                    }
+                    if (demoAgents.length > 0) {
+                        groups.push({ label: "Examples", items: demoAgents, muted: true });
+                    }
+
+                    if (groups.length === 0) {
+                        return (
+                            <div className="text-muted-foreground px-2 py-1.5 text-sm">
+                                No agents available
+                            </div>
+                        );
+                    }
+
+                    return groups.map((group, gi) => (
+                        <div key={group.label}>
+                            {gi > 0 && <SelectSeparator />}
+                            <SelectGroup>
+                                <SelectLabel>{group.label}</SelectLabel>
+                                {group.items.map((agent) => (
+                                    <SelectItem key={agent.slug} value={agent.slug}>
+                                        <div className="flex items-center gap-2">
+                                            <span
+                                                className={cn(
+                                                    "size-2 rounded-full",
+                                                    agent.isActive
+                                                        ? "bg-green-500"
+                                                        : "bg-muted-foreground"
+                                                )}
+                                            />
+                                            <span
+                                                className={
+                                                    group.muted ? "text-muted-foreground" : ""
+                                                }
+                                            >
+                                                {agent.name}
+                                            </span>
+                                        </div>
+                                    </SelectItem>
+                                ))}
+                            </SelectGroup>
                         </div>
-                    </SelectItem>
-                ))}
+                    ));
+                })()}
             </SelectContent>
         </Select>
     );

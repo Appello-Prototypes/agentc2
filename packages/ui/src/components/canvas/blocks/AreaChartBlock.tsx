@@ -12,22 +12,15 @@ import {
     ResponsiveContainer
 } from "recharts";
 import { useResolvedData } from "../use-resolved-data";
+import { useChartColors } from "../use-chart-colors";
 import { BlockWrapper } from "./BlockWrapper";
-
-const DEFAULT_COLORS = [
-    "hsl(221 83% 53%)",
-    "hsl(142 76% 36%)",
-    "hsl(47 96% 53%)",
-    "hsl(0 84% 60%)",
-    "hsl(262 83% 58%)"
-];
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function AreaChartBlock({ config }: { config: any }) {
     const rawData = useResolvedData(config.data);
     const data = Array.isArray(rawData) ? rawData : [];
     const yAxisKeys = Array.isArray(config.yAxis) ? config.yAxis : [config.yAxis];
-    const colors = config.colors || DEFAULT_COLORS;
+    const colors = useChartColors(config.colors);
     const height = config.height || 300;
 
     return (
