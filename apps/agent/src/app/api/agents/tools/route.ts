@@ -27,6 +27,8 @@ export async function GET() {
 
         // Get MCP tools (dynamic, from connected MCP servers)
         let mcpTools: { id: string; name: string; description: string; source: string }[] = [];
+        let mcpError: string | null = null;
+        const mcpServerStatus: Record<string, { connected: boolean; toolCount: number }> = {};
         try {
             const mcpDefinitions = await listMcpToolDefinitions(organizationId);
             mcpTools = mcpDefinitions.map((def) => ({
@@ -35,9 +37,18 @@ export async function GET() {
                 description: def.description,
                 source: `mcp:${def.server}`
             }));
-        } catch (mcpError) {
+
+            // Build per-server status from successfully loaded tools
+            for (const def of mcpDefinitions) {
+                if (!mcpServerStatus[def.server]) {
+                    mcpServerStatus[def.server] = { connected: true, toolCount: 0 };
+                }
+                mcpServerStatus[def.server]!.toolCount++;
+            }
+        } catch (err) {
             // MCP tools are optional - log but don't fail
-            console.warn("[Agents Tools] MCP tools not available:", mcpError);
+            mcpError = err instanceof Error ? err.message : "MCP tools not available";
+            console.warn("[Agents Tools] MCP tools not available:", err);
         }
 
         // Combine all tools, marking source for UI differentiation
@@ -50,7 +61,9 @@ export async function GET() {
             success: true,
             tools: allTools,
             models,
-            scorers
+            scorers,
+            mcpServerStatus,
+            mcpError
         });
     } catch (error) {
         console.error("[Agents Tools] Error:", error);

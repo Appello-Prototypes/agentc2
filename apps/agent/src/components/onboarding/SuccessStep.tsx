@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { Button, Card, CardContent, Badge } from "@repo/ui";
 import { CheckCircleIcon } from "lucide-react";
 
@@ -10,7 +9,7 @@ interface SuccessStepProps {
     modelProvider: string;
     modelName: string;
     toolCount: number;
-    onFinish: () => void;
+    onFinish: (navigateTo?: string) => void;
 }
 
 const MODEL_DISPLAY: Record<string, string> = {
@@ -19,6 +18,19 @@ const MODEL_DISPLAY: Record<string, string> = {
     "claude-sonnet-4-20250514": "Claude Sonnet 4",
     "claude-haiku-3-5-20241022": "Claude Haiku 3.5"
 };
+
+const NEXT_STEPS = [
+    {
+        href: "/",
+        title: "Chat with your agent",
+        description: "Open the Workspace and start a conversation"
+    },
+    {
+        href: "/mcp",
+        title: "Set up integrations",
+        description: "Connect HubSpot, Jira, Slack, and more via MCP"
+    }
+];
 
 export function SuccessStep({
     agentName,
@@ -29,6 +41,20 @@ export function SuccessStep({
     onFinish
 }: SuccessStepProps) {
     const displayModel = MODEL_DISPLAY[modelName] || modelName;
+
+    const allNextSteps = [
+        ...NEXT_STEPS,
+        {
+            href: `/agents/${agentSlug}/overview`,
+            title: "View agent details",
+            description: "Monitor runs, analytics, and performance"
+        },
+        {
+            href: "/workflows",
+            title: "Create a workflow",
+            description: "Chain multiple steps with logic and approvals"
+        }
+    ];
 
     return (
         <Card className="border-0 shadow-none">
@@ -69,47 +95,22 @@ export function SuccessStep({
                 <div className="mx-auto max-w-md space-y-4 text-left">
                     <p className="text-sm font-medium">What&apos;s next?</p>
                     <div className="space-y-2">
-                        <Link
-                            href="/"
-                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
-                        >
-                            <p className="text-sm font-medium">Chat with your agent</p>
-                            <p className="text-muted-foreground text-xs">
-                                Open the Workspace and start a conversation
-                            </p>
-                        </Link>
-                        <Link
-                            href="/mcp"
-                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
-                        >
-                            <p className="text-sm font-medium">Set up integrations</p>
-                            <p className="text-muted-foreground text-xs">
-                                Connect HubSpot, Jira, Slack, and more via MCP
-                            </p>
-                        </Link>
-                        <Link
-                            href={`/agents/${agentSlug}/overview`}
-                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
-                        >
-                            <p className="text-sm font-medium">View agent details</p>
-                            <p className="text-muted-foreground text-xs">
-                                Monitor runs, analytics, and performance
-                            </p>
-                        </Link>
-                        <Link
-                            href="/workflows"
-                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
-                        >
-                            <p className="text-sm font-medium">Create a workflow</p>
-                            <p className="text-muted-foreground text-xs">
-                                Chain multiple steps with logic and approvals
-                            </p>
-                        </Link>
+                        {allNextSteps.map((step) => (
+                            <button
+                                key={step.href}
+                                type="button"
+                                onClick={() => onFinish(step.href)}
+                                className="hover:bg-accent/50 block w-full rounded-lg border p-3 text-left transition-colors"
+                            >
+                                <p className="text-sm font-medium">{step.title}</p>
+                                <p className="text-muted-foreground text-xs">{step.description}</p>
+                            </button>
+                        ))}
                     </div>
                 </div>
 
                 {/* CTA */}
-                <Button size="lg" className="px-10" onClick={onFinish}>
+                <Button size="lg" className="px-10" onClick={() => onFinish()}>
                     Go to Workspace
                 </Button>
             </CardContent>

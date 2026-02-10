@@ -166,17 +166,23 @@ export default function DocumentDetailPage() {
     }, [documentId]);
 
     // Lazy-load chunks when tab is first selected
+    const [chunksError, setChunksError] = useState<string | null>(null);
     const loadChunks = useCallback(async () => {
         if (chunksLoaded || chunksLoading) return;
         setChunksLoading(true);
+        setChunksError(null);
         try {
             const res = await fetch(`${getApiBase()}/api/documents/${documentId}/chunks`);
             const data = await res.json();
-            if (data.chunks) {
+            if (!res.ok) {
+                console.error("Chunks API error:", res.status, data);
+                setChunksError(data.error || `Failed to load chunks (${res.status})`);
+            } else if (data.chunks) {
                 setChunks(data.chunks);
             }
         } catch (error) {
             console.error("Failed to fetch chunks:", error);
+            setChunksError(error instanceof Error ? error.message : "Failed to fetch chunks");
         } finally {
             setChunksLoading(false);
             setChunksLoaded(true);
@@ -429,6 +435,14 @@ export default function DocumentDetailPage() {
                                 <Skeleton key={i} className="h-32 w-full rounded-lg" />
                             ))}
                         </div>
+                    ) : chunksError ? (
+                        <Card>
+                            <CardContent className="py-8 text-center">
+                                <p className="text-destructive font-medium">
+                                    Error loading chunks: {chunksError}
+                                </p>
+                            </CardContent>
+                        </Card>
                     ) : chunks.length === 0 ? (
                         <Card>
                             <CardContent className="py-8 text-center">
@@ -511,9 +525,7 @@ export default function DocumentDetailPage() {
                                 <p className="text-destructive text-sm font-medium">
                                     Search failed
                                 </p>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {searchError}
-                                </p>
+                                <p className="text-muted-foreground mt-1 text-xs">{searchError}</p>
                             </CardContent>
                         </Card>
                     )}

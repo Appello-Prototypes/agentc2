@@ -23,9 +23,12 @@ import {
     Tabs,
     TabsContent,
     TabsList,
-    TabsTrigger
+    TabsTrigger,
+    Sheet,
+    SheetContent
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { SkillBuilderPanel } from "@/components/skills/SkillBuilderPanel";
 
 interface ModelConfig {
     thinking?: {
@@ -143,6 +146,7 @@ export default function ConfigurePage() {
     const [availableSkills, setAvailableSkills] = useState<AvailableSkill[]>([]);
     const [skillsLoading, setSkillsLoading] = useState(false);
     const [skillActionLoading, setSkillActionLoading] = useState(false);
+    const [skillBuilderOpen, setSkillBuilderOpen] = useState(false);
 
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
@@ -576,9 +580,7 @@ export default function ConfigurePage() {
                     <TabsTrigger value="model">Model</TabsTrigger>
                     <TabsTrigger value="instructions">Instructions</TabsTrigger>
                     <TabsTrigger value="tools">Tools</TabsTrigger>
-                    <TabsTrigger value="skills">
-                        Skills ({attachedSkills.length})
-                    </TabsTrigger>
+                    <TabsTrigger value="skills">Skills ({attachedSkills.length})</TabsTrigger>
                     <TabsTrigger value="orchestration">Orchestration</TabsTrigger>
                     <TabsTrigger value="memory">Memory</TabsTrigger>
                     <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
@@ -1168,13 +1170,44 @@ export default function ConfigurePage() {
                 <TabsContent value="skills">
                     <Card>
                         <CardHeader>
-                            <CardTitle>Skills</CardTitle>
-                            <CardDescription>
-                                Composable competency bundles that provide this agent with domain
-                                knowledge, procedures, and tool bindings. Attaching or detaching a
-                                skill creates a new agent version.
-                            </CardDescription>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <CardTitle>Skills</CardTitle>
+                                    <CardDescription>
+                                        Composable competency bundles that provide this agent with
+                                        domain knowledge, procedures, and tool bindings. Attaching
+                                        or detaching a skill creates a new agent version.
+                                    </CardDescription>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setSkillBuilderOpen(true)}
+                                >
+                                    Create Skill
+                                </Button>
+                            </div>
                         </CardHeader>
+
+                        {/* Skill Builder Sheet */}
+                        {agent && (
+                            <Sheet open={skillBuilderOpen} onOpenChange={setSkillBuilderOpen}>
+                                <SheetContent
+                                    side="right"
+                                    showCloseButton
+                                    className="w-[480px] p-0 sm:max-w-[480px]"
+                                >
+                                    <SkillBuilderPanel
+                                        agentId={agent.id}
+                                        agentSlug={agent.slug}
+                                        onSkillCreated={() => {
+                                            fetchAgent();
+                                            fetchSkills();
+                                        }}
+                                    />
+                                </SheetContent>
+                            </Sheet>
+                        )}
                         <CardContent className="space-y-6">
                             {/* Attached Skills */}
                             {attachedSkills.length > 0 ? (
@@ -1190,10 +1223,7 @@ export default function ConfigurePage() {
                                                     <p className="text-sm font-medium">
                                                         {as.skill.name}
                                                     </p>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="text-xs"
-                                                    >
+                                                    <Badge variant="outline" className="text-xs">
                                                         v{as.skill.version}
                                                     </Badge>
                                                 </div>
@@ -1226,9 +1256,7 @@ export default function ConfigurePage() {
 
                             {/* Available Skills to Attach */}
                             {(() => {
-                                const attachedIds = new Set(
-                                    attachedSkills.map((as) => as.skillId)
-                                );
+                                const attachedIds = new Set(attachedSkills.map((as) => as.skillId));
                                 const unattached = availableSkills.filter(
                                     (s) => !attachedIds.has(s.id)
                                 );
@@ -1264,9 +1292,7 @@ export default function ConfigurePage() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() =>
-                                                            handleAttachSkill(skill.id)
-                                                        }
+                                                        onClick={() => handleAttachSkill(skill.id)}
                                                         disabled={skillActionLoading}
                                                     >
                                                         Attach

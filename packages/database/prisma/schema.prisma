@@ -1141,23 +1141,23 @@ model AgentRun {
 
 // Agent Trace - Detailed execution trace per run
 model AgentTrace {
-    id         String    @id @default(cuid())
-    runId      String    @unique
-    run        AgentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
-    agentId    String
-    agent      Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    tenantId   String?
-    status     RunStatus @default(RUNNING)
-    inputText  String    @db.Text
-    outputText String?   @db.Text
-    durationMs Int?
+    id                   String    @id @default(cuid())
+    runId                String    @unique
+    run                  AgentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+    agentId              String
+    agent                Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId             String?
+    status               RunStatus @default(RUNNING)
+    inputText            String    @db.Text
+    outputText           String?   @db.Text
+    durationMs           Int?
     stepsJson            Json? // Array of execution steps
     modelJson            Json? // Model configuration used
     tokensJson           Json? // Token counts
     scoresJson           Json? // Evaluation scores
     instructionsHash     String? // SHA-256 of merged instructions (base + skills)
-    instructionsSnapshot String? @db.Text // Full merged instructions for audit
-    createdAt            DateTime @default(now())
+    instructionsSnapshot String?   @db.Text // Full merged instructions for audit
+    createdAt            DateTime  @default(now())
 
     // Relations
     steps     AgentTraceStep[]

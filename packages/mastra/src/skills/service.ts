@@ -217,10 +217,7 @@ export async function listSkills(input: ListSkillsInput = {}) {
 /**
  * Helper: Create a skill version snapshot when composition changes.
  */
-async function createSkillVersionForCompositionChange(
-    skillId: string,
-    changeSummary: string
-) {
+async function createSkillVersionForCompositionChange(skillId: string, changeSummary: string) {
     const skill = await prisma.skill.findUniqueOrThrow({
         where: { id: skillId }
     });
@@ -311,10 +308,7 @@ export async function attachTool(skillId: string, toolId: string) {
         data: { skillId, toolId }
     });
 
-    await createSkillVersionForCompositionChange(
-        skillId,
-        `Attached tool: ${toolId}`
-    );
+    await createSkillVersionForCompositionChange(skillId, `Attached tool: ${toolId}`);
 
     return junction;
 }
@@ -329,10 +323,7 @@ export async function detachTool(skillId: string, toolId: string) {
         }
     });
 
-    await createSkillVersionForCompositionChange(
-        skillId,
-        `Detached tool: ${toolId}`
-    );
+    await createSkillVersionForCompositionChange(skillId, `Detached tool: ${toolId}`);
 }
 
 // ===========================
@@ -355,10 +346,7 @@ async function resolveAgentId(idOrSlug: string): Promise<string> {
  * Helper: Create an agent version snapshot when skills change.
  * Follows the same pattern as agent PUT route versioning.
  */
-async function createAgentVersionForSkillChange(
-    agentId: string,
-    changeDescription: string
-) {
+async function createAgentVersionForSkillChange(agentId: string, changeDescription: string) {
     const agent = await prisma.agent.findUniqueOrThrow({
         where: { id: agentId },
         include: {

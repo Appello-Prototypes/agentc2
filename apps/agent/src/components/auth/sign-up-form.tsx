@@ -2,9 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signUp } from "@repo/auth/client";
+import { signIn, signUp } from "@repo/auth/client";
 import { Button, Input, Field, FieldError, FieldLabel, FieldDescription } from "@repo/ui";
 import Link from "next/link";
+
+const GMAIL_SCOPES = [
+    "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.send"
+];
 
 export function SignUpForm() {
     const router = useRouter();
@@ -16,6 +21,7 @@ export function SignUpForm() {
     const [inviteCode, setInviteCode] = useState("");
     const [error, setError] = useState("");
     const [loading, setLoading] = useState(false);
+    const [socialLoading, setSocialLoading] = useState(false);
 
     useEffect(() => {
         const invite = searchParams.get("invite");
@@ -23,6 +29,24 @@ export function SignUpForm() {
             setInviteCode(invite);
         }
     }, [searchParams]);
+
+    const handleGoogleSignUp = async () => {
+        setError("");
+        setSocialLoading(true);
+
+        try {
+            await signIn.social({
+                provider: "google",
+                requestSignUp: true,
+                callbackURL: "/onboarding",
+                scopes: GMAIL_SCOPES
+            });
+        } catch (err) {
+            setError("An unexpected error occurred");
+            console.error(err);
+            setSocialLoading(false);
+        }
+    };
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -67,6 +91,18 @@ export function SignUpForm() {
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
+            <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={handleGoogleSignUp}
+                disabled={loading || socialLoading}
+            >
+                {socialLoading ? "Connecting to Google..." : "Sign Up with Google"}
+            </Button>
+
+            <div className="text-muted-foreground text-center text-xs">or</div>
+
             <Field>
                 <FieldLabel htmlFor="name">Name</FieldLabel>
                 <Input
@@ -122,7 +158,7 @@ export function SignUpForm() {
 
             {error && <FieldError>{error}</FieldError>}
 
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || socialLoading}>
                 {loading ? "Creating account..." : "Sign Up"}
             </Button>
 

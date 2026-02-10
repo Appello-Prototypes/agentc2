@@ -414,9 +414,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
 
             // Resolve tool source from origin map if not explicitly set
             const toolOriginMap = options.toolOriginMap;
-            let toolSource = toolCall.mcpServerId
-                ? `mcp:${toolCall.mcpServerId}`
-                : undefined;
+            let toolSource = toolCall.mcpServerId ? `mcp:${toolCall.mcpServerId}` : undefined;
             let mcpServerId = toolCall.mcpServerId;
 
             if (toolOriginMap && toolCall.toolKey in toolOriginMap) {

@@ -21,6 +21,20 @@ function generateSlug(name: string): string {
 }
 
 /**
+ * Generate a unique agent slug, appending a numeric suffix if the base slug already exists.
+ * e.g. "general-assistant" -> "general-assistant-2" -> "general-assistant-3"
+ */
+async function generateUniqueAgentSlug(base: string): Promise<string> {
+    let slug = base;
+    let suffix = 2;
+    while (await prisma.agent.findUnique({ where: { slug } })) {
+        slug = `${base}-${suffix}`;
+        suffix++;
+    }
+    return slug;
+}
+
+/**
  * GET /api/agents
  *
  * List all agents (SYSTEM + user's own)
@@ -126,22 +140,8 @@ export async function POST(request: NextRequest) {
 
         if (USE_DB_AGENTS) {
             // Use new Agent model
-            const slug = body.slug || generateSlug(name);
-
-            // Check if slug already exists
-            const existing = await prisma.agent.findUnique({
-                where: { slug }
-            });
-
-            if (existing) {
-                return NextResponse.json(
-                    {
-                        success: false,
-                        error: `Agent with slug '${slug}' already exists`
-                    },
-                    { status: 409 }
-                );
-            }
+            const baseSlug = body.slug || generateSlug(name);
+            const slug = await generateUniqueAgentSlug(baseSlug);
 
             // Build modelConfig from extended thinking settings
             const modelConfigBase = (body.modelConfig as Record<string, unknown> | null) || {};

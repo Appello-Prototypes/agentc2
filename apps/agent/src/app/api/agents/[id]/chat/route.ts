@@ -180,11 +180,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         // eslint-disable-next-line prefer-const
-        let { agent, record, source, activeSkills, toolOriginMap } =
-            await agentResolver.resolve({
-                slug: id,
-                requestContext
-            });
+        let { agent, record, source, activeSkills, toolOriginMap } = await agentResolver.resolve({
+            slug: id,
+            requestContext
+        });
 
         console.log(`[Agent Chat] Resolved agent '${id}' from ${source} (mode: ${runSource})`);
 
@@ -257,8 +256,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 userId: resourceId,
                 threadId: userThreadId,
                 skillsJson: activeSkills.length > 0 ? activeSkills : undefined,
-                toolOriginMap:
-                    Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                 instructionsHash,
                 instructionsSnapshot: mergedInstructions || undefined
             })

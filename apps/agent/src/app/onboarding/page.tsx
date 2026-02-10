@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { TemplateStep } from "@/components/onboarding/TemplateStep";
@@ -183,8 +182,6 @@ function clearPersistedState() {
 }
 
 export default function OnboardingPage() {
-    const router = useRouter();
-
     // Restore state from localStorage if available
     const [initialized, setInitialized] = useState(false);
     const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
@@ -202,6 +199,7 @@ export default function OnboardingPage() {
     });
     const [isCreating, setIsCreating] = useState(false);
     const [createError, setCreateError] = useState<string | null>(null);
+    const [mcpWarning, setMcpWarning] = useState<string | null>(null);
 
     // Initialize from persisted state
     useEffect(() => {
@@ -266,6 +264,12 @@ export default function OnboardingPage() {
                     if (filtered.length > 0) {
                         setAvailableTools(filtered);
                     }
+                }
+                // Surface MCP connection warnings
+                if (result.mcpError) {
+                    setMcpWarning(
+                        "Some MCP integrations could not be reached. Their tools may not appear below."
+                    );
                 }
             } catch (error) {
                 console.error("Failed to fetch tools:", error);
@@ -383,29 +387,45 @@ export default function OnboardingPage() {
         setCurrentStep("success");
     }, []);
 
-    const handleFinish = async () => {
+    const completeOnboarding = async (): Promise<boolean> => {
         try {
-            await fetch(`${getApiBase()}/api/onboarding/complete`, { method: "POST" });
+            const response = await fetch(`${getApiBase()}/api/onboarding/complete`, {
+                method: "POST"
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                localStorage.setItem("agentc2_onboarding_complete", "true");
+                clearPersistedState();
+                return true;
+            }
+            console.error("Failed to complete onboarding:", result.error);
+            return false;
         } catch (error) {
             console.error("Failed to complete onboarding:", error);
+            return false;
         }
+    };
 
-        localStorage.setItem("agentc2_onboarding_complete", "true");
-        clearPersistedState();
-
-        // Navigate to home workspace
-        router.push("/");
+    const handleFinish = async (navigateTo?: string) => {
+        const success = await completeOnboarding();
+        if (success) {
+            // Use hard navigation to avoid proxy race condition with client router
+            window.location.href = navigateTo || "/";
+        } else {
+            setCreateError("Failed to complete onboarding. Please try again.");
+        }
     };
 
     const handleSkipToDashboard = async () => {
-        try {
-            await fetch(`${getApiBase()}/api/onboarding/complete`, { method: "POST" });
-        } catch {
-            // Best-effort
+        const success = await completeOnboarding();
+        if (success) {
+            window.location.href = "/";
+        } else {
+            // Fallback: still try to navigate even if API failed
+            localStorage.setItem("agentc2_onboarding_complete", "true");
+            clearPersistedState();
+            window.location.href = "/";
         }
-        localStorage.setItem("agentc2_onboarding_complete", "true");
-        clearPersistedState();
-        router.push("/");
     };
 
     // Don't render until we've checked localStorage for persisted state
@@ -428,7 +448,11 @@ export default function OnboardingPage() {
                         />
                     </div>
                     <div className="text-muted-foreground mt-2 text-center text-xs">
-                        Step {getStepOrder().indexOf(currentStep)} of {getStepOrder().length - 2}
+                        Step{" "}
+                        {getStepOrder()
+                            .filter((s) => s !== "welcome" && s !== "success")
+                            .indexOf(currentStep) + 1}{" "}
+                        of {getStepOrder().length - 2}
                     </div>
                 </div>
             )}
@@ -459,7 +483,11 @@ export default function OnboardingPage() {
             )}
 
             {currentStep === "integrations" && (
-                <IntegrationsStep onContinue={handleIntegrationsComplete} onBack={goBack} />
+                <IntegrationsStep
+                    onContinue={handleIntegrationsComplete}
+                    onBack={goBack}
+                    availableTools={availableTools}
+                />
             )}
 
             {currentStep === "tools" && (
@@ -471,6 +499,7 @@ export default function OnboardingPage() {
                     onBack={goBack}
                     isCreating={isCreating}
                     createError={createError}
+                    mcpWarning={mcpWarning}
                 />
             )}
 
@@ -493,6 +522,13 @@ export default function OnboardingPage() {
                     toolCount={data.selectedTools.length}
                     onFinish={handleFinish}
                 />
+            )}
+
+            {/* Navigation error (shown when onboarding complete API fails) */}
+            {createError && currentStep === "success" && (
+                <div className="mx-auto mt-4 max-w-md rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+                    {createError}
+                </div>
             )}
         </>
     );

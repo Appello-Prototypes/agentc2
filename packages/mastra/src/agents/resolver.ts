@@ -278,12 +278,10 @@ export class AgentResolver {
         }
         for (const key of Object.keys(skillTools)) {
             // Find which skill owns this tool
-            const ownerSkill = activeSkills.find((s) =>
-                skillResult.skillToolMapping?.[key] === s.skillSlug
+            const ownerSkill = activeSkills.find(
+                (s) => skillResult.skillToolMapping?.[key] === s.skillSlug
             );
-            toolOriginMap[key] = ownerSkill
-                ? `skill:${ownerSkill.skillSlug}`
-                : "skill:unknown";
+            toolOriginMap[key] = ownerSkill ? `skill:${ownerSkill.skillSlug}` : "skill:unknown";
         }
         for (const key of Object.keys(registryTools)) {
             toolOriginMap[key] = "registry";

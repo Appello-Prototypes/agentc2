@@ -50,14 +50,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
         // Import vector store directly to query with filter
         const { vector } = await import("@repo/mastra");
 
+        console.log(
+            `[chunks] Querying vectors for document slug="${document.slug}", name="${document.name}"`
+        );
+
         const results = await vector.query({
             indexName: "rag_documents",
             queryVector: embedding,
             topK: 200,
-            minScore: 0,
+            minScore: -1,
             filter: { documentId: document.slug },
             includeVector: true
         });
+
+        console.log(`[chunks] Vector query returned ${results.length} results`);
 
         // Sort by chunk index for consistent ordering
         const chunks = results

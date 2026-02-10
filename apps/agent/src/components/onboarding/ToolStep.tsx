@@ -22,6 +22,7 @@ interface ToolStepProps {
     onBack: () => void;
     isCreating: boolean;
     createError: string | null;
+    mcpWarning?: string | null;
 }
 
 /** Human-friendly names for known MCP server prefixes */
@@ -54,7 +55,8 @@ export function ToolStep({
     onContinue,
     onBack,
     isCreating,
-    createError
+    createError,
+    mcpWarning
 }: ToolStepProps) {
     const [search, setSearch] = useState("");
     const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -147,8 +149,8 @@ export function ToolStep({
                 </Button>
                 <h2 className="text-2xl font-bold">Add tools to your agent</h2>
                 <p className="text-muted-foreground text-sm">
-                    Tools let your agent take real actions. System tools are built-in; MCP tools come
-                    from your connected integrations.
+                    Tools let your agent take real actions. System tools are built-in; MCP tools
+                    come from your connected integrations.
                 </p>
             </div>
 
@@ -162,6 +164,13 @@ export function ToolStep({
                         onChange={(e) => setSearch(e.target.value)}
                         className="pl-9"
                     />
+                </div>
+            )}
+
+            {/* MCP warning */}
+            {mcpWarning && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                    {mcpWarning}
                 </div>
             )}
 
@@ -182,8 +191,7 @@ export function ToolStep({
                     if (filtered.length === 0) return null;
 
                     const selected = selectedInGroup(group.tools);
-                    const isCollapsed =
-                        collapsedGroups[group.key] ?? group.defaultCollapsed;
+                    const isCollapsed = collapsedGroups[group.key] ?? group.defaultCollapsed;
 
                     return (
                         <Card key={group.key}>

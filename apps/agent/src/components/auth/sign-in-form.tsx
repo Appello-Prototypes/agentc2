@@ -18,7 +18,13 @@ export function SignInForm() {
 
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
-    const [error, setError] = useState("");
+    const [error, setError] = useState(() => {
+        const errorParam = searchParams.get("error");
+        if (errorParam === "no_account") {
+            return "No account found. Please sign up first.";
+        }
+        return "";
+    });
     const [loading, setLoading] = useState(false);
     const [socialLoading, setSocialLoading] = useState(false);
 
@@ -56,6 +62,7 @@ export function SignInForm() {
             await signIn.social({
                 provider: "google",
                 callbackURL: callbackUrl,
+                errorCallbackURL: "/login?error=no_account",
                 scopes: GMAIL_SCOPES
             });
         } catch (err) {

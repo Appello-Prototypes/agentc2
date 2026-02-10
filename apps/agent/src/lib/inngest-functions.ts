@@ -1349,7 +1349,11 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                     data: {
                         sessionId,
                         tenantId: dataset.tenantId,
-                        type: signal.type as "LOW_SCORE" | "TOOL_FAILURE" | "NEGATIVE_FEEDBACK" | "SKILL_CORRELATION",
+                        type: signal.type as
+                            | "LOW_SCORE"
+                            | "TOOL_FAILURE"
+                            | "NEGATIVE_FEEDBACK"
+                            | "SKILL_CORRELATION",
                         severity: signal.severity,
                         pattern: signal.pattern,
                         evidenceJson: signal.evidence,
@@ -1516,9 +1520,7 @@ export const learningProposalGenerationFunction = inngest.createFunction(
             }
 
             // Analyze skill correlation signals
-            const skillCorrelationSignals = signals.filter(
-                (s) => s.type === "SKILL_CORRELATION"
-            );
+            const skillCorrelationSignals = signals.filter((s) => s.type === "SKILL_CORRELATION");
             if (skillCorrelationSignals.length > 0) {
                 const evidence = skillCorrelationSignals[0].evidenceJson as Array<{
                     skillSlug: string;
