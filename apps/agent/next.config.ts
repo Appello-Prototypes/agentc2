@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
     devIndicators,
     headers: createHeadersConfig(),
     turbopack: {},
+    // Skip TypeScript checking in next build -- verified by CI/local type-check
+    typescript: {
+        ignoreBuildErrors: true
+    },
     // Externalize server-only packages that have Node.js-specific dependencies
     // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
     serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"],

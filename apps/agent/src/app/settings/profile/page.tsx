@@ -27,7 +27,7 @@ interface UserProfile {
 }
 
 export default function ProfileSettingsPage() {
-    const { data: session } = useSession();
+    const { data: session, refetch: refetchSession } = useSession();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -80,6 +80,8 @@ export default function ProfileSettingsPage() {
             if (data.success) {
                 setProfile(data.user);
                 setSuccess("Profile updated successfully");
+                // Refresh the session so all components (header avatar, greeting, etc.) pick up the new name/image
+                await refetchSession();
             } else {
                 setError(data.error || "Failed to update profile");
             }
