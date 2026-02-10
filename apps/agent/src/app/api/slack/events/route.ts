@@ -125,13 +125,96 @@ function stripBotMention(text: string): string {
 }
 
 /**
- * Send a message to Slack using the Web API
- * Requires SLACK_BOT_TOKEN environment variable
+ * Parse an optional agent directive from the message text.
+ * Supports:
+ *   "agent:research What is X?" -> { slug: "research", text: "What is X?" }
+ *   "What is X?"                -> { slug: DEFAULT_AGENT_SLUG, text: "What is X?" }
+ *   "agent:list"                -> { slug: null, text: "", isListCommand: true }
+ *   "help"                      -> { slug: null, text: "", isListCommand: true }
+ */
+function parseAgentDirective(text: string): {
+    slug: string | null;
+    text: string;
+    isListCommand: boolean;
+} {
+    const trimmed = text.trim();
+
+    // Check for help / list commands
+    if (/^(help|agent:list)$/i.test(trimmed)) {
+        return { slug: null, text: "", isListCommand: true };
+    }
+
+    // Check for agent:slug prefix
+    const match = trimmed.match(/^agent:([a-z0-9_-]+)\s*(.*)/i);
+    if (match) {
+        return { slug: match[1], text: match[2].trim(), isListCommand: false };
+    }
+
+    // No directive -- use default agent
+    return { slug: DEFAULT_AGENT_SLUG, text: trimmed, isListCommand: false };
+}
+
+/**
+ * List active agents from the database and format as a Slack message.
+ */
+async function listActiveAgents(): Promise<string> {
+    const agents = await prisma.agent.findMany({
+        where: { isActive: true },
+        select: { slug: true, name: true, description: true },
+        orderBy: { name: "asc" }
+    });
+
+    if (agents.length === 0) {
+        return "No active agents found.";
+    }
+
+    const lines = agents.map((a) => {
+        const desc = a.description ? ` -- ${a.description}` : "";
+        return `  \`agent:${a.slug}\`  *${a.name}*${desc}`;
+    });
+
+    return [
+        "*Available Agents*",
+        "",
+        ...lines,
+        "",
+        `_Default agent: \`${DEFAULT_AGENT_SLUG}\`_`,
+        '_Usage: prefix your message with `agent:<slug>` to talk to a specific agent._'
+    ].join("\n");
+}
+
+/**
+ * Resolve Slack display identity from the agent record's metadata.
+ * Falls back to the agent name when no slack-specific config is set.
+ */
+function resolveSlackIdentity(record: {
+    name: string;
+    metadata: unknown;
+}): { username?: string; icon_emoji?: string; icon_url?: string } {
+    const metadata = record.metadata as Record<string, unknown> | null;
+    const slack = metadata?.slack as Record<string, unknown> | undefined;
+
+    const username = (slack?.displayName as string) || record.name;
+    const iconEmoji = slack?.iconEmoji as string | undefined;
+    const iconUrl = slack?.iconUrl as string | undefined;
+
+    return {
+        username,
+        ...(iconEmoji ? { icon_emoji: iconEmoji } : {}),
+        ...(iconUrl ? { icon_url: iconUrl } : {})
+    };
+}
+
+/**
+ * Send a message to Slack using the Web API.
+ * Supports per-message display identity (username, icon_emoji, icon_url)
+ * via the chat:write.customize scope.
  */
 async function sendSlackMessage(
     channelId: string,
     text: string,
-    threadTs?: string
+    threadTs?: string,
+    identity?: { username?: string; icon_emoji?: string; icon_url?: string }
 ): Promise<boolean> {
     const botToken = process.env.SLACK_BOT_TOKEN;
 
@@ -150,7 +233,10 @@ async function sendSlackMessage(
             body: JSON.stringify({
                 channel: channelId,
                 text,
-                ...(threadTs && { thread_ts: threadTs })
+                ...(threadTs && { thread_ts: threadTs }),
+                ...(identity?.username && { username: identity.username }),
+                ...(identity?.icon_emoji && { icon_emoji: identity.icon_emoji }),
+                ...(identity?.icon_url && { icon_url: identity.icon_url })
             })
         });
 
@@ -324,24 +410,39 @@ const appendChatReaction = async (options: {
 };
 
 /**
- * Process a Slack message and generate a response
- * Records the run in AgentRun for full observability
+ * Result returned from processMessage, including the response text
+ * and the agent record for display identity.
+ */
+interface ProcessMessageResult {
+    text: string;
+    identity: { username?: string; icon_emoji?: string; icon_url?: string };
+}
+
+/**
+ * Process a Slack message and generate a response.
+ * Records the run in AgentRun for full observability.
+ * Supports per-message agent routing and conversation memory.
  */
 async function processMessage(
     text: string,
     userId: string,
     channelId: string,
     threadTs: string,
-    messageTs: string
-): Promise<string> {
+    messageTs: string,
+    agentSlug?: string
+): Promise<ProcessMessageResult> {
+    const slug = agentSlug || DEFAULT_AGENT_SLUG;
+    const slackThreadId = `slack-${channelId}-${threadTs}`;
+
     console.log(`\n${"=".repeat(60)}`);
     console.log(`[Slack] Processing message at ${new Date().toISOString()}`);
     console.log(`[Slack] User: ${userId}`);
     console.log(`[Slack] Channel: ${channelId}`);
     console.log(`[Slack] Thread: ${threadTs}`);
+    console.log(`[Slack] Agent: ${slug}`);
     console.log(`[Slack] Message: ${text}`);
 
-    // Resolve the agent first to get agentId
+    // Resolve the agent
     let agentId: string;
     let agent;
     let record;
@@ -349,7 +450,7 @@ async function processMessage(
 
     try {
         const resolved = await agentResolver.resolve({
-            slug: DEFAULT_AGENT_SLUG,
+            slug,
             requestContext: {
                 userId,
                 metadata: {
@@ -363,13 +464,21 @@ async function processMessage(
         agent = resolved.agent;
         record = resolved.record;
         source = resolved.source;
-        agentId = record?.id || DEFAULT_AGENT_SLUG;
+        agentId = record?.id || slug;
 
-        console.log(`[Slack] Using agent "${DEFAULT_AGENT_SLUG}" from ${source}`);
+        console.log(`[Slack] Using agent "${slug}" from ${source}`);
     } catch (error) {
-        console.error("[Slack] Failed to resolve agent:", error);
-        return "I encountered an error loading the agent. Please try again.";
+        console.error(`[Slack] Failed to resolve agent "${slug}":`, error);
+        return {
+            text: `I couldn't find an agent called \`${slug}\`. Use \`help\` to see available agents.`,
+            identity: {}
+        };
     }
+
+    // Resolve display identity from agent metadata
+    const identity = record
+        ? resolveSlackIdentity({ name: record.name, metadata: record.metadata })
+        : {};
 
     const workspaceId = record?.workspaceId || null;
     const organizationId = workspaceId
@@ -399,7 +508,8 @@ async function processMessage(
             userId,
             text,
             metadata: {
-                threadTs
+                threadTs,
+                agentSlug: slug
             }
         });
     }
@@ -407,19 +517,29 @@ async function processMessage(
     // Start recording the run
     const run = await startRun({
         agentId,
-        agentSlug: DEFAULT_AGENT_SLUG,
+        agentSlug: slug,
         input: text,
         source: "slack",
         userId,
-        threadId: `slack-${channelId}-${threadTs}`,
+        threadId: slackThreadId,
         sessionId: channelId
     });
 
     try {
-        // Generate response
-        const response = await agent.generate(text, {
-            maxSteps: record?.maxSteps ?? 5
-        });
+        // Build generate options with memory persistence when enabled
+        const generateOptions = {
+            maxSteps: record?.maxSteps ?? 5,
+            ...(record?.memoryEnabled
+                ? {
+                      memory: {
+                          thread: slackThreadId,
+                          resource: userId
+                      }
+                  }
+                : {})
+        } as unknown as Parameters<typeof agent.generate>[1];
+
+        const response = await agent.generate(text, generateOptions);
 
         // Extract token usage
         const tokens = extractTokenUsage(response);
@@ -451,13 +571,19 @@ async function processMessage(
         console.log(`[Slack] Response preview: ${response.text?.substring(0, 200)}...`);
         console.log(`${"=".repeat(60)}\n`);
 
-        return response.text || "I'm sorry, I couldn't generate a response.";
+        return {
+            text: response.text || "I'm sorry, I couldn't generate a response.",
+            identity
+        };
     } catch (error) {
         // Record the failure
         await run.fail(error instanceof Error ? error : new Error(String(error)));
 
         console.error("[Slack] Error processing message:", error);
-        return "I encountered an error processing your message. Please try again.";
+        return {
+            text: "I encountered an error processing your message. Please try again.",
+            identity
+        };
     }
 }
 
@@ -528,20 +654,37 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true });
             }
 
+            // Parse agent directive (e.g. "agent:research What is X?" or "help")
+            const directive = parseAgentDirective(cleanText);
+
             // Process asynchronously to respond within 3 seconds
             // Slack requires acknowledgment within 3 seconds
             setImmediate(async () => {
                 const threadTs = mentionEvent.thread_ts || mentionEvent.ts;
-                const response = await processMessage(
-                    cleanText,
+
+                // Handle help / agent:list command
+                if (directive.isListCommand) {
+                    const helpText = await listActiveAgents();
+                    await sendSlackMessage(mentionEvent.channel, helpText, threadTs);
+                    return;
+                }
+
+                const result = await processMessage(
+                    directive.text,
                     mentionEvent.user,
                     mentionEvent.channel,
                     threadTs,
-                    mentionEvent.ts
+                    mentionEvent.ts,
+                    directive.slug || undefined
                 );
 
-                // Reply in the thread
-                await sendSlackMessage(mentionEvent.channel, response, threadTs);
+                // Reply in the thread with per-agent display identity
+                await sendSlackMessage(
+                    mentionEvent.channel,
+                    result.text,
+                    threadTs,
+                    result.identity
+                );
             });
 
             // Acknowledge immediately
@@ -643,19 +786,36 @@ export async function POST(request: NextRequest) {
             }
 
             if ("channel_type" in event && event.channel_type === "im") {
+                // Parse agent directive from DM text
+                const directive = parseAgentDirective(messageEvent.text);
+
                 // Process asynchronously
                 setImmediate(async () => {
                     const threadTs = messageEvent.thread_ts || messageEvent.ts;
-                    const response = await processMessage(
-                        messageEvent.text,
+
+                    // Handle help / agent:list command
+                    if (directive.isListCommand) {
+                        const helpText = await listActiveAgents();
+                        await sendSlackMessage(messageEvent.channel, helpText, threadTs);
+                        return;
+                    }
+
+                    const result = await processMessage(
+                        directive.text,
                         messageEvent.user,
                         messageEvent.channel,
                         threadTs,
-                        messageEvent.ts
+                        messageEvent.ts,
+                        directive.slug || undefined
                     );
 
-                    // Reply in the thread for DMs too
-                    await sendSlackMessage(messageEvent.channel, response, threadTs);
+                    // Reply in the thread with per-agent display identity
+                    await sendSlackMessage(
+                        messageEvent.channel,
+                        result.text,
+                        threadTs,
+                        result.identity
+                    );
                 });
 
                 // Acknowledge immediately
@@ -695,6 +855,7 @@ export async function GET() {
             requiredScopes: [
                 "app_mentions:read",
                 "chat:write",
+                "chat:write.customize",
                 "im:history",
                 "im:read",
                 "im:write",

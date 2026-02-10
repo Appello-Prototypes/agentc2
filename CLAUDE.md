@@ -596,6 +596,7 @@ The system supports two-way Slack conversations where users can talk to agents d
     - Add Bot Token Scopes:
         - `app_mentions:read` - Receive @mentions
         - `chat:write` - Send messages
+        - `chat:write.customize` - Post with custom username/icon per agent
         - `im:history` - Read DM history
         - `im:read` - Access DM metadata
         - `im:write` - Send DMs
@@ -628,17 +629,35 @@ Once configured, you can:
 
 - **@mention the bot** in any channel it's added to
 - **Send direct messages** to the bot
-- The bot will respond in a thread, maintaining conversation context
+- The bot will respond in a thread, maintaining conversation context per Slack thread
+- **Route to any agent** by prefixing your message with `agent:<slug>`:
+    - `@Bot agent:research What is quantum computing?` -- routes to the `research` agent
+    - `@Bot What time is it?` -- routes to the default agent
+    - `@Bot help` or `@Bot agent:list` -- lists all available agents with their slugs
+- Each agent responds with its own **display name and icon** (configured via agent metadata)
 
-### Changing the Agent
+### Changing the Default Agent
 
-Set `SLACK_DEFAULT_AGENT_SLUG` to use a different agent:
+Set `SLACK_DEFAULT_AGENT_SLUG` to change which agent handles messages without an `agent:` prefix:
 
 ```bash
-SLACK_DEFAULT_AGENT_SLUG="research"  # Use the research agent
+SLACK_DEFAULT_AGENT_SLUG="assistant"  # Default agent for Slack
 ```
 
-Or create a dedicated Slack agent in the database with specific instructions.
+### Per-Agent Display Identity
+
+Each agent can have a custom Slack display name and icon. Set this in the agent's `metadata` JSON field:
+
+```json
+{
+    "slack": {
+        "displayName": "Research Agent",
+        "iconEmoji": ":microscope:"
+    }
+}
+```
+
+When no `slack` metadata is set, the agent's `name` field is used as the display name.
 
 ---
 
