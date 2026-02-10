@@ -82,6 +82,7 @@ export async function POST(request: NextRequest) {
                         status: TriggerEventStatus.SKIPPED,
                         sourceType: "event",
                         triggerType: trigger.triggerType,
+                        entityType: "agent",
                         eventName: trigger.eventName,
                         payload: normalizedPayload,
                         errorMessage: "Agent is disabled"
@@ -116,6 +117,7 @@ export async function POST(request: NextRequest) {
                     status: TriggerEventStatus.NO_MATCH,
                     sourceType: "event",
                     triggerType: "event",
+                    entityType: "agent",
                     eventName,
                     payload: normalizedPayload,
                     errorMessage: "No active triggers matched event"
@@ -137,6 +139,7 @@ export async function POST(request: NextRequest) {
                     status: TriggerEventStatus.RECEIVED,
                     sourceType: "event",
                     triggerType: trigger.triggerType,
+                    entityType: "agent",
                     eventName: trigger.eventName,
                     payload: normalizedPayload
                 })

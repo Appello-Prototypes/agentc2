@@ -73,6 +73,11 @@ export async function createTriggerEventRecord(options: {
     payload?: unknown;
     errorMessage?: string | null;
     metadata?: Record<string, unknown> | null;
+    entityType?: string | null;
+    workflowId?: string | null;
+    workflowRunId?: string | null;
+    networkId?: string | null;
+    networkRunId?: string | null;
 }) {
     const { payloadJson, payloadPreview, payloadTruncated } = buildTriggerPayloadSnapshot(
         options.payload
@@ -95,6 +100,11 @@ export async function createTriggerEventRecord(options: {
             payloadPreview,
             payloadTruncated,
             errorMessage: options.errorMessage ?? null,
+            entityType: options.entityType ?? null,
+            workflowId: options.workflowId ?? null,
+            workflowRunId: options.workflowRunId ?? null,
+            networkId: options.networkId ?? null,
+            networkRunId: options.networkRunId ?? null,
             metadata: options.metadata
                 ? (JSON.parse(JSON.stringify(options.metadata)) as Prisma.InputJsonValue)
                 : undefined

@@ -113,6 +113,7 @@ export async function POST(
             status: TriggerEventStatus.RECEIVED,
             sourceType: "webhook",
             triggerType: trigger.triggerType,
+            entityType: "agent",
             webhookPath: trigger.webhookPath,
             payload: normalizedPayload
         });

@@ -136,6 +136,9 @@ model Workspace {
     ActionItem        ActionItem[]
     ApprovalRequest   ApprovalRequest[]
     CrmAuditLog       CrmAuditLog[]
+    documents         Document[]
+    skills            Skill[]
+    canvases          Canvas[]
 
     @@unique([organizationId, slug])
     @@index([organizationId])
@@ -678,6 +681,7 @@ model Agent {
     GmailIntegration       GmailIntegration[]
     TriggerEvent           TriggerEvent[]
     ApprovalRequest        ApprovalRequest[]
+    skills                 AgentSkill[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -2514,4 +2518,206 @@ model BimDiffSummary {
     @@index([fromVersionId])
     @@index([toVersionId])
     @@map("bim_diff_summary")
+}
+
+// ==============================
+// Document Primitive
+// ==============================
+
+model Document {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String? @db.Text
+    content     String  @db.Text
+    contentType String  @default("markdown")
+
+    vectorIds  String[]
+    chunkCount Int       @default(0)
+    embeddedAt DateTime?
+
+    category String?
+    tags     String[]
+    metadata Json?
+
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+    version  Int               @default(1)
+    versions DocumentVersion[]
+    skills   SkillDocument[]
+
+    type      String   @default("USER") @map("doc_type")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    @@index([workspaceId])
+    @@index([category])
+    @@map("document")
+}
+
+model DocumentVersion {
+    id            String   @id @default(cuid())
+    documentId    String
+    document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+    version       Int
+    content       String   @db.Text
+    changeSummary String?
+    createdAt     DateTime @default(now())
+    createdBy     String?
+
+    @@unique([documentId, version])
+    @@map("document_version")
+}
+
+// ==============================
+// Skill Primitive
+// ==============================
+
+model Skill {
+    id           String  @id @default(cuid())
+    slug         String  @unique
+    name         String
+    description  String? @db.Text
+    instructions String  @db.Text
+    examples     String? @db.Text
+
+    category String?
+    tags     String[]
+    metadata Json?
+
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+    version  Int            @default(1)
+    versions SkillVersion[]
+
+    documents SkillDocument[]
+    tools     SkillTool[]
+    agents    AgentSkill[]
+
+    type      String   @default("USER")
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    @@index([workspaceId])
+    @@index([category])
+    @@map("skill")
+}
+
+model SkillVersion {
+    id            String   @id @default(cuid())
+    skillId       String
+    skill         Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    version       Int
+    instructions  String   @db.Text
+    configJson    Json?
+    changeSummary String?
+    createdAt     DateTime @default(now())
+    createdBy     String?
+
+    @@unique([skillId, version])
+    @@map("skill_version")
+}
+
+model SkillDocument {
+    id         String   @id @default(cuid())
+    skillId    String
+    skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    documentId String
+    document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+    role       String?
+
+    @@unique([skillId, documentId])
+    @@map("skill_document")
+}
+
+model SkillTool {
+    id      String @id @default(cuid())
+    skillId String
+    skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    toolId  String
+
+    @@unique([skillId, toolId])
+    @@map("skill_tool")
+}
+
+model AgentSkill {
+    id      String @id @default(cuid())
+    agentId String
+    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    skillId String
+    skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+    @@unique([agentId, skillId])
+    @@map("agent_skill")
+}
+
+// ==============================
+// Canvas Primitive
+// ==============================
+
+// Canvas - Agent-built, data-connected UI
+model Canvas {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    title       String
+    description String? @db.Text
+
+    // Schema definition (the full CanvasSchemaSpec JSON)
+    schemaJson  Json
+    dataQueries Json? // Extracted query definitions for server-side execution
+    thumbnail   String? // Auto-generated preview URL
+
+    // Status
+    isPublished Boolean @default(false)
+    isActive    Boolean @default(true)
+    version     Int     @default(1)
+
+    // Tenancy (same pattern as Workflow/Network)
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    ownerId     String?
+    createdBy   String?
+    agentId     String? // Agent that created/maintains this canvas
+
+    // Categorization
+    tags     String[]
+    category String?
+    metadata Json?
+
+    // Sharing
+    isPublic    Boolean @default(false)
+    publicToken String? @unique // Token for public access without auth
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    versions CanvasVersion[]
+
+    @@index([slug])
+    @@index([workspaceId])
+    @@index([category])
+    @@index([isPublished])
+    @@map("canvas")
+}
+
+// Canvas Version History
+model CanvasVersion {
+    id         String   @id @default(cuid())
+    canvasId   String
+    canvas     Canvas   @relation(fields: [canvasId], references: [id], onDelete: Cascade)
+    version    Int
+    schemaJson Json
+    changelog  String?  @db.Text
+    createdAt  DateTime @default(now())
+    createdBy  String?
+
+    @@unique([canvasId, version])
+    @@index([canvasId])
+    @@map("canvas_version")
 }

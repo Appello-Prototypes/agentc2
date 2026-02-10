@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { inngest } from "@/lib/inngest";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * GET /api/agents/[id]/simulations
@@ -137,6 +138,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 concurrency: validConcurrency
             }
         });
+
+        // Record trigger event for unified triggers dashboard
+        try {
+            await createTriggerEventRecord({
+                agentId: agent.id,
+                workspaceId: agent.workspaceId || null,
+                sourceType: "simulation",
+                entityType: "agent",
+                payload: { theme: theme.trim(), targetCount, concurrency: validConcurrency },
+                metadata: {
+                    sessionId: session.id,
+                    theme: theme.trim(),
+                    targetCount
+                }
+            });
+        } catch (e) {
+            console.warn("[Simulations] Failed to record trigger event:", e);
+        }
 
         // Emit Inngest event to start the simulation
         await inngest.send({

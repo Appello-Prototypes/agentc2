@@ -32,6 +32,7 @@ export async function GET(request: NextRequest) {
         const triggerId = searchParams.get("triggerId");
         const agentId = searchParams.get("agentId");
         const eventName = searchParams.get("eventName");
+        const entityType = searchParams.get("entityType");
         const search = searchParams.get("search");
         const from = searchParams.get("from");
         const to = searchParams.get("to");
@@ -45,57 +46,56 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const baseWhere: Prisma.TriggerEventWhereInput = {
-            workspaceId: workspaceContext.workspaceId
-        };
-        const createdAtFilter: Prisma.DateTimeFilter = {};
+        // Include events from this workspace AND events with no workspace (system-level)
+        const conditions: Prisma.TriggerEventWhereInput[] = [
+            {
+                OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+            }
+        ];
 
         if (status && status !== "all") {
-            baseWhere.status = status as TriggerEventStatus;
+            conditions.push({ status: status as TriggerEventStatus });
         }
-
         if (sourceType && sourceType !== "all") {
-            baseWhere.sourceType = sourceType;
+            conditions.push({ sourceType });
         }
-
         if (integrationKey && integrationKey !== "all") {
-            baseWhere.integrationKey = integrationKey;
+            conditions.push({ integrationKey });
         }
-
         if (triggerId && triggerId !== "all") {
-            baseWhere.triggerId = triggerId;
+            conditions.push({ triggerId });
         }
-
         if (agentId && agentId !== "all") {
-            baseWhere.agentId = agentId;
+            conditions.push({ agentId });
         }
-
         if (eventName && eventName !== "all") {
-            baseWhere.eventName = eventName;
+            conditions.push({ eventName });
+        }
+        if (entityType && entityType !== "all") {
+            conditions.push({ entityType });
         }
 
-        if (from) {
-            createdAtFilter.gte = new Date(from);
-        }
-
-        if (to) {
-            createdAtFilter.lte = new Date(to);
-        }
-
+        const createdAtFilter: Prisma.DateTimeFilter = {};
+        if (from) createdAtFilter.gte = new Date(from);
+        if (to) createdAtFilter.lte = new Date(to);
         if (Object.keys(createdAtFilter).length > 0) {
-            baseWhere.createdAt = createdAtFilter;
+            conditions.push({ createdAt: createdAtFilter });
         }
 
         if (search) {
-            baseWhere.OR = [
-                { id: { contains: search, mode: "insensitive" } },
-                { eventName: { contains: search, mode: "insensitive" } },
-                { payloadPreview: { contains: search, mode: "insensitive" } },
-                { errorMessage: { contains: search, mode: "insensitive" } },
-                { trigger: { name: { contains: search, mode: "insensitive" } } },
-                { agent: { name: { contains: search, mode: "insensitive" } } }
-            ];
+            conditions.push({
+                OR: [
+                    { id: { contains: search, mode: "insensitive" } },
+                    { eventName: { contains: search, mode: "insensitive" } },
+                    { payloadPreview: { contains: search, mode: "insensitive" } },
+                    { errorMessage: { contains: search, mode: "insensitive" } },
+                    { trigger: { name: { contains: search, mode: "insensitive" } } },
+                    { agent: { name: { contains: search, mode: "insensitive" } } }
+                ]
+            });
         }
+
+        const baseWhere: Prisma.TriggerEventWhereInput = { AND: conditions };
 
         const [events, total] = await Promise.all([
             prisma.triggerEvent.findMany({
@@ -125,6 +125,30 @@ export async function GET(request: NextRequest) {
                             completedAt: true,
                             durationMs: true
                         }
+                    },
+                    workflow: {
+                        select: { id: true, slug: true, name: true }
+                    },
+                    workflowRun: {
+                        select: {
+                            id: true,
+                            status: true,
+                            startedAt: true,
+                            completedAt: true,
+                            durationMs: true
+                        }
+                    },
+                    network: {
+                        select: { id: true, slug: true, name: true }
+                    },
+                    networkRun: {
+                        select: {
+                            id: true,
+                            status: true,
+                            startedAt: true,
+                            completedAt: true,
+                            durationMs: true
+                        }
                     }
                 },
                 orderBy: { createdAt: "desc" },
@@ -141,6 +165,7 @@ export async function GET(request: NextRequest) {
                 status: event.status,
                 sourceType: event.sourceType,
                 triggerType: event.triggerType,
+                entityType: event.entityType,
                 integrationKey: event.integrationKey,
                 integrationId: event.integrationId,
                 eventName: event.eventName,
@@ -175,6 +200,38 @@ export async function GET(request: NextRequest) {
                               ? event.run.completedAt.toISOString()
                               : null,
                           durationMs: event.run.durationMs
+                      }
+                    : null,
+                workflow: event.workflow
+                    ? {
+                          id: event.workflow.id,
+                          slug: event.workflow.slug,
+                          name: event.workflow.name
+                      }
+                    : null,
+                workflowRun: event.workflowRun
+                    ? {
+                          id: event.workflowRun.id,
+                          status: event.workflowRun.status,
+                          startedAt: event.workflowRun.startedAt?.toISOString() ?? null,
+                          completedAt: event.workflowRun.completedAt?.toISOString() ?? null,
+                          durationMs: event.workflowRun.durationMs
+                      }
+                    : null,
+                network: event.network
+                    ? {
+                          id: event.network.id,
+                          slug: event.network.slug,
+                          name: event.network.name
+                      }
+                    : null,
+                networkRun: event.networkRun
+                    ? {
+                          id: event.networkRun.id,
+                          status: event.networkRun.status,
+                          startedAt: event.networkRun.startedAt?.toISOString() ?? null,
+                          completedAt: event.networkRun.completedAt?.toISOString() ?? null,
+                          durationMs: event.networkRun.durationMs
                       }
                     : null
             })),

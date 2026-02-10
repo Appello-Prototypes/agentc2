@@ -3,6 +3,7 @@ import { prisma, Prisma } from "@repo/database";
 import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/mastra";
 import { refreshWorkflowMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 function mapStepStatus(status: "completed" | "failed" | "suspended") {
     if (status === "failed") return "FAILED";
@@ -46,6 +47,26 @@ export async function POST(
                 triggerType: resolveRunTriggerType(body.triggerType ?? body.trigger, body.source)
             }
         });
+
+        // Record trigger event for unified triggers dashboard
+        try {
+            await createTriggerEventRecord({
+                workflowId: workflow.id,
+                workflowRunId: run.id,
+                workspaceId: workflow.workspaceId,
+                sourceType: body.source || "api",
+                triggerType: body.triggerType || "manual",
+                entityType: "workflow",
+                payload: input,
+                metadata: {
+                    workflowSlug: workflow.slug,
+                    workflowName: workflow.name,
+                    environment: body.environment
+                }
+            });
+        } catch (e) {
+            console.warn("[Workflow Execute] Failed to record trigger event:", e);
+        }
 
         const result = await executeWorkflowDefinition({
             definition: workflow.definitionJson as unknown as WorkflowDefinition,

@@ -3,6 +3,7 @@ import { prisma, Prisma, RunStatus } from "@repo/database";
 import { buildNetworkAgent } from "@repo/mastra";
 import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 function inferStepType(eventType: string) {
     if (eventType.includes("routing")) return "routing";
@@ -92,6 +93,26 @@ export async function POST(
                 });
 
                 sendEvent("start", { runId: run.id });
+
+                // Record trigger event for unified triggers dashboard
+                try {
+                    await createTriggerEventRecord({
+                        networkId: network.id,
+                        networkRunId: run.id,
+                        workspaceId: network.workspaceId,
+                        sourceType: body.source || "api",
+                        triggerType: body.triggerType || "manual",
+                        entityType: "network",
+                        payload: { message },
+                        metadata: {
+                            networkSlug: network.slug,
+                            networkName: network.name,
+                            streaming: true
+                        }
+                    });
+                } catch (e) {
+                    console.warn("[Network Stream] Failed to record trigger event:", e);
+                }
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const result = await (agent as any).network(message, {

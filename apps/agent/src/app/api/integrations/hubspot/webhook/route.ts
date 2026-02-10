@@ -133,6 +133,7 @@ export async function POST(request: NextRequest) {
                     status: TriggerEventStatus.RECEIVED,
                     sourceType: "integration",
                     triggerType: "event",
+                    entityType: "agent",
                     integrationKey: "hubspot",
                     integrationId: connection.id,
                     eventName: getEventName(event),

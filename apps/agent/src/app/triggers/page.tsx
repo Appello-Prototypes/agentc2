@@ -46,6 +46,9 @@ interface TriggerFilters {
     sources: Array<{ sourceType: string; count: number }>;
     integrations: Array<{ integrationKey: string | null; count: number }>;
     eventNames: Array<{ eventName: string | null; count: number }>;
+    workflows: Array<{ id: string; slug: string; name: string }>;
+    networks: Array<{ id: string; slug: string; name: string }>;
+    entityTypes: Array<{ entityType: string | null; count: number }>;
 }
 
 interface TriggerMetrics {
@@ -53,6 +56,7 @@ interface TriggerMetrics {
         total: number;
         statuses: Array<{ status: string; count: number }>;
         sources: Array<{ sourceType: string; count: number }>;
+        entityTypes: Array<{ entityType: string | null; count: number }>;
     };
     dateRange: {
         from: string | null;
@@ -72,6 +76,7 @@ interface TriggerEventRow {
     errorMessage: string | null;
     payloadPreview: string | null;
     payloadTruncated: boolean;
+    entityType: string | null;
     createdAt: string;
     updatedAt: string;
     trigger: {
@@ -87,6 +92,30 @@ interface TriggerEventRow {
         name: string;
     } | null;
     run: {
+        id: string;
+        status: string;
+        startedAt: string;
+        completedAt: string | null;
+        durationMs: number | null;
+    } | null;
+    workflow: {
+        id: string;
+        slug: string;
+        name: string;
+    } | null;
+    workflowRun: {
+        id: string;
+        status: string;
+        startedAt: string;
+        completedAt: string | null;
+        durationMs: number | null;
+    } | null;
+    network: {
+        id: string;
+        slug: string;
+        name: string;
+    } | null;
+    networkRun: {
         id: string;
         status: string;
         startedAt: string;
@@ -220,6 +249,31 @@ function getSourceBadgeColor(source: string | null): string {
             return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
         case "event":
             return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+        case "slack":
+            return "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300";
+        case "api":
+            return "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300";
+        case "chat":
+            return "bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300";
+        case "mcp":
+            return "bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300";
+        case "simulation":
+            return "bg-pink-100 text-pink-800 dark:bg-pink-900/30 dark:text-pink-300";
+        case "integration":
+            return "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+        default:
+            return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
+    }
+}
+
+function getEntityTypeBadgeColor(entityType: string | null): string {
+    switch (entityType?.toLowerCase()) {
+        case "agent":
+            return "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300";
+        case "workflow":
+            return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300";
+        case "network":
+            return "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300";
         default:
             return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
     }
@@ -249,6 +303,7 @@ function TriggerMonitoringClient() {
     const [triggerFilter, setTriggerFilter] = useState(initialTriggerId);
     const [agentFilter, setAgentFilter] = useState("all");
     const [eventNameFilter, setEventNameFilter] = useState("all");
+    const [entityTypeFilter, setEntityTypeFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [timeRange, setTimeRange] = useState("24h");
     const [detailTab, setDetailTab] = useState("overview");
@@ -273,6 +328,7 @@ function TriggerMonitoringClient() {
         triggerFilter !== "all" ||
         agentFilter !== "all" ||
         eventNameFilter !== "all" ||
+        entityTypeFilter !== "all" ||
         timeRange !== "24h";
 
     const fetchFilters = useCallback(async () => {
@@ -331,6 +387,7 @@ function TriggerMonitoringClient() {
             if (triggerFilter !== "all") params.set("triggerId", triggerFilter);
             if (agentFilter !== "all") params.set("agentId", agentFilter);
             if (eventNameFilter !== "all") params.set("eventName", eventNameFilter);
+            if (entityTypeFilter !== "all") params.set("entityType", entityTypeFilter);
             if (searchQuery) params.set("search", searchQuery);
             if (rangeFrom) params.set("from", rangeFrom.toISOString());
             if (rangeTo) params.set("to", rangeTo.toISOString());
@@ -357,6 +414,7 @@ function TriggerMonitoringClient() {
         triggerFilter,
         agentFilter,
         eventNameFilter,
+        entityTypeFilter,
         searchQuery,
         rangeFrom,
         rangeTo
@@ -426,11 +484,6 @@ function TriggerMonitoringClient() {
 
     const handleRowClick = (eventRow: TriggerEventRow) => {
         setSelectedEvent(eventRow);
-    };
-
-    const handleAgentClick = (agentSlug?: string | null) => {
-        if (!agentSlug) return;
-        router.push(`/agents/${agentSlug}/overview`);
     };
 
     if (loading) {
@@ -668,6 +721,20 @@ function TriggerMonitoringClient() {
                             </SelectContent>
                         </Select>
                         <Select
+                            value={entityTypeFilter}
+                            onValueChange={(value) => setEntityTypeFilter(value ?? "all")}
+                        >
+                            <SelectTrigger className="w-36">
+                                <SelectValue placeholder="Entity Type" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Types</SelectItem>
+                                <SelectItem value="agent">Agent</SelectItem>
+                                <SelectItem value="workflow">Workflow</SelectItem>
+                                <SelectItem value="network">Network</SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <Select
                             value={timeRange}
                             onValueChange={(value) => setTimeRange(value ?? "24h")}
                         >
@@ -694,6 +761,7 @@ function TriggerMonitoringClient() {
                                     setTriggerFilter("all");
                                     setAgentFilter("all");
                                     setEventNameFilter("all");
+                                    setEntityTypeFilter("all");
                                     setTimeRange("24h");
                                 }}
                             >
@@ -785,9 +853,10 @@ function TriggerMonitoringClient() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead>Trigger</TableHead>
+                                            <TableHead>Type</TableHead>
                                             <TableHead>Source</TableHead>
                                             <TableHead>Status</TableHead>
-                                            <TableHead>Agent</TableHead>
+                                            <TableHead>Target</TableHead>
                                             <TableHead>Run</TableHead>
                                             <TableHead>Error</TableHead>
                                             <TableHead className="text-right">Time</TableHead>
@@ -817,6 +886,19 @@ function TriggerMonitoringClient() {
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
+                                                        {eventRow.entityType && (
+                                                            <Badge
+                                                                className={getEntityTypeBadgeColor(
+                                                                    eventRow.entityType
+                                                                )}
+                                                            >
+                                                                {formatStatusLabel(
+                                                                    eventRow.entityType
+                                                                )}
+                                                            </Badge>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         <Badge
                                                             className={getSourceBadgeColor(
                                                                 eventRow.sourceType
@@ -832,14 +914,22 @@ function TriggerMonitoringClient() {
                                                     </TableCell>
                                                     <TableCell>
                                                         <div className="flex flex-col gap-1">
-                                                            {eventRow.run ? (
+                                                            {eventRow.run ||
+                                                            eventRow.workflowRun ||
+                                                            eventRow.networkRun ? (
                                                                 <Badge
                                                                     variant={getRunStatusBadgeVariant(
-                                                                        eventRow.run.status
+                                                                        (eventRow.run ||
+                                                                            eventRow.workflowRun ||
+                                                                            eventRow.networkRun)!
+                                                                            .status
                                                                     )}
                                                                 >
                                                                     {formatStatusLabel(
-                                                                        eventRow.run.status
+                                                                        (eventRow.run ||
+                                                                            eventRow.workflowRun ||
+                                                                            eventRow.networkRun)!
+                                                                            .status
                                                                     )}
                                                                 </Badge>
                                                             ) : (
@@ -853,32 +943,64 @@ function TriggerMonitoringClient() {
                                                                     )}
                                                                 </Badge>
                                                             )}
-                                                            {eventRow.run && (
-                                                                <Badge variant="outline">
-                                                                    {formatStatusLabel(
-                                                                        eventRow.status
-                                                                    )}
-                                                                </Badge>
-                                                            )}
                                                         </div>
                                                     </TableCell>
                                                     <TableCell>
-                                                        <button
-                                                            type="button"
-                                                            onClick={(event) => {
-                                                                event.stopPropagation();
-                                                                handleAgentClick(
-                                                                    eventRow.agent?.slug
-                                                                );
-                                                            }}
-                                                            className="hover:text-primary text-sm font-medium"
-                                                        >
-                                                            {eventRow.agent?.name || "—"}
-                                                        </button>
+                                                        {eventRow.agent ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    router.push(
+                                                                        `/agents/${eventRow.agent!.slug}/overview`
+                                                                    );
+                                                                }}
+                                                                className="hover:text-primary text-sm font-medium"
+                                                            >
+                                                                {eventRow.agent.name}
+                                                            </button>
+                                                        ) : eventRow.workflow ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    router.push(
+                                                                        `/workflows/${eventRow.workflow!.slug}`
+                                                                    );
+                                                                }}
+                                                                className="hover:text-primary text-sm font-medium"
+                                                            >
+                                                                {eventRow.workflow.name}
+                                                            </button>
+                                                        ) : eventRow.network ? (
+                                                            <button
+                                                                type="button"
+                                                                onClick={(event) => {
+                                                                    event.stopPropagation();
+                                                                    router.push(
+                                                                        `/networks/${eventRow.network!.slug}`
+                                                                    );
+                                                                }}
+                                                                className="hover:text-primary text-sm font-medium"
+                                                            >
+                                                                {eventRow.network.name}
+                                                            </button>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">
+                                                                —
+                                                            </span>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell className="text-xs">
-                                                        {eventRow.run?.id
-                                                            ? eventRow.run.id.slice(0, 8)
+                                                        {eventRow.run?.id ||
+                                                        eventRow.workflowRun?.id ||
+                                                        eventRow.networkRun?.id
+                                                            ? (eventRow.run?.id ||
+                                                                  eventRow.workflowRun?.id ||
+                                                                  eventRow.networkRun?.id)!.slice(
+                                                                  0,
+                                                                  8
+                                                              )
                                                             : "—"}
                                                     </TableCell>
                                                     <TableCell className="text-xs">
@@ -927,13 +1049,28 @@ function TriggerMonitoringClient() {
                                         : "Select an event to inspect payload and outcome."}
                                 </CardDescription>
                             </div>
-                            {selectedEvent?.run && (
+                            {(selectedEvent?.run ||
+                                selectedEvent?.workflowRun ||
+                                selectedEvent?.networkRun) && (
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    onClick={() =>
-                                        router.push(`/live?runId=${selectedEvent.run?.id}`)
-                                    }
+                                    onClick={() => {
+                                        if (selectedEvent?.workflowRun && selectedEvent?.workflow) {
+                                            router.push(
+                                                `/workflows/${selectedEvent.workflow.slug}/runs/${selectedEvent.workflowRun.id}`
+                                            );
+                                        } else if (
+                                            selectedEvent?.networkRun &&
+                                            selectedEvent?.network
+                                        ) {
+                                            router.push(
+                                                `/networks/${selectedEvent.network.slug}/runs/${selectedEvent.networkRun.id}`
+                                            );
+                                        } else if (selectedEvent?.run) {
+                                            router.push(`/live?runId=${selectedEvent.run.id}`);
+                                        }
+                                    }}
                                 >
                                     Open Run
                                 </Button>
@@ -941,11 +1078,21 @@ function TriggerMonitoringClient() {
                         </div>
                         {selectedEvent && (
                             <div className="flex flex-wrap items-center gap-2">
-                                {selectedEvent.run ? (
+                                {selectedEvent.run ||
+                                selectedEvent.workflowRun ||
+                                selectedEvent.networkRun ? (
                                     <Badge
-                                        variant={getRunStatusBadgeVariant(selectedEvent.run.status)}
+                                        variant={getRunStatusBadgeVariant(
+                                            (selectedEvent.run ||
+                                                selectedEvent.workflowRun ||
+                                                selectedEvent.networkRun)!.status
+                                        )}
                                     >
-                                        {formatStatusLabel(selectedEvent.run.status)}
+                                        {formatStatusLabel(
+                                            (selectedEvent.run ||
+                                                selectedEvent.workflowRun ||
+                                                selectedEvent.networkRun)!.status
+                                        )}
                                     </Badge>
                                 ) : (
                                     <Badge
@@ -957,11 +1104,26 @@ function TriggerMonitoringClient() {
                                 <Badge className={getSourceBadgeColor(selectedEvent.sourceType)}>
                                     {formatStatusLabel(selectedEvent.sourceType)}
                                 </Badge>
+                                {selectedEvent.entityType && (
+                                    <Badge
+                                        className={getEntityTypeBadgeColor(
+                                            selectedEvent.entityType
+                                        )}
+                                    >
+                                        {formatStatusLabel(selectedEvent.entityType)}
+                                    </Badge>
+                                )}
                                 {selectedEvent.integrationKey && (
                                     <Badge variant="outline">{selectedEvent.integrationKey}</Badge>
                                 )}
-                                {selectedEvent.agent && (
-                                    <Badge variant="outline">{selectedEvent.agent.name}</Badge>
+                                {(selectedEvent.agent ||
+                                    selectedEvent.workflow ||
+                                    selectedEvent.network) && (
+                                    <Badge variant="outline">
+                                        {selectedEvent.agent?.name ||
+                                            selectedEvent.workflow?.name ||
+                                            selectedEvent.network?.name}
+                                    </Badge>
                                 )}
                             </div>
                         )}
@@ -976,22 +1138,35 @@ function TriggerMonitoringClient() {
                                 <div className="bg-muted/50 rounded-lg p-3">
                                     <p className="text-muted-foreground text-xs">Duration</p>
                                     <p className="text-base font-semibold">
-                                        {selectedEvent.run?.durationMs
-                                            ? formatLatency(selectedEvent.run.durationMs)
+                                        {selectedEvent.run?.durationMs ||
+                                        selectedEvent.workflowRun?.durationMs ||
+                                        selectedEvent.networkRun?.durationMs
+                                            ? formatLatency(
+                                                  (selectedEvent.run?.durationMs ||
+                                                      selectedEvent.workflowRun?.durationMs ||
+                                                      selectedEvent.networkRun?.durationMs)!
+                                              )
                                             : "—"}
                                     </p>
                                 </div>
                                 <div className="bg-muted/50 rounded-lg p-3">
-                                    <p className="text-muted-foreground text-xs">Agent</p>
+                                    <p className="text-muted-foreground text-xs">Target</p>
                                     <p className="text-base font-semibold">
-                                        {selectedEvent.agent?.name || "—"}
+                                        {selectedEvent.agent?.name ||
+                                            selectedEvent.workflow?.name ||
+                                            selectedEvent.network?.name ||
+                                            "—"}
                                     </p>
                                 </div>
                                 <div className="bg-muted/50 rounded-lg p-3">
                                     <p className="text-muted-foreground text-xs">Run ID</p>
                                     <p className="truncate text-base font-semibold">
-                                        {selectedEvent.run?.id
-                                            ? selectedEvent.run.id.slice(0, 12)
+                                        {selectedEvent.run?.id ||
+                                        selectedEvent.workflowRun?.id ||
+                                        selectedEvent.networkRun?.id
+                                            ? (selectedEvent.run?.id ||
+                                                  selectedEvent.workflowRun?.id ||
+                                                  selectedEvent.networkRun?.id)!.slice(0, 12)
                                             : "—"}
                                     </p>
                                 </div>
@@ -1057,18 +1232,26 @@ function TriggerMonitoringClient() {
                                                                 )}
                                                             </Badge>
                                                         </div>
-                                                        {eventDetail.run && (
+                                                        {(eventDetail.run ||
+                                                            eventDetail.workflowRun ||
+                                                            eventDetail.networkRun) && (
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-muted-foreground">
                                                                     Run Status
                                                                 </span>
                                                                 <Badge
                                                                     variant={getRunStatusBadgeVariant(
-                                                                        eventDetail.run.status
+                                                                        (eventDetail.run ||
+                                                                            eventDetail.workflowRun ||
+                                                                            eventDetail.networkRun)!
+                                                                            .status
                                                                     )}
                                                                 >
                                                                     {formatStatusLabel(
-                                                                        eventDetail.run.status
+                                                                        (eventDetail.run ||
+                                                                            eventDetail.workflowRun ||
+                                                                            eventDetail.networkRun)!
+                                                                            .status
                                                                     )}
                                                                 </Badge>
                                                             </div>
@@ -1106,10 +1289,13 @@ function TriggerMonitoringClient() {
                                                         </div>
                                                         <div className="flex items-center justify-between">
                                                             <span className="text-muted-foreground">
-                                                                Agent
+                                                                Target
                                                             </span>
                                                             <span>
-                                                                {eventDetail.agent?.name || "—"}
+                                                                {eventDetail.agent?.name ||
+                                                                    eventDetail.workflow?.name ||
+                                                                    eventDetail.network?.name ||
+                                                                    "—"}
                                                             </span>
                                                         </div>
                                                         <div className="flex items-center justify-between">
@@ -1117,7 +1303,10 @@ function TriggerMonitoringClient() {
                                                                 Run
                                                             </span>
                                                             <span>
-                                                                {eventDetail.run?.id || "—"}
+                                                                {eventDetail.run?.id ||
+                                                                    eventDetail.workflowRun?.id ||
+                                                                    eventDetail.networkRun?.id ||
+                                                                    "—"}
                                                             </span>
                                                         </div>
                                                         {eventDetail.errorMessage && (
@@ -1139,14 +1328,22 @@ function TriggerMonitoringClient() {
                                                                 ).toLocaleString()}
                                                             </span>
                                                         </div>
-                                                        {eventDetail.run?.completedAt && (
+                                                        {(eventDetail.run?.completedAt ||
+                                                            eventDetail.workflowRun?.completedAt ||
+                                                            eventDetail.networkRun
+                                                                ?.completedAt) && (
                                                             <div className="flex items-center justify-between">
                                                                 <span className="text-muted-foreground">
                                                                     Completed
                                                                 </span>
                                                                 <span>
                                                                     {new Date(
-                                                                        eventDetail.run.completedAt
+                                                                        (eventDetail.run
+                                                                            ?.completedAt ||
+                                                                            eventDetail.workflowRun
+                                                                                ?.completedAt ||
+                                                                            eventDetail.networkRun
+                                                                                ?.completedAt)!
                                                                     ).toLocaleString()}
                                                                 </span>
                                                             </div>

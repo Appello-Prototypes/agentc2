@@ -166,6 +166,7 @@ export async function POST(request: NextRequest) {
             status: TriggerEventStatus.RECEIVED,
             sourceType: "integration",
             triggerType: "event",
+            entityType: "agent",
             integrationKey: "fathom",
             integrationId: connection.id,
             eventName: "fathom.transcript.received",

@@ -12,6 +12,7 @@ import {
     resolveRunTriggerType,
     type TriggerInputDefaults
 } from "@/lib/unified-triggers";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * POST /api/agents/[id]/execution-triggers/[triggerId]/execute
@@ -54,7 +55,8 @@ export async function POST(
             select: {
                 id: true,
                 slug: true,
-                isActive: true
+                isActive: true,
+                workspaceId: true
             }
         });
 
@@ -128,6 +130,27 @@ export async function POST(
                     runCount: { increment: 1 }
                 }
             });
+
+            // Record trigger event for unified triggers dashboard
+            try {
+                await createTriggerEventRecord({
+                    agentId: agent.id,
+                    workspaceId: agent.workspaceId || schedule.workspaceId || null,
+                    runId: runHandle.runId,
+                    sourceType: "schedule",
+                    triggerType: "schedule",
+                    entityType: "agent",
+                    eventName: `schedule.${schedule.name}`,
+                    payload: { input },
+                    metadata: {
+                        scheduleId: schedule.id,
+                        scheduleName: schedule.name,
+                        cronExpr: schedule.cronExpr
+                    }
+                });
+            } catch (e) {
+                console.warn("[Execution Triggers] Failed to record trigger event:", e);
+            }
 
             await inngest.send({
                 name: "agent/invoke.async",
@@ -240,6 +263,27 @@ export async function POST(
                 triggerCount: { increment: 1 }
             }
         });
+
+        // Record trigger event for unified triggers dashboard
+        try {
+            await createTriggerEventRecord({
+                triggerId: trigger.id,
+                agentId: trigger.agent.id,
+                workspaceId: trigger.workspaceId || agent.workspaceId || null,
+                runId: runHandle.runId,
+                sourceType: trigger.triggerType,
+                triggerType: trigger.triggerType,
+                entityType: "agent",
+                eventName: trigger.eventName || undefined,
+                payload: payloadObj,
+                metadata: {
+                    triggerName: trigger.name,
+                    triggerType: trigger.triggerType
+                }
+            });
+        } catch (e) {
+            console.warn("[Execution Triggers] Failed to record trigger event:", e);
+        }
 
         await inngest.send({
             name: "agent/invoke.async",

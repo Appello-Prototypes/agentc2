@@ -26,24 +26,23 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const baseWhere: Prisma.TriggerEventWhereInput = {
-            workspaceId: workspaceContext.workspaceId
-        };
+        // Include events from this workspace AND events with no workspace (system-level)
+        const conditions: Prisma.TriggerEventWhereInput[] = [
+            {
+                OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+            }
+        ];
+
         const createdAtFilter: Prisma.DateTimeFilter = {};
-
-        if (from) {
-            createdAtFilter.gte = new Date(from);
-        }
-
-        if (to) {
-            createdAtFilter.lte = new Date(to);
-        }
-
+        if (from) createdAtFilter.gte = new Date(from);
+        if (to) createdAtFilter.lte = new Date(to);
         if (Object.keys(createdAtFilter).length > 0) {
-            baseWhere.createdAt = createdAtFilter;
+            conditions.push({ createdAt: createdAtFilter });
         }
 
-        const [total, statusRows, sourceRows] = await Promise.all([
+        const baseWhere: Prisma.TriggerEventWhereInput = { AND: conditions };
+
+        const [total, statusRows, sourceRows, entityTypeRows] = await Promise.all([
             prisma.triggerEvent.count({ where: baseWhere }),
             prisma.triggerEvent.groupBy({
                 by: ["status"],
@@ -52,6 +51,11 @@ export async function GET(request: NextRequest) {
             }),
             prisma.triggerEvent.groupBy({
                 by: ["sourceType"],
+                where: baseWhere,
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["entityType"],
                 where: baseWhere,
                 _count: { _all: true }
             })
@@ -67,6 +71,10 @@ export async function GET(request: NextRequest) {
                 })),
                 sources: sourceRows.map((row) => ({
                     sourceType: row.sourceType,
+                    count: row._count._all
+                })),
+                entityTypes: entityTypeRows.map((row) => ({
+                    entityType: row.entityType,
                     count: row._count._all
                 }))
             },

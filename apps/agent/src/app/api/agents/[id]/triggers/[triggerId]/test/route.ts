@@ -68,6 +68,7 @@ export async function POST(
             status: TriggerEventStatus.RECEIVED,
             sourceType: trigger.triggerType === "webhook" ? "webhook" : "event",
             triggerType: trigger.triggerType,
+            entityType: "agent",
             integrationKey: trigger.eventName === "gmail.message.received" ? "gmail" : null,
             eventName: trigger.eventName,
             webhookPath: trigger.webhookPath,

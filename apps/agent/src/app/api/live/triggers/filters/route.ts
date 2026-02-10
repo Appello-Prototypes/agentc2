@@ -26,56 +26,79 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const baseWhere: Prisma.TriggerEventWhereInput = {
-            workspaceId: workspaceContext.workspaceId
-        };
+        // Include events from this workspace AND events with no workspace (system-level)
+        const conditions: Prisma.TriggerEventWhereInput[] = [
+            {
+                OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
+            }
+        ];
+
         const createdAtFilter: Prisma.DateTimeFilter = {};
-
-        if (from) {
-            createdAtFilter.gte = new Date(from);
-        }
-
-        if (to) {
-            createdAtFilter.lte = new Date(to);
-        }
-
+        if (from) createdAtFilter.gte = new Date(from);
+        if (to) createdAtFilter.lte = new Date(to);
         if (Object.keys(createdAtFilter).length > 0) {
-            baseWhere.createdAt = createdAtFilter;
+            conditions.push({ createdAt: createdAtFilter });
         }
 
-        const [agentRows, triggerRows, statusRows, sourceRows, integrationRows, eventRows] =
-            await Promise.all([
-                prisma.triggerEvent.findMany({
-                    where: baseWhere,
-                    distinct: ["agentId"],
-                    select: { agentId: true }
-                }),
-                prisma.triggerEvent.findMany({
-                    where: baseWhere,
-                    distinct: ["triggerId"],
-                    select: { triggerId: true }
-                }),
-                prisma.triggerEvent.groupBy({
-                    by: ["status"],
-                    where: baseWhere,
-                    _count: { _all: true }
-                }),
-                prisma.triggerEvent.groupBy({
-                    by: ["sourceType"],
-                    where: baseWhere,
-                    _count: { _all: true }
-                }),
-                prisma.triggerEvent.groupBy({
-                    by: ["integrationKey"],
-                    where: { ...baseWhere, integrationKey: { not: null } },
-                    _count: { _all: true }
-                }),
-                prisma.triggerEvent.groupBy({
-                    by: ["eventName"],
-                    where: { ...baseWhere, eventName: { not: null } },
-                    _count: { _all: true }
-                })
-            ]);
+        const baseWhere: Prisma.TriggerEventWhereInput = { AND: conditions };
+
+        const [
+            agentRows,
+            triggerRows,
+            statusRows,
+            sourceRows,
+            integrationRows,
+            eventRows,
+            entityTypeRows,
+            workflowRows,
+            networkRows
+        ] = await Promise.all([
+            prisma.triggerEvent.findMany({
+                where: baseWhere,
+                distinct: ["agentId"],
+                select: { agentId: true }
+            }),
+            prisma.triggerEvent.findMany({
+                where: baseWhere,
+                distinct: ["triggerId"],
+                select: { triggerId: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["status"],
+                where: baseWhere,
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["sourceType"],
+                where: baseWhere,
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["integrationKey"],
+                where: { ...baseWhere, integrationKey: { not: null } },
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["eventName"],
+                where: { ...baseWhere, eventName: { not: null } },
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.groupBy({
+                by: ["entityType"],
+                where: baseWhere,
+                _count: { _all: true }
+            }),
+            prisma.triggerEvent.findMany({
+                where: { ...baseWhere, workflowId: { not: null } },
+                distinct: ["workflowId"],
+                select: { workflowId: true }
+            }),
+            prisma.triggerEvent.findMany({
+                where: { ...baseWhere, networkId: { not: null } },
+                distinct: ["networkId"],
+                select: { networkId: true }
+            })
+        ]);
 
         const agentIds = agentRows
             .map((row) => row.agentId)
@@ -83,8 +106,14 @@ export async function GET(request: NextRequest) {
         const triggerIds = triggerRows
             .map((row) => row.triggerId)
             .filter((id): id is string => Boolean(id));
+        const workflowIds = workflowRows
+            .map((row) => row.workflowId)
+            .filter((id): id is string => Boolean(id));
+        const networkIds = networkRows
+            .map((row) => row.networkId)
+            .filter((id): id is string => Boolean(id));
 
-        const [agents, triggers] = await Promise.all([
+        const [agents, triggers, workflows, networks] = await Promise.all([
             agentIds.length > 0
                 ? prisma.agent.findMany({
                       where: { id: { in: agentIds } },
@@ -102,6 +131,18 @@ export async function GET(request: NextRequest) {
                           webhookPath: true
                       }
                   })
+                : Promise.resolve([]),
+            workflowIds.length > 0
+                ? prisma.workflow.findMany({
+                      where: { id: { in: workflowIds } },
+                      select: { id: true, slug: true, name: true }
+                  })
+                : Promise.resolve([]),
+            networkIds.length > 0
+                ? prisma.network.findMany({
+                      where: { id: { in: networkIds } },
+                      select: { id: true, slug: true, name: true }
+                  })
                 : Promise.resolve([])
         ]);
 
@@ -110,6 +151,8 @@ export async function GET(request: NextRequest) {
             filters: {
                 agents,
                 triggers,
+                workflows,
+                networks,
                 statuses: statusRows.map((row) => ({
                     status: row.status,
                     count: row._count._all
@@ -124,6 +167,10 @@ export async function GET(request: NextRequest) {
                 })),
                 eventNames: eventRows.map((row) => ({
                     eventName: row.eventName,
+                    count: row._count._all
+                })),
+                entityTypes: entityTypeRows.map((row) => ({
+                    entityType: row.entityType,
                     count: row._count._all
                 }))
             }

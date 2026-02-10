@@ -3753,6 +3753,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
 
         const { startRun } = await import("./run-recorder");
+        const { createTriggerEventRecord } = await import("./trigger-events");
 
         const runHandle = await startRun({
             agentId: schedule.agent.id,
@@ -3767,6 +3768,27 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
             },
             initialStatus: RunStatus.QUEUED
         });
+
+        // Record trigger event for unified triggers dashboard
+        try {
+            await createTriggerEventRecord({
+                agentId: schedule.agent.id,
+                workspaceId: schedule.workspaceId || null,
+                runId: runHandle.runId,
+                sourceType: "schedule",
+                triggerType: "schedule",
+                entityType: "agent",
+                eventName: `schedule.${schedule.name}`,
+                payload: { input, cronExpr: schedule.cronExpr },
+                metadata: {
+                    scheduleId: schedule.id,
+                    scheduleName: schedule.name,
+                    cronExpr: schedule.cronExpr
+                }
+            });
+        } catch (e) {
+            console.warn("[Schedule Trigger] Failed to record trigger event:", e);
+        }
 
         if (inputJson?.task === "gmail_watch_refresh" && inputJson?.integrationId) {
             const integration = await prisma.gmailIntegration.findUnique({

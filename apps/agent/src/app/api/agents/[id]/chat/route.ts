@@ -15,6 +15,7 @@ import {
     type ToolCallData
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -164,7 +165,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const { id } = await params;
         const body = await request.json();
-        const { threadId, requestContext, messages } = body;
+        const { threadId, requestContext, messages, modelOverride, thinkingOverride } = body;
 
         // Determine source based on mode parameter in requestContext
         // "live" mode = production run (PROD), otherwise test run (TEST)
@@ -177,12 +178,39 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
-        const { agent, record, source } = await agentResolver.resolve({
+        // eslint-disable-next-line prefer-const
+        let { agent, record, source } = await agentResolver.resolve({
             slug: id,
             requestContext
         });
 
         console.log(`[Agent Chat] Resolved agent '${id}' from ${source} (mode: ${runSource})`);
+
+        // Apply model override if provided (user selected a different model in the UI)
+        if (modelOverride && modelOverride.provider && modelOverride.name) {
+            const { Agent: AgentClass } = await import("@mastra/core/agent");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const baseConfig = (agent as any).__config || {};
+            const overriddenModel = `${modelOverride.provider}/${modelOverride.name}`;
+
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            let providerOptions: Record<string, any> | undefined;
+            if (thinkingOverride && modelOverride.provider === "anthropic") {
+                providerOptions = { anthropic: { thinking: thinkingOverride } };
+            }
+
+            agent = new AgentClass({
+                ...baseConfig,
+                model: overriddenModel,
+                ...(providerOptions
+                    ? { defaultOptions: { ...baseConfig.defaultOptions, providerOptions } }
+                    : {})
+            });
+
+            console.log(
+                `[Agent Chat] Model override: ${overriddenModel}${thinkingOverride ? " (thinking)" : ""}`
+            );
+        }
 
         // Convert AI SDK v5 messages to get the last user message
         const lastUserMessage = messages
@@ -219,6 +247,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 threadId: userThreadId
             });
             console.log(`[Agent Chat] Started run ${run.runId} for agent ${id}`);
+
+            // Record trigger event for unified triggers dashboard
+            try {
+                await createTriggerEventRecord({
+                    agentId,
+                    workspaceId: record?.workspaceId || null,
+                    runId: run.runId,
+                    sourceType: "chat",
+                    entityType: "agent",
+                    payload: { input: lastUserMessage },
+                    metadata: {
+                        threadId: userThreadId,
+                        resourceId,
+                        mode
+                    }
+                });
+            } catch (e) {
+                console.warn("[Agent Chat] Failed to record trigger event:", e);
+            }
         } else {
             console.log(
                 `[Agent Chat] Skipping run recording for fallback agent '${id}' (no DB record)`

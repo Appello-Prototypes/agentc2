@@ -198,6 +198,23 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }
             });
 
+            // Record trigger event for unified triggers dashboard (async mode)
+            try {
+                await createTriggerEventRecord({
+                    agentId: record.id,
+                    workspaceId: record.workspaceId,
+                    runId: run.id,
+                    sourceType: triggerRecord ? triggerRecord.triggerType : "api",
+                    triggerType: triggerRecord?.triggerType || null,
+                    triggerId: triggerRecord?.id || null,
+                    entityType: "agent",
+                    payload: { input },
+                    metadata: { mode: "async", source: runSource }
+                });
+            } catch (e) {
+                console.warn("[Agent Invoke] Failed to record trigger event:", e);
+            }
+
             // Queue the job via Inngest
             await inngest.send({
                 name: "agent/invoke.async",
@@ -375,11 +392,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         status: TriggerEventStatus.RECEIVED,
                         sourceType: triggerRecord.triggerType,
                         triggerType: triggerRecord.triggerType,
+                        entityType: "agent",
                         webhookPath: triggerRecord.webhookPath || undefined,
                         payload: { input },
                         metadata: { mode: "sync", source: "invoke" }
                     })
                 ]);
+            } else {
+                // Record trigger event for non-trigger API invocations
+                try {
+                    await createTriggerEventRecord({
+                        agentId: record.id,
+                        workspaceId: record.workspaceId,
+                        runId: runHandle.runId,
+                        sourceType: "api",
+                        entityType: "agent",
+                        payload: { input },
+                        metadata: { mode: "sync", source: runSource }
+                    });
+                } catch (e) {
+                    console.warn("[Agent Invoke] Failed to record trigger event:", e);
+                }
             }
 
             return NextResponse.json({
