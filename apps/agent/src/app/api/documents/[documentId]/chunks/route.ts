@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { getDocumentRecord } from "@repo/mastra";
+import { getDocumentRecord, ragIndexExists } from "@repo/mastra";
 import { authenticateRequest } from "@/lib/api-auth";
 import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -39,6 +39,17 @@ export async function GET(request: NextRequest, context: RouteContext) {
         const document = await getDocumentRecord(documentId);
         if (!document) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
+
+        // Check if the RAG vector index exists before querying
+        if (!(await ragIndexExists())) {
+            return NextResponse.json({
+                documentId: document.id,
+                documentSlug: document.slug,
+                chunkCount: 0,
+                chunks: [],
+                warning: "Vector table does not exist yet. Re-embed the document to create it."
+            });
         }
 
         // We need a query vector to search -- embed the document's name as a representative query

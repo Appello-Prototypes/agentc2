@@ -134,7 +134,7 @@ export async function ingestDocument(
 /**
  * Check whether the RAG index exists (without creating it).
  */
-async function ragIndexExists(): Promise<boolean> {
+export async function ragIndexExists(): Promise<boolean> {
     const indexes = await vector.listIndexes();
     return indexes.includes(RAG_INDEX_NAME);
 }

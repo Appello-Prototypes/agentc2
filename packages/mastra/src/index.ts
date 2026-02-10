@@ -147,6 +147,7 @@ export {
     createDocument,
     chunkDocument,
     initializeRagIndex,
+    ragIndexExists,
     ingestDocument,
     queryRag,
     ragGenerate,
