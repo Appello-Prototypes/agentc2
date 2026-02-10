@@ -132,6 +132,14 @@ export async function ingestDocument(
 }
 
 /**
+ * Check whether the RAG index exists (without creating it).
+ */
+async function ragIndexExists(): Promise<boolean> {
+    const indexes = await vector.listIndexes();
+    return indexes.includes(RAG_INDEX_NAME);
+}
+
+/**
  * Query the RAG system for relevant chunks
  */
 export async function queryRag(
@@ -149,6 +157,10 @@ export async function queryRag(
     }>
 > {
     const { topK = 5, minScore = 0.5, filter } = options;
+
+    if (!(await ragIndexExists())) {
+        return [];
+    }
 
     const { embedding } = await embed({
         model: embedder,
@@ -264,6 +276,9 @@ Provide a comprehensive answer based on the context above.`;
  * Delete a document and all its chunks from RAG
  */
 export async function deleteDocument(documentId: string): Promise<void> {
+    if (!(await ragIndexExists())) {
+        return; // Nothing to delete if index doesn't exist yet
+    }
     await vector.deleteVectors({
         indexName: RAG_INDEX_NAME,
         filter: { documentId }
@@ -281,6 +296,10 @@ export async function listDocuments(): Promise<
         ingestedAt: string;
     }>
 > {
+    if (!(await ragIndexExists())) {
+        return []; // No documents ingested yet
+    }
+
     const stats = await vector.describeIndex({ indexName: RAG_INDEX_NAME });
 
     return [

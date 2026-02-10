@@ -67,9 +67,22 @@ export async function createSkill(input: CreateSkillInput) {
 }
 
 /**
+ * Resolve a skill ID or slug to the internal CUID.
+ */
+async function resolveSkillId(idOrSlug: string): Promise<string> {
+    const skill = await prisma.skill.findFirst({
+        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        select: { id: true }
+    });
+    if (!skill) throw new Error(`Skill not found: ${idOrSlug}`);
+    return skill.id;
+}
+
+/**
  * Update a skill
  */
-export async function updateSkill(id: string, input: UpdateSkillInput) {
+export async function updateSkill(idOrSlug: string, input: UpdateSkillInput) {
+    const id = await resolveSkillId(idOrSlug);
     const existing = await prisma.skill.findUniqueOrThrow({
         where: { id }
     });
@@ -123,7 +136,8 @@ export async function updateSkill(id: string, input: UpdateSkillInput) {
 /**
  * Delete a skill (cascades to versions, junctions)
  */
-export async function deleteSkill(id: string) {
+export async function deleteSkill(idOrSlug: string) {
+    const id = await resolveSkillId(idOrSlug);
     await prisma.skill.delete({
         where: { id }
     });
@@ -251,9 +265,23 @@ export async function detachTool(skillId: string, toolId: string) {
 // ===========================
 
 /**
+ * Resolve an agent ID or slug to the internal CUID.
+ */
+async function resolveAgentId(idOrSlug: string): Promise<string> {
+    const agent = await prisma.agent.findFirst({
+        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        select: { id: true }
+    });
+    if (!agent) throw new Error(`Agent not found: ${idOrSlug}`);
+    return agent.id;
+}
+
+/**
  * Attach a skill to an agent
  */
-export async function attachToAgent(agentId: string, skillId: string) {
+export async function attachToAgent(agentIdOrSlug: string, skillIdOrSlug: string) {
+    const agentId = await resolveAgentId(agentIdOrSlug);
+    const skillId = await resolveSkillId(skillIdOrSlug);
     const junction = await prisma.agentSkill.create({
         data: { agentId, skillId }
     });
@@ -263,7 +291,9 @@ export async function attachToAgent(agentId: string, skillId: string) {
 /**
  * Detach a skill from an agent
  */
-export async function detachFromAgent(agentId: string, skillId: string) {
+export async function detachFromAgent(agentIdOrSlug: string, skillIdOrSlug: string) {
+    const agentId = await resolveAgentId(agentIdOrSlug);
+    const skillId = await resolveSkillId(skillIdOrSlug);
     await prisma.agentSkill.delete({
         where: {
             agentId_skillId: { agentId, skillId }

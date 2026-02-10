@@ -17,7 +17,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { MCPServer } from "@mastra/mcp";
-import { z } from "zod";
+import { z, ZodTypeAny } from "zod";
 
 /**
  * Internal base URL for calling the /api/mcp gateway.
@@ -34,6 +34,89 @@ interface GatewayTool {
     name: string;
     description?: string;
     inputSchema?: Record<string, unknown>;
+}
+
+/**
+ * Convert a JSON Schema property definition to a Zod type.
+ */
+function jsonSchemaPropertyToZod(prop: Record<string, unknown>): ZodTypeAny {
+    const type = prop.type as string | undefined;
+    const description = prop.description as string | undefined;
+    const enumValues = prop.enum as string[] | undefined;
+
+    let schema: ZodTypeAny;
+
+    if (enumValues && type === "string") {
+        schema = z.enum(enumValues as [string, ...string[]]);
+    } else if (type === "string") {
+        schema = z.string();
+    } else if (type === "number" || type === "integer") {
+        schema = z.number();
+    } else if (type === "boolean") {
+        schema = z.boolean();
+    } else if (type === "array") {
+        const items = prop.items as Record<string, unknown> | undefined;
+        if (items) {
+            schema = z.array(jsonSchemaPropertyToZod(items));
+        } else {
+            schema = z.array(z.unknown());
+        }
+    } else if (type === "object") {
+        const properties = prop.properties as Record<string, Record<string, unknown>> | undefined;
+        if (properties) {
+            schema = jsonSchemaToZod(prop);
+        } else if (prop.additionalProperties) {
+            schema = z.record(z.string(), z.unknown());
+        } else {
+            schema = z.record(z.string(), z.unknown());
+        }
+    } else if (prop.oneOf) {
+        // For oneOf, accept unknown (these are complex union types)
+        schema = z.unknown();
+    } else {
+        schema = z.unknown();
+    }
+
+    if (description) {
+        schema = schema.describe(description);
+    }
+
+    return schema;
+}
+
+/**
+ * Convert a JSON Schema object to a Zod object schema.
+ * Handles the simple schemas used by MCP tool definitions:
+ * { type: "object", properties: { ... }, required: [...] }
+ */
+function jsonSchemaToZod(
+    jsonSchema: Record<string, unknown>
+): z.ZodObject<Record<string, ZodTypeAny>> {
+    const properties = jsonSchema.properties as Record<string, Record<string, unknown>> | undefined;
+    const required = (jsonSchema.required as string[]) || [];
+
+    if (!properties || Object.keys(properties).length === 0) {
+        // Empty schema -- no properties
+        return z.object({});
+    }
+
+    const shape: Record<string, ZodTypeAny> = {};
+
+    for (const [key, prop] of Object.entries(properties)) {
+        let fieldSchema = jsonSchemaPropertyToZod(prop);
+
+        if (!required.includes(key)) {
+            fieldSchema = fieldSchema.optional();
+        }
+
+        shape[key] = fieldSchema;
+    }
+
+    if (jsonSchema.additionalProperties) {
+        return z.object(shape).passthrough();
+    }
+
+    return z.object(shape);
 }
 
 /**
@@ -128,10 +211,12 @@ export async function buildMcpServer(
         const safeName = gwTool.name.replace(/[.-]/g, "_");
         const originalName = gwTool.name;
 
+        const inputSchema = gwTool.inputSchema ? jsonSchemaToZod(gwTool.inputSchema) : z.object({});
+
         tools[safeName] = createTool({
             id: safeName,
             description: gwTool.description || `Invoke ${originalName}`,
-            inputSchema: z.record(z.unknown()).describe("Tool parameters"),
+            inputSchema,
             execute: async (inputData) => {
                 const result = await invokeMcpGatewayTool(
                     originalName,

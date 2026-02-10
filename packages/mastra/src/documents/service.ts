@@ -128,9 +128,22 @@ export async function createDocument(input: CreateDocumentInput) {
 }
 
 /**
+ * Resolve a document ID or slug to the internal CUID.
+ */
+async function resolveDocumentId(idOrSlug: string): Promise<string> {
+    const doc = await prisma.document.findFirst({
+        where: { OR: [{ id: idOrSlug }, { slug: idOrSlug }] },
+        select: { id: true }
+    });
+    if (!doc) throw new Error(`Document not found: ${idOrSlug}`);
+    return doc.id;
+}
+
+/**
  * Update a document with automatic re-embedding
  */
-export async function updateDocument(id: string, input: UpdateDocumentInput) {
+export async function updateDocument(idOrSlug: string, input: UpdateDocumentInput) {
+    const id = await resolveDocumentId(idOrSlug);
     const existing = await prisma.document.findUniqueOrThrow({
         where: { id }
     });
@@ -201,7 +214,8 @@ export async function updateDocument(id: string, input: UpdateDocumentInput) {
 /**
  * Delete a document and its vectors
  */
-export async function deleteDocument(id: string) {
+export async function deleteDocument(idOrSlug: string) {
+    const id = await resolveDocumentId(idOrSlug);
     const existing = await prisma.document.findUniqueOrThrow({
         where: { id }
     });

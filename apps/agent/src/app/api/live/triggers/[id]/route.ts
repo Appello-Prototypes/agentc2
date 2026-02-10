@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { requireMonitoringWorkspace } from "@/lib/monitoring-auth";
 
@@ -7,13 +7,13 @@ import { requireMonitoringWorkspace } from "@/lib/monitoring-auth";
  *
  * Fetch a single trigger event detail.
  */
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const { searchParams } = new URL(request.url);
         const requestedWorkspaceId = searchParams.get("workspaceId");
 
-        const workspaceContext = await requireMonitoringWorkspace(requestedWorkspaceId);
+        const workspaceContext = await requireMonitoringWorkspace(requestedWorkspaceId, request);
         if (!workspaceContext.ok) {
             return NextResponse.json(
                 { success: false, error: workspaceContext.error },
