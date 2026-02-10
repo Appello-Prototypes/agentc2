@@ -101,9 +101,18 @@ async function authenticateRequest(
  * Build a 401 response with proper WWW-Authenticate header
  * that points Claude to our OAuth discovery metadata.
  */
-function unauthorizedResponse(request: NextRequest, orgSlug: string): Response {
+function getPublicBaseUrl(request: NextRequest): string {
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    if (forwardedHost) {
+        return `${forwardedProto}://${forwardedHost}`;
+    }
     const url = new URL(request.url);
-    const baseUrl = `${url.protocol}//${url.host}`;
+    return `${url.protocol}//${url.host}`;
+}
+
+function unauthorizedResponse(request: NextRequest, orgSlug: string): Response {
+    const baseUrl = getPublicBaseUrl(request);
     const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
 
     return new Response(

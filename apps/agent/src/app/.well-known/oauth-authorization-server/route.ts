@@ -8,9 +8,18 @@ export const dynamic = "force-dynamic";
  * OAuth 2.0 Authorization Server Metadata (RFC 8414).
  * Claude CoWork discovers this to find our authorize and token endpoints.
  */
-export async function GET(request: NextRequest): Promise<Response> {
+function getPublicBaseUrl(request: NextRequest): string {
+    const forwardedHost = request.headers.get("x-forwarded-host");
+    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+    if (forwardedHost) {
+        return `${forwardedProto}://${forwardedHost}`;
+    }
     const url = new URL(request.url);
-    const baseUrl = `${url.protocol}//${url.host}`;
+    return `${url.protocol}//${url.host}`;
+}
+
+export async function GET(request: NextRequest): Promise<Response> {
+    const baseUrl = getPublicBaseUrl(request);
 
     return new Response(
         JSON.stringify({
