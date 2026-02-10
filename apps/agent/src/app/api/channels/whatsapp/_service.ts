@@ -3,6 +3,7 @@
  *
  * This module manages the WhatsApp client lifecycle.
  * The client is lazily initialized when first needed.
+ * Credentials are resolved from the database (per-org) with env-var fallback.
  */
 
 import { WhatsAppClient, type WhatsAppConfig, type MessageHandler } from "@repo/mastra/channels";
@@ -10,15 +11,18 @@ import { agentResolver } from "@repo/mastra";
 import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 let whatsappService: WhatsAppClient | null = null;
 let initialized = false;
 
 /**
- * Get configuration from environment
+ * Get configuration, resolving credentials from DB then env fallback.
  */
-function getConfig(): WhatsAppConfig {
-    const allowlistStr = process.env.WHATSAPP_ALLOWLIST || "";
+async function getConfig(organizationId?: string): Promise<WhatsAppConfig> {
+    const { credentials } = await resolveChannelCredentials("whatsapp-web", organizationId);
+    const allowlistStr = credentials.WHATSAPP_ALLOWLIST || process.env.WHATSAPP_ALLOWLIST || "";
     const allowlist = allowlistStr
         .split(",")
         .map((s) => s.trim())
@@ -26,10 +30,16 @@ function getConfig(): WhatsAppConfig {
 
     return {
         enabled: process.env.WHATSAPP_ENABLED === "true",
-        defaultAgentSlug: process.env.WHATSAPP_DEFAULT_AGENT_SLUG || "mcp-agent",
+        defaultAgentSlug:
+            credentials.WHATSAPP_DEFAULT_AGENT_SLUG ||
+            process.env.WHATSAPP_DEFAULT_AGENT_SLUG ||
+            "mcp-agent",
         allowlist: allowlist.length > 0 ? allowlist : undefined,
         selfChatMode: process.env.WHATSAPP_SELF_CHAT_MODE === "true",
-        sessionPath: process.env.WHATSAPP_SESSION_PATH || "./.whatsapp-session"
+        sessionPath:
+            credentials.WHATSAPP_SESSION_PATH ||
+            process.env.WHATSAPP_SESSION_PATH ||
+            "./.whatsapp-session"
     };
 }
 
@@ -56,6 +66,20 @@ async function executeAgentWithRecording(
         sessionId,
         threadId: `whatsapp-${sessionId}`
     });
+
+    // Record trigger event for unified triggers dashboard
+    try {
+        await createTriggerEventRecord({
+            agentId,
+            sourceType: "whatsapp",
+            entityType: "agent",
+            runId: run.runId,
+            payload: { input },
+            metadata: { userId, sessionId, source: "whatsapp" }
+        });
+    } catch (e) {
+        console.warn("[WhatsApp] Failed to record trigger event:", e);
+    }
 
     try {
         const response = await agent.generate(input, { maxSteps: record?.maxSteps ?? 5 });
@@ -110,7 +134,7 @@ const messageHandler: MessageHandler = async (message) => {
             data: {
                 channel: "whatsapp",
                 channelId,
-                agentSlug: getConfig().defaultAgentSlug,
+                agentSlug: (await getConfig()).defaultAgentSlug,
                 metadata: {
                     isGroup: message.isGroup,
                     groupId: message.groupId
@@ -156,7 +180,7 @@ const messageHandler: MessageHandler = async (message) => {
     }
 
     // Use session agent
-    const agentSlug = session.agentSlug || getConfig().defaultAgentSlug;
+    const agentSlug = session.agentSlug || (await getConfig()).defaultAgentSlug;
 
     try {
         return await executeAgentWithRecording(agentSlug, message.text, session.id, message.from);
@@ -178,7 +202,7 @@ export function isWhatsAppInitialized(): boolean {
  */
 export async function getWhatsAppService(): Promise<WhatsAppClient> {
     if (!whatsappService) {
-        const config = getConfig();
+        const config = await getConfig();
         whatsappService = new WhatsAppClient(config);
         whatsappService.onMessage(messageHandler);
 

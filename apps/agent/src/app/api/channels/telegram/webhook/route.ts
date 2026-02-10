@@ -3,27 +3,47 @@ import { agentResolver } from "@repo/mastra";
 import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
-/**
- * Default agent slug for Telegram
- */
-const DEFAULT_AGENT_SLUG = process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "mcp-agent";
+/** Cached credentials with timestamp-based TTL (no setTimeout leak) */
+let _cachedCreds: Record<string, string> | null = null;
+let _cachedAt = 0;
+const CACHE_TTL_MS = 60_000; // 60 seconds
+
+async function getTelegramCredentials(): Promise<Record<string, string>> {
+    const now = Date.now();
+    if (!_cachedCreds || now - _cachedAt > CACHE_TTL_MS) {
+        const { credentials } = await resolveChannelCredentials("telegram-bot");
+        _cachedCreds = credentials;
+        _cachedAt = now;
+    }
+    return _cachedCreds;
+}
+
+function getTelegramBotToken(creds: Record<string, string>): string | undefined {
+    return creds.TELEGRAM_BOT_TOKEN || process.env.TELEGRAM_BOT_TOKEN;
+}
+
+function getDefaultAgentSlug(creds: Record<string, string>): string {
+    return (
+        creds.TELEGRAM_DEFAULT_AGENT_SLUG || process.env.TELEGRAM_DEFAULT_AGENT_SLUG || "mcp-agent"
+    );
+}
 
 /**
  * Validate bot token from request
  */
-function validateBotToken(request: NextRequest): boolean {
-    const configuredToken = process.env.TELEGRAM_BOT_TOKEN;
+function validateBotToken(request: NextRequest, creds: Record<string, string>): boolean {
+    const configuredToken = getTelegramBotToken(creds);
     if (!configuredToken) {
         console.warn("[Telegram] TELEGRAM_BOT_TOKEN not configured");
         return false;
     }
 
-    // Telegram sends the token in the URL path for webhook verification
-    // For security, we verify requests come from Telegram IPs
-    // In production, you'd also verify X-Telegram-Bot-Api-Secret-Token header
     const secretToken = request.headers.get("x-telegram-bot-api-secret-token");
-    if (secretToken && secretToken !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+    const expectedSecret = creds.TELEGRAM_WEBHOOK_SECRET || process.env.TELEGRAM_WEBHOOK_SECRET;
+    if (secretToken && expectedSecret && secretToken !== expectedSecret) {
         return false;
     }
 
@@ -41,11 +61,12 @@ async function getOrCreateSession(chatId: string, userId: string) {
     });
 
     if (!session) {
+        const creds = await getTelegramCredentials();
         session = await prisma.channelSession.create({
             data: {
                 channel: "telegram",
                 channelId,
-                agentSlug: DEFAULT_AGENT_SLUG,
+                agentSlug: getDefaultAgentSlug(creds),
                 metadata: { chatId, userId }
             }
         });
@@ -66,8 +87,9 @@ async function getOrCreateSession(chatId: string, userId: string) {
  * Receives updates from Telegram Bot API and processes messages.
  */
 export async function POST(request: NextRequest) {
-    // Validate request
-    if (!validateBotToken(request)) {
+    // Resolve credentials and validate request
+    const creds = await getTelegramCredentials();
+    if (!validateBotToken(request, creds)) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
@@ -119,6 +141,20 @@ export async function POST(request: NextRequest) {
                 sessionId: session.id,
                 threadId: `telegram-${chatId}`
             });
+
+            // Record trigger event for unified triggers dashboard
+            try {
+                await createTriggerEventRecord({
+                    agentId,
+                    runId: run.runId,
+                    sourceType: "telegram",
+                    entityType: "agent",
+                    payload: { input: text },
+                    metadata: { userId, chatId: String(chatId), source: "telegram" }
+                });
+            } catch (e) {
+                console.warn("[Telegram] Failed to record trigger event:", e);
+            }
 
             try {
                 // Generate response
@@ -207,7 +243,8 @@ async function sendTelegramMessage(
     text: string,
     replyToMessageId?: number
 ): Promise<void> {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const creds = await getTelegramCredentials();
+    const botToken = getTelegramBotToken(creds);
     if (!botToken) {
         throw new Error("TELEGRAM_BOT_TOKEN not configured");
     }
@@ -232,7 +269,8 @@ async function sendTelegramMessage(
  * Answer a callback query
  */
 async function answerCallbackQuery(queryId: string, text: string): Promise<void> {
-    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+    const creds = await getTelegramCredentials();
+    const botToken = getTelegramBotToken(creds);
     if (!botToken) return;
 
     await fetch(`https://api.telegram.org/bot${botToken}/answerCallbackQuery`, {

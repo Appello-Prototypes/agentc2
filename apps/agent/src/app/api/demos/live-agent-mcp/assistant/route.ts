@@ -12,6 +12,7 @@ import {
     type ToolCallData
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /** Default agent slug for ElevenLabs requests */
 const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-agent";
@@ -116,6 +117,20 @@ export async function POST(request: NextRequest) {
                 availableTools
             }
         });
+
+        // Record trigger event for unified triggers dashboard
+        try {
+            await createTriggerEventRecord({
+                agentId,
+                runId: run.runId,
+                sourceType: "elevenlabs",
+                entityType: "agent",
+                payload: { input: question },
+                metadata: { conversationId, source: "elevenlabs" }
+            });
+        } catch (e) {
+            console.warn("[ElevenLabs] Failed to record trigger event:", e);
+        }
 
         // Build prompt - agent's instructions are already set, just pass the question
         const prompt = `The user asked: "${question}"

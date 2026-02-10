@@ -785,7 +785,7 @@ model AgentTrigger {
     @@map("agent_trigger")
 }
 
-// Trigger Event - Logged trigger executions and failures
+// Trigger Event - Unified execution origin log for agents, workflows, and networks
 model TriggerEvent {
     id               String             @id @default(cuid())
     triggerId        String?
@@ -797,8 +797,8 @@ model TriggerEvent {
     runId            String?
     run              AgentRun?          @relation(fields: [runId], references: [id], onDelete: SetNull)
     status           TriggerEventStatus @default(RECEIVED)
-    sourceType       String // "webhook", "event", "integration"
-    triggerType      String? // "webhook", "event", "mcp"
+    sourceType       String // "webhook", "event", "integration", "schedule", "slack", "api", "chat", "mcp", "simulation"
+    triggerType      String? // "webhook", "event", "mcp", "schedule"
     integrationKey   String? // e.g., "gmail"
     integrationId    String?
     eventName        String?
@@ -808,9 +808,25 @@ model TriggerEvent {
     payloadTruncated Boolean            @default(false)
     errorMessage     String?            @db.Text
     metadata         Json?
-    createdAt        DateTime           @default(now())
-    updatedAt        DateTime           @updatedAt
-    ApprovalRequest  ApprovalRequest[]
+
+    // Entity type discrimination: "agent", "workflow", "network"
+    entityType String?
+
+    // Workflow support
+    workflowId    String?
+    workflow      Workflow?    @relation(fields: [workflowId], references: [id], onDelete: SetNull)
+    workflowRunId String?      @unique
+    workflowRun   WorkflowRun? @relation(fields: [workflowRunId], references: [id], onDelete: SetNull)
+
+    // Network support
+    networkId    String?
+    network      Network?    @relation(fields: [networkId], references: [id], onDelete: SetNull)
+    networkRunId String?     @unique
+    networkRun   NetworkRun? @relation(fields: [networkRunId], references: [id], onDelete: SetNull)
+
+    createdAt       DateTime          @default(now())
+    updatedAt       DateTime          @updatedAt
+    ApprovalRequest ApprovalRequest[]
 
     @@unique([runId])
     @@index([triggerId, createdAt])
@@ -819,6 +835,10 @@ model TriggerEvent {
     @@index([status, createdAt])
     @@index([eventName])
     @@index([integrationKey])
+    @@index([entityType, createdAt])
+    @@index([workflowId, createdAt])
+    @@index([networkId, createdAt])
+    @@index([sourceType, createdAt])
     @@map("trigger_event")
 }
 
@@ -1964,6 +1984,7 @@ model Workflow {
     runs              WorkflowRun[]
     networkPrimitives NetworkPrimitive[]
     metrics           WorkflowMetricDaily[]
+    triggerEvents     TriggerEvent[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -2026,6 +2047,7 @@ model WorkflowRun {
     // Relations
     steps           WorkflowRunStep[]
     ApprovalRequest ApprovalRequest[]
+    TriggerEvent    TriggerEvent?
 
     @@index([workflowId, createdAt])
     @@index([workflowId, environment])
@@ -2105,10 +2127,11 @@ model Network {
     createdBy String?
 
     // Relations
-    primitives NetworkPrimitive[]
-    versions   NetworkVersion[]
-    runs       NetworkRun[]
-    metrics    NetworkMetricDaily[]
+    primitives    NetworkPrimitive[]
+    versions      NetworkVersion[]
+    runs          NetworkRun[]
+    metrics       NetworkMetricDaily[]
+    triggerEvents TriggerEvent[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -2202,6 +2225,7 @@ model NetworkRun {
     // Relations
     steps        NetworkRunStep[]
     workflowRuns WorkflowRun[]
+    TriggerEvent TriggerEvent?
 
     @@index([networkId, createdAt])
     @@index([networkId, environment])

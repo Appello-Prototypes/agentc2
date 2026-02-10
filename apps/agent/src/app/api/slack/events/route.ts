@@ -6,6 +6,7 @@ import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorde
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveIdentity } from "@/lib/identity";
 import { handleSlackApprovalReaction } from "@/lib/approvals";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * Default agent to use for Slack conversations
@@ -792,6 +793,23 @@ async function processMessage(
         threadId: slackThreadId,
         sessionId: channelId
     });
+
+    // Record trigger event for unified triggers dashboard
+    try {
+        await createTriggerEventRecord({
+            agentId,
+            workspaceId: record?.workspaceId || null,
+            runId: run.runId,
+            sourceType: "slack",
+            triggerType: "event",
+            entityType: "agent",
+            eventName: threadTs === messageTs ? "slack.message" : "slack.app_mention",
+            payload: { text, channel: channelId, user: userId },
+            metadata: { channelId, userId, threadTs, messageTs }
+        });
+    } catch (e) {
+        console.warn("[Slack] Failed to record trigger event:", e);
+    }
 
     try {
         // Build generate options with memory persistence when enabled

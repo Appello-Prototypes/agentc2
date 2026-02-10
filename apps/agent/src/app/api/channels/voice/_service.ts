@@ -2,29 +2,39 @@
  * Voice Service - Singleton wrapper for Twilio Voice client
  *
  * This module manages the Twilio voice client lifecycle.
+ * Credentials are resolved from the database (per-org) with env-var fallback.
  */
 
 import { TwilioVoiceClient, type VoiceConfig, type MessageHandler } from "@repo/mastra/channels";
 import { agentResolver } from "@repo/mastra";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 let voiceService: TwilioVoiceClient | null = null;
 let initialized = false;
 
 /**
- * Get configuration from environment
+ * Get configuration, resolving credentials from DB then env fallback.
  */
-function getConfig(): VoiceConfig {
+async function getConfig(organizationId?: string): Promise<VoiceConfig> {
+    const { credentials } = await resolveChannelCredentials("twilio-voice", organizationId);
     return {
-        enabled: process.env.TWILIO_ENABLED === "true",
-        defaultAgentSlug: process.env.VOICE_DEFAULT_AGENT_SLUG || "mcp-agent",
-        accountSid: process.env.TWILIO_ACCOUNT_SID || "",
-        authToken: process.env.TWILIO_AUTH_TOKEN || "",
-        phoneNumber: process.env.TWILIO_PHONE_NUMBER || "",
-        webhookUrl: process.env.VOICE_WEBHOOK_URL,
-        ttsProvider: (process.env.VOICE_TTS_PROVIDER as VoiceConfig["ttsProvider"]) || "twilio",
-        elevenlabsVoiceId: process.env.ELEVENLABS_VOICE_ID
+        enabled: process.env.TWILIO_ENABLED === "true" || !!credentials.TWILIO_ACCOUNT_SID,
+        defaultAgentSlug:
+            credentials.VOICE_DEFAULT_AGENT_SLUG ||
+            process.env.VOICE_DEFAULT_AGENT_SLUG ||
+            "mcp-agent",
+        accountSid: credentials.TWILIO_ACCOUNT_SID || "",
+        authToken: credentials.TWILIO_AUTH_TOKEN || "",
+        phoneNumber: credentials.TWILIO_PHONE_NUMBER || "",
+        webhookUrl: credentials.VOICE_WEBHOOK_URL || process.env.VOICE_WEBHOOK_URL,
+        ttsProvider:
+            (credentials.VOICE_TTS_PROVIDER as VoiceConfig["ttsProvider"]) ||
+            (process.env.VOICE_TTS_PROVIDER as VoiceConfig["ttsProvider"]) ||
+            "twilio",
+        elevenlabsVoiceId: credentials.ELEVENLABS_VOICE_ID || process.env.ELEVENLABS_VOICE_ID
     };
 }
 
@@ -35,7 +45,7 @@ function getConfig(): VoiceConfig {
 const messageHandler: MessageHandler = async (message, agent) => {
     console.log(`[Voice] Handling speech from ${message.from}: "${message.text}"`);
 
-    const config = getConfig();
+    const config = await getConfig();
     const agentSlug = config.defaultAgentSlug;
 
     // Resolve agent to get record info
@@ -52,6 +62,20 @@ const messageHandler: MessageHandler = async (message, agent) => {
         sessionId: message.from, // Use caller ID as session
         threadId: `voice-${message.from}-${Date.now()}`
     });
+
+    // Record trigger event for unified triggers dashboard
+    try {
+        await createTriggerEventRecord({
+            agentId,
+            runId: run.runId,
+            sourceType: "voice",
+            entityType: "agent",
+            payload: { input: message.text },
+            metadata: { from: message.from, source: "voice" }
+        });
+    } catch (e) {
+        console.warn("[Voice] Failed to record trigger event:", e);
+    }
 
     try {
         const response = await agent.generate(message.text, { maxSteps: record?.maxSteps ?? 5 });
@@ -99,9 +123,9 @@ export function isVoiceInitialized(): boolean {
 /**
  * Get or create voice service
  */
-export async function getVoiceService(): Promise<TwilioVoiceClient> {
+export async function getVoiceService(organizationId?: string): Promise<TwilioVoiceClient> {
     if (!voiceService) {
-        const config = getConfig();
+        const config = await getConfig(organizationId);
         voiceService = new TwilioVoiceClient(config);
         voiceService.onMessage(messageHandler);
 

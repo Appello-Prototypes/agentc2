@@ -16,6 +16,7 @@ import {
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { getUserOrganizationId } from "@/lib/organization";
+import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * The slug of the database-driven webhook wizard agent.
@@ -97,6 +98,20 @@ export async function POST(request: NextRequest) {
                 threadId: userThreadId
             });
             console.log(`[Webhook Chat] Started run ${run.runId} for agent ${WEBHOOK_WIZARD_SLUG}`);
+
+            // Record trigger event for unified triggers dashboard
+            try {
+                await createTriggerEventRecord({
+                    agentId,
+                    runId: run.runId,
+                    sourceType: "chat",
+                    entityType: "agent",
+                    payload: { input: lastUserMessage },
+                    metadata: { threadId: userThreadId, source: "webhook-chat" }
+                });
+            } catch (e) {
+                console.warn("[Webhook Chat] Failed to record trigger event:", e);
+            }
         }
 
         const maxSteps = record?.maxSteps ?? 5;
