@@ -14,6 +14,69 @@ import { handleSlackApprovalReaction } from "@/lib/approvals";
 const DEFAULT_AGENT_SLUG = process.env.SLACK_DEFAULT_AGENT_SLUG || "assistant";
 
 /**
+ * Cache the bot's own Slack user ID to detect own messages and thread participation.
+ * Resolved once via auth.test on first use.
+ */
+let cachedBotUserId: string | null = null;
+
+async function getBotUserId(): Promise<string | null> {
+    if (cachedBotUserId) return cachedBotUserId;
+    const botToken = process.env.SLACK_BOT_TOKEN;
+    if (!botToken) return null;
+    try {
+        const res = await fetch("https://slack.com/api/auth.test", {
+            method: "POST",
+            headers: { Authorization: `Bearer ${botToken}` }
+        });
+        const data = await res.json();
+        if (data.ok && data.user_id) {
+            cachedBotUserId = data.user_id;
+            console.log(`[Slack] Bot user ID resolved: ${cachedBotUserId}`);
+            return cachedBotUserId;
+        }
+    } catch (error) {
+        console.error("[Slack] Failed to resolve bot user ID:", error);
+    }
+    return null;
+}
+
+/**
+ * Track threads the bot has participated in so it can auto-reply
+ * without requiring @mention on every message.
+ * Key: "channelId-threadTs" -> true
+ */
+const activeThreads = new Set<string>();
+
+function markThreadActive(channelId: string, threadTs: string) {
+    activeThreads.add(`${channelId}-${threadTs}`);
+}
+
+function isThreadActive(channelId: string, threadTs: string): boolean {
+    return activeThreads.has(`${channelId}-${threadTs}`);
+}
+
+/**
+ * Deduplicate Slack events. Slack can retry delivery if it doesn't get
+ * a timely 200 response, leading to duplicate processing.
+ * Stores event IDs for the last 5 minutes.
+ */
+const processedEvents = new Map<string, number>();
+const EVENT_DEDUP_TTL_MS = 5 * 60 * 1000;
+
+function isDuplicateEvent(eventId: string): boolean {
+    // Prune old entries periodically
+    const now = Date.now();
+    if (processedEvents.size > 500) {
+        for (const [id, ts] of processedEvents) {
+            if (now - ts > EVENT_DEDUP_TTL_MS) processedEvents.delete(id);
+        }
+    }
+    if (processedEvents.has(eventId)) return true;
+    processedEvents.set(eventId, now);
+    return false;
+}
+
+/**
  * Slack Event Types
  */
 interface SlackEventBase {
@@ -179,7 +242,7 @@ async function listActiveAgents(): Promise<string> {
         ...lines,
         "",
         `_Default agent: \`${DEFAULT_AGENT_SLUG}\`_`,
-        '_Usage: prefix your message with `agent:<slug>` to talk to a specific agent._'
+        "_Usage: prefix your message with `agent:<slug>` to talk to a specific agent._"
     ].join("\n");
 }
 
@@ -187,10 +250,11 @@ async function listActiveAgents(): Promise<string> {
  * Resolve Slack display identity from the agent record's metadata.
  * Falls back to the agent name when no slack-specific config is set.
  */
-function resolveSlackIdentity(record: {
-    name: string;
-    metadata: unknown;
-}): { username?: string; icon_emoji?: string; icon_url?: string } {
+function resolveSlackIdentity(record: { name: string; metadata: unknown }): {
+    username?: string;
+    icon_emoji?: string;
+    icon_url?: string;
+} {
     const metadata = record.metadata as Record<string, unknown> | null;
     const slack = metadata?.slack as Record<string, unknown> | undefined;
 
@@ -252,6 +316,63 @@ async function sendSlackMessage(
     } catch (error) {
         console.error("[Slack] Failed to send message:", error);
         return false;
+    }
+}
+
+/**
+ * Add a reaction to a message (e.g., :eyes: while thinking).
+ * This is a human-like "I see your message" acknowledgment.
+ */
+async function addReaction(
+    channelId: string,
+    messageTs: string,
+    reaction: string
+): Promise<void> {
+    const botToken = process.env.SLACK_BOT_TOKEN;
+    if (!botToken) return;
+    try {
+        await fetch("https://slack.com/api/reactions.add", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${botToken}`
+            },
+            body: JSON.stringify({
+                channel: channelId,
+                timestamp: messageTs,
+                name: reaction
+            })
+        });
+    } catch {
+        // Reactions are best-effort, ignore failures
+    }
+}
+
+/**
+ * Remove a reaction from a message (e.g., remove :eyes: after responding).
+ */
+async function removeReaction(
+    channelId: string,
+    messageTs: string,
+    reaction: string
+): Promise<void> {
+    const botToken = process.env.SLACK_BOT_TOKEN;
+    if (!botToken) return;
+    try {
+        await fetch("https://slack.com/api/reactions.remove", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${botToken}`
+            },
+            body: JSON.stringify({
+                channel: channelId,
+                timestamp: messageTs,
+                name: reaction
+            })
+        });
+    } catch {
+        // Reactions are best-effort, ignore failures
     }
 }
 
@@ -638,9 +759,21 @@ export async function POST(request: NextRequest) {
     if (payload.type === "event_callback") {
         const event = payload.event;
 
-        // Ignore bot messages to prevent loops
+        // Deduplicate: Slack may retry events if it doesn't get a fast 200
+        if (isDuplicateEvent(payload.event_id)) {
+            console.log(`[Slack] Duplicate event ${payload.event_id}, ignoring`);
+            return NextResponse.json({ ok: true });
+        }
+
+        // Resolve bot user ID for loop prevention and thread detection
+        const botUserId = await getBotUserId();
+
+        // Ignore messages from the bot itself (covers both bot_message subtype
+        // and cases where the bot's user ID matches the event sender)
         if ("subtype" in event && event.subtype === "bot_message") {
-            console.log("[Slack] Ignoring bot message");
+            return NextResponse.json({ ok: true });
+        }
+        if ("user" in event && event.user && event.user === botUserId) {
             return NextResponse.json({ ok: true });
         }
 
@@ -658,7 +791,6 @@ export async function POST(request: NextRequest) {
             const directive = parseAgentDirective(cleanText);
 
             // Process asynchronously to respond within 3 seconds
-            // Slack requires acknowledgment within 3 seconds
             setImmediate(async () => {
                 const threadTs = mentionEvent.thread_ts || mentionEvent.ts;
 
@@ -669,6 +801,9 @@ export async function POST(request: NextRequest) {
                     return;
                 }
 
+                // Show "thinking" reaction while processing
+                await addReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
+
                 const result = await processMessage(
                     directive.text,
                     mentionEvent.user,
@@ -678,16 +813,19 @@ export async function POST(request: NextRequest) {
                     directive.slug || undefined
                 );
 
-                // Reply in the thread with per-agent display identity
+                // Remove thinking reaction, reply with agent identity
+                await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
                 await sendSlackMessage(
                     mentionEvent.channel,
                     result.text,
                     threadTs,
                     result.identity
                 );
+
+                // Remember this thread so follow-up replies don't need @mention
+                markThreadActive(mentionEvent.channel, threadTs);
             });
 
-            // Acknowledge immediately
             return NextResponse.json({ ok: true });
         }
 
@@ -726,7 +864,7 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        // Handle direct message events
+        // Handle message events (DMs + thread replies in channels)
         if (event.type === "message") {
             const messageEvent = event as SlackMessageEvent;
 
@@ -785,11 +923,18 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true });
             }
 
-            if ("channel_type" in event && event.channel_type === "im") {
-                // Parse agent directive from DM text
+            // Determine if this message should get a response:
+            // 1. DMs always get a response
+            // 2. Channel thread replies get a response if the bot participated in that thread
+            const isDM = "channel_type" in event && event.channel_type === "im";
+            const isActiveThreadReply =
+                !isDM &&
+                messageEvent.thread_ts &&
+                isThreadActive(messageEvent.channel, messageEvent.thread_ts);
+
+            if (isDM || isActiveThreadReply) {
                 const directive = parseAgentDirective(messageEvent.text);
 
-                // Process asynchronously
                 setImmediate(async () => {
                     const threadTs = messageEvent.thread_ts || messageEvent.ts;
 
@@ -800,6 +945,9 @@ export async function POST(request: NextRequest) {
                         return;
                     }
 
+                    // Show "thinking" reaction while processing
+                    await addReaction(messageEvent.channel, messageEvent.ts, "eyes");
+
                     const result = await processMessage(
                         directive.text,
                         messageEvent.user,
@@ -809,16 +957,19 @@ export async function POST(request: NextRequest) {
                         directive.slug || undefined
                     );
 
-                    // Reply in the thread with per-agent display identity
+                    // Remove thinking reaction, reply with agent identity
+                    await removeReaction(messageEvent.channel, messageEvent.ts, "eyes");
                     await sendSlackMessage(
                         messageEvent.channel,
                         result.text,
                         threadTs,
                         result.identity
                     );
+
+                    // Keep thread marked active
+                    markThreadActive(messageEvent.channel, threadTs);
                 });
 
-                // Acknowledge immediately
                 return NextResponse.json({ ok: true });
             }
         }
@@ -849,18 +1000,26 @@ export async function GET() {
         setup: {
             step1: "Create a Slack App at https://api.slack.com/apps",
             step2: "Enable Event Subscriptions and set Request URL to this endpoint",
-            step3: "Subscribe to bot events: app_mention, message.im",
+            step3: "Subscribe to bot events: app_mention, message.im, message.channels",
             step4: "Install app to workspace and copy Bot Token",
             step5: "Add SLACK_SIGNING_SECRET and SLACK_BOT_TOKEN to .env",
             requiredScopes: [
                 "app_mentions:read",
                 "chat:write",
                 "chat:write.customize",
+                "reactions:write",
                 "im:history",
                 "im:read",
                 "im:write",
                 "channels:history",
                 "channels:read"
+            ],
+            features: [
+                "Thread auto-reply: bot responds to thread follow-ups without @mention",
+                "Thinking indicator: :eyes: reaction while processing",
+                "Multi-agent routing: prefix with agent:<slug> to pick an agent",
+                "Per-agent identity: each agent has its own display name and icon",
+                "Conversation memory: context persists within each Slack thread"
             ]
         }
     });
