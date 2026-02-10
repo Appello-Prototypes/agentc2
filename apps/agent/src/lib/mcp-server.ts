@@ -1,19 +1,23 @@
 /**
  * MCPServer Factory for Claude CoWork (Remote Streamable HTTP)
  *
- * Creates an MCPServer instance that exposes Mastra agents, workflows, and networks
- * as MCP tools accessible via the Streamable HTTP transport. This allows Claude CoWork
- * and other remote MCP clients to connect directly via a public URL.
+ * Creates an MCPServer instance that exposes ALL tools accessible to the
+ * organization via the Streamable HTTP transport:
  *
- * The tools delegate execution to the existing /api/mcp gateway internally,
- * reusing the same authentication and invocation logic that the Cursor stdio
- * MCP server uses.
+ * 1. Platform tools -- agents, workflows, networks, and static platform ops
+ *    (fetched from the /api/mcp gateway, same source as Cursor's Mastra Agents)
+ *
+ * 2. External MCP tools -- HubSpot, Jira, Slack, GitHub, Fathom, etc.
+ *    (loaded via getMcpClientForOrganization / listMcpToolDefinitions)
+ *
+ * This gives Claude CoWork full parity with what Cursor sees across all 13+
+ * MCP servers, but through a single remote endpoint.
  */
 
 import { createTool } from "@mastra/core/tools";
 import { MCPServer } from "@mastra/mcp";
 import { z } from "zod";
-import { prisma } from "@repo/database";
+import { listMcpToolDefinitions, executeMcpTool } from "@repo/mastra";
 
 /**
  * Internal base URL for calling the /api/mcp gateway.
@@ -26,9 +30,37 @@ function getInternalBaseUrl(): string {
     return process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
 }
 
+// ── Gateway tools (platform agents, workflows, networks, static ops) ──
+
+interface GatewayTool {
+    name: string;
+    description?: string;
+    inputSchema?: Record<string, unknown>;
+}
+
 /**
- * Invoke a tool via the existing /api/mcp gateway.
- * This reuses the same pattern as scripts/mcp-server/index.js but server-side.
+ * Fetch the complete tool list from the /api/mcp gateway.
+ */
+async function fetchToolsFromGateway(authHeaders: Record<string, string>): Promise<GatewayTool[]> {
+    const response = await fetch(`${getInternalBaseUrl()}/api/mcp`, {
+        headers: {
+            "Content-Type": "application/json",
+            ...authHeaders
+        }
+    });
+
+    const data = await response.json();
+
+    if (!data.success) {
+        console.error("[MCP Server] Failed to fetch tools from gateway:", data.error);
+        return [];
+    }
+
+    return data.tools || [];
+}
+
+/**
+ * Invoke a tool via the /api/mcp gateway.
  */
 async function invokeMcpGatewayTool(
     toolName: string,
@@ -57,10 +89,8 @@ async function invokeMcpGatewayTool(
     return data.result;
 }
 
-/**
- * Format a tool result into a human-readable string.
- * Same logic as the Cursor stdio MCP server.
- */
+// ── Result formatting ──
+
 function formatResult(result: unknown): string {
     if (typeof result === "string") {
         return result;
@@ -75,107 +105,41 @@ function formatResult(result: unknown): string {
     return JSON.stringify(result, null, 2);
 }
 
-interface AgentRecord {
-    id: string;
-    slug: string;
-    name: string;
-    description: string | null;
-    modelProvider: string;
-    modelName: string;
-}
-
-interface WorkflowRecord {
-    id: string;
-    slug: string;
-    name: string;
-    description: string | null;
-}
-
-interface NetworkRecord {
-    id: string;
-    slug: string;
-    name: string;
-    description: string | null;
-}
+// ── Main builder ──
 
 /**
- * Build an MCPServer instance that exposes all agents, workflows, and networks
- * for a given organization as MCP tools.
+ * Build an MCPServer instance that exposes ALL tools for a given organization:
+ * - Platform tools from /api/mcp (agents, workflows, networks, static ops)
+ * - External MCP tools (HubSpot, Jira, Slack, GitHub, etc.)
  *
- * @param organizationId - The organization to load primitives for
+ * @param organizationId - The organization ID
  * @param authHeaders - Headers to forward to the internal /api/mcp gateway
  */
 export async function buildMcpServer(
     organizationId: string,
     authHeaders: Record<string, string>
 ): Promise<MCPServer> {
-    // Load agents from database
-    const agents: AgentRecord[] = await prisma.agent.findMany({
-        where: {
-            isActive: true,
-            workspace: { organizationId }
-        },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            description: true,
-            modelProvider: true,
-            modelName: true
-        },
-        orderBy: { name: "asc" }
-    });
-
-    // Load workflows
-    const workflows: WorkflowRecord[] = await prisma.workflow.findMany({
-        where: {
-            isActive: true,
-            workspace: { organizationId }
-        },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            description: true
-        },
-        orderBy: { name: "asc" }
-    });
-
-    // Load networks
-    const networks: NetworkRecord[] = await prisma.network.findMany({
-        where: {
-            isActive: true,
-            workspace: { organizationId }
-        },
-        select: {
-            id: true,
-            slug: true,
-            name: true,
-            description: true
-        },
-        orderBy: { name: "asc" }
-    });
-
-    // Build tool definitions for each agent
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tools: Record<string, any> = {};
+    const toolNames = new Set<string>();
 
-    for (const agent of agents) {
-        const toolId = `ask_${agent.slug.replace(/-/g, "_")}`;
-        const agentSlug = agent.slug;
-        tools[toolId] = createTool({
-            id: toolId,
-            description:
-                agent.description ||
-                `Ask agent ${agent.name} a question (${agent.modelProvider}/${agent.modelName})`,
-            inputSchema: z.object({
-                input: z.string().describe("The input message or task for the agent"),
-                context: z.record(z.unknown()).optional().describe("Optional context variables"),
-                maxSteps: z.number().optional().describe("Maximum tool-use steps (optional)")
-            }),
+    // ── 1. Platform tools from /api/mcp gateway ──
+    const gatewayTools = await fetchToolsFromGateway(authHeaders);
+
+    for (const gwTool of gatewayTools) {
+        const safeName = gwTool.name.replace(/[.-]/g, "_");
+        const originalName = gwTool.name;
+
+        if (toolNames.has(safeName)) continue;
+        toolNames.add(safeName);
+
+        tools[safeName] = createTool({
+            id: safeName,
+            description: gwTool.description || `Invoke ${originalName}`,
+            inputSchema: z.record(z.unknown()).describe("Tool parameters"),
             execute: async (inputData) => {
                 const result = await invokeMcpGatewayTool(
-                    `agent.${agentSlug}`,
+                    originalName,
                     inputData as Record<string, unknown>,
                     authHeaders
                 );
@@ -184,62 +148,62 @@ export async function buildMcpServer(
         });
     }
 
-    // Build tool definitions for each workflow
-    for (const workflow of workflows) {
-        const toolId = `run_workflow_${workflow.slug.replace(/-/g, "_")}`;
-        const workflowSlug = workflow.slug;
-        tools[toolId] = createTool({
-            id: toolId,
-            description: workflow.description || `Execute workflow: ${workflow.name}`,
-            inputSchema: z.object({
-                input: z.record(z.unknown()).describe("Workflow input payload"),
-                source: z.string().optional().describe("Source channel"),
-                environment: z.string().optional().describe("Environment"),
-                triggerType: z.string().optional().describe("Trigger type")
-            }),
-            execute: async (inputData) => {
-                const result = await invokeMcpGatewayTool(
-                    `workflow-${workflowSlug}`,
-                    inputData as Record<string, unknown>,
-                    authHeaders
-                );
-                return formatResult(result);
-            }
-        });
+    // ── 2. External MCP tools (HubSpot, Jira, Slack, GitHub, etc.) ──
+    try {
+        const externalTools = await listMcpToolDefinitions({ organizationId });
+
+        for (const extTool of externalTools) {
+            const safeName = extTool.name.replace(/[.-]/g, "_");
+
+            // Skip if already registered from gateway (avoid duplicates)
+            if (toolNames.has(safeName)) continue;
+            toolNames.add(safeName);
+
+            const extToolName = extTool.name;
+
+            tools[safeName] = createTool({
+                id: safeName,
+                description:
+                    extTool.description || `External tool: ${extTool.name} (${extTool.server})`,
+                inputSchema: z.record(z.unknown()).describe("Tool parameters"),
+                execute: async (inputData) => {
+                    const result = await executeMcpTool(
+                        extToolName,
+                        inputData as Record<string, unknown>,
+                        { organizationId }
+                    );
+                    if (!result.success) {
+                        throw new Error(result.error || "Tool execution failed");
+                    }
+                    return formatResult(result.result);
+                }
+            });
+        }
+
+        console.log(
+            `[MCP Server] Built server for org ${organizationId}: ` +
+                `${gatewayTools.length} platform tools + ${externalTools.length} external tools = ` +
+                `${toolNames.size} total (after dedup)`
+        );
+    } catch (error) {
+        // External MCP tools may fail if servers are not configured -- that's OK,
+        // we still expose the platform tools
+        console.warn(
+            `[MCP Server] Failed to load external MCP tools for org ${organizationId}:`,
+            error instanceof Error ? error.message : error
+        );
+        console.log(
+            `[MCP Server] Built server for org ${organizationId}: ` +
+                `${gatewayTools.length} platform tools (external tools unavailable)`
+        );
     }
 
-    // Build tool definitions for each network
-    for (const network of networks) {
-        const toolId = `route_network_${network.slug.replace(/-/g, "_")}`;
-        const networkSlug = network.slug;
-        tools[toolId] = createTool({
-            id: toolId,
-            description: network.description || `Route message through network: ${network.name}`,
-            inputSchema: z.object({
-                message: z.string().describe("Message to route through the network"),
-                source: z.string().optional().describe("Source channel"),
-                environment: z.string().optional().describe("Environment"),
-                threadId: z.string().optional().describe("Optional thread ID"),
-                resourceId: z.string().optional().describe("Optional resource ID")
-            }),
-            execute: async (inputData) => {
-                const result = await invokeMcpGatewayTool(
-                    `network-${networkSlug}`,
-                    inputData as Record<string, unknown>,
-                    authHeaders
-                );
-                return formatResult(result);
-            }
-        });
-    }
-
-    // Create the MCPServer
     const server = new MCPServer({
         id: "mastra-remote-mcp",
         name: "Mastra Agents",
         version: "1.0.0",
         description:
-            "Mastra AI Agent platform - exposes agents, workflows, and networks as MCP tools",
+            "Mastra AI Agent platform - exposes agents, workflows, networks, and all integrated MCP tools",
         tools
     });
 
