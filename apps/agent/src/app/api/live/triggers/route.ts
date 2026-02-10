@@ -125,30 +125,6 @@ export async function GET(request: NextRequest) {
                             completedAt: true,
                             durationMs: true
                         }
-                    },
-                    workflow: {
-                        select: { id: true, slug: true, name: true }
-                    },
-                    workflowRun: {
-                        select: {
-                            id: true,
-                            status: true,
-                            startedAt: true,
-                            completedAt: true,
-                            durationMs: true
-                        }
-                    },
-                    network: {
-                        select: { id: true, slug: true, name: true }
-                    },
-                    networkRun: {
-                        select: {
-                            id: true,
-                            status: true,
-                            startedAt: true,
-                            completedAt: true,
-                            durationMs: true
-                        }
                     }
                 },
                 orderBy: { createdAt: "desc" },
@@ -202,38 +178,10 @@ export async function GET(request: NextRequest) {
                           durationMs: event.run.durationMs
                       }
                     : null,
-                workflow: event.workflow
-                    ? {
-                          id: event.workflow.id,
-                          slug: event.workflow.slug,
-                          name: event.workflow.name
-                      }
-                    : null,
-                workflowRun: event.workflowRun
-                    ? {
-                          id: event.workflowRun.id,
-                          status: event.workflowRun.status,
-                          startedAt: event.workflowRun.startedAt?.toISOString() ?? null,
-                          completedAt: event.workflowRun.completedAt?.toISOString() ?? null,
-                          durationMs: event.workflowRun.durationMs
-                      }
-                    : null,
-                network: event.network
-                    ? {
-                          id: event.network.id,
-                          slug: event.network.slug,
-                          name: event.network.name
-                      }
-                    : null,
-                networkRun: event.networkRun
-                    ? {
-                          id: event.networkRun.id,
-                          status: event.networkRun.status,
-                          startedAt: event.networkRun.startedAt?.toISOString() ?? null,
-                          completedAt: event.networkRun.completedAt?.toISOString() ?? null,
-                          durationMs: event.networkRun.durationMs
-                      }
-                    : null
+                workflow: null,
+                workflowRun: null,
+                network: null,
+                networkRun: null
             })),
             pagination: {
                 limit,
