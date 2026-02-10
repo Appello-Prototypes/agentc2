@@ -70,7 +70,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
     const activeSection = pathname.split("/")[2] || "profile";
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-full overflow-hidden">
             {/* Sidebar */}
             <aside className="bg-muted/30 flex w-64 flex-col border-r">
                 {/* Header */}

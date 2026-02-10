@@ -11,7 +11,8 @@
     "./tools": "./src/tools/index.ts",
     "./workflows": "./src/workflows/index.ts",
     "./orchestrator": "./src/orchestrator/index.ts",
-    "./channels": "./src/channels/index.ts"
+    "./channels": "./src/channels/index.ts",
+    "./canvas": "./src/canvas/index.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

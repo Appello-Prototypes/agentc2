@@ -9,17 +9,17 @@
 
 The platform today has five primitives:
 
-| Primitive    | What It Is                              | Analogy              |
-| ------------ | --------------------------------------- | -------------------- |
-| **Agent**    | LLM worker with instructions and tools  | An employee          |
-| **Workflow** | DAG-based multi-step orchestration      | A standard procedure |
-| **Network**  | LLM-routed dynamic agent orchestration  | A team meeting       |
-| **Tool**     | Atomic action (API call, computation)   | A hammer             |
-| **Scorer**   | Quality metric for evaluating outputs   | A rubric             |
+| Primitive    | What It Is                             | Analogy              |
+| ------------ | -------------------------------------- | -------------------- |
+| **Agent**    | LLM worker with instructions and tools | An employee          |
+| **Workflow** | DAG-based multi-step orchestration     | A standard procedure |
+| **Network**  | LLM-routed dynamic agent orchestration | A team meeting       |
+| **Tool**     | Atomic action (API call, computation)  | A hammer             |
+| **Scorer**   | Quality metric for evaluating outputs  | A rubric             |
 
 Two things are missing:
 
-1. **Skills** — the training, domain expertise, and procedural knowledge that make an agent *competent* at something, not just *capable* of it
+1. **Skills** — the training, domain expertise, and procedural knowledge that make an agent _competent_ at something, not just _capable_ of it
 2. **Documents** — managed knowledge artifacts that can be ingested, versioned, searched, and composed into agent context
 
 ---
@@ -28,7 +28,7 @@ Two things are missing:
 
 ### The Problem: Tools ≠ Competence
 
-An agent with 200 MCP tools has **capability** — it *can* create HubSpot contacts, search Jira, send emails. But capability without context is dangerous. Consider:
+An agent with 200 MCP tools has **capability** — it _can_ create HubSpot contacts, search Jira, send emails. But capability without context is dangerous. Consider:
 
 - An agent with `hubspot-batch-update-objects` can update CRM records, but does it know the company's deal stage definitions? Lead scoring criteria? Data hygiene rules?
 - An agent with `jira-create-issue` can file tickets, but does it know the team's workflow? The project key conventions? The required fields?
@@ -49,6 +49,7 @@ Skill
 ```
 
 This is directly analogous to how humans develop competence:
+
 - Reading the manual (Knowledge/Documents)
 - Following the training guide (Procedure)
 - Knowing which tools to reach for (Tools)
@@ -58,38 +59,42 @@ This is directly analogous to how humans develop competence:
 
 The `.cursor/skills/` directory already contains skills for Cursor AI:
 
-| Skill              | What It Provides                                         |
-| ------------------ | -------------------------------------------------------- |
-| `mastra-platform`  | Platform knowledge + MCP tool catalog + operational recipes |
-| `mastra-vv`        | V&V procedures + acceptance criteria + report templates   |
-| `mastra-deploy`    | Deployment knowledge + step-by-step server procedures     |
-| `mastra-db-dump`   | Database schema knowledge + dump procedures               |
+| Skill             | What It Provides                                            |
+| ----------------- | ----------------------------------------------------------- |
+| `mastra-platform` | Platform knowledge + MCP tool catalog + operational recipes |
+| `mastra-vv`       | V&V procedures + acceptance criteria + report templates     |
+| `mastra-deploy`   | Deployment knowledge + step-by-step server procedures       |
+| `mastra-db-dump`  | Database schema knowledge + dump procedures                 |
 
-These work because they **inject context that changes how the AI operates** — not by giving it new tools, but by giving it the *understanding* of when and how to use them.
+These work because they **inject context that changes how the AI operates** — not by giving it new tools, but by giving it the _understanding_ of when and how to use them.
 
 The platform should have this same concept as a first-class primitive.
 
 ### Concrete Skill Examples
 
 **Skill: "HubSpot CRM Management"**
+
 - Knowledge: Deal stage definitions, lead scoring criteria, data quality rules, CRM governance policy
 - Procedure: "When creating contacts, check for duplicates by email first. When updating deal stages, always log a note explaining why. Follow the lead scoring rubric to prioritize outreach."
 - Tools: `hubspot-search-objects`, `hubspot-batch-create-objects`, `hubspot-batch-update-objects`, `hubspot-create-engagement`
 - Examples: Sample CRM audit output, properly formatted contact notes
 
 **Skill: "Jira Project Management"**
+
 - Knowledge: Team workflow (statuses, transitions), project key conventions, sprint planning guidelines, issue type definitions
 - Procedure: "Before creating an issue, verify the correct project key and issue type. Use the Plan for Review workflow for all architectural decisions. Link related issues."
 - Tools: `jira-create-issue`, `jira-search`, `jira-transition-issue`, `jira-add-comment`
 - Examples: Well-formatted Jira tickets, proper status transitions
 
 **Skill: "Meeting Intelligence"**
+
 - Knowledge: Meeting types and cadences, key stakeholders, follow-up SLAs, action item tracking rules
 - Procedure: "After each meeting transcript is ingested, extract action items, identify decisions made, flag unresolved blockers, and route follow-ups to the appropriate channels."
 - Tools: `fathom-get-meeting-summary`, `fathom-get-meeting-transcript`, `jira-create-issue`, `slack-post-message`
 - Examples: Sample meeting digest, properly extracted action items
 
 **Skill: "Customer Onboarding"**
+
 - Knowledge: Onboarding playbook, product documentation, FAQ database, common setup issues
 - Procedure: "Follow the 30-60-90 framework. Day 1: send welcome email. Day 3: schedule kickoff. Week 2: first check-in. Track progress in HubSpot deal pipeline."
 - Tools: `hubspot-create-engagement`, `gmail-send-email`, `google-calendar-create-event`
@@ -97,13 +102,13 @@ The platform should have this same concept as a first-class primitive.
 
 ### How Skills Differ From Everything Else
 
-| Dimension     | Tool                    | Skill                                | Agent Instructions  |
-| ------------- | ----------------------- | ------------------------------------ | ------------------- |
-| **Scope**     | Single action           | Domain of competence                 | General personality |
-| **Reusable**  | Yes, by any agent       | Yes, composable across agents        | No, per-agent       |
-| **Knowledge** | None — pure function    | Rich domain context                  | Embedded inline     |
-| **Structure** | Input → Output          | Knowledge + Procedure + Tools + Examples | Freeform text    |
-| **Versioned** | Via MCP server          | Yes, independently                   | Via agent version   |
+| Dimension     | Tool                 | Skill                                    | Agent Instructions  |
+| ------------- | -------------------- | ---------------------------------------- | ------------------- |
+| **Scope**     | Single action        | Domain of competence                     | General personality |
+| **Reusable**  | Yes, by any agent    | Yes, composable across agents            | No, per-agent       |
+| **Knowledge** | None — pure function | Rich domain context                      | Embedded inline     |
+| **Structure** | Input → Output       | Knowledge + Procedure + Tools + Examples | Freeform text       |
+| **Versioned** | Via MCP server       | Yes, independently                       | Via agent version   |
 
 The key insight: **Skills are reusable, composable packages of competence.** One skill can be attached to many agents. One agent can have many skills. The same "HubSpot CRM Management" skill works whether it's attached to the Sales Agent, the Reporting Agent, or the Customer Success Agent.
 
@@ -139,18 +144,18 @@ Documents are the **atomic unit of knowledge** in the platform. They can exist i
 
 The `docs/` folder contains 15 documents that represent significant organizational knowledge:
 
-| Document                                 | Type                 | Potential Use                           |
-| ---------------------------------------- | -------------------- | --------------------------------------- |
-| `ai-agent-best-practices.md`            | Reference            | Agent design skill, learning system     |
-| `agent-platform-vision.md`              | Strategy             | Platform assistant context              |
-| `executive-l10-process-improvement.md`  | Process/SOP          | Jira management skill                   |
-| `integrations-hub.md`                   | Technical reference  | Integration management skill            |
-| `integrations-validation-runbook.md`    | Procedure/Runbook    | V&V skill, QA skill                     |
-| `agent-execution-triggers.md`           | Technical reference  | Platform operations skill               |
-| `mcp-tool-exposure.md`                  | Architecture         | MCP management skill                    |
-| `mcp-workflows-networks.md`             | Architecture         | Workflow/network design skill           |
-| `agent-learning-mechanisms.md`          | Technical reference  | Learning system operations skill        |
-| `agentc2-vision-plan.md`               | Strategy             | Platform assistant context              |
+| Document                               | Type                | Potential Use                       |
+| -------------------------------------- | ------------------- | ----------------------------------- |
+| `ai-agent-best-practices.md`           | Reference           | Agent design skill, learning system |
+| `agent-platform-vision.md`             | Strategy            | Platform assistant context          |
+| `executive-l10-process-improvement.md` | Process/SOP         | Jira management skill               |
+| `integrations-hub.md`                  | Technical reference | Integration management skill        |
+| `integrations-validation-runbook.md`   | Procedure/Runbook   | V&V skill, QA skill                 |
+| `agent-execution-triggers.md`          | Technical reference | Platform operations skill           |
+| `mcp-tool-exposure.md`                 | Architecture        | MCP management skill                |
+| `mcp-workflows-networks.md`            | Architecture        | Workflow/network design skill       |
+| `agent-learning-mechanisms.md`         | Technical reference | Learning system operations skill    |
+| `agentc2-vision-plan.md`               | Strategy            | Platform assistant context          |
 
 None of these are ingested into RAG. None are connected to agents. They're knowledge trapped in files.
 
@@ -163,6 +168,7 @@ Create/Upload → Chunk → Embed → Index → Link to Skills → Agent Queries
 ```
 
 When a document is updated:
+
 1. Old embeddings are removed from the vector index
 2. New content is chunked and embedded
 3. Any agent using a skill that references this document automatically gets fresh knowledge
@@ -191,9 +197,9 @@ Agent
 1. **Agent Resolution**: Load the agent from DB, including its skills
 2. **Skill Resolution**: For each skill, load its documents, tools, and instructions
 3. **Context Assembly**:
-   - Agent's base instructions (personality, role)
-   - Skill instructions injected as structured context blocks
-   - Skill tools merged into the agent's tool set
+    - Agent's base instructions (personality, role)
+    - Skill instructions injected as structured context blocks
+    - Skill tools merged into the agent's tool set
 4. **RAG at Query Time**: When the agent needs deeper knowledge, it queries RAG **scoped to its skill documents** — not the entire vector index
 5. **Focused Retrieval**: The agent doesn't search ALL knowledge — it searches knowledge relevant to its assigned skills
 
@@ -203,17 +209,18 @@ Today, `queryRag` searches the entire vector index. With Skills + Documents:
 
 ```typescript
 // Before: search everything
-const results = await queryRag("deal stage criteria")
+const results = await queryRag("deal stage criteria");
 
 // After: search within the agent's skill documents
 const results = await queryRag("deal stage criteria", {
     filter: {
-        documentId: { $in: agent.skills.flatMap(s => s.documents.map(d => d.id)) }
+        documentId: { $in: agent.skills.flatMap((s) => s.documents.map((d) => d.id)) }
     }
-})
+});
 ```
 
 This means:
+
 - The **Sales Agent** with the "CRM Management" skill searches CRM knowledge
 - The **Dev Agent** with the "Code Review" skill searches coding standards
 - The **Platform Agent** with the "Operations" skill searches platform docs
@@ -231,38 +238,38 @@ This means:
 // ==============================
 
 model Document {
-    id          String    @id @default(cuid())
-    slug        String    @unique
+    id          String  @id @default(cuid())
+    slug        String  @unique
     name        String
-    description String?   @db.Text
-    content     String    @db.Text    // The actual markdown/text content
-    type        String    @default("markdown") // markdown, text, html, json
+    description String? @db.Text
+    content     String  @db.Text // The actual markdown/text content
+    type        String  @default("markdown") // markdown, text, html, json
 
     // RAG integration
-    vectorIds   String[]  // References to chunks in vector DB
-    chunkCount  Int       @default(0)
-    embeddedAt  DateTime? // When last embedded
+    vectorIds  String[] // References to chunks in vector DB
+    chunkCount Int       @default(0)
+    embeddedAt DateTime? // When last embedded
 
     // Categorization
-    category    String?   // e.g., "process", "reference", "architecture"
-    tags        String[]
-    metadata    Json?     // Flexible key-value metadata
+    category String? // e.g., "process", "reference", "architecture"
+    tags     String[]
+    metadata Json? // Flexible key-value metadata
 
     // Multi-tenancy
     workspaceId String
     workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
     // Versioning
-    version     Int       @default(1)
-    versions    DocumentVersion[]
+    version  Int               @default(1)
+    versions DocumentVersion[]
 
     // Relations
-    skills      SkillDocument[]
+    skills SkillDocument[]
 
     // Audit
-    createdAt   DateTime  @default(now())
-    updatedAt   DateTime  @updatedAt
-    createdBy   String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
 
     @@index([workspaceId])
     @@index([category])
@@ -270,14 +277,14 @@ model Document {
 }
 
 model DocumentVersion {
-    id         String   @id @default(cuid())
-    documentId String
-    document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-    version    Int
-    content    String   @db.Text
+    id            String   @id @default(cuid())
+    documentId    String
+    document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+    version       Int
+    content       String   @db.Text
     changeSummary String?
-    createdAt  DateTime @default(now())
-    createdBy  String?
+    createdAt     DateTime @default(now())
+    createdBy     String?
 
     @@unique([documentId, version])
     @@map("document_version")
@@ -288,40 +295,40 @@ model DocumentVersion {
 // ==============================
 
 model Skill {
-    id           String    @id @default(cuid())
-    slug         String    @unique
-    name         String
-    description  String?   @db.Text
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String? @db.Text
 
     // Core skill content
-    instructions String    @db.Text  // Procedural knowledge - the "how to"
-    examples     String?   @db.Text  // Reference outputs, patterns
+    instructions String  @db.Text // Procedural knowledge - the "how to"
+    examples     String? @db.Text // Reference outputs, patterns
 
     // Categorization
-    category     String?   // e.g., "crm", "development", "operations"
-    tags         String[]
-    metadata     Json?
+    category String? // e.g., "crm", "development", "operations"
+    tags     String[]
+    metadata Json?
 
     // Multi-tenancy
-    workspaceId  String
-    workspace    Workspace @relation(fields: [workspaceId], references: [id])
+    workspaceId String
+    workspace   Workspace @relation(fields: [workspaceId], references: [id])
 
     // Versioning
-    version      Int       @default(1)
-    versions     SkillVersion[]
+    version  Int            @default(1)
+    versions SkillVersion[]
 
     // Relations
-    documents    SkillDocument[]  // Knowledge base
-    tools        SkillTool[]      // Associated tools
-    agents       AgentSkill[]     // Agents with this skill
+    documents SkillDocument[] // Knowledge base
+    tools     SkillTool[] // Associated tools
+    agents    AgentSkill[] // Agents with this skill
 
     // Type
-    type         String    @default("USER") // USER or SYSTEM
+    type String @default("USER") // USER or SYSTEM
 
     // Audit
-    createdAt    DateTime  @default(now())
-    updatedAt    DateTime  @updatedAt
-    createdBy    String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
 
     @@index([workspaceId])
     @@index([category])
@@ -329,15 +336,15 @@ model Skill {
 }
 
 model SkillVersion {
-    id           String   @id @default(cuid())
-    skillId      String
-    skill        Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
-    version      Int
-    instructions String   @db.Text
-    configJson   Json?    // Snapshot of documents, tools, etc.
+    id            String   @id @default(cuid())
+    skillId       String
+    skill         Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    version       Int
+    instructions  String   @db.Text
+    configJson    Json? // Snapshot of documents, tools, etc.
     changeSummary String?
-    createdAt    DateTime @default(now())
-    createdBy    String?
+    createdAt     DateTime @default(now())
+    createdBy     String?
 
     @@unique([skillId, version])
     @@map("skill_version")
@@ -353,7 +360,7 @@ model SkillDocument {
     skill      Skill    @relation(fields: [skillId], references: [id], onDelete: Cascade)
     documentId String
     document   Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
-    role       String?  // "reference", "procedure", "example", "context"
+    role       String? // "reference", "procedure", "example", "context"
 
     @@unique([skillId, documentId])
     @@map("skill_document")
@@ -516,13 +523,13 @@ This is how organizations actually work: institutional knowledge improves over t
 
 ## Summary
 
-| What                    | Current State                        | Proposed State                                    |
-| ----------------------- | ------------------------------------ | ------------------------------------------------- |
-| **Knowledge**           | Trapped in `docs/` files, unindexed  | First-class Documents, auto-embedded, versioned   |
-| **RAG**                 | Flat vector search, no scoping       | Document-scoped, skill-filtered, agent-aware      |
-| **Domain Expertise**    | Crammed into agent instructions      | Reusable Skills composable across agents          |
-| **Tool Context**        | Tools exist but agents lack guidance | Skills bundle tools with "how and when to use"    |
-| **Composability**       | Agent = instructions + tools         | Agent = instructions + skills + tools + memory    |
-| **Knowledge Lifecycle** | Static, manual                       | Versioned, auto-embedded, freshness-tracked       |
+| What                    | Current State                        | Proposed State                                  |
+| ----------------------- | ------------------------------------ | ----------------------------------------------- |
+| **Knowledge**           | Trapped in `docs/` files, unindexed  | First-class Documents, auto-embedded, versioned |
+| **RAG**                 | Flat vector search, no scoping       | Document-scoped, skill-filtered, agent-aware    |
+| **Domain Expertise**    | Crammed into agent instructions      | Reusable Skills composable across agents        |
+| **Tool Context**        | Tools exist but agents lack guidance | Skills bundle tools with "how and when to use"  |
+| **Composability**       | Agent = instructions + tools         | Agent = instructions + skills + tools + memory  |
+| **Knowledge Lifecycle** | Static, manual                       | Versioned, auto-embedded, freshness-tracked     |
 
 **A tool is a hammer. A document is a blueprint. A skill is the carpentry training that teaches you WHEN to use the hammer and HOW to read the blueprint.**

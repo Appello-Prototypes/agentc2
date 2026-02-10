@@ -3,3 +3,39 @@
 
 /* Scan agent app source files for Tailwind classes */
 @source "../../**/*.{js,ts,jsx,tsx}";
+
+/* Tighter font sizing for chat messages */
+[role="log"] .is-assistant p,
+[role="log"] .is-assistant li,
+[role="log"] .is-assistant td,
+[role="log"] .is-assistant th {
+    font-size: 0.8125rem;
+    line-height: 1.65;
+}
+
+[role="log"] .is-assistant h1 {
+    font-size: 1.125rem;
+}
+
+[role="log"] .is-assistant h2 {
+    font-size: 1rem;
+}
+
+[role="log"] .is-assistant h3 {
+    font-size: 0.875rem;
+}
+
+[role="log"] .is-assistant h4,
+[role="log"] .is-assistant h5,
+[role="log"] .is-assistant h6 {
+    font-size: 0.8125rem;
+}
+
+/* CoWork-style soft background wash */
+.cowork-bg {
+    background: radial-gradient(
+        ellipse 80% 60% at 50% 100%,
+        hsl(var(--muted) / 0.4) 0%,
+        transparent 70%
+    );
+}

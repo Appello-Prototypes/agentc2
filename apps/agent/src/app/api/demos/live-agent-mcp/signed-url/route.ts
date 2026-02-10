@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { resolveChannelCredentials } from "@/lib/channel-credentials";
 
 /**
  * ElevenLabs Agent from API response
@@ -63,7 +64,8 @@ export async function GET(request: Request) {
     const agentIdParam = searchParams.get("agent");
     const listAgents = searchParams.get("list") === "true";
 
-    const apiKey = process.env.ELEVENLABS_API_KEY;
+    const { credentials: elCreds } = await resolveChannelCredentials("elevenlabs");
+    const apiKey = elCreds.ELEVENLABS_API_KEY || process.env.ELEVENLABS_API_KEY;
 
     if (!apiKey) {
         return NextResponse.json({ error: "ELEVENLABS_API_KEY not configured" }, { status: 500 });
@@ -93,7 +95,11 @@ export async function GET(request: Request) {
 
     // Use provided agent ID or fall back to environment variable
     const agentId =
-        agentIdParam || process.env.ELEVENLABS_MCP_AGENT_ID || process.env.ELEVENLABS_AGENT_ID;
+        agentIdParam ||
+        elCreds.ELEVENLABS_MCP_AGENT_ID ||
+        elCreds.ELEVENLABS_AGENT_ID ||
+        process.env.ELEVENLABS_MCP_AGENT_ID ||
+        process.env.ELEVENLABS_AGENT_ID;
 
     if (!agentId) {
         return NextResponse.json(

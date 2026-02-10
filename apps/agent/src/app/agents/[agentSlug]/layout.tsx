@@ -18,7 +18,6 @@ import {
 } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
-import { LiveChatPanel } from "@/components/LiveChatPanel";
 
 interface Agent {
     id: string;
@@ -53,7 +52,6 @@ function formatModelName(modelName: string): string {
 const navItems: { id: string; label: string; icon: IconName }[] = [
     { id: "overview", label: "Overview", icon: "dashboard" },
     { id: "configure", label: "Configure", icon: "settings" },
-    { id: "test", label: "Test", icon: "test-tube" },
     { id: "runs", label: "Runs", icon: "play-circle" },
     { id: "automation", label: "Automation", icon: "calendar" },
     { id: "analytics", label: "Analytics", icon: "analytics" },
@@ -75,10 +73,6 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
     const [agent, setAgent] = useState<Agent | null>(null);
     const [allAgents, setAllAgents] = useState<AgentListItem[]>([]);
     const [loading, setLoading] = useState(true);
-
-    // Mode toggle state: "workspace" or "live"
-    const [mode, setMode] = useState<"workspace" | "live">("workspace");
-    const [chatMinimized, setChatMinimized] = useState(false);
 
     // Determine active tab from pathname
     const activeTab = pathname.split("/").pop() || "overview";
@@ -120,7 +114,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
 
     if (loading) {
         return (
-            <div className="flex h-screen">
+            <div className="flex h-full">
                 <div className="w-64 border-r p-4">
                     <Skeleton className="mb-4 h-8 w-full" />
                     <Skeleton className="mb-8 h-6 w-3/4" />
@@ -137,7 +131,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
 
     if (!agent) {
         return (
-            <div className="flex h-screen items-center justify-center">
+            <div className="flex h-full items-center justify-center">
                 <div className="text-center">
                     <h1 className="mb-2 text-2xl font-bold">Agent Not Found</h1>
                     <p className="text-muted-foreground mb-4">
@@ -152,48 +146,9 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
     }
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-full overflow-hidden">
             {/* Sidebar */}
             <aside className="bg-muted/30 flex w-64 flex-col border-r">
-                {/* Mode Toggle Header */}
-                <div className="flex items-center justify-between border-b px-3 py-2">
-                    <div className="bg-muted flex rounded-lg p-0.5">
-                        <button
-                            onClick={() => setMode("workspace")}
-                            className={cn(
-                                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                                mode === "workspace"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            Manage
-                        </button>
-                        <button
-                            onClick={() => {
-                                setMode("live");
-                                setChatMinimized(false);
-                            }}
-                            className={cn(
-                                "rounded-md px-3 py-1 text-xs font-medium transition-colors",
-                                mode === "live"
-                                    ? "bg-green-500 text-white shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            Live
-                        </button>
-                    </div>
-                    {mode === "live" && (
-                        <Badge
-                            variant="outline"
-                            className="h-5 bg-green-100 px-1.5 text-[10px] text-green-800 dark:bg-green-900/30 dark:text-green-300"
-                        >
-                            PROD
-                        </Badge>
-                    )}
-                </div>
-
                 {/* Agent Header with Switcher */}
                 <div className="border-b p-3">
                     {/* Agent Switcher Dropdown */}
@@ -289,12 +244,20 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                 </nav>
 
                 {/* Footer */}
-                <div className="border-t p-4">
+                <div className="space-y-2 border-t p-4">
+                    <Button
+                        variant="default"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => router.push(`/?agent=${agentSlug}`)}
+                    >
+                        Try it
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"
                         className="w-full"
-                        onClick={() => router.push("/demos/agents/manage")}
+                        onClick={() => router.push("/agents")}
                     >
                         ← Back to Agents
                     </Button>
@@ -302,24 +265,9 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
             </aside>
 
             {/* Main Content */}
-            <main
-                className={cn(
-                    "flex-1 overflow-y-auto",
-                    mode === "live" && !chatMinimized && "mr-[420px]"
-                )}
-            >
+            <main className="flex-1 overflow-y-auto">
                 <div className="p-6">{children}</div>
             </main>
-
-            {/* Live Mode Chat Panel */}
-            {mode === "live" && (
-                <LiveChatPanel
-                    initialAgentSlug={agentSlug}
-                    minimized={chatMinimized}
-                    onMinimizeToggle={() => setChatMinimized(!chatMinimized)}
-                    onClose={() => setMode("workspace")}
-                />
-            )}
         </div>
     );
 }

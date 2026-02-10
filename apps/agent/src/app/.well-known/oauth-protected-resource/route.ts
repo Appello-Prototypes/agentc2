@@ -1,7 +1,7 @@
-import { NextRequest } from "next/server"
-import { getPublicBaseUrl } from "@/lib/mcp-oauth"
+import { NextRequest } from "next/server";
+import { getPublicBaseUrl } from "@/lib/mcp-oauth";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 /**
  * GET /.well-known/oauth-protected-resource
@@ -10,22 +10,22 @@ export const dynamic = "force-dynamic"
  * Claude CoWork discovers this endpoint to find our authorization server.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-    const baseUrl = getPublicBaseUrl(request)
+    const baseUrl = getPublicBaseUrl(request);
 
     return new Response(
         JSON.stringify({
             resource: `${baseUrl}/api/mcp/server`,
             authorization_servers: [baseUrl],
             scopes_supported: ["mcp"],
-            bearer_methods_supported: ["header"],
+            bearer_methods_supported: ["header"]
         }),
         {
             status: 200,
             headers: {
                 "Content-Type": "application/json",
                 "Cache-Control": "public, max-age=3600",
-                "X-Content-Type-Options": "nosniff",
-            },
+                "X-Content-Type-Options": "nosniff"
+            }
         }
-    )
+    );
 }

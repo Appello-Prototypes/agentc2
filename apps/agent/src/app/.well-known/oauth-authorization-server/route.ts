@@ -1,7 +1,7 @@
-import { NextRequest } from "next/server"
-import { getPublicBaseUrl } from "@/lib/mcp-oauth"
+import { NextRequest } from "next/server";
+import { getPublicBaseUrl } from "@/lib/mcp-oauth";
 
-export const dynamic = "force-dynamic"
+export const dynamic = "force-dynamic";
 
 /**
  * GET /.well-known/oauth-authorization-server
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic"
  * Claude CoWork discovers this to find our authorize and token endpoints.
  */
 export async function GET(request: NextRequest): Promise<Response> {
-    const baseUrl = getPublicBaseUrl(request)
+    const baseUrl = getPublicBaseUrl(request);
 
     return new Response(
         JSON.stringify({
@@ -20,19 +20,16 @@ export async function GET(request: NextRequest): Promise<Response> {
             response_types_supported: ["code"],
             grant_types_supported: ["authorization_code", "refresh_token"],
             code_challenge_methods_supported: ["S256"],
-            token_endpoint_auth_methods_supported: [
-                "client_secret_post",
-                "client_secret_basic",
-            ],
-            scopes_supported: ["mcp"],
+            token_endpoint_auth_methods_supported: ["client_secret_post", "client_secret_basic"],
+            scopes_supported: ["mcp"]
         }),
         {
             status: 200,
             headers: {
                 "Content-Type": "application/json",
                 "Cache-Control": "public, max-age=3600",
-                "X-Content-Type-Options": "nosniff",
-            },
+                "X-Content-Type-Options": "nosniff"
+            }
         }
-    )
+    );
 }

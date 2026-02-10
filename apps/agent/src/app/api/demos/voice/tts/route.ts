@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { OpenAIVoice } from "@mastra/voice-openai";
 import { ElevenLabsVoice } from "@mastra/voice-elevenlabs";
 import { Readable } from "stream";
+import { resolveCredentialValue } from "@/lib/channel-credentials";
 
 // Helper to convert Node.js Readable stream to buffer using async iteration
 // This handles already-ended streams (like PassThrough) more reliably than events
@@ -27,7 +28,11 @@ export async function POST(request: NextRequest) {
 
         let voice;
         if (provider === "elevenlabs") {
-            if (!process.env.ELEVENLABS_API_KEY) {
+            const { value: elApiKey } = await resolveCredentialValue(
+                "elevenlabs",
+                "ELEVENLABS_API_KEY"
+            );
+            if (!elApiKey) {
                 return NextResponse.json(
                     { error: "ELEVENLABS_API_KEY not configured" },
                     { status: 500 }
@@ -36,7 +41,7 @@ export async function POST(request: NextRequest) {
             voice = new ElevenLabsVoice({
                 speechModel: {
                     name: "eleven_multilingual_v2",
-                    apiKey: process.env.ELEVENLABS_API_KEY
+                    apiKey: elApiKey
                 }
             });
         } else {

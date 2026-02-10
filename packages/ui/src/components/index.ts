@@ -37,3 +37,6 @@ export * from "./providers";
 
 // AI Elements
 export * from "./ai-elements";
+
+// Canvas
+export * from "./canvas";

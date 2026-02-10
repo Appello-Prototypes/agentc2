@@ -7,13 +7,15 @@ import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
-    { label: "Assistant", href: "/assistant" },
+    { label: "Chat", href: "/" },
     { label: "Agents", href: "/agents" },
     { label: "Workflows", href: "/workflows" },
     { label: "Networks", href: "/networks" },
     { label: "Live Runs", href: "/live" },
     { label: "Triggers", href: "/triggers" },
-    { label: "Integrations", href: "/mcp" }
+    { label: "Knowledge", href: "/knowledge" },
+    { label: "Integrations", href: "/mcp" },
+    { label: "Channels", href: "/channels/test" }
 ];
 
 export function AgentHeader() {
@@ -35,9 +37,8 @@ export function AgentHeader() {
     };
 
     const isActive = (href: string) => {
-        if (href === "/agents") {
-            // Agents is active for root and /agents paths
-            return pathname === "/" || pathname?.startsWith("/agents");
+        if (href === "/") {
+            return pathname === "/";
         }
         return pathname?.startsWith(href);
     };

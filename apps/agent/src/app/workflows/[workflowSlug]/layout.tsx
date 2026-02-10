@@ -64,7 +64,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
 
     if (loading) {
         return (
-            <div className="flex h-screen">
+            <div className="flex h-full">
                 <div className="w-64 border-r p-4">
                     <Skeleton className="mb-4 h-8 w-full" />
                     <Skeleton className="mb-8 h-6 w-3/4" />
@@ -81,7 +81,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
 
     if (!workflow) {
         return (
-            <div className="flex h-screen items-center justify-center">
+            <div className="flex h-full items-center justify-center">
                 <div className="text-center">
                     <h1 className="mb-2 text-2xl font-bold">Workflow Not Found</h1>
                     <p className="text-muted-foreground mb-4">
@@ -94,7 +94,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
     }
 
     return (
-        <div className="flex h-screen overflow-hidden">
+        <div className="flex h-full overflow-hidden">
             <aside className="bg-muted/30 flex w-64 flex-col border-r">
                 <div className="border-b p-3">
                     <div className="flex items-start justify-between gap-2">

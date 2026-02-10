@@ -97,6 +97,7 @@ export {
     memoryRecallTool,
     workflowTriggerTool,
     jsonParserTool,
+    askQuestionsTool,
     extendedTools,
     // Tool registry for stored agents
     mcpToolDefinitions,
@@ -154,6 +155,61 @@ export {
     type DocumentType,
     type ChunkOptions
 } from "./rag";
+
+// Documents (first-class primitive)
+export {
+    createDocument as createDocumentRecord,
+    updateDocument as updateDocumentRecord,
+    deleteDocument as deleteDocumentRecord,
+    getDocument as getDocumentRecord,
+    listDocuments as listDocumentRecords,
+    searchDocuments as searchDocumentRecords,
+    reembedDocument,
+    getDocumentVersions,
+    type CreateDocumentInput,
+    type UpdateDocumentInput,
+    type ListDocumentsInput,
+    type SearchDocumentsInput
+} from "./documents";
+
+// Skills (first-class primitive)
+export {
+    createSkill,
+    updateSkill,
+    deleteSkill,
+    getSkill,
+    listSkills,
+    attachDocument as skillAttachDocument,
+    detachDocument as skillDetachDocument,
+    attachTool as skillAttachTool,
+    detachTool as skillDetachTool,
+    attachToAgent as skillAttachToAgent,
+    detachFromAgent as skillDetachFromAgent,
+    getSkillVersions,
+    type CreateSkillInput,
+    type UpdateSkillInput,
+    type ListSkillsInput
+} from "./skills";
+
+// Canvas
+export {
+    CanvasSchemaSpec,
+    DataQuerySchema,
+    CanvasComponentSchema,
+    BLOCK_TYPES,
+    executeCanvasQueries,
+    executeSingleQuery,
+    resolveExpression,
+    resolveExpressions
+} from "./canvas";
+export type {
+    DataQuery,
+    CanvasComponent,
+    BlockTypeInfo,
+    QueryExecutionResult,
+    QueryExecutionOptions,
+    ExpressionContext
+} from "./canvas";
 
 // BIM
 export {

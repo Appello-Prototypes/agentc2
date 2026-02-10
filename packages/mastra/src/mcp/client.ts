@@ -516,6 +516,142 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "automation",
         authType: "webhook",
         providerType: "webhook"
+    },
+
+    // ── Channel Integrations (voice / messaging) ──────────────────────
+    {
+        key: "twilio-voice",
+        name: "Twilio Voice",
+        description: "Phone call integration with speech recognition and TTS",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
+            fieldDefinitions: {
+                TWILIO_ACCOUNT_SID: {
+                    label: "Account SID",
+                    description: "Found on the Twilio Console dashboard",
+                    placeholder: "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                },
+                TWILIO_AUTH_TOKEN: {
+                    label: "Auth Token",
+                    description: "Found on the Twilio Console dashboard",
+                    placeholder: "your_auth_token",
+                    type: "password"
+                },
+                TWILIO_PHONE_NUMBER: {
+                    label: "Phone Number",
+                    description: "Twilio phone number in E.164 format",
+                    placeholder: "+15551234567"
+                },
+                VOICE_TTS_PROVIDER: {
+                    label: "TTS Provider (optional)",
+                    description: "Text-to-speech provider: twilio, elevenlabs, or openai",
+                    placeholder: "twilio"
+                },
+                VOICE_DEFAULT_AGENT_SLUG: {
+                    label: "Default Agent Slug (optional)",
+                    description: "Agent to handle voice calls",
+                    placeholder: "mcp-agent"
+                }
+            }
+        }
+    },
+    {
+        key: "elevenlabs",
+        name: "ElevenLabs",
+        description: "Conversational AI agents, premium text-to-speech, and webhook tools",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["ELEVENLABS_API_KEY"],
+            fieldDefinitions: {
+                ELEVENLABS_API_KEY: {
+                    label: "API Key",
+                    description: "From the ElevenLabs dashboard > Profile + API Key",
+                    placeholder: "sk_...",
+                    type: "password"
+                },
+                ELEVENLABS_AGENT_ID: {
+                    label: "Agent ID (optional)",
+                    description: "Default conversational agent ID",
+                    placeholder: "agent_..."
+                },
+                ELEVENLABS_WEBHOOK_SECRET: {
+                    label: "Webhook Secret (optional)",
+                    description: "Secret for authenticating webhook calls from ElevenLabs",
+                    placeholder: "wsec_...",
+                    type: "password"
+                },
+                ELEVENLABS_MCP_WEBHOOK_URL: {
+                    label: "MCP Webhook URL (optional)",
+                    description: "Public URL for MCP tool webhooks (via ngrok)",
+                    placeholder: "https://your-domain.ngrok-free.dev/api/demos/live-agent-mcp/tools"
+                }
+            }
+        }
+    },
+    {
+        key: "telegram-bot",
+        name: "Telegram Bot",
+        description: "Telegram Bot API for messaging and group chat",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["TELEGRAM_BOT_TOKEN"],
+            fieldDefinitions: {
+                TELEGRAM_BOT_TOKEN: {
+                    label: "Bot Token",
+                    description: "Obtain from @BotFather on Telegram",
+                    placeholder: "7123456789:AAH...",
+                    type: "password"
+                },
+                TELEGRAM_WEBHOOK_SECRET: {
+                    label: "Webhook Secret (optional)",
+                    description: "Secret for verifying webhook requests",
+                    placeholder: "your_secret",
+                    type: "password"
+                },
+                TELEGRAM_DEFAULT_AGENT_SLUG: {
+                    label: "Default Agent Slug (optional)",
+                    description: "Agent to handle Telegram messages",
+                    placeholder: "mcp-agent"
+                }
+            }
+        }
+    },
+    {
+        key: "whatsapp-web",
+        name: "WhatsApp Web",
+        description: "WhatsApp integration via Baileys (QR code pairing, no API key required)",
+        category: "communication",
+        authType: "none",
+        providerType: "custom",
+        configJson: {
+            requiredFields: [],
+            fieldDefinitions: {
+                WHATSAPP_ALLOWLIST: {
+                    label: "Phone Number Allowlist (optional)",
+                    description: "Comma-separated phone numbers allowed to message",
+                    placeholder: "+15551234567,+15559876543"
+                },
+                WHATSAPP_DEFAULT_AGENT_SLUG: {
+                    label: "Default Agent Slug (optional)",
+                    description: "Agent to handle WhatsApp messages",
+                    placeholder: "mcp-agent"
+                },
+                WHATSAPP_SESSION_PATH: {
+                    label: "Session Path (optional)",
+                    description: "Path for storing the Baileys session",
+                    placeholder: "./.whatsapp-session"
+                }
+            },
+            setupUrl: "/api/channels/whatsapp/qr",
+            setupLabel: "Scan QR Code"
+        }
     }
 ];
 

@@ -59,6 +59,7 @@ export {
     PromptInputActionMenuTrigger,
     PromptInputActionMenuContent,
     PromptInputActionMenuItem,
+    PromptInputActionAddAttachments,
     PromptInputProvider,
     usePromptInputAttachments,
     usePromptInputController,
@@ -79,7 +80,8 @@ export {
     type PromptInputActionMenuProps,
     type PromptInputActionMenuTriggerProps,
     type PromptInputActionMenuContentProps,
-    type PromptInputActionMenuItemProps
+    type PromptInputActionMenuItemProps,
+    type PromptInputActionAddAttachmentsProps
 } from "./prompt-input";
 
 // Tool

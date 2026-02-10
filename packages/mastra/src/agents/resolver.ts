@@ -241,6 +241,20 @@ export class AgentResolver {
             );
         }
 
+        // Load skills (documents + tools + instructions)
+        const { skillInstructions, skillTools } = await this.loadSkills(record.id, organizationId);
+
+        // Merge skill tools into agent tools (agent-explicit tools take precedence)
+        if (Object.keys(skillTools).length > 0) {
+            tools = { ...skillTools, ...tools };
+        }
+
+        // Append skill instructions to agent instructions
+        let finalInstructions = instructions;
+        if (skillInstructions) {
+            finalInstructions += `\n\n---\n# Skills & Domain Knowledge\n${skillInstructions}`;
+        }
+
         // Get scorers from registry
         const scorers = getScorersByNames(record.scorers);
 
@@ -258,7 +272,7 @@ export class AgentResolver {
         const agentConfig: any = {
             id: record.id,
             name: record.name,
-            instructions,
+            instructions: finalInstructions,
             model
         };
 
@@ -288,6 +302,66 @@ export class AgentResolver {
         }
 
         return new Agent(agentConfig);
+    }
+
+    /**
+     * Load skills attached to an agent via AgentSkill junction.
+     * Returns merged skill instructions, resolved skill tools, and document IDs for scoped RAG.
+     */
+    private async loadSkills(
+        agentId: string,
+        organizationId?: string | null
+    ): Promise<{
+        skillInstructions: string;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        skillTools: Record<string, any>;
+        skillDocumentIds: string[];
+    }> {
+        const agentSkills = await prisma.agentSkill.findMany({
+            where: { agentId },
+            include: {
+                skill: {
+                    include: {
+                        documents: {
+                            include: {
+                                document: {
+                                    select: { id: true, slug: true, name: true }
+                                }
+                            }
+                        },
+                        tools: true
+                    }
+                }
+            }
+        });
+
+        if (agentSkills.length === 0) {
+            return { skillInstructions: "", skillTools: {}, skillDocumentIds: [] };
+        }
+
+        let skillInstructions = "";
+        const skillToolIds: string[] = [];
+        const skillDocumentIds: string[] = [];
+
+        for (const { skill } of agentSkills) {
+            skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
+            if (skill.examples) {
+                skillInstructions += `\n\n### Examples:\n${skill.examples}`;
+            }
+
+            for (const st of skill.tools) {
+                skillToolIds.push(st.toolId);
+            }
+
+            for (const sd of skill.documents) {
+                skillDocumentIds.push(sd.documentId);
+            }
+        }
+
+        const skillTools =
+            skillToolIds.length > 0 ? await getToolsByNamesAsync(skillToolIds, organizationId) : {};
+
+        return { skillInstructions, skillTools, skillDocumentIds };
     }
 
     /**

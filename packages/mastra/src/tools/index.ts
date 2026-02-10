@@ -1,4 +1,5 @@
 export { dateTimeTool, calculatorTool, generateIdTool, tools } from "./example-tools";
+export { askQuestionsTool } from "./ask-questions";
 export { webFetchTool } from "./web-fetch";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
@@ -139,6 +140,7 @@ export {
 export type { ToolInfo } from "./registry";
 
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
+import { askQuestionsTool } from "./ask-questions";
 import { webFetchTool } from "./web-fetch";
 import { jsonParserTool } from "./json-parser";
 import { workflowExecuteTool, workflowListRunsTool, workflowGetRunTool } from "./workflow-tools";
@@ -168,5 +170,6 @@ export const extendedTools = {
     bimTakeoffTool,
     bimDiffTool,
     bimClashTool,
-    bimHandoverTool
+    bimHandoverTool,
+    askQuestionsTool
 };

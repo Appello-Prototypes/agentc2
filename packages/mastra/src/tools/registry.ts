@@ -6,6 +6,7 @@
  * Also supports MCP tools dynamically via getMcpTools().
  */
 
+import { gmailArchiveEmailTool } from "./gmail";
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
@@ -130,6 +131,37 @@ import {
     orgWorkspaceCreateTool
 } from "./organization-tools";
 import { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
+import {
+    documentCreateTool,
+    documentReadTool,
+    documentUpdateTool,
+    documentDeleteTool,
+    documentListTool,
+    documentSearchTool
+} from "./document-tools";
+import {
+    skillCreateTool,
+    skillReadTool,
+    skillUpdateTool,
+    skillDeleteTool,
+    skillListTool,
+    skillAttachDocumentTool,
+    skillDetachDocumentTool,
+    skillAttachToolTool,
+    skillDetachToolTool,
+    agentAttachSkillTool,
+    agentDetachSkillTool
+} from "./skill-tools";
+import {
+    canvasCreateTool,
+    canvasReadTool,
+    canvasUpdateTool,
+    canvasDeleteTool,
+    canvasListTool,
+    canvasQueryPreviewTool,
+    canvasListBlocksTool
+} from "./canvas-tools";
+import { askQuestionsTool } from "./ask-questions";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -272,7 +304,43 @@ export const toolRegistry: Record<string, any> = {
     "org-workspace-create": orgWorkspaceCreateTool,
     "goal-create": goalCreateTool,
     "goal-list": goalListTool,
-    "goal-get": goalGetTool
+    "goal-get": goalGetTool,
+
+    // Document tools
+    "document-create": documentCreateTool,
+    "document-read": documentReadTool,
+    "document-update": documentUpdateTool,
+    "document-delete": documentDeleteTool,
+    "document-list": documentListTool,
+    "document-search": documentSearchTool,
+
+    // Skill tools
+    "skill-create": skillCreateTool,
+    "skill-read": skillReadTool,
+    "skill-update": skillUpdateTool,
+    "skill-delete": skillDeleteTool,
+    "skill-list": skillListTool,
+    "skill-attach-document": skillAttachDocumentTool,
+    "skill-detach-document": skillDetachDocumentTool,
+    "skill-attach-tool": skillAttachToolTool,
+    "skill-detach-tool": skillDetachToolTool,
+    "agent-attach-skill": agentAttachSkillTool,
+    "agent-detach-skill": agentDetachSkillTool,
+
+    // Gmail tools
+    "gmail-archive-email": gmailArchiveEmailTool,
+
+    // Canvas tools
+    "canvas-create": canvasCreateTool,
+    "canvas-read": canvasReadTool,
+    "canvas-update": canvasUpdateTool,
+    "canvas-delete": canvasDeleteTool,
+    "canvas-list": canvasListTool,
+    "canvas-query-preview": canvasQueryPreviewTool,
+    "canvas-list-blocks": canvasListBlocksTool,
+
+    // Interactive UI tools
+    "ask-questions": askQuestionsTool
 };
 
 /**

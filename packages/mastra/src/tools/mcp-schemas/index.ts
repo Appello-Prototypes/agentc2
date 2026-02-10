@@ -17,6 +17,8 @@ import { scheduleToolDefinitions, scheduleToolRoutes } from "./schedules";
 import { triggerToolDefinitions, triggerToolRoutes } from "./triggers";
 import { workflowConfigToolDefinitions, workflowConfigToolRoutes } from "./workflow-config";
 import { workflowOpsToolDefinitions, workflowOpsToolRoutes } from "./workflow-ops";
+import { documentToolDefinitions, documentToolRoutes } from "./documents";
+import { skillToolDefinitions, skillToolRoutes } from "./skills";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -41,7 +43,9 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...scheduleToolDefinitions,
     ...triggerToolDefinitions,
     ...executionTriggerToolDefinitions,
-    ...integrationToolDefinitions
+    ...integrationToolDefinitions,
+    ...documentToolDefinitions,
+    ...skillToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -63,5 +67,7 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...scheduleToolRoutes,
     ...triggerToolRoutes,
     ...executionTriggerToolRoutes,
-    ...integrationToolRoutes
+    ...integrationToolRoutes,
+    ...documentToolRoutes,
+    ...skillToolRoutes
 ];

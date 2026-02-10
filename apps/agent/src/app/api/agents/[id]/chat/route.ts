@@ -378,6 +378,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 startTime: Date.now()
                             });
 
+                            // Stream tool invocation to frontend
+                            writer.write({
+                                type: "tool-input-available",
+                                toolCallId,
+                                toolName,
+                                input: args
+                            });
+
                             stepCounter++;
                             executionSteps.push({
                                 step: stepCounter,
@@ -436,6 +444,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     error: error
                                 });
                                 console.log(`[Agent Chat] Unmatched tool result: ${toolName}`);
+                            }
+
+                            // Stream tool result to frontend
+                            if (error) {
+                                writer.write({
+                                    type: "tool-output-error",
+                                    toolCallId,
+                                    errorText: error
+                                });
+                            } else {
+                                writer.write({
+                                    type: "tool-output-available",
+                                    toolCallId,
+                                    output: result
+                                });
                             }
 
                             stepCounter++;
