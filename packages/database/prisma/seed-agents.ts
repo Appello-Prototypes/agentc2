@@ -68,46 +68,100 @@ Remember: Be helpful, accurate, and efficient. Pay attention to personal details
         slug: "workspace-concierge",
         name: "Workspace Concierge",
         description:
-            "Helps people describe outcomes and builds agents, workflows, or networks to deliver them.",
-        instructions: `You are the workspace concierge. Your job is to help people describe outcomes without forcing them to learn system primitives.
+            "Full-capability workspace AI with access to all platform tools and MCP integrations. Manages agents, workflows, networks, and interacts with CRM, email, calendar, project management, meetings, and more.",
+        instructions: `You are the Workspace AI — the central assistant for the AgentC2 platform. You have access to every tool and integration available, matching the full capabilities of the platform.
 
-Core flow (always start here):
-1) When does this happen? (event, schedule, or on-demand)
-2) What should happen? (review, categorize/analyze, take action, notify, chain steps)
-3) What details are missing? (data source, recipients, criteria, output format)
+## What You Can Do
 
-Guidance principles:
-- Use plain language. Avoid "agent", "workflow", "network" unless the user asks.
-- Present a short plan and ask for confirmation before making changes.
-- After creation, summarize what will happen, when, and the expected outcome.
-- Offer advanced controls only if requested and link to the relevant area.
+### Platform Management
+- Create, configure, and manage AI agents, workflows, and networks
+- Set up triggers (event-driven, scheduled, on-demand) for any automation
+- View analytics, metrics, costs, and run history across the platform
+- Manage evaluations, feedback, guardrails, budgets, and test cases
+- Start learning sessions and simulations for agents
+- Manage RAG documents (ingest, query, delete)
+- View audit logs and live production stats
 
-Decision heuristics:
-- Single, simple outcome -> build a single automation (agent).
-- Multiple steps or approvals -> build a multi-step flow (workflow).
-- Multiple specialized paths or routing decisions -> build a routed system (network).
+### External Integrations (via MCP)
+- **HubSpot CRM**: Search/manage contacts, companies, deals, pipeline, properties, workflows, engagements
+- **Jira**: Search/manage issues, projects, sprints, boards, comments, transitions
+- **Gmail**: Search, read, send, draft emails; manage labels and filters
+- **Google Calendar**: List, create, update, delete events; check free/busy
+- **Google Drive**: Search and read files (Docs, Sheets, Slides)
+- **Fathom**: List meetings, get transcripts and summaries
+- **ATLAS**: Query the knowledge base of historical meeting transcripts and documents
+- **Slack**: Search messages, list channels and users
+- **GitHub**: Manage repos, issues, PRs, code, and actions
+- **Firecrawl**: Scrape web pages and extract content
 
-Tools:
-- Use workspace-intent-recommendation to sanity check the structure.
-- Use *-create/*-update tools to build or adjust automations.
-- Use trigger-unified-* tools to attach event/schedule/on-demand triggers.
-- Use metrics-* tools to answer performance questions.
+### Utility Tools
+- Get current date/time, perform calculations, generate IDs
+- Fetch web content, parse JSON, recall from memory
 
-Always confirm intent, then execute. Keep responses concise and outcome-focused.`,
+## How to Work
+
+### For building automations:
+1. Ask: When does this happen? (event, schedule, or on-demand)
+2. Ask: What should happen? (review, analyze, take action, notify, chain steps)
+3. Ask: What details are missing? (data source, recipients, criteria)
+4. Decide the right primitive:
+   - Single outcome → agent
+   - Multiple steps or approvals → workflow
+   - Multiple specialized paths → network
+5. Present a plan, confirm, then build it
+
+### For direct tasks:
+When users ask you to do something directly (look up a contact, check a calendar, find a Jira issue, search emails, etc.), just do it. Use the appropriate MCP tools without asking unnecessary questions.
+
+### Guidelines:
+- Use plain language. Avoid technical jargon unless the user asks.
+- Present a plan and confirm before making changes to the platform.
+- For read-only lookups, just execute and return results.
+- Keep responses concise and outcome-focused.
+- When combining multiple tools, explain what you're doing briefly.`,
         modelProvider: "anthropic",
         modelName: "claude-sonnet-4-20250514",
         tools: [
+            // Utility tools
+            "date-time",
+            "calculator",
+            "generate-id",
+            "web-fetch",
+            "memory-recall",
+            "json-parser",
+
+            // Agent CRUD
             "agent-create",
             "agent-read",
             "agent-update",
+            "agent-delete",
+
+            // Workflow CRUD & execution
             "workflow-create",
             "workflow-read",
             "workflow-update",
+            "workflow-delete",
+            "workflow-execute",
+            "workflow-list-runs",
+            "workflow-get-run",
+            "workflow-resume",
+            "workflow-metrics",
+            "workflow-versions",
+            "workflow-stats",
+
+            // Network CRUD & execution
             "network-create",
             "network-read",
             "network-update",
-            "workflow-execute",
+            "network-delete",
             "network-execute",
+            "network-list-runs",
+            "network-get-run",
+            "network-metrics",
+            "network-versions",
+            "network-stats",
+
+            // Trigger management
             "trigger-unified-list",
             "trigger-unified-get",
             "trigger-unified-create",
@@ -115,21 +169,107 @@ Always confirm intent, then execute. Keep responses concise and outcome-focused.
             "trigger-unified-delete",
             "trigger-unified-enable",
             "trigger-unified-disable",
+
+            // Agent operations
+            "agent-list",
+            "agent-overview",
+            "agent-analytics",
+            "agent-costs",
+            "agent-budget-get",
+            "agent-budget-update",
+
+            // Agent quality & safety
+            "agent-feedback-submit",
+            "agent-feedback-list",
+            "agent-guardrails-get",
+            "agent-guardrails-update",
+            "agent-guardrails-events",
+            "agent-test-cases-list",
+            "agent-test-cases-create",
+
+            // Run management
+            "agent-run-cancel",
+            "agent-run-rerun",
+            "agent-run-trace",
+
+            // Learning system
+            "agent-learning-sessions",
+            "agent-learning-start",
+            "agent-learning-session-get",
+            "agent-learning-proposal-approve",
+            "agent-learning-proposal-reject",
+            "agent-learning-experiments",
+            "agent-learning-metrics",
+            "agent-learning-policy",
+
+            // RAG pipeline
+            "rag-query",
+            "rag-ingest",
+            "rag-documents-list",
+            "rag-document-delete",
+
+            // Simulations
+            "agent-simulations-list",
+            "agent-simulations-start",
+            "agent-simulations-get",
+
+            // Metrics & observability
             "metrics-live-summary",
             "metrics-agent-analytics",
             "metrics-agent-runs",
             "metrics-workflow-daily",
             "metrics-network-daily",
-            "workspace-intent-recommendation"
+            "live-runs",
+            "live-metrics",
+            "live-stats",
+            "audit-logs-list",
+
+            // Workspace intent
+            "workspace-intent-recommendation",
+
+            // BIM tools
+            "bim-query",
+            "bim-takeoff",
+            "bim-diff",
+            "bim-clash",
+            "bim-handover",
+
+            // Webhooks
+            "webhook-list-agents",
+            "webhook-create",
+
+            // Integration management
+            "integration-import-mcp-json",
+            "integration-mcp-config",
+            "integration-connection-test",
+            "integration-providers-list",
+            "integration-connections-list",
+            "integration-connection-create",
+
+            // Organization management
+            "org-list",
+            "org-get",
+            "org-members-list",
+            "org-member-add",
+            "org-workspaces-list",
+            "org-workspace-create",
+
+            // Goals
+            "goal-create",
+            "goal-list",
+            "goal-get"
         ],
         memoryEnabled: true,
         memoryConfig: {
-            lastMessages: 20,
+            lastMessages: 40,
             semanticRecall: { topK: 10, messageRange: 100 },
             workingMemory: { enabled: true }
         },
         scorers: ["relevancy", "completeness"],
-        maxSteps: 10
+        maxSteps: 15,
+        metadata: {
+            mcpEnabled: true
+        }
     },
     {
         slug: "structured",

@@ -333,10 +333,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         let score: number | undefined;
 
                         if (key === "helpfulness") {
-                            const result = evaluateHelpfulness(
-                                run.inputText,
-                                run.outputText
-                            );
+                            const result = evaluateHelpfulness(run.inputText, run.outputText);
                             score = result.score;
                         } else if (key === "conciseness") {
                             // Custom conciseness scorer: ratio of input length to output length

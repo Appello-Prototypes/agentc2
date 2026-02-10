@@ -156,8 +156,15 @@ export default function TracesPage() {
                 throw new Error(runsResult.error || "Failed to fetch runs");
             }
 
+            // Filter to terminal statuses only to avoid duplicate rows
+            // (a QUEUED/RUNNING row and a COMPLETED row for the same execution)
+            const terminalStatuses = ["COMPLETED", "FAILED", "TIMEOUT"];
+            const terminalRuns = runsResult.runs.filter((run: { status: string }) =>
+                terminalStatuses.includes(run.status.toUpperCase())
+            );
+
             // Transform runs into trace objects (without full trace details)
-            const transformedTraces: Trace[] = runsResult.runs.map(
+            const transformedTraces: Trace[] = terminalRuns.map(
                 (run: {
                     id: string;
                     status: string;
@@ -256,8 +263,47 @@ export default function TracesPage() {
                     const stepsFromJson = traceData.stepsJson || [];
 
                     // Prefer relational data, but use JSON fallback if empty
-                    const rawSteps =
-                        stepsFromRelation.length > 0 ? stepsFromRelation : stepsFromJson;
+                    let rawSteps = stepsFromRelation.length > 0 ? stepsFromRelation : stepsFromJson;
+
+                    // If no steps exist but tool calls do, synthesize a timeline from tool calls
+                    const toolCallsData = traceData.toolCalls || [];
+                    if (rawSteps.length === 0 && toolCallsData.length > 0) {
+                        const synthesized: Array<{
+                            step: number;
+                            type: string;
+                            content: string;
+                            timestamp: string;
+                            durationMs?: number;
+                        }> = [];
+                        let stepNum = 1;
+                        for (const tc of toolCallsData) {
+                            synthesized.push({
+                                step: stepNum++,
+                                type: "tool_call",
+                                content: `Called tool: ${tc.toolKey}${tc.inputJson ? ` with ${JSON.stringify(tc.inputJson).slice(0, 200)}` : ""}`,
+                                timestamp: tc.createdAt || new Date().toISOString(),
+                                durationMs: tc.durationMs
+                            });
+                            synthesized.push({
+                                step: stepNum++,
+                                type: "tool_result",
+                                content: tc.success
+                                    ? `Tool ${tc.toolKey} succeeded${tc.outputJson ? `: ${JSON.stringify(tc.outputJson).slice(0, 200)}` : ""}`
+                                    : `Tool ${tc.toolKey} failed: ${tc.error || "Unknown error"}`,
+                                timestamp: tc.createdAt || new Date().toISOString()
+                            });
+                        }
+                        // Add a final response step if there's output
+                        if (baseTrace.output) {
+                            synthesized.push({
+                                step: stepNum++,
+                                type: "response",
+                                content: baseTrace.output.slice(0, 500),
+                                timestamp: traceData.createdAt || new Date().toISOString()
+                            });
+                        }
+                        rawSteps = synthesized;
+                    }
 
                     const detailedTrace: Trace = {
                         ...baseTrace,
@@ -503,90 +549,99 @@ export default function TracesPage() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {traces.map((trace) => {
-                                    const hasTokens = trace.tokens.total > 0;
-                                    const costLabel = hasTokens
-                                        ? `$${trace.costUsd.toFixed(4)}`
-                                        : "-";
-                                    const versionLabel = getVersionLabel(trace);
-                                    return (
-                                        <tr
-                                            key={trace.id}
-                                            onClick={() => handleTraceSelect(trace)}
-                                            className={`cursor-pointer border-t transition-colors ${
-                                                selectedTrace?.runId === trace.runId
-                                                    ? "bg-primary/5"
-                                                    : "hover:bg-muted/40"
-                                            }`}
-                                        >
-                                            <td className="px-3 py-2 align-top">
-                                                <div className="max-w-[320px]">
-                                                    <p className="truncate text-sm font-medium">
-                                                        {trace.input}
-                                                    </p>
-                                                    <p className="text-muted-foreground truncate text-xs">
-                                                        {trace.output || "—"}
-                                                    </p>
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-2 align-top">
-                                                <StatusBadge status={trace.status} />
-                                            </td>
-                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
-                                                {trace.stepsCount}
-                                            </td>
-                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
-                                                {trace.toolCallsCount}
-                                            </td>
-                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
-                                                {hasTokens ? trace.tokens.total : "-"}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-xs">
-                                                <span className="font-mono">
-                                                    {trace.model.provider}/{trace.model.name}
-                                                </span>
-                                            </td>
-                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
-                                                {costLabel}
-                                            </td>
-                                            <td className="px-3 py-2 text-right align-top font-mono text-xs">
-                                                {getEvalScoreLabel(trace.scores)}
-                                            </td>
-                                            <td className="px-3 py-2 text-center align-top">
-                                                {trace.guardrailCount > 0 ? (
-                                                    <Badge
-                                                        variant="destructive"
-                                                        className="text-xs"
-                                                    >
-                                                        {trace.guardrailCount}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-xs">
-                                                        -
+                                {traces
+                                    .filter((t) => {
+                                        if (!searchQuery) return true;
+                                        const q = searchQuery.toLowerCase();
+                                        return (
+                                            t.input.toLowerCase().includes(q) ||
+                                            t.output.toLowerCase().includes(q)
+                                        );
+                                    })
+                                    .map((trace) => {
+                                        const hasTokens = trace.tokens.total > 0;
+                                        const costLabel = hasTokens
+                                            ? `$${trace.costUsd.toFixed(4)}`
+                                            : "-";
+                                        const versionLabel = getVersionLabel(trace);
+                                        return (
+                                            <tr
+                                                key={trace.id}
+                                                onClick={() => handleTraceSelect(trace)}
+                                                className={`cursor-pointer border-t transition-colors ${
+                                                    selectedTrace?.runId === trace.runId
+                                                        ? "bg-primary/5"
+                                                        : "hover:bg-muted/40"
+                                                }`}
+                                            >
+                                                <td className="px-3 py-2 align-top">
+                                                    <div className="max-w-[320px]">
+                                                        <p className="truncate text-sm font-medium">
+                                                            {trace.input}
+                                                        </p>
+                                                        <p className="text-muted-foreground truncate text-xs">
+                                                            {trace.output || "—"}
+                                                        </p>
+                                                    </div>
+                                                </td>
+                                                <td className="px-3 py-2 align-top">
+                                                    <StatusBadge status={trace.status} />
+                                                </td>
+                                                <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                    {trace.stepsCount}
+                                                </td>
+                                                <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                    {trace.toolCallsCount}
+                                                </td>
+                                                <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                    {hasTokens ? trace.tokens.total : "-"}
+                                                </td>
+                                                <td className="px-3 py-2 align-top text-xs">
+                                                    <span className="font-mono">
+                                                        {trace.model.provider}/{trace.model.name}
                                                     </span>
-                                                )}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-xs">
-                                                {versionLabel !== "-" ? (
-                                                    <Badge
-                                                        variant="secondary"
-                                                        className="font-mono text-xs"
-                                                        title={trace.versionId || undefined}
-                                                    >
-                                                        {versionLabel}
-                                                    </Badge>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-xs">
-                                                        -
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="text-muted-foreground px-3 py-2 text-right align-top text-xs">
-                                                {new Date(trace.createdAt).toLocaleTimeString()}
-                                            </td>
-                                        </tr>
-                                    );
-                                })}
+                                                </td>
+                                                <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                    {costLabel}
+                                                </td>
+                                                <td className="px-3 py-2 text-right align-top font-mono text-xs">
+                                                    {getEvalScoreLabel(trace.scores)}
+                                                </td>
+                                                <td className="px-3 py-2 text-center align-top">
+                                                    {trace.guardrailCount > 0 ? (
+                                                        <Badge
+                                                            variant="destructive"
+                                                            className="text-xs"
+                                                        >
+                                                            {trace.guardrailCount}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-xs">
+                                                            -
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="px-3 py-2 align-top text-xs">
+                                                    {versionLabel !== "-" ? (
+                                                        <Badge
+                                                            variant="secondary"
+                                                            className="font-mono text-xs"
+                                                            title={trace.versionId || undefined}
+                                                        >
+                                                            {versionLabel}
+                                                        </Badge>
+                                                    ) : (
+                                                        <span className="text-muted-foreground text-xs">
+                                                            -
+                                                        </span>
+                                                    )}
+                                                </td>
+                                                <td className="text-muted-foreground px-3 py-2 text-right align-top text-xs">
+                                                    {new Date(trace.createdAt).toLocaleTimeString()}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
                             </tbody>
                         </table>
                     </div>
@@ -763,7 +818,17 @@ export default function TracesPage() {
                                             )}
                                         </p>
                                         <div className="space-y-2">
-                                            {visibleSteps.length === 0 && timeTravelEnabled ? (
+                                            {visibleSteps.length === 0 &&
+                                            !timeTravelEnabled &&
+                                            selectedTrace.toolCalls.length === 0 ? (
+                                                <div className="text-muted-foreground rounded-lg border py-6 text-center text-sm">
+                                                    <p>No execution steps recorded for this run.</p>
+                                                    <p className="mt-1 text-xs">
+                                                        Step-level tracing may not be enabled for
+                                                        this channel.
+                                                    </p>
+                                                </div>
+                                            ) : visibleSteps.length === 0 && timeTravelEnabled ? (
                                                 <div className="text-muted-foreground rounded-lg border py-4 text-center text-sm">
                                                     Click &quot;Next&quot; or &quot;Play&quot; to
                                                     step through the execution

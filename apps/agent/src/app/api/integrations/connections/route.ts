@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
                 organizationId,
                 ...(providerKey ? { provider: { key: providerKey } } : {}),
                 ...(scopeFilter ? { scope: scopeFilter } : {}),
-                    OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
+                OR: [{ scope: "org" }, { scope: "user", userId: authContext.userId }]
             },
             include: { provider: true },
             orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]

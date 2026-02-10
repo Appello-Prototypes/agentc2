@@ -1,414 +1,450 @@
 "use client";
 
-import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { getApiBase } from "@/lib/utils";
 import { calculateCost } from "@/lib/cost-calculator";
 import {
+    Badge,
+    Button,
     Card,
     CardContent,
     CardDescription,
     CardHeader,
     CardTitle,
-    Badge,
-    Button,
     Input,
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-    Skeleton
+    Skeleton,
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+    Tabs,
+    TabsContent,
+    TabsList,
+    TabsTrigger
 } from "@repo/ui";
+
+// --- Types ---
 
 interface Run {
     id: string;
-    input: string;
-    output: string;
-    status: "completed" | "failed" | "timeout" | "running" | "queued" | "cancelled";
-    durationMs: number;
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-    estimatedCost: number;
-    modelName: string;
-    toolCalls: string[];
-    scores: {
-        helpfulness?: number;
-        relevancy?: number;
-        toxicity?: number;
-    };
-    feedback?: {
-        rating?: number;
-        thumbs?: "up" | "down";
-    };
-    userId?: string;
+    status: string;
+    source: string | null;
+    sessionId: string | null;
+    threadId: string | null;
+    inputText: string;
+    outputText: string | null;
+    durationMs: number | null;
+    startedAt: string;
+    completedAt: string | null;
+    modelProvider: string | null;
+    modelName: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
+    totalTokens: number | null;
+    costUsd: number | null;
+    toolCallCount: number;
+    uniqueToolCount: number;
+    stepCount: number;
+    versionId: string | null;
+}
+
+interface TraceStep {
+    id: string;
+    stepNumber: number;
+    type: string;
+    content: unknown;
+    timestamp: string;
+    durationMs: number | null;
+}
+
+interface ToolCall {
+    id: string;
+    toolKey: string;
+    mcpServerId: string | null;
+    inputJson: unknown;
+    outputJson: unknown;
+    success: boolean;
+    error: string | null;
+    durationMs: number | null;
     createdAt: string;
 }
 
-function StatusBadge({ status }: { status: Run["status"] }) {
-    const config: Record<string, { variant: "default" | "destructive" | "secondary" | "outline"; label: string }> = {
-        completed: { variant: "default", label: "Completed" },
-        failed: { variant: "destructive", label: "Failed" },
-        timeout: { variant: "secondary", label: "Timeout" },
-        running: { variant: "outline", label: "Running" },
-        queued: { variant: "secondary", label: "Queued" },
-        cancelled: { variant: "secondary", label: "Cancelled" }
-    };
-    const { variant, label } = config[status] || { variant: "secondary" as const, label: status };
-    return <Badge variant={variant}>{label}</Badge>;
+interface Trace {
+    id: string;
+    status: string;
+    inputText: string;
+    outputText: string | null;
+    durationMs: number | null;
+    stepsJson: unknown;
+    modelJson: unknown;
+    tokensJson: unknown;
+    scoresJson: unknown;
+    steps: TraceStep[];
+    toolCalls: ToolCall[];
 }
+
+interface Evaluation {
+    id: string;
+    scoresJson: Record<string, number>;
+    scorerVersion: string | null;
+    createdAt: string;
+}
+
+interface Feedback {
+    id: string;
+    thumbs: boolean | null;
+    rating: number | null;
+    comment: string | null;
+    createdAt: string;
+}
+
+interface GuardrailEvent {
+    id: string;
+    type: string;
+    guardrailKey: string;
+    reason: string;
+    inputSnippet: string | null;
+    outputSnippet: string | null;
+    createdAt: string;
+}
+
+interface VersionInfo {
+    id: string;
+    version: number;
+    description: string | null;
+    instructions: string;
+    modelProvider: string;
+    modelName: string;
+    snapshot: Record<string, unknown> | null;
+    createdAt: string;
+}
+
+interface RunDetail {
+    id: string;
+    agentId: string;
+    runType: string;
+    status: string;
+    inputText: string;
+    outputText: string | null;
+    durationMs: number | null;
+    startedAt: string;
+    completedAt: string | null;
+    modelProvider: string | null;
+    modelName: string | null;
+    versionId: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
+    totalTokens: number | null;
+    costUsd: number | null;
+    trace: Trace | null;
+    evaluation: Evaluation | Evaluation[] | null;
+    feedback: Feedback | Feedback[] | null;
+    costEvent: {
+        id: string;
+        totalCostUsd: number;
+        promptTokens: number;
+        completionTokens: number;
+    } | null;
+    guardrailEvents: GuardrailEvent[] | null;
+    version: VersionInfo | null;
+}
+
+// --- Helpers ---
+
+function formatLatency(ms: number): string {
+    if (ms < 1000) return `${ms}ms`;
+    return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function formatRelativeTime(dateStr: string | null): string {
+    if (!dateStr) return "Never";
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffSecs = Math.floor(diffMs / 1000);
+    const diffMins = Math.floor(diffSecs / 60);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffSecs < 60) return "just now";
+    if (diffMins < 60) return `${diffMins}m ago`;
+    if (diffHours < 24) return `${diffHours}h ago`;
+    if (diffDays < 7) return `${diffDays}d ago`;
+    return date.toLocaleDateString();
+}
+
+function formatCost(value: number | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    if (value === 0) return "$0.00";
+    return value < 1 ? `$${value.toFixed(4)}` : `$${value.toFixed(2)}`;
+}
+
+function formatTokens(value: number | null | undefined): string {
+    if (value === null || value === undefined) return "-";
+    return value.toLocaleString();
+}
+
+function formatModelLabel(modelName: string | null, modelProvider?: string | null): string {
+    if (!modelName) return "-";
+    const cleaned = modelName
+        .replace(/-\d{8}$/, "")
+        .replace(/^claude-/, "")
+        .replace(/^gpt-/, "");
+    return modelProvider ? `${cleaned} (${modelProvider})` : cleaned;
+}
+
+function getStatusBadgeVariant(
+    status: string
+): "default" | "secondary" | "destructive" | "outline" {
+    switch (status.toUpperCase()) {
+        case "COMPLETED":
+            return "default";
+        case "FAILED":
+            return "destructive";
+        case "RUNNING":
+        case "QUEUED":
+            return "secondary";
+        default:
+            return "outline";
+    }
+}
+
+function getSourceBadgeColor(source: string | null): string {
+    switch (source?.toLowerCase()) {
+        case "slack":
+            return "bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300";
+        case "whatsapp":
+            return "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300";
+        case "voice":
+            return "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300";
+        case "api":
+            return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
+        default:
+            return "bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300";
+    }
+}
+
+function resolveToolLabel(toolCall: ToolCall): string {
+    if (toolCall.toolKey && toolCall.toolKey !== "unknown") return toolCall.toolKey;
+    const input = toolCall.inputJson as Record<string, unknown> | null;
+    const output = toolCall.outputJson as Record<string, unknown> | null;
+    const candidates = [
+        input?.toolName,
+        input?.tool,
+        input?.name,
+        output?.toolName,
+        output?.tool,
+        output?.name
+    ];
+    const resolved = candidates.find(
+        (v): v is string => typeof v === "string" && v.trim().length > 0
+    );
+    return resolved || "Tool Call";
+}
+
+// --- Component ---
 
 export default function RunsPage() {
     const params = useParams();
-    const router = useRouter();
-    const searchParams = useSearchParams();
     const agentSlug = params.agentSlug as string;
 
     const [loading, setLoading] = useState(true);
     const [runs, setRuns] = useState<Run[]>([]);
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
-    const [rerunning, setRerunning] = useState(false);
-    const [exporting, setExporting] = useState(false);
+    const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
+    const [runDetailLoading, setRunDetailLoading] = useState(false);
+    const [detailTab, setDetailTab] = useState("overview");
+    const [autoRefresh, setAutoRefresh] = useState(false);
 
     // Filters
-    const [statusFilter, setStatusFilter] = useState<string>("all");
-    const [sourceFilter, setSourceFilter] = useState<string>("all");
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [sourceFilter, setSourceFilter] = useState("all");
     const [searchQuery, setSearchQuery] = useState("");
-    const [triggerIdFilter, setTriggerIdFilter] = useState<string | null>(
-        searchParams.get("triggerId")
+    const [sortKey, setSortKey] = useState("startedAt");
+    const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+
+    const fetchRuns = useCallback(async () => {
+        try {
+            const p = new URLSearchParams();
+            p.set("source", sourceFilter === "all" ? "all" : sourceFilter);
+            if (statusFilter !== "all") p.set("status", statusFilter.toUpperCase());
+            if (searchQuery) p.set("search", searchQuery);
+            p.set("limit", "50");
+            const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs?${p.toString()}`);
+            const data = await res.json();
+            if (data.success) {
+                const transformed: Run[] = data.runs.map(
+                    (run: {
+                        id: string;
+                        status: string;
+                        inputText: string;
+                        outputText?: string;
+                        durationMs?: number;
+                        startedAt: string;
+                        completedAt?: string;
+                        modelProvider?: string;
+                        modelName?: string;
+                        promptTokens?: number;
+                        completionTokens?: number;
+                        totalTokens?: number;
+                        costUsd?: number;
+                        source?: string;
+                        sessionId?: string;
+                        threadId?: string;
+                        versionId?: string;
+                        traceStepsCount?: number;
+                        traceToolCallsCount?: number;
+                        toolCallsCount?: number;
+                    }) => ({
+                        id: run.id,
+                        status: run.status,
+                        source: run.source || null,
+                        sessionId: run.sessionId || null,
+                        threadId: run.threadId || null,
+                        inputText: run.inputText,
+                        outputText: run.outputText || null,
+                        durationMs: run.durationMs || null,
+                        startedAt: run.startedAt,
+                        completedAt: run.completedAt || null,
+                        modelProvider: run.modelProvider || null,
+                        modelName: run.modelName || null,
+                        promptTokens: run.promptTokens || null,
+                        completionTokens: run.completionTokens || null,
+                        totalTokens: run.totalTokens || null,
+                        costUsd:
+                            run.costUsd ??
+                            calculateCost(
+                                run.modelName || "gpt-4o",
+                                run.modelProvider,
+                                run.promptTokens,
+                                run.completionTokens
+                            ),
+                        toolCallCount: run.traceToolCallsCount ?? run.toolCallsCount ?? 0,
+                        uniqueToolCount: run.traceToolCallsCount ?? run.toolCallsCount ?? 0,
+                        stepCount: run.traceStepsCount ?? 0,
+                        versionId: run.versionId || null
+                    })
+                );
+                setRuns(transformed);
+            }
+        } catch (error) {
+            console.error("Error fetching runs:", error);
+        } finally {
+            setLoading(false);
+        }
+    }, [agentSlug, statusFilter, sourceFilter, searchQuery]);
+
+    const fetchRunDetail = useCallback(
+        async (run: Run) => {
+            setRunDetailLoading(true);
+            setDetailTab("overview");
+            setRunDetail(null);
+            try {
+                const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs/${run.id}`);
+                const data = await res.json();
+                if (data.success) {
+                    setRunDetail(data.run);
+                }
+            } catch (error) {
+                console.error("Failed to fetch run detail:", error);
+            } finally {
+                setRunDetailLoading(false);
+            }
+        },
+        [agentSlug]
     );
 
     useEffect(() => {
-        setTriggerIdFilter(searchParams.get("triggerId"));
-    }, [searchParams]);
+        fetchRuns();
+    }, [fetchRuns]);
 
     useEffect(() => {
-        const fetchRuns = async () => {
-            try {
-                setLoading(true);
-                const params = new URLSearchParams();
-                if (statusFilter !== "all") {
-                    params.append("status", statusFilter.toUpperCase());
-                }
-                // Source filter: "all" shows everything, "production" excludes simulations, "simulation" shows only simulations
-                if (sourceFilter !== "all") {
-                    params.append("source", sourceFilter);
-                } else {
-                    params.append("source", "all");
-                }
-                if (searchQuery) {
-                    params.append("search", searchQuery);
-                }
-                if (triggerIdFilter) {
-                    params.append("triggerId", triggerIdFilter);
-                }
+        if (!autoRefresh) return;
+        const interval = setInterval(fetchRuns, 30000);
+        return () => clearInterval(interval);
+    }, [autoRefresh, fetchRuns]);
 
-                const response = await fetch(
-                    `${getApiBase()}/api/agents/${agentSlug}/runs?${params.toString()}`
-                );
-                const result = await response.json();
-
-                if (result.success) {
-                    // Transform API response to match Run interface
-                    const transformedRuns = result.runs.map(
-                        (run: {
-                            id: string;
-                            runType: string;
-                            status: string;
-                            inputText: string;
-                            outputText: string;
-                            durationMs: number;
-                            startedAt: string;
-                            modelProvider?: string;
-                            modelName?: string;
-                            promptTokens?: number;
-                            completionTokens?: number;
-                            totalTokens?: number;
-                            costUsd?: number;
-                            evaluation?: Record<string, number>;
-                            feedback?: { thumbs?: boolean; rating?: number };
-                        }) => {
-                            // Calculate cost from tokens if not provided
-                            const cost =
-                                run.costUsd ??
-                                calculateCost(
-                                    run.modelName || "gpt-4o",
-                                    run.modelProvider,
-                                    run.promptTokens,
-                                    run.completionTokens
-                                );
-
-                            return {
-                                id: run.id,
-                                input: run.inputText,
-                                output: run.outputText || "",
-                                status: run.status.toLowerCase() as Run["status"],
-                                durationMs: run.durationMs || 0,
-                                promptTokens: run.promptTokens || 0,
-                                completionTokens: run.completionTokens || 0,
-                                totalTokens: run.totalTokens || 0,
-                                estimatedCost: cost,
-                                modelName: run.modelName || "unknown",
-                                toolCalls: [],
-                                scores: run.evaluation || {},
-                                feedback: run.feedback
-                                    ? {
-                                          thumbs:
-                                              run.feedback.thumbs === true
-                                                  ? ("up" as const)
-                                                  : run.feedback.thumbs === false
-                                                    ? ("down" as const)
-                                                    : undefined,
-                                          rating: run.feedback.rating
-                                      }
-                                    : undefined,
-                                createdAt: run.startedAt
-                            };
-                        }
-                    );
-                    setRuns(transformedRuns);
-                } else {
-                    console.error("Failed to fetch runs:", result.error);
-                    // Fall back to empty array on error
-                    setRuns([]);
-                }
-            } catch (error) {
-                console.error("Error fetching runs:", error);
-                setRuns([]);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchRuns();
-    }, [agentSlug, statusFilter, sourceFilter, searchQuery, triggerIdFilter]);
-
-    // Handle viewing full trace
-    const handleViewTrace = (runId: string) => {
-        router.push(`/agents/${agentSlug}/traces?runId=${runId}`);
+    const handleRunClick = (run: Run) => {
+        setSelectedRun(run);
+        fetchRunDetail(run);
     };
 
-    // Handle re-running an agent execution
-    const handleRerun = async (runId: string) => {
-        try {
-            setRerunning(true);
-            const response = await fetch(
-                `${getApiBase()}/api/agents/${agentSlug}/runs/${runId}/rerun`,
-                {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" }
-                }
-            );
-
-            const result = await response.json();
-
-            if (result.success) {
-                // Refresh the runs list to show the new run
-                const params = new URLSearchParams();
-                if (statusFilter !== "all") {
-                    params.append("status", statusFilter.toUpperCase());
-                }
-                if (searchQuery) {
-                    params.append("search", searchQuery);
-                }
-
-                const refreshResponse = await fetch(
-                    `${getApiBase()}/api/agents/${agentSlug}/runs?${params.toString()}`
-                );
-                const refreshResult = await refreshResponse.json();
-
-                if (refreshResult.success) {
-                    const transformedRuns = refreshResult.runs.map(
-                        (run: {
-                            id: string;
-                            runType: string;
-                            status: string;
-                            inputText: string;
-                            outputText: string;
-                            durationMs: number;
-                            startedAt: string;
-                            modelProvider?: string;
-                            modelName?: string;
-                            promptTokens?: number;
-                            completionTokens?: number;
-                            totalTokens?: number;
-                            costUsd?: number;
-                            evaluation?: Record<string, number>;
-                            feedback?: { thumbs?: boolean; rating?: number };
-                        }) => {
-                            const cost =
-                                run.costUsd ??
-                                calculateCost(
-                                    run.modelName || "gpt-4o",
-                                    run.modelProvider,
-                                    run.promptTokens,
-                                    run.completionTokens
-                                );
-
-                            return {
-                                id: run.id,
-                                input: run.inputText,
-                                output: run.outputText || "",
-                                status: run.status.toLowerCase() as Run["status"],
-                                durationMs: run.durationMs || 0,
-                                promptTokens: run.promptTokens || 0,
-                                completionTokens: run.completionTokens || 0,
-                                totalTokens: run.totalTokens || 0,
-                                estimatedCost: cost,
-                                modelName: run.modelName || "unknown",
-                                toolCalls: [],
-                                scores: run.evaluation || {},
-                                feedback: run.feedback
-                                    ? {
-                                          thumbs:
-                                              run.feedback.thumbs === true
-                                                  ? ("up" as const)
-                                                  : run.feedback.thumbs === false
-                                                    ? ("down" as const)
-                                                    : undefined,
-                                          rating: run.feedback.rating
-                                      }
-                                    : undefined,
-                                createdAt: run.startedAt
-                            };
-                        }
+    const sortedRuns = useMemo(() => {
+        const sorted = [...runs];
+        const dir = sortDirection === "asc" ? 1 : -1;
+        sorted.sort((a, b) => {
+            switch (sortKey) {
+                case "durationMs":
+                    return ((a.durationMs || 0) - (b.durationMs || 0)) * dir;
+                case "costUsd":
+                    return ((a.costUsd || 0) - (b.costUsd || 0)) * dir;
+                case "totalTokens":
+                    return ((a.totalTokens || 0) - (b.totalTokens || 0)) * dir;
+                case "toolCallCount":
+                    return (a.toolCallCount - b.toolCallCount) * dir;
+                case "status":
+                    return a.status.localeCompare(b.status) * dir;
+                case "startedAt":
+                default:
+                    return (
+                        (new Date(a.startedAt).getTime() - new Date(b.startedAt).getTime()) * dir
                     );
-                    setRuns(transformedRuns);
-
-                    // Select the new run
-                    const newRun = transformedRuns.find((r: Run) => r.id === result.newRunId);
-                    if (newRun) {
-                        setSelectedRun(newRun);
-                    }
-                }
-            } else {
-                console.error("Failed to re-run:", result.error);
-                alert(`Failed to re-run: ${result.error}`);
             }
-        } catch (error) {
-            console.error("Error re-running:", error);
-            alert("Failed to re-run the agent execution");
-        } finally {
-            setRerunning(false);
-        }
-    };
-
-    // Handle exporting a single run
-    const handleExportRun = (run: Run) => {
-        const exportData = {
-            id: run.id,
-            input: run.input,
-            output: run.output,
-            status: run.status,
-            durationMs: run.durationMs,
-            promptTokens: run.promptTokens,
-            completionTokens: run.completionTokens,
-            totalTokens: run.totalTokens,
-            estimatedCost: run.estimatedCost,
-            modelName: run.modelName,
-            scores: run.scores,
-            feedback: run.feedback,
-            createdAt: run.createdAt
-        };
-
-        const blob = new Blob([JSON.stringify(exportData, null, 2)], {
-            type: "application/json"
         });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = `run-${run.id}.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-    };
+        return sorted;
+    }, [runs, sortKey, sortDirection]);
 
-    // Handle exporting all runs
-    const handleExportAllRuns = () => {
-        setExporting(true);
-        try {
-            const headers = [
-                "ID",
-                "Input",
-                "Output",
-                "Status",
-                "Duration (ms)",
-                "Prompt Tokens",
-                "Completion Tokens",
-                "Total Tokens",
-                "Cost (USD)",
-                "Model",
-                "Helpfulness",
-                "Relevancy",
-                "Feedback",
-                "Created At"
-            ];
+    const feedbackList = useMemo(() => {
+        const feedback = runDetail?.feedback;
+        if (!feedback) return [];
+        return Array.isArray(feedback) ? feedback : [feedback];
+    }, [runDetail]);
 
-            const rows = filteredRuns.map((run) => [
-                run.id,
-                `"${run.input.replace(/"/g, '""')}"`,
-                `"${run.output.replace(/"/g, '""')}"`,
-                run.status,
-                run.durationMs,
-                run.promptTokens,
-                run.completionTokens,
-                run.totalTokens,
-                run.estimatedCost.toFixed(6),
-                run.modelName,
-                run.scores.helpfulness !== undefined
-                    ? (run.scores.helpfulness * 100).toFixed(0) + "%"
-                    : "",
-                run.scores.relevancy !== undefined
-                    ? (run.scores.relevancy * 100).toFixed(0) + "%"
-                    : "",
-                run.feedback?.thumbs || "",
-                run.createdAt
-            ]);
+    const evaluationScores = useMemo(() => {
+        const evaluation = runDetail?.evaluation;
+        const evaluationScoresJson = Array.isArray(evaluation)
+            ? evaluation[0]?.scoresJson
+            : evaluation?.scoresJson;
+        const traceScores =
+            typeof runDetail?.trace?.scoresJson === "object"
+                ? (runDetail?.trace?.scoresJson as Record<string, unknown>)
+                : null;
+        return evaluationScoresJson || traceScores;
+    }, [runDetail]);
 
-            const csv = [headers.join(","), ...rows.map((row) => row.join(","))].join("\n");
-
-            const blob = new Blob([csv], { type: "text/csv" });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement("a");
-            a.href = url;
-            a.download = `${agentSlug}-runs-${new Date().toISOString().split("T")[0]}.csv`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        } finally {
-            setExporting(false);
+    const handleSort = (key: string) => {
+        if (sortKey === key) {
+            setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+        } else {
+            setSortKey(key);
+            setSortDirection("desc");
         }
     };
 
-    const filteredRuns = runs.filter((run) => {
-        if (statusFilter !== "all" && run.status !== statusFilter) return false;
-        if (searchQuery && !run.input.toLowerCase().includes(searchQuery.toLowerCase()))
-            return false;
-        return true;
-    });
+    const SortIcon = ({ column }: { column: string }) => {
+        if (sortKey !== column) return null;
+        return <span className="ml-1 text-xs">{sortDirection === "asc" ? "▲" : "▼"}</span>;
+    };
 
     if (loading) {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-8 w-48" />
-                <div className="flex gap-4">
-                    <Skeleton className="h-10 w-64" />
-                    <Skeleton className="h-10 w-40" />
-                </div>
-                <div className="space-y-3">
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <Skeleton key={i} className="h-24 w-full" />
-                    ))}
-                </div>
+                <Skeleton className="h-12 w-full" />
+                <Skeleton className="h-[400px] w-full" />
             </div>
         );
     }
 
     return (
-        <div className="space-y-6">
+        <div className="flex h-full flex-col gap-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
@@ -417,58 +453,42 @@ export default function RunsPage() {
                         All executions for this agent ({runs.length} total)
                     </p>
                 </div>
-                <Button
-                    variant="outline"
-                    onClick={handleExportAllRuns}
-                    disabled={exporting || filteredRuns.length === 0}
-                >
-                    {exporting ? "Exporting..." : "Export"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant={autoRefresh ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setAutoRefresh(!autoRefresh)}
+                    >
+                        {autoRefresh ? "Auto-refresh ON" : "Auto-refresh OFF"}
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={fetchRuns}>
+                        Refresh
+                    </Button>
+                </div>
             </div>
 
-            {triggerIdFilter && (
-                <Card>
-                    <CardContent className="flex items-center justify-between gap-4 py-4 text-sm">
-                        <div>
-                            Filtering runs for trigger{" "}
-                            <span className="font-medium">{triggerIdFilter}</span>
-                        </div>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => {
-                                setTriggerIdFilter(null);
-                                router.push(`/agents/${agentSlug}/runs`);
-                            }}
-                        >
-                            Clear filter
-                        </Button>
-                    </CardContent>
-                </Card>
-            )}
-
             {/* Filters */}
-            <div className="flex items-center gap-4">
-                <div className="max-w-sm flex-1">
-                    <Input
-                        placeholder="Search runs..."
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                    />
-                </div>
+            <div className="flex flex-wrap items-center gap-3">
+                <Input
+                    placeholder="Search runs..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="max-w-xs"
+                />
                 <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Status" />
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
                         <SelectItem value="completed">Completed</SelectItem>
                         <SelectItem value="failed">Failed</SelectItem>
-                        <SelectItem value="timeout">Timeout</SelectItem>
+                        <SelectItem value="running">Running</SelectItem>
+                        <SelectItem value="queued">Queued</SelectItem>
                     </SelectContent>
                 </Select>
                 <Select value={sourceFilter} onValueChange={(v) => v && setSourceFilter(v)}>
-                    <SelectTrigger className="w-40">
+                    <SelectTrigger className="w-[140px]">
                         <SelectValue placeholder="Source" />
                     </SelectTrigger>
                     <SelectContent>
@@ -479,215 +499,721 @@ export default function RunsPage() {
                 </Select>
             </div>
 
-            {/* Runs List & Detail */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-                {/* Runs List */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Runs ({filteredRuns.length})</CardTitle>
-                        <CardDescription>Click a run to view details</CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="max-h-[600px] space-y-2 overflow-y-auto">
-                            {filteredRuns.map((run) => (
-                                <div
-                                    key={run.id}
-                                    onClick={() => setSelectedRun(run)}
-                                    className={`cursor-pointer rounded-lg border p-3 transition-colors ${
-                                        selectedRun?.id === run.id
-                                            ? "border-primary bg-primary/5"
-                                            : "hover:bg-muted/50"
-                                    }`}
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <div className="min-w-0 flex-1">
-                                            <p className="truncate text-sm font-medium">
-                                                {run.input}
+            {/* Main Layout: Table + Detail */}
+            <div className="grid min-h-0 flex-1 grid-cols-1 gap-6 lg:grid-cols-5">
+                {/* Runs Table */}
+                <Card className="flex flex-col overflow-hidden lg:col-span-3">
+                    <CardContent className="flex-1 overflow-auto p-0">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Source</TableHead>
+                                    <TableHead>Model</TableHead>
+                                    <TableHead>Input</TableHead>
+                                    <TableHead
+                                        className="cursor-pointer text-right"
+                                        onClick={() => handleSort("durationMs")}
+                                    >
+                                        Duration <SortIcon column="durationMs" />
+                                    </TableHead>
+                                    <TableHead
+                                        className="cursor-pointer text-right"
+                                        onClick={() => handleSort("toolCallCount")}
+                                    >
+                                        Tools <SortIcon column="toolCallCount" />
+                                    </TableHead>
+                                    <TableHead
+                                        className="cursor-pointer text-right"
+                                        onClick={() => handleSort("totalTokens")}
+                                    >
+                                        Tokens <SortIcon column="totalTokens" />
+                                    </TableHead>
+                                    <TableHead
+                                        className="cursor-pointer text-right"
+                                        onClick={() => handleSort("costUsd")}
+                                    >
+                                        Cost <SortIcon column="costUsd" />
+                                    </TableHead>
+                                    <TableHead
+                                        className="cursor-pointer text-right"
+                                        onClick={() => handleSort("startedAt")}
+                                    >
+                                        Time <SortIcon column="startedAt" />
+                                    </TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {sortedRuns.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={9} className="py-12 text-center">
+                                            <p className="text-muted-foreground text-sm">
+                                                No runs found
                                             </p>
-                                            <div className="mt-2 flex items-center gap-2">
-                                                <StatusBadge status={run.status} />
-                                                <span className="text-muted-foreground text-xs">
-                                                    {(run.durationMs / 1000).toFixed(1)}s
-                                                </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    {run.totalTokens} tokens
-                                                </span>
-                                                {run.feedback?.thumbs && (
-                                                    <span className="text-sm">
-                                                        {run.feedback.thumbs === "up" ? "👍" : "👎"}
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    sortedRuns.map((run) => (
+                                        <TableRow
+                                            key={run.id}
+                                            onClick={() => handleRunClick(run)}
+                                            className={`cursor-pointer transition-colors ${
+                                                selectedRun?.id === run.id
+                                                    ? "bg-primary/5"
+                                                    : "hover:bg-muted/50"
+                                            }`}
+                                        >
+                                            <TableCell>
+                                                <Badge variant={getStatusBadgeVariant(run.status)}>
+                                                    {run.status}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                {run.source ? (
+                                                    <span
+                                                        className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${getSourceBadgeColor(run.source)}`}
+                                                    >
+                                                        {run.source}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-xs">
+                                                        -
                                                     </span>
                                                 )}
-                                            </div>
-                                        </div>
-                                        <div className="text-muted-foreground shrink-0 text-xs">
-                                            {new Date(run.createdAt).toLocaleTimeString()}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
+                                            </TableCell>
+                                            <TableCell className="max-w-[120px] truncate text-xs">
+                                                {formatModelLabel(run.modelName, run.modelProvider)}
+                                            </TableCell>
+                                            <TableCell className="max-w-[200px] truncate">
+                                                <span className="text-sm">{run.inputText}</span>
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-xs">
+                                                {run.durationMs
+                                                    ? formatLatency(run.durationMs)
+                                                    : "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-xs">
+                                                {run.toolCallCount || "-"}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-xs">
+                                                {formatTokens(run.totalTokens)}
+                                            </TableCell>
+                                            <TableCell className="text-right font-mono text-xs">
+                                                {formatCost(run.costUsd)}
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground text-right text-xs">
+                                                {formatRelativeTime(run.startedAt)}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
                     </CardContent>
                 </Card>
 
-                {/* Run Detail */}
-                <Card>
-                    <CardHeader>
-                        <CardTitle>Run Detail</CardTitle>
-                        <CardDescription>
-                            {selectedRun ? `ID: ${selectedRun.id}` : "Select a run to view details"}
-                        </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                        {selectedRun ? (
-                            <div className="space-y-6">
-                                {/* Status & Timing */}
-                                <div className="grid grid-cols-3 gap-4">
-                                    <div>
-                                        <p className="text-muted-foreground text-sm">Status</p>
-                                        <StatusBadge status={selectedRun.status} />
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground text-sm">Duration</p>
-                                        <p className="font-mono">
-                                            {(selectedRun.durationMs / 1000).toFixed(2)}s
-                                        </p>
-                                    </div>
-                                    <div>
-                                        <p className="text-muted-foreground text-sm">Cost</p>
-                                        <p className="font-mono">
-                                            ${selectedRun.estimatedCost.toFixed(4)}
-                                        </p>
-                                    </div>
+                {/* Run Detail Panel */}
+                <Card className="flex flex-col overflow-hidden lg:col-span-2">
+                    <CardHeader className="shrink-0 pb-3">
+                        <CardTitle className="text-base">Run Detail</CardTitle>
+                        {selectedRun && (
+                            <CardDescription className="font-mono text-xs">
+                                {selectedRun.id}
+                            </CardDescription>
+                        )}
+                        {selectedRun && (
+                            <div className="mt-2 grid grid-cols-4 gap-2">
+                                <div className="bg-muted/50 rounded-lg p-2">
+                                    <p className="text-muted-foreground text-xs">Status</p>
+                                    <Badge
+                                        variant={getStatusBadgeVariant(selectedRun.status)}
+                                        className="mt-1"
+                                    >
+                                        {selectedRun.status}
+                                    </Badge>
                                 </div>
-
-                                {/* Input */}
-                                <div>
-                                    <p className="text-muted-foreground mb-1 text-sm">Input</p>
-                                    <div className="bg-muted rounded-lg p-3">
-                                        <p className="text-sm">{selectedRun.input}</p>
-                                    </div>
-                                </div>
-
-                                {/* Output */}
-                                <div>
-                                    <p className="text-muted-foreground mb-1 text-sm">Output</p>
-                                    <div className="bg-muted rounded-lg p-3">
-                                        <p className="text-sm">{selectedRun.output}</p>
-                                    </div>
-                                </div>
-
-                                {/* Tool Calls */}
-                                {selectedRun.toolCalls.length > 0 && (
-                                    <div>
-                                        <p className="text-muted-foreground mb-1 text-sm">
-                                            Tool Calls
-                                        </p>
-                                        <div className="flex flex-wrap gap-2">
-                                            {selectedRun.toolCalls.map((tool, i) => (
-                                                <Badge key={i} variant="outline">
-                                                    🔧 {tool}
-                                                </Badge>
-                                            ))}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Tokens */}
-                                <div>
-                                    <p className="text-muted-foreground mb-1 text-sm">
-                                        Token Usage
+                                <div className="bg-muted/50 rounded-lg p-2">
+                                    <p className="text-muted-foreground text-xs">Duration</p>
+                                    <p className="mt-1 text-sm font-semibold">
+                                        {selectedRun.durationMs
+                                            ? formatLatency(selectedRun.durationMs)
+                                            : "-"}
                                     </p>
-                                    <div className="bg-muted grid grid-cols-3 gap-4 rounded-lg p-3">
-                                        <div>
-                                            <p className="text-muted-foreground text-xs">Prompt</p>
-                                            <p className="font-mono text-sm">
-                                                {selectedRun.promptTokens}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-muted-foreground text-xs">
-                                                Completion
-                                            </p>
-                                            <p className="font-mono text-sm">
-                                                {selectedRun.completionTokens}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-muted-foreground text-xs">Total</p>
-                                            <p className="font-mono text-sm">
-                                                {selectedRun.totalTokens}
-                                            </p>
-                                        </div>
-                                    </div>
                                 </div>
-
-                                {/* Scores */}
-                                {Object.keys(selectedRun.scores).length > 0 && (
-                                    <div>
-                                        <p className="text-muted-foreground mb-1 text-sm">
-                                            Evaluation Scores
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            {selectedRun.scores.helpfulness !== undefined && (
-                                                <div className="bg-muted rounded-lg p-3">
-                                                    <p className="text-muted-foreground text-xs">
-                                                        Helpfulness
-                                                    </p>
-                                                    <p className="text-xl font-bold">
-                                                        {(
-                                                            selectedRun.scores.helpfulness * 100
-                                                        ).toFixed(0)}
-                                                        %
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {selectedRun.scores.relevancy !== undefined && (
-                                                <div className="bg-muted rounded-lg p-3">
-                                                    <p className="text-muted-foreground text-xs">
-                                                        Relevancy
-                                                    </p>
-                                                    <p className="text-xl font-bold">
-                                                        {(
-                                                            selectedRun.scores.relevancy * 100
-                                                        ).toFixed(0)}
-                                                        %
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                {/* Actions */}
-                                <div className="flex gap-2">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleViewTrace(selectedRun.id)}
-                                    >
-                                        View Full Trace
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleRerun(selectedRun.id)}
-                                        disabled={rerunning}
-                                    >
-                                        {rerunning ? "Re-running..." : "Re-run"}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleExportRun(selectedRun)}
-                                    >
-                                        Export
-                                    </Button>
+                                <div className="bg-muted/50 rounded-lg p-2">
+                                    <p className="text-muted-foreground text-xs">Cost</p>
+                                    <p className="mt-1 text-sm font-semibold">
+                                        {formatCost(selectedRun.costUsd)}
+                                    </p>
                                 </div>
+                                <div className="bg-muted/50 rounded-lg p-2">
+                                    <p className="text-muted-foreground text-xs">Tool Calls</p>
+                                    <p className="mt-1 text-sm font-semibold">
+                                        {selectedRun.toolCallCount}
+                                    </p>
+                                </div>
+                            </div>
+                        )}
+                    </CardHeader>
+                    <CardContent className="flex-1 overflow-hidden">
+                        {!selectedRun ? (
+                            <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-12 text-center">
+                                <p className="text-sm">
+                                    Select a run to view its trace, tools, and latency breakdown.
+                                </p>
                             </div>
                         ) : (
-                            <div className="text-muted-foreground py-12 text-center">
-                                <p>Select a run from the list to view details</p>
-                            </div>
+                            <Tabs
+                                defaultValue="overview"
+                                value={detailTab}
+                                onValueChange={(v) => setDetailTab(v ?? "overview")}
+                                className="flex h-full flex-col"
+                            >
+                                <TabsList className="flex w-full flex-nowrap justify-start gap-2 overflow-x-auto">
+                                    <TabsTrigger value="overview" className="shrink-0">
+                                        Overview
+                                    </TabsTrigger>
+                                    <TabsTrigger value="trace" className="shrink-0">
+                                        Trace
+                                    </TabsTrigger>
+                                    <TabsTrigger value="tools" className="shrink-0">
+                                        Tools
+                                    </TabsTrigger>
+                                    <TabsTrigger value="errors" className="shrink-0">
+                                        Errors
+                                    </TabsTrigger>
+                                    <TabsTrigger value="latency" className="shrink-0">
+                                        Latency
+                                    </TabsTrigger>
+                                </TabsList>
+
+                                <div className="mt-4 flex-1 overflow-y-auto">
+                                    {runDetailLoading ? (
+                                        <div className="space-y-4">
+                                            <Skeleton className="h-32 w-full" />
+                                            <Skeleton className="h-48 w-full" />
+                                        </div>
+                                    ) : (
+                                        <>
+                                            {/* Overview Tab */}
+                                            <TabsContent
+                                                value="overview"
+                                                className="mt-0 space-y-6"
+                                            >
+                                                <div className="grid gap-4 lg:grid-cols-2">
+                                                    <div className="flex flex-col">
+                                                        <h3 className="mb-2 text-sm font-semibold">
+                                                            User Input
+                                                        </h3>
+                                                        <div className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-3">
+                                                            <pre className="font-mono text-xs whitespace-pre-wrap">
+                                                                {selectedRun.inputText}
+                                                            </pre>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <h3 className="mb-2 text-sm font-semibold">
+                                                            Agent Response
+                                                        </h3>
+                                                        <div className="bg-muted/20 flex-1 overflow-auto rounded-lg border p-3">
+                                                            <pre className="font-mono text-xs whitespace-pre-wrap">
+                                                                {selectedRun.outputText ||
+                                                                    runDetail?.outputText ||
+                                                                    "No output"}
+                                                            </pre>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {(selectedRun.sessionId ||
+                                                    selectedRun.threadId) && (
+                                                    <div className="grid grid-cols-2 gap-4">
+                                                        {selectedRun.sessionId && (
+                                                            <div>
+                                                                <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                                                    Session ID
+                                                                </h3>
+                                                                <code className="bg-muted rounded px-2 py-1 text-xs">
+                                                                    {selectedRun.sessionId}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                        {selectedRun.threadId && (
+                                                            <div>
+                                                                <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                                                    Thread ID
+                                                                </h3>
+                                                                <code className="bg-muted rounded px-2 py-1 text-xs">
+                                                                    {selectedRun.threadId}
+                                                                </code>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                )}
+
+                                                <div>
+                                                    <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                        Token Breakdown
+                                                    </h3>
+                                                    <div className="flex flex-wrap gap-4 text-sm">
+                                                        <span>
+                                                            Prompt:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.promptTokens ??
+                                                                        selectedRun.promptTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                        <span>
+                                                            Completion:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.completionTokens ??
+                                                                        selectedRun.completionTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                        <span>
+                                                            Total:{" "}
+                                                            <strong>
+                                                                {formatTokens(
+                                                                    runDetail?.totalTokens ??
+                                                                        selectedRun.totalTokens
+                                                                )}
+                                                            </strong>
+                                                        </span>
+                                                    </div>
+                                                </div>
+
+                                                {runDetail?.version && (
+                                                    <div>
+                                                        <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                            System Context
+                                                        </h3>
+                                                        <div className="bg-muted/20 rounded-lg border p-3">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <Badge variant="outline">
+                                                                    v{runDetail.version.version}
+                                                                </Badge>
+                                                                <Badge variant="outline">
+                                                                    {formatModelLabel(
+                                                                        runDetail.version.modelName,
+                                                                        runDetail.version
+                                                                            .modelProvider
+                                                                    )}
+                                                                </Badge>
+                                                            </div>
+                                                            <pre className="bg-background mt-3 max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                {runDetail.version.instructions}
+                                                            </pre>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {evaluationScores &&
+                                                    Object.keys(evaluationScores).length > 0 && (
+                                                        <div>
+                                                            <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                                Evaluation Scores
+                                                            </h3>
+                                                            <div className="flex flex-wrap gap-3">
+                                                                {Object.entries(
+                                                                    evaluationScores
+                                                                ).map(([key, value]) => (
+                                                                    <div
+                                                                        key={key}
+                                                                        className="bg-muted/50 rounded-lg px-3 py-2 text-center"
+                                                                    >
+                                                                        <p className="text-muted-foreground text-xs">
+                                                                            {key}
+                                                                        </p>
+                                                                        <p className="text-lg font-bold">
+                                                                            {typeof value ===
+                                                                            "number"
+                                                                                ? value <= 1
+                                                                                    ? `${Math.round(value * 100)}%`
+                                                                                    : String(value)
+                                                                                : String(value)}
+                                                                        </p>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                {feedbackList.length > 0 && (
+                                                    <div>
+                                                        <h3 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                            User Feedback
+                                                        </h3>
+                                                        <div className="flex flex-wrap gap-3">
+                                                            {feedbackList.map((fb) => (
+                                                                <div
+                                                                    key={fb.id}
+                                                                    className="bg-muted/50 flex items-center gap-2 rounded-lg px-3 py-2"
+                                                                >
+                                                                    {fb.thumbs !== null && (
+                                                                        <span className="text-xl">
+                                                                            {fb.thumbs
+                                                                                ? "👍"
+                                                                                : "👎"}
+                                                                        </span>
+                                                                    )}
+                                                                    {fb.rating !== null && (
+                                                                        <span className="font-semibold">
+                                                                            {fb.rating}/5
+                                                                        </span>
+                                                                    )}
+                                                                    {fb.comment && (
+                                                                        <span className="text-muted-foreground text-sm">
+                                                                            {fb.comment}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </TabsContent>
+
+                                            {/* Trace Tab */}
+                                            <TabsContent value="trace" className="mt-0 space-y-4">
+                                                {(() => {
+                                                    const steps = runDetail?.trace?.steps ?? [];
+                                                    const stepsJson = runDetail?.trace
+                                                        ?.stepsJson as unknown[] | null;
+                                                    const hasSteps = steps.length > 0;
+                                                    const hasStepsJson =
+                                                        Array.isArray(stepsJson) &&
+                                                        stepsJson.length > 0;
+
+                                                    if (hasSteps) {
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {steps.map((step, idx) => (
+                                                                    <div
+                                                                        key={step.id}
+                                                                        className="bg-muted/30 rounded-lg border p-4"
+                                                                    >
+                                                                        <div className="mb-2 flex items-center justify-between">
+                                                                            <div className="flex items-center gap-3">
+                                                                                <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                    {idx + 1}
+                                                                                </span>
+                                                                                <Badge variant="outline">
+                                                                                    {step.type}
+                                                                                </Badge>
+                                                                            </div>
+                                                                            <span className="text-muted-foreground text-sm">
+                                                                                {step.durationMs
+                                                                                    ? formatLatency(
+                                                                                          step.durationMs
+                                                                                      )
+                                                                                    : "-"}
+                                                                            </span>
+                                                                        </div>
+                                                                        <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                            {typeof step.content ===
+                                                                            "string"
+                                                                                ? step.content
+                                                                                : JSON.stringify(
+                                                                                      step.content,
+                                                                                      null,
+                                                                                      2
+                                                                                  )}
+                                                                        </pre>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    if (hasStepsJson) {
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {stepsJson.map(
+                                                                    (
+                                                                        step: unknown,
+                                                                        idx: number
+                                                                    ) => {
+                                                                        const s = step as Record<
+                                                                            string,
+                                                                            unknown
+                                                                        >;
+                                                                        return (
+                                                                            <div
+                                                                                key={idx}
+                                                                                className="bg-muted/30 rounded-lg border p-4"
+                                                                            >
+                                                                                <div className="mb-2 flex items-center justify-between">
+                                                                                    <div className="flex items-center gap-3">
+                                                                                        <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                            {idx +
+                                                                                                1}
+                                                                                        </span>
+                                                                                        <Badge variant="outline">
+                                                                                            {String(
+                                                                                                s.type ||
+                                                                                                    "step"
+                                                                                            )}
+                                                                                        </Badge>
+                                                                                    </div>
+                                                                                    <span className="text-muted-foreground text-sm">
+                                                                                        {typeof s.durationMs ===
+                                                                                        "number"
+                                                                                            ? formatLatency(
+                                                                                                  s.durationMs
+                                                                                              )
+                                                                                            : "-"}
+                                                                                    </span>
+                                                                                </div>
+                                                                                <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                                                    {JSON.stringify(
+                                                                                        s,
+                                                                                        null,
+                                                                                        2
+                                                                                    )}
+                                                                                </pre>
+                                                                            </div>
+                                                                        );
+                                                                    }
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+
+                                                    return (
+                                                        <div className="py-8 text-center">
+                                                            <p className="text-muted-foreground text-sm">
+                                                                No trace steps available for this
+                                                                run.
+                                                            </p>
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </TabsContent>
+
+                                            {/* Tools Tab */}
+                                            <TabsContent value="tools" className="mt-0 space-y-4">
+                                                {runDetail?.trace?.toolCalls &&
+                                                runDetail.trace.toolCalls.length > 0 ? (
+                                                    <div className="space-y-4">
+                                                        {runDetail.trace.toolCalls.map(
+                                                            (toolCall, idx) => (
+                                                                <div
+                                                                    key={toolCall.id}
+                                                                    className="bg-muted/30 rounded-lg border p-4"
+                                                                >
+                                                                    <div className="mb-3 flex items-center justify-between">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                                {idx + 1}
+                                                                            </span>
+                                                                            <div>
+                                                                                <div className="flex items-center gap-2">
+                                                                                    <span className="font-semibold">
+                                                                                        {resolveToolLabel(
+                                                                                            toolCall
+                                                                                        )}
+                                                                                    </span>
+                                                                                    {toolCall.mcpServerId && (
+                                                                                        <Badge
+                                                                                            variant="outline"
+                                                                                            className="text-xs"
+                                                                                        >
+                                                                                            {
+                                                                                                toolCall.mcpServerId
+                                                                                            }
+                                                                                        </Badge>
+                                                                                    )}
+                                                                                </div>
+                                                                                <div className="text-muted-foreground text-xs">
+                                                                                    {toolCall.success ? (
+                                                                                        <span className="text-green-600">
+                                                                                            Success
+                                                                                        </span>
+                                                                                    ) : (
+                                                                                        <span className="text-red-600">
+                                                                                            Failed
+                                                                                        </span>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-muted-foreground text-sm">
+                                                                            {toolCall.durationMs
+                                                                                ? formatLatency(
+                                                                                      toolCall.durationMs
+                                                                                  )
+                                                                                : "-"}
+                                                                        </div>
+                                                                    </div>
+                                                                    <div className="grid gap-4 md:grid-cols-2">
+                                                                        <div>
+                                                                            <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                                                Input
+                                                                            </h4>
+                                                                            <pre className="bg-background max-h-32 overflow-auto rounded border p-3 text-xs">
+                                                                                {JSON.stringify(
+                                                                                    toolCall.inputJson,
+                                                                                    null,
+                                                                                    2
+                                                                                )}
+                                                                            </pre>
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                                                                Output
+                                                                            </h4>
+                                                                            {toolCall.success ? (
+                                                                                <pre className="bg-background max-h-32 overflow-auto rounded border p-3 text-xs">
+                                                                                    {JSON.stringify(
+                                                                                        toolCall.outputJson,
+                                                                                        null,
+                                                                                        2
+                                                                                    )}
+                                                                                </pre>
+                                                                            ) : (
+                                                                                <pre className="max-h-32 overflow-auto rounded border border-red-500/20 bg-red-50 p-3 text-xs text-red-700 dark:bg-red-900/10 dark:text-red-400">
+                                                                                    {toolCall.error ||
+                                                                                        "Unknown error"}
+                                                                                </pre>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            )
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="py-8 text-center">
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No tool calls recorded for this run.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </TabsContent>
+
+                                            {/* Errors Tab */}
+                                            <TabsContent value="errors" className="mt-0 space-y-4">
+                                                {selectedRun.status.toUpperCase() === "FAILED" && (
+                                                    <div className="rounded-lg border border-red-500/20 bg-red-50 p-4 dark:bg-red-900/10">
+                                                        <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">
+                                                            Run Failed
+                                                        </h3>
+                                                        <pre className="text-xs whitespace-pre-wrap text-red-600 dark:text-red-300">
+                                                            {runDetail?.outputText ||
+                                                                "No error details available"}
+                                                        </pre>
+                                                    </div>
+                                                )}
+
+                                                {runDetail?.guardrailEvents &&
+                                                runDetail.guardrailEvents.length > 0 ? (
+                                                    <div className="space-y-3">
+                                                        <h3 className="text-sm font-semibold">
+                                                            Guardrail Events
+                                                        </h3>
+                                                        {runDetail.guardrailEvents.map((event) => (
+                                                            <div
+                                                                key={event.id}
+                                                                className="rounded-lg border border-yellow-500/20 bg-yellow-50 p-4 dark:bg-yellow-900/10"
+                                                            >
+                                                                <div className="mb-2 flex items-center gap-2">
+                                                                    <Badge variant="outline">
+                                                                        {event.type}
+                                                                    </Badge>
+                                                                    <span className="font-mono text-xs">
+                                                                        {event.guardrailKey}
+                                                                    </span>
+                                                                </div>
+                                                                <p className="text-sm">
+                                                                    {event.reason}
+                                                                </p>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                ) : selectedRun.status.toUpperCase() !==
+                                                  "FAILED" ? (
+                                                    <div className="py-8 text-center">
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No errors or guardrail events for this
+                                                            run.
+                                                        </p>
+                                                    </div>
+                                                ) : null}
+                                            </TabsContent>
+
+                                            {/* Latency Tab */}
+                                            <TabsContent value="latency" className="mt-0 space-y-4">
+                                                {runDetail?.trace?.steps &&
+                                                runDetail.trace.steps.length > 0 ? (
+                                                    <Table>
+                                                        <TableHeader>
+                                                            <TableRow>
+                                                                <TableHead>#</TableHead>
+                                                                <TableHead>Type</TableHead>
+                                                                <TableHead className="text-right">
+                                                                    Duration
+                                                                </TableHead>
+                                                                <TableHead className="text-right">
+                                                                    % of Total
+                                                                </TableHead>
+                                                            </TableRow>
+                                                        </TableHeader>
+                                                        <TableBody>
+                                                            {runDetail.trace.steps.map(
+                                                                (step, idx) => {
+                                                                    const totalMs =
+                                                                        selectedRun.durationMs || 1;
+                                                                    const pct = step.durationMs
+                                                                        ? (
+                                                                              (step.durationMs /
+                                                                                  totalMs) *
+                                                                              100
+                                                                          ).toFixed(1)
+                                                                        : "-";
+                                                                    return (
+                                                                        <TableRow key={step.id}>
+                                                                            <TableCell>
+                                                                                {idx + 1}
+                                                                            </TableCell>
+                                                                            <TableCell>
+                                                                                <Badge variant="outline">
+                                                                                    {step.type}
+                                                                                </Badge>
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right font-mono text-xs">
+                                                                                {step.durationMs
+                                                                                    ? formatLatency(
+                                                                                          step.durationMs
+                                                                                      )
+                                                                                    : "-"}
+                                                                            </TableCell>
+                                                                            <TableCell className="text-right font-mono text-xs">
+                                                                                {pct !== "-"
+                                                                                    ? `${pct}%`
+                                                                                    : "-"}
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    );
+                                                                }
+                                                            )}
+                                                        </TableBody>
+                                                    </Table>
+                                                ) : (
+                                                    <div className="py-8 text-center">
+                                                        <p className="text-muted-foreground text-sm">
+                                                            No step-level latency data available.
+                                                        </p>
+                                                    </div>
+                                                )}
+                                            </TabsContent>
+                                        </>
+                                    )}
+                                </div>
+                            </Tabs>
                         )}
                     </CardContent>
                 </Card>

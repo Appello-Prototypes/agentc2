@@ -51,6 +51,16 @@ export async function GET(
             );
         }
 
+        // If trace has no tool calls via the trace relation, fall back to
+        // querying tool calls directly by runId (they may be linked only to the run)
+        let toolCalls = trace.toolCalls;
+        if (toolCalls.length === 0) {
+            toolCalls = await prisma.agentToolCall.findMany({
+                where: { runId },
+                orderBy: { createdAt: "asc" }
+            });
+        }
+
         return NextResponse.json({
             success: true,
             trace: {
@@ -74,7 +84,7 @@ export async function GET(
                     timestamp: step.timestamp,
                     durationMs: step.durationMs
                 })),
-                toolCalls: trace.toolCalls.map((call) => ({
+                toolCalls: toolCalls.map((call) => ({
                     id: call.id,
                     toolKey: call.toolKey,
                     mcpServerId: call.mcpServerId,

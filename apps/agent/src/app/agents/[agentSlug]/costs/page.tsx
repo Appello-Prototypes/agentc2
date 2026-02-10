@@ -112,7 +112,199 @@ interface CostData {
         cost: number;
     }>;
     byDay: Array<{ date: string; cost: number }>;
+    byRun: Array<{ id: string; costUsd: number; createdAt: string }>;
     dateRange: { from: string; to: string };
+}
+
+function CostPerRunChart({
+    runs,
+    averageCost
+}: {
+    runs: Array<{ id: string; costUsd: number; createdAt: string }>;
+    averageCost: number;
+}) {
+    const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+
+    if (runs.length === 0) return null;
+
+    const chartHeight = 250;
+    const chartWidth = 800;
+    const padding = { top: 20, right: 60, bottom: 40, left: 60 };
+    const innerWidth = chartWidth - padding.left - padding.right;
+    const innerHeight = chartHeight - padding.top - padding.bottom;
+
+    const maxCost = Math.max(...runs.map((r) => r.costUsd), averageCost * 1.2, 0.001);
+    const minCost = 0;
+
+    const xScale = (index: number) =>
+        padding.left +
+        (runs.length > 1 ? (index / (runs.length - 1)) * innerWidth : innerWidth / 2);
+    const yScale = (cost: number) =>
+        padding.top + innerHeight - ((cost - minCost) / (maxCost - minCost)) * innerHeight;
+
+    // Build polyline points
+    const linePoints = runs.map((r, i) => `${xScale(i)},${yScale(r.costUsd)}`).join(" ");
+
+    // Average line Y position
+    const avgY = yScale(averageCost);
+
+    // Y-axis ticks (5 ticks)
+    const yTicks = Array.from({ length: 5 }, (_, i) => {
+        const value = minCost + ((maxCost - minCost) * i) / 4;
+        return { value, y: yScale(value) };
+    });
+
+    // X-axis labels (show a few timestamps)
+    const xLabelCount = Math.min(runs.length, 6);
+    const xLabels = Array.from({ length: xLabelCount }, (_, i) => {
+        const idx = runs.length <= 1 ? 0 : Math.round((i / (xLabelCount - 1)) * (runs.length - 1));
+        return {
+            x: xScale(idx),
+            label: new Date(runs[idx].createdAt).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit"
+            })
+        };
+    });
+
+    return (
+        <div className="relative">
+            <svg
+                viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                className="h-[250px] w-full"
+                preserveAspectRatio="xMidYMid meet"
+            >
+                {/* Y-axis grid lines and labels */}
+                {yTicks.map((tick, i) => (
+                    <g key={i}>
+                        <line
+                            x1={padding.left}
+                            y1={tick.y}
+                            x2={chartWidth - padding.right}
+                            y2={tick.y}
+                            stroke="currentColor"
+                            strokeOpacity={0.1}
+                            strokeDasharray="4 4"
+                        />
+                        <text
+                            x={padding.left - 8}
+                            y={tick.y + 4}
+                            textAnchor="end"
+                            className="fill-muted-foreground"
+                            fontSize={10}
+                        >
+                            ${tick.value.toFixed(4)}
+                        </text>
+                    </g>
+                ))}
+
+                {/* X-axis labels */}
+                {xLabels.map((label, i) => (
+                    <text
+                        key={i}
+                        x={label.x}
+                        y={chartHeight - 5}
+                        textAnchor="middle"
+                        className="fill-muted-foreground"
+                        fontSize={9}
+                    >
+                        {label.label}
+                    </text>
+                ))}
+
+                {/* Average cost dashed line */}
+                <line
+                    x1={padding.left}
+                    y1={avgY}
+                    x2={chartWidth - padding.right}
+                    y2={avgY}
+                    stroke="hsl(var(--destructive))"
+                    strokeWidth={1.5}
+                    strokeDasharray="8 4"
+                    strokeOpacity={0.7}
+                />
+                <text
+                    x={chartWidth - padding.right + 4}
+                    y={avgY + 4}
+                    className="fill-destructive"
+                    fontSize={10}
+                    fontWeight={600}
+                >
+                    avg ${averageCost.toFixed(4)}
+                </text>
+
+                {/* Cost line */}
+                {runs.length > 1 && (
+                    <polyline
+                        points={linePoints}
+                        fill="none"
+                        stroke="hsl(var(--primary))"
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                    />
+                )}
+
+                {/* Data points */}
+                {runs.map((run, i) => (
+                    <g key={run.id}>
+                        {/* Invisible larger hit area */}
+                        <circle
+                            cx={xScale(i)}
+                            cy={yScale(run.costUsd)}
+                            r={12}
+                            fill="transparent"
+                            onMouseEnter={() => setHoveredIndex(i)}
+                            onMouseLeave={() => setHoveredIndex(null)}
+                        />
+                        {/* Visible dot */}
+                        <circle
+                            cx={xScale(i)}
+                            cy={yScale(run.costUsd)}
+                            r={hoveredIndex === i ? 5 : 3}
+                            fill={
+                                run.costUsd > averageCost
+                                    ? "hsl(var(--destructive))"
+                                    : "hsl(var(--primary))"
+                            }
+                            stroke="hsl(var(--background))"
+                            strokeWidth={1.5}
+                            className="transition-all duration-150"
+                        />
+                    </g>
+                ))}
+            </svg>
+
+            {/* Tooltip */}
+            {hoveredIndex !== null && runs[hoveredIndex] && (
+                <div
+                    className="bg-popover text-popover-foreground pointer-events-none absolute z-10 rounded-lg border px-3 py-2 shadow-lg"
+                    style={{
+                        left: `${(xScale(hoveredIndex) / chartWidth) * 100}%`,
+                        top: `${(yScale(runs[hoveredIndex].costUsd) / chartHeight) * 100 - 15}%`,
+                        transform: "translate(-50%, -100%)"
+                    }}
+                >
+                    <p className="font-mono text-sm font-semibold">
+                        ${runs[hoveredIndex].costUsd.toFixed(6)}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                        {new Date(runs[hoveredIndex].createdAt).toLocaleString()}
+                    </p>
+                    <p className="text-muted-foreground font-mono text-[10px]">
+                        Run: {runs[hoveredIndex].id.slice(0, 12)}...
+                    </p>
+                    {runs[hoveredIndex].costUsd > averageCost ? (
+                        <p className="text-destructive text-xs">Above average</p>
+                    ) : (
+                        <p className="text-xs text-green-600">Below average</p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function CostsPage() {
@@ -234,6 +426,7 @@ export default function CostsPage() {
                         date: d.date,
                         cost: d.costUsd
                     })),
+                    byRun: costsResult.byRun || [],
                     dateRange: costsResult.dateRange || { from: "", to: "" }
                 };
 
@@ -339,6 +532,7 @@ export default function CostsPage() {
         },
         byModel: [],
         byDay: [] as Array<{ date: string; cost: number }>,
+        byRun: [] as Array<{ id: string; costUsd: number; createdAt: string }>,
         dateRange: { from: "", to: "" }
     };
 
@@ -550,6 +744,28 @@ export default function CostsPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Cost Per Run Line Chart */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Cost Per Run</CardTitle>
+                    <CardDescription>
+                        Individual run costs over time with average baseline
+                    </CardDescription>
+                </CardHeader>
+                <CardContent>
+                    {displayCostData.byRun.length > 0 ? (
+                        <CostPerRunChart
+                            runs={displayCostData.byRun}
+                            averageCost={displayCostData.costPerRun}
+                        />
+                    ) : (
+                        <div className="text-muted-foreground flex h-[250px] items-center justify-center">
+                            No per-run cost data available for this period
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
                 {/* Cost Over Time */}

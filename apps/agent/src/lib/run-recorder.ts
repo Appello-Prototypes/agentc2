@@ -220,6 +220,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
         `[RunRecorder] Started run ${run.id} for agent ${options.agentSlug} from ${options.source}`
     );
 
+    // Track tool calls in memory for step synthesis
+    const recordedToolCalls: ToolCallData[] = [];
+
     // Return handle with completion methods
     return {
         runId: run.id,
@@ -232,6 +235,36 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
             const durationMs = Date.now() - startTime;
             const totalTokens =
                 (completeOptions.promptTokens || 0) + (completeOptions.completionTokens || 0);
+
+            // Auto-synthesize steps from recorded tool calls if no explicit steps provided
+            const steps = completeOptions.steps ? [...completeOptions.steps] : [];
+            if (steps.length === 0 && recordedToolCalls.length > 0) {
+                let stepNum = 1;
+                for (const tc of recordedToolCalls) {
+                    steps.push({
+                        step: stepNum++,
+                        type: "tool_call",
+                        content: `Called tool: ${tc.toolKey}${tc.input ? ` with ${JSON.stringify(tc.input).slice(0, 200)}` : ""}`,
+                        timestamp: new Date().toISOString()
+                    });
+                    steps.push({
+                        step: stepNum++,
+                        type: "tool_result",
+                        content: tc.success
+                            ? `Tool ${tc.toolKey} succeeded${tc.output ? `: ${JSON.stringify(tc.output).slice(0, 200)}` : ""}`
+                            : `Tool ${tc.toolKey} failed: ${tc.error || "Unknown error"}`,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+                if (completeOptions.output) {
+                    steps.push({
+                        step: stepNum++,
+                        type: "response",
+                        content: completeOptions.output.slice(0, 500),
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
 
             await prisma.$transaction(async (tx) => {
                 // Update AgentRun
@@ -258,7 +291,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         status: "COMPLETED",
                         outputText: completeOptions.output,
                         durationMs,
-                        stepsJson: (completeOptions.steps || []) as unknown as Prisma.JsonArray,
+                        stepsJson: (steps || []) as unknown as Prisma.JsonArray,
                         modelJson: {
                             provider: completeOptions.modelProvider,
                             name: completeOptions.modelName
@@ -364,6 +397,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
          * Record a tool call
          */
         async addToolCall(toolCall: ToolCallData): Promise<void> {
+            // Track in memory for step synthesis on complete()
+            recordedToolCalls.push(toolCall);
+
             await prisma.agentToolCall.create({
                 data: {
                     runId: run.id,

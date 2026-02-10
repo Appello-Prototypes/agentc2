@@ -1221,8 +1221,7 @@ function sanitizeToolSchema(schema: any): any {
     // Fix: Array type missing items definition
     // Handle both string type and array type (e.g., ["array", "null"])
     const isArrayType =
-        result.type === "array" ||
-        (Array.isArray(result.type) && result.type.includes("array"));
+        result.type === "array" || (Array.isArray(result.type) && result.type.includes("array"));
     if (isArrayType && !result.items) {
         result.items = {}; // Default to any type (most permissive)
     }

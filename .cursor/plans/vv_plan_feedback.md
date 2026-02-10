@@ -12,7 +12,7 @@ The existing plan is structurally sound -- it covers CRUD, execution, analytics,
 
 1. **Sample size is too small** -- 3 runs per agent tells you almost nothing statistically. You need 20-50+ runs per entity to generate meaningful distributions for latency, cost, eval scores, and failure rates.
 2. **No feedback loops** -- The plan is a linear waterfall. When Phase 7 breaks, there's no defined protocol for how you triage, fix, re-validate, and decide when to advance again.
-3. **Learning system is tested too late and too lightly** -- Learning requires a *corpus* of runs with evaluations and feedback. Testing it after a handful of runs in Phase 8 guarantees it has nothing meaningful to learn from.
+3. **Learning system is tested too late and too lightly** -- Learning requires a _corpus_ of runs with evaluations and feedback. Testing it after a handful of runs in Phase 8 guarantees it has nothing meaningful to learn from.
 4. **No stability/soak testing** -- A single successful run proves the happy path works once. It doesn't prove the system is reliable. You need repeated runs over time to catch intermittent failures, memory leaks, rate limits, and state corruption.
 5. **Missing entire categories of testing** -- Concurrency, error handling, edge cases, data consistency, idempotency, and regression validation are absent.
 
@@ -74,9 +74,9 @@ When ANY check within a phase fails:
    - Is this a test design issue (wrong expectations)?
 4. FIX the root cause in the codebase
 5. RE-RUN from the beginning of the current TIER
-   - Not just the failed phase -- earlier phases in the tier 
+   - Not just the failed phase -- earlier phases in the tier
      could have been affected by the same root cause
-6. Only advance to the next Tier once ALL phases in the 
+6. Only advance to the next Tier once ALL phases in the
    current Tier pass cleanly in a single continuous run
 ```
 
@@ -85,15 +85,15 @@ When ANY check within a phase fails:
 Maintain a running decision log during execution:
 
 ```markdown
-| Iteration | Tier | Phase | Status | Issue | Root Cause | Fix Applied | Re-run From |
-|-----------|------|-------|--------|-------|------------|-------------|-------------|
-| 1         | 1    | 0     | PASS   | --    | --         | --          | --          |
-| 1         | 1    | 1     | FAIL   | MCP config read returned empty | API key expired | Rotated key in .env | Tier 1 start |
-| 2         | 1    | 0     | PASS   | --    | --         | --          | --          |
-| 2         | 1    | 1     | PASS   | --    | --         | --          | --          |
-| 2         | 1    | 2     | PASS   | --    | --         | --          | --          |
-| 2         | 2    | 3     | FAIL   | Agent run returned 500 | Tool registry missing calc tool | Fixed registry export | Tier 2 start |
-| ...       |      |       |        |       |            |             |             |
+| Iteration | Tier | Phase | Status | Issue                          | Root Cause                      | Fix Applied           | Re-run From  |
+| --------- | ---- | ----- | ------ | ------------------------------ | ------------------------------- | --------------------- | ------------ |
+| 1         | 1    | 0     | PASS   | --                             | --                              | --                    | --           |
+| 1         | 1    | 1     | FAIL   | MCP config read returned empty | API key expired                 | Rotated key in .env   | Tier 1 start |
+| 2         | 1    | 0     | PASS   | --                             | --                              | --                    | --           |
+| 2         | 1    | 1     | PASS   | --                             | --                              | --                    | --           |
+| 2         | 1    | 2     | PASS   | --                             | --                              | --                    | --           |
+| 2         | 2    | 3     | FAIL   | Agent run returned 500         | Tool registry missing calc tool | Fixed registry export | Tier 2 start |
+| ...       |      |       |        |                                |                                 |                       |              |
 ```
 
 ---
@@ -112,18 +112,18 @@ The current plan runs each agent **3 times** (Phase 3a: 3 runs, Phase 3b: 3 turn
 
 ### Required Sample Sizes
 
-| Entity | Current Plan | Recommended Minimum | Purpose |
-|--------|-------------|--------------------|---------| 
-| V&V Test Agent | 3 runs | **30 runs** (10 basic, 10 tool-use, 10 calculator) | Statistical reliability, eval distribution |
-| Assistant Agent | 3 turns | **25 conversations** (5 turns each = 125 total turns) | Memory stress test, working memory validation |
-| Structured Agent | 1 run | **20 runs** with varied inputs | JSON schema compliance rate |
-| Research Agent | 1 run | **15 runs** with diverse topics | Tool call reliability, output quality variance |
-| Evaluated Agent | 1 run | **20 runs** | Eval score distribution, scorer reliability |
-| V&V Workflow | 1 run | **15 executions** with varied inputs | Step chaining reliability |
-| V&V Network | 1 run | **15 executions** with varied messages | Routing accuracy |
-| Existing Workflows | 1 each | **10 each** | Regression baseline |
-| Existing Networks | 1 each | **10 each** | Routing consistency |
-| Simulations | 5 runs | **50 runs** (10 per theme, 5 themes) | Learning system fuel |
+| Entity             | Current Plan | Recommended Minimum                                   | Purpose                                        |
+| ------------------ | ------------ | ----------------------------------------------------- | ---------------------------------------------- |
+| V&V Test Agent     | 3 runs       | **30 runs** (10 basic, 10 tool-use, 10 calculator)    | Statistical reliability, eval distribution     |
+| Assistant Agent    | 3 turns      | **25 conversations** (5 turns each = 125 total turns) | Memory stress test, working memory validation  |
+| Structured Agent   | 1 run        | **20 runs** with varied inputs                        | JSON schema compliance rate                    |
+| Research Agent     | 1 run        | **15 runs** with diverse topics                       | Tool call reliability, output quality variance |
+| Evaluated Agent    | 1 run        | **20 runs**                                           | Eval score distribution, scorer reliability    |
+| V&V Workflow       | 1 run        | **15 executions** with varied inputs                  | Step chaining reliability                      |
+| V&V Network        | 1 run        | **15 executions** with varied messages                | Routing accuracy                               |
+| Existing Workflows | 1 each       | **10 each**                                           | Regression baseline                            |
+| Existing Networks  | 1 each       | **10 each**                                           | Routing consistency                            |
+| Simulations        | 5 runs       | **50 runs** (10 per theme, 5 themes)                  | Learning system fuel                           |
 
 **Total estimated runs: ~350-400** (vs. current ~20)
 
@@ -182,9 +182,10 @@ For EVERY batch of N runs, verify:
 
 #### Phase 0: Environment Baseline
 
-*No changes to scope. Add gate:*
+_No changes to scope. Add gate:_
 
 **Gate Criteria**:
+
 - [ ] `org_list` returns >= 1 org
 - [ ] `org_workspaces_list` returns >= 1 workspace
 - [ ] `live_stats` returns without error
@@ -192,9 +193,10 @@ For EVERY batch of N runs, verify:
 
 #### Phase 1: Integration & MCP Configuration
 
-*No changes to scope. Add gate:*
+_No changes to scope. Add gate:_
 
 **Gate Criteria**:
+
 - [ ] `integration_mcp_config(read)` returns non-empty config with all expected servers
 - [ ] `integration_providers_list` returns providers with connection status
 - [ ] `integration_connections_list` returns active connections
@@ -202,9 +204,10 @@ For EVERY batch of N runs, verify:
 
 #### Phase 2: Agent CRUD & Configuration
 
-*No changes to scope. Add gate:*
+_No changes to scope. Add gate:_
 
 **Gate Criteria**:
+
 - [ ] `agent_list` returns expected count of system agents
 - [ ] `agent_read` returns full agent definition with tools, memory config
 - [ ] `agent_create` succeeds and agent appears in list
@@ -229,6 +232,7 @@ Replace the current Phase 3a-3d with a **batch execution approach**.
 Run 3 batches of 10 prompts each (basic, datetime tool, calculator tool).
 
 **Execution Protocol**:
+
 1. Record baseline: `agent_runs_list` count, `agent_overview` stats
 2. Execute 10 basic prompts sequentially
 3. **Checkpoint**: Verify 10 runs appeared, all completed, all have traces
@@ -238,6 +242,7 @@ Run 3 batches of 10 prompts each (basic, datetime tool, calculator tool).
 7. **Checkpoint**: Verify 30 cumulative runs
 
 **Post-Batch Verification**:
+
 - `agent_runs_list`: 30 runs, all status "completed"
 - `agent_run_trace` on 5 random runs: Complete step chains, tool calls present where expected
 - `agent_overview`: Stats reflect 30 runs
@@ -247,6 +252,7 @@ Run 3 batches of 10 prompts each (basic, datetime tool, calculator tool).
 - Failure rate: 0% target, < 5% acceptable for gate
 
 **Gate Criteria for 3a**:
+
 - [ ] 30/30 runs completed successfully
 - [ ] Tool call success rate >= 95% (at least 19/20 tool runs used tools)
 - [ ] All 30 runs have traces with complete step chains
@@ -258,18 +264,21 @@ Run 3 batches of 10 prompts each (basic, datetime tool, calculator tool).
 Run 5 categories of conversations, 5 conversations each, ~5 turns per conversation.
 
 **Execution Protocol**:
+
 1. For each conversation, use a fresh thread/resource context
 2. Execute turns sequentially within each conversation
 3. After each conversation, verify memory recall in the final turn
 4. **Checkpoint every 5 conversations**: Verify runs, traces, memory behavior
 
 **Post-Batch Verification**:
+
 - Memory recall accuracy: In conversations testing recall, did the agent correctly remember stored facts?
 - Working memory updates: Did `agent_run_trace` show working memory being written?
 - Multi-turn coherence: Did responses stay contextually relevant across turns?
 - Calculate: conversation completion rate, memory recall accuracy rate
 
 **Gate Criteria for 3b**:
+
 - [ ] 25/25 conversations completed (all turns responded)
 - [ ] Memory recall accuracy >= 80% (agent remembers facts from earlier turns)
 - [ ] No conversation produced an error/empty response
@@ -277,13 +286,14 @@ Run 5 categories of conversations, 5 conversations each, ~5 turns per conversati
 
 ##### Phase 3c: Specialized Agents -- 55 Runs Total
 
-| Agent | Runs | Input Diversity |
-|-------|------|----------------|
-| Structured | 20 | 4 categories x 5 prompts |
-| Research | 15 | 3 categories x 5 prompts |
-| Evaluated | 20 | Varied technical questions |
+| Agent      | Runs | Input Diversity            |
+| ---------- | ---- | -------------------------- |
+| Structured | 20   | 4 categories x 5 prompts   |
+| Research   | 15   | 3 categories x 5 prompts   |
+| Evaluated  | 20   | Varied technical questions |
 
 **Execution Protocol**:
+
 1. Run each agent's batch sequentially (all structured, then all research, then all evaluated)
 2. **Checkpoint after each agent's batch**: Verify runs, outputs, traces
 3. For Structured agent: validate JSON output parsing on every response
@@ -291,6 +301,7 @@ Run 5 categories of conversations, 5 conversations each, ~5 turns per conversati
 5. For Evaluated agent: verify evaluation scores were generated
 
 **Gate Criteria for 3c**:
+
 - [ ] Structured: >= 18/20 runs produced valid JSON (90%+ compliance)
 - [ ] Research: >= 13/15 runs showed tool usage in traces
 - [ ] Evaluated: All 20 runs completed, evaluations triggered
@@ -300,6 +311,7 @@ Run 5 categories of conversations, 5 conversations each, ~5 turns per conversati
 After all 3a-3c batches complete (~210 runs total), do a comprehensive cross-check.
 
 **Gate Criteria for 3d**:
+
 - [ ] `live_runs` total count matches sum of all executed runs
 - [ ] `live_metrics` aggregates are internally consistent
 - [ ] Per-agent `agent_overview` run counts match expected per-agent totals
@@ -316,6 +328,7 @@ Now that there's a real corpus, quality tooling has meaningful data to work with
 This is **critical**. Don't just evaluate a handful of runs.
 
 **Execution Protocol**:
+
 1. `agent_evaluations_run` on V&V test agent (all 30 runs)
 2. `agent_evaluations_run` on assistant (sample of 20 runs from the 125 turns)
 3. `agent_evaluations_run` on structured agent (all 20 runs)
@@ -323,24 +336,27 @@ This is **critical**. Don't just evaluate a handful of runs.
 5. `agent_evaluations_list` for each agent -- verify scores exist
 
 **Post-Evaluation Analysis**:
+
 - Score distribution per agent: mean, median, min, max, stddev
 - Identify any outlier runs (score < 0.3) -- investigate traces
 - Compare scores across agents: do specialized agents score higher in their domain?
 
 **Gate Criteria for 4a**:
+
 - [ ] Evaluations completed without error for all target agents
 - [ ] Score distributions are non-degenerate (not all zeros, not all ones)
 - [ ] No agent has a mean score < 0.5 (indicates systemic quality issue)
 
 ##### Phase 4b: Feedback, Test Cases, Guardrails, Budgets
 
-*Scope stays the same as current Phase 4.* Add:
+_Scope stays the same as current Phase 4._ Add:
 
 - Submit feedback on **at least 10 runs** (mix of positive/negative/varied ratings)
 - Create **at least 5 test cases** (not just 2)
 - This volume matters for the learning system later
 
 **Gate Criteria for 4b**:
+
 - [ ] 10+ feedback entries submitted and retrievable
 - [ ] 5+ test cases created with tags
 - [ ] Guardrail policy readable and writable
@@ -349,9 +365,10 @@ This is **critical**. Don't just evaluate a handful of runs.
 
 #### Phase 5: Triggers, Schedules & RAG
 
-*Combine current Phase 5 and Phase 6. No major changes needed, these are infrastructure validations.*
+_Combine current Phase 5 and Phase 6. No major changes needed, these are infrastructure validations._
 
 **Gate Criteria for Phase 5**:
+
 - [ ] Trigger CRUD lifecycle complete (create, read, test, execute, enable, disable, delete)
 - [ ] At least 1 trigger execution produced a real agent run
 - [ ] Schedule CRUD lifecycle complete
@@ -369,14 +386,16 @@ This is **critical**. Don't just evaluate a handful of runs.
 ##### Phase 6a: V&V Test Workflow -- 15 Executions
 
 **Execution Protocol**:
+
 1. Generate, validate, create workflow
 2. Execute with 15 varied topic inputs
 3. **Checkpoint every 5 runs**: Verify step chains, outputs, metrics
 4. For at least 3 runs, inspect `workflow_get_run` in detail (step-by-step output verification)
 
 **Gate Criteria**:
+
 - [ ] Workflow generates and validates successfully
-- [ ] >= 14/15 executions complete all steps (>= 93%)
+- [ ] > = 14/15 executions complete all steps (>= 93%)
 - [ ] Step outputs chain correctly (step 1 output feeds step 2)
 - [ ] `workflow_metrics` reflects all 15 runs
 - [ ] `workflow_stats` includes this workflow
@@ -384,14 +403,16 @@ This is **critical**. Don't just evaluate a handful of runs.
 ##### Phase 6b: V&V Test Network -- 15 Executions
 
 **Execution Protocol**:
+
 1. Generate, validate, create network
 2. Execute with 15 varied messages
 3. **Checkpoint every 5 runs**: Verify routing, agent participation, outputs
 4. For at least 3 runs, inspect `network_get_run` routing details
 
 **Gate Criteria**:
+
 - [ ] Network generates and validates successfully
-- [ ] >= 14/15 executions route correctly between agents
+- [ ] > = 14/15 executions route correctly between agents
 - [ ] Each run shows which agents handled which parts
 - [ ] `network_metrics` reflects all 15 runs
 - [ ] Final outputs are coherent and complete
@@ -401,23 +422,26 @@ This is **critical**. Don't just evaluate a handful of runs.
 Run existing/seeded workflows and networks 10 times each.
 
 **Special attention**:
+
 - Human approval workflow: Test suspend/resume at least 3 times
 - Trip planner network: Verify multi-agent routing with varied destinations
 
 **Gate Criteria**:
+
 - [ ] Each existing workflow/network completes >= 9/10 runs
 - [ ] Human approval suspend/resume works reliably
 - [ ] Network routing engages the correct agent specializations
 
 #### Phase 7: Triggers (Expanded)
 
-*Move trigger execution testing here so it interacts with the larger corpus.*
+_Move trigger execution testing here so it interacts with the larger corpus._
 
 ##### Phase 7a: Trigger-Driven Agent Runs -- 10 Executions
 
 Fire the webhook trigger 10 times with varied payloads.
 
 **Gate Criteria**:
+
 - [ ] All 10 trigger executions produce agent runs
 - [ ] `trigger_events_list` shows all 10 events
 - [ ] Runs are attributed to the correct trigger source
@@ -425,6 +449,7 @@ Fire the webhook trigger 10 times with varied payloads.
 #### Phase 8: Learning System (with Real Data)
 
 This is where the plan's most significant gap is. The learning system needs:
+
 - A large corpus of runs (you now have 300+)
 - Evaluation scores on those runs
 - Feedback (positive and negative)
@@ -445,14 +470,15 @@ Before starting learning, verify the inputs are sufficient:
 1. `agent_learning_start` with clear trigger reason
 2. Poll `agent_learning_session_get` every 30 seconds until status changes
 3. **If session fails**: Investigate why. Common issues:
-   - Not enough runs (need more data generation)
-   - Inngest not processing events (check dev server)
-   - Signal extraction finds no variance (all runs too similar)
+    - Not enough runs (need more data generation)
+    - Inngest not processing events (check dev server)
+    - Signal extraction finds no variance (all runs too similar)
 4. If session produces proposals: Review them via `agent_learning_session_get`
 5. Check `agent_learning_metrics` for KPIs
 6. Check `agent_learning_experiments` for any A/B tests
 
 **Gate Criteria for 8b**:
+
 - [ ] Learning session starts without error
 - [ ] Session progresses through stages (signal extraction -> proposal generation)
 - [ ] At least 1 proposal or insight is generated
@@ -463,15 +489,16 @@ Before starting learning, verify the inputs are sufficient:
 
 Run simulations to generate additional diverse data AND to test the simulation infrastructure itself.
 
-| Theme | Count | Agent |
-|-------|-------|-------|
-| Customer support for SaaS | 10 | assistant |
-| Technical troubleshooting | 10 | assistant |
-| Product feature questions | 10 | assistant |
-| Onboarding new users | 10 | assistant |
-| Billing and pricing inquiries | 10 | assistant |
+| Theme                         | Count | Agent     |
+| ----------------------------- | ----- | --------- |
+| Customer support for SaaS     | 10    | assistant |
+| Technical troubleshooting     | 10    | assistant |
+| Product feature questions     | 10    | assistant |
+| Onboarding new users          | 10    | assistant |
+| Billing and pricing inquiries | 10    | assistant |
 
 **Execution Protocol**:
+
 1. Start simulation for theme 1, wait for completion
 2. Verify runs generated, source = "simulation"
 3. Run evaluations on simulation runs
@@ -479,6 +506,7 @@ Run simulations to generate additional diverse data AND to test the simulation i
 5. After all 50: Check learning metrics again -- has the additional data changed anything?
 
 **Gate Criteria for 8c**:
+
 - [ ] All 50 simulation runs completed
 - [ ] Each run has real output and trace
 - [ ] Runs correctly attributed as "simulation" source
@@ -488,6 +516,7 @@ Run simulations to generate additional diverse data AND to test the simulation i
 ##### Phase 8d: Post-Learning Re-Evaluation
 
 After learning + simulations:
+
 1. `agent_learning_metrics` -- Compare to pre-learning baseline
 2. `agent_learning_experiments` -- Any experiments running?
 3. If a proposal exists, consider `agent_learning_proposal_approve` or `agent_learning_proposal_reject`
@@ -501,15 +530,17 @@ After learning + simulations:
 
 #### Phase 9: Audit & Observability Cross-Check
 
-*Same scope as current Phase 9, but now validating against 400+ runs instead of 20.*
+_Same scope as current Phase 9, but now validating against 400+ runs instead of 20._
 
 **Enhanced Checks**:
+
 - `audit_logs_list` should show **all CRUD operations** from the entire test session
 - `live_runs` count should match your running tally exactly
 - `live_metrics` should be internally consistent with per-agent totals
 - Check for orphaned data: runs without traces, evaluations without runs
 
 **Gate Criteria**:
+
 - [ ] Audit log entries exist for every create/update/delete operation
 - [ ] `live_runs` total matches your execution tally (within 5% margin for timing)
 - [ ] No orphaned data detected
@@ -524,13 +555,15 @@ After learning + simulations:
 Execute 20 agent runs as fast as possible (no delays between calls) for a single agent.
 
 **What you're testing**:
+
 - Rate limiting behavior
 - Connection pool exhaustion
 - Request queuing/backpressure
 - Error recovery
 
 **Gate Criteria**:
-- [ ] >= 18/20 runs complete successfully under burst load
+
+- [ ] > = 18/20 runs complete successfully under burst load
 - [ ] No HTTP 429 or 503 errors (or if they occur, they're handled gracefully)
 - [ ] System recovers and returns to normal after burst
 
@@ -539,6 +572,7 @@ Execute 20 agent runs as fast as possible (no delays between calls) for a single
 Execute agent runs, workflow runs, and network runs in rapid alternation (not sequentially by type).
 
 **What you're testing**:
+
 - Resource contention between different execution paths
 - Database connection sharing
 - MCP client multiplexing
@@ -546,12 +580,14 @@ Execute agent runs, workflow runs, and network runs in rapid alternation (not se
 ##### Phase 10c: Error Recovery
 
 Deliberately test error paths:
+
 1. Execute an agent with an invalid tool reference -- does it fail gracefully?
 2. Execute a workflow with missing input fields -- does it return a clear error?
 3. Execute a network with a message that no agent should handle -- what happens?
 4. Submit feedback for a non-existent run ID -- does it return 404 or error?
 
 **Gate Criteria**:
+
 - [ ] All error cases return meaningful error messages (not 500s)
 - [ ] System remains healthy after error cases (subsequent valid calls succeed)
 
@@ -560,6 +596,7 @@ Deliberately test error paths:
 Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke during Tier 4 stress testing.
 
 **Run**:
+
 - 5 V&V test agent prompts
 - 3 assistant conversations
 - 3 workflow executions
@@ -568,12 +605,13 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 - 1 trigger execution
 
 **Gate Criteria**:
+
 - [ ] All regression runs pass with same behavior as original runs
 - [ ] No degradation in latency or cost compared to Tier 2 baselines
 
 #### Phase 12: Cleanup
 
-*Same as current Phase 10.*
+_Same as current Phase 10._
 
 **TIER 4 GATE**: System stable under load, errors handled gracefully, no regressions. V&V complete.
 
@@ -584,6 +622,7 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 ### 1. Idempotency & State Corruption
 
 **The risk**: Running the same operation twice produces unexpected side effects. For example:
+
 - Creating an agent with the same slug twice -- does it error or silently overwrite?
 - Submitting the same feedback twice for the same run -- duplicated or deduplicated?
 - Deleting an already-deleted agent -- graceful 404 or crash?
@@ -612,7 +651,8 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 
 **The risk**: 400+ runs with GPT-4o and Claude could cost $50-200+. Without monitoring, you could blow through API budgets.
 
-**Recommendation**: 
+**Recommendation**:
+
 - Set budget policies on test agents BEFORE running batches (Phase 2c, not Phase 4e)
 - Monitor `agent_costs` after every batch of 10 runs
 - Use `gpt-4o-mini` for high-volume test agents, reserve expensive models for targeted tests
@@ -635,6 +675,7 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 **The risk**: The human approval workflow is tested once. But what about resuming after a long delay? What if the resume data is malformed?
 
 **Recommendation**: Test resume with:
+
 - Immediate resume (< 1s)
 - Delayed resume (wait 60s before resuming)
 - Malformed resume data (missing required fields)
@@ -645,6 +686,7 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 **The risk**: The learning system depends on Inngest for async event processing. If the Inngest dev server isn't running, learning sessions will appear to start but never progress. The current plan doesn't validate Inngest connectivity before testing learning.
 
 **Recommendation**: Add a pre-flight check at the start of Phase 8:
+
 - Verify Inngest dev server is running (check port 8288)
 - Send a test event and verify it's processed
 - Only then proceed with learning session tests
@@ -654,15 +696,17 @@ Re-run a representative subset of tests from Tiers 1-3 to confirm nothing broke 
 **The risk**: Without baseline metrics (latency, cost, eval scores) recorded before any changes, you can't measure improvement or detect regression.
 
 **Recommendation**: At the end of Tier 2, record a **baseline metrics snapshot**:
+
 - Per-agent: mean latency, mean cost, mean eval score, failure rate
 - Store this in the decision log
 - Compare against this baseline in Tier 4 regression testing
 
 ### 11. Designer Chat Validation is Superficial
 
-**The risk**: `workflow_designer_chat` and `network_designer_chat` are tested by checking if they return "structurally valid patches." But are those patches actually *correct*? Can you apply them and re-validate?
+**The risk**: `workflow_designer_chat` and `network_designer_chat` are tested by checking if they return "structurally valid patches." But are those patches actually _correct_? Can you apply them and re-validate?
 
 **Recommendation**: After getting a designer patch:
+
 1. Apply it via `workflow_update` / `network_update`
 2. Re-validate the modified definition
 3. Execute the modified workflow/network

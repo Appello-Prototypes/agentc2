@@ -84,9 +84,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         let promptCostUsd = 0;
         let completionCostUsd = 0;
 
-        // Group by model and day
+        // Group by model and day, and collect per-run costs
         const byModel = new Map<string, { cost: number; tokens: number; runs: number }>();
         const byDay = new Map<string, number>();
+        const byRun: Array<{ id: string; costUsd: number; createdAt: string }> = [];
 
         for (const run of runs) {
             const promptToks = run.promptTokens || 0;
@@ -108,6 +109,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 );
             }
             totalCostUsd += runCost;
+
+            // Collect per-run cost data
+            byRun.push({
+                id: run.id,
+                costUsd: Math.round(runCost * 1000000) / 1000000,
+                createdAt: run.createdAt.toISOString()
+            });
 
             // Calculate breakdown
             const breakdown = calculateCostBreakdown(
@@ -169,6 +177,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     date,
                     costUsd: Math.round(cost * 10000) / 10000
                 })),
+            byRun: byRun.sort(
+                (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+            ),
             budget: budget
                 ? {
                       enabled: budget.enabled,

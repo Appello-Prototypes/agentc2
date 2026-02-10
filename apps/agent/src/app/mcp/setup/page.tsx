@@ -544,18 +544,210 @@ main().catch(console.error);
 
     const canManageKeys = membership?.role === "owner" || membership?.role === "admin";
 
+    const [platform, setPlatform] = useState<"cursor" | "claude-cowork">("cursor");
+
+    // Remote MCP server URL for Claude CoWork (org-scoped)
+    const remoteMcpUrl =
+        instanceUrl && organization?.slug
+            ? `${instanceUrl}/api/mcp/server/${organization.slug}`
+            : "";
+
     return (
         <div className="container mx-auto max-w-5xl space-y-6 p-6">
             {/* Header */}
             <div>
-                <h1 className="mb-2 text-3xl font-bold">MCP Setup for Cursor</h1>
+                <h1 className="mb-2 text-3xl font-bold">MCP Setup</h1>
                 <p className="text-muted-foreground">
-                    Configure your Cursor IDE to use your Mastra agents as MCP tools. This allows
-                    Claude in Cursor to call your agents directly.
+                    Connect external clients to your Mastra agents via MCP (Model Context Protocol).
+                    Choose your platform below.
                 </p>
             </div>
 
-            {/* Organization MCP Access */}
+            {/* Platform Selector */}
+            <Tabs
+                defaultValue="cursor"
+                value={platform}
+                onValueChange={(v) => setPlatform(v as "cursor" | "claude-cowork")}
+                className="w-full"
+            >
+                <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="cursor">Cursor IDE</TabsTrigger>
+                    <TabsTrigger value="claude-cowork">Claude CoWork</TabsTrigger>
+                </TabsList>
+
+                {/* ─── Claude CoWork Tab ─── */}
+                <TabsContent value="claude-cowork" className="space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Connect Claude CoWork</CardTitle>
+                            <CardDescription>
+                                Add your Mastra agents as a Custom Connector in Claude CoWork.
+                                Claude will be able to call your agents directly via the remote MCP
+                                server.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Step 1 */}
+                            <div className="space-y-3">
+                                <h4 className="flex items-center gap-2 font-medium">
+                                    <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                        1
+                                    </span>
+                                    Copy Remote MCP Server URL
+                                </h4>
+                                <p className="text-muted-foreground text-sm">
+                                    This URL is unique to your organization and exposes only your
+                                    agents via the MCP Streamable HTTP protocol.
+                                </p>
+                                <div className="flex gap-2">
+                                    <Input
+                                        value={remoteMcpUrl}
+                                        readOnly
+                                        className="bg-muted flex-1 font-mono text-sm"
+                                    />
+                                    {remoteMcpUrl && <CopyButton text={remoteMcpUrl} />}
+                                </div>
+                            </div>
+
+                            <Separator />
+
+                            {/* Step 2 */}
+                            <div className="space-y-3">
+                                <h4 className="flex items-center gap-2 font-medium">
+                                    <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                        2
+                                    </span>
+                                    Generate MCP API Key
+                                </h4>
+                                <p className="text-muted-foreground text-sm">
+                                    Generate an API key below and use it as the{" "}
+                                    <strong>OAuth Client Secret</strong> in Claude. This ensures
+                                    only authorized users can access your organization&apos;s
+                                    agents. The key works the same way as the Cursor MCP API key.
+                                </p>
+                                <p className="text-muted-foreground text-sm">
+                                    Use the <strong>Organization MCP Access</strong> section below
+                                    to generate or view your API key.
+                                </p>
+                            </div>
+
+                            <Separator />
+
+                            {/* Step 3 */}
+                            <div className="space-y-3">
+                                <h4 className="flex items-center gap-2 font-medium">
+                                    <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                        3
+                                    </span>
+                                    Add Custom Connector in Claude
+                                </h4>
+                                <p className="text-muted-foreground text-sm">
+                                    In Claude, go to{" "}
+                                    <strong>
+                                        Settings &gt; Connectors &gt; Add Custom Connector
+                                    </strong>{" "}
+                                    and fill in the following:
+                                </p>
+                                <div className="bg-muted space-y-2 rounded-lg border p-4 text-sm">
+                                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <span className="text-muted-foreground font-medium">
+                                            Name:
+                                        </span>
+                                        <span>Mastra Agents</span>
+                                    </div>
+                                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <span className="text-muted-foreground font-medium">
+                                            Remote MCP URL:
+                                        </span>
+                                        <code className="break-all">{remoteMcpUrl}</code>
+                                    </div>
+                                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <span className="text-muted-foreground font-medium">
+                                            OAuth Client ID:
+                                        </span>
+                                        <span className="text-muted-foreground italic">
+                                            (leave blank)
+                                        </span>
+                                    </div>
+                                    <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <span className="text-muted-foreground font-medium">
+                                            OAuth Client Secret:
+                                        </span>
+                                        <span className="text-muted-foreground italic">
+                                            {mcpApiKey
+                                                ? "(paste your MCP API key from Step 2)"
+                                                : "(generate a key in Step 2 first)"}
+                                        </span>
+                                    </div>
+                                </div>
+                                <p className="text-muted-foreground text-sm">
+                                    Click <strong>Add</strong> and Claude will connect to your
+                                    Mastra agents. You can verify by asking Claude to list available
+                                    tools.
+                                </p>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>How It Works</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-3">
+                            <p className="text-muted-foreground text-sm">
+                                Claude CoWork connects to your Mastra instance using the{" "}
+                                <strong>MCP Streamable HTTP</strong> transport protocol. Unlike
+                                Cursor (which runs a local MCP server via stdio), Claude CoWork
+                                connects directly to your server over HTTPS.
+                            </p>
+                            <p className="text-muted-foreground text-sm">
+                                Your agents, workflows, and networks are exposed as MCP tools that
+                                Claude can call. Each agent becomes a tool like{" "}
+                                <code className="bg-muted rounded px-1">ask_assistant</code>,
+                                workflows become{" "}
+                                <code className="bg-muted rounded px-1">
+                                    run_workflow_my_workflow
+                                </code>
+                                , and networks become{" "}
+                                <code className="bg-muted rounded px-1">
+                                    route_network_my_network
+                                </code>
+                                .
+                            </p>
+                            <div className="flex gap-2">
+                                <a
+                                    href="https://support.claude.com/en/articles/11175166-getting-started-with-custom-connectors-using-remote-mcp"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                                >
+                                    <ExternalLinkIcon className="h-4 w-4" />
+                                    Claude Connectors Guide
+                                </a>
+                                <a
+                                    href="https://modelcontextprotocol.io/specification/2025-03-26/basic/transports"
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="border-input bg-background hover:bg-accent hover:text-accent-foreground inline-flex h-10 items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                                >
+                                    <ExternalLinkIcon className="h-4 w-4" />
+                                    MCP Transport Spec
+                                </a>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ─── Cursor IDE Tab ─── */}
+                <TabsContent value="cursor" className="space-y-6">
+                    <p className="text-muted-foreground text-sm">
+                        Configure your Cursor IDE to use your Mastra agents as MCP tools. This
+                        allows Claude in Cursor to call your agents directly.
+                    </p>
+                </TabsContent>
+            </Tabs>
+
+            {/* Organization MCP Access -- shared across both tabs */}
             <Card>
                 <CardHeader>
                     <CardTitle>Organization MCP Access</CardTitle>
@@ -648,222 +840,231 @@ main().catch(console.error);
                 </CardContent>
             </Card>
 
-            {/* Instance Configuration */}
-            <Card>
-                <CardHeader>
-                    <CardTitle>Your Instance</CardTitle>
-                    <CardDescription>
-                        Configure the connection to your Mastra instance
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                            <Label htmlFor="instanceUrl">Instance URL</Label>
-                            <Input
-                                id="instanceUrl"
-                                value={instanceUrl}
-                                onChange={(e) => setInstanceUrl(e.target.value)}
-                                placeholder="https://your-instance.com/agent"
-                            />
-                            <p className="text-muted-foreground text-xs">
-                                The base URL of your Mastra deployment
-                            </p>
-                        </div>
-                        <div className="space-y-2">
-                            <Label htmlFor="nodePath">Node.js Path</Label>
-                            <Input
-                                id="nodePath"
-                                value={nodePath}
-                                onChange={(e) => setNodePath(e.target.value)}
-                                placeholder="/usr/local/bin/node"
-                            />
-                            <p className="text-muted-foreground text-xs">
-                                Run <code className="bg-muted rounded px-1">which node</code> to
-                                find your path
-                            </p>
-                        </div>
-                    </div>
-                    <div className="space-y-2">
-                        <Label htmlFor="serverScriptPath">Server Script Path</Label>
-                        <Input
-                            id="serverScriptPath"
-                            value={serverScriptPath}
-                            onChange={(e) => setServerScriptPath(e.target.value)}
-                            placeholder="~/mastra-mcp-server/index.js"
-                        />
-                        <p className="text-muted-foreground text-xs">
-                            Where you will save the MCP server script
-                        </p>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* Setup Instructions */}
-            <Tabs defaultValue="quick" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="quick">Quick Setup</TabsTrigger>
-                    <TabsTrigger value="manual">Manual Setup</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="quick" className="space-y-4">
+            {/* Instance Configuration + Setup Instructions -- Cursor only */}
+            {platform === "cursor" && (
+                <>
                     <Card>
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    1
-                                </span>
-                                Download Server Files
-                            </CardTitle>
+                            <CardTitle>Your Instance</CardTitle>
                             <CardDescription>
-                                Download the MCP server script and package.json
+                                Configure the connection to your Mastra instance
                             </CardDescription>
                         </CardHeader>
-                        <CardContent>
-                            <Button onClick={downloadServerFiles}>
-                                <DownloadIcon className="mr-2 h-4 w-4" />
-                                Download Server Files
-                            </Button>
-                            <p className="text-muted-foreground mt-2 text-sm">
-                                Save these files to a folder like{" "}
-                                <code className="bg-muted rounded px-1">~/mastra-mcp-server/</code>
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    2
-                                </span>
-                                Generate MCP API Key
-                            </CardTitle>
-                            <CardDescription>
-                                Create or rotate the key for this organization
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-muted-foreground text-sm">
-                                Use the controls above to generate your MCP API key, then copy the
-                                organization slug shown in the same section.
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    3
-                                </span>
-                                Install Dependencies
-                            </CardTitle>
-                            <CardDescription>
-                                Navigate to the folder and install the required package
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <CodeBlock
-                                code={`cd ~/mastra-mcp-server
-npm install`}
-                                language="bash"
-                            />
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    4
-                                </span>
-                                Add to Cursor MCP Config
-                            </CardTitle>
-                            <CardDescription>
-                                Add the following to your{" "}
-                                <code className="bg-muted rounded px-1">~/.cursor/mcp.json</code>.
-                                It includes your organization slug and API key.
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <CodeBlock code={generateMcpConfig()} language="json" />
-                            <p className="text-muted-foreground mt-3 text-sm">
-                                If the file already has content, merge the{" "}
-                                <code className="bg-muted rounded px-1">mcpServers</code> entries.
-                            </p>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
-                                    5
-                                </span>
-                                Restart Cursor
-                            </CardTitle>
-                            <CardDescription>
-                                Restart Cursor to load the new MCP server
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <p className="text-muted-foreground text-sm">
-                                After restarting, Claude in Cursor will be able to use your agents
-                                as tools. You can verify by asking Claude to list available tools.
-                            </p>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                <TabsContent value="manual" className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>MCP Server Script</CardTitle>
-                            <CardDescription>
-                                Create a file called <code>index.js</code> with this content
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="max-h-96 overflow-auto">
-                                <CodeBlock code={serverScript} language="javascript" />
+                        <CardContent className="space-y-4">
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="instanceUrl">Instance URL</Label>
+                                    <Input
+                                        id="instanceUrl"
+                                        value={instanceUrl}
+                                        onChange={(e) => setInstanceUrl(e.target.value)}
+                                        placeholder="https://your-instance.com/agent"
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        The base URL of your Mastra deployment
+                                    </p>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="nodePath">Node.js Path</Label>
+                                    <Input
+                                        id="nodePath"
+                                        value={nodePath}
+                                        onChange={(e) => setNodePath(e.target.value)}
+                                        placeholder="/usr/local/bin/node"
+                                    />
+                                    <p className="text-muted-foreground text-xs">
+                                        Run{" "}
+                                        <code className="bg-muted rounded px-1">which node</code> to
+                                        find your path
+                                    </p>
+                                </div>
+                            </div>
+                            <div className="space-y-2">
+                                <Label htmlFor="serverScriptPath">Server Script Path</Label>
+                                <Input
+                                    id="serverScriptPath"
+                                    value={serverScriptPath}
+                                    onChange={(e) => setServerScriptPath(e.target.value)}
+                                    placeholder="~/mastra-mcp-server/index.js"
+                                />
+                                <p className="text-muted-foreground text-xs">
+                                    Where you will save the MCP server script
+                                </p>
                             </div>
                         </CardContent>
                     </Card>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Package Configuration</CardTitle>
-                            <CardDescription>
-                                Create a <code>package.json</code> in the same folder
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <CodeBlock code={packageJson} language="json" />
-                        </CardContent>
-                    </Card>
+                    {/* Setup Instructions */}
+                    <Tabs defaultValue="quick" className="w-full">
+                        <TabsList className="grid w-full grid-cols-2">
+                            <TabsTrigger value="quick">Quick Setup</TabsTrigger>
+                            <TabsTrigger value="manual">Manual Setup</TabsTrigger>
+                        </TabsList>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Cursor MCP Configuration</CardTitle>
-                            <CardDescription>
-                                Add to <code>~/.cursor/mcp.json</code>
-                            </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            <CodeBlock code={generateMcpConfig()} language="json" />
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-            </Tabs>
+                        <TabsContent value="quick" className="space-y-4">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                            1
+                                        </span>
+                                        Download Server Files
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Download the MCP server script and package.json
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <Button onClick={downloadServerFiles}>
+                                        <DownloadIcon className="mr-2 h-4 w-4" />
+                                        Download Server Files
+                                    </Button>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Save these files to a folder like{" "}
+                                        <code className="bg-muted rounded px-1">
+                                            ~/mastra-mcp-server/
+                                        </code>
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                            2
+                                        </span>
+                                        Generate MCP API Key
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Create or rotate the key for this organization
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground text-sm">
+                                        Use the controls above to generate your MCP API key, then
+                                        copy the organization slug shown in the same section.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                            3
+                                        </span>
+                                        Install Dependencies
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Navigate to the folder and install the required package
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <CodeBlock
+                                        code={`cd ~/mastra-mcp-server
+npm install`}
+                                        language="bash"
+                                    />
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                            4
+                                        </span>
+                                        Add to Cursor MCP Config
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Add the following to your{" "}
+                                        <code className="bg-muted rounded px-1">
+                                            ~/.cursor/mcp.json
+                                        </code>
+                                        . It includes your organization slug and API key.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <CodeBlock code={generateMcpConfig()} language="json" />
+                                    <p className="text-muted-foreground mt-3 text-sm">
+                                        If the file already has content, merge the{" "}
+                                        <code className="bg-muted rounded px-1">mcpServers</code>{" "}
+                                        entries.
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2">
+                                        <span className="bg-primary text-primary-foreground flex h-6 w-6 items-center justify-center rounded-full text-sm">
+                                            5
+                                        </span>
+                                        Restart Cursor
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Restart Cursor to load the new MCP server
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <p className="text-muted-foreground text-sm">
+                                        After restarting, Claude in Cursor will be able to use your
+                                        agents as tools. You can verify by asking Claude to list
+                                        available tools.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="manual" className="space-y-4">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>MCP Server Script</CardTitle>
+                                    <CardDescription>
+                                        Create a file called <code>index.js</code> with this content
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="max-h-96 overflow-auto">
+                                        <CodeBlock code={serverScript} language="javascript" />
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Package Configuration</CardTitle>
+                                    <CardDescription>
+                                        Create a <code>package.json</code> in the same folder
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <CodeBlock code={packageJson} language="json" />
+                                </CardContent>
+                            </Card>
+
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>Cursor MCP Configuration</CardTitle>
+                                    <CardDescription>
+                                        Add to <code>~/.cursor/mcp.json</code>
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <CodeBlock code={generateMcpConfig()} language="json" />
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+                    </Tabs>
+                </>
+            )}
 
             {/* Available Agents */}
             <Card>
                 <CardHeader>
                     <CardTitle>Available Agents</CardTitle>
-                    <CardDescription>
-                        These agents will be available as MCP tools in Cursor
-                    </CardDescription>
+                    <CardDescription>These agents will be available as MCP tools</CardDescription>
                 </CardHeader>
                 <CardContent>
                     {loading ? (

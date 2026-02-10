@@ -104,8 +104,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 requestContext: context
             }));
         } catch (resolveError) {
-            const msg =
-                resolveError instanceof Error ? resolveError.message : String(resolveError);
+            const msg = resolveError instanceof Error ? resolveError.message : String(resolveError);
             if (msg.includes("not found")) {
                 return NextResponse.json(
                     { success: false, error: `Agent '${id}' not found` },
@@ -254,8 +253,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
             // Extract threadId and resourceId for memory persistence
             const threadId = context?.threadId || context?.thread?.id;
-            const resourceId =
-                context?.userId || context?.resource?.userId || "default";
+            const resourceId = context?.userId || context?.resource?.userId || "default";
 
             const generateOptions = {
                 maxSteps: effectiveMaxSteps,
