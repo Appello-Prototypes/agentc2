@@ -188,6 +188,67 @@ function stripBotMention(text: string): string {
 }
 
 /**
+ * Convert Markdown to Slack mrkdwn format.
+ * Slack uses a different syntax than standard Markdown:
+ *   Markdown **bold**  -> Slack *bold*
+ *   Markdown __bold__  -> Slack *bold*
+ *   Markdown *italic*  -> Slack _italic_ (only single asterisk without spaces)
+ *   Markdown ## Header -> Slack *Header* (bold, no heading syntax)
+ *   Markdown [text](url) -> Slack <url|text>
+ *   Markdown ![alt](url) -> Slack <url|alt> (images become links)
+ *   Markdown > blockquote -> Slack > blockquote (same)
+ *   Markdown `code` -> Slack `code` (same)
+ *   Markdown ```code``` -> Slack ```code``` (same)
+ */
+function markdownToSlack(text: string): string {
+    let result = text;
+
+    // Preserve code blocks from being modified (replace temporarily)
+    const codeBlocks: string[] = [];
+    result = result.replace(/```[\s\S]*?```/g, (match) => {
+        codeBlocks.push(match);
+        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+    });
+
+    // Preserve inline code
+    const inlineCode: string[] = [];
+    result = result.replace(/`[^`]+`/g, (match) => {
+        inlineCode.push(match);
+        return `__INLINE_CODE_${inlineCode.length - 1}__`;
+    });
+
+    // Convert Markdown links [text](url) -> <url|text>
+    result = result.replace(/!?\[([^\]]+)\]\(([^)]+)\)/g, "<$2|$1>");
+
+    // Convert headers: ## Header -> *Header*
+    result = result.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
+
+    // Convert bold: **text** or __text__ -> *text*
+    result = result.replace(/\*\*(.+?)\*\*/g, "*$1*");
+    result = result.replace(/__(.+?)__/g, "*$1*");
+
+    // Convert italic: single *text* (not already bold) -> _text_
+    // Only match *word* patterns that aren't inside bold markers
+    // Skip this if the text is already using Slack bold (*text*)
+    // Markdown italic with underscores _text_ stays as _text_ (Slack italic)
+
+    // Convert horizontal rules --- or *** -> ───
+    result = result.replace(/^[-*_]{3,}$/gm, "───");
+
+    // Restore inline code
+    for (let i = 0; i < inlineCode.length; i++) {
+        result = result.replace(`__INLINE_CODE_${i}__`, inlineCode[i]);
+    }
+
+    // Restore code blocks
+    for (let i = 0; i < codeBlocks.length; i++) {
+        result = result.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
+    }
+
+    return result;
+}
+
+/**
  * Parse an optional agent directive from the message text.
  * Supports:
  *   "agent:research What is X?" -> { slug: "research", text: "What is X?" }
@@ -693,7 +754,7 @@ async function processMessage(
         console.log(`${"=".repeat(60)}\n`);
 
         return {
-            text: response.text || "I'm sorry, I couldn't generate a response.",
+            text: markdownToSlack(response.text || "I'm sorry, I couldn't generate a response."),
             identity
         };
     } catch (error) {
