@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useResolvedValue, formatValue } from "../use-resolved-data"
-import { BlockWrapper } from "./BlockWrapper"
+import * as React from "react";
+import { useResolvedValue, formatValue } from "../use-resolved-data";
+import { BlockWrapper } from "./BlockWrapper";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function MetricItem({ metric }: { metric: any }) {
-    const rawValue = useResolvedValue(metric.value)
-    const displayValue = formatValue(rawValue, metric.format, metric.prefix, metric.suffix)
+    const rawValue = useResolvedValue(metric.value);
+    const displayValue = formatValue(rawValue, metric.format, metric.prefix, metric.suffix);
 
     return (
         <div className="flex min-w-0 flex-1 flex-col items-center gap-1 px-3 py-2">
@@ -17,12 +17,12 @@ function MetricItem({ metric }: { metric: any }) {
                 {metric.label}
             </span>
         </div>
-    )
+    );
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function MetricRowBlock({ config }: { config: any }) {
-    const metrics = config.metrics || []
+    const metrics = config.metrics || [];
 
     return (
         <BlockWrapper
@@ -37,5 +37,5 @@ export function MetricRowBlock({ config }: { config: any }) {
                 ))}
             </div>
         </BlockWrapper>
-    )
+    );
 }

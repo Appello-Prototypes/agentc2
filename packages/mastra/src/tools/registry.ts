@@ -150,7 +150,8 @@ import {
     skillAttachToolTool,
     skillDetachToolTool,
     agentAttachSkillTool,
-    agentDetachSkillTool
+    agentDetachSkillTool,
+    skillGetVersionsTool
 } from "./skill-tools";
 import {
     canvasCreateTool,
@@ -327,6 +328,7 @@ export const toolRegistry: Record<string, any> = {
     "skill-detach-tool": skillDetachToolTool,
     "agent-attach-skill": agentAttachSkillTool,
     "agent-detach-skill": agentDetachSkillTool,
+    "skill-get-versions": skillGetVersionsTool,
 
     // Gmail tools
     "gmail-archive-email": gmailArchiveEmailTool,

@@ -84,7 +84,10 @@ export function FormBlock({ config }: { config: any }) {
                             <div className="mt-1 space-y-1">
                                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                                 {(field.options || []).map((opt: any) => (
-                                    <label key={opt.value} className="flex items-center gap-2 text-sm">
+                                    <label
+                                        key={opt.value}
+                                        className="flex items-center gap-2 text-sm"
+                                    >
                                         <input
                                             type="radio"
                                             name={field.name}

@@ -286,7 +286,7 @@ export function UploadDocumentDialog({ open, onOpenChange, onSuccess }: UploadDo
 
     return (
         <Dialog open={open} onOpenChange={handleClose}>
-            <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-[600px]">
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[720px]">
                 <DialogHeader>
                     <DialogTitle>Add Document</DialogTitle>
                     <DialogDescription>
@@ -374,9 +374,9 @@ export function UploadDocumentDialog({ open, onOpenChange, onSuccess }: UploadDo
                                     />
 
                                     {selectedFile ? (
-                                        <div className="flex items-center gap-3 p-4">
-                                            <FileTextIcon className="text-primary size-8" />
-                                            <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-3 overflow-hidden p-4">
+                                            <FileTextIcon className="text-primary size-8 shrink-0" />
+                                            <div className="min-w-0 flex-1 overflow-hidden">
                                                 <p className="truncate text-sm font-medium">
                                                     {selectedFile.name}
                                                 </p>

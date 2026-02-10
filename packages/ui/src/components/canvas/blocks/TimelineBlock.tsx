@@ -19,17 +19,19 @@ export function TimelineBlock({ config }: { config: any }) {
             <div className="relative space-y-4 pl-6">
                 <div className="bg-border absolute top-0 bottom-0 left-2 w-px" />
                 {data.map((item: Record<string, unknown>, idx: number) => {
-                    const dotColor = config.colorKey && item[config.colorKey]
-                        ? String(item[config.colorKey])
-                        : undefined;
-                    const icon = config.iconKey && item[config.iconKey]
-                        ? String(item[config.iconKey])
-                        : undefined;
+                    const dotColor =
+                        config.colorKey && item[config.colorKey]
+                            ? String(item[config.colorKey])
+                            : undefined;
+                    const icon =
+                        config.iconKey && item[config.iconKey]
+                            ? String(item[config.iconKey])
+                            : undefined;
 
                     return (
                         <div key={idx} className="relative">
                             {icon ? (
-                                <span className="absolute -left-5 top-0.5 text-sm">{icon}</span>
+                                <span className="absolute top-0.5 -left-5 text-sm">{icon}</span>
                             ) : (
                                 <div
                                     className={cn(

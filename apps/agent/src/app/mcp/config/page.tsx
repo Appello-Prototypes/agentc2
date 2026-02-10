@@ -373,172 +373,183 @@ export default function McpConfigPage() {
     };
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <div className="mb-2">
-                        <Link
-                            href="/mcp"
-                            className={buttonVariants({ variant: "outline", size: "sm" })}
-                        >
-                            Back to Integrations
-                        </Link>
-                    </div>
-                    <h1 className="text-3xl font-bold">MCP JSON Config</h1>
-                    <p className="text-muted-foreground">
-                        Paste your MCP JSON like Cursor. Save to sync connections.
-                    </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    <Button variant="outline" onClick={() => void handleLoad()} disabled={loading}>
-                        {loading ? "Loading..." : "Load current config"}
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                        {saving ? "Saving..." : "Save config"}
-                    </Button>
-                </div>
-            </div>
-
-            <AlertDialog open={impactOpen} onOpenChange={handleImpactClose}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Confirm MCP config changes</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Saving this config will disable{" "}
-                            {impactResult?.serversToDisable.length ?? 0} MCP servers and affect{" "}
-                            {impactResult?.totalAffectedAgents ?? 0} agents. Tools reconnect
-                            automatically if the server is re-added later.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <div className="max-h-[320px] space-y-3 overflow-auto text-sm">
-                        {impactResult?.serversToDisable.map((server) => (
-                            <div
-                                key={`${server.serverKey}-${server.serverName}`}
-                                className="rounded border p-3"
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <div className="mb-2">
+                            <Link
+                                href="/mcp"
+                                className={buttonVariants({ variant: "outline", size: "sm" })}
                             >
-                                <div className="font-medium">{server.serverName}</div>
-                                <div className="text-muted-foreground text-xs">
-                                    Server key: {server.serverKey}
-                                </div>
-                                {server.affectedAgents.length > 0 ? (
-                                    <div className="mt-2 space-y-1 text-xs">
-                                        {server.affectedAgents.map((agent) => (
-                                            <div key={agent.id}>
-                                                {agent.name} ({agent.slug}){" "}
-                                                {agent.reason === "explicit"
-                                                    ? `- ${agent.toolCount} tool${
-                                                          agent.toolCount === 1 ? "" : "s"
-                                                      } configured`
-                                                    : "- MCP-enabled agent"}
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="text-muted-foreground mt-2 text-xs">
-                                        No agents are using this server.
-                                    </div>
-                                )}
-                            </div>
-                        ))}
+                                Back to Integrations
+                            </Link>
+                        </div>
+                        <h1 className="text-3xl font-bold">MCP JSON Config</h1>
+                        <p className="text-muted-foreground">
+                            Paste your MCP JSON like Cursor. Save to sync connections.
+                        </p>
                     </div>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => void handleConfirmSave()}>
-                            Save config
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                    <div className="flex flex-wrap gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => void handleLoad()}
+                            disabled={loading}
+                        >
+                            {loading ? "Loading..." : "Load current config"}
+                        </Button>
+                        <Button onClick={handleSave} disabled={saving}>
+                            {saving ? "Saving..." : "Save config"}
+                        </Button>
+                    </div>
+                </div>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Configuration</CardTitle>
-                    <CardDescription>
-                        Choose a format and edit the MCP JSON directly. Cursor format is the default
-                        and recommended.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <Tabs defaultValue="cursor" value={format} onValueChange={setFormat}>
-                        <TabsList>
-                            <TabsTrigger value="cursor">Cursor format</TabsTrigger>
-                            <TabsTrigger value="claude">Claude format</TabsTrigger>
-                            <TabsTrigger value="raw">Raw MCP</TabsTrigger>
-                        </TabsList>
-                        <TabsContent value="cursor">
-                            <p className="text-muted-foreground text-xs">
-                                Compatible with `.cursor/mcp.json`.
-                            </p>
-                        </TabsContent>
-                        <TabsContent value="claude">
-                            <p className="text-muted-foreground text-xs">
-                                Uses the same JSON structure as Cursor for now.
-                            </p>
-                        </TabsContent>
-                        <TabsContent value="raw">
-                            <p className="text-muted-foreground text-xs">
-                                Direct MCP server definitions.
-                            </p>
-                        </TabsContent>
-                    </Tabs>
-
-                    <Textarea
-                        value={configText}
-                        onChange={(event) => setConfigText(event.target.value)}
-                        className="min-h-[420px] font-mono text-xs"
-                        spellCheck={false}
-                    />
-
-                    {parseError && <div className="text-sm text-red-500">{parseError}</div>}
-
-                    {validation.length > 0 && (
-                        <div className="space-y-1 text-sm text-red-500">
-                            {validation.map((message) => (
-                                <div key={message}>{message}</div>
+                <AlertDialog open={impactOpen} onOpenChange={handleImpactClose}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Confirm MCP config changes</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                Saving this config will disable{" "}
+                                {impactResult?.serversToDisable.length ?? 0} MCP servers and affect{" "}
+                                {impactResult?.totalAffectedAgents ?? 0} agents. Tools reconnect
+                                automatically if the server is re-added later.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <div className="max-h-[320px] space-y-3 overflow-auto text-sm">
+                            {impactResult?.serversToDisable.map((server) => (
+                                <div
+                                    key={`${server.serverKey}-${server.serverName}`}
+                                    className="rounded border p-3"
+                                >
+                                    <div className="font-medium">{server.serverName}</div>
+                                    <div className="text-muted-foreground text-xs">
+                                        Server key: {server.serverKey}
+                                    </div>
+                                    {server.affectedAgents.length > 0 ? (
+                                        <div className="mt-2 space-y-1 text-xs">
+                                            {server.affectedAgents.map((agent) => (
+                                                <div key={agent.id}>
+                                                    {agent.name} ({agent.slug}){" "}
+                                                    {agent.reason === "explicit"
+                                                        ? `- ${agent.toolCount} tool${
+                                                              agent.toolCount === 1 ? "" : "s"
+                                                          } configured`
+                                                        : "- MCP-enabled agent"}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-muted-foreground mt-2 text-xs">
+                                            No agents are using this server.
+                                        </div>
+                                    )}
+                                </div>
                             ))}
                         </div>
-                    )}
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => void handleConfirmSave()}>
+                                Save config
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
-                    {warnings.length > 0 && (
-                        <div className="space-y-1 text-sm text-yellow-600">
-                            {warnings.map((message) => (
-                                <div key={message}>{message}</div>
-                            ))}
-                        </div>
-                    )}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Configuration</CardTitle>
+                        <CardDescription>
+                            Choose a format and edit the MCP JSON directly. Cursor format is the
+                            default and recommended.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <Tabs defaultValue="cursor" value={format} onValueChange={setFormat}>
+                            <TabsList>
+                                <TabsTrigger value="cursor">Cursor format</TabsTrigger>
+                                <TabsTrigger value="claude">Claude format</TabsTrigger>
+                                <TabsTrigger value="raw">Raw MCP</TabsTrigger>
+                            </TabsList>
+                            <TabsContent value="cursor">
+                                <p className="text-muted-foreground text-xs">
+                                    Compatible with `.cursor/mcp.json`.
+                                </p>
+                            </TabsContent>
+                            <TabsContent value="claude">
+                                <p className="text-muted-foreground text-xs">
+                                    Uses the same JSON structure as Cursor for now.
+                                </p>
+                            </TabsContent>
+                            <TabsContent value="raw">
+                                <p className="text-muted-foreground text-xs">
+                                    Direct MCP server definitions.
+                                </p>
+                            </TabsContent>
+                        </Tabs>
 
-                    {saveError && <div className="text-sm text-red-500">{saveError}</div>}
+                        <Textarea
+                            value={configText}
+                            onChange={(event) => setConfigText(event.target.value)}
+                            className="min-h-[420px] font-mono text-xs"
+                            spellCheck={false}
+                        />
 
-                    {saveResult && (
-                        <div className="space-y-1 text-sm text-emerald-600">
-                            {saveResult.createdProviders?.length ? (
-                                <div>Providers created: {saveResult.createdProviders.length}</div>
-                            ) : null}
-                            {saveResult.updatedProviders?.length ? (
-                                <div>Providers updated: {saveResult.updatedProviders.length}</div>
-                            ) : null}
-                            {saveResult.createdConnections?.length ? (
-                                <div>
-                                    Connections created: {saveResult.createdConnections.length}
-                                </div>
-                            ) : null}
-                            {saveResult.updatedConnections?.length ? (
-                                <div>
-                                    Connections updated: {saveResult.updatedConnections.length}
-                                </div>
-                            ) : null}
-                            {saveResult.disabledConnections?.length ? (
-                                <div>
-                                    Connections disabled: {saveResult.disabledConnections.length}
-                                </div>
-                            ) : null}
-                            {saveResult.warnings?.length ? (
-                                <div>Warnings: {saveResult.warnings.length}</div>
-                            ) : null}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                        {parseError && <div className="text-sm text-red-500">{parseError}</div>}
+
+                        {validation.length > 0 && (
+                            <div className="space-y-1 text-sm text-red-500">
+                                {validation.map((message) => (
+                                    <div key={message}>{message}</div>
+                                ))}
+                            </div>
+                        )}
+
+                        {warnings.length > 0 && (
+                            <div className="space-y-1 text-sm text-yellow-600">
+                                {warnings.map((message) => (
+                                    <div key={message}>{message}</div>
+                                ))}
+                            </div>
+                        )}
+
+                        {saveError && <div className="text-sm text-red-500">{saveError}</div>}
+
+                        {saveResult && (
+                            <div className="space-y-1 text-sm text-emerald-600">
+                                {saveResult.createdProviders?.length ? (
+                                    <div>
+                                        Providers created: {saveResult.createdProviders.length}
+                                    </div>
+                                ) : null}
+                                {saveResult.updatedProviders?.length ? (
+                                    <div>
+                                        Providers updated: {saveResult.updatedProviders.length}
+                                    </div>
+                                ) : null}
+                                {saveResult.createdConnections?.length ? (
+                                    <div>
+                                        Connections created: {saveResult.createdConnections.length}
+                                    </div>
+                                ) : null}
+                                {saveResult.updatedConnections?.length ? (
+                                    <div>
+                                        Connections updated: {saveResult.updatedConnections.length}
+                                    </div>
+                                ) : null}
+                                {saveResult.disabledConnections?.length ? (
+                                    <div>
+                                        Connections disabled:{" "}
+                                        {saveResult.disabledConnections.length}
+                                    </div>
+                                ) : null}
+                                {saveResult.warnings?.length ? (
+                                    <div>Warnings: {saveResult.warnings.length}</div>
+                                ) : null}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

@@ -56,13 +56,40 @@ export async function GET(request: NextRequest) {
                     category: true,
                     agentId: true,
                     createdAt: true,
-                    updatedAt: true
+                    updatedAt: true,
+                    schemaJson: true
                 }
             }),
             prisma.canvas.count({ where })
         ]);
 
-        return NextResponse.json({ canvases, total, skip, take });
+        // Extract lightweight preview info from schemaJson
+        const canvasesWithPreview = canvases.map((c) => {
+            const schema = c.schemaJson as Record<string, unknown> | null;
+            const components = (schema?.components as Array<Record<string, unknown>>) || [];
+            const layout = schema?.layout as Record<string, unknown> | undefined;
+
+            return {
+                ...c,
+                schemaJson: undefined, // Don't send the full schema
+                preview: {
+                    layout: layout
+                        ? {
+                              type: layout.type || "grid",
+                              columns: layout.columns || 12
+                          }
+                        : { type: "grid", columns: 12 },
+                    components: components.map((comp) => ({
+                        type: comp.type as string,
+                        span: (comp.span as number) || 12,
+                        row: comp.row as string | undefined,
+                        title: comp.title as string | undefined
+                    }))
+                }
+            };
+        });
+
+        return NextResponse.json({ canvases: canvasesWithPreview, total, skip, take });
     } catch (error) {
         console.error("List canvases error:", error);
         return NextResponse.json(

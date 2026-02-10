@@ -77,6 +77,14 @@ export interface StartRunOptions {
     triggerType?: RunTriggerType;
     triggerId?: string;
     initialStatus?: RunStatus;
+    /** Active skills at run time [{skillId, skillSlug, skillVersion}] */
+    skillsJson?: unknown;
+    /** Tool origin map for attribution (toolKey -> "registry" | "mcp:server" | "skill:slug") */
+    toolOriginMap?: Record<string, string>;
+    /** SHA-256 hash of merged instructions (base + skills) */
+    instructionsHash?: string;
+    /** Full merged instructions text for audit */
+    instructionsSnapshot?: string;
 }
 
 /**
@@ -195,7 +203,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 triggerType: options.triggerType,
                 triggerId: options.triggerId,
                 sessionId: options.sessionId,
-                threadId: options.threadId
+                threadId: options.threadId,
+                // Skills active at run time
+                skillsJson: options.skillsJson ?? undefined
             }
         });
 
@@ -209,7 +219,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 inputText: options.input,
                 stepsJson: [],
                 modelJson: {},
-                tokensJson: {}
+                tokensJson: {},
+                instructionsHash: options.instructionsHash,
+                instructionsSnapshot: options.instructionsSnapshot
             }
         });
 
@@ -400,13 +412,29 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
             // Track in memory for step synthesis on complete()
             recordedToolCalls.push(toolCall);
 
+            // Resolve tool source from origin map if not explicitly set
+            const toolOriginMap = options.toolOriginMap;
+            let toolSource = toolCall.mcpServerId
+                ? `mcp:${toolCall.mcpServerId}`
+                : undefined;
+            let mcpServerId = toolCall.mcpServerId;
+
+            if (toolOriginMap && toolCall.toolKey in toolOriginMap) {
+                toolSource = toolOriginMap[toolCall.toolKey];
+                // Extract mcpServerId from origin if it's an MCP tool
+                if (toolSource?.startsWith("mcp:") && !mcpServerId) {
+                    mcpServerId = toolSource.replace("mcp:", "");
+                }
+            }
+
             await prisma.agentToolCall.create({
                 data: {
                     runId: run.id,
                     traceId: trace.id,
                     tenantId: options.tenantId,
                     toolKey: toolCall.toolKey,
-                    mcpServerId: toolCall.mcpServerId,
+                    mcpServerId,
+                    toolSource,
                     inputJson: (toolCall.input || {}) as Prisma.InputJsonValue,
                     outputJson:
                         toolCall.output !== undefined

@@ -7,7 +7,7 @@ import {
     ConversationContent,
     ConversationEmptyState,
     ConversationScrollButton,
-    Loader,
+    StreamingStatus,
     Message,
     MessageAction,
     MessageActions,
@@ -190,7 +190,19 @@ export default function WebhookChat({
                             ))
                         )}
 
-                        {(status === "submitted" || status === "streaming") && <Loader />}
+                        <StreamingStatus
+                            status={
+                                status === "submitted"
+                                    ? "submitted"
+                                    : status === "streaming"
+                                      ? "streaming"
+                                      : undefined
+                            }
+                            hasVisibleContent={
+                                messages.length > 0 &&
+                                messages[messages.length - 1]?.role === "assistant"
+                            }
+                        />
                     </ConversationContent>
                     <ConversationScrollButton />
                 </Conversation>

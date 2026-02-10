@@ -6,7 +6,12 @@ import { useSession } from "@repo/auth/client";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
 import { getApiBase } from "@/lib/utils";
-import { saveConversation, loadConversation, generateTitle } from "@/lib/conversation-store";
+import {
+    saveConversation,
+    loadConversation,
+    generateTitle,
+    generateTitleAsync
+} from "@/lib/conversation-store";
 import {
     Badge,
     Button,
@@ -29,7 +34,7 @@ import {
     PromptInputActionMenuContent,
     PromptInputActionMenuItem,
     usePromptInputAttachments,
-    Loader,
+    StreamingStatus,
     type PromptInputMessage
 } from "@repo/ui";
 import {
@@ -233,6 +238,8 @@ export default function UnifiedChatPage() {
 
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
+    const titleGenFiredRef = useRef<boolean>(false);
+    const [titleVersion, setTitleVersion] = useState(0);
 
     const currentModelName = modelOverride?.name || agentDefaultModel || null;
     const showThinkingToggle = isAnthropicModel(currentModelName);
@@ -300,6 +307,7 @@ export default function UnifiedChatPage() {
         setQuestionAnswers({});
         conversationTitleRef.current = "";
         conversationCreatedRef.current = new Date().toISOString();
+        titleGenFiredRef.current = false;
     }, [selectedAgentSlug, setMessages]);
 
     const handleLoadConversation = useCallback(
@@ -311,6 +319,7 @@ export default function UnifiedChatPage() {
                 setAgentName(meta.agentName);
                 conversationTitleRef.current = meta.title;
                 conversationCreatedRef.current = meta.createdAt;
+                titleGenFiredRef.current = true; // already has a title
                 setMessages(loaded);
                 setQuestionAnswers({});
             }
@@ -330,6 +339,7 @@ export default function UnifiedChatPage() {
     useEffect(() => {
         if (messages.length === 0) return;
         const timer = setTimeout(() => {
+            // Set an immediate client-side title as placeholder
             if (!conversationTitleRef.current) {
                 const first = messages.find((m) => m.role === "user");
                 if (first) {
@@ -352,9 +362,36 @@ export default function UnifiedChatPage() {
                 },
                 messages
             );
+
+            // Fire async LLM title generation once we have a user + assistant exchange
+            if (!titleGenFiredRef.current && !isStreaming) {
+                const hasUserMsg = messages.some((m) => m.role === "user");
+                const hasAssistantMsg = messages.some((m) => m.role === "assistant");
+                if (hasUserMsg && hasAssistantMsg) {
+                    titleGenFiredRef.current = true;
+                    const first = messages.find((m) => m.role === "user");
+                    const tp = first?.parts?.find((p) => p.type === "text");
+                    const userText = tp ? (tp as { text: string }).text : "";
+                    if (userText) {
+                        generateTitleAsync(threadId, userText).then((betterTitle) => {
+                            conversationTitleRef.current = betterTitle;
+                            // Bump titleVersion to trigger sidebar refresh
+                            setTitleVersion((v) => v + 1);
+                        });
+                    }
+                }
+            }
         }, 500);
         return () => clearTimeout(timer);
-    }, [messages, threadId, selectedAgentSlug, agentName, modelOverride, agentDefaultModel]);
+    }, [
+        messages,
+        threadId,
+        selectedAgentSlug,
+        agentName,
+        modelOverride,
+        agentDefaultModel,
+        isStreaming
+    ]);
 
     // Quick-send for action menu items (search knowledge base, fetch URL)
     const quickSend = useCallback(
@@ -477,6 +514,7 @@ export default function UnifiedChatPage() {
                     activeId={null}
                     onSelect={handleLoadConversation}
                     onNewConversation={handleNewConversation}
+                    refreshKey={titleVersion}
                 />
                 <div className="cowork-bg relative flex flex-1 flex-col">
                     {/* Scrollable area above */}
@@ -545,6 +583,7 @@ export default function UnifiedChatPage() {
                 activeId={threadId}
                 onSelect={handleLoadConversation}
                 onNewConversation={handleNewConversation}
+                refreshKey={titleVersion}
             />
             <div className="cowork-bg relative flex flex-1 flex-col">
                 {/* Context bar */}
@@ -615,11 +654,19 @@ export default function UnifiedChatPage() {
                                     )}
                                 </Message>
                             ))}
-                            {(isStreaming || isSubmitted) && (
-                                <div className="flex justify-center py-2">
-                                    <Loader />
-                                </div>
-                            )}
+                            <StreamingStatus
+                                status={submitStatus}
+                                hasVisibleContent={messages.some(
+                                    (m) =>
+                                        m.role === "assistant" &&
+                                        m.parts?.some(
+                                            (p) =>
+                                                p.type === "text" &&
+                                                (p as { text: string }).text.length > 0
+                                        )
+                                )}
+                                agentName={agentName || undefined}
+                            />
                         </ConversationContent>
                     </Conversation>
                 </div>

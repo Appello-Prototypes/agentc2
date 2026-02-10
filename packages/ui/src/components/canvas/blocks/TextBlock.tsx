@@ -51,33 +51,54 @@ function simpleMarkdown(text: string): string {
 
         // Headings
         if (trimmed.startsWith("### ")) {
-            if (inList) { html.push("</ul>"); inList = false; }
+            if (inList) {
+                html.push("</ul>");
+                inList = false;
+            }
             html.push(`<h4>${inlineMarkdown(trimmed.slice(4))}</h4>`);
         } else if (trimmed.startsWith("## ")) {
-            if (inList) { html.push("</ul>"); inList = false; }
+            if (inList) {
+                html.push("</ul>");
+                inList = false;
+            }
             html.push(`<h3>${inlineMarkdown(trimmed.slice(3))}</h3>`);
         } else if (trimmed.startsWith("# ")) {
-            if (inList) { html.push("</ul>"); inList = false; }
+            if (inList) {
+                html.push("</ul>");
+                inList = false;
+            }
             html.push(`<h2>${inlineMarkdown(trimmed.slice(2))}</h2>`);
         }
         // List items
         else if (trimmed.startsWith("- ") || trimmed.startsWith("* ")) {
-            if (!inList) { html.push("<ul>"); inList = true; }
+            if (!inList) {
+                html.push("<ul>");
+                inList = true;
+            }
             html.push(`<li>${inlineMarkdown(trimmed.slice(2))}</li>`);
         }
         // Numbered list items
         else if (/^\d+\.\s/.test(trimmed)) {
-            if (!inList) { html.push("<ol>"); inList = true; }
+            if (!inList) {
+                html.push("<ol>");
+                inList = true;
+            }
             html.push(`<li>${inlineMarkdown(trimmed.replace(/^\d+\.\s/, ""))}</li>`);
         }
         // Empty line = paragraph break
         else if (trimmed === "") {
-            if (inList) { html.push("</ul>"); inList = false; }
+            if (inList) {
+                html.push("</ul>");
+                inList = false;
+            }
             html.push("<br>");
         }
         // Regular text
         else {
-            if (inList) { html.push("</ul>"); inList = false; }
+            if (inList) {
+                html.push("</ul>");
+                inList = false;
+            }
             html.push(`<p>${inlineMarkdown(trimmed)}</p>`);
         }
     }

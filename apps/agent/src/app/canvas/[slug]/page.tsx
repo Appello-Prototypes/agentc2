@@ -77,28 +77,31 @@ export default function CanvasViewerPage() {
     }, [slug]);
 
     // Fetch data with SWR-style caching: show stale data during refresh
-    const fetchData = useCallback(async (isBackground = false) => {
-        try {
-            if (!isBackground) setRefreshing(true);
-            const res = await fetch(`${getApiBase()}/api/canvases/${slug}/data`);
-            if (!res.ok) throw new Error("Failed to load data");
-            const result = await res.json();
-            const queryData = result.queries || {};
-            // Extract data from QueryExecutionResult format if present
-            const extracted: Record<string, unknown> = {};
-            for (const [key, val] of Object.entries(queryData)) {
-                const typed = val as { data?: unknown };
-                extracted[key] = typed?.data !== undefined ? typed.data : val;
+    const fetchData = useCallback(
+        async (isBackground = false) => {
+            try {
+                if (!isBackground) setRefreshing(true);
+                const res = await fetch(`${getApiBase()}/api/canvases/${slug}/data`);
+                if (!res.ok) throw new Error("Failed to load data");
+                const result = await res.json();
+                const queryData = result.queries || {};
+                // Extract data from QueryExecutionResult format if present
+                const extracted: Record<string, unknown> = {};
+                for (const [key, val] of Object.entries(queryData)) {
+                    const typed = val as { data?: unknown };
+                    extracted[key] = typed?.data !== undefined ? typed.data : val;
+                }
+                setData(extracted);
+            } catch (err) {
+                console.error("Canvas data error:", err);
+                // On background refresh failure, keep existing data (SWR pattern)
+            } finally {
+                setLoading(false);
+                setRefreshing(false);
             }
-            setData(extracted);
-        } catch (err) {
-            console.error("Canvas data error:", err);
-            // On background refresh failure, keep existing data (SWR pattern)
-        } finally {
-            setLoading(false);
-            setRefreshing(false);
-        }
-    }, [slug]);
+        },
+        [slug]
+    );
 
     useEffect(() => {
         if (schema) {

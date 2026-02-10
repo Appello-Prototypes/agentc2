@@ -1,23 +1,23 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useResolvedValue } from "../use-resolved-data"
-import { BlockWrapper } from "./BlockWrapper"
+import * as React from "react";
+import { useResolvedValue } from "../use-resolved-data";
+import { BlockWrapper } from "./BlockWrapper";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ImageBlock({ config }: { config: any }) {
-    const resolvedSrc = useResolvedValue(config.src)
-    const src = typeof resolvedSrc === "string" ? resolvedSrc : config.src
-    const alt = config.alt || ""
-    const fit = config.fit || "cover"
-    const height = config.height || 200
+    const resolvedSrc = useResolvedValue(config.src);
+    const src = typeof resolvedSrc === "string" ? resolvedSrc : config.src;
+    const alt = config.alt || "";
+    const fit = config.fit || "cover";
+    const height = config.height || 200;
 
     const fitMap: Record<string, string> = {
         cover: "object-cover",
         contain: "object-contain",
-        fill: "object-fill",
-    }
-    const fitClass = fitMap[fit] || "object-cover"
+        fill: "object-fill"
+    };
+    const fitClass = fitMap[fit] || "object-cover";
 
     return (
         <BlockWrapper
@@ -43,5 +43,5 @@ export function ImageBlock({ config }: { config: any }) {
                 </div>
             )}
         </BlockWrapper>
-    )
+    );
 }

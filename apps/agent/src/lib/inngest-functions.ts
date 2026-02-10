@@ -1,6 +1,6 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
-import { prisma, RunStatus, RunTriggerType, TriggerEventStatus } from "@repo/database";
+import { prisma, Prisma, RunStatus, RunTriggerType, TriggerEventStatus } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import {
     evaluateHelpfulness,
@@ -1220,8 +1220,128 @@ export const learningSignalExtractionFunction = inngest.createFunction(
             return signals;
         });
 
-        // Step 5: Store all signals
-        const allSignals = [...lowScoreSignals, ...toolFailureSignals, ...feedbackSignals];
+        // Step 5: Analyze skill correlation with poor performance
+        const skillCorrelationSignals = await step.run("analyze-skill-correlation", async () => {
+            // Get runs with their skills and evaluations
+            const runs = await prisma.agentRun.findMany({
+                where: {
+                    id: { in: dataset.runIds },
+                    NOT: { skillsJson: { equals: Prisma.JsonNull } }
+                },
+                include: {
+                    evaluation: {
+                        select: { scoresJson: true }
+                    }
+                }
+            });
+
+            // Also get runs without skills for comparison baseline
+            const runsWithoutSkills = await prisma.agentRun.findMany({
+                where: {
+                    id: { in: dataset.runIds },
+                    skillsJson: { equals: Prisma.JsonNull }
+                },
+                include: {
+                    evaluation: {
+                        select: { scoresJson: true }
+                    }
+                }
+            });
+
+            const signals: Array<{
+                type: "SKILL_CORRELATION";
+                severity: string;
+                pattern: string;
+                evidence: {
+                    skillSlug: string;
+                    avgScoreWithSkill: number;
+                    avgScoreWithout: number;
+                    runCount: number;
+                }[];
+            }> = [];
+
+            // Calculate baseline average (runs without skills)
+            let baselineAvg = 0;
+            let baselineCount = 0;
+            for (const r of runsWithoutSkills) {
+                if (r.evaluation?.scoresJson) {
+                    const scores = r.evaluation.scoresJson as Record<string, number>;
+                    const avg =
+                        Object.values(scores).reduce((a, b) => a + b, 0) /
+                        Math.max(Object.keys(scores).length, 1);
+                    baselineAvg += avg;
+                    baselineCount++;
+                }
+            }
+            baselineAvg = baselineCount > 0 ? baselineAvg / baselineCount : 0.5;
+
+            // Group runs by skill slug and calculate avg score per skill
+            const skillScores: Record<
+                string,
+                { totalScore: number; count: number; runCount: number }
+            > = {};
+
+            for (const r of runs) {
+                const skills = r.skillsJson as Array<{
+                    skillSlug: string;
+                }>;
+                if (!Array.isArray(skills) || !r.evaluation?.scoresJson) continue;
+
+                const scores = r.evaluation.scoresJson as Record<string, number>;
+                const avg =
+                    Object.values(scores).reduce((a, b) => a + b, 0) /
+                    Math.max(Object.keys(scores).length, 1);
+
+                for (const s of skills) {
+                    if (!skillScores[s.skillSlug]) {
+                        skillScores[s.skillSlug] = { totalScore: 0, count: 0, runCount: 0 };
+                    }
+                    skillScores[s.skillSlug].totalScore += avg;
+                    skillScores[s.skillSlug].count++;
+                    skillScores[s.skillSlug].runCount++;
+                }
+            }
+
+            // Detect skills that correlate with >20% score decrease
+            const evidence: {
+                skillSlug: string;
+                avgScoreWithSkill: number;
+                avgScoreWithout: number;
+                runCount: number;
+            }[] = [];
+
+            for (const [slug, data] of Object.entries(skillScores)) {
+                if (data.count < 3) continue; // Need minimum sample size
+                const avgWithSkill = data.totalScore / data.count;
+                if (baselineAvg > 0 && avgWithSkill < baselineAvg * 0.8) {
+                    evidence.push({
+                        skillSlug: slug,
+                        avgScoreWithSkill: Math.round(avgWithSkill * 100) / 100,
+                        avgScoreWithout: Math.round(baselineAvg * 100) / 100,
+                        runCount: data.runCount
+                    });
+                }
+            }
+
+            if (evidence.length > 0) {
+                signals.push({
+                    type: "SKILL_CORRELATION",
+                    severity: evidence.length > 1 ? "high" : "medium",
+                    pattern: `${evidence.length} skill(s) correlated with decreased scores: ${evidence.map((e) => e.skillSlug).join(", ")}`,
+                    evidence
+                });
+            }
+
+            return signals;
+        });
+
+        // Step 6: Store all signals
+        const allSignals = [
+            ...lowScoreSignals,
+            ...toolFailureSignals,
+            ...feedbackSignals,
+            ...skillCorrelationSignals
+        ];
 
         await step.run("store-signals", async () => {
             for (const signal of allSignals) {
@@ -1229,7 +1349,7 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                     data: {
                         sessionId,
                         tenantId: dataset.tenantId,
-                        type: signal.type,
+                        type: signal.type as "LOW_SCORE" | "TOOL_FAILURE" | "NEGATIVE_FEEDBACK" | "SKILL_CORRELATION",
                         severity: signal.severity,
                         pattern: signal.pattern,
                         evidenceJson: signal.evidence,
@@ -1246,7 +1366,7 @@ export const learningSignalExtractionFunction = inngest.createFunction(
             });
         });
 
-        // Step 6: Trigger proposal generation
+        // Step 7: Trigger proposal generation
         await step.sendEvent("generate-proposals", {
             name: "learning/proposals.generate",
             data: {
@@ -1392,6 +1512,31 @@ export const learningProposalGenerationFunction = inngest.createFunction(
 + - Keep responses concise but complete`,
                     expectedImpact: `Expected to improve user satisfaction by 20-30%`,
                     confidenceScore: 0.6
+                });
+            }
+
+            // Analyze skill correlation signals
+            const skillCorrelationSignals = signals.filter(
+                (s) => s.type === "SKILL_CORRELATION"
+            );
+            if (skillCorrelationSignals.length > 0) {
+                const evidence = skillCorrelationSignals[0].evidenceJson as Array<{
+                    skillSlug: string;
+                    avgScoreWithSkill: number;
+                    avgScoreWithout: number;
+                    runCount: number;
+                }>;
+                const skillNames = evidence.map((e) => e.skillSlug).join(", ");
+                const worstSkill = evidence.sort(
+                    (a, b) => a.avgScoreWithSkill - b.avgScoreWithSkill
+                )[0];
+
+                proposalsToCreate.push({
+                    proposalType: "skills",
+                    title: "Detach underperforming skill",
+                    description: `Skill "${worstSkill.skillSlug}" correlates with a ${Math.round((1 - worstSkill.avgScoreWithSkill / worstSkill.avgScoreWithout) * 100)}% decrease in quality scores (${worstSkill.avgScoreWithSkill} avg vs ${worstSkill.avgScoreWithout} baseline, across ${worstSkill.runCount} runs). Consider detaching this skill or revising its instructions. Affected skills: ${skillNames}.`,
+                    expectedImpact: `Expected to restore quality scores to baseline (~${worstSkill.avgScoreWithout} avg) for affected runs`,
+                    confidenceScore: 0.65
                 });
             }
 

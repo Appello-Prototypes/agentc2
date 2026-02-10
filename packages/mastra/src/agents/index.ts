@@ -27,7 +27,8 @@ export type {
     RequestContext,
     ResolveOptions,
     HydratedAgent,
-    AgentRecordWithTools
+    AgentRecordWithTools,
+    ActiveSkillInfo
 } from "./resolver";
 
 // Network resolver for database-driven agent networks

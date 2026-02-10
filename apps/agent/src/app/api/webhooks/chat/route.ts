@@ -83,35 +83,42 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Start recording the run (only if agent exists in database)
+        // Start recording the run (fire-and-forget to avoid blocking the stream).
         const agentId = record?.id || null;
         let run: RunRecorderHandle | null = null;
+        let runReady: Promise<void> | null = null;
         const runSource: RunSource = "api";
 
         if (agentId) {
-            run = await startRun({
+            runReady = startRun({
                 agentId,
                 agentSlug: WEBHOOK_WIZARD_SLUG,
                 input: lastUserMessage,
                 source: runSource,
                 userId: resourceId,
                 threadId: userThreadId
-            });
-            console.log(`[Webhook Chat] Started run ${run.runId} for agent ${WEBHOOK_WIZARD_SLUG}`);
+            })
+                .then((handle) => {
+                    run = handle;
+                    console.log(
+                        `[Webhook Chat] Started run ${handle.runId} for agent ${WEBHOOK_WIZARD_SLUG}`
+                    );
 
-            // Record trigger event for unified triggers dashboard
-            try {
-                await createTriggerEventRecord({
-                    agentId,
-                    runId: run.runId,
-                    sourceType: "chat",
-                    entityType: "agent",
-                    payload: { input: lastUserMessage },
-                    metadata: { threadId: userThreadId, source: "webhook-chat" }
+                    // Record trigger event (non-blocking, best-effort)
+                    createTriggerEventRecord({
+                        agentId,
+                        runId: handle.runId,
+                        sourceType: "chat",
+                        entityType: "agent",
+                        payload: { input: lastUserMessage },
+                        metadata: { threadId: userThreadId, source: "webhook-chat" }
+                    }).catch((e) => {
+                        console.warn("[Webhook Chat] Failed to record trigger event:", e);
+                    });
+                })
+                .catch((e) => {
+                    console.warn("[Webhook Chat] Failed to start run:", e);
                 });
-            } catch (e) {
-                console.warn("[Webhook Chat] Failed to record trigger event:", e);
-            }
         }
 
         const maxSteps = record?.maxSteps ?? 5;
@@ -143,6 +150,11 @@ export async function POST(request: NextRequest) {
         // Create a UI message stream compatible with useChat
         const stream = createUIMessageStream({
             execute: async ({ writer }: { writer: UIMessageStreamWriter }) => {
+                // Ensure run handle is ready (fire-and-forget started earlier)
+                if (runReady) {
+                    await runReady;
+                }
+
                 const messageId = generateId();
 
                 try {

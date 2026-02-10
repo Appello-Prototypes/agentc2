@@ -1,12 +1,15 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Button, Card, CardContent, Input, Skeleton } from "@repo/ui";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { Button, Card, CardContent, Input, Badge, Skeleton } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { BotIcon, LoaderIcon, SendIcon } from "lucide-react";
 
 interface TestStepProps {
     agentSlug: string;
     agentName: string;
+    modelName: string;
+    templateId: string | null;
     onContinue: () => void;
 }
 
@@ -15,11 +18,58 @@ interface Message {
     content: string;
 }
 
-export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
+const MODEL_DISPLAY: Record<string, string> = {
+    "gpt-4o": "GPT-4o",
+    "gpt-4o-mini": "GPT-4o Mini",
+    "claude-sonnet-4-20250514": "Claude Sonnet 4",
+    "claude-haiku-3-5-20241022": "Claude Haiku 3.5"
+};
+
+const SUGGESTED_MESSAGES: Record<string, string[]> = {
+    "general-assistant": [
+        "What can you help me with?",
+        "Summarize the benefits of AI agents",
+        "What's 15% of 2,340?"
+    ],
+    "customer-support": [
+        "I have a billing question",
+        "How do I reset my password?",
+        "I'm having trouble with my account"
+    ],
+    "research-assistant": [
+        "Research the latest trends in AI",
+        "Compare pros and cons of remote work",
+        "What are the key findings on productivity?"
+    ],
+    "data-analyst": [
+        "What's the compound growth rate of 100 to 250 over 5 years?",
+        "Help me interpret a dataset",
+        "Calculate the average of 42, 67, 89, 23, 55"
+    ],
+    default: [
+        "What can you help me with?",
+        "Tell me about your capabilities",
+        "Help me with a quick task"
+    ]
+};
+
+export function TestStep({
+    agentSlug,
+    agentName,
+    modelName,
+    templateId,
+    onContinue
+}: TestStepProps) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
+
+    const suggestions = useMemo(() => {
+        return SUGGESTED_MESSAGES[templateId || "default"] || SUGGESTED_MESSAGES["default"]!;
+    }, [templateId]);
+
+    const displayModel = MODEL_DISPLAY[modelName] || modelName;
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,10 +79,10 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
         scrollToBottom();
     }, [messages]);
 
-    const sendMessage = async () => {
-        if (!input.trim() || isLoading) return;
+    const sendMessage = async (text?: string) => {
+        const userMessage = (text || input).trim();
+        if (!userMessage || isLoading) return;
 
-        const userMessage = input.trim();
         setInput("");
         setMessages((prev) => [...prev, { role: "user", content: userMessage }]);
         setIsLoading(true);
@@ -43,7 +93,7 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     messages: [{ role: "user", content: userMessage }],
-                    threadId: `onboarding-${Date.now()}`
+                    threadId: `onboarding-test-${agentSlug}`
                 })
             });
 
@@ -53,11 +103,8 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
             if (!reader) throw new Error("No reader");
 
             let assistantMessage = "";
-
-            // Add empty assistant message
             setMessages((prev) => [...prev, { role: "assistant", content: "" }]);
 
-            // Stream the response
             while (true) {
                 const { done, value } = await reader.read();
                 if (done) break;
@@ -81,7 +128,7 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
                                 });
                             }
                         } catch {
-                            // Ignore parse errors
+                            // Ignore parse errors from partial chunks
                         }
                     }
                 }
@@ -108,20 +155,41 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
         <div className="space-y-6">
             <div className="space-y-2">
                 <h2 className="text-2xl font-bold">Test your agent</h2>
-                <p className="text-muted-foreground">
-                    Your agent &quot;{agentName}&quot; is ready! Try it out below.
+                <p className="text-muted-foreground text-sm">
+                    Your agent &quot;{agentName}&quot; is ready. Send a message to try it out.
                 </p>
             </div>
 
             <Card className="overflow-hidden">
+                {/* Chat header */}
+                <div className="flex items-center gap-2 border-b px-4 py-2.5">
+                    <div className="bg-primary/10 flex h-7 w-7 items-center justify-center rounded-full">
+                        <BotIcon className="text-primary size-3.5" />
+                    </div>
+                    <span className="text-sm font-medium">{agentName}</span>
+                    <Badge variant="outline" className="text-[10px]">
+                        {displayModel}
+                    </Badge>
+                </div>
+
                 {/* Chat messages */}
-                <CardContent className="h-80 overflow-y-auto p-4">
+                <CardContent className="h-72 overflow-y-auto p-4">
                     {messages.length === 0 ? (
-                        <div className="text-muted-foreground flex h-full flex-col items-center justify-center text-center">
-                            <p className="text-lg">Send a message to get started</p>
-                            <p className="mt-2 text-sm">
-                                Try asking: &quot;What can you help me with?&quot;
+                        <div className="flex h-full flex-col items-center justify-center">
+                            <p className="text-muted-foreground mb-4 text-sm">
+                                Try one of these to get started:
                             </p>
+                            <div className="flex flex-col gap-2">
+                                {suggestions.map((suggestion, i) => (
+                                    <button
+                                        key={i}
+                                        onClick={() => sendMessage(suggestion)}
+                                        className="bg-muted/50 hover:bg-muted rounded-lg px-4 py-2 text-left text-sm transition-colors"
+                                    >
+                                        {suggestion}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     ) : (
                         <div className="space-y-4">
@@ -141,13 +209,26 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
                                     </div>
                                 </div>
                             ))}
+                            {/* Streaming indicator */}
+                            {isLoading &&
+                                messages.length > 0 &&
+                                messages[messages.length - 1]?.role === "user" && (
+                                    <div className="flex justify-start">
+                                        <div className="bg-muted flex items-center gap-2 rounded-lg px-4 py-2">
+                                            <LoaderIcon className="size-3.5 animate-spin" />
+                                            <span className="text-muted-foreground text-xs">
+                                                Thinking...
+                                            </span>
+                                        </div>
+                                    </div>
+                                )}
                             <div ref={messagesEndRef} />
                         </div>
                     )}
                 </CardContent>
 
                 {/* Input */}
-                <div className="border-t p-4">
+                <div className="border-t p-3">
                     <div className="flex gap-2">
                         <Input
                             placeholder="Type a message..."
@@ -155,9 +236,14 @@ export function TestStep({ agentSlug, agentName, onContinue }: TestStepProps) {
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
                             disabled={isLoading}
+                            className="text-sm"
                         />
-                        <Button onClick={sendMessage} disabled={!input.trim() || isLoading}>
-                            Send
+                        <Button
+                            size="icon"
+                            onClick={() => sendMessage()}
+                            disabled={!input.trim() || isLoading}
+                        >
+                            <SendIcon className="size-4" />
                         </Button>
                     </div>
                 </div>

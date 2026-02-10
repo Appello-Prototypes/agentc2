@@ -19,17 +19,12 @@ import {
     PromptInputSubmit,
     PromptInputFooter,
     PromptInputTools,
-    Loader,
+    StreamingStatus,
     Skeleton,
     type PromptInputMessage
 } from "@repo/ui";
 import { CanvasRenderer, type CanvasSchemaForRenderer } from "@repo/ui/components/canvas";
-import {
-    PanelLeftCloseIcon,
-    PanelLeftOpenIcon,
-    ExternalLinkIcon,
-    RefreshCwIcon
-} from "lucide-react";
+import { PanelLeftCloseIcon, PanelLeftIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
 
 const CANVAS_BUILDER_SLUG = "canvas-builder";
@@ -53,6 +48,43 @@ export function CanvasBuilderPanel({
     const [data, setData] = useState<Record<string, unknown>>(existingData || {});
     const [previewLoading, setPreviewLoading] = useState(false);
     const [chatCollapsed, setChatCollapsed] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(400);
+    const isResizing = useRef(false);
+
+    const MIN_WIDTH = 300;
+    const MAX_WIDTH = 600;
+
+    const handleResizeStart = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            isResizing.current = true;
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+
+            const onMouseMove = (ev: MouseEvent) => {
+                if (!isResizing.current) return;
+                const newWidth = Math.min(
+                    MAX_WIDTH,
+                    Math.max(MIN_WIDTH, startWidth + (ev.clientX - startX))
+                );
+                setSidebarWidth(newWidth);
+            };
+
+            const onMouseUp = () => {
+                isResizing.current = false;
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
+            };
+
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        },
+        [sidebarWidth]
+    );
 
     // Track which canvas slugs we've already loaded to avoid duplicate fetches
     const loadedSlugsRef = useRef<Set<string>>(new Set());
@@ -218,191 +250,219 @@ export function CanvasBuilderPanel({
             ? messages.slice(1)
             : messages;
 
-    // Determine whether to show the welcome text (no user-visible messages yet)
-    const showWelcome = displayMessages.length === 0 && !isStreaming && !isSubmitted;
+    // Show welcome/context text when no user-visible messages yet.
+    // In edit mode during initial context loading, show the editing info so the
+    // user sees content immediately instead of a blank area with just a spinner.
+    const hasVisibleContent = displayMessages.some((m) =>
+        m.parts?.some(
+            (p) => (p.type === "text" && p.text.trim().length > 0) || p.type === "tool-invocation"
+        )
+    );
+    const showWelcome = !hasVisibleContent;
 
     return (
         // Fixed height container accounting for the app header (56px / 3.5rem)
         <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
             {/* Chat Panel */}
-            <div
-                className={`flex flex-col overflow-hidden border-r transition-all ${
-                    chatCollapsed ? "w-12" : "w-[400px] min-w-[400px]"
-                }`}
-            >
-                {chatCollapsed ? (
-                    <div className="flex h-full flex-col items-center py-3">
-                        <button
-                            onClick={() => setChatCollapsed(false)}
-                            className="text-muted-foreground hover:text-foreground"
-                        >
-                            <PanelLeftOpenIcon className="size-5" />
-                        </button>
+            {chatCollapsed ? (
+                <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setChatCollapsed(false)}
+                    >
+                        <PanelLeftIcon className="size-4" />
+                    </Button>
+                </div>
+            ) : (
+                <div
+                    className="relative flex shrink-0 flex-col border-r"
+                    style={{ width: sidebarWidth }}
+                >
+                    {/* Resize handle */}
+                    <div
+                        onMouseDown={handleResizeStart}
+                        className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
+                    />
+
+                    {/* Collapse toggle -- pinned to right edge */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="bg-background absolute top-2.5 right-0 z-30 size-7 translate-x-1/2 rounded-full border shadow-sm"
+                        onClick={() => setChatCollapsed(true)}
+                    >
+                        <PanelLeftCloseIcon className="size-3.5" />
+                    </Button>
+
+                    {/* Chat header */}
+                    <div className="shrink-0 pt-3 pr-8 pb-2.5 pl-3">
+                        <div className="mb-0 px-0.5">
+                            <h2 className="text-foreground text-sm font-semibold tracking-tight">
+                                {headerTitle}
+                            </h2>
+                            <p className="text-muted-foreground text-[11px]">
+                                {mode === "edit"
+                                    ? "Edit your canvas with AI"
+                                    : "Build a canvas with AI"}
+                            </p>
+                        </div>
                     </div>
-                ) : (
-                    <>
-                        {/* Chat header */}
-                        <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
-                            <div className="flex items-center gap-2">
-                                <span className="text-sm font-medium">{headerTitle}</span>
-                                <Badge variant="outline" className="text-xs">
-                                    AI
-                                </Badge>
-                            </div>
-                            <button
-                                onClick={() => setChatCollapsed(true)}
-                                className="text-muted-foreground hover:text-foreground"
-                            >
-                                <PanelLeftCloseIcon className="size-4" />
-                            </button>
-                        </div>
 
-                        {/* Messages */}
-                        <div className="min-h-0 flex-1">
-                            <Conversation>
-                                <ConversationContent>
-                                    <ConversationScrollButton />
+                    {/* Messages */}
+                    <div className="min-h-0 flex-1 overflow-hidden">
+                        <Conversation>
+                            <ConversationContent>
+                                <ConversationScrollButton />
 
-                                    {/* Welcome message */}
-                                    {showWelcome && (
-                                        <div className="p-4">
-                                            {mode === "edit" ? (
-                                                <>
-                                                    <p className="text-muted-foreground text-sm">
-                                                        Editing canvas:{" "}
-                                                        <code className="bg-muted rounded px-1">
-                                                            {existingSlug}
-                                                        </code>
-                                                    </p>
-                                                    <p className="text-muted-foreground mt-2 text-sm">
-                                                        Describe what you want to change. For
-                                                        example:
-                                                    </p>
-                                                    <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
-                                                        <li>
-                                                            &ldquo;Add a pie chart showing deal
-                                                            distribution by stage&rdquo;
-                                                        </li>
-                                                        <li>
-                                                            &ldquo;Change the table columns to show
-                                                            owner and close date&rdquo;
-                                                        </li>
-                                                        <li>
-                                                            &ldquo;Remove the KPI cards and add a
-                                                            filter bar instead&rdquo;
-                                                        </li>
-                                                    </ul>
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <p className="text-muted-foreground text-sm">
-                                                        Describe what you want to build. For
-                                                        example:
-                                                    </p>
-                                                    <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
-                                                        <li>
-                                                            &ldquo;Build a dashboard showing my
-                                                            HubSpot deals pipeline&rdquo;
-                                                        </li>
-                                                        <li>
-                                                            &ldquo;Create a table of all Jira issues
-                                                            sorted by priority&rdquo;
-                                                        </li>
-                                                        <li>
-                                                            &ldquo;Make a KPI dashboard with
-                                                            revenue, deal count, and avg deal
-                                                            size&rdquo;
-                                                        </li>
-                                                    </ul>
-                                                </>
-                                            )}
-                                        </div>
-                                    )}
-
-                                    {displayMessages.map((message) => (
-                                        <Message key={message.id} from={message.role}>
-                                            <MessageContent>
-                                                {message.parts && message.parts.length > 0 ? (
-                                                    message.parts.map((part, index) => {
-                                                        if (part.type === "text") {
-                                                            return (
-                                                                <MessageResponse key={index}>
-                                                                    {part.text}
-                                                                </MessageResponse>
-                                                            );
-                                                        }
-                                                        if (part.type === "tool-invocation") {
-                                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                                            const toolPart = part as any;
-                                                            const hasResult =
-                                                                "result" in
-                                                                (toolPart.toolInvocation || {});
-                                                            return (
-                                                                <div
-                                                                    key={index}
-                                                                    className="my-2 flex items-center gap-2"
-                                                                >
-                                                                    <Badge
-                                                                        variant="outline"
-                                                                        className="text-xs"
-                                                                    >
-                                                                        {
-                                                                            toolPart.toolInvocation
-                                                                                ?.toolName
-                                                                        }
-                                                                    </Badge>
-                                                                    {hasResult && (
-                                                                        <Badge className="bg-green-100 text-xs text-green-800">
-                                                                            Done
-                                                                        </Badge>
-                                                                    )}
-                                                                </div>
-                                                            );
-                                                        }
-                                                        return null;
-                                                    })
+                                {/* Welcome message */}
+                                {showWelcome && (
+                                    <div className="p-4">
+                                        {mode === "edit" ? (
+                                            <>
+                                                <p className="text-muted-foreground text-sm">
+                                                    Editing canvas:{" "}
+                                                    <code className="bg-muted rounded px-1">
+                                                        {existingSlug}
+                                                    </code>
+                                                </p>
+                                                {isStreaming || isSubmitted ? (
+                                                    <StreamingStatus
+                                                        status={submitStatus}
+                                                        className="mt-3 justify-start text-xs"
+                                                    />
                                                 ) : (
-                                                    <MessageResponse>
-                                                        {String(
-                                                            (
-                                                                message as unknown as {
-                                                                    content?: string;
-                                                                }
-                                                            ).content || ""
-                                                        )}
-                                                    </MessageResponse>
+                                                    <>
+                                                        <p className="text-muted-foreground mt-2 text-sm">
+                                                            Describe what you want to change. For
+                                                            example:
+                                                        </p>
+                                                        <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
+                                                            <li>
+                                                                &ldquo;Add a pie chart showing deal
+                                                                distribution by stage&rdquo;
+                                                            </li>
+                                                            <li>
+                                                                &ldquo;Change the table columns to
+                                                                show owner and close date&rdquo;
+                                                            </li>
+                                                            <li>
+                                                                &ldquo;Remove the KPI cards and add
+                                                                a filter bar instead&rdquo;
+                                                            </li>
+                                                        </ul>
+                                                    </>
                                                 )}
-                                            </MessageContent>
-                                        </Message>
-                                    ))}
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-muted-foreground text-sm">
+                                                    Describe what you want to build. For example:
+                                                </p>
+                                                <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
+                                                    <li>
+                                                        &ldquo;Build a dashboard showing my HubSpot
+                                                        deals pipeline&rdquo;
+                                                    </li>
+                                                    <li>
+                                                        &ldquo;Create a table of all Jira issues
+                                                        sorted by priority&rdquo;
+                                                    </li>
+                                                    <li>
+                                                        &ldquo;Make a KPI dashboard with revenue,
+                                                        deal count, and avg deal size&rdquo;
+                                                    </li>
+                                                </ul>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
 
-                                    {(isStreaming || isSubmitted) && (
-                                        <div className="flex justify-center py-2">
-                                            <Loader />
-                                        </div>
-                                    )}
-                                </ConversationContent>
-                            </Conversation>
-                        </div>
+                                {displayMessages.map((message) => (
+                                    <Message key={message.id} from={message.role}>
+                                        <MessageContent>
+                                            {message.parts && message.parts.length > 0 ? (
+                                                message.parts.map((part, index) => {
+                                                    if (part.type === "text") {
+                                                        return (
+                                                            <MessageResponse key={index}>
+                                                                {part.text}
+                                                            </MessageResponse>
+                                                        );
+                                                    }
+                                                    if (part.type === "tool-invocation") {
+                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                        const toolPart = part as any;
+                                                        const hasResult =
+                                                            "result" in
+                                                            (toolPart.toolInvocation || {});
+                                                        return (
+                                                            <div
+                                                                key={index}
+                                                                className="my-2 flex items-center gap-2"
+                                                            >
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    {
+                                                                        toolPart.toolInvocation
+                                                                            ?.toolName
+                                                                    }
+                                                                </Badge>
+                                                                {hasResult && (
+                                                                    <Badge className="bg-green-100 text-xs text-green-800">
+                                                                        Done
+                                                                    </Badge>
+                                                                )}
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })
+                                            ) : (
+                                                <MessageResponse>
+                                                    {String(
+                                                        (
+                                                            message as unknown as {
+                                                                content?: string;
+                                                            }
+                                                        ).content || ""
+                                                    )}
+                                                </MessageResponse>
+                                            )}
+                                        </MessageContent>
+                                    </Message>
+                                ))}
 
-                        {/* Input */}
-                        <div className="shrink-0 border-t p-3">
-                            <PromptInput onSubmit={handleSend}>
-                                <PromptInputBody>
-                                    <PromptInputTextarea
-                                        placeholder={placeholderText}
-                                        disabled={isStreaming}
+                                {!showWelcome && (
+                                    <StreamingStatus
+                                        status={submitStatus}
+                                        hasVisibleContent={hasVisibleContent}
                                     />
-                                </PromptInputBody>
-                                <PromptInputFooter>
-                                    <PromptInputTools />
-                                    <PromptInputSubmit status={submitStatus} onStop={stop} />
-                                </PromptInputFooter>
-                            </PromptInput>
-                        </div>
-                    </>
-                )}
-            </div>
+                                )}
+                            </ConversationContent>
+                        </Conversation>
+                    </div>
+
+                    {/* Input */}
+                    <div className="shrink-0 border-t p-3">
+                        <PromptInput onSubmit={handleSend}>
+                            <PromptInputBody>
+                                <PromptInputTextarea
+                                    placeholder={placeholderText}
+                                    disabled={isStreaming}
+                                />
+                            </PromptInputBody>
+                            <PromptInputFooter>
+                                <PromptInputTools />
+                                <PromptInputSubmit status={submitStatus} onStop={stop} />
+                            </PromptInputFooter>
+                        </PromptInput>
+                    </div>
+                </div>
+            )}
 
             {/* Preview Panel */}
             <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

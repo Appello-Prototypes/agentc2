@@ -317,8 +317,8 @@ export async function searchDocuments(input: SearchDocumentsInput) {
     }
 
     const results = await queryRag(input.query, {
-        topK: input.topK || 5,
-        minScore: input.minScore || 0.5,
+        topK: input.topK ?? 5,
+        minScore: input.minScore ?? 0.5,
         filter: Object.keys(filter).length > 0 ? filter : undefined
     });
 

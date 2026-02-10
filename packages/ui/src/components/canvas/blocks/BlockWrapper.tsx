@@ -34,15 +34,13 @@ export function BlockWrapper({
     }
 
     const density = theme?.density || "default";
-    const headerPadding = density === "compact" ? "px-3 py-2" : density === "spacious" ? "px-5 py-4" : "px-4 py-3";
+    const headerPadding =
+        density === "compact" ? "px-3 py-2" : density === "spacious" ? "px-5 py-4" : "px-4 py-3";
     const bodyPadding = density === "compact" ? "p-3" : density === "spacious" ? "p-5" : "p-4";
 
     return (
         <div
-            className={cn(
-                "bg-card text-card-foreground rounded-lg border shadow-sm",
-                className
-            )}
+            className={cn("bg-card text-card-foreground rounded-lg border shadow-sm", className)}
             style={themeStyle}
         >
             {(title || description) && (

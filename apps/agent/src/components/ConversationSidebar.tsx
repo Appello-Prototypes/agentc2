@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
     PlusIcon,
     SearchIcon,
@@ -31,31 +31,71 @@ interface ConversationSidebarProps {
     activeId: string | null;
     onSelect: (id: string) => void;
     onNewConversation: () => void;
+    /** Increment to force a re-read of conversations from localStorage (e.g. after async title update) */
+    refreshKey?: number;
 }
 
 export function ConversationSidebar({
     activeId,
     onSelect,
-    onNewConversation
+    onNewConversation,
+    refreshKey
 }: ConversationSidebarProps) {
     const [collapsed, setCollapsed] = useState(false);
+    const [sidebarWidth, setSidebarWidth] = useState(220);
     const [conversations, setConversations] = useState<ConversationMeta[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editValue, setEditValue] = useState("");
+    const isResizing = useRef(false);
+
+    const MIN_WIDTH = 180;
+    const MAX_WIDTH = 400;
+
+    const handleResizeStart = useCallback(
+        (e: React.MouseEvent) => {
+            e.preventDefault();
+            isResizing.current = true;
+            const startX = e.clientX;
+            const startWidth = sidebarWidth;
+
+            const onMouseMove = (ev: MouseEvent) => {
+                if (!isResizing.current) return;
+                const newWidth = Math.min(
+                    MAX_WIDTH,
+                    Math.max(MIN_WIDTH, startWidth + (ev.clientX - startX))
+                );
+                setSidebarWidth(newWidth);
+            };
+
+            const onMouseUp = () => {
+                isResizing.current = false;
+                document.removeEventListener("mousemove", onMouseMove);
+                document.removeEventListener("mouseup", onMouseUp);
+                document.body.style.cursor = "";
+                document.body.style.userSelect = "";
+            };
+
+            document.body.style.cursor = "col-resize";
+            document.body.style.userSelect = "none";
+            document.addEventListener("mousemove", onMouseMove);
+            document.addEventListener("mouseup", onMouseUp);
+        },
+        [sidebarWidth]
+    );
 
     // Refresh conversations from localStorage
     const refreshConversations = useCallback(() => {
         setConversations(listConversations());
     }, []);
 
-    // Re-read from localStorage when activeId changes (conversation saved)
+    // Re-read from localStorage when activeId or refreshKey changes (conversation saved / title updated)
     useEffect(() => {
         const id = requestAnimationFrame(() => {
             setConversations(listConversations());
         });
         return () => cancelAnimationFrame(id);
-    }, [activeId]);
+    }, [activeId, refreshKey]);
 
     const filtered = searchQuery
         ? conversations.filter((c) => c.title.toLowerCase().includes(searchQuery.toLowerCase()))
@@ -85,10 +125,10 @@ export function ConversationSidebar({
         [editValue, refreshConversations]
     );
 
-    // Collapsed state: just a thin bar with expand button
+    // Collapsed state: thin strip with expand toggle
     if (collapsed) {
         return (
-            <div className="flex h-full w-12 shrink-0 flex-col items-center border-r py-2">
+            <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
                 <Button
                     variant="ghost"
                     size="icon"
@@ -111,25 +151,42 @@ export function ConversationSidebar({
 
     // Expanded state: full sidebar
     return (
-        <div className="flex h-full w-[220px] shrink-0 flex-col border-r">
+        <div
+            className="relative flex h-full shrink-0 flex-col border-r"
+            style={{ width: sidebarWidth }}
+        >
+            {/* Resize handle */}
+            <div
+                onMouseDown={handleResizeStart}
+                className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
+            />
+
+            {/* Collapse toggle -- pinned to right edge, outside content flow */}
+            <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background absolute top-2.5 right-0 z-10 size-7 translate-x-1/2 rounded-full border shadow-sm"
+                onClick={() => setCollapsed(true)}
+            >
+                <PanelLeftCloseIcon className="size-3.5" />
+            </Button>
+
             {/* Header */}
-            <div className="flex items-center justify-between px-3 py-2.5">
+            <div className="px-3 pt-3 pb-2.5">
+                <div className="mb-2.5 px-0.5">
+                    <h2 className="text-foreground text-sm font-semibold tracking-tight">
+                        Workspace
+                    </h2>
+                    <p className="text-muted-foreground text-[11px]">Your place to get work done</p>
+                </div>
                 <Button
-                    variant="ghost"
+                    variant="default"
                     size="sm"
                     onClick={onNewConversation}
-                    className="h-7 gap-1.5 px-2 text-xs"
+                    className="h-8 w-full gap-1.5 text-xs font-medium shadow-sm"
                 >
                     <PlusIcon className="size-3.5" />
-                    New task
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-7"
-                    onClick={() => setCollapsed(true)}
-                >
-                    <PanelLeftCloseIcon className="size-3.5" />
+                    New Task
                 </Button>
             </div>
 

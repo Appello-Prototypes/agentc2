@@ -63,13 +63,41 @@ export const skillCreateTool = createTool({
         description: z.string().optional(),
         examples: z.string().optional().describe("Reference outputs"),
         category: z.string().optional(),
-        tags: z.array(z.string()).optional()
+        tags: z.array(z.string()).optional(),
+        metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
+        workspaceId: z.string().optional(),
+        type: z.enum(["USER", "SYSTEM"]).optional(),
+        createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug, name, instructions, description, examples, category, tags }) => {
+    execute: async ({
+        slug,
+        name,
+        instructions,
+        description,
+        examples,
+        category,
+        tags,
+        metadata,
+        workspaceId,
+        type,
+        createdBy
+    }) => {
         return callInternalApi("/api/skills", {
             method: "POST",
-            body: { slug, name, instructions, description, examples, category, tags }
+            body: {
+                slug,
+                name,
+                instructions,
+                description,
+                examples,
+                category,
+                tags,
+                metadata,
+                workspaceId,
+                type,
+                createdBy
+            }
         });
     }
 });
@@ -97,7 +125,9 @@ export const skillUpdateTool = createTool({
         examples: z.string().optional(),
         category: z.string().optional(),
         tags: z.array(z.string()).optional(),
-        changeSummary: z.string().optional()
+        changeSummary: z.string().optional(),
+        metadata: z.record(z.unknown()).optional().describe("Additional metadata"),
+        createdBy: z.string().optional()
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ skillId, ...body }) => {
@@ -128,11 +158,16 @@ export const skillListTool = createTool({
     inputSchema: z.object({
         category: z.string().optional(),
         tags: z.string().optional(),
-        type: z.enum(["USER", "SYSTEM"]).optional()
+        type: z.enum(["USER", "SYSTEM"]).optional(),
+        workspaceId: z.string().optional(),
+        skip: z.number().optional().describe("Pagination offset"),
+        take: z.number().optional().describe("Page size")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ category, tags, type }) => {
-        return callInternalApi("/api/skills", { query: { category, tags, type } });
+    execute: async ({ category, tags, type, workspaceId, skip, take }) => {
+        return callInternalApi("/api/skills", {
+            query: { category, tags, type, workspaceId, skip, take }
+        });
     }
 });
 
@@ -230,5 +265,17 @@ export const agentDetachSkillTool = createTool({
             method: "DELETE",
             body: { skillId }
         });
+    }
+});
+
+export const skillGetVersionsTool = createTool({
+    id: "skill-get-versions",
+    description: "Get version history for a skill.",
+    inputSchema: z.object({
+        skillId: z.string()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ skillId }) => {
+        return callInternalApi(`/api/skills/${encodeURIComponent(skillId)}/versions`);
     }
 });

@@ -7,7 +7,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
 
 const navItems = [
-    { label: "Chat", href: "/" },
+    { label: "Workspace", href: "/" },
     { label: "Canvas", href: "/canvas" },
     { label: "Agents", href: "/agents" },
     { label: "Workflows", href: "/workflows" },
@@ -22,6 +22,11 @@ export function AgentHeader() {
     const { data: session } = useSession();
     const pathname = usePathname();
     const router = useRouter();
+
+    // Hide full nav during onboarding -- layout provides its own minimal header
+    if (pathname?.startsWith("/onboarding")) {
+        return null;
+    }
 
     if (!session?.user) {
         return null;

@@ -18,7 +18,7 @@ const nextConfig: NextConfig = {
     },
     // Externalize server-only packages that have Node.js-specific dependencies
     // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
-    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp"],
+    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp", "pdf-parse", "pdfjs-dist"],
     webpack: (config, { isServer }) => {
         if (isServer) {
             config.resolve.alias = {

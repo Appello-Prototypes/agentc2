@@ -128,12 +128,79 @@ export function searchConversations(query: string): ConversationMeta[] {
 }
 
 /**
- * Generate a title from the first user message
+ * Generate a concise task title from the first user message (client-side only).
+ * Strips conversational filler and derives a short action-oriented label.
+ * Used as an immediate placeholder while the async LLM title is being generated.
  */
 export function generateTitle(firstMessage: string): string {
-    const clean = firstMessage.trim().replace(/\n/g, " ");
-    if (clean.length <= 50) return clean;
-    return clean.slice(0, 47) + "...";
+    let text = firstMessage.trim().replace(/\n/g, " ");
+
+    // Strip leading filler phrases (case-insensitive)
+    const fillerPrefixes = [
+        /^(hey|hi|hello|yo|sup|hiya)[,!.\s]*/i,
+        /^(can you|could you|would you|will you|please|pls|plz)\s+/i,
+        /^(i want to|i'd like to|i need to|i want you to|i need you to|i'd like you to)\s+/i,
+        /^(help me|help us|assist me|assist us)\s+(to\s+)?/i,
+        /^(i need help with|i need help on|i need some help with)\s+/i,
+        /^(i have a question about|i have a question on|question about)\s+/i,
+        /^(let's|lets|let us)\s+/i,
+        /^(i'm trying to|i am trying to)\s+/i,
+        /^(give me|show me|tell me|get me)\s+(a\s+)?/i
+    ];
+
+    for (const re of fillerPrefixes) {
+        text = text.replace(re, "");
+    }
+
+    // Capitalize first letter
+    text = text.charAt(0).toUpperCase() + text.slice(1);
+
+    // Remove trailing punctuation for cleanliness
+    text = text.replace(/[.!?]+$/, "");
+
+    // Truncate to a reasonable title length
+    if (text.length <= 40) return text;
+    // Try to break at a word boundary
+    const truncated = text.slice(0, 40);
+    const lastSpace = truncated.lastIndexOf(" ");
+    if (lastSpace > 20) return truncated.slice(0, lastSpace) + "…";
+    return truncated + "…";
+}
+
+/**
+ * Generate a conversation title using a server-side LLM call (async).
+ * Falls back to the client-side `generateTitle` if the API call fails.
+ * This runs in the background and updates the conversation title once ready.
+ */
+export async function generateTitleAsync(
+    conversationId: string,
+    firstMessage: string
+): Promise<string> {
+    try {
+        const res = await fetch("/api/conversations/title", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: firstMessage })
+        });
+
+        if (!res.ok) {
+            throw new Error(`Title API returned ${res.status}`);
+        }
+
+        const { title } = await res.json();
+
+        if (title && typeof title === "string") {
+            // Update the stored conversation with the LLM-generated title
+            updateConversationTitle(conversationId, title);
+            return title;
+        }
+
+        // Fallback if API returns empty
+        return generateTitle(firstMessage);
+    } catch {
+        // Silently fall back to the client-side title
+        return generateTitle(firstMessage);
+    }
 }
 
 /**

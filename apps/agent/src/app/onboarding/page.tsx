@@ -1,29 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { TemplateStep } from "@/components/onboarding/TemplateStep";
 import { ConfigureStep } from "@/components/onboarding/ConfigureStep";
+import { IntegrationsStep } from "@/components/onboarding/IntegrationsStep";
 import { ToolStep } from "@/components/onboarding/ToolStep";
 import { TestStep } from "@/components/onboarding/TestStep";
 import { SuccessStep } from "@/components/onboarding/SuccessStep";
 
-export type OnboardingStep = "welcome" | "template" | "configure" | "tools" | "test" | "success";
+export type OnboardingStep =
+    | "welcome"
+    | "template"
+    | "configure"
+    | "integrations"
+    | "tools"
+    | "test"
+    | "success";
 
 export interface AgentTemplate {
     id: string;
     name: string;
     description: string;
     icon: string;
+    color: string;
     modelProvider: string;
     modelName: string;
     tools: string[];
     instructions: string;
+    popular?: boolean;
 }
 
-interface ToolInfo {
+export interface ToolInfo {
     id: string;
     name: string;
     description: string;
@@ -42,12 +52,33 @@ export interface OnboardingData {
     createdAgentSlug: string | null;
 }
 
-const TEMPLATES: AgentTemplate[] = [
+export const TEMPLATES: AgentTemplate[] = [
+    {
+        id: "general-assistant",
+        name: "General Assistant",
+        description: "Versatile assistant for everyday tasks, questions, and conversations",
+        icon: "\u2728",
+        color: "bg-violet-100 text-violet-700",
+        modelProvider: "openai",
+        modelName: "gpt-4o",
+        tools: ["calculator", "web-fetch", "date-time"],
+        instructions: `You are a versatile AI assistant. Your role is to:
+
+1. Answer questions clearly and accurately
+2. Help with a wide range of tasks from writing to analysis
+3. Use your tools when they can provide better answers
+4. Be conversational but precise
+5. Ask clarifying questions when the request is ambiguous
+
+Be helpful, honest, and concise. If you're unsure about something, say so.`,
+        popular: true
+    },
     {
         id: "customer-support",
         name: "Customer Support",
         description: "Friendly assistant for customer inquiries and support tickets",
-        icon: "💬",
+        icon: "\uD83C\uDFA7",
+        color: "bg-blue-100 text-blue-700",
         modelProvider: "openai",
         modelName: "gpt-4o",
         tools: ["memory-recall", "web-fetch"],
@@ -65,9 +96,10 @@ Always be empathetic and patient. If you don't know something, say so honestly r
         id: "research-assistant",
         name: "Research Assistant",
         description: "Thorough researcher that finds and synthesizes information",
-        icon: "🔍",
-        modelProvider: "anthropic",
-        modelName: "claude-sonnet-4-20250514",
+        icon: "\uD83D\uDD0D",
+        color: "bg-emerald-100 text-emerald-700",
+        modelProvider: "openai",
+        modelName: "gpt-4o",
         tools: ["web-fetch", "json-parser"],
         instructions: `You are a thorough research assistant. Your role is to:
 
@@ -83,7 +115,8 @@ Always prioritize accuracy over speed. When presenting findings, structure them 
         id: "data-analyst",
         name: "Data Analyst",
         description: "Precise analyst for calculations and data interpretation",
-        icon: "📊",
+        icon: "\uD83D\uDCCA",
+        color: "bg-amber-100 text-amber-700",
         modelProvider: "openai",
         modelName: "gpt-4o",
         tools: ["calculator", "json-parser"],
@@ -100,8 +133,9 @@ Always show your work. Double-check calculations and be explicit about assumptio
     {
         id: "blank",
         name: "Start from Scratch",
-        description: "Build a custom agent with full control",
-        icon: "✨",
+        description: "Build a custom agent with full control over every setting",
+        icon: "\uD83D\uDEE0\uFE0F",
+        color: "bg-zinc-100 text-zinc-700",
         modelProvider: "openai",
         modelName: "gpt-4o",
         tools: [],
@@ -110,7 +144,7 @@ Always show your work. Double-check calculations and be explicit about assumptio
     }
 ];
 
-const AVAILABLE_TOOLS = [
+const FALLBACK_TOOLS: ToolInfo[] = [
     { id: "calculator", name: "Calculator", description: "Math and calculations" },
     { id: "web-fetch", name: "Web Fetch", description: "Fetch data from URLs" },
     { id: "memory-recall", name: "Memory Recall", description: "Remember past conversations" },
@@ -119,10 +153,42 @@ const AVAILABLE_TOOLS = [
     { id: "generate-id", name: "Generate ID", description: "Create unique identifiers" }
 ];
 
+// Persist onboarding state to localStorage to survive refreshes
+const STORAGE_KEY = "agentc2_onboarding_state";
+
+function loadPersistedState(): { step: OnboardingStep; data: OnboardingData } | null {
+    try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) return null;
+        return JSON.parse(raw);
+    } catch {
+        return null;
+    }
+}
+
+function persistState(step: OnboardingStep, data: OnboardingData) {
+    try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify({ step, data }));
+    } catch {
+        // Silently fail
+    }
+}
+
+function clearPersistedState() {
+    try {
+        localStorage.removeItem(STORAGE_KEY);
+    } catch {
+        // Silently fail
+    }
+}
+
 export default function OnboardingPage() {
     const router = useRouter();
+
+    // Restore state from localStorage if available
+    const [initialized, setInitialized] = useState(false);
     const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
-    const [availableTools, setAvailableTools] = useState<ToolInfo[]>(AVAILABLE_TOOLS);
+    const [availableTools, setAvailableTools] = useState<ToolInfo[]>(FALLBACK_TOOLS);
     const [data, setData] = useState<OnboardingData>({
         selectedTemplate: null,
         agentName: "",
@@ -135,14 +201,71 @@ export default function OnboardingPage() {
         createdAgentSlug: null
     });
     const [isCreating, setIsCreating] = useState(false);
+    const [createError, setCreateError] = useState<string | null>(null);
 
+    // Initialize from persisted state
     useEffect(() => {
+        const persisted = loadPersistedState();
+        if (persisted) {
+            setCurrentStep(persisted.step);
+            setData(persisted.data);
+        }
+        setInitialized(true);
+    }, []);
+
+    // Persist state on changes
+    useEffect(() => {
+        if (initialized) {
+            persistState(currentStep, data);
+        }
+    }, [currentStep, data, initialized]);
+
+    // Fetch available tools from the registry
+    // Filter out platform management tools that aren't relevant for agent configuration
+    useEffect(() => {
+        const PLATFORM_TOOL_PREFIXES = [
+            "agent-",
+            "workflow-",
+            "network-",
+            "live-",
+            "audit-",
+            "org-",
+            "goal-",
+            "rag-",
+            "document-",
+            "skill-",
+            "trigger-",
+            "integration-",
+            "metrics-",
+            "bim-",
+            "webhook-",
+            "canvas-",
+            "workspace-",
+            "gmail-",
+            "ask-questions"
+        ];
+
+        const isAgentRelevantTool = (tool: ToolInfo) => {
+            // MCP tools are always relevant
+            if (tool.source?.startsWith("mcp:")) return true;
+            // Filter out platform management tools from registry
+            if (tool.source === "registry") {
+                return !PLATFORM_TOOL_PREFIXES.some(
+                    (prefix) => tool.id.startsWith(prefix) || tool.id === prefix
+                );
+            }
+            return true;
+        };
+
         const fetchTools = async () => {
             try {
                 const response = await fetch(`${getApiBase()}/api/agents/tools`);
                 const result = await response.json();
                 if (result.success && Array.isArray(result.tools) && result.tools.length > 0) {
-                    setAvailableTools(result.tools);
+                    const filtered = (result.tools as ToolInfo[]).filter(isAgentRelevantTool);
+                    if (filtered.length > 0) {
+                        setAvailableTools(filtered);
+                    }
                 }
             } catch (error) {
                 console.error("Failed to fetch tools:", error);
@@ -152,30 +275,62 @@ export default function OnboardingPage() {
         fetchTools();
     }, []);
 
-    const updateData = (updates: Partial<OnboardingData>) => {
+    const updateData = useCallback((updates: Partial<OnboardingData>) => {
         setData((prev) => ({ ...prev, ...updates }));
-    };
+    }, []);
 
-    const handleTemplateSelect = (template: AgentTemplate) => {
-        updateData({
-            selectedTemplate: template,
-            modelProvider: template.modelProvider,
-            modelName: template.modelName,
-            selectedTools: template.tools,
-            instructions: template.instructions,
-            agentName: template.id === "blank" ? "" : template.name
-        });
-        setCurrentStep("configure");
-    };
+    // ── Step flow ──────────────────────────────────────────────────────────
 
-    const handleConfigureComplete = () => {
-        // If blank template, go to tools; otherwise skip to test
-        if (data.selectedTemplate?.id === "blank") {
-            setCurrentStep("tools");
-        } else {
-            handleCreateAgent();
+    /**
+     * Dynamic step order based on the selected template.
+     * Blank templates always go through tools; template-based agents
+     * also go through tools now (pre-selected) so users can customize.
+     */
+    const getStepOrder = useCallback((): OnboardingStep[] => {
+        return ["welcome", "template", "configure", "integrations", "tools", "test", "success"];
+    }, []);
+
+    const goBack = useCallback(() => {
+        const steps = getStepOrder();
+        const idx = steps.indexOf(currentStep);
+        if (idx > 0) {
+            setCurrentStep(steps[idx - 1]!);
         }
-    };
+    }, [currentStep, getStepOrder]);
+
+    const getProgress = useCallback(() => {
+        const steps = getStepOrder().filter(
+            (s) => s !== "welcome" && s !== "success"
+        ) as OnboardingStep[];
+        const idx = steps.indexOf(currentStep);
+        if (idx < 0) return 0;
+        return Math.round((idx / (steps.length - 1)) * 100);
+    }, [currentStep, getStepOrder]);
+
+    // ── Handlers ───────────────────────────────────────────────────────────
+
+    const handleTemplateSelect = useCallback(
+        (template: AgentTemplate) => {
+            updateData({
+                selectedTemplate: template,
+                modelProvider: template.modelProvider,
+                modelName: template.modelName,
+                selectedTools: template.tools,
+                instructions: template.instructions,
+                agentName: template.id === "blank" ? "" : template.name
+            });
+            setCurrentStep("configure");
+        },
+        [updateData]
+    );
+
+    const handleConfigureComplete = useCallback(() => {
+        setCurrentStep("integrations");
+    }, []);
+
+    const handleIntegrationsComplete = useCallback(() => {
+        setCurrentStep("tools");
+    }, []);
 
     const handleToolsComplete = () => {
         handleCreateAgent();
@@ -183,8 +338,8 @@ export default function OnboardingPage() {
 
     const handleCreateAgent = async () => {
         setIsCreating(true);
+        setCreateError(null);
         try {
-            // Ensure instructions are not empty
             const instructions =
                 data.instructions.trim() ||
                 "You are a helpful AI assistant. Respond clearly and helpfully to user requests.";
@@ -215,21 +370,18 @@ export default function OnboardingPage() {
                 });
                 setCurrentStep("test");
             } else {
-                // Show error to user
-                console.error("Failed to create agent:", result);
-                alert(`Failed to create agent: ${result.error || "Unknown error"}`);
+                setCreateError(result.error || "Failed to create agent. Please try again.");
             }
-        } catch (error) {
-            console.error("Failed to create agent:", error);
-            alert("Network error. Please check your connection and try again.");
+        } catch {
+            setCreateError("Network error. Please check your connection and try again.");
         } finally {
             setIsCreating(false);
         }
     };
 
-    const handleTestComplete = () => {
+    const handleTestComplete = useCallback(() => {
         setCurrentStep("success");
-    };
+    }, []);
 
     const handleFinish = async () => {
         try {
@@ -238,48 +390,45 @@ export default function OnboardingPage() {
             console.error("Failed to complete onboarding:", error);
         }
 
-        // Transitional fallback for client-only checks
         localStorage.setItem("agentc2_onboarding_complete", "true");
+        clearPersistedState();
 
-        if (data.createdAgentSlug) {
-            router.push(`/agents/${data.createdAgentSlug}/configure`);
-        } else {
-            router.push("/agents");
+        // Navigate to home workspace
+        router.push("/");
+    };
+
+    const handleSkipToDashboard = async () => {
+        try {
+            await fetch(`${getApiBase()}/api/onboarding/complete`, { method: "POST" });
+        } catch {
+            // Best-effort
         }
+        localStorage.setItem("agentc2_onboarding_complete", "true");
+        clearPersistedState();
+        router.push("/");
     };
 
-    const goBack = () => {
-        const stepOrder: OnboardingStep[] = [
-            "welcome",
-            "template",
-            "configure",
-            "tools",
-            "test",
-            "success"
-        ];
-        const currentIndex = stepOrder.indexOf(currentStep);
-        if (currentIndex > 0) {
-            setCurrentStep(stepOrder[currentIndex - 1]);
-        }
-    };
+    // Don't render until we've checked localStorage for persisted state
+    if (!initialized) {
+        return null;
+    }
 
-    // Progress indicator
-    const getProgress = () => {
-        const steps: OnboardingStep[] = ["welcome", "template", "configure", "test", "success"];
-        const currentIndex = steps.indexOf(currentStep);
-        return Math.round((currentIndex / (steps.length - 1)) * 100);
-    };
+    const showProgress =
+        currentStep !== "welcome" && currentStep !== "success" && currentStep !== "test";
 
     return (
-        <div className="mx-auto max-w-2xl">
+        <>
             {/* Progress bar */}
-            {currentStep !== "welcome" && currentStep !== "success" && (
+            {showProgress && (
                 <div className="mb-8">
-                    <div className="bg-muted h-2 overflow-hidden rounded-full">
+                    <div className="bg-muted h-1.5 overflow-hidden rounded-full">
                         <div
-                            className="bg-primary h-full transition-all duration-300"
+                            className="bg-primary h-full transition-all duration-500 ease-out"
                             style={{ width: `${getProgress()}%` }}
                         />
+                    </div>
+                    <div className="text-muted-foreground mt-2 text-center text-xs">
+                        Step {getStepOrder().indexOf(currentStep)} of {getStepOrder().length - 2}
                     </div>
                 </div>
             )}
@@ -288,7 +437,7 @@ export default function OnboardingPage() {
             {currentStep === "welcome" && (
                 <WelcomeStep
                     onContinue={() => setCurrentStep("template")}
-                    onAiSetup={() => router.push("/assistant")}
+                    onSkip={handleSkipToDashboard}
                 />
             )}
 
@@ -306,8 +455,11 @@ export default function OnboardingPage() {
                     updateData={updateData}
                     onContinue={handleConfigureComplete}
                     onBack={goBack}
-                    isCreating={isCreating}
                 />
+            )}
+
+            {currentStep === "integrations" && (
+                <IntegrationsStep onContinue={handleIntegrationsComplete} onBack={goBack} />
             )}
 
             {currentStep === "tools" && (
@@ -318,6 +470,7 @@ export default function OnboardingPage() {
                     onContinue={handleToolsComplete}
                     onBack={goBack}
                     isCreating={isCreating}
+                    createError={createError}
                 />
             )}
 
@@ -325,6 +478,8 @@ export default function OnboardingPage() {
                 <TestStep
                     agentSlug={data.createdAgentSlug}
                     agentName={data.agentName}
+                    modelName={data.modelName}
+                    templateId={data.selectedTemplate?.id || null}
                     onContinue={handleTestComplete}
                 />
             )}
@@ -333,9 +488,12 @@ export default function OnboardingPage() {
                 <SuccessStep
                     agentName={data.agentName}
                     agentSlug={data.createdAgentSlug || ""}
+                    modelProvider={data.modelProvider}
+                    modelName={data.modelName}
+                    toolCount={data.selectedTools.length}
                     onFinish={handleFinish}
                 />
             )}
-        </div>
+        </>
     );
 }

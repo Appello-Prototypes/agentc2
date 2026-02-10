@@ -20,7 +20,7 @@ export default async function LoginPage() {
         });
 
         if (membership?.onboardingCompletedAt) {
-            redirect("/agents");
+            redirect("/");
         }
 
         redirect("/onboarding");

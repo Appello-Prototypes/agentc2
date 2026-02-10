@@ -67,6 +67,27 @@ interface Agent {
     version: number;
 }
 
+interface AttachedSkill {
+    id: string;
+    skillId: string;
+    skill: {
+        id: string;
+        slug: string;
+        name: string;
+        description: string | null;
+        version: number;
+    };
+}
+
+interface AvailableSkill {
+    id: string;
+    slug: string;
+    name: string;
+    description: string | null;
+    version: number;
+    _count: { documents: number; tools: number; agents: number };
+}
+
 interface ModelInfo {
     provider: string;
     name: string;
@@ -117,6 +138,12 @@ export default function ConfigurePage() {
         Array<{ id: string; slug: string; name: string }>
     >([]);
 
+    // Skills state
+    const [attachedSkills, setAttachedSkills] = useState<AttachedSkill[]>([]);
+    const [availableSkills, setAvailableSkills] = useState<AvailableSkill[]>([]);
+    const [skillsLoading, setSkillsLoading] = useState(false);
+    const [skillActionLoading, setSkillActionLoading] = useState(false);
+
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
     const [hasChanges, setHasChanges] = useState(false);
@@ -153,6 +180,69 @@ export default function ConfigurePage() {
             console.error("Failed to fetch agents/workflows:", err);
         }
     }, []);
+
+    const fetchSkills = useCallback(async () => {
+        try {
+            setSkillsLoading(true);
+            const res = await fetch(`${getApiBase()}/api/skills`);
+            const data = await res.json();
+            if (data.skills) {
+                setAvailableSkills(data.skills);
+            }
+        } catch (err) {
+            console.error("Failed to fetch skills:", err);
+        } finally {
+            setSkillsLoading(false);
+        }
+    }, []);
+
+    const handleAttachSkill = useCallback(
+        async (skillId: string) => {
+            if (!agent || skillActionLoading) return;
+            setSkillActionLoading(true);
+            try {
+                const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/skills`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ skillId })
+                });
+                if (res.ok) {
+                    // Refresh agent data to get updated skills and version
+                    await fetchAgent();
+                    await fetchSkills();
+                }
+            } catch (err) {
+                console.error("Failed to attach skill:", err);
+            } finally {
+                setSkillActionLoading(false);
+            }
+        },
+        [agent, skillActionLoading] // eslint-disable-line react-hooks/exhaustive-deps
+    );
+
+    const handleDetachSkill = useCallback(
+        async (skillId: string) => {
+            if (!agent || skillActionLoading) return;
+            if (!confirm("Detach this skill? This will create a new agent version.")) return;
+            setSkillActionLoading(true);
+            try {
+                const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/skills`, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ skillId })
+                });
+                if (res.ok) {
+                    await fetchAgent();
+                    await fetchSkills();
+                }
+            } catch (err) {
+                console.error("Failed to detach skill:", err);
+            } finally {
+                setSkillActionLoading(false);
+            }
+        },
+        [agent, skillActionLoading] // eslint-disable-line react-hooks/exhaustive-deps
+    );
 
     const fetchAgent = useCallback(async () => {
         try {
@@ -193,6 +283,11 @@ export default function ConfigurePage() {
                 version: agentData.version ?? 1
             };
 
+            // Extract attached skills from API response
+            if (agentData.skills) {
+                setAttachedSkills(agentData.skills);
+            }
+
             // Extract extended thinking settings from modelConfig
             const modelConfig = agentData.modelConfig as ModelConfig | null;
             const hasExtendedThinking = modelConfig?.thinking?.type === "enabled";
@@ -219,7 +314,8 @@ export default function ConfigurePage() {
         fetchAgent();
         fetchToolsAndScorers();
         fetchAgentsAndWorkflows();
-    }, [fetchAgent, fetchToolsAndScorers, fetchAgentsAndWorkflows]);
+        fetchSkills();
+    }, [fetchAgent, fetchToolsAndScorers, fetchAgentsAndWorkflows, fetchSkills]);
 
     // Group tools by source for display
     const groupToolsBySource = (tools: ToolInfo[]) => {
@@ -480,6 +576,9 @@ export default function ConfigurePage() {
                     <TabsTrigger value="model">Model</TabsTrigger>
                     <TabsTrigger value="instructions">Instructions</TabsTrigger>
                     <TabsTrigger value="tools">Tools</TabsTrigger>
+                    <TabsTrigger value="skills">
+                        Skills ({attachedSkills.length})
+                    </TabsTrigger>
                     <TabsTrigger value="orchestration">Orchestration</TabsTrigger>
                     <TabsTrigger value="memory">Memory</TabsTrigger>
                     <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
@@ -1061,6 +1160,123 @@ export default function ConfigurePage() {
                                     )}
                                 </div>
                             )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* Skills Tab */}
+                <TabsContent value="skills">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Skills</CardTitle>
+                            <CardDescription>
+                                Composable competency bundles that provide this agent with domain
+                                knowledge, procedures, and tool bindings. Attaching or detaching a
+                                skill creates a new agent version.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            {/* Attached Skills */}
+                            {attachedSkills.length > 0 ? (
+                                <div className="space-y-3">
+                                    <h4 className="text-sm font-medium">Attached Skills</h4>
+                                    {attachedSkills.map((as) => (
+                                        <div
+                                            key={as.id}
+                                            className="flex items-center justify-between rounded-lg border p-3"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-2">
+                                                    <p className="text-sm font-medium">
+                                                        {as.skill.name}
+                                                    </p>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className="text-xs"
+                                                    >
+                                                        v{as.skill.version}
+                                                    </Badge>
+                                                </div>
+                                                <p className="text-muted-foreground font-mono text-xs">
+                                                    {as.skill.slug}
+                                                </p>
+                                                {as.skill.description && (
+                                                    <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">
+                                                        {as.skill.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleDetachSkill(as.skillId)}
+                                                disabled={skillActionLoading}
+                                            >
+                                                Detach
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-muted-foreground rounded-lg border border-dashed py-8 text-center text-sm">
+                                    No skills attached. Attach a skill below to give this agent
+                                    domain knowledge and procedures.
+                                </div>
+                            )}
+
+                            {/* Available Skills to Attach */}
+                            {(() => {
+                                const attachedIds = new Set(
+                                    attachedSkills.map((as) => as.skillId)
+                                );
+                                const unattached = availableSkills.filter(
+                                    (s) => !attachedIds.has(s.id)
+                                );
+                                if (skillsLoading) {
+                                    return <Skeleton className="h-24 w-full" />;
+                                }
+                                if (unattached.length === 0) return null;
+                                return (
+                                    <div className="space-y-3">
+                                        <h4 className="text-sm font-medium">Available Skills</h4>
+                                        <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                            {unattached.map((skill) => (
+                                                <div
+                                                    key={skill.id}
+                                                    className="hover:bg-muted/50 flex items-center justify-between rounded-lg border p-3 transition-colors"
+                                                >
+                                                    <div className="min-w-0 flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="text-sm font-medium">
+                                                                {skill.name}
+                                                            </p>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                            >
+                                                                v{skill.version}
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
+                                                            {skill.description || skill.slug}
+                                                        </p>
+                                                    </div>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            handleAttachSkill(skill.id)
+                                                        }
+                                                        disabled={skillActionLoading}
+                                                    >
+                                                        Attach
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                 </TabsContent>

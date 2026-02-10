@@ -54,13 +54,18 @@ export function ListBlock({ config }: { config: any }) {
                                             onClick={() => {
                                                 if (action.type === "link" && action.href) {
                                                     window.open(action.href, "_blank");
-                                                } else if (action.type === "navigate" && action.target) {
+                                                } else if (
+                                                    action.type === "navigate" &&
+                                                    action.target
+                                                ) {
                                                     window.location.href = action.target;
                                                 }
                                             }}
                                             className="text-primary text-xs hover:underline"
                                         >
-                                            {action.icon && <span className="mr-0.5">{action.icon}</span>}
+                                            {action.icon && (
+                                                <span className="mr-0.5">{action.icon}</span>
+                                            )}
                                             {action.label}
                                         </button>
                                     ))}

@@ -55,13 +55,6 @@ interface DocumentDetail {
     createdAt: string;
     updatedAt: string;
     createdBy: string | null;
-    skills: Array<{
-        id: string;
-        skillId: string;
-        documentId: string;
-        role: string | null;
-        skill: { id: string; slug: string; name: string };
-    }>;
 }
 
 interface ChunkData {
@@ -75,6 +68,8 @@ interface ChunkData {
     documentId: string;
     sourceName: string;
     metadata: Record<string, unknown>;
+    vectorDimensions: number;
+    vectorPreview: number[];
 }
 
 interface SearchResult {
@@ -140,6 +135,8 @@ export default function DocumentDetailPage() {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
     const [searchLoading, setSearchLoading] = useState(false);
+    const [searchError, setSearchError] = useState<string | null>(null);
+    const [searchExecuted, setSearchExecuted] = useState(false);
     const [minScore, setMinScore] = useState(0.3);
 
     // Versions tab state
@@ -215,6 +212,8 @@ export default function DocumentDetailPage() {
     const handleSearch = useCallback(async () => {
         if (!searchQuery.trim()) return;
         setSearchLoading(true);
+        setSearchError(null);
+        setSearchExecuted(true);
         try {
             const res = await fetch(`${getApiBase()}/api/documents/${documentId}/search`, {
                 method: "POST",
@@ -226,11 +225,22 @@ export default function DocumentDetailPage() {
                 })
             });
             const data = await res.json();
+            if (!res.ok) {
+                setSearchError(data.error || `Search failed (${res.status})`);
+                setSearchResults([]);
+                return;
+            }
             if (data.results) {
                 setSearchResults(data.results);
+            } else {
+                setSearchResults([]);
             }
         } catch (error) {
             console.error("Search failed:", error);
+            setSearchError(
+                error instanceof Error ? error.message : "Network error -- search request failed."
+            );
+            setSearchResults([]);
         } finally {
             setSearchLoading(false);
         }
@@ -382,7 +392,6 @@ export default function DocumentDetailPage() {
                     <TabsTrigger value="content">Content</TabsTrigger>
                     <TabsTrigger value="chunks">Chunks ({doc.chunkCount})</TabsTrigger>
                     <TabsTrigger value="search">Search</TabsTrigger>
-                    <TabsTrigger value="skills">Skills ({doc.skills.length})</TabsTrigger>
                     <TabsTrigger value="versions">Versions ({doc.version})</TabsTrigger>
                 </TabsList>
 
@@ -496,7 +505,20 @@ export default function DocumentDetailPage() {
                         </div>
                     )}
 
-                    {!searchLoading && searchResults.length > 0 && (
+                    {!searchLoading && searchError && (
+                        <Card className="border-destructive/50">
+                            <CardContent className="py-6 text-center">
+                                <p className="text-destructive text-sm font-medium">
+                                    Search failed
+                                </p>
+                                <p className="text-muted-foreground mt-1 text-xs">
+                                    {searchError}
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {!searchLoading && !searchError && searchResults.length > 0 && (
                         <div className="space-y-3">
                             <p className="text-muted-foreground text-sm">
                                 {searchResults.length} result{searchResults.length !== 1 ? "s" : ""}
@@ -507,49 +529,19 @@ export default function DocumentDetailPage() {
                         </div>
                     )}
 
-                    {!searchLoading && searchResults.length === 0 && searchQuery && (
-                        <Card>
-                            <CardContent className="py-8 text-center">
-                                <p className="text-muted-foreground">
-                                    No results above the minimum score threshold.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-
-                {/* ==================== Skills Tab ==================== */}
-                <TabsContent value="skills" className="mt-4">
-                    {doc.skills.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-8 text-center">
-                                <p className="text-muted-foreground">
-                                    Not linked to any skills. Attach this document to a skill via
-                                    the API or MCP tools.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="space-y-3">
-                            {doc.skills.map((sd) => (
-                                <Card key={sd.id}>
-                                    <CardHeader className="pb-2">
-                                        <div className="flex items-center justify-between">
-                                            <div>
-                                                <CardTitle className="text-base">
-                                                    {sd.skill.name}
-                                                </CardTitle>
-                                                <CardDescription className="font-mono text-xs">
-                                                    {sd.skill.slug}
-                                                </CardDescription>
-                                            </div>
-                                            {sd.role && <Badge variant="outline">{sd.role}</Badge>}
-                                        </div>
-                                    </CardHeader>
-                                </Card>
-                            ))}
-                        </div>
-                    )}
+                    {!searchLoading &&
+                        !searchError &&
+                        searchResults.length === 0 &&
+                        searchExecuted && (
+                            <Card>
+                                <CardContent className="py-8 text-center">
+                                    <p className="text-muted-foreground">
+                                        No results found. Try a different query or lower the minimum
+                                        score (currently {minScore.toFixed(2)}).
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        )}
                 </TabsContent>
 
                 {/* ==================== Versions Tab ==================== */}
@@ -594,6 +586,7 @@ export default function DocumentDetailPage() {
 
 function ChunkCard({ chunk }: { chunk: ChunkData }) {
     const [expanded, setExpanded] = useState(false);
+    const isVectorized = chunk.vectorDimensions > 0;
 
     return (
         <Card>
@@ -607,6 +600,11 @@ function ChunkCard({ chunk }: { chunk: ChunkData }) {
                             <span className="text-muted-foreground font-mono text-xs">
                                 {chunk.id}
                             </span>
+                            {isVectorized && (
+                                <Badge variant="outline" className="text-xs">
+                                    {chunk.vectorDimensions}d
+                                </Badge>
+                            )}
                         </div>
                         <div className="flex items-center gap-2">
                             <span className="text-muted-foreground text-xs">
@@ -627,6 +625,23 @@ function ChunkCard({ chunk }: { chunk: ChunkData }) {
                             : chunk.text.slice(0, 200) + (chunk.text.length > 200 ? "..." : "")}
                     </p>
                     <CollapsibleContent>
+                        {isVectorized && (
+                            <>
+                                <Separator className="my-3" />
+                                <div className="space-y-1">
+                                    <p className="text-muted-foreground text-xs font-medium">
+                                        Embedding Vector ({chunk.vectorDimensions} dimensions)
+                                    </p>
+                                    <pre className="bg-muted overflow-auto rounded p-3 font-mono text-xs">
+                                        [{chunk.vectorPreview.map((v) => v.toFixed(6)).join(", ")}
+                                        {chunk.vectorDimensions > 10
+                                            ? `, ... ${chunk.vectorDimensions - 10} more`
+                                            : ""}
+                                        ]
+                                    </pre>
+                                </div>
+                            </>
+                        )}
                         <Separator className="my-3" />
                         <div className="space-y-1">
                             <p className="text-muted-foreground text-xs font-medium">

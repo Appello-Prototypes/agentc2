@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 import {
     createUIMessageStream,
@@ -179,10 +180,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         // eslint-disable-next-line prefer-const
-        let { agent, record, source } = await agentResolver.resolve({
-            slug: id,
-            requestContext
-        });
+        let { agent, record, source, activeSkills, toolOriginMap } =
+            await agentResolver.resolve({
+                slug: id,
+                requestContext
+            });
 
         console.log(`[Agent Chat] Resolved agent '${id}' from ${source} (mode: ${runSource})`);
 
@@ -235,37 +237,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Fallback agents (code-defined, no DB record) cannot be recorded due to FK constraints
         const agentId = record?.id || null;
 
-        // Start recording the run (only if agent exists in database)
+        // Compute instructions hash for tracing (base + skill instructions merged)
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const mergedInstructions = (agent as any).__config?.instructions || "";
+        const instructionsHash = mergedInstructions
+            ? createHash("sha256").update(mergedInstructions).digest("hex")
+            : undefined;
+
+        // Start recording the run (fire-and-forget to avoid blocking the stream).
+        // The run handle is captured asynchronously and used later by the stream writer.
         let run: RunRecorderHandle | null = null;
+        let runReady: Promise<void> | null = null;
         if (agentId) {
-            run = await startRun({
+            runReady = startRun({
                 agentId,
                 agentSlug: id,
                 input: lastUserMessage,
                 source: runSource,
                 userId: resourceId,
-                threadId: userThreadId
-            });
-            console.log(`[Agent Chat] Started run ${run.runId} for agent ${id}`);
+                threadId: userThreadId,
+                skillsJson: activeSkills.length > 0 ? activeSkills : undefined,
+                toolOriginMap:
+                    Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                instructionsHash,
+                instructionsSnapshot: mergedInstructions || undefined
+            })
+                .then((handle) => {
+                    run = handle;
+                    console.log(`[Agent Chat] Started run ${handle.runId} for agent ${id}`);
 
-            // Record trigger event for unified triggers dashboard
-            try {
-                await createTriggerEventRecord({
-                    agentId,
-                    workspaceId: record?.workspaceId || null,
-                    runId: run.runId,
-                    sourceType: "chat",
-                    entityType: "agent",
-                    payload: { input: lastUserMessage },
-                    metadata: {
-                        threadId: userThreadId,
-                        resourceId,
-                        mode
-                    }
+                    // Record trigger event (non-blocking, best-effort)
+                    createTriggerEventRecord({
+                        agentId,
+                        workspaceId: record?.workspaceId || null,
+                        runId: handle.runId,
+                        sourceType: "chat",
+                        entityType: "agent",
+                        payload: { input: lastUserMessage },
+                        metadata: {
+                            threadId: userThreadId,
+                            resourceId,
+                            mode
+                        }
+                    }).catch((e) => {
+                        console.warn("[Agent Chat] Failed to record trigger event:", e);
+                    });
+                })
+                .catch((e) => {
+                    console.warn("[Agent Chat] Failed to start run:", e);
                 });
-            } catch (e) {
-                console.warn("[Agent Chat] Failed to record trigger event:", e);
-            }
         } else {
             console.log(
                 `[Agent Chat] Skipping run recording for fallback agent '${id}' (no DB record)`
@@ -308,6 +328,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Create a UI message stream compatible with useChat
         const stream = createUIMessageStream({
             execute: async ({ writer }: { writer: UIMessageStreamWriter }) => {
+                // Ensure run handle is ready (fire-and-forget started earlier)
+                if (runReady) {
+                    await runReady;
+                }
+
                 // Generate a unique message ID for this response
                 const messageId = generateId();
 

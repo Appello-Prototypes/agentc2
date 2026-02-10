@@ -1,10 +1,10 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { LineChart, Line, BarChart, Bar, AreaChart, Area, ResponsiveContainer } from "recharts"
-import { useResolvedValue, useResolvedData, formatValue } from "../use-resolved-data"
-import { useChartColors } from "../use-chart-colors"
-import { cn } from "../../../lib/utils"
+import * as React from "react";
+import { LineChart, Line, BarChart, Bar, AreaChart, Area, ResponsiveContainer } from "recharts";
+import { useResolvedValue, useResolvedData, formatValue } from "../use-resolved-data";
+import { useChartColors } from "../use-chart-colors";
+import { cn } from "../../../lib/utils";
 
 const colorMap: Record<string, string> = {
     default: "",
@@ -12,30 +12,30 @@ const colorMap: Record<string, string> = {
     green: "border-l-4 border-l-green-500",
     red: "border-l-4 border-l-red-500",
     yellow: "border-l-4 border-l-yellow-500",
-    purple: "border-l-4 border-l-purple-500",
-}
+    purple: "border-l-4 border-l-purple-500"
+};
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function StatCardBlock({ config }: { config: any }) {
-    const rawValue = useResolvedValue(config.value)
-    const trendValue = useResolvedValue(config.trend?.value)
-    const sparklineRaw = useResolvedData(config.sparklineData)
-    const chartColors = useChartColors()
+    const rawValue = useResolvedValue(config.value);
+    const trendValue = useResolvedValue(config.trend?.value);
+    const sparklineRaw = useResolvedData(config.sparklineData);
+    const chartColors = useChartColors();
 
-    const displayValue = formatValue(rawValue, config.format, config.prefix, config.suffix)
-    const colorClass = colorMap[config.color || "default"] || ""
+    const displayValue = formatValue(rawValue, config.format, config.prefix, config.suffix);
+    const colorClass = colorMap[config.color || "default"] || "";
 
     // Normalize sparkline data
     const sparkData = React.useMemo(() => {
-        if (!Array.isArray(sparklineRaw)) return null
+        if (!Array.isArray(sparklineRaw)) return null;
         return sparklineRaw.map((item: unknown, idx: number) => ({
             value: typeof item === "number" ? item : Number(item) || 0,
-            idx,
-        }))
-    }, [sparklineRaw])
+            idx
+        }));
+    }, [sparklineRaw]);
 
-    const sparkColor = chartColors[0] || "oklch(0.57 0.26 230)"
-    const sparkType = config.sparklineType || "line"
+    const sparkColor = chartColors[0] || "oklch(0.57 0.26 230)";
+    const sparkType = config.sparklineType || "line";
 
     return (
         <div
@@ -119,5 +119,5 @@ export function StatCardBlock({ config }: { config: any }) {
                 )}
             </div>
         </div>
-    )
+    );
 }

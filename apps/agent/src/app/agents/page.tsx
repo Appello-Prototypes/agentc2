@@ -62,7 +62,7 @@ import {
     TableBody,
     TableHead,
     TableRow,
-    TableCell,
+    TableCell
 } from "@repo/ui";
 import { FlaskConicalIcon } from "lucide-react";
 
@@ -753,268 +753,215 @@ export default function AgentsPage() {
 
     return (
         <div className="h-full overflow-y-auto">
-        <div className="container mx-auto space-y-6 py-6">
-            {/* Header */}
-            <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold">Agents</h1>
-                    <p className="text-muted-foreground">Build, run, and improve AI agents</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    {demoAgents.length > 0 && (
-                        <Button
-                            variant={examplesOpen ? "secondary" : "outline"}
-                            onClick={() => setExamplesOpen(!examplesOpen)}
-                        >
-                            <FlaskConicalIcon className="mr-1.5 size-4" />
-                            Examples
-                            <Badge variant="secondary" className="ml-1.5">
-                                {demoAgents.length}
-                            </Badge>
+            <div className="container mx-auto space-y-6 py-6">
+                {/* Header */}
+                <div className="flex items-start justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold">Agents</h1>
+                        <p className="text-muted-foreground">Build, run, and improve AI agents</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        {demoAgents.length > 0 && (
+                            <Button
+                                variant={examplesOpen ? "secondary" : "outline"}
+                                onClick={() => setExamplesOpen(!examplesOpen)}
+                            >
+                                <FlaskConicalIcon className="mr-1.5 size-4" />
+                                Examples
+                                <Badge variant="secondary" className="ml-1.5">
+                                    {demoAgents.length}
+                                </Badge>
+                            </Button>
+                        )}
+                        <Button onClick={() => router.push("/demos/agents/manage")}>
+                            + Create Agent
                         </Button>
-                    )}
-                    <Button onClick={() => router.push("/demos/agents/manage")}>
-                        + Create Agent
-                    </Button>
-                </div>
-            </div>
-
-            {/* Summary Stats */}
-            {summary && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Agents</CardDescription>
-                            <CardTitle className="text-2xl">{summary.totalAgents}</CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Active</CardDescription>
-                            <CardTitle className="text-2xl text-green-600">
-                                {summary.activeAgents}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Runs</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalRuns.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Success Rate</CardDescription>
-                            <CardTitle
-                                className={`text-2xl ${summary.successRate >= 90 ? "text-green-600" : summary.successRate >= 70 ? "text-yellow-600" : "text-red-600"}`}
-                            >
-                                {summary.successRate}%
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Avg Latency</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {formatLatency(summary.avgLatencyMs)}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Cost</CardDescription>
-                            <CardTitle className="text-2xl">
-                                ${summary.totalCostUsd.toFixed(2)}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                </div>
-            )}
-
-            {/* Tabs */}
-            <Tabs
-                defaultValue="agents"
-                value={activeTab}
-                onValueChange={(val) => setActiveTab(val as typeof activeTab)}
-            >
-                <div className="flex items-center justify-between">
-                    <TabsList>
-                        <TabsTrigger value="agents">Agents</TabsTrigger>
-                        <TabsTrigger value="runs">Runs</TabsTrigger>
-                    </TabsList>
-
-                    {activeTab === "agents" && (
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant={viewMode === "grid" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("grid")}
-                            >
-                                Grid
-                            </Button>
-                            <Button
-                                variant={viewMode === "list" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("list")}
-                            >
-                                List
-                            </Button>
-                            <Button
-                                variant={viewMode === "table" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("table")}
-                            >
-                                Table
-                            </Button>
-                        </div>
-                    )}
+                    </div>
                 </div>
 
-                <TabsContent value="agents">
-                    {/* Filters */}
-                    <div className="mb-4 flex flex-wrap items-center gap-4">
-                        <div className="min-w-64 flex-1">
-                            <Input
-                                placeholder="Search agents..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                        <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v ?? "all")}>
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="Type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Types</SelectItem>
-                                <SelectItem value="USER">User</SelectItem>
-                                <SelectItem value="SYSTEM">System</SelectItem>
-                                <SelectItem value="DEMO">Demo</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(v) => setStatusFilter(v ?? "all")}
-                        >
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
+                {/* Summary Stats */}
+                {summary && (
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Agents</CardDescription>
+                                <CardTitle className="text-2xl">{summary.totalAgents}</CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Active</CardDescription>
+                                <CardTitle className="text-2xl text-green-600">
+                                    {summary.activeAgents}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Runs</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.totalRuns.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Success Rate</CardDescription>
+                                <CardTitle
+                                    className={`text-2xl ${summary.successRate >= 90 ? "text-green-600" : summary.successRate >= 70 ? "text-yellow-600" : "text-red-600"}`}
+                                >
+                                    {summary.successRate}%
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Avg Latency</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {formatLatency(summary.avgLatencyMs)}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Cost</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    ${summary.totalCostUsd.toFixed(2)}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Tabs */}
+                <Tabs
+                    defaultValue="agents"
+                    value={activeTab}
+                    onValueChange={(val) => setActiveTab(val as typeof activeTab)}
+                >
+                    <div className="flex items-center justify-between">
+                        <TabsList>
+                            <TabsTrigger value="agents">Agents</TabsTrigger>
+                            <TabsTrigger value="runs">Runs</TabsTrigger>
+                        </TabsList>
+
+                        {activeTab === "agents" && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={viewMode === "grid" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("grid")}
+                                >
+                                    Grid
+                                </Button>
+                                <Button
+                                    variant={viewMode === "list" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("list")}
+                                >
+                                    List
+                                </Button>
+                                <Button
+                                    variant={viewMode === "table" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("table")}
+                                >
+                                    Table
+                                </Button>
+                            </div>
+                        )}
                     </div>
 
-                    {/* Agents */}
-                    {primaryAgents.length === 0 && demoAgents.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                {agents.length === 0 ? (
-                                    <div>
-                                        <p className="text-muted-foreground text-lg">
-                                            Ready to build your first agent?
-                                        </p>
-                                        <p className="text-muted-foreground mt-2 text-sm">
-                                            Start with a template or build from scratch
-                                        </p>
-                                        <Button
-                                            className="mt-4"
-                                            onClick={() => router.push("/demos/agents/manage")}
-                                        >
-                                            Create Agent
-                                        </Button>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <p className="text-muted-foreground text-lg">
-                                            No agents match your filters
-                                        </p>
-                                        <Button
-                                            variant="outline"
-                                            className="mt-4"
-                                            onClick={() => {
-                                                setSearchQuery("");
-                                                setTypeFilter("all");
-                                                setStatusFilter("all");
-                                            }}
-                                        >
-                                            Clear Filters
-                                        </Button>
-                                    </div>
-                                )}
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="space-y-6">
-                            {/* Primary section: User + System agents */}
-                            {primaryAgents.length > 0 ? (
-                                viewMode === "table" ? (
-                                    <AgentTableView
-                                        agents={primaryAgents}
-                                        onAgentClick={handleAgentClick}
-                                    />
-                                ) : viewMode === "list" ? (
-                                    <div className="space-y-3">
-                                        {primaryAgents.map((agent) => (
-                                            <AgentListView
-                                                key={agent.id}
-                                                agent={agent}
-                                                onClick={() => handleAgentClick(agent)}
-                                            />
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                        {primaryAgents.map((agent) => (
-                                            <AgentCardView
-                                                key={agent.id}
-                                                agent={agent}
-                                                onClick={() => handleAgentClick(agent)}
-                                            />
-                                        ))}
-                                    </div>
-                                )
-                            ) : typeFilter === "all" ? (
-                                <Card>
-                                    <CardContent className="py-8 text-center">
-                                        <p className="text-muted-foreground text-lg">
-                                            No agents yet
-                                        </p>
-                                        <p className="text-muted-foreground mt-1 text-sm">
-                                            Create your first agent, or try one of the examples
-                                            below
-                                        </p>
-                                        <Button
-                                            className="mt-4"
-                                            onClick={() => router.push("/demos/agents/manage")}
-                                        >
-                                            Create Agent
-                                        </Button>
-                                    </CardContent>
-                                </Card>
-                            ) : null}
+                    <TabsContent value="agents">
+                        {/* Filters */}
+                        <div className="mb-4 flex flex-wrap items-center gap-4">
+                            <div className="min-w-64 flex-1">
+                                <Input
+                                    placeholder="Search agents..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Select
+                                value={typeFilter}
+                                onValueChange={(v) => setTypeFilter(v ?? "all")}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Types</SelectItem>
+                                    <SelectItem value="USER">User</SelectItem>
+                                    <SelectItem value="SYSTEM">System</SelectItem>
+                                    <SelectItem value="DEMO">Demo</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(v) => setStatusFilter(v ?? "all")}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                            {/* Demo/example agents -- shown when Examples button is active */}
-                            {examplesOpen && demoAgents.length > 0 && (
-                                <div>
-                                    <div className="mb-4 flex items-center gap-2">
-                                        <FlaskConicalIcon className="text-muted-foreground size-4" />
-                                        <span className="text-muted-foreground text-sm font-medium">
-                                            Examples &amp; Templates
-                                        </span>
-                                        <div className="bg-border h-px flex-1" />
-                                    </div>
-                                    {viewMode === "table" ? (
+                        {/* Agents */}
+                        {primaryAgents.length === 0 && demoAgents.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    {agents.length === 0 ? (
+                                        <div>
+                                            <p className="text-muted-foreground text-lg">
+                                                Ready to build your first agent?
+                                            </p>
+                                            <p className="text-muted-foreground mt-2 text-sm">
+                                                Start with a template or build from scratch
+                                            </p>
+                                            <Button
+                                                className="mt-4"
+                                                onClick={() => router.push("/demos/agents/manage")}
+                                            >
+                                                Create Agent
+                                            </Button>
+                                        </div>
+                                    ) : (
+                                        <div>
+                                            <p className="text-muted-foreground text-lg">
+                                                No agents match your filters
+                                            </p>
+                                            <Button
+                                                variant="outline"
+                                                className="mt-4"
+                                                onClick={() => {
+                                                    setSearchQuery("");
+                                                    setTypeFilter("all");
+                                                    setStatusFilter("all");
+                                                }}
+                                            >
+                                                Clear Filters
+                                            </Button>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="space-y-6">
+                                {/* Primary section: User + System agents */}
+                                {primaryAgents.length > 0 ? (
+                                    viewMode === "table" ? (
                                         <AgentTableView
-                                            agents={demoAgents}
+                                            agents={primaryAgents}
                                             onAgentClick={handleAgentClick}
                                         />
                                     ) : viewMode === "list" ? (
                                         <div className="space-y-3">
-                                            {demoAgents.map((agent) => (
+                                            {primaryAgents.map((agent) => (
                                                 <AgentListView
                                                     key={agent.id}
                                                     agent={agent}
@@ -1024,7 +971,7 @@ export default function AgentsPage() {
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                            {demoAgents.map((agent) => (
+                                            {primaryAgents.map((agent) => (
                                                 <AgentCardView
                                                     key={agent.id}
                                                     agent={agent}
@@ -1032,137 +979,193 @@ export default function AgentsPage() {
                                                 />
                                             ))}
                                         </div>
-                                    )}
-                                </div>
+                                    )
+                                ) : typeFilter === "all" ? (
+                                    <Card>
+                                        <CardContent className="py-8 text-center">
+                                            <p className="text-muted-foreground text-lg">
+                                                No agents yet
+                                            </p>
+                                            <p className="text-muted-foreground mt-1 text-sm">
+                                                Create your first agent, or try one of the examples
+                                                below
+                                            </p>
+                                            <Button
+                                                className="mt-4"
+                                                onClick={() => router.push("/demos/agents/manage")}
+                                            >
+                                                Create Agent
+                                            </Button>
+                                        </CardContent>
+                                    </Card>
+                                ) : null}
+
+                                {/* Demo/example agents -- shown when Examples button is active */}
+                                {examplesOpen && demoAgents.length > 0 && (
+                                    <div>
+                                        <div className="mb-4 flex items-center gap-2">
+                                            <FlaskConicalIcon className="text-muted-foreground size-4" />
+                                            <span className="text-muted-foreground text-sm font-medium">
+                                                Examples &amp; Templates
+                                            </span>
+                                            <div className="bg-border h-px flex-1" />
+                                        </div>
+                                        {viewMode === "table" ? (
+                                            <AgentTableView
+                                                agents={demoAgents}
+                                                onAgentClick={handleAgentClick}
+                                            />
+                                        ) : viewMode === "list" ? (
+                                            <div className="space-y-3">
+                                                {demoAgents.map((agent) => (
+                                                    <AgentListView
+                                                        key={agent.id}
+                                                        agent={agent}
+                                                        onClick={() => handleAgentClick(agent)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                                {demoAgents.map((agent) => (
+                                                    <AgentCardView
+                                                        key={agent.id}
+                                                        agent={agent}
+                                                        onClick={() => handleAgentClick(agent)}
+                                                    />
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="runs">
+                        {/* Run Counts Summary */}
+                        {runCounts && (
+                            <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-6">
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("all")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Total</CardDescription>
+                                        <CardTitle className="text-xl">
+                                            {runCounts.total.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("completed")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Completed</CardDescription>
+                                        <CardTitle className="text-xl text-green-600">
+                                            {runCounts.completed.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("failed")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Failed</CardDescription>
+                                        <CardTitle className="text-xl text-red-600">
+                                            {runCounts.failed.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("running")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Running</CardDescription>
+                                        <CardTitle className="text-xl text-blue-600">
+                                            {runCounts.running.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("queued")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Queued</CardDescription>
+                                        <CardTitle className="text-xl text-yellow-600">
+                                            {runCounts.queued.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                                <Card
+                                    className="cursor-pointer"
+                                    onClick={() => setRunStatusFilter("cancelled")}
+                                >
+                                    <CardHeader className="pb-2">
+                                        <CardDescription>Cancelled</CardDescription>
+                                        <CardTitle className="text-xl text-gray-600">
+                                            {runCounts.cancelled.toLocaleString()}
+                                        </CardTitle>
+                                    </CardHeader>
+                                </Card>
+                            </div>
+                        )}
+
+                        {/* Status Filter */}
+                        <div className="mb-4 flex items-center gap-4">
+                            <Select
+                                value={runStatusFilter}
+                                onValueChange={(v) => setRunStatusFilter(v ?? "all")}
+                            >
+                                <SelectTrigger className="w-40">
+                                    <SelectValue placeholder="Filter by status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Runs</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="failed">Failed</SelectItem>
+                                    <SelectItem value="running">Running</SelectItem>
+                                    <SelectItem value="queued">Queued</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {runStatusFilter !== "all" && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setRunStatusFilter("all")}
+                                >
+                                    Clear Filter
+                                </Button>
                             )}
                         </div>
-                    )}
-                </TabsContent>
 
-                <TabsContent value="runs">
-                    {/* Run Counts Summary */}
-                    {runCounts && (
-                        <div className="mb-4 grid grid-cols-2 gap-4 md:grid-cols-6">
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("all")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Total</CardDescription>
-                                    <CardTitle className="text-xl">
-                                        {runCounts.total.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
+                        {/* Runs Table */}
+                        {runsLoading ? (
+                            <div className="space-y-3">
+                                {[1, 2, 3, 4, 5].map((i) => (
+                                    <Skeleton key={i} className="h-16" />
+                                ))}
+                            </div>
+                        ) : runs.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-muted-foreground text-lg">No runs found</p>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Runs will appear here when agents are executed
+                                    </p>
+                                </CardContent>
                             </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("completed")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Completed</CardDescription>
-                                    <CardTitle className="text-xl text-green-600">
-                                        {runCounts.completed.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("failed")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Failed</CardDescription>
-                                    <CardTitle className="text-xl text-red-600">
-                                        {runCounts.failed.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("running")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Running</CardDescription>
-                                    <CardTitle className="text-xl text-blue-600">
-                                        {runCounts.running.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("queued")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Queued</CardDescription>
-                                    <CardTitle className="text-xl text-yellow-600">
-                                        {runCounts.queued.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                            <Card
-                                className="cursor-pointer"
-                                onClick={() => setRunStatusFilter("cancelled")}
-                            >
-                                <CardHeader className="pb-2">
-                                    <CardDescription>Cancelled</CardDescription>
-                                    <CardTitle className="text-xl text-gray-600">
-                                        {runCounts.cancelled.toLocaleString()}
-                                    </CardTitle>
-                                </CardHeader>
-                            </Card>
-                        </div>
-                    )}
-
-                    {/* Status Filter */}
-                    <div className="mb-4 flex items-center gap-4">
-                        <Select
-                            value={runStatusFilter}
-                            onValueChange={(v) => setRunStatusFilter(v ?? "all")}
-                        >
-                            <SelectTrigger className="w-40">
-                                <SelectValue placeholder="Filter by status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Runs</SelectItem>
-                                <SelectItem value="completed">Completed</SelectItem>
-                                <SelectItem value="failed">Failed</SelectItem>
-                                <SelectItem value="running">Running</SelectItem>
-                                <SelectItem value="queued">Queued</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        {runStatusFilter !== "all" && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setRunStatusFilter("all")}
-                            >
-                                Clear Filter
-                            </Button>
+                        ) : (
+                            <RunsTable runs={runs} onRunClick={handleRunClick} />
                         )}
-                    </div>
-
-                    {/* Runs Table */}
-                    {runsLoading ? (
-                        <div className="space-y-3">
-                            {[1, 2, 3, 4, 5].map((i) => (
-                                <Skeleton key={i} className="h-16" />
-                            ))}
-                        </div>
-                    ) : runs.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">No runs found</p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Runs will appear here when agents are executed
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <RunsTable runs={runs} onRunClick={handleRunClick} />
-                    )}
-                </TabsContent>
-            </Tabs>
-        </div>
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     );
 }

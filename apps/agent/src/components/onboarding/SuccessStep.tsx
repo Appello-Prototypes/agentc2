@@ -1,68 +1,116 @@
 "use client";
 
 import Link from "next/link";
-import { Button, Card, CardContent } from "@repo/ui";
+import { Button, Card, CardContent, Badge } from "@repo/ui";
+import { CheckCircleIcon } from "lucide-react";
 
 interface SuccessStepProps {
     agentName: string;
     agentSlug: string;
+    modelProvider: string;
+    modelName: string;
+    toolCount: number;
     onFinish: () => void;
 }
 
-export function SuccessStep({ agentName, agentSlug, onFinish }: SuccessStepProps) {
+const MODEL_DISPLAY: Record<string, string> = {
+    "gpt-4o": "GPT-4o",
+    "gpt-4o-mini": "GPT-4o Mini",
+    "claude-sonnet-4-20250514": "Claude Sonnet 4",
+    "claude-haiku-3-5-20241022": "Claude Haiku 3.5"
+};
+
+export function SuccessStep({
+    agentName,
+    agentSlug,
+    modelProvider,
+    modelName,
+    toolCount,
+    onFinish
+}: SuccessStepProps) {
+    const displayModel = MODEL_DISPLAY[modelName] || modelName;
+
     return (
         <Card className="border-0 shadow-none">
-            <CardContent className="space-y-8 py-12 text-center">
+            <CardContent className="space-y-8 py-8 text-center">
                 {/* Success icon */}
-                <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-green-100 text-4xl">
-                    ✓
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
+                    <CheckCircleIcon className="size-8 text-green-600 dark:text-green-400" />
                 </div>
 
                 {/* Message */}
                 <div className="space-y-3">
                     <h1 className="text-3xl font-bold">You&apos;re all set!</h1>
-                    <p className="text-muted-foreground mx-auto max-w-md text-lg">
-                        Your agent &quot;{agentName}&quot; is ready to use.
+                    <p className="text-muted-foreground mx-auto max-w-md text-base">
+                        Your agent is live and ready to work.
                     </p>
+                </div>
+
+                {/* Agent summary */}
+                <div className="bg-muted/50 mx-auto max-w-sm rounded-lg border p-4 text-left">
+                    <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{agentName}</span>
+                            <Badge variant="outline" className="text-[10px]">
+                                {displayModel}
+                            </Badge>
+                        </div>
+                        <div className="text-muted-foreground flex items-center gap-3 text-xs">
+                            <span className="capitalize">{modelProvider}</span>
+                            <span>&middot;</span>
+                            <span>
+                                {toolCount} tool{toolCount !== 1 ? "s" : ""}
+                            </span>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Next steps */}
                 <div className="mx-auto max-w-md space-y-4 text-left">
-                    <p className="font-medium">What&apos;s next?</p>
-                    <div className="space-y-3">
+                    <p className="text-sm font-medium">What&apos;s next?</p>
+                    <div className="space-y-2">
+                        <Link
+                            href="/"
+                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
+                        >
+                            <p className="text-sm font-medium">Chat with your agent</p>
+                            <p className="text-muted-foreground text-xs">
+                                Open the Workspace and start a conversation
+                            </p>
+                        </Link>
+                        <Link
+                            href="/mcp"
+                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
+                        >
+                            <p className="text-sm font-medium">Set up integrations</p>
+                            <p className="text-muted-foreground text-xs">
+                                Connect HubSpot, Jira, Slack, and more via MCP
+                            </p>
+                        </Link>
                         <Link
                             href={`/agents/${agentSlug}/overview`}
-                            className="hover:bg-muted block rounded-lg border p-4 transition-colors"
+                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
                         >
-                            <p className="font-medium">View your agent</p>
-                            <p className="text-muted-foreground text-sm">
+                            <p className="text-sm font-medium">View agent details</p>
+                            <p className="text-muted-foreground text-xs">
                                 Monitor runs, analytics, and performance
                             </p>
                         </Link>
                         <Link
                             href="/workflows"
-                            className="hover:bg-muted block rounded-lg border p-4 transition-colors"
+                            className="hover:bg-accent/50 block rounded-lg border p-3 transition-colors"
                         >
-                            <p className="font-medium">Create a workflow</p>
-                            <p className="text-muted-foreground text-sm">
+                            <p className="text-sm font-medium">Create a workflow</p>
+                            <p className="text-muted-foreground text-xs">
                                 Chain multiple steps with logic and approvals
-                            </p>
-                        </Link>
-                        <Link
-                            href="/networks"
-                            className="hover:bg-muted block rounded-lg border p-4 transition-colors"
-                        >
-                            <p className="font-medium">Build a network</p>
-                            <p className="text-muted-foreground text-sm">
-                                Let AI decide which agents to use
                             </p>
                         </Link>
                     </div>
                 </div>
 
                 {/* CTA */}
-                <Button size="lg" className="px-8" onClick={onFinish}>
-                    Go to Agents
+                <Button size="lg" className="px-10" onClick={onFinish}>
+                    Go to Workspace
                 </Button>
             </CardContent>
         </Card>

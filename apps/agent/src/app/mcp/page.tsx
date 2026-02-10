@@ -599,162 +599,169 @@ export default function IntegrationsHubPage() {
     }, [appendLog, handleTestServer, mcpProviders]);
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-bold">Integrations Hub</h1>
-                    <p className="text-muted-foreground">
-                        Manage MCP servers, webhooks, and OAuth integrations in one place.
-                    </p>
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <h1 className="text-3xl font-bold">Integrations Hub</h1>
+                        <p className="text-muted-foreground">
+                            Manage MCP servers, webhooks, and OAuth integrations in one place.
+                        </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Link href="/mcp/setup" className={buttonVariants({ variant: "outline" })}>
+                            Setup &amp; Debug
+                        </Link>
+                    </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <Link href="/mcp/setup" className={buttonVariants({ variant: "outline" })}>
-                        Setup &amp; Debug
-                    </Link>
-                </div>
-            </div>
 
-            {loading && (
-                <div className="text-muted-foreground text-sm">Loading integrations...</div>
-            )}
+                {loading && (
+                    <div className="text-muted-foreground text-sm">Loading integrations...</div>
+                )}
 
-            {error && (
-                <Card>
-                    <CardContent className="py-4 text-sm text-red-500">{error}</CardContent>
-                </Card>
-            )}
-
-            {!loading && !error && (
-                <Tabs defaultValue="mcp" className="w-full">
-                    <TabsList className="grid w-full grid-cols-4">
-                        <TabsTrigger value="webhooks">
-                            Webhooks
-                            {webhooks.length > 0 && (
-                                <Badge variant="secondary" className="ml-2">
-                                    {webhooks.length}
-                                </Badge>
-                            )}
-                        </TabsTrigger>
-                        <TabsTrigger value="mcp">
-                            MCP Servers
-                            {mcpProviders.length > 0 && (
-                                <Badge variant="secondary" className="ml-2">
-                                    {mcpProviders.length}
-                                </Badge>
-                            )}
-                        </TabsTrigger>
-                        <TabsTrigger value="oauth">
-                            OAuth Platforms
-                            {oauthProviders.length > 0 && (
-                                <Badge variant="secondary" className="ml-2">
-                                    {oauthProviders.length}
-                                </Badge>
-                            )}
-                        </TabsTrigger>
-                        <TabsTrigger value="channels">Channels</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="webhooks" className="mt-4">
-                        <WebhooksTab webhooks={webhooks} origin={origin} onRefresh={loadWebhooks} />
-                    </TabsContent>
-
-                    <TabsContent value="mcp" className="mt-4">
-                        <Card>
-                            <CardHeader className="flex flex-row items-start justify-between gap-4">
-                                <div>
-                                    <CardTitle>MCP Servers</CardTitle>
-                                    <CardDescription>
-                                        Model Context Protocol servers defined in your MCP JSON.
-                                    </CardDescription>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        onClick={handleTestAll}
-                                        disabled={testAllRunning}
-                                    >
-                                        {testAllRunning ? "Testing..." : "Test all"}
-                                    </Button>
-                                    <Link
-                                        href="/mcp/config"
-                                        className={buttonVariants({ variant: "default" })}
-                                    >
-                                        <PlusIcon className="mr-2 h-4 w-4" />
-                                        New MCP Server
-                                    </Link>
-                                </div>
-                            </CardHeader>
-                            <CardContent>
-                                <ProviderTable
-                                    providers={mcpProviders}
-                                    onTest={handleTestServer}
-                                    testResults={testResults}
-                                    testingServers={testingServers}
-                                    showManage={false}
-                                />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="oauth" className="mt-4">
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>OAuth Platforms</CardTitle>
-                                <CardDescription>
-                                    One-click OAuth integrations that connect directly to platforms.
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <ProviderTable providers={oauthProviders} />
-                            </CardContent>
-                        </Card>
-                    </TabsContent>
-
-                    <TabsContent value="channels" className="mt-4">
-                        <ChannelsTab />
-                    </TabsContent>
-                </Tabs>
-            )}
-
-            {debugLogs.length > 0 && (
-                <Collapsible defaultOpen className="mt-6">
-                    <Card className="border-dashed">
-                        <CollapsibleTrigger className="w-full">
-                            <CardHeader className="hover:bg-muted/50 flex cursor-pointer flex-row items-center justify-between py-4">
-                                <div className="text-left">
-                                    <CardTitle className="text-base">Debug log</CardTitle>
-                                    <CardDescription>
-                                        Recent MCP test activity and errors.
-                                    </CardDescription>
-                                </div>
-                                <Badge variant="outline" className="shrink-0">
-                                    {debugLogs.length} entries
-                                </Badge>
-                            </CardHeader>
-                        </CollapsibleTrigger>
-                        <CollapsibleContent>
-                            <CardContent className="border-t pt-4">
-                                <div className="max-h-64 space-y-1 overflow-auto font-mono text-xs">
-                                    {debugLogs.map((entry) => (
-                                        <div
-                                            key={entry.id}
-                                            className={
-                                                entry.level === "error"
-                                                    ? "text-red-500"
-                                                    : entry.level === "success"
-                                                      ? "text-emerald-600"
-                                                      : "text-muted-foreground"
-                                            }
-                                        >
-                                            [{entry.timestamp}] {entry.message}
-                                        </div>
-                                    ))}
-                                </div>
-                            </CardContent>
-                        </CollapsibleContent>
+                {error && (
+                    <Card>
+                        <CardContent className="py-4 text-sm text-red-500">{error}</CardContent>
                     </Card>
-                </Collapsible>
-            )}
+                )}
+
+                {!loading && !error && (
+                    <Tabs defaultValue="mcp" className="w-full">
+                        <TabsList className="grid w-full grid-cols-4">
+                            <TabsTrigger value="webhooks">
+                                Webhooks
+                                {webhooks.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {webhooks.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="mcp">
+                                MCP Servers
+                                {mcpProviders.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {mcpProviders.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="oauth">
+                                OAuth Platforms
+                                {oauthProviders.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {oauthProviders.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="channels">Channels</TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="webhooks" className="mt-4">
+                            <WebhooksTab
+                                webhooks={webhooks}
+                                origin={origin}
+                                onRefresh={loadWebhooks}
+                            />
+                        </TabsContent>
+
+                        <TabsContent value="mcp" className="mt-4">
+                            <Card>
+                                <CardHeader className="flex flex-row items-start justify-between gap-4">
+                                    <div>
+                                        <CardTitle>MCP Servers</CardTitle>
+                                        <CardDescription>
+                                            Model Context Protocol servers defined in your MCP JSON.
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                            variant="outline"
+                                            onClick={handleTestAll}
+                                            disabled={testAllRunning}
+                                        >
+                                            {testAllRunning ? "Testing..." : "Test all"}
+                                        </Button>
+                                        <Link
+                                            href="/mcp/config"
+                                            className={buttonVariants({ variant: "default" })}
+                                        >
+                                            <PlusIcon className="mr-2 h-4 w-4" />
+                                            New MCP Server
+                                        </Link>
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <ProviderTable
+                                        providers={mcpProviders}
+                                        onTest={handleTestServer}
+                                        testResults={testResults}
+                                        testingServers={testingServers}
+                                        showManage={false}
+                                    />
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="oauth" className="mt-4">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>OAuth Platforms</CardTitle>
+                                    <CardDescription>
+                                        One-click OAuth integrations that connect directly to
+                                        platforms.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <ProviderTable providers={oauthProviders} />
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        <TabsContent value="channels" className="mt-4">
+                            <ChannelsTab />
+                        </TabsContent>
+                    </Tabs>
+                )}
+
+                {debugLogs.length > 0 && (
+                    <Collapsible defaultOpen className="mt-6">
+                        <Card className="border-dashed">
+                            <CollapsibleTrigger className="w-full">
+                                <CardHeader className="hover:bg-muted/50 flex cursor-pointer flex-row items-center justify-between py-4">
+                                    <div className="text-left">
+                                        <CardTitle className="text-base">Debug log</CardTitle>
+                                        <CardDescription>
+                                            Recent MCP test activity and errors.
+                                        </CardDescription>
+                                    </div>
+                                    <Badge variant="outline" className="shrink-0">
+                                        {debugLogs.length} entries
+                                    </Badge>
+                                </CardHeader>
+                            </CollapsibleTrigger>
+                            <CollapsibleContent>
+                                <CardContent className="border-t pt-4">
+                                    <div className="max-h-64 space-y-1 overflow-auto font-mono text-xs">
+                                        {debugLogs.map((entry) => (
+                                            <div
+                                                key={entry.id}
+                                                className={
+                                                    entry.level === "error"
+                                                        ? "text-red-500"
+                                                        : entry.level === "success"
+                                                          ? "text-emerald-600"
+                                                          : "text-muted-foreground"
+                                                }
+                                            >
+                                                [{entry.timestamp}] {entry.message}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </CollapsibleContent>
+                        </Card>
+                    </Collapsible>
+                )}
+            </div>
         </div>
     );
 }

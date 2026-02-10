@@ -1,19 +1,19 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import { useResolvedValue } from "../use-resolved-data"
-import { useChartColors } from "../use-chart-colors"
-import { BlockWrapper } from "./BlockWrapper"
+import * as React from "react";
+import { useResolvedValue } from "../use-resolved-data";
+import { useChartColors } from "../use-chart-colors";
+import { BlockWrapper } from "./BlockWrapper";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function ProgressBarBlock({ config }: { config: any }) {
-    const rawValue = useResolvedValue(config.value)
-    const chartColors = useChartColors()
-    const value = Number(rawValue) || 0
-    const max = config.max || 100
-    const percentage = Math.min(Math.max((value / max) * 100, 0), 100)
-    const barColor = config.color || chartColors[0]
-    const height = config.height || 8
+    const rawValue = useResolvedValue(config.value);
+    const chartColors = useChartColors();
+    const value = Number(rawValue) || 0;
+    const max = config.max || 100;
+    const percentage = Math.min(Math.max((value / max) * 100, 0), 100);
+    const barColor = config.color || chartColors[0];
+    const height = config.height || 8;
 
     return (
         <BlockWrapper
@@ -39,7 +39,7 @@ export function ProgressBarBlock({ config }: { config: any }) {
                     className="h-full rounded-full transition-all duration-500"
                     style={{
                         width: `${percentage}%`,
-                        backgroundColor: barColor,
+                        backgroundColor: barColor
                     }}
                 />
             </div>
@@ -49,5 +49,5 @@ export function ProgressBarBlock({ config }: { config: any }) {
                 </div>
             )}
         </BlockWrapper>
-    )
+    );
 }

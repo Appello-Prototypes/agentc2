@@ -172,8 +172,12 @@ export function DataTableBlock({ config }: { config: any }) {
                         {sorted.length > 0 && (
                             <button
                                 onClick={() => {
-                                    const visibleCols = columns.filter((c: { hidden?: boolean }) => !c.hidden);
-                                    const header = visibleCols.map((c: { label: string }) => c.label).join(",");
+                                    const visibleCols = columns.filter(
+                                        (c: { hidden?: boolean }) => !c.hidden
+                                    );
+                                    const header = visibleCols
+                                        .map((c: { label: string }) => c.label)
+                                        .join(",");
                                     const rows = sorted.map((row: Record<string, unknown>) =>
                                         visibleCols
                                             .map((col: { key: string }) => {
@@ -185,7 +189,9 @@ export function DataTableBlock({ config }: { config: any }) {
                                             .join(",")
                                     );
                                     const csv = [header, ...rows].join("\n");
-                                    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                                    const blob = new Blob([csv], {
+                                        type: "text/csv;charset=utf-8;"
+                                    });
                                     const url = URL.createObjectURL(blob);
                                     const a = document.createElement("a");
                                     a.href = url;

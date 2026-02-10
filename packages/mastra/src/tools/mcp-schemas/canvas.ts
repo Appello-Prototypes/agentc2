@@ -39,16 +39,19 @@ export const canvasToolDefinitions: McpToolDefinition[] = [
                         dataQueries: {
                             type: "array",
                             items: { type: "object" },
-                            description: "Data query definitions (mcp, sql, rag, static, agent, api)"
+                            description:
+                                "Data query definitions (mcp, sql, rag, static, agent, api)"
                         },
                         components: {
                             type: "array",
                             items: { type: "object" },
-                            description: "UI component definitions (use canvas-list-blocks to see types)"
+                            description:
+                                "UI component definitions (use canvas-list-blocks to see types)"
                         },
                         theme: {
                             type: "object",
-                            description: "Optional theme overrides (primaryColor, chartColors, etc.)"
+                            description:
+                                "Optional theme overrides (primaryColor, chartColors, etc.)"
                         }
                     },
                     required: ["title", "components"]

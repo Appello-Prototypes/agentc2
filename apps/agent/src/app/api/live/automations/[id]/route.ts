@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { requireMonitoringWorkspace } from "@/lib/monitoring-auth";
 
 /**
@@ -31,14 +31,83 @@ function parseAutomationId(id: string): {
     return null;
 }
 
+/** Shared include for enriched run data (matches Live Runs schema). */
+const enrichedRunInclude = {
+    agent: {
+        select: { slug: true, name: true }
+    },
+    trace: {
+        select: {
+            stepsJson: true,
+            tokensJson: true,
+            _count: { select: { steps: true, toolCalls: true } }
+        }
+    },
+    toolCalls: {
+        select: { toolKey: true }
+    },
+    _count: {
+        select: { toolCalls: true }
+    }
+} satisfies Prisma.AgentRunInclude;
+
+/**
+ * Format a raw enriched AgentRun row into the Live-Runs-compatible shape.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatEnrichedRun(run: any, versionMap: Map<string, number>) {
+    return {
+        id: run.id,
+        agentId: run.agentId,
+        agentSlug: run.agent?.slug ?? null,
+        agentName: run.agent?.name ?? null,
+        runType: run.runType,
+        status: run.status,
+        source: run.source || null,
+        sessionId: run.sessionId || null,
+        threadId: run.threadId || null,
+        inputText: run.inputText,
+        outputText: run.outputText,
+        durationMs: run.durationMs,
+        startedAt:
+            run.startedAt instanceof Date ? run.startedAt.toISOString() : (run.startedAt ?? null),
+        completedAt:
+            run.completedAt instanceof Date
+                ? run.completedAt.toISOString()
+                : (run.completedAt ?? null),
+        modelProvider: run.modelProvider ?? null,
+        modelName: run.modelName ?? null,
+        promptTokens:
+            run.promptTokens ?? (run.trace?.tokensJson?.prompt as number | undefined) ?? 0,
+        completionTokens:
+            run.completionTokens ?? (run.trace?.tokensJson?.completion as number | undefined) ?? 0,
+        totalTokens: run.totalTokens ?? (run.trace?.tokensJson?.total as number | undefined) ?? 0,
+        costUsd: run.costUsd ?? null,
+        toolCallCount:
+            run._count?.toolCalls > 0 ? run._count.toolCalls : (run.trace?._count?.toolCalls ?? 0),
+        uniqueToolCount: new Set((run.toolCalls || []).map((tc: { toolKey: string }) => tc.toolKey))
+            .size,
+        stepCount: (() => {
+            const stepsFromRelation = run.trace?._count?.steps ?? 0;
+            if (stepsFromRelation > 0) return stepsFromRelation;
+            return Array.isArray(run.trace?.stepsJson) ? run.trace.stepsJson.length : 0;
+        })(),
+        versionId: run.versionId || null,
+        versionNumber: run.versionId ? (versionMap.get(run.versionId) ?? null) : null
+    };
+}
+
 /**
  * GET /api/live/automations/[id]
  *
- * Returns paginated run history for a specific automation.
+ * Returns paginated, enriched run history for a specific automation.
+ * Response shape matches /api/live/runs for UI consistency.
  *
  * Query Parameters:
  *   - limit: Max runs to return (default 20, max 100)
  *   - offset: Pagination offset (default 0)
+ *   - status: Filter by run status (completed, failed, running, queued, cancelled)
+ *   - from/to: ISO date range filter
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
@@ -46,6 +115,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const { searchParams } = new URL(request.url);
         const limit = Math.min(parseInt(searchParams.get("limit") || "20", 10), 100);
         const offset = parseInt(searchParams.get("offset") || "0", 10);
+        const statusParam = searchParams.get("status");
+        const from = searchParams.get("from");
+        const to = searchParams.get("to");
 
         const workspaceContext = await requireMonitoringWorkspace(
             searchParams.get("workspaceId"),
@@ -66,93 +138,139 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
+        // ── Implicit Slack triggers ──────────────────────────────────────
         if (parsed.sourceType === "implicit" && parsed.implicitKind === "slack") {
-            // For Slack implicit triggers, query TriggerEvent joined with runs
-            const events = await prisma.triggerEvent.findMany({
-                where: {
-                    sourceType: "slack",
-                    agentId: parsed.sourceId
-                },
-                orderBy: { createdAt: "desc" },
-                take: limit,
-                skip: offset,
-                select: {
-                    id: true,
-                    createdAt: true,
-                    payloadPreview: true,
-                    errorMessage: true,
-                    run: {
-                        select: {
-                            id: true,
-                            status: true,
-                            startedAt: true,
-                            completedAt: true,
-                            durationMs: true,
-                            inputText: true,
-                            outputText: true
+            // Build where clause for the joined run
+            const runWhere: Prisma.AgentRunWhereInput = {};
+            if (statusParam && statusParam !== "all") {
+                runWhere.status = statusParam.toUpperCase() as Prisma.EnumRunStatusFilter;
+            }
+            const startedAtFilter: Prisma.DateTimeFilter = {};
+            if (from) startedAtFilter.gte = new Date(from);
+            if (to) startedAtFilter.lte = new Date(to);
+            if (Object.keys(startedAtFilter).length > 0) {
+                runWhere.startedAt = startedAtFilter;
+            }
+
+            const eventWhere: Prisma.TriggerEventWhereInput = {
+                sourceType: "slack",
+                agentId: parsed.sourceId,
+                ...(Object.keys(runWhere).length > 0 ? { run: runWhere } : {})
+            };
+
+            const [events, total] = await Promise.all([
+                prisma.triggerEvent.findMany({
+                    where: eventWhere,
+                    orderBy: { createdAt: "desc" },
+                    take: limit,
+                    skip: offset,
+                    select: {
+                        id: true,
+                        createdAt: true,
+                        payloadPreview: true,
+                        errorMessage: true,
+                        run: {
+                            include: enrichedRunInclude
                         }
                     }
-                }
-            });
+                }),
+                prisma.triggerEvent.count({ where: eventWhere })
+            ]);
 
-            const total = await prisma.triggerEvent.count({
-                where: {
-                    sourceType: "slack",
-                    agentId: parsed.sourceId
-                }
-            });
+            // Resolve version numbers for Slack runs
+            const versionIds = Array.from(
+                new Set(events.map((e) => e.run?.versionId).filter(Boolean) as string[])
+            );
+            const versionMap = new Map<string, number>();
+            if (versionIds.length > 0) {
+                const versions = await prisma.agentVersion.findMany({
+                    where: { id: { in: versionIds } },
+                    select: { id: true, version: true }
+                });
+                for (const v of versions) versionMap.set(v.id, v.version);
+            }
 
             return NextResponse.json({
                 success: true,
-                runs: events.map((e) => ({
-                    id: e.run?.id ?? e.id,
-                    status: e.run?.status ?? "UNKNOWN",
-                    startedAt: e.run?.startedAt ?? e.createdAt,
-                    completedAt: e.run?.completedAt ?? null,
-                    durationMs: e.run?.durationMs ?? null,
-                    inputPreview:
-                        e.run?.inputText?.slice(0, 200) ?? e.payloadPreview?.slice(0, 200) ?? null,
-                    outputPreview: e.run?.outputText?.slice(0, 200) ?? null,
-                    error: e.errorMessage
-                })),
+                runs: events.map((e) => {
+                    if (e.run) {
+                        return formatEnrichedRun(e.run, versionMap);
+                    }
+                    // Fallback for events without a linked run
+                    return {
+                        id: e.id,
+                        agentId: null,
+                        agentSlug: null,
+                        agentName: null,
+                        runType: null,
+                        status: "UNKNOWN",
+                        source: "slack",
+                        sessionId: null,
+                        threadId: null,
+                        inputText: e.payloadPreview?.slice(0, 200) ?? null,
+                        outputText: null,
+                        durationMs: null,
+                        startedAt:
+                            e.createdAt instanceof Date
+                                ? e.createdAt.toISOString()
+                                : (e.createdAt ?? null),
+                        completedAt: null,
+                        modelProvider: null,
+                        modelName: null,
+                        promptTokens: 0,
+                        completionTokens: 0,
+                        totalTokens: 0,
+                        costUsd: null,
+                        toolCallCount: 0,
+                        uniqueToolCount: 0,
+                        stepCount: 0,
+                        versionId: null,
+                        versionNumber: null
+                    };
+                }),
                 pagination: { limit, offset, total, hasMore: offset + limit < total }
             });
         }
 
-        // For schedule/trigger automations, query AgentRun by triggerId
+        // ── Schedule / Trigger automations ───────────────────────────────
+        const baseWhere: Prisma.AgentRunWhereInput = { triggerId: parsed.sourceId };
+        if (statusParam && statusParam !== "all") {
+            baseWhere.status = statusParam.toUpperCase() as Prisma.EnumRunStatusFilter;
+        }
+        const startedAtFilter: Prisma.DateTimeFilter = {};
+        if (from) startedAtFilter.gte = new Date(from);
+        if (to) startedAtFilter.lte = new Date(to);
+        if (Object.keys(startedAtFilter).length > 0) {
+            baseWhere.startedAt = startedAtFilter;
+        }
+
         const [runs, total] = await Promise.all([
             prisma.agentRun.findMany({
-                where: { triggerId: parsed.sourceId },
+                where: baseWhere,
+                include: enrichedRunInclude,
                 orderBy: { startedAt: "desc" },
                 take: limit,
-                skip: offset,
-                select: {
-                    id: true,
-                    status: true,
-                    startedAt: true,
-                    completedAt: true,
-                    durationMs: true,
-                    inputText: true,
-                    outputText: true
-                }
+                skip: offset
             }),
-            prisma.agentRun.count({
-                where: { triggerId: parsed.sourceId }
-            })
+            prisma.agentRun.count({ where: baseWhere })
         ]);
+
+        // Resolve version numbers
+        const versionIds = Array.from(
+            new Set(runs.map((r) => r.versionId).filter(Boolean)) as Set<string>
+        );
+        const versionMap = new Map<string, number>();
+        if (versionIds.length > 0) {
+            const versions = await prisma.agentVersion.findMany({
+                where: { id: { in: versionIds } },
+                select: { id: true, version: true }
+            });
+            for (const v of versions) versionMap.set(v.id, v.version);
+        }
 
         return NextResponse.json({
             success: true,
-            runs: runs.map((r) => ({
-                id: r.id,
-                status: r.status,
-                startedAt: r.startedAt,
-                completedAt: r.completedAt,
-                durationMs: r.durationMs,
-                inputPreview: r.inputText?.slice(0, 200) ?? null,
-                outputPreview: r.outputText?.slice(0, 200) ?? null,
-                error: null
-            })),
+            runs: runs.map((r) => formatEnrichedRun(r, versionMap)),
             pagination: { limit, offset, total, hasMore: offset + limit < total }
         });
     } catch (error) {

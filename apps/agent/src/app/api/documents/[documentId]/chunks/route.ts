@@ -55,23 +55,30 @@ export async function GET(request: NextRequest, context: RouteContext) {
             queryVector: embedding,
             topK: 200,
             minScore: 0,
-            filter: { documentId: document.slug }
+            filter: { documentId: document.slug },
+            includeVector: true
         });
 
         // Sort by chunk index for consistent ordering
         const chunks = results
-            .map((r) => ({
-                id: r.id,
-                score: r.score,
-                text: r.metadata?.text || "",
-                chunkIndex: r.metadata?.chunkIndex ?? -1,
-                charCount: r.metadata?.charCount || 0,
-                totalChunks: r.metadata?.totalChunks || 0,
-                ingestedAt: r.metadata?.ingestedAt || "",
-                documentId: r.metadata?.documentId || "",
-                sourceName: r.metadata?.sourceName || "",
-                metadata: r.metadata || {}
-            }))
+            .map((r) => {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const vec = (r as any).vector as number[] | undefined;
+                return {
+                    id: r.id,
+                    score: r.score,
+                    text: r.metadata?.text || "",
+                    chunkIndex: r.metadata?.chunkIndex ?? -1,
+                    charCount: r.metadata?.charCount || 0,
+                    totalChunks: r.metadata?.totalChunks || 0,
+                    ingestedAt: r.metadata?.ingestedAt || "",
+                    documentId: r.metadata?.documentId || "",
+                    sourceName: r.metadata?.sourceName || "",
+                    metadata: r.metadata || {},
+                    vectorDimensions: vec?.length ?? 0,
+                    vectorPreview: vec?.slice(0, 10) ?? []
+                };
+            })
             .sort((a, b) => a.chunkIndex - b.chunkIndex);
 
         return NextResponse.json({

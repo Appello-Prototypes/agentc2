@@ -35,7 +35,8 @@ export type {
     RequestContext,
     ResolveOptions,
     HydratedAgent,
-    AgentRecordWithTools
+    AgentRecordWithTools,
+    ActiveSkillInfo
 } from "./agents";
 
 // MCP

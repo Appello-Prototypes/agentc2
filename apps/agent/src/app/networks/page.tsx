@@ -454,552 +454,571 @@ export default function NetworksPage() {
 
     if (loading) {
         return (
-            <div className="container mx-auto space-y-6 py-6">
-                <Skeleton className="h-8 w-48" />
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <Skeleton key={i} className="h-24" />
-                    ))}
+            <div className="h-full overflow-y-auto">
+                <div className="container mx-auto space-y-6 py-6">
+                    <Skeleton className="h-8 w-48" />
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <Skeleton key={i} className="h-24" />
+                        ))}
+                    </div>
+                    <Skeleton className="h-96" />
                 </div>
-                <Skeleton className="h-96" />
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold">Networks</h1>
-                    <p className="text-muted-foreground">
-                        Create smart routers that coordinate agents, workflows, and tools
-                    </p>
-                </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                    <Button onClick={() => setCreateOpen(true)}>+ Create Network</Button>
-                    <DialogContent className="sm:max-w-2xl">
-                        <DialogHeader>
-                            <DialogTitle>Create network</DialogTitle>
-                            <DialogDescription>
-                                Set up a routing agent configuration.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div className="space-y-2 md:col-span-2">
-                                <Input
-                                    placeholder="Network name"
-                                    value={name}
-                                    onChange={(e) => setName(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                                <Input
-                                    placeholder="Description (optional)"
-                                    value={description}
-                                    onChange={(e) => setDescription(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Select
-                                    value={modelProvider}
-                                    onValueChange={(value) =>
-                                        setModelProvider(value ?? "anthropic")
-                                    }
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Model provider" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="anthropic">Anthropic</SelectItem>
-                                        <SelectItem value="openai">OpenAI</SelectItem>
-                                        <SelectItem value="google">Google</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-2">
-                                <Input
-                                    placeholder="Model name"
-                                    value={modelName}
-                                    onChange={(e) => setModelName(e.target.value)}
-                                />
-                            </div>
-                            <div className="space-y-2 md:col-span-2">
-                                <Textarea
-                                    rows={4}
-                                    placeholder="Routing instructions"
-                                    value={instructions}
-                                    onChange={(e) => setInstructions(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={async () => {
-                                    if (!name.trim() || !instructions.trim()) return;
-                                    try {
-                                        setCreating(true);
-                                        const res = await fetch(`${getApiBase()}/api/networks`, {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({
-                                                name,
-                                                description,
-                                                instructions,
-                                                modelProvider,
-                                                modelName,
-                                                memoryConfig: {
-                                                    lastMessages: 10,
-                                                    semanticRecall: false,
-                                                    workingMemory: { enabled: false }
-                                                },
-                                                topologyJson: { nodes: [], edges: [] }
-                                            })
-                                        });
-                                        if (res.ok) {
-                                            setName("");
-                                            setDescription("");
-                                            setInstructions("");
-                                            setCreateOpen(false);
-                                            await fetchStats();
-                                        }
-                                    } finally {
-                                        setCreating(false);
-                                    }
-                                }}
-                                disabled={creating || !name.trim() || !instructions.trim()}
-                            >
-                                {creating ? "Creating..." : "Create network"}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {summary && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Networks</CardDescription>
-                            <CardTitle className="text-2xl">{summary.totalNetworks}</CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Active</CardDescription>
-                            <CardTitle className="text-2xl text-green-600">
-                                {summary.activeNetworks}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Published</CardDescription>
-                            <CardTitle className="text-2xl">{summary.publishedNetworks}</CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Runs</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalRuns.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Success Rate</CardDescription>
-                            <CardTitle
-                                className={`text-2xl ${
-                                    summary.successRate >= 90
-                                        ? "text-green-600"
-                                        : summary.successRate >= 70
-                                          ? "text-yellow-600"
-                                          : "text-red-600"
-                                }`}
-                            >
-                                {summary.successRate}%
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Avg Latency</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.avgLatencyMs ? formatLatency(summary.avgLatencyMs) : "—"}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Tokens</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalTokens.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Cost</CardDescription>
-                            <CardTitle className="text-2xl">
-                                ${summary.totalCostUsd.toFixed(2)}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                </div>
-            )}
-
-            <Tabs defaultValue="networks" value={activeTab} onValueChange={setActiveTab}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <TabsList>
-                        <TabsTrigger value="networks">Networks</TabsTrigger>
-                        <TabsTrigger value="runs">Runs</TabsTrigger>
-                    </TabsList>
-
-                    {activeTab === "networks" && (
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant={viewMode === "grid" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("grid")}
-                            >
-                                Grid
-                            </Button>
-                            <Button
-                                variant={viewMode === "list" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("list")}
-                            >
-                                List
-                            </Button>
-                            <Button
-                                variant={viewMode === "table" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("table")}
-                            >
-                                Table
-                            </Button>
-                        </div>
-                    )}
-                </div>
-
-                <TabsContent value="networks">
-                    <div className="mb-4 flex flex-wrap items-center gap-4">
-                        <div className="min-w-64 flex-1">
-                            <Input
-                                placeholder="Search networks..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(value) => setStatusFilter(value ?? "all")}
-                        >
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select
-                            value={publishedFilter}
-                            onValueChange={(value) => setPublishedFilter(value ?? "all")}
-                        >
-                            <SelectTrigger className="w-36">
-                                <SelectValue placeholder="Published" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="published">Published</SelectItem>
-                                <SelectItem value="unpublished">Draft</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        {(searchQuery || statusFilter !== "all" || publishedFilter !== "all") && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setSearchQuery("");
-                                    setStatusFilter("all");
-                                    setPublishedFilter("all");
-                                }}
-                            >
-                                Clear Filters
-                            </Button>
-                        )}
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold">Networks</h1>
+                        <p className="text-muted-foreground">
+                            Create smart routers that coordinate agents, workflows, and tools
+                        </p>
                     </div>
-
-                    {filteredNetworks.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">No networks yet</p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Networks let an AI decide which agents or workflows to use
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : viewMode === "table" ? (
-                        <NetworkTableView networks={filteredNetworks} />
-                    ) : viewMode === "list" ? (
-                        <div className="space-y-3">
-                            {filteredNetworks.map((network) => (
-                                <NetworkListView key={network.id} network={network} />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredNetworks.map((network) => (
-                                <NetworkCardView key={network.id} network={network} />
-                            ))}
-                        </div>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="runs">
-                    {networks.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">
-                                    No networks available
-                                </p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Create a network to start tracking runs.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-4">
-                                <Select
-                                    value={selectedNetwork ?? undefined}
-                                    onValueChange={(value) => setSelectedNetwork(value ?? null)}
-                                >
-                                    <SelectTrigger className="w-64">
-                                        <SelectValue placeholder="Select network" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {networks.map((network) => (
-                                            <SelectItem key={network.slug} value={network.slug}>
-                                                {network.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runStatusFilter}
-                                    onValueChange={(value) => setRunStatusFilter(value ?? "all")}
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Status</SelectItem>
-                                        <SelectItem value="completed">Completed</SelectItem>
-                                        <SelectItem value="failed">Failed</SelectItem>
-                                        <SelectItem value="running">Running</SelectItem>
-                                        <SelectItem value="queued">Queued</SelectItem>
-                                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runEnvironmentFilter}
-                                    onValueChange={(value) =>
-                                        setRunEnvironmentFilter(value ?? "all")
-                                    }
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Environment" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Environments</SelectItem>
-                                        <SelectItem value="development">Development</SelectItem>
-                                        <SelectItem value="staging">Staging</SelectItem>
-                                        <SelectItem value="production">Production</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runTriggerFilter}
-                                    onValueChange={(value) => setRunTriggerFilter(value ?? "all")}
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Trigger" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Triggers</SelectItem>
-                                        <SelectItem value="manual">Manual</SelectItem>
-                                        <SelectItem value="api">API</SelectItem>
-                                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                                        <SelectItem value="webhook">Webhook</SelectItem>
-                                        <SelectItem value="tool">Tool</SelectItem>
-                                        <SelectItem value="test">Test</SelectItem>
-                                        <SelectItem value="retry">Retry</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <div className="min-w-56 flex-1">
+                    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                        <Button onClick={() => setCreateOpen(true)}>+ Create Network</Button>
+                        <DialogContent className="sm:max-w-2xl">
+                            <DialogHeader>
+                                <DialogTitle>Create network</DialogTitle>
+                                <DialogDescription>
+                                    Set up a routing agent configuration.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                <div className="space-y-2 md:col-span-2">
                                     <Input
-                                        placeholder="Search run ID or input"
-                                        value={runSearchQuery}
-                                        onChange={(e) => setRunSearchQuery(e.target.value)}
+                                        placeholder="Network name"
+                                        value={name}
+                                        onChange={(e) => setName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <Input
+                                        placeholder="Description (optional)"
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Select
+                                        value={modelProvider}
+                                        onValueChange={(value) =>
+                                            setModelProvider(value ?? "anthropic")
+                                        }
+                                    >
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="Model provider" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="anthropic">Anthropic</SelectItem>
+                                            <SelectItem value="openai">OpenAI</SelectItem>
+                                            <SelectItem value="google">Google</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Input
+                                        placeholder="Model name"
+                                        value={modelName}
+                                        onChange={(e) => setModelName(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2 md:col-span-2">
+                                    <Textarea
+                                        rows={4}
+                                        placeholder="Routing instructions"
+                                        value={instructions}
+                                        onChange={(e) => setInstructions(e.target.value)}
                                     />
                                 </div>
                             </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={async () => {
+                                        if (!name.trim() || !instructions.trim()) return;
+                                        try {
+                                            setCreating(true);
+                                            const res = await fetch(
+                                                `${getApiBase()}/api/networks`,
+                                                {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                        name,
+                                                        description,
+                                                        instructions,
+                                                        modelProvider,
+                                                        modelName,
+                                                        memoryConfig: {
+                                                            lastMessages: 10,
+                                                            semanticRecall: false,
+                                                            workingMemory: { enabled: false }
+                                                        },
+                                                        topologyJson: { nodes: [], edges: [] }
+                                                    })
+                                                }
+                                            );
+                                            if (res.ok) {
+                                                setName("");
+                                                setDescription("");
+                                                setInstructions("");
+                                                setCreateOpen(false);
+                                                await fetchStats();
+                                            }
+                                        } finally {
+                                            setCreating(false);
+                                        }
+                                    }}
+                                    disabled={creating || !name.trim() || !instructions.trim()}
+                                >
+                                    {creating ? "Creating..." : "Create network"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
+                </div>
 
-                            {selectedNetworkStats && (
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("all")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Total</CardDescription>
-                                            <CardTitle className="text-xl">
-                                                {selectedNetworkStats.totalRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("completed")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Completed</CardDescription>
-                                            <CardTitle className="text-xl text-green-600">
-                                                {selectedNetworkStats.completedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("failed")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Failed</CardDescription>
-                                            <CardTitle className="text-xl text-red-600">
-                                                {selectedNetworkStats.failedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("running")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Running</CardDescription>
-                                            <CardTitle className="text-xl text-blue-600">
-                                                {selectedNetworkStats.runningRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("queued")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Queued</CardDescription>
-                                            <CardTitle className="text-xl text-yellow-600">
-                                                {selectedNetworkStats.queuedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("cancelled")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Cancelled</CardDescription>
-                                            <CardTitle className="text-xl text-gray-600">
-                                                {selectedNetworkStats.cancelledRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                </div>
-                            )}
+                {summary && (
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Networks</CardDescription>
+                                <CardTitle className="text-2xl">{summary.totalNetworks}</CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Active</CardDescription>
+                                <CardTitle className="text-2xl text-green-600">
+                                    {summary.activeNetworks}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Published</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.publishedNetworks}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Runs</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.totalRuns.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Success Rate</CardDescription>
+                                <CardTitle
+                                    className={`text-2xl ${
+                                        summary.successRate >= 90
+                                            ? "text-green-600"
+                                            : summary.successRate >= 70
+                                              ? "text-yellow-600"
+                                              : "text-red-600"
+                                    }`}
+                                >
+                                    {summary.successRate}%
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Avg Latency</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.avgLatencyMs
+                                        ? formatLatency(summary.avgLatencyMs)
+                                        : "—"}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Tokens</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.totalTokens.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Cost</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    ${summary.totalCostUsd.toFixed(2)}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                    </div>
+                )}
 
-                            {runsLoading ? (
-                                <div className="space-y-3">
-                                    {[1, 2, 3, 4, 5].map((i) => (
-                                        <Skeleton key={i} className="h-16" />
-                                    ))}
-                                </div>
-                            ) : runs.length === 0 ? (
-                                <Card>
-                                    <CardContent className="py-12 text-center">
-                                        <p className="text-muted-foreground text-lg">
-                                            No runs found
-                                        </p>
-                                        <p className="text-muted-foreground mt-2 text-sm">
-                                            Runs will appear here when networks execute.
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Environment</TableHead>
-                                                <TableHead>Trigger</TableHead>
-                                                <TableHead>Input</TableHead>
-                                                <TableHead className="text-right">Steps</TableHead>
-                                                <TableHead className="text-right">
-                                                    Duration
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Started
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {runs.map((run) => (
-                                                <TableRow key={run.id}>
-                                                    <TableCell>
-                                                        <Badge
-                                                            variant={getStatusBadgeVariant(
-                                                                run.status
-                                                            )}
-                                                        >
-                                                            {run.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="capitalize">
-                                                        {run.environment.toLowerCase()}
-                                                    </TableCell>
-                                                    <TableCell className="capitalize">
-                                                        {run.triggerType.toLowerCase()}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <p className="max-w-xs truncate">
-                                                            {run.inputText}
-                                                        </p>
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {run.stepsCount}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {run.durationMs
-                                                            ? formatLatency(run.durationMs)
-                                                            : "—"}
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground text-right">
-                                                        {formatRelativeTime(run.startedAt)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </Card>
+                <Tabs defaultValue="networks" value={activeTab} onValueChange={setActiveTab}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <TabsList>
+                            <TabsTrigger value="networks">Networks</TabsTrigger>
+                            <TabsTrigger value="runs">Runs</TabsTrigger>
+                        </TabsList>
+
+                        {activeTab === "networks" && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={viewMode === "grid" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("grid")}
+                                >
+                                    Grid
+                                </Button>
+                                <Button
+                                    variant={viewMode === "list" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("list")}
+                                >
+                                    List
+                                </Button>
+                                <Button
+                                    variant={viewMode === "table" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("table")}
+                                >
+                                    Table
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    <TabsContent value="networks">
+                        <div className="mb-4 flex flex-wrap items-center gap-4">
+                            <div className="min-w-64 flex-1">
+                                <Input
+                                    placeholder="Search networks..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
+                            </div>
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(value) => setStatusFilter(value ?? "all")}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={publishedFilter}
+                                onValueChange={(value) => setPublishedFilter(value ?? "all")}
+                            >
+                                <SelectTrigger className="w-36">
+                                    <SelectValue placeholder="Published" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="published">Published</SelectItem>
+                                    <SelectItem value="unpublished">Draft</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {(searchQuery ||
+                                statusFilter !== "all" ||
+                                publishedFilter !== "all") && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearchQuery("");
+                                        setStatusFilter("all");
+                                        setPublishedFilter("all");
+                                    }}
+                                >
+                                    Clear Filters
+                                </Button>
                             )}
                         </div>
-                    )}
-                </TabsContent>
-            </Tabs>
+
+                        {filteredNetworks.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-muted-foreground text-lg">No networks yet</p>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Networks let an AI decide which agents or workflows to use
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : viewMode === "table" ? (
+                            <NetworkTableView networks={filteredNetworks} />
+                        ) : viewMode === "list" ? (
+                            <div className="space-y-3">
+                                {filteredNetworks.map((network) => (
+                                    <NetworkListView key={network.id} network={network} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {filteredNetworks.map((network) => (
+                                    <NetworkCardView key={network.id} network={network} />
+                                ))}
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="runs">
+                        {networks.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-muted-foreground text-lg">
+                                        No networks available
+                                    </p>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Create a network to start tracking runs.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center gap-4">
+                                    <Select
+                                        value={selectedNetwork ?? undefined}
+                                        onValueChange={(value) => setSelectedNetwork(value ?? null)}
+                                    >
+                                        <SelectTrigger className="w-64">
+                                            <SelectValue placeholder="Select network" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {networks.map((network) => (
+                                                <SelectItem key={network.slug} value={network.slug}>
+                                                    {network.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runStatusFilter}
+                                        onValueChange={(value) =>
+                                            setRunStatusFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Status</SelectItem>
+                                            <SelectItem value="completed">Completed</SelectItem>
+                                            <SelectItem value="failed">Failed</SelectItem>
+                                            <SelectItem value="running">Running</SelectItem>
+                                            <SelectItem value="queued">Queued</SelectItem>
+                                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runEnvironmentFilter}
+                                        onValueChange={(value) =>
+                                            setRunEnvironmentFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Environment" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Environments</SelectItem>
+                                            <SelectItem value="development">Development</SelectItem>
+                                            <SelectItem value="staging">Staging</SelectItem>
+                                            <SelectItem value="production">Production</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runTriggerFilter}
+                                        onValueChange={(value) =>
+                                            setRunTriggerFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Trigger" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Triggers</SelectItem>
+                                            <SelectItem value="manual">Manual</SelectItem>
+                                            <SelectItem value="api">API</SelectItem>
+                                            <SelectItem value="scheduled">Scheduled</SelectItem>
+                                            <SelectItem value="webhook">Webhook</SelectItem>
+                                            <SelectItem value="tool">Tool</SelectItem>
+                                            <SelectItem value="test">Test</SelectItem>
+                                            <SelectItem value="retry">Retry</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="min-w-56 flex-1">
+                                        <Input
+                                            placeholder="Search run ID or input"
+                                            value={runSearchQuery}
+                                            onChange={(e) => setRunSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {selectedNetworkStats && (
+                                    <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("all")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Total</CardDescription>
+                                                <CardTitle className="text-xl">
+                                                    {selectedNetworkStats.totalRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("completed")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Completed</CardDescription>
+                                                <CardTitle className="text-xl text-green-600">
+                                                    {selectedNetworkStats.completedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("failed")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Failed</CardDescription>
+                                                <CardTitle className="text-xl text-red-600">
+                                                    {selectedNetworkStats.failedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("running")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Running</CardDescription>
+                                                <CardTitle className="text-xl text-blue-600">
+                                                    {selectedNetworkStats.runningRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("queued")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Queued</CardDescription>
+                                                <CardTitle className="text-xl text-yellow-600">
+                                                    {selectedNetworkStats.queuedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("cancelled")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Cancelled</CardDescription>
+                                                <CardTitle className="text-xl text-gray-600">
+                                                    {selectedNetworkStats.cancelledRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                    </div>
+                                )}
+
+                                {runsLoading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <Skeleton key={i} className="h-16" />
+                                        ))}
+                                    </div>
+                                ) : runs.length === 0 ? (
+                                    <Card>
+                                        <CardContent className="py-12 text-center">
+                                            <p className="text-muted-foreground text-lg">
+                                                No runs found
+                                            </p>
+                                            <p className="text-muted-foreground mt-2 text-sm">
+                                                Runs will appear here when networks execute.
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                ) : (
+                                    <Card>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead>Environment</TableHead>
+                                                    <TableHead>Trigger</TableHead>
+                                                    <TableHead>Input</TableHead>
+                                                    <TableHead className="text-right">
+                                                        Steps
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        Duration
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        Started
+                                                    </TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {runs.map((run) => (
+                                                    <TableRow key={run.id}>
+                                                        <TableCell>
+                                                            <Badge
+                                                                variant={getStatusBadgeVariant(
+                                                                    run.status
+                                                                )}
+                                                            >
+                                                                {run.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {run.environment.toLowerCase()}
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {run.triggerType.toLowerCase()}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <p className="max-w-xs truncate">
+                                                                {run.inputText}
+                                                            </p>
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            {run.stepsCount}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            {run.durationMs
+                                                                ? formatLatency(run.durationMs)
+                                                                : "—"}
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground text-right">
+                                                            {formatRelativeTime(run.startedAt)}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     );
 }

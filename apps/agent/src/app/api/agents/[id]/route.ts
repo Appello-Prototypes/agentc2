@@ -20,7 +20,22 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 where: {
                     OR: [{ slug: id }, { id: id }]
                 },
-                include: { tools: true }
+                include: {
+                    tools: true,
+                    skills: {
+                        include: {
+                            skill: {
+                                select: {
+                                    id: true,
+                                    slug: true,
+                                    name: true,
+                                    description: true,
+                                    version: true
+                                }
+                            }
+                        }
+                    }
+                }
             });
 
             if (!agent) {
@@ -82,7 +97,14 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 where: {
                     OR: [{ slug: id }, { id: id }]
                 },
-                include: { tools: true }
+                include: {
+                    tools: true,
+                    skills: {
+                        include: {
+                            skill: { select: { id: true, slug: true, name: true, version: true } }
+                        }
+                    }
+                }
             });
 
             if (!existing) {
@@ -183,6 +205,24 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
             // Detect changes and build changesJson for version history
+            // Use deep comparison for JSON fields with sorted keys to avoid false positives/negatives
+            const sortedStringify = (val: unknown): string =>
+                JSON.stringify(val, (_, v) =>
+                    v && typeof v === "object" && !Array.isArray(v)
+                        ? Object.keys(v)
+                              .sort()
+                              .reduce(
+                                  (acc, key) => {
+                                      acc[key] = v[key];
+                                      return acc;
+                                  },
+                                  {} as Record<string, unknown>
+                              )
+                        : v
+                );
+            const jsonEqual = (a: unknown, b: unknown): boolean =>
+                sortedStringify(a) === sortedStringify(b);
+
             const changes: string[] = [];
 
             if (body.name !== undefined && body.name !== existing.name) {
@@ -216,7 +256,10 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     `Memory: ${existing.memoryEnabled ? "enabled" : "disabled"} → ${body.memoryEnabled ? "enabled" : "disabled"}`
                 );
             }
-            if (body.memoryConfig !== undefined) {
+            if (
+                body.memoryConfig !== undefined &&
+                !jsonEqual(body.memoryConfig, existing.memoryConfig)
+            ) {
                 changes.push("Updated memory configuration");
             }
             if (body.subAgents !== undefined) {
@@ -253,43 +296,63 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     changes.push(`Tools: ${existingToolIds.length} → ${newToolIds.length}`);
                 }
             }
-            if (body.extendedThinking !== undefined) {
-                const existingThinking =
-                    (existing.modelConfig as { thinking?: { type: string } })?.thinking?.type ===
-                    "enabled";
-                if (body.extendedThinking !== existingThinking) {
-                    changes.push(
-                        `Extended thinking: ${existingThinking ? "enabled" : "disabled"} → ${body.extendedThinking ? "enabled" : "disabled"}`
-                    );
-                }
+            if (body.metadata !== undefined && !jsonEqual(body.metadata, existing.metadata)) {
+                changes.push("Updated metadata");
             }
-            if (body.parallelToolCalls !== undefined) {
-                const existingParallel = (existing.modelConfig as { parallelToolCalls?: boolean })
-                    ?.parallelToolCalls;
-                if (body.parallelToolCalls !== existingParallel) {
-                    changes.push("Parallel tool calling updated");
+            if (hasModelConfigUpdate && !jsonEqual(updateData.modelConfig, existing.modelConfig)) {
+                // Build specific change descriptions for modelConfig sub-fields
+                if (body.extendedThinking !== undefined) {
+                    const existingThinking =
+                        (existing.modelConfig as { thinking?: { type: string } })?.thinking
+                            ?.type === "enabled";
+                    if (body.extendedThinking !== existingThinking) {
+                        changes.push(
+                            `Extended thinking: ${existingThinking ? "enabled" : "disabled"} → ${body.extendedThinking ? "enabled" : "disabled"}`
+                        );
+                    }
                 }
-            }
-            if (body.reasoningEffort !== undefined) {
-                const existingEffort = (existing.modelConfig as { reasoningEffort?: string })
-                    ?.reasoningEffort;
-                if (body.reasoningEffort !== existingEffort) {
-                    changes.push("Reasoning effort updated");
+                if (body.parallelToolCalls !== undefined) {
+                    const existingParallel = (
+                        existing.modelConfig as { parallelToolCalls?: boolean }
+                    )?.parallelToolCalls;
+                    if (body.parallelToolCalls !== existingParallel) {
+                        changes.push("Parallel tool calling updated");
+                    }
                 }
-            }
-            if (body.cacheControl !== undefined) {
-                const existingCache =
-                    (existing.modelConfig as { cacheControl?: { type?: string } })?.cacheControl
-                        ?.type === "ephemeral";
-                if (body.cacheControl !== existingCache) {
-                    changes.push("Prompt cache control updated");
+                if (body.reasoningEffort !== undefined) {
+                    const existingEffort = (existing.modelConfig as { reasoningEffort?: string })
+                        ?.reasoningEffort;
+                    if (body.reasoningEffort !== existingEffort) {
+                        changes.push("Reasoning effort updated");
+                    }
                 }
-            }
-            if (body.toolChoice !== undefined) {
-                const existingToolChoice = (existing.modelConfig as { toolChoice?: string })
-                    ?.toolChoice;
-                if (body.toolChoice !== existingToolChoice) {
-                    changes.push("Tool choice updated");
+                if (body.cacheControl !== undefined) {
+                    const existingCache =
+                        (existing.modelConfig as { cacheControl?: { type?: string } })?.cacheControl
+                            ?.type === "ephemeral";
+                    if (body.cacheControl !== existingCache) {
+                        changes.push("Prompt cache control updated");
+                    }
+                }
+                if (body.toolChoice !== undefined) {
+                    const existingToolChoice = (existing.modelConfig as { toolChoice?: string })
+                        ?.toolChoice;
+                    if (body.toolChoice !== existingToolChoice) {
+                        changes.push("Tool choice updated");
+                    }
+                }
+                // If modelConfig changed but no specific sub-field produced a description, add generic
+                if (
+                    !changes.some(
+                        (c) =>
+                            c.includes("thinking") ||
+                            c.includes("Parallel") ||
+                            c.includes("Reasoning") ||
+                            c.includes("cache") ||
+                            c.includes("Tool choice")
+                    )
+                ) {
+                    changes.push("Updated model configuration");
                 }
             }
             if (body.isActive !== undefined && body.isActive !== existing.isActive) {
@@ -303,15 +366,40 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 );
             }
 
+            // Determine if there are actual data changes beyond what the change descriptions cover
+            // This catches any field update even if the specific change description logic missed it
+            const hasDataChanges =
+                changes.length > 0 ||
+                Object.keys(updateData).some((key) => {
+                    if (key === "version") return false; // skip version field itself
+                    const existingVal = (existing as Record<string, unknown>)[key];
+                    const newVal = (updateData as Record<string, unknown>)[key];
+                    return !jsonEqual(existingVal, newVal);
+                });
+
+            // Also check tools separately since they're updated outside updateData
+            const hasToolChanges =
+                body.tools !== undefined &&
+                Array.isArray(body.tools) &&
+                JSON.stringify(existing.tools.map((t) => t.toolId).sort()) !==
+                    JSON.stringify([...body.tools].sort());
+
+            const shouldVersion = hasDataChanges || hasToolChanges;
+
             // Create version snapshot if there are actual changes
-            if (changes.length > 0) {
+            if (shouldVersion) {
+                // If we detected data changes but no specific change descriptions, add a generic one
+                if (changes.length === 0) {
+                    changes.push("Configuration updated");
+                }
+
                 // Get the next version number from AgentVersion table
                 const lastVersion = await prisma.agentVersion.findFirst({
                     where: { agentId: existing.id },
                     orderBy: { version: "desc" },
                     select: { version: true }
                 });
-                const nextVersion = (lastVersion?.version || 0) + 1;
+                const nextVersion = (lastVersion?.version || existing.version || 0) + 1;
 
                 // Build full snapshot of current state (before changes)
                 const snapshot = {
@@ -331,39 +419,49 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     workflows: existing.workflows,
                     scorers: existing.scorers,
                     tools: existing.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
+                    skills: existing.skills.map((s) => ({
+                        skillId: s.skillId,
+                        skillSlug: s.skill.slug,
+                        skillVersion: s.skill.version
+                    })),
                     isPublic: existing.isPublic,
                     isActive: existing.isActive,
                     metadata: existing.metadata
                 };
 
-                // Create version record
-                await prisma.agentVersion.create({
-                    data: {
-                        agentId: existing.id,
-                        tenantId: existing.tenantId,
-                        version: nextVersion,
-                        description:
-                            changes.length === 1
-                                ? changes[0]
-                                : `${changes.length} configuration changes`,
-                        instructions: existing.instructions,
-                        modelProvider: existing.modelProvider,
-                        modelName: existing.modelName,
-                        changesJson: changes,
-                        snapshot,
-                        createdBy: body.createdBy || null
-                    }
-                });
-
-                // Add version to updateData
-                updateData.version = nextVersion;
+                // Create version record and update agent atomically
+                await prisma.$transaction([
+                    prisma.agentVersion.create({
+                        data: {
+                            agentId: existing.id,
+                            tenantId: existing.tenantId,
+                            version: nextVersion,
+                            description:
+                                changes.length === 1
+                                    ? changes[0]
+                                    : `${changes.length} configuration changes`,
+                            instructions: existing.instructions,
+                            modelProvider: existing.modelProvider,
+                            modelName: existing.modelName,
+                            changesJson: changes,
+                            snapshot,
+                            createdBy: body.createdBy || null
+                        }
+                    }),
+                    prisma.agent.update({
+                        where: { id: existing.id },
+                        data: { ...updateData, version: nextVersion }
+                    })
+                ]);
+            } else {
+                // No version-worthy changes, but still apply any updateData
+                if (Object.keys(updateData).length > 0) {
+                    await prisma.agent.update({
+                        where: { id: existing.id },
+                        data: updateData
+                    });
+                }
             }
-
-            // Update agent
-            await prisma.agent.update({
-                where: { id: existing.id },
-                data: updateData
-            });
 
             // Update tools if provided
             if (body.tools !== undefined && Array.isArray(body.tools)) {

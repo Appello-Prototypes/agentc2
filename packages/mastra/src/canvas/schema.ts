@@ -585,10 +585,7 @@ export type CanvasLayout = z.infer<typeof CanvasLayoutSchema>;
 export const CanvasThemeSchema = z
     .object({
         primaryColor: z.string().optional().describe("Primary accent color (any valid CSS color)"),
-        backgroundColor: z
-            .string()
-            .optional()
-            .describe("Canvas background color override"),
+        backgroundColor: z.string().optional().describe("Canvas background color override"),
         cardBackground: z.string().optional().describe("Card/block background color"),
         cardBorder: z.string().optional().describe("Card/block border color"),
         textColor: z.string().optional().describe("Primary text color"),

@@ -31,9 +31,9 @@ export async function POST(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "skillId is required" }, { status: 400 });
         }
 
-        const junction = await skillAttachToAgent(agentId, skillId);
+        const result = await skillAttachToAgent(agentId, skillId);
 
-        return NextResponse.json(junction, { status: 201 });
+        return NextResponse.json(result, { status: 201 });
     } catch (error) {
         console.error("Attach skill to agent error:", error);
         return NextResponse.json(
@@ -68,9 +68,9 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "skillId is required" }, { status: 400 });
         }
 
-        await skillDetachFromAgent(agentId, skillId);
+        const result = await skillDetachFromAgent(agentId, skillId);
 
-        return NextResponse.json({ success: true });
+        return NextResponse.json({ success: true, ...result });
     } catch (error) {
         console.error("Detach skill from agent error:", error);
         return NextResponse.json(

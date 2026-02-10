@@ -21,10 +21,7 @@
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import {
-    CallToolRequestSchema,
-    ListToolsRequestSchema
-} from "@modelcontextprotocol/sdk/types.js";
+import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 /**
  * Internal base URL for calling the /api/mcp gateway.

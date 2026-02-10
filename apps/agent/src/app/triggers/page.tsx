@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -36,6 +36,16 @@ import {
 import { getApiBase } from "@/lib/utils";
 import RunDetailPanel from "@/components/RunDetailPanel";
 import type { RunDetail } from "@/components/run-detail-utils";
+import {
+    formatLatency as fmtLatency,
+    formatRelativeTime as fmtRelTime,
+    formatCost,
+    formatTokens,
+    formatModelLabel,
+    getStatusBadgeVariant,
+    getSourceBadgeColor as getRunSourceBadgeColor,
+    getDateRange as getDateRangeUtil
+} from "@/components/run-detail-utils";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Shared helpers
@@ -55,22 +65,6 @@ function formatRelativeTime(dateStr: string | null | undefined): string {
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-}
-
-function formatFutureTime(dateStr: string | null | undefined): string {
-    if (!dateStr) return "—";
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffMs = date.getTime() - now.getTime();
-    if (diffMs <= 0) return "now";
-    const diffSecs = Math.floor(diffMs / 1000);
-    const diffMins = Math.floor(diffSecs / 60);
-    const diffHours = Math.floor(diffMins / 60);
-
-    if (diffSecs < 60) return `${diffSecs}s`;
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
     return date.toLocaleDateString();
 }
 
@@ -178,34 +172,68 @@ interface AutomationSummary {
     overallSuccessRate: number;
 }
 
-interface AutomationRun {
+/** Enriched run shape matching Live Runs schema. */
+interface AutomationRunEnriched {
     id: string;
+    agentId: string | null;
+    agentSlug: string | null;
+    agentName: string | null;
+    runType: string | null;
     status: string;
-    startedAt: string;
-    completedAt: string | null;
+    source: string | null;
+    sessionId: string | null;
+    threadId: string | null;
+    inputText: string | null;
+    outputText: string | null;
     durationMs: number | null;
-    inputPreview: string | null;
-    outputPreview: string | null;
-    error: string | null;
+    startedAt: string | null;
+    completedAt: string | null;
+    modelProvider: string | null;
+    modelName: string | null;
+    promptTokens: number | null;
+    completionTokens: number | null;
+    totalTokens: number | null;
+    costUsd: number | null;
+    toolCallCount: number;
+    uniqueToolCount: number;
+    versionId: string | null;
+    versionNumber: number | null;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Automation Registry Tab
+// Automation Registry Tab (Accordion + Runs Table + RunDetailPanel)
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/** Number of columns in the parent automation table. */
+const PARENT_COL_COUNT = 9;
 
 function AutomationRegistryTab() {
     const router = useRouter();
     const apiBase = getApiBase();
 
+    // ── Automations list state ───────────────────────────────────────
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [summary, setSummary] = useState<AutomationSummary | null>(null);
-    const [selectedAutomation, setSelectedAutomation] = useState<Automation | null>(null);
-    const [detailRuns, setDetailRuns] = useState<AutomationRun[]>([]);
-    const [detailLoading, setDetailLoading] = useState(false);
     const [toggling, setToggling] = useState<string | null>(null);
 
+    // ── Accordion expansion state ────────────────────────────────────
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [automationRuns, setAutomationRuns] = useState<Map<string, AutomationRunEnriched[]>>(
+        new Map()
+    );
+    const [runsLoading, setRunsLoading] = useState<string | null>(null);
+    const [runStatusFilter, setRunStatusFilter] = useState("all");
+    const [runTimeFilter, setRunTimeFilter] = useState("all");
+
+    // ── Run inspector (right panel) state ────────────────────────────
+    const [selectedRun, setSelectedRun] = useState<AutomationRunEnriched | null>(null);
+    const [selectedRunAutomation, setSelectedRunAutomation] = useState<Automation | null>(null);
+    const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
+    const [runDetailLoading, setRunDetailLoading] = useState(false);
+
+    // ── Fetch automations list ───────────────────────────────────────
     const fetchAutomations = useCallback(async () => {
         try {
             const res = await fetch(`${apiBase}/api/live/automations`);
@@ -225,27 +253,59 @@ function AutomationRegistryTab() {
         }
     }, [apiBase]);
 
-    const fetchDetailRuns = useCallback(
-        async (automationId: string) => {
-            setDetailLoading(true);
-            setDetailRuns([]);
+    // ── Fetch enriched runs for an automation ────────────────────────
+    const fetchAutomationRuns = useCallback(
+        async (automationId: string, status?: string, timeRange?: string) => {
+            setRunsLoading(automationId);
             try {
+                const params = new URLSearchParams({ limit: "20" });
+                if (status && status !== "all") params.set("status", status);
+                if (timeRange && timeRange !== "all") {
+                    const { from } = getDateRangeUtil(timeRange);
+                    if (from) params.set("from", from.toISOString());
+                }
                 const res = await fetch(
-                    `${apiBase}/api/live/automations/${encodeURIComponent(automationId)}?limit=10`
+                    `${apiBase}/api/live/automations/${encodeURIComponent(automationId)}?${params.toString()}`
                 );
                 const data = await res.json();
                 if (data.success) {
-                    setDetailRuns(data.runs || []);
+                    setAutomationRuns((prev) => {
+                        const next = new Map(prev);
+                        next.set(automationId, data.runs || []);
+                        return next;
+                    });
                 }
             } catch {
-                // Silently handle -- detail panel shows empty
+                // Silently handle
             } finally {
-                setDetailLoading(false);
+                setRunsLoading(null);
             }
         },
         [apiBase]
     );
 
+    // ── Fetch full run detail for right panel ────────────────────────
+    const fetchRunDetail = useCallback(
+        async (run: AutomationRunEnriched) => {
+            if (!run.agentSlug) return;
+            setRunDetailLoading(true);
+            setRunDetail(null);
+            try {
+                const res = await fetch(`${apiBase}/api/agents/${run.agentSlug}/runs/${run.id}`);
+                const data = await res.json();
+                if (data.success) {
+                    setRunDetail(data.run);
+                }
+            } catch (err) {
+                console.error("Failed to fetch run detail:", err);
+            } finally {
+                setRunDetailLoading(false);
+            }
+        },
+        [apiBase]
+    );
+
+    // ── Toggle automation active/paused ──────────────────────────────
     const toggleAutomation = useCallback(
         async (automation: Automation) => {
             if (automation.sourceType === "implicit") return;
@@ -261,17 +321,11 @@ function AutomationRegistryTab() {
                 );
                 const data = await res.json();
                 if (data.success) {
-                    // Update local state
                     setAutomations((prev) =>
                         prev.map((a) =>
                             a.id === automation.id ? { ...a, isActive: !a.isActive } : a
                         )
                     );
-                    if (selectedAutomation?.id === automation.id) {
-                        setSelectedAutomation((prev) =>
-                            prev ? { ...prev, isActive: !prev.isActive } : prev
-                        );
-                    }
                 }
             } catch {
                 // Silently handle
@@ -279,9 +333,37 @@ function AutomationRegistryTab() {
                 setToggling(null);
             }
         },
-        [apiBase, selectedAutomation]
+        [apiBase]
     );
 
+    // ── Row click: toggle accordion ──────────────────────────────────
+    const handleAutomationRowClick = useCallback(
+        (automation: Automation) => {
+            if (expandedId === automation.id) {
+                // Collapse
+                setExpandedId(null);
+            } else {
+                // Expand + fetch runs
+                setExpandedId(automation.id);
+                setRunStatusFilter("all");
+                setRunTimeFilter("all");
+                fetchAutomationRuns(automation.id);
+            }
+        },
+        [expandedId, fetchAutomationRuns]
+    );
+
+    // ── Run row click: select for right panel ────────────────────────
+    const handleRunClick = useCallback(
+        (run: AutomationRunEnriched, automation: Automation) => {
+            setSelectedRun(run);
+            setSelectedRunAutomation(automation);
+            fetchRunDetail(run);
+        },
+        [fetchRunDetail]
+    );
+
+    // ── Effects ──────────────────────────────────────────────────────
     useEffect(() => {
         fetchAutomations();
     }, [fetchAutomations]);
@@ -292,16 +374,43 @@ function AutomationRegistryTab() {
         return () => clearInterval(interval);
     }, [fetchAutomations]);
 
+    // Re-fetch runs when inline filters change
     useEffect(() => {
-        if (selectedAutomation) {
-            fetchDetailRuns(selectedAutomation.id);
+        if (expandedId) {
+            fetchAutomationRuns(expandedId, runStatusFilter, runTimeFilter);
         }
-    }, [selectedAutomation, fetchDetailRuns]);
+    }, [runStatusFilter, runTimeFilter, expandedId, fetchAutomationRuns]);
 
-    const handleRowClick = (automation: Automation) => {
-        setSelectedAutomation(automation);
-    };
+    // Auto-expand: pick the automation with the most recent failure or most recent lastRunAt
+    useEffect(() => {
+        if (!loading && automations.length > 0 && expandedId === null) {
+            // Prefer automation with failures and lowest success rate
+            const withFailures = automations
+                .filter((a) => a.stats.failedRuns > 0)
+                .sort((a, b) => a.stats.successRate - b.stats.successRate);
+            if (withFailures.length > 0) {
+                setExpandedId(withFailures[0]!.id);
+                fetchAutomationRuns(withFailures[0]!.id);
+                return;
+            }
+            // Otherwise pick the most recently run automation
+            const sorted = [...automations]
+                .filter((a) => a.stats.lastRunAt)
+                .sort(
+                    (a, b) =>
+                        new Date(b.stats.lastRunAt!).getTime() -
+                        new Date(a.stats.lastRunAt!).getTime()
+                );
+            if (sorted.length > 0) {
+                setExpandedId(sorted[0]!.id);
+                fetchAutomationRuns(sorted[0]!.id);
+            }
+        }
+        // Only run on first load
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading]);
 
+    // ── Render ───────────────────────────────────────────────────────
     if (loading) {
         return (
             <div className="space-y-6">
@@ -370,9 +479,9 @@ function AutomationRegistryTab() {
                 </Card>
             </div>
 
-            {/* Main content */}
+            {/* Main content: Accordion table (left) + Run Inspector (right) */}
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                {/* Automation table */}
+                {/* Automation table with inline expansion */}
                 <Card>
                     <CardHeader>
                         <div className="flex items-start justify-between gap-4">
@@ -404,6 +513,7 @@ function AutomationRegistryTab() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
+                                            <TableHead className="w-6" />
                                             <TableHead>Name</TableHead>
                                             <TableHead>Type</TableHead>
                                             <TableHead>Agent</TableHead>
@@ -412,142 +522,416 @@ function AutomationRegistryTab() {
                                             <TableHead>Health</TableHead>
                                             <TableHead>Runs</TableHead>
                                             <TableHead>Last Run</TableHead>
-                                            <TableHead>Next Run</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {automations.map((automation) => {
-                                            const isSelected =
-                                                selectedAutomation?.id === automation.id;
+                                            const isExpanded = expandedId === automation.id;
+                                            const runs = automationRuns.get(automation.id) || [];
+                                            const isLoadingRuns = runsLoading === automation.id;
+
                                             return (
-                                                <TableRow
-                                                    key={automation.id}
-                                                    className={`cursor-pointer ${isSelected ? "bg-muted/50" : ""}`}
-                                                    onClick={() => handleRowClick(automation)}
-                                                >
-                                                    <TableCell>
-                                                        <div>
-                                                            <p className="font-medium">
-                                                                {automation.name}
-                                                            </p>
-                                                            {automation.description && (
-                                                                <p className="text-muted-foreground max-w-[200px] truncate text-xs">
-                                                                    {automation.description}
-                                                                </p>
-                                                            )}
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge
-                                                            className={getTypeBadgeColor(
-                                                                automation.type
-                                                            )}
-                                                        >
-                                                            {getTypeLabel(automation.type)}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {automation.agent ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    router.push(
-                                                                        `/agents/${automation.agent!.slug}/overview`
-                                                                    );
-                                                                }}
-                                                                className="hover:text-primary text-sm font-medium"
-                                                            >
-                                                                {automation.agent.name}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">
-                                                                —
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <span className="font-mono text-xs">
-                                                            {automation.config.cronExpr ||
-                                                                automation.config.eventName ||
-                                                                automation.config.webhookPath ||
-                                                                "—"}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {automation.sourceType === "implicit" ? (
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="text-muted-foreground"
-                                                            >
-                                                                Always On
-                                                            </Badge>
-                                                        ) : (
-                                                            <div
-                                                                className="flex items-center gap-2"
-                                                                onClick={(e) => e.stopPropagation()}
-                                                            >
-                                                                <Switch
-                                                                    checked={automation.isActive}
-                                                                    onCheckedChange={() =>
-                                                                        toggleAutomation(automation)
-                                                                    }
-                                                                    disabled={
-                                                                        toggling === automation.id
-                                                                    }
-                                                                />
-                                                                <span className="text-xs">
-                                                                    {automation.isActive
-                                                                        ? "Active"
-                                                                        : "Paused"}
-                                                                </span>
-                                                            </div>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {automation.stats.totalRuns > 0 ? (
+                                                <Fragment key={automation.id}>
+                                                    {/* Parent automation row */}
+                                                    <TableRow
+                                                        className={`cursor-pointer ${isExpanded ? "bg-muted/50 border-b-0" : ""}`}
+                                                        onClick={() =>
+                                                            handleAutomationRowClick(automation)
+                                                        }
+                                                    >
+                                                        <TableCell className="w-6 px-2">
                                                             <span
-                                                                className={`text-sm font-semibold ${getSuccessRateColor(automation.stats.successRate)}`}
+                                                                className={`inline-block text-xs transition-transform ${isExpanded ? "rotate-90" : ""}`}
                                                             >
-                                                                {automation.stats.successRate}%
+                                                                ▶
                                                             </span>
-                                                        ) : (
-                                                            <span className="text-muted-foreground text-sm">
-                                                                —
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <span className="text-sm">
-                                                            {automation.stats.totalRuns}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <span
-                                                            className="text-muted-foreground text-sm"
-                                                            title={
-                                                                automation.stats.lastRunAt
-                                                                    ? new Date(
-                                                                          automation.stats.lastRunAt
-                                                                      ).toLocaleString()
-                                                                    : undefined
-                                                            }
-                                                        >
-                                                            {formatRelativeTime(
-                                                                automation.stats.lastRunAt
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div>
+                                                                <p className="font-medium">
+                                                                    {automation.name}
+                                                                </p>
+                                                                {automation.description && (
+                                                                    <p className="text-muted-foreground max-w-[200px] truncate text-xs">
+                                                                        {automation.description}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <Badge
+                                                                className={getTypeBadgeColor(
+                                                                    automation.type
+                                                                )}
+                                                            >
+                                                                {getTypeLabel(automation.type)}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {automation.agent ? (
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        router.push(
+                                                                            `/agents/${automation.agent!.slug}/overview`
+                                                                        );
+                                                                    }}
+                                                                    className="hover:text-primary text-sm font-medium"
+                                                                >
+                                                                    {automation.agent.name}
+                                                                </button>
+                                                            ) : (
+                                                                <span className="text-muted-foreground">
+                                                                    —
+                                                                </span>
                                                             )}
-                                                        </span>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <span className="text-muted-foreground text-sm">
-                                                            {automation.stats.nextRunAt
-                                                                ? formatFutureTime(
-                                                                      automation.stats.nextRunAt
-                                                                  )
-                                                                : "—"}
-                                                        </span>
-                                                    </TableCell>
-                                                </TableRow>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className="font-mono text-xs">
+                                                                {automation.config.cronExpr ||
+                                                                    automation.config.eventName ||
+                                                                    automation.config.webhookPath ||
+                                                                    "—"}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {automation.sourceType ===
+                                                            "implicit" ? (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-muted-foreground"
+                                                                >
+                                                                    Always On
+                                                                </Badge>
+                                                            ) : (
+                                                                <div
+                                                                    className="flex items-center gap-2"
+                                                                    onClick={(e) =>
+                                                                        e.stopPropagation()
+                                                                    }
+                                                                >
+                                                                    <Switch
+                                                                        checked={
+                                                                            automation.isActive
+                                                                        }
+                                                                        onCheckedChange={() =>
+                                                                            toggleAutomation(
+                                                                                automation
+                                                                            )
+                                                                        }
+                                                                        disabled={
+                                                                            toggling ===
+                                                                            automation.id
+                                                                        }
+                                                                    />
+                                                                    <span className="text-xs">
+                                                                        {automation.isActive
+                                                                            ? "Active"
+                                                                            : "Paused"}
+                                                                    </span>
+                                                                </div>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {automation.stats.totalRuns > 0 ? (
+                                                                <span
+                                                                    className={`text-sm font-semibold ${getSuccessRateColor(automation.stats.successRate)}`}
+                                                                >
+                                                                    {automation.stats.successRate}%
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-muted-foreground text-sm">
+                                                                    —
+                                                                </span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className="text-sm">
+                                                                {automation.stats.totalRuns}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span
+                                                                className="text-muted-foreground text-sm"
+                                                                title={
+                                                                    automation.stats.lastRunAt
+                                                                        ? new Date(
+                                                                              automation.stats
+                                                                                  .lastRunAt
+                                                                          ).toLocaleString()
+                                                                        : undefined
+                                                                }
+                                                            >
+                                                                {formatRelativeTime(
+                                                                    automation.stats.lastRunAt
+                                                                )}
+                                                            </span>
+                                                        </TableCell>
+                                                    </TableRow>
+
+                                                    {/* Expanded inline runs table */}
+                                                    {isExpanded && (
+                                                        <TableRow className="hover:bg-transparent">
+                                                            <TableCell
+                                                                colSpan={PARENT_COL_COUNT}
+                                                                className="bg-muted/20 px-4 py-3"
+                                                            >
+                                                                {/* Inline filter bar */}
+                                                                <div className="mb-3 flex items-center gap-2">
+                                                                    <span className="text-muted-foreground text-xs font-medium">
+                                                                        Runs
+                                                                    </span>
+                                                                    <div className="flex items-center gap-1">
+                                                                        <Badge
+                                                                            variant={
+                                                                                runStatusFilter ===
+                                                                                "all"
+                                                                                    ? "default"
+                                                                                    : "outline"
+                                                                            }
+                                                                            className="cursor-pointer text-xs"
+                                                                            onClick={() =>
+                                                                                setRunStatusFilter(
+                                                                                    "all"
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            All
+                                                                        </Badge>
+                                                                        <Badge
+                                                                            variant={
+                                                                                runStatusFilter ===
+                                                                                "failed"
+                                                                                    ? "destructive"
+                                                                                    : "outline"
+                                                                            }
+                                                                            className="cursor-pointer text-xs"
+                                                                            onClick={() =>
+                                                                                setRunStatusFilter(
+                                                                                    "failed"
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Failed
+                                                                        </Badge>
+                                                                        <Badge
+                                                                            variant={
+                                                                                runStatusFilter ===
+                                                                                "completed"
+                                                                                    ? "default"
+                                                                                    : "outline"
+                                                                            }
+                                                                            className="cursor-pointer text-xs"
+                                                                            onClick={() =>
+                                                                                setRunStatusFilter(
+                                                                                    "completed"
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Completed
+                                                                        </Badge>
+                                                                        <Badge
+                                                                            variant={
+                                                                                runStatusFilter ===
+                                                                                "running"
+                                                                                    ? "secondary"
+                                                                                    : "outline"
+                                                                            }
+                                                                            className="cursor-pointer text-xs"
+                                                                            onClick={() =>
+                                                                                setRunStatusFilter(
+                                                                                    "running"
+                                                                                )
+                                                                            }
+                                                                        >
+                                                                            Running
+                                                                        </Badge>
+                                                                    </div>
+                                                                    <Separator
+                                                                        orientation="vertical"
+                                                                        className="mx-1 h-4"
+                                                                    />
+                                                                    <Select
+                                                                        value={runTimeFilter}
+                                                                        onValueChange={(v) =>
+                                                                            setRunTimeFilter(
+                                                                                v ?? "all"
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        <SelectTrigger className="h-7 w-24 text-xs">
+                                                                            <SelectValue placeholder="Time" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="all">
+                                                                                All Time
+                                                                            </SelectItem>
+                                                                            <SelectItem value="24h">
+                                                                                Last 24h
+                                                                            </SelectItem>
+                                                                            <SelectItem value="7d">
+                                                                                Last 7d
+                                                                            </SelectItem>
+                                                                            <SelectItem value="30d">
+                                                                                Last 30d
+                                                                            </SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+
+                                                                {/* Runs table */}
+                                                                {isLoadingRuns ? (
+                                                                    <div className="space-y-2">
+                                                                        {Array.from({
+                                                                            length: 4
+                                                                        }).map((_, i) => (
+                                                                            <Skeleton
+                                                                                key={i}
+                                                                                className="h-10 w-full"
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                ) : runs.length === 0 ? (
+                                                                    <p className="text-muted-foreground py-6 text-center text-sm">
+                                                                        No runs recorded
+                                                                        {runStatusFilter !== "all"
+                                                                            ? " matching this filter"
+                                                                            : ""}
+                                                                    </p>
+                                                                ) : (
+                                                                    <div className="overflow-auto rounded-md border">
+                                                                        <Table>
+                                                                            <TableHeader>
+                                                                                <TableRow>
+                                                                                    <TableHead>
+                                                                                        Run ID
+                                                                                    </TableHead>
+                                                                                    <TableHead>
+                                                                                        Status
+                                                                                    </TableHead>
+                                                                                    <TableHead>
+                                                                                        Source
+                                                                                    </TableHead>
+                                                                                    <TableHead>
+                                                                                        Model
+                                                                                    </TableHead>
+                                                                                    <TableHead className="text-right">
+                                                                                        Duration
+                                                                                    </TableHead>
+                                                                                    <TableHead className="text-right">
+                                                                                        Tokens
+                                                                                    </TableHead>
+                                                                                    <TableHead className="text-right">
+                                                                                        Cost
+                                                                                    </TableHead>
+                                                                                    <TableHead className="text-right">
+                                                                                        Time
+                                                                                    </TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {runs.map((run) => {
+                                                                                    const isRunSelected =
+                                                                                        selectedRun?.id ===
+                                                                                        run.id;
+                                                                                    return (
+                                                                                        <TableRow
+                                                                                            key={
+                                                                                                run.id
+                                                                                            }
+                                                                                            className={`cursor-pointer ${isRunSelected ? "bg-muted/50" : ""}`}
+                                                                                            onClick={(
+                                                                                                e
+                                                                                            ) => {
+                                                                                                e.stopPropagation();
+                                                                                                handleRunClick(
+                                                                                                    run,
+                                                                                                    automation
+                                                                                                );
+                                                                                            }}
+                                                                                        >
+                                                                                            <TableCell className="font-mono text-xs">
+                                                                                                {run.id.slice(
+                                                                                                    0,
+                                                                                                    8
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                            <TableCell>
+                                                                                                <Badge
+                                                                                                    variant={getStatusBadgeVariant(
+                                                                                                        run.status
+                                                                                                    )}
+                                                                                                >
+                                                                                                    {
+                                                                                                        run.status
+                                                                                                    }
+                                                                                                </Badge>
+                                                                                            </TableCell>
+                                                                                            <TableCell>
+                                                                                                {run.source ? (
+                                                                                                    <Badge
+                                                                                                        className={getRunSourceBadgeColor(
+                                                                                                            run.source
+                                                                                                        )}
+                                                                                                    >
+                                                                                                        {
+                                                                                                            run.source
+                                                                                                        }
+                                                                                                    </Badge>
+                                                                                                ) : (
+                                                                                                    "—"
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-xs">
+                                                                                                {formatModelLabel(
+                                                                                                    run.modelName,
+                                                                                                    run.modelProvider
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-right">
+                                                                                                {run.durationMs
+                                                                                                    ? fmtLatency(
+                                                                                                          run.durationMs
+                                                                                                      )
+                                                                                                    : "—"}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-right">
+                                                                                                {formatTokens(
+                                                                                                    run.totalTokens
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-right">
+                                                                                                {formatCost(
+                                                                                                    run.costUsd
+                                                                                                )}
+                                                                                            </TableCell>
+                                                                                            <TableCell className="text-muted-foreground text-right">
+                                                                                                <span
+                                                                                                    title={
+                                                                                                        run.startedAt
+                                                                                                            ? new Date(
+                                                                                                                  run.startedAt
+                                                                                                              ).toLocaleString()
+                                                                                                            : undefined
+                                                                                                    }
+                                                                                                >
+                                                                                                    {fmtRelTime(
+                                                                                                        run.startedAt
+                                                                                                    )}
+                                                                                                </span>
+                                                                                            </TableCell>
+                                                                                        </TableRow>
+                                                                                    );
+                                                                                })}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    </div>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    )}
+                                                </Fragment>
                                             );
                                         })}
                                     </TableBody>
@@ -557,91 +941,84 @@ function AutomationRegistryTab() {
                     </CardContent>
                 </Card>
 
-                {/* Detail panel */}
+                {/* Right panel: Unified Run Inspector */}
                 <Card className="flex flex-col">
                     <CardHeader className="space-y-3">
                         <div className="flex items-start justify-between gap-3">
                             <div>
                                 <CardTitle className="text-lg">
-                                    {selectedAutomation?.name || "Automation Detail"}
+                                    {selectedRun && selectedRunAutomation
+                                        ? selectedRunAutomation.name
+                                        : "Run Detail"}
                                 </CardTitle>
                                 <CardDescription>
-                                    {selectedAutomation
-                                        ? selectedAutomation.description ||
-                                          `${getTypeLabel(selectedAutomation.type)} automation`
-                                        : "Select an automation to view details and run history."}
+                                    {selectedRun
+                                        ? `Run ID: ${selectedRun.id}`
+                                        : "Click a run to inspect trace, tools, and context."}
                                 </CardDescription>
                             </div>
-                            {selectedAutomation?.agent && (
-                                <Link href={`/agents/${selectedAutomation.agent.slug}/automation`}>
-                                    <Button variant="outline" size="sm">
-                                        Edit
-                                    </Button>
-                                </Link>
+                            {selectedRun && (
+                                <div className="flex items-center gap-2">
+                                    <Link href={`/live?search=${selectedRun.id}`}>
+                                        <Button variant="outline" size="sm">
+                                            Open in Live Runs
+                                        </Button>
+                                    </Link>
+                                </div>
                             )}
                         </div>
 
-                        {selectedAutomation && (
+                        {selectedRun && (
                             <>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Badge className={getTypeBadgeColor(selectedAutomation.type)}>
-                                        {getTypeLabel(selectedAutomation.type)}
+                                    <Badge variant={getStatusBadgeVariant(selectedRun.status)}>
+                                        {selectedRun.status}
                                     </Badge>
-                                    {selectedAutomation.agent && (
-                                        <Badge variant="outline">
-                                            {selectedAutomation.agent.name}
+                                    {selectedRun.source && (
+                                        <Badge
+                                            className={getRunSourceBadgeColor(selectedRun.source)}
+                                        >
+                                            {selectedRun.source}
                                         </Badge>
                                     )}
-                                    <Badge
-                                        variant={
-                                            selectedAutomation.isActive ? "default" : "secondary"
-                                        }
-                                    >
-                                        {selectedAutomation.isActive ? "Active" : "Paused"}
+                                    {selectedRun.versionNumber && (
+                                        <Badge variant="outline">
+                                            v{selectedRun.versionNumber}
+                                        </Badge>
+                                    )}
+                                    <Badge variant="outline">
+                                        {formatModelLabel(
+                                            selectedRun.modelName,
+                                            selectedRun.modelProvider
+                                        )}
                                     </Badge>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Total Runs</p>
+                                        <p className="text-muted-foreground text-xs">Duration</p>
                                         <p className="text-base font-semibold">
-                                            {selectedAutomation.stats.totalRuns}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">
-                                            Success Rate
-                                        </p>
-                                        <p
-                                            className={`text-base font-semibold ${getSuccessRateColor(selectedAutomation.stats.successRate)}`}
-                                        >
-                                            {selectedAutomation.stats.totalRuns > 0
-                                                ? `${selectedAutomation.stats.successRate}%`
+                                            {selectedRun.durationMs
+                                                ? fmtLatency(selectedRun.durationMs)
                                                 : "—"}
                                         </p>
                                     </div>
                                     <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">
-                                            Avg Duration
-                                        </p>
+                                        <p className="text-muted-foreground text-xs">Tokens</p>
                                         <p className="text-base font-semibold">
-                                            {formatLatency(selectedAutomation.stats.avgDurationMs)}
+                                            {formatTokens(selectedRun.totalTokens)}
                                         </p>
                                     </div>
                                     <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">
-                                            {selectedAutomation.stats.nextRunAt
-                                                ? "Next Run"
-                                                : "Last Run"}
-                                        </p>
+                                        <p className="text-muted-foreground text-xs">Cost</p>
                                         <p className="text-base font-semibold">
-                                            {selectedAutomation.stats.nextRunAt
-                                                ? formatFutureTime(
-                                                      selectedAutomation.stats.nextRunAt
-                                                  )
-                                                : formatRelativeTime(
-                                                      selectedAutomation.stats.lastRunAt
-                                                  )}
+                                            {formatCost(selectedRun.costUsd)}
+                                        </p>
+                                    </div>
+                                    <div className="bg-muted/50 rounded-lg p-3">
+                                        <p className="text-muted-foreground text-xs">Tool Calls</p>
+                                        <p className="text-base font-semibold">
+                                            {selectedRun.toolCallCount}
                                         </p>
                                     </div>
                                 </div>
@@ -649,117 +1026,27 @@ function AutomationRegistryTab() {
                         )}
                     </CardHeader>
                     <CardContent className="flex-1 overflow-hidden">
-                        {!selectedAutomation ? (
+                        {!selectedRun ? (
                             <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-12 text-center">
                                 <HugeiconsIcon icon={icons.activity!} className="size-10" />
                                 <p className="text-sm">
-                                    Select an automation to view its configuration and run history.
+                                    Expand an automation and click a run to view its trace, tools,
+                                    and latency breakdown.
                                 </p>
                             </div>
                         ) : (
-                            <div className="space-y-4">
-                                {/* Config section */}
-                                <div>
-                                    <h4 className="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
-                                        Configuration
-                                    </h4>
-                                    <div className="bg-muted/50 space-y-1 rounded-md p-3 font-mono text-xs">
-                                        {selectedAutomation.config.cronExpr && (
-                                            <div className="flex justify-between gap-4">
-                                                <span className="text-muted-foreground">Cron</span>
-                                                <span>{selectedAutomation.config.cronExpr}</span>
-                                            </div>
-                                        )}
-                                        {selectedAutomation.config.timezone && (
-                                            <div className="flex justify-between gap-4">
-                                                <span className="text-muted-foreground">
-                                                    Timezone
-                                                </span>
-                                                <span>{selectedAutomation.config.timezone}</span>
-                                            </div>
-                                        )}
-                                        {selectedAutomation.config.eventName && (
-                                            <div className="flex justify-between gap-4">
-                                                <span className="text-muted-foreground">Event</span>
-                                                <span>{selectedAutomation.config.eventName}</span>
-                                            </div>
-                                        )}
-                                        {selectedAutomation.config.webhookPath && (
-                                            <div className="flex justify-between gap-4">
-                                                <span className="text-muted-foreground">
-                                                    Webhook
-                                                </span>
-                                                <span className="truncate">
-                                                    {selectedAutomation.config.webhookPath}
-                                                </span>
-                                            </div>
-                                        )}
-                                        <div className="flex justify-between gap-4">
-                                            <span className="text-muted-foreground">Created</span>
-                                            <span>
-                                                {new Date(
-                                                    selectedAutomation.createdAt
-                                                ).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <Separator />
-
-                                {/* Recent runs */}
-                                <div>
-                                    <h4 className="text-muted-foreground mb-2 text-xs font-medium tracking-wider uppercase">
-                                        Recent Runs
-                                    </h4>
-                                    {detailLoading ? (
-                                        <div className="space-y-2">
-                                            {Array.from({ length: 5 }).map((_, i) => (
-                                                <Skeleton key={i} className="h-8 w-full" />
-                                            ))}
-                                        </div>
-                                    ) : detailRuns.length === 0 ? (
-                                        <p className="text-muted-foreground py-4 text-center text-sm">
-                                            No runs recorded yet
-                                        </p>
-                                    ) : (
-                                        <div className="space-y-1.5">
-                                            {detailRuns.map((run) => (
-                                                <div
-                                                    key={run.id}
-                                                    className="flex items-center justify-between rounded-md px-2 py-1.5 text-sm"
-                                                >
-                                                    <div className="flex items-center gap-2">
-                                                        <Badge
-                                                            variant={
-                                                                run.status === "COMPLETED"
-                                                                    ? "default"
-                                                                    : run.status === "FAILED"
-                                                                      ? "destructive"
-                                                                      : "secondary"
-                                                            }
-                                                            className="text-xs"
-                                                        >
-                                                            {formatStatusLabel(run.status)}
-                                                        </Badge>
-                                                        <span className="text-muted-foreground text-xs">
-                                                            {formatLatency(run.durationMs)}
-                                                        </span>
-                                                    </div>
-                                                    <span
-                                                        className="text-muted-foreground text-xs"
-                                                        title={new Date(
-                                                            run.startedAt
-                                                        ).toLocaleString()}
-                                                    >
-                                                        {formatRelativeTime(run.startedAt)}
-                                                    </span>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <RunDetailPanel
+                                runDetail={runDetail}
+                                loading={runDetailLoading}
+                                inputText={selectedRun.inputText ?? undefined}
+                                outputText={selectedRun.outputText}
+                                status={selectedRun.status}
+                                promptTokens={selectedRun.promptTokens}
+                                completionTokens={selectedRun.completionTokens}
+                                totalTokens={selectedRun.totalTokens}
+                                sessionId={selectedRun.sessionId}
+                                threadId={selectedRun.threadId}
+                            />
                         )}
                     </CardContent>
                 </Card>
@@ -1117,24 +1404,19 @@ function ActivityLogTab() {
         }
     }, []);
 
-    const fetchRunDetail = useCallback(
-        async (agentSlug: string, runId: string) => {
-            setRunDetailLoading(true);
-            setRunDetail(null);
-            try {
-                const res = await fetch(
-                    `${getApiBase()}/api/agents/${agentSlug}/runs/${runId}`
-                );
-                const data = await res.json();
-                if (data.success) setRunDetail(data.run);
-            } catch (err) {
-                console.error("Failed to fetch run detail:", err);
-            } finally {
-                setRunDetailLoading(false);
-            }
-        },
-        []
-    );
+    const fetchRunDetail = useCallback(async (agentSlug: string, runId: string) => {
+        setRunDetailLoading(true);
+        setRunDetail(null);
+        try {
+            const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs/${runId}`);
+            const data = await res.json();
+            if (data.success) setRunDetail(data.run);
+        } catch (err) {
+            console.error("Failed to fetch run detail:", err);
+        } finally {
+            setRunDetailLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         Promise.all([fetchFilters(), fetchMetrics(), fetchEvents()]).finally(() =>
@@ -1585,9 +1867,7 @@ function ActivityLogTab() {
                                                         <span className="text-muted-foreground">
                                                             Event
                                                         </span>
-                                                        <span>
-                                                            {eventDetail.eventName || "—"}
-                                                        </span>
+                                                        <span>{eventDetail.eventName || "—"}</span>
                                                     </div>
                                                     {eventDetail.run && (
                                                         <div className="flex items-center justify-between">
@@ -1638,9 +1918,7 @@ function ActivityLogTab() {
                         <Card className="flex flex-col">
                             <CardHeader className="space-y-2 pb-3">
                                 <CardTitle className="text-base">Run Detail</CardTitle>
-                                <CardDescription>
-                                    Run ID: {eventDetail.run.id}
-                                </CardDescription>
+                                <CardDescription>Run ID: {eventDetail.run.id}</CardDescription>
                             </CardHeader>
                             <CardContent className="flex-1 overflow-hidden">
                                 <RunDetailPanel
@@ -1679,28 +1957,30 @@ function AutomationsPageClient() {
     const initialTab = searchParams.get("tab") || "automations";
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div>
-                <h1 className="text-3xl font-bold">Automations</h1>
-                <p className="text-muted-foreground">
-                    Manage scheduled jobs, event triggers, and monitor all execution activity.
-                </p>
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div>
+                    <h1 className="text-3xl font-bold">Automations</h1>
+                    <p className="text-muted-foreground">
+                        Manage scheduled jobs, event triggers, and monitor all execution activity.
+                    </p>
+                </div>
+
+                <Tabs defaultValue={initialTab} className="space-y-6">
+                    <TabsList>
+                        <TabsTrigger value="automations">Automations</TabsTrigger>
+                        <TabsTrigger value="activity">Activity Log</TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="automations" className="mt-0">
+                        <AutomationRegistryTab />
+                    </TabsContent>
+
+                    <TabsContent value="activity" className="mt-0">
+                        <ActivityLogTab />
+                    </TabsContent>
+                </Tabs>
             </div>
-
-            <Tabs defaultValue={initialTab} className="space-y-6">
-                <TabsList>
-                    <TabsTrigger value="automations">Automations</TabsTrigger>
-                    <TabsTrigger value="activity">Activity Log</TabsTrigger>
-                </TabsList>
-
-                <TabsContent value="automations" className="mt-0">
-                    <AutomationRegistryTab />
-                </TabsContent>
-
-                <TabsContent value="activity" className="mt-0">
-                    <ActivityLogTab />
-                </TabsContent>
-            </Tabs>
         </div>
     );
 }

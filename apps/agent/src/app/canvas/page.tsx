@@ -7,6 +7,18 @@ import { Button, Badge, Skeleton } from "@repo/ui";
 import { PlusIcon, SearchIcon, LayoutDashboardIcon, TrashIcon, PencilIcon } from "lucide-react";
 import Link from "next/link";
 
+interface PreviewComponent {
+    type: string;
+    span: number;
+    row?: string;
+    title?: string;
+}
+
+interface CanvasPreview {
+    layout: { type: string; columns: number };
+    components: PreviewComponent[];
+}
+
 interface CanvasSummary {
     id: string;
     slug: string;
@@ -21,6 +33,107 @@ interface CanvasSummary {
     agentId: string | null;
     createdAt: string;
     updatedAt: string;
+    preview?: CanvasPreview;
+}
+
+// ─── Mini-preview block type → visual style mapping ────────────────────────
+const BLOCK_STYLES: Record<string, { bg: string; icon: string }> = {
+    // Charts
+    "bar-chart": { bg: "bg-blue-500/20", icon: "▐▌▐" },
+    "line-chart": { bg: "bg-blue-500/20", icon: "╱╲╱" },
+    "pie-chart": { bg: "bg-blue-500/20", icon: "◕" },
+    "area-chart": { bg: "bg-blue-500/20", icon: "▁▃▅" },
+    sparkline: { bg: "bg-blue-500/20", icon: "⌇" },
+    funnel: { bg: "bg-blue-500/20", icon: "▽" },
+    // Tables & Data
+    "data-table": { bg: "bg-emerald-500/20", icon: "▦" },
+    "detail-view": { bg: "bg-emerald-500/20", icon: "≡" },
+    "property-list": { bg: "bg-emerald-500/20", icon: "≣" },
+    list: { bg: "bg-emerald-500/20", icon: "☰" },
+    kanban: { bg: "bg-emerald-500/20", icon: "⫼" },
+    timeline: { bg: "bg-emerald-500/20", icon: "⏤" },
+    // KPIs & Metrics
+    "kpi-card": { bg: "bg-violet-500/20", icon: "#" },
+    "stat-card": { bg: "bg-violet-500/20", icon: "↑" },
+    "metric-row": { bg: "bg-violet-500/20", icon: "⋯" },
+    "progress-bar": { bg: "bg-violet-500/20", icon: "▰▰▱" },
+    // Interactive
+    "filter-bar": { bg: "bg-amber-500/20", icon: "▼" },
+    search: { bg: "bg-amber-500/20", icon: "⌕" },
+    form: { bg: "bg-amber-500/20", icon: "☐" },
+    "action-button": { bg: "bg-amber-500/20", icon: "▶" },
+    // Layout
+    text: { bg: "bg-zinc-500/15", icon: "T" },
+    tabs: { bg: "bg-zinc-500/15", icon: "⊞" },
+    accordion: { bg: "bg-zinc-500/15", icon: "▾" },
+    divider: { bg: "bg-zinc-500/15", icon: "—" },
+    image: { bg: "bg-zinc-500/15", icon: "◻" }
+};
+
+function CanvasMiniPreview({ preview }: { preview: CanvasPreview }) {
+    const { layout, components } = preview;
+    const cols = layout.columns || 12;
+
+    if (!components || components.length === 0) {
+        return (
+            <div className="flex h-full items-center justify-center">
+                <LayoutDashboardIcon className="text-muted-foreground/40 size-10" />
+            </div>
+        );
+    }
+
+    // Group components into rows
+    const rows: PreviewComponent[][] = [];
+    let currentRow: PreviewComponent[] = [];
+    let currentSpan = 0;
+
+    for (const comp of components) {
+        const span = Math.min(comp.span || 12, cols);
+        if (currentSpan + span > cols && currentRow.length > 0) {
+            rows.push(currentRow);
+            currentRow = [];
+            currentSpan = 0;
+        }
+        currentRow.push(comp);
+        currentSpan += span;
+    }
+    if (currentRow.length > 0) rows.push(currentRow);
+
+    // Limit to first ~5 rows so it fits in the thumbnail
+    const visibleRows = rows.slice(0, 5);
+    const hasMore = rows.length > 5;
+
+    return (
+        <div className="flex h-full flex-col gap-[3px] p-2.5">
+            {visibleRows.map((row, ri) => (
+                <div key={ri} className="flex min-h-0 flex-1 gap-[3px]">
+                    {row.map((comp, ci) => {
+                        const style = BLOCK_STYLES[comp.type] || {
+                            bg: "bg-zinc-500/15",
+                            icon: "?"
+                        };
+                        const widthPct = ((comp.span || 12) / cols) * 100;
+                        return (
+                            <div
+                                key={ci}
+                                className={`${style.bg} flex items-center justify-center rounded-[3px] text-[8px] leading-none opacity-80`}
+                                style={{ width: `${widthPct}%` }}
+                            >
+                                <span className="text-muted-foreground/70 select-none">
+                                    {style.icon}
+                                </span>
+                            </div>
+                        );
+                    })}
+                </div>
+            ))}
+            {hasMore && (
+                <div className="text-muted-foreground/40 mt-auto text-center text-[7px]">
+                    +{rows.length - 5} more
+                </div>
+            )}
+        </div>
+    );
 }
 
 export default function CanvasGalleryPage() {
@@ -161,9 +274,15 @@ export default function CanvasGalleryPage() {
                             className="bg-card group cursor-pointer rounded-lg border transition-shadow hover:shadow-md"
                             onClick={() => router.push(`/canvas/${canvas.slug}`)}
                         >
-                            {/* Thumbnail placeholder */}
-                            <div className="bg-muted/50 flex h-32 items-center justify-center rounded-t-lg">
-                                <LayoutDashboardIcon className="text-muted-foreground/40 size-10" />
+                            {/* Canvas preview */}
+                            <div className="bg-muted/50 h-32 overflow-hidden rounded-t-lg">
+                                {canvas.preview && canvas.preview.components.length > 0 ? (
+                                    <CanvasMiniPreview preview={canvas.preview} />
+                                ) : (
+                                    <div className="flex h-full items-center justify-center">
+                                        <LayoutDashboardIcon className="text-muted-foreground/40 size-10" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Info */}

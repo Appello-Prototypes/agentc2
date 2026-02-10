@@ -433,489 +433,516 @@ export default function WorkflowsPage() {
 
     if (loading) {
         return (
-            <div className="container mx-auto space-y-6 py-6">
-                <Skeleton className="h-8 w-48" />
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <Skeleton key={i} className="h-24" />
-                    ))}
+            <div className="h-full overflow-y-auto">
+                <div className="container mx-auto space-y-6 py-6">
+                    <Skeleton className="h-8 w-48" />
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                        {[1, 2, 3, 4, 5, 6].map((i) => (
+                            <Skeleton key={i} className="h-24" />
+                        ))}
+                    </div>
+                    <Skeleton className="h-96" />
                 </div>
-                <Skeleton className="h-96" />
             </div>
         );
     }
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <h1 className="text-3xl font-bold">Workflows</h1>
-                    <p className="text-muted-foreground">
-                        Design step-by-step processes with branching, loops, and approvals
-                    </p>
-                </div>
-                <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-                    <Button onClick={() => setCreateOpen(true)}>+ Create Workflow</Button>
-                    <DialogContent className="sm:max-w-lg">
-                        <DialogHeader>
-                            <DialogTitle>Create workflow</DialogTitle>
-                            <DialogDescription>
-                                Start from a blank workflow definition.
-                            </DialogDescription>
-                        </DialogHeader>
-                        <div className="space-y-3">
-                            <Input
-                                placeholder="Workflow name"
-                                value={name}
-                                onChange={(e) => setName(e.target.value)}
-                            />
-                            <Input
-                                placeholder="Description (optional)"
-                                value={description}
-                                onChange={(e) => setDescription(e.target.value)}
-                            />
-                        </div>
-                        <DialogFooter>
-                            <Button variant="outline" onClick={() => setCreateOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                onClick={async () => {
-                                    if (!name.trim()) return;
-                                    try {
-                                        setCreating(true);
-                                        const res = await fetch(`${getApiBase()}/api/workflows`, {
-                                            method: "POST",
-                                            headers: { "Content-Type": "application/json" },
-                                            body: JSON.stringify({
-                                                name,
-                                                description,
-                                                definitionJson: { steps: [] }
-                                            })
-                                        });
-                                        if (res.ok) {
-                                            setName("");
-                                            setDescription("");
-                                            setCreateOpen(false);
-                                            await fetchStats();
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div>
+                        <h1 className="text-3xl font-bold">Workflows</h1>
+                        <p className="text-muted-foreground">
+                            Design step-by-step processes with branching, loops, and approvals
+                        </p>
+                    </div>
+                    <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                        <Button onClick={() => setCreateOpen(true)}>+ Create Workflow</Button>
+                        <DialogContent className="sm:max-w-lg">
+                            <DialogHeader>
+                                <DialogTitle>Create workflow</DialogTitle>
+                                <DialogDescription>
+                                    Start from a blank workflow definition.
+                                </DialogDescription>
+                            </DialogHeader>
+                            <div className="space-y-3">
+                                <Input
+                                    placeholder="Workflow name"
+                                    value={name}
+                                    onChange={(e) => setName(e.target.value)}
+                                />
+                                <Input
+                                    placeholder="Description (optional)"
+                                    value={description}
+                                    onChange={(e) => setDescription(e.target.value)}
+                                />
+                            </div>
+                            <DialogFooter>
+                                <Button variant="outline" onClick={() => setCreateOpen(false)}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    onClick={async () => {
+                                        if (!name.trim()) return;
+                                        try {
+                                            setCreating(true);
+                                            const res = await fetch(
+                                                `${getApiBase()}/api/workflows`,
+                                                {
+                                                    method: "POST",
+                                                    headers: { "Content-Type": "application/json" },
+                                                    body: JSON.stringify({
+                                                        name,
+                                                        description,
+                                                        definitionJson: { steps: [] }
+                                                    })
+                                                }
+                                            );
+                                            if (res.ok) {
+                                                setName("");
+                                                setDescription("");
+                                                setCreateOpen(false);
+                                                await fetchStats();
+                                            }
+                                        } finally {
+                                            setCreating(false);
                                         }
-                                    } finally {
-                                        setCreating(false);
-                                    }
-                                }}
-                                disabled={creating || !name.trim()}
-                            >
-                                {creating ? "Creating..." : "Create workflow"}
-                            </Button>
-                        </DialogFooter>
-                    </DialogContent>
-                </Dialog>
-            </div>
-
-            {summary && (
-                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Workflows</CardDescription>
-                            <CardTitle className="text-2xl">{summary.totalWorkflows}</CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Active</CardDescription>
-                            <CardTitle className="text-2xl text-green-600">
-                                {summary.activeWorkflows}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Published</CardDescription>
-                            <CardTitle className="text-2xl">{summary.publishedWorkflows}</CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Total Runs</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.totalRuns.toLocaleString()}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Success Rate</CardDescription>
-                            <CardTitle
-                                className={`text-2xl ${
-                                    summary.successRate >= 90
-                                        ? "text-green-600"
-                                        : summary.successRate >= 70
-                                          ? "text-yellow-600"
-                                          : "text-red-600"
-                                }`}
-                            >
-                                {summary.successRate}%
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                    <Card>
-                        <CardHeader className="pb-2">
-                            <CardDescription>Avg Latency</CardDescription>
-                            <CardTitle className="text-2xl">
-                                {summary.avgLatencyMs ? formatLatency(summary.avgLatencyMs) : "—"}
-                            </CardTitle>
-                        </CardHeader>
-                    </Card>
-                </div>
-            )}
-
-            <Tabs defaultValue="workflows" value={activeTab} onValueChange={setActiveTab}>
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                    <TabsList>
-                        <TabsTrigger value="workflows">Workflows</TabsTrigger>
-                        <TabsTrigger value="runs">Runs</TabsTrigger>
-                    </TabsList>
-
-                    {activeTab === "workflows" && (
-                        <div className="flex items-center gap-2">
-                            <Button
-                                variant={viewMode === "grid" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("grid")}
-                            >
-                                Grid
-                            </Button>
-                            <Button
-                                variant={viewMode === "list" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("list")}
-                            >
-                                List
-                            </Button>
-                            <Button
-                                variant={viewMode === "table" ? "default" : "outline"}
-                                size="sm"
-                                onClick={() => setViewMode("table")}
-                            >
-                                Table
-                            </Button>
-                        </div>
-                    )}
+                                    }}
+                                    disabled={creating || !name.trim()}
+                                >
+                                    {creating ? "Creating..." : "Create workflow"}
+                                </Button>
+                            </DialogFooter>
+                        </DialogContent>
+                    </Dialog>
                 </div>
 
-                <TabsContent value="workflows">
-                    <div className="mb-4 flex flex-wrap items-center gap-4">
-                        <div className="min-w-64 flex-1">
-                            <Input
-                                placeholder="Search workflows..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
-                        </div>
-                        <Select
-                            value={statusFilter}
-                            onValueChange={(value) => setStatusFilter(value ?? "all")}
-                        >
-                            <SelectTrigger className="w-32">
-                                <SelectValue placeholder="Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
-                                <SelectItem value="inactive">Inactive</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        <Select
-                            value={publishedFilter}
-                            onValueChange={(value) => setPublishedFilter(value ?? "all")}
-                        >
-                            <SelectTrigger className="w-36">
-                                <SelectValue placeholder="Published" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All</SelectItem>
-                                <SelectItem value="published">Published</SelectItem>
-                                <SelectItem value="unpublished">Draft</SelectItem>
-                            </SelectContent>
-                        </Select>
-                        {(searchQuery || statusFilter !== "all" || publishedFilter !== "all") && (
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                    setSearchQuery("");
-                                    setStatusFilter("all");
-                                    setPublishedFilter("all");
-                                }}
-                            >
-                                Clear Filters
-                            </Button>
+                {summary && (
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-6">
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Workflows</CardDescription>
+                                <CardTitle className="text-2xl">{summary.totalWorkflows}</CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Active</CardDescription>
+                                <CardTitle className="text-2xl text-green-600">
+                                    {summary.activeWorkflows}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Published</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.publishedWorkflows}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Total Runs</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.totalRuns.toLocaleString()}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Success Rate</CardDescription>
+                                <CardTitle
+                                    className={`text-2xl ${
+                                        summary.successRate >= 90
+                                            ? "text-green-600"
+                                            : summary.successRate >= 70
+                                              ? "text-yellow-600"
+                                              : "text-red-600"
+                                    }`}
+                                >
+                                    {summary.successRate}%
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                        <Card>
+                            <CardHeader className="pb-2">
+                                <CardDescription>Avg Latency</CardDescription>
+                                <CardTitle className="text-2xl">
+                                    {summary.avgLatencyMs
+                                        ? formatLatency(summary.avgLatencyMs)
+                                        : "—"}
+                                </CardTitle>
+                            </CardHeader>
+                        </Card>
+                    </div>
+                )}
+
+                <Tabs defaultValue="workflows" value={activeTab} onValueChange={setActiveTab}>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                        <TabsList>
+                            <TabsTrigger value="workflows">Workflows</TabsTrigger>
+                            <TabsTrigger value="runs">Runs</TabsTrigger>
+                        </TabsList>
+
+                        {activeTab === "workflows" && (
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant={viewMode === "grid" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("grid")}
+                                >
+                                    Grid
+                                </Button>
+                                <Button
+                                    variant={viewMode === "list" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("list")}
+                                >
+                                    List
+                                </Button>
+                                <Button
+                                    variant={viewMode === "table" ? "default" : "outline"}
+                                    size="sm"
+                                    onClick={() => setViewMode("table")}
+                                >
+                                    Table
+                                </Button>
+                            </div>
                         )}
                     </div>
 
-                    {filteredWorkflows.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">No workflows yet</p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Workflows let you chain steps together with logic and approvals
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : viewMode === "table" ? (
-                        <WorkflowTableView workflows={filteredWorkflows} />
-                    ) : viewMode === "list" ? (
-                        <div className="space-y-3">
-                            {filteredWorkflows.map((workflow) => (
-                                <WorkflowListView key={workflow.id} workflow={workflow} />
-                            ))}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                            {filteredWorkflows.map((workflow) => (
-                                <WorkflowCardView key={workflow.id} workflow={workflow} />
-                            ))}
-                        </div>
-                    )}
-                </TabsContent>
-
-                <TabsContent value="runs">
-                    {workflows.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">
-                                    No workflows available
-                                </p>
-                                <p className="text-muted-foreground mt-2 text-sm">
-                                    Create a workflow to start tracking runs.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="flex flex-wrap items-center gap-4">
-                                <Select
-                                    value={selectedWorkflow ?? undefined}
-                                    onValueChange={(value) => setSelectedWorkflow(value ?? null)}
-                                >
-                                    <SelectTrigger className="w-64">
-                                        <SelectValue placeholder="Select workflow" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {workflows.map((workflow) => (
-                                            <SelectItem key={workflow.slug} value={workflow.slug}>
-                                                {workflow.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runStatusFilter}
-                                    onValueChange={(value) => setRunStatusFilter(value ?? "all")}
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Status" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Status</SelectItem>
-                                        <SelectItem value="completed">Completed</SelectItem>
-                                        <SelectItem value="failed">Failed</SelectItem>
-                                        <SelectItem value="running">Running</SelectItem>
-                                        <SelectItem value="queued">Queued</SelectItem>
-                                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runEnvironmentFilter}
-                                    onValueChange={(value) =>
-                                        setRunEnvironmentFilter(value ?? "all")
-                                    }
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Environment" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Environments</SelectItem>
-                                        <SelectItem value="development">Development</SelectItem>
-                                        <SelectItem value="staging">Staging</SelectItem>
-                                        <SelectItem value="production">Production</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <Select
-                                    value={runTriggerFilter}
-                                    onValueChange={(value) => setRunTriggerFilter(value ?? "all")}
-                                >
-                                    <SelectTrigger className="w-40">
-                                        <SelectValue placeholder="Trigger" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Triggers</SelectItem>
-                                        <SelectItem value="manual">Manual</SelectItem>
-                                        <SelectItem value="api">API</SelectItem>
-                                        <SelectItem value="scheduled">Scheduled</SelectItem>
-                                        <SelectItem value="webhook">Webhook</SelectItem>
-                                        <SelectItem value="tool">Tool</SelectItem>
-                                        <SelectItem value="test">Test</SelectItem>
-                                        <SelectItem value="retry">Retry</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                                <div className="min-w-56 flex-1">
-                                    <Input
-                                        placeholder="Search run ID"
-                                        value={runSearchQuery}
-                                        onChange={(e) => setRunSearchQuery(e.target.value)}
-                                    />
-                                </div>
+                    <TabsContent value="workflows">
+                        <div className="mb-4 flex flex-wrap items-center gap-4">
+                            <div className="min-w-64 flex-1">
+                                <Input
+                                    placeholder="Search workflows..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                />
                             </div>
-
-                            {selectedWorkflowStats && (
-                                <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("all")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Total</CardDescription>
-                                            <CardTitle className="text-xl">
-                                                {selectedWorkflowStats.totalRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("completed")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Completed</CardDescription>
-                                            <CardTitle className="text-xl text-green-600">
-                                                {selectedWorkflowStats.completedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("failed")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Failed</CardDescription>
-                                            <CardTitle className="text-xl text-red-600">
-                                                {selectedWorkflowStats.failedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("running")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Running</CardDescription>
-                                            <CardTitle className="text-xl text-blue-600">
-                                                {selectedWorkflowStats.runningRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("queued")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Queued</CardDescription>
-                                            <CardTitle className="text-xl text-yellow-600">
-                                                {selectedWorkflowStats.queuedRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                    <Card
-                                        className="cursor-pointer"
-                                        onClick={() => setRunStatusFilter("cancelled")}
-                                    >
-                                        <CardHeader className="pb-2">
-                                            <CardDescription>Cancelled</CardDescription>
-                                            <CardTitle className="text-xl text-gray-600">
-                                                {selectedWorkflowStats.cancelledRuns}
-                                            </CardTitle>
-                                        </CardHeader>
-                                    </Card>
-                                </div>
-                            )}
-
-                            {runsLoading ? (
-                                <div className="space-y-3">
-                                    {[1, 2, 3, 4, 5].map((i) => (
-                                        <Skeleton key={i} className="h-16" />
-                                    ))}
-                                </div>
-                            ) : runs.length === 0 ? (
-                                <Card>
-                                    <CardContent className="py-12 text-center">
-                                        <p className="text-muted-foreground text-lg">
-                                            No runs found
-                                        </p>
-                                        <p className="text-muted-foreground mt-2 text-sm">
-                                            Runs will appear here when workflows execute.
-                                        </p>
-                                    </CardContent>
-                                </Card>
-                            ) : (
-                                <Card>
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Environment</TableHead>
-                                                <TableHead>Trigger</TableHead>
-                                                <TableHead className="text-right">Steps</TableHead>
-                                                <TableHead className="text-right">
-                                                    Duration
-                                                </TableHead>
-                                                <TableHead>Suspended</TableHead>
-                                                <TableHead className="text-right">
-                                                    Started
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {runs.map((run) => (
-                                                <TableRow key={run.id}>
-                                                    <TableCell>
-                                                        <Badge
-                                                            variant={getStatusBadgeVariant(
-                                                                run.status
-                                                            )}
-                                                        >
-                                                            {run.status}
-                                                        </Badge>
-                                                    </TableCell>
-                                                    <TableCell className="capitalize">
-                                                        {run.environment.toLowerCase()}
-                                                    </TableCell>
-                                                    <TableCell className="capitalize">
-                                                        {run.triggerType.toLowerCase()}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {run.stepsCount}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {run.durationMs
-                                                            ? formatLatency(run.durationMs)
-                                                            : "—"}
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground">
-                                                        {run.suspendedStep || "—"}
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground text-right">
-                                                        {formatRelativeTime(run.startedAt)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </Card>
+                            <Select
+                                value={statusFilter}
+                                onValueChange={(value) => setStatusFilter(value ?? "all")}
+                            >
+                                <SelectTrigger className="w-32">
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="active">Active</SelectItem>
+                                    <SelectItem value="inactive">Inactive</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
+                                value={publishedFilter}
+                                onValueChange={(value) => setPublishedFilter(value ?? "all")}
+                            >
+                                <SelectTrigger className="w-36">
+                                    <SelectValue placeholder="Published" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="published">Published</SelectItem>
+                                    <SelectItem value="unpublished">Draft</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {(searchQuery ||
+                                statusFilter !== "all" ||
+                                publishedFilter !== "all") && (
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSearchQuery("");
+                                        setStatusFilter("all");
+                                        setPublishedFilter("all");
+                                    }}
+                                >
+                                    Clear Filters
+                                </Button>
                             )}
                         </div>
-                    )}
-                </TabsContent>
-            </Tabs>
+
+                        {filteredWorkflows.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-muted-foreground text-lg">
+                                        No workflows yet
+                                    </p>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Workflows let you chain steps together with logic and
+                                        approvals
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : viewMode === "table" ? (
+                            <WorkflowTableView workflows={filteredWorkflows} />
+                        ) : viewMode === "list" ? (
+                            <div className="space-y-3">
+                                {filteredWorkflows.map((workflow) => (
+                                    <WorkflowListView key={workflow.id} workflow={workflow} />
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                {filteredWorkflows.map((workflow) => (
+                                    <WorkflowCardView key={workflow.id} workflow={workflow} />
+                                ))}
+                            </div>
+                        )}
+                    </TabsContent>
+
+                    <TabsContent value="runs">
+                        {workflows.length === 0 ? (
+                            <Card>
+                                <CardContent className="py-12 text-center">
+                                    <p className="text-muted-foreground text-lg">
+                                        No workflows available
+                                    </p>
+                                    <p className="text-muted-foreground mt-2 text-sm">
+                                        Create a workflow to start tracking runs.
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="flex flex-wrap items-center gap-4">
+                                    <Select
+                                        value={selectedWorkflow ?? undefined}
+                                        onValueChange={(value) =>
+                                            setSelectedWorkflow(value ?? null)
+                                        }
+                                    >
+                                        <SelectTrigger className="w-64">
+                                            <SelectValue placeholder="Select workflow" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {workflows.map((workflow) => (
+                                                <SelectItem
+                                                    key={workflow.slug}
+                                                    value={workflow.slug}
+                                                >
+                                                    {workflow.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runStatusFilter}
+                                        onValueChange={(value) =>
+                                            setRunStatusFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Status</SelectItem>
+                                            <SelectItem value="completed">Completed</SelectItem>
+                                            <SelectItem value="failed">Failed</SelectItem>
+                                            <SelectItem value="running">Running</SelectItem>
+                                            <SelectItem value="queued">Queued</SelectItem>
+                                            <SelectItem value="cancelled">Cancelled</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runEnvironmentFilter}
+                                        onValueChange={(value) =>
+                                            setRunEnvironmentFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Environment" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Environments</SelectItem>
+                                            <SelectItem value="development">Development</SelectItem>
+                                            <SelectItem value="staging">Staging</SelectItem>
+                                            <SelectItem value="production">Production</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <Select
+                                        value={runTriggerFilter}
+                                        onValueChange={(value) =>
+                                            setRunTriggerFilter(value ?? "all")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-40">
+                                            <SelectValue placeholder="Trigger" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Triggers</SelectItem>
+                                            <SelectItem value="manual">Manual</SelectItem>
+                                            <SelectItem value="api">API</SelectItem>
+                                            <SelectItem value="scheduled">Scheduled</SelectItem>
+                                            <SelectItem value="webhook">Webhook</SelectItem>
+                                            <SelectItem value="tool">Tool</SelectItem>
+                                            <SelectItem value="test">Test</SelectItem>
+                                            <SelectItem value="retry">Retry</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <div className="min-w-56 flex-1">
+                                        <Input
+                                            placeholder="Search run ID"
+                                            value={runSearchQuery}
+                                            onChange={(e) => setRunSearchQuery(e.target.value)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {selectedWorkflowStats && (
+                                    <div className="grid grid-cols-2 gap-4 md:grid-cols-6">
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("all")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Total</CardDescription>
+                                                <CardTitle className="text-xl">
+                                                    {selectedWorkflowStats.totalRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("completed")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Completed</CardDescription>
+                                                <CardTitle className="text-xl text-green-600">
+                                                    {selectedWorkflowStats.completedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("failed")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Failed</CardDescription>
+                                                <CardTitle className="text-xl text-red-600">
+                                                    {selectedWorkflowStats.failedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("running")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Running</CardDescription>
+                                                <CardTitle className="text-xl text-blue-600">
+                                                    {selectedWorkflowStats.runningRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("queued")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Queued</CardDescription>
+                                                <CardTitle className="text-xl text-yellow-600">
+                                                    {selectedWorkflowStats.queuedRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                        <Card
+                                            className="cursor-pointer"
+                                            onClick={() => setRunStatusFilter("cancelled")}
+                                        >
+                                            <CardHeader className="pb-2">
+                                                <CardDescription>Cancelled</CardDescription>
+                                                <CardTitle className="text-xl text-gray-600">
+                                                    {selectedWorkflowStats.cancelledRuns}
+                                                </CardTitle>
+                                            </CardHeader>
+                                        </Card>
+                                    </div>
+                                )}
+
+                                {runsLoading ? (
+                                    <div className="space-y-3">
+                                        {[1, 2, 3, 4, 5].map((i) => (
+                                            <Skeleton key={i} className="h-16" />
+                                        ))}
+                                    </div>
+                                ) : runs.length === 0 ? (
+                                    <Card>
+                                        <CardContent className="py-12 text-center">
+                                            <p className="text-muted-foreground text-lg">
+                                                No runs found
+                                            </p>
+                                            <p className="text-muted-foreground mt-2 text-sm">
+                                                Runs will appear here when workflows execute.
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                ) : (
+                                    <Card>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Status</TableHead>
+                                                    <TableHead>Environment</TableHead>
+                                                    <TableHead>Trigger</TableHead>
+                                                    <TableHead className="text-right">
+                                                        Steps
+                                                    </TableHead>
+                                                    <TableHead className="text-right">
+                                                        Duration
+                                                    </TableHead>
+                                                    <TableHead>Suspended</TableHead>
+                                                    <TableHead className="text-right">
+                                                        Started
+                                                    </TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {runs.map((run) => (
+                                                    <TableRow key={run.id}>
+                                                        <TableCell>
+                                                            <Badge
+                                                                variant={getStatusBadgeVariant(
+                                                                    run.status
+                                                                )}
+                                                            >
+                                                                {run.status}
+                                                            </Badge>
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {run.environment.toLowerCase()}
+                                                        </TableCell>
+                                                        <TableCell className="capitalize">
+                                                            {run.triggerType.toLowerCase()}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            {run.stepsCount}
+                                                        </TableCell>
+                                                        <TableCell className="text-right">
+                                                            {run.durationMs
+                                                                ? formatLatency(run.durationMs)
+                                                                : "—"}
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground">
+                                                            {run.suspendedStep || "—"}
+                                                        </TableCell>
+                                                        <TableCell className="text-muted-foreground text-right">
+                                                            {formatRelativeTime(run.startedAt)}
+                                                        </TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </Card>
+                                )}
+                            </div>
+                        )}
+                    </TabsContent>
+                </Tabs>
+            </div>
         </div>
     );
 }

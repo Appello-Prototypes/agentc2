@@ -733,19 +733,25 @@ export default function ProviderDetailPage() {
 
     if (loading) {
         return (
-            <div className="text-muted-foreground container mx-auto py-6 text-sm">Loading...</div>
+            <div className="h-full overflow-y-auto">
+                <div className="text-muted-foreground container mx-auto py-6 text-sm">
+                    Loading...
+                </div>
+            </div>
         );
     }
 
     if (!provider) {
         return (
-            <div className="container mx-auto space-y-4 py-6">
-                <Link href="/mcp" className={buttonVariants({ variant: "outline" })}>
-                    Back to Integrations
-                </Link>
-                <Card>
-                    <CardContent className="py-6 text-sm text-red-500">{error}</CardContent>
-                </Card>
+            <div className="h-full overflow-y-auto">
+                <div className="container mx-auto space-y-4 py-6">
+                    <Link href="/mcp" className={buttonVariants({ variant: "outline" })}>
+                        Back to Integrations
+                    </Link>
+                    <Card>
+                        <CardContent className="py-6 text-sm text-red-500">{error}</CardContent>
+                    </Card>
+                </div>
             </div>
         );
     }
@@ -756,25 +762,27 @@ export default function ProviderDetailPage() {
 
     if (isOAuthProvider) {
         return (
-            <div className="container mx-auto max-w-2xl space-y-6 py-6">
-                <div>
-                    <Link
-                        href="/mcp"
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                        Back to Integrations
-                    </Link>
-                    <h1 className="mt-3 text-2xl font-semibold">{provider.name}</h1>
-                    <p className="text-muted-foreground text-sm">{provider.description}</p>
-                </div>
-
-                {error && (
-                    <div className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
-                        {error}
+            <div className="h-full overflow-y-auto">
+                <div className="container mx-auto max-w-2xl space-y-6 py-6">
+                    <div>
+                        <Link
+                            href="/mcp"
+                            className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                            Back to Integrations
+                        </Link>
+                        <h1 className="mt-3 text-2xl font-semibold">{provider.name}</h1>
+                        <p className="text-muted-foreground text-sm">{provider.description}</p>
                     </div>
-                )}
 
-                <OAuthProviderView provider={provider} onError={setError} />
+                    {error && (
+                        <div className="rounded-md bg-red-500/10 px-4 py-3 text-sm text-red-500">
+                            {error}
+                        </div>
+                    )}
+
+                    <OAuthProviderView provider={provider} onError={setError} />
+                </div>
             </div>
         );
     }
@@ -784,502 +792,526 @@ export default function ProviderDetailPage() {
     /* ====================================================================== */
 
     return (
-        <div className="container mx-auto space-y-6 py-6">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-                <div>
-                    <Link
-                        href="/mcp"
-                        className={buttonVariants({ variant: "outline", size: "sm" })}
-                    >
-                        Back to Integrations
-                    </Link>
-                    <h1 className="mt-3 text-2xl font-semibold">{provider.name}</h1>
-                    <p className="text-muted-foreground text-sm">{provider.description}</p>
+        <div className="h-full overflow-y-auto">
+            <div className="container mx-auto space-y-6 py-6">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                        <Link
+                            href="/mcp"
+                            className={buttonVariants({ variant: "outline", size: "sm" })}
+                        >
+                            Back to Integrations
+                        </Link>
+                        <h1 className="mt-3 text-2xl font-semibold">{provider.name}</h1>
+                        <p className="text-muted-foreground text-sm">{provider.description}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <Badge variant="outline" className="uppercase">
+                            {provider.authType}
+                        </Badge>
+                        <Badge variant="outline" className="uppercase">
+                            {provider.providerType}
+                        </Badge>
+                    </div>
                 </div>
-                <div className="flex flex-wrap gap-2">
-                    <Badge variant="outline" className="uppercase">
-                        {provider.authType}
-                    </Badge>
-                    <Badge variant="outline" className="uppercase">
-                        {provider.providerType}
-                    </Badge>
-                </div>
-            </div>
 
-            {error && (
-                <Card>
-                    <CardContent className="py-4 text-sm text-red-500">{error}</CardContent>
-                </Card>
-            )}
+                {error && (
+                    <Card>
+                        <CardContent className="py-4 text-sm text-red-500">{error}</CardContent>
+                    </Card>
+                )}
 
-            {(requiredFields.length > 0 || requiredScopes.length > 0 || setupUrl) && (
+                {(requiredFields.length > 0 || requiredScopes.length > 0 || setupUrl) && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Provider Requirements</CardTitle>
+                            <CardDescription>
+                                Requirements are driven by the provider configuration.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="text-muted-foreground space-y-3 text-sm">
+                            {requiredFields.length > 0 && (
+                                <div>
+                                    <div className="text-xs font-medium uppercase">
+                                        Required Fields
+                                    </div>
+                                    <div>{requiredFields.join(", ")}</div>
+                                </div>
+                            )}
+                            {requiredScopes.length > 0 && (
+                                <div>
+                                    <div className="text-xs font-medium uppercase">
+                                        Required Scopes
+                                    </div>
+                                    <div>{requiredScopes.join(", ")}</div>
+                                </div>
+                            )}
+                            {setupUrl && (
+                                <div>
+                                    <Link
+                                        href={setupUrl}
+                                        className={buttonVariants({
+                                            variant: "outline",
+                                            size: "sm"
+                                        })}
+                                    >
+                                        {setupLabel}
+                                    </Link>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+                )}
+
                 <Card>
                     <CardHeader>
-                        <CardTitle>Provider Requirements</CardTitle>
+                        <CardTitle>Create Connection</CardTitle>
                         <CardDescription>
-                            Requirements are driven by the provider configuration.
+                            Store credentials and metadata for this provider.
                         </CardDescription>
                     </CardHeader>
-                    <CardContent className="text-muted-foreground space-y-3 text-sm">
+                    <CardContent className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="connection-name">Connection Name</Label>
+                            <Input
+                                id="connection-name"
+                                value={form.name}
+                                onChange={(event) =>
+                                    setForm((prev) => ({ ...prev, name: event.target.value }))
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Scope</Label>
+                            <Select
+                                value={form.scope}
+                                onValueChange={(value) =>
+                                    setForm((prev) => ({ ...prev, scope: value || "org" }))
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select scope" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="org">Organization</SelectItem>
+                                    <SelectItem value="user">User</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
                         {requiredFields.length > 0 && (
-                            <div>
-                                <div className="text-xs font-medium uppercase">Required Fields</div>
-                                <div>{requiredFields.join(", ")}</div>
+                            <div className="grid gap-3 md:grid-cols-2">
+                                {requiredFields.map((field) => {
+                                    const definition = fieldDefinitions[field] || {};
+                                    const label = definition.label || field;
+                                    const description = definition.description;
+                                    const placeholder = definition.placeholder || "";
+                                    const type =
+                                        definition.type === "password"
+                                            ? "password"
+                                            : definition.type === "url"
+                                              ? "url"
+                                              : "text";
+
+                                    return (
+                                        <div key={field} className="space-y-2">
+                                            <Label htmlFor={`required-${field}`}>{label}</Label>
+                                            <Input
+                                                id={`required-${field}`}
+                                                type={type}
+                                                placeholder={placeholder}
+                                                value={requiredValues[field] || ""}
+                                                onChange={(event) =>
+                                                    setRequiredValues((prev) => ({
+                                                        ...prev,
+                                                        [field]: event.target.value
+                                                    }))
+                                                }
+                                            />
+                                            {description && (
+                                                <div className="text-muted-foreground text-xs">
+                                                    {description}
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
                             </div>
                         )}
-                        {requiredScopes.length > 0 && (
-                            <div>
-                                <div className="text-xs font-medium uppercase">Required Scopes</div>
-                                <div>{requiredScopes.join(", ")}</div>
-                            </div>
+                        {requiredFields.length > 0 && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setShowAdvancedCreate((prev) => !prev)}
+                            >
+                                {showAdvancedCreate ? "Hide Advanced JSON" : "Show Advanced JSON"}
+                            </Button>
                         )}
-                        {setupUrl && (
-                            <div>
-                                <Link
-                                    href={setupUrl}
-                                    className={buttonVariants({ variant: "outline", size: "sm" })}
-                                >
-                                    {setupLabel}
-                                </Link>
-                            </div>
+                        {showAdvancedCreateFields && (
+                            <>
+                                <div className="space-y-2">
+                                    <Label>Credentials (JSON)</Label>
+                                    <Textarea
+                                        value={form.credentials}
+                                        onChange={(event) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                credentials: event.target.value
+                                            }))
+                                        }
+                                        className="min-h-[140px] font-mono text-xs"
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label>Metadata (JSON)</Label>
+                                    <Textarea
+                                        value={form.metadata}
+                                        onChange={(event) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                metadata: event.target.value
+                                            }))
+                                        }
+                                        className="min-h-[140px] font-mono text-xs"
+                                    />
+                                </div>
+                            </>
                         )}
+                        <div className="flex items-center gap-2">
+                            <Switch
+                                checked={testAfterSave}
+                                onCheckedChange={(checked) => setTestAfterSave(checked)}
+                            />
+                            <Label>Test connection after saving</Label>
+                        </div>
+                        <Button onClick={handleCreateConnection} disabled={saving}>
+                            {saving ? "Saving..." : "Save Connection"}
+                        </Button>
                     </CardContent>
                 </Card>
-            )}
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Create Connection</CardTitle>
-                    <CardDescription>
-                        Store credentials and metadata for this provider.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="space-y-2">
-                        <Label htmlFor="connection-name">Connection Name</Label>
-                        <Input
-                            id="connection-name"
-                            value={form.name}
-                            onChange={(event) =>
-                                setForm((prev) => ({ ...prev, name: event.target.value }))
-                            }
-                        />
-                    </div>
-                    <div className="space-y-2">
-                        <Label>Scope</Label>
-                        <Select
-                            value={form.scope}
-                            onValueChange={(value) =>
-                                setForm((prev) => ({ ...prev, scope: value || "org" }))
-                            }
-                        >
-                            <SelectTrigger>
-                                <SelectValue placeholder="Select scope" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="org">Organization</SelectItem>
-                                <SelectItem value="user">User</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
-                    {requiredFields.length > 0 && (
-                        <div className="grid gap-3 md:grid-cols-2">
-                            {requiredFields.map((field) => {
-                                const definition = fieldDefinitions[field] || {};
-                                const label = definition.label || field;
-                                const description = definition.description;
-                                const placeholder = definition.placeholder || "";
-                                const type =
-                                    definition.type === "password"
-                                        ? "password"
-                                        : definition.type === "url"
-                                          ? "url"
-                                          : "text";
-
-                                return (
-                                    <div key={field} className="space-y-2">
-                                        <Label htmlFor={`required-${field}`}>{label}</Label>
-                                        <Input
-                                            id={`required-${field}`}
-                                            type={type}
-                                            placeholder={placeholder}
-                                            value={requiredValues[field] || ""}
-                                            onChange={(event) =>
-                                                setRequiredValues((prev) => ({
-                                                    ...prev,
-                                                    [field]: event.target.value
-                                                }))
-                                            }
-                                        />
-                                        {description && (
-                                            <div className="text-muted-foreground text-xs">
-                                                {description}
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Connections</CardTitle>
+                        <CardDescription>
+                            Test connections and view available actions/triggers.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {provider.connections.length === 0 && (
+                            <div className="text-muted-foreground text-sm">
+                                No connections configured for this provider.
+                            </div>
+                        )}
+                        {provider.connections.map((connection) => (
+                            <div
+                                key={connection.id}
+                                className="space-y-3 rounded-md border px-4 py-3"
+                            >
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div>
+                                        <div className="font-medium">{connection.name}</div>
+                                        <div className="text-muted-foreground text-xs">
+                                            {connection.scope}
+                                            {connection.isDefault ? " · default" : ""}
+                                            {!connection.isActive ? " · disabled" : ""}
+                                        </div>
+                                        {connection.missingFields.length > 0 && (
+                                            <div className="text-xs text-yellow-600">
+                                                Missing: {connection.missingFields.join(", ")}
                                             </div>
                                         )}
                                     </div>
-                                );
-                            })}
-                        </div>
-                    )}
-                    {requiredFields.length > 0 && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowAdvancedCreate((prev) => !prev)}
-                        >
-                            {showAdvancedCreate ? "Hide Advanced JSON" : "Show Advanced JSON"}
-                        </Button>
-                    )}
-                    {showAdvancedCreateFields && (
-                        <>
-                            <div className="space-y-2">
-                                <Label>Credentials (JSON)</Label>
-                                <Textarea
-                                    value={form.credentials}
-                                    onChange={(event) =>
-                                        setForm((prev) => ({
-                                            ...prev,
-                                            credentials: event.target.value
-                                        }))
-                                    }
-                                    className="min-h-[140px] font-mono text-xs"
-                                />
-                            </div>
-                            <div className="space-y-2">
-                                <Label>Metadata (JSON)</Label>
-                                <Textarea
-                                    value={form.metadata}
-                                    onChange={(event) =>
-                                        setForm((prev) => ({
-                                            ...prev,
-                                            metadata: event.target.value
-                                        }))
-                                    }
-                                    className="min-h-[140px] font-mono text-xs"
-                                />
-                            </div>
-                        </>
-                    )}
-                    <div className="flex items-center gap-2">
-                        <Switch
-                            checked={testAfterSave}
-                            onCheckedChange={(checked) => setTestAfterSave(checked)}
-                        />
-                        <Label>Test connection after saving</Label>
-                    </div>
-                    <Button onClick={handleCreateConnection} disabled={saving}>
-                        {saving ? "Saving..." : "Save Connection"}
-                    </Button>
-                </CardContent>
-            </Card>
-
-            <Card>
-                <CardHeader>
-                    <CardTitle>Connections</CardTitle>
-                    <CardDescription>
-                        Test connections and view available actions/triggers.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    {provider.connections.length === 0 && (
-                        <div className="text-muted-foreground text-sm">
-                            No connections configured for this provider.
-                        </div>
-                    )}
-                    {provider.connections.map((connection) => (
-                        <div key={connection.id} className="space-y-3 rounded-md border px-4 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                                <div>
-                                    <div className="font-medium">{connection.name}</div>
-                                    <div className="text-muted-foreground text-xs">
-                                        {connection.scope}
-                                        {connection.isDefault ? " · default" : ""}
-                                        {!connection.isActive ? " · disabled" : ""}
-                                    </div>
-                                    {connection.missingFields.length > 0 && (
-                                        <div className="text-xs text-yellow-600">
-                                            Missing: {connection.missingFields.join(", ")}
-                                        </div>
+                                    <ConnectionBadge connected={connection.connected} />
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleTestConnection(connection.id)}
+                                    >
+                                        Test Connection
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleLoadActions(connection.id)}
+                                    >
+                                        Load Actions
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleToggleEdit(connection.id)}
+                                    >
+                                        {editingConnectionId === connection.id ? "Close" : "Edit"}
+                                    </Button>
+                                    {testStatus[connection.id] && (
+                                        <span className="text-muted-foreground text-xs">
+                                            {testStatus[connection.id]}
+                                        </span>
                                     )}
                                 </div>
-                                <ConnectionBadge connected={connection.connected} />
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleTestConnection(connection.id)}
-                                >
-                                    Test Connection
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleLoadActions(connection.id)}
-                                >
-                                    Load Actions
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleToggleEdit(connection.id)}
-                                >
-                                    {editingConnectionId === connection.id ? "Close" : "Edit"}
-                                </Button>
-                                {testStatus[connection.id] && (
-                                    <span className="text-muted-foreground text-xs">
-                                        {testStatus[connection.id]}
-                                    </span>
-                                )}
-                            </div>
-                            {editingConnectionId === connection.id && (
-                                <div className="bg-muted/40 space-y-4 rounded-md border p-4 text-sm">
-                                    {loadingConnectionId === connection.id && (
-                                        <div className="text-muted-foreground text-xs">
-                                            Loading connection details...
-                                        </div>
-                                    )}
-                                    {connectionForms[connection.id] && (
-                                        <>
-                                            {connectionForms[connection.id].errorMessage && (
-                                                <div className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-500">
-                                                    {connectionForms[connection.id].errorMessage}
+                                {editingConnectionId === connection.id && (
+                                    <div className="bg-muted/40 space-y-4 rounded-md border p-4 text-sm">
+                                        {loadingConnectionId === connection.id && (
+                                            <div className="text-muted-foreground text-xs">
+                                                Loading connection details...
+                                            </div>
+                                        )}
+                                        {connectionForms[connection.id] && (
+                                            <>
+                                                {connectionForms[connection.id].errorMessage && (
+                                                    <div className="rounded-md bg-red-500/10 px-3 py-2 text-xs text-red-500">
+                                                        {
+                                                            connectionForms[connection.id]
+                                                                .errorMessage
+                                                        }
+                                                    </div>
+                                                )}
+                                                <div className="space-y-2">
+                                                    <Label htmlFor={`edit-name-${connection.id}`}>
+                                                        Connection Name
+                                                    </Label>
+                                                    <Input
+                                                        id={`edit-name-${connection.id}`}
+                                                        value={connectionForms[connection.id].name}
+                                                        onChange={(event) =>
+                                                            setConnectionForms((prev) => ({
+                                                                ...prev,
+                                                                [connection.id]: {
+                                                                    ...prev[connection.id],
+                                                                    name: event.target.value
+                                                                }
+                                                            }))
+                                                        }
+                                                    />
                                                 </div>
-                                            )}
-                                            <div className="space-y-2">
-                                                <Label htmlFor={`edit-name-${connection.id}`}>
-                                                    Connection Name
-                                                </Label>
-                                                <Input
-                                                    id={`edit-name-${connection.id}`}
-                                                    value={connectionForms[connection.id].name}
-                                                    onChange={(event) =>
-                                                        setConnectionForms((prev) => ({
-                                                            ...prev,
-                                                            [connection.id]: {
-                                                                ...prev[connection.id],
-                                                                name: event.target.value
+                                                <div className="flex flex-wrap items-center gap-6">
+                                                    <div className="flex items-center gap-2">
+                                                        <Switch
+                                                            checked={
+                                                                connectionForms[connection.id]
+                                                                    .isDefault
                                                             }
-                                                        }))
-                                                    }
-                                                />
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-6">
-                                                <div className="flex items-center gap-2">
-                                                    <Switch
-                                                        checked={
-                                                            connectionForms[connection.id].isDefault
-                                                        }
-                                                        onCheckedChange={(checked) =>
-                                                            setConnectionForms((prev) => ({
-                                                                ...prev,
-                                                                [connection.id]: {
-                                                                    ...prev[connection.id],
-                                                                    isDefault: checked
-                                                                }
-                                                            }))
-                                                        }
-                                                    />
-                                                    <Label>Default</Label>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Switch
-                                                        checked={
-                                                            connectionForms[connection.id].isActive
-                                                        }
-                                                        onCheckedChange={(checked) =>
-                                                            setConnectionForms((prev) => ({
-                                                                ...prev,
-                                                                [connection.id]: {
-                                                                    ...prev[connection.id],
-                                                                    isActive: checked
-                                                                }
-                                                            }))
-                                                        }
-                                                    />
-                                                    <Label>Active</Label>
-                                                </div>
-                                            </div>
-                                            {requiredFields.length > 0 && (
-                                                <div className="grid gap-3 md:grid-cols-2">
-                                                    {requiredFields.map((field) => {
-                                                        const definition =
-                                                            fieldDefinitions[field] || {};
-                                                        const label = definition.label || field;
-                                                        const description = definition.description;
-                                                        const placeholder =
-                                                            definition.placeholder || "";
-                                                        const type =
-                                                            definition.type === "password"
-                                                                ? "password"
-                                                                : definition.type === "url"
-                                                                  ? "url"
-                                                                  : "text";
-
-                                                        return (
-                                                            <div key={field} className="space-y-2">
-                                                                <Label
-                                                                    htmlFor={`edit-${connection.id}-${field}`}
-                                                                >
-                                                                    {label}
-                                                                </Label>
-                                                                <Input
-                                                                    id={`edit-${connection.id}-${field}`}
-                                                                    type={type}
-                                                                    placeholder={placeholder}
-                                                                    value={
-                                                                        connectionForms[
-                                                                            connection.id
-                                                                        ].requiredValues[field] ||
-                                                                        ""
+                                                            onCheckedChange={(checked) =>
+                                                                setConnectionForms((prev) => ({
+                                                                    ...prev,
+                                                                    [connection.id]: {
+                                                                        ...prev[connection.id],
+                                                                        isDefault: checked
                                                                     }
-                                                                    onChange={(event) =>
-                                                                        setConnectionForms(
-                                                                            (prev) => ({
-                                                                                ...prev,
-                                                                                [connection.id]: {
-                                                                                    ...prev[
-                                                                                        connection
-                                                                                            .id
-                                                                                    ],
-                                                                                    requiredValues:
+                                                                }))
+                                                            }
+                                                        />
+                                                        <Label>Default</Label>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <Switch
+                                                            checked={
+                                                                connectionForms[connection.id]
+                                                                    .isActive
+                                                            }
+                                                            onCheckedChange={(checked) =>
+                                                                setConnectionForms((prev) => ({
+                                                                    ...prev,
+                                                                    [connection.id]: {
+                                                                        ...prev[connection.id],
+                                                                        isActive: checked
+                                                                    }
+                                                                }))
+                                                            }
+                                                        />
+                                                        <Label>Active</Label>
+                                                    </div>
+                                                </div>
+                                                {requiredFields.length > 0 && (
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        {requiredFields.map((field) => {
+                                                            const definition =
+                                                                fieldDefinitions[field] || {};
+                                                            const label = definition.label || field;
+                                                            const description =
+                                                                definition.description;
+                                                            const placeholder =
+                                                                definition.placeholder || "";
+                                                            const type =
+                                                                definition.type === "password"
+                                                                    ? "password"
+                                                                    : definition.type === "url"
+                                                                      ? "url"
+                                                                      : "text";
+
+                                                            return (
+                                                                <div
+                                                                    key={field}
+                                                                    className="space-y-2"
+                                                                >
+                                                                    <Label
+                                                                        htmlFor={`edit-${connection.id}-${field}`}
+                                                                    >
+                                                                        {label}
+                                                                    </Label>
+                                                                    <Input
+                                                                        id={`edit-${connection.id}-${field}`}
+                                                                        type={type}
+                                                                        placeholder={placeholder}
+                                                                        value={
+                                                                            connectionForms[
+                                                                                connection.id
+                                                                            ].requiredValues[
+                                                                                field
+                                                                            ] || ""
+                                                                        }
+                                                                        onChange={(event) =>
+                                                                            setConnectionForms(
+                                                                                (prev) => ({
+                                                                                    ...prev,
+                                                                                    [connection.id]:
                                                                                         {
                                                                                             ...prev[
                                                                                                 connection
                                                                                                     .id
-                                                                                            ]
-                                                                                                .requiredValues,
-                                                                                            [field]:
-                                                                                                event
-                                                                                                    .target
-                                                                                                    .value
+                                                                                            ],
+                                                                                            requiredValues:
+                                                                                                {
+                                                                                                    ...prev[
+                                                                                                        connection
+                                                                                                            .id
+                                                                                                    ]
+                                                                                                        .requiredValues,
+                                                                                                    [field]:
+                                                                                                        event
+                                                                                                            .target
+                                                                                                            .value
+                                                                                                }
                                                                                         }
-                                                                                }
-                                                                            })
-                                                                        )
-                                                                    }
-                                                                />
-                                                                {description && (
-                                                                    <div className="text-muted-foreground text-xs">
-                                                                        {description}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            )}
-                                            {requiredFields.length > 0 && (
+                                                                                })
+                                                                            )
+                                                                        }
+                                                                    />
+                                                                    {description && (
+                                                                        <div className="text-muted-foreground text-xs">
+                                                                            {description}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            );
+                                                        })}
+                                                    </div>
+                                                )}
+                                                {requiredFields.length > 0 && (
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            setShowAdvancedEdit((prev) => ({
+                                                                ...prev,
+                                                                [connection.id]:
+                                                                    !prev[connection.id]
+                                                            }))
+                                                        }
+                                                    >
+                                                        {showAdvancedEdit[connection.id]
+                                                            ? "Hide Advanced JSON"
+                                                            : "Show Advanced JSON"}
+                                                    </Button>
+                                                )}
+                                                {(showAdvancedEdit[connection.id] ||
+                                                    requiredFields.length === 0) && (
+                                                    <>
+                                                        <div className="space-y-2">
+                                                            <Label>Credentials (JSON)</Label>
+                                                            <Textarea
+                                                                value={
+                                                                    connectionForms[connection.id]
+                                                                        .credentialsJson
+                                                                }
+                                                                onChange={(event) =>
+                                                                    setConnectionForms((prev) => ({
+                                                                        ...prev,
+                                                                        [connection.id]: {
+                                                                            ...prev[connection.id],
+                                                                            credentialsJson:
+                                                                                event.target.value
+                                                                        }
+                                                                    }))
+                                                                }
+                                                                className="min-h-[140px] font-mono text-xs"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-2">
+                                                            <Label>Metadata (JSON)</Label>
+                                                            <Textarea
+                                                                value={
+                                                                    connectionForms[connection.id]
+                                                                        .metadataJson
+                                                                }
+                                                                onChange={(event) =>
+                                                                    setConnectionForms((prev) => ({
+                                                                        ...prev,
+                                                                        [connection.id]: {
+                                                                            ...prev[connection.id],
+                                                                            metadataJson:
+                                                                                event.target.value
+                                                                        }
+                                                                    }))
+                                                                }
+                                                                className="min-h-[140px] font-mono text-xs"
+                                                            />
+                                                        </div>
+                                                    </>
+                                                )}
                                                 <Button
-                                                    variant="outline"
-                                                    size="sm"
                                                     onClick={() =>
-                                                        setShowAdvancedEdit((prev) => ({
-                                                            ...prev,
-                                                            [connection.id]: !prev[connection.id]
-                                                        }))
+                                                        handleUpdateConnection(connection.id)
                                                     }
+                                                    disabled={savingConnectionId === connection.id}
                                                 >
-                                                    {showAdvancedEdit[connection.id]
-                                                        ? "Hide Advanced JSON"
-                                                        : "Show Advanced JSON"}
+                                                    {savingConnectionId === connection.id
+                                                        ? "Saving..."
+                                                        : "Save Changes"}
                                                 </Button>
-                                            )}
-                                            {(showAdvancedEdit[connection.id] ||
-                                                requiredFields.length === 0) && (
-                                                <>
-                                                    <div className="space-y-2">
-                                                        <Label>Credentials (JSON)</Label>
-                                                        <Textarea
-                                                            value={
-                                                                connectionForms[connection.id]
-                                                                    .credentialsJson
-                                                            }
-                                                            onChange={(event) =>
-                                                                setConnectionForms((prev) => ({
-                                                                    ...prev,
-                                                                    [connection.id]: {
-                                                                        ...prev[connection.id],
-                                                                        credentialsJson:
-                                                                            event.target.value
-                                                                    }
-                                                                }))
-                                                            }
-                                                            className="min-h-[140px] font-mono text-xs"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-2">
-                                                        <Label>Metadata (JSON)</Label>
-                                                        <Textarea
-                                                            value={
-                                                                connectionForms[connection.id]
-                                                                    .metadataJson
-                                                            }
-                                                            onChange={(event) =>
-                                                                setConnectionForms((prev) => ({
-                                                                    ...prev,
-                                                                    [connection.id]: {
-                                                                        ...prev[connection.id],
-                                                                        metadataJson:
-                                                                            event.target.value
-                                                                    }
-                                                                }))
-                                                            }
-                                                            className="min-h-[140px] font-mono text-xs"
-                                                        />
-                                                    </div>
-                                                </>
-                                            )}
-                                            <Button
-                                                onClick={() =>
-                                                    handleUpdateConnection(connection.id)
-                                                }
-                                                disabled={savingConnectionId === connection.id}
-                                            >
-                                                {savingConnectionId === connection.id
-                                                    ? "Saving..."
-                                                    : "Save Changes"}
-                                            </Button>
-                                        </>
-                                    )}
-                                </div>
-                            )}
-                            {Boolean(actionsByConnection[connection.id]) ? (
-                                <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
-                                    {formatJson(actionsByConnection[connection.id])}
-                                </pre>
-                            ) : null}
-                        </div>
-                    ))}
-                </CardContent>
-            </Card>
+                                            </>
+                                        )}
+                                    </div>
+                                )}
+                                {Boolean(actionsByConnection[connection.id]) ? (
+                                    <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
+                                        {formatJson(actionsByConnection[connection.id])}
+                                    </pre>
+                                ) : null}
+                            </div>
+                        ))}
+                    </CardContent>
+                </Card>
 
-            <Card>
-                <CardHeader>
-                    <CardTitle>Provider Metadata</CardTitle>
-                    <CardDescription>
-                        Actions and triggers registered for this provider.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div>
-                        <div className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-                            Actions
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Provider Metadata</CardTitle>
+                        <CardDescription>
+                            Actions and triggers registered for this provider.
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <div>
+                            <div className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                Actions
+                            </div>
+                            <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
+                                {formatJson(provider.actions || {})}
+                            </pre>
                         </div>
-                        <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
-                            {formatJson(provider.actions || {})}
-                        </pre>
-                    </div>
-                    <div>
-                        <div className="text-muted-foreground mb-2 text-xs font-medium uppercase">
-                            Triggers
+                        <div>
+                            <div className="text-muted-foreground mb-2 text-xs font-medium uppercase">
+                                Triggers
+                            </div>
+                            <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
+                                {formatJson(provider.triggers || {})}
+                            </pre>
                         </div>
-                        <pre className="bg-muted/40 max-h-64 overflow-auto rounded p-3 text-xs">
-                            {formatJson(provider.triggers || {})}
-                        </pre>
-                    </div>
-                </CardContent>
-            </Card>
+                    </CardContent>
+                </Card>
+            </div>
         </div>
     );
 }

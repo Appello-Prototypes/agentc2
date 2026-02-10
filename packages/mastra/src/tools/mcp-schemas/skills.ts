@@ -13,7 +13,11 @@ export const skillToolDefinitions: McpToolDefinition[] = [
                 description: { type: "string" },
                 examples: { type: "string", description: "Reference outputs" },
                 category: { type: "string" },
-                tags: { type: "array", items: { type: "string" } }
+                tags: { type: "array", items: { type: "string" } },
+                metadata: { type: "object", description: "Additional metadata" },
+                workspaceId: { type: "string" },
+                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                createdBy: { type: "string" }
             },
             required: ["slug", "name", "instructions"]
         },
@@ -44,7 +48,9 @@ export const skillToolDefinitions: McpToolDefinition[] = [
                 examples: { type: "string" },
                 category: { type: "string" },
                 tags: { type: "array", items: { type: "string" } },
-                changeSummary: { type: "string" }
+                changeSummary: { type: "string" },
+                metadata: { type: "object", description: "Additional metadata" },
+                createdBy: { type: "string" }
             },
             required: ["skillId"]
         },
@@ -70,7 +76,10 @@ export const skillToolDefinitions: McpToolDefinition[] = [
             properties: {
                 category: { type: "string" },
                 tags: { type: "string" },
-                type: { type: "string", enum: ["USER", "SYSTEM"] }
+                type: { type: "string", enum: ["USER", "SYSTEM"] },
+                workspaceId: { type: "string" },
+                skip: { type: "number", description: "Pagination offset" },
+                take: { type: "number", description: "Page size" }
             }
         },
         invoke_url: "/api/mcp",
@@ -145,6 +154,17 @@ export const skillToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "skills"
+    },
+    {
+        name: "skill-get-versions",
+        description: "Get version history for a skill.",
+        inputSchema: {
+            type: "object",
+            properties: { skillId: { type: "string" } },
+            required: ["skillId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "skills"
     }
 ];
 
@@ -159,5 +179,6 @@ export const skillToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "skill-attach-tool" },
     { kind: "registry", name: "skill-detach-tool" },
     { kind: "registry", name: "agent-attach-skill" },
-    { kind: "registry", name: "agent-detach-skill" }
+    { kind: "registry", name: "agent-detach-skill" },
+    { kind: "registry", name: "skill-get-versions" }
 ];

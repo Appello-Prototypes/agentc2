@@ -1107,6 +1107,9 @@ model AgentRun {
     experiment      LearningExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
     experimentGroup String? // "baseline" or "candidate" - which version this run used
 
+    // Skills active at run time [{skillId, skillSlug, skillVersion}]
+    skillsJson Json?
+
     // Production channel tracking
     source      String? // "slack", "whatsapp", "voice", "telegram", "elevenlabs", "api", "test"
     triggerType RunTriggerType @default(API)
@@ -1148,11 +1151,13 @@ model AgentTrace {
     inputText  String    @db.Text
     outputText String?   @db.Text
     durationMs Int?
-    stepsJson  Json? // Array of execution steps
-    modelJson  Json? // Model configuration used
-    tokensJson Json? // Token counts
-    scoresJson Json? // Evaluation scores
-    createdAt  DateTime  @default(now())
+    stepsJson            Json? // Array of execution steps
+    modelJson            Json? // Model configuration used
+    tokensJson           Json? // Token counts
+    scoresJson           Json? // Evaluation scores
+    instructionsHash     String? // SHA-256 of merged instructions (base + skills)
+    instructionsSnapshot String? @db.Text // Full merged instructions for audit
+    createdAt            DateTime @default(now())
 
     // Relations
     steps     AgentTraceStep[]
@@ -1191,6 +1196,7 @@ model AgentToolCall {
     tenantId    String?
     toolKey     String
     mcpServerId String?
+    toolSource  String? // "registry", "mcp:hubspot", "skill:research-assistant"
     inputJson   Json?
     outputJson  Json?
     success     Boolean     @default(true)
@@ -1660,6 +1666,7 @@ enum LearningSignalType {
     HIGH_LATENCY // Run took too long
     ERROR // Run failed with error
     PATTERN // Detected pattern across runs
+    SKILL_CORRELATION // Skill correlated with poor performance
 }
 
 // Risk Tier Enum for Continuous Learning

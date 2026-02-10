@@ -119,12 +119,27 @@ export interface ResolveOptions {
 export type AgentRecordWithTools = AgentRecord;
 
 /**
+ * Active skill metadata captured at resolution time
+ */
+export interface ActiveSkillInfo {
+    skillId: string;
+    skillSlug: string;
+    skillVersion: number;
+}
+
+/**
  * Result of agent resolution
  */
 export interface HydratedAgent {
     agent: Agent;
     record: AgentRecordWithTools | null;
     source: "database" | "fallback";
+    /** Skills active on the agent at resolution time */
+    activeSkills: ActiveSkillInfo[];
+    /** Maps tool name -> origin (e.g. "registry", "mcp:hubspot", "skill:research") */
+    toolOriginMap: Record<string, string>;
+    /** Document IDs from attached skills for RAG scoping */
+    skillDocumentIds: string[];
 }
 
 /**
@@ -186,8 +201,8 @@ export class AgentResolver {
         });
 
         if (record) {
-            const agent = await this.hydrate(record, requestContext);
-            return { agent, record, source: "database" };
+            const result = await this.hydrate(record, requestContext);
+            return { ...result, record, source: "database" };
         }
 
         // Fallback to code-defined agents
@@ -196,7 +211,14 @@ export class AgentResolver {
                 const agent = mastra.getAgent(slug);
                 if (agent) {
                     console.log(`[AgentResolver] Fallback to code-defined agent: ${slug}`);
-                    return { agent, record: null, source: "fallback" };
+                    return {
+                        agent,
+                        record: null,
+                        source: "fallback",
+                        activeSkills: [],
+                        toolOriginMap: {},
+                        skillDocumentIds: []
+                    };
                 }
             } catch {
                 // Agent not found in Mastra either
@@ -209,8 +231,17 @@ export class AgentResolver {
     /**
      * Hydrate an Agent instance from a database record
      * Supports both static registry tools and MCP tools
+     * Returns agent + skill metadata + tool origin map for observability
      */
-    private async hydrate(record: AgentRecordWithTools, context?: RequestContext): Promise<Agent> {
+    private async hydrate(
+        record: AgentRecordWithTools,
+        context?: RequestContext
+    ): Promise<{
+        agent: Agent;
+        activeSkills: ActiveSkillInfo[];
+        toolOriginMap: Record<string, string>;
+        skillDocumentIds: string[];
+    }> {
         // Interpolate instructions if template exists
         const instructions = record.instructionsTemplate
             ? this.interpolateInstructions(record.instructionsTemplate, context || {})
@@ -228,25 +259,43 @@ export class AgentResolver {
             context?.tenantId ||
             record.workspace?.organizationId ||
             record.tenantId;
-        let tools = await getToolsByNamesAsync(toolNames, organizationId);
 
-        // If agent is MCP-enabled, merge in all available MCP tools
+        // Parallelize independent async work: tools, skills, sub-agents, and MCP tools
         const metadata = record.metadata as Record<string, unknown> | null;
-        if (metadata?.mcpEnabled) {
-            const mcpTools = await getAllMcpTools(organizationId);
-            // Merge MCP tools without overwriting already-resolved tools
-            tools = { ...mcpTools, ...tools };
+        const [registryTools, skillResult, subAgents, mcpTools] = await Promise.all([
+            getToolsByNamesAsync(toolNames, organizationId),
+            this.loadSkills(record.id, organizationId),
+            this.loadSubAgents(record.subAgents, context),
+            metadata?.mcpEnabled ? getAllMcpTools(organizationId) : Promise.resolve({})
+        ]);
+        const { skillInstructions, skillTools, skillDocumentIds, activeSkills } = skillResult;
+
+        // Build tool origin map before merging (tracks where each tool came from)
+        const toolOriginMap: Record<string, string> = {};
+        for (const key of Object.keys(mcpTools)) {
+            const serverName = key.split("_")[0] || "unknown";
+            toolOriginMap[key] = `mcp:${serverName}`;
+        }
+        for (const key of Object.keys(skillTools)) {
+            // Find which skill owns this tool
+            const ownerSkill = activeSkills.find((s) =>
+                skillResult.skillToolMapping?.[key] === s.skillSlug
+            );
+            toolOriginMap[key] = ownerSkill
+                ? `skill:${ownerSkill.skillSlug}`
+                : "skill:unknown";
+        }
+        for (const key of Object.keys(registryTools)) {
+            toolOriginMap[key] = "registry";
+        }
+
+        // Merge tools: MCP tools (lowest priority) -> skill tools -> registry tools (highest)
+        const tools = { ...mcpTools, ...skillTools, ...registryTools };
+
+        if (metadata?.mcpEnabled && Object.keys(mcpTools).length > 0) {
             console.log(
                 `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
             );
-        }
-
-        // Load skills (documents + tools + instructions)
-        const { skillInstructions, skillTools } = await this.loadSkills(record.id, organizationId);
-
-        // Merge skill tools into agent tools (agent-explicit tools take precedence)
-        if (Object.keys(skillTools).length > 0) {
-            tools = { ...skillTools, ...tools };
         }
 
         // Append skill instructions to agent instructions
@@ -255,7 +304,7 @@ export class AgentResolver {
             finalInstructions += `\n\n---\n# Skills & Domain Knowledge\n${skillInstructions}`;
         }
 
-        // Get scorers from registry
+        // Get scorers from registry (synchronous)
         const scorers = getScorersByNames(record.scorers);
 
         // Build model string
@@ -264,7 +313,6 @@ export class AgentResolver {
 
         const defaultOptions = this.buildDefaultOptions(record);
 
-        const subAgents = await this.loadSubAgents(record.subAgents, context);
         const workflows = this.loadWorkflows(record.workflows);
 
         // Create agent - using any to bypass strict typing issues with Mastra's Agent constructor
@@ -301,12 +349,18 @@ export class AgentResolver {
             agentConfig.workflows = workflows;
         }
 
-        return new Agent(agentConfig);
+        return {
+            agent: new Agent(agentConfig),
+            activeSkills,
+            toolOriginMap,
+            skillDocumentIds
+        };
     }
 
     /**
      * Load skills attached to an agent via AgentSkill junction.
-     * Returns merged skill instructions, resolved skill tools, and document IDs for scoped RAG.
+     * Returns merged skill instructions, resolved skill tools, document IDs,
+     * active skill metadata, and a mapping of tool IDs to skill slugs.
      */
     private async loadSkills(
         agentId: string,
@@ -316,6 +370,8 @@ export class AgentResolver {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         skillTools: Record<string, any>;
         skillDocumentIds: string[];
+        activeSkills: ActiveSkillInfo[];
+        skillToolMapping: Record<string, string>;
     }> {
         const agentSkills = await prisma.agentSkill.findMany({
             where: { agentId },
@@ -336,32 +392,60 @@ export class AgentResolver {
         });
 
         if (agentSkills.length === 0) {
-            return { skillInstructions: "", skillTools: {}, skillDocumentIds: [] };
+            return {
+                skillInstructions: "",
+                skillTools: {},
+                skillDocumentIds: [],
+                activeSkills: [],
+                skillToolMapping: {}
+            };
         }
 
         let skillInstructions = "";
         const skillToolIds: string[] = [];
         const skillDocumentIds: string[] = [];
+        const activeSkills: ActiveSkillInfo[] = [];
+        const skillToolMapping: Record<string, string> = {};
 
         for (const { skill } of agentSkills) {
+            // Track active skill metadata
+            activeSkills.push({
+                skillId: skill.id,
+                skillSlug: skill.slug,
+                skillVersion: skill.version
+            });
+
             skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
             if (skill.examples) {
                 skillInstructions += `\n\n### Examples:\n${skill.examples}`;
             }
 
-            for (const st of skill.tools) {
-                skillToolIds.push(st.toolId);
+            // Append associated document info to skill instructions (for RAG scoping)
+            if (skill.documents.length > 0) {
+                skillInstructions += `\n\n### Associated Knowledge Base Documents:`;
+                for (const sd of skill.documents) {
+                    const roleSuffix = sd.role ? ` (${sd.role})` : "";
+                    skillInstructions += `\n- ${sd.document.name}${roleSuffix}`;
+                    skillDocumentIds.push(sd.documentId);
+                }
             }
 
-            for (const sd of skill.documents) {
-                skillDocumentIds.push(sd.documentId);
+            for (const st of skill.tools) {
+                skillToolIds.push(st.toolId);
+                skillToolMapping[st.toolId] = skill.slug;
             }
         }
 
         const skillTools =
             skillToolIds.length > 0 ? await getToolsByNamesAsync(skillToolIds, organizationId) : {};
 
-        return { skillInstructions, skillTools, skillDocumentIds };
+        return {
+            skillInstructions,
+            skillTools,
+            skillDocumentIds,
+            activeSkills,
+            skillToolMapping
+        };
     }
 
     /**

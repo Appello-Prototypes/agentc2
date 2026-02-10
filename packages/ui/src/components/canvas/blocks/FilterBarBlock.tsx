@@ -17,7 +17,10 @@ export function FilterBarBlock({ config }: { config: any }) {
         return filter.id;
     };
 
-    const handleFilterChange = (filter: { id: string; queryId?: string; paramKey?: string }, value: unknown) => {
+    const handleFilterChange = (
+        filter: { id: string; queryId?: string; paramKey?: string },
+        value: unknown
+    ) => {
         // Set both the composite key and the individual id for compatibility
         const key = getFilterKey(filter);
         setFilter(key, value);
@@ -26,7 +29,8 @@ export function FilterBarBlock({ config }: { config: any }) {
         }
     };
 
-    const inputClass = "border-input bg-background ring-offset-background focus-visible:ring-ring rounded-md border px-3 py-1.5 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
+    const inputClass =
+        "border-input bg-background ring-offset-background focus-visible:ring-ring rounded-md border px-3 py-1.5 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none";
 
     return (
         <BlockWrapper
@@ -38,7 +42,8 @@ export function FilterBarBlock({ config }: { config: any }) {
                 {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
                 {(config.filters || []).map((filter: any) => {
                     const filterKey = getFilterKey(filter);
-                    const currentValue = filters[filterKey] ?? filters[filter.id] ?? filter.defaultValue ?? "";
+                    const currentValue =
+                        filters[filterKey] ?? filters[filter.id] ?? filter.defaultValue ?? "";
 
                     return (
                         <div key={filter.id} className="flex flex-col gap-1">
