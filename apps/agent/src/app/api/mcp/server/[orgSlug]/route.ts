@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 120;
 
 /**
- * Remote MCP Server Endpoint (Streamable HTTP) -- Organization-scoped
+ * Remote MCP Server Endpoint (Streamable HTTP) -- Organization-scoped, OAuth-protected
  *
  * Exposes Mastra agents, workflows, and networks as a proper MCP server
  * using the Streamable HTTP transport. This endpoint is designed for
@@ -15,124 +15,130 @@ export const maxDuration = 120;
  *
  * URL: /api/mcp/server/{orgSlug}
  *
- * The org slug is embedded in the URL so each organization gets a unique
- * MCP server endpoint. This mirrors how the Cursor setup uses
- * MASTRA_ORGANIZATION_SLUG to scope which agents are visible.
- *
  * Authentication:
- * - API Key via Authorization: Bearer header (recommended)
- *   Claude CoWork sends this when you fill in the "OAuth Client Secret" field.
- * - Also accepts X-API-Key header for direct usage.
- * - The API key is validated against the org's stored MCP API key in the DB.
- * - Falls back to global MCP_API_KEY from env if no org-specific key matches.
+ * - Bearer token via Authorization header (required)
+ * - Token is the org's MCP API key, obtained via the OAuth flow
+ * - Claude CoWork handles the OAuth flow automatically when Client ID + Secret are provided
+ *
+ * OAuth flow:
+ * 1. Claude discovers /.well-known/oauth-protected-resource → authorization server
+ * 2. Claude discovers /.well-known/oauth-authorization-server → authorize + token URLs
+ * 3. Claude redirects to /authorize → auto-approves, returns auth code
+ * 4. Claude exchanges code at /token (with client_secret = MCP API key) → gets access_token
+ * 5. Claude sends Bearer token on all MCP requests
  *
  * Protocol: MCP Streamable HTTP (spec version 2025-03-26)
- *
- * Claude CoWork users add this as a Custom Connector with the URL:
- *   https://mastra.useappello.app/agent/api/mcp/server/{orgSlug}
  */
 
 type RouteContext = { params: Promise<{ orgSlug: string }> };
 
 /**
- * Resolve and authenticate the organization from the URL slug + optional API key.
+ * Validate Bearer token against the org's stored MCP API key.
+ * Returns organizationId + auth headers for the internal gateway, or null if invalid.
  */
-async function resolveOrganization(
+async function authenticateRequest(
     orgSlug: string,
     request: NextRequest
 ): Promise<{ organizationId: string; authHeaders: Record<string, string> } | null> {
-    // Look up the organization by slug
+    // Look up the organization
     const org = await prisma.organization.findUnique({
         where: { slug: orgSlug },
         select: { id: true }
     });
-    if (!org) {
-        return null;
+    if (!org) return null;
+
+    // Extract Bearer token
+    const token =
+        request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+        request.headers.get("x-api-key");
+
+    if (!token) return null;
+
+    // Validate against org-specific MCP API key
+    const credential = await prisma.toolCredential.findUnique({
+        where: {
+            organizationId_toolId: {
+                organizationId: org.id,
+                toolId: "mastra-mcp-api"
+            }
+        },
+        select: { credentials: true, isActive: true }
+    });
+    const credentialPayload = credential?.credentials;
+    const storedKey =
+        credentialPayload &&
+        typeof credentialPayload === "object" &&
+        !Array.isArray(credentialPayload)
+            ? (credentialPayload as { apiKey?: string }).apiKey
+            : undefined;
+
+    if (credential?.isActive && storedKey && storedKey === token) {
+        return {
+            organizationId: org.id,
+            authHeaders: {
+                "X-API-Key": token,
+                "X-Organization-Slug": orgSlug
+            }
+        };
     }
 
-    const apiKey =
-        request.headers.get("x-api-key") ||
-        request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-
-    const authHeaders: Record<string, string> = {
-        "X-Organization-Slug": orgSlug
-    };
-
-    // If the caller provided an API key, validate it
-    if (apiKey) {
-        // Check org-specific MCP API key stored in ToolCredential
-        const credential = await prisma.toolCredential.findUnique({
-            where: {
-                organizationId_toolId: {
-                    organizationId: org.id,
-                    toolId: "mastra-mcp-api"
-                }
-            },
-            select: { credentials: true, isActive: true }
-        });
-        const credentialPayload = credential?.credentials;
-        const storedKey =
-            credentialPayload &&
-            typeof credentialPayload === "object" &&
-            !Array.isArray(credentialPayload)
-                ? (credentialPayload as { apiKey?: string }).apiKey
-                : undefined;
-
-        if (credential?.isActive && storedKey && storedKey === apiKey) {
-            authHeaders["X-API-Key"] = apiKey;
-            return { organizationId: org.id, authHeaders };
-        }
-
-        // Check global MCP_API_KEY from env
-        const globalKey = process.env.MCP_API_KEY;
-        if (globalKey && apiKey === globalKey) {
-            authHeaders["X-API-Key"] = apiKey;
-            return { organizationId: org.id, authHeaders };
-        }
-
-        // API key was provided but didn't match -- reject
-        return null;
-    }
-
-    // No API key provided -- allow if a global key exists (inject it for
-    // the internal gateway call) so the endpoint is usable in authless mode
-    // during initial testing. In production you should require a key.
+    // Also accept global MCP_API_KEY
     const globalKey = process.env.MCP_API_KEY;
-    if (globalKey) {
-        authHeaders["X-API-Key"] = globalKey;
+    if (globalKey && token === globalKey) {
+        return {
+            organizationId: org.id,
+            authHeaders: {
+                "X-API-Key": token,
+                "X-Organization-Slug": orgSlug
+            }
+        };
     }
 
-    return { organizationId: org.id, authHeaders };
+    return null;
+}
+
+/**
+ * Build a 401 response with proper WWW-Authenticate header
+ * that points Claude to our OAuth discovery metadata.
+ */
+function unauthorizedResponse(request: NextRequest, orgSlug: string): Response {
+    const url = new URL(request.url);
+    const baseUrl = `${url.protocol}//${url.host}`;
+    const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
+
+    return new Response(
+        JSON.stringify({
+            jsonrpc: "2.0",
+            error: {
+                code: -32001,
+                message: `Authentication required for organization "${orgSlug}".`
+            },
+            id: null
+        }),
+        {
+            status: 401,
+            headers: {
+                "Content-Type": "application/json",
+                "WWW-Authenticate": `Bearer resource_metadata="${resourceMetadataUrl}"`
+            }
+        }
+    );
 }
 
 /**
  * Handle MCP Streamable HTTP requests.
- * Converts Next.js Request/Response to Node.js IncomingMessage/ServerResponse
- * using fetch-to-node, then delegates to MCPServer.startHTTP().
  */
 async function handleMcpRequest(request: NextRequest, context: RouteContext): Promise<Response> {
     const { orgSlug } = await context.params;
 
-    try {
-        const orgContext = await resolveOrganization(orgSlug, request);
-        if (!orgContext) {
-            return new Response(
-                JSON.stringify({
-                    jsonrpc: "2.0",
-                    error: {
-                        code: -32001,
-                        message: `Organization "${orgSlug}" not found or API key is invalid.`
-                    },
-                    id: null
-                }),
-                {
-                    status: 401,
-                    headers: { "Content-Type": "application/json" }
-                }
-            );
-        }
+    // Authenticate
+    const authResult = await authenticateRequest(orgSlug, request);
+    if (!authResult) {
+        return unauthorizedResponse(request, orgSlug);
+    }
 
-        const { organizationId, authHeaders } = orgContext;
+    try {
+        const { organizationId, authHeaders } = authResult;
 
         // Build the MCPServer with tools for this organization
         const mcpServer = await buildMcpServer(organizationId, authHeaders);
@@ -140,7 +146,6 @@ async function handleMcpRequest(request: NextRequest, context: RouteContext): Pr
         // Convert the Next.js Request to Node.js req/res
         const { req: nodeReq, res: nodeRes } = toReqRes(request);
 
-        // Determine the MCP path
         const url = new URL(request.url);
 
         // Start the Streamable HTTP handler in serverless mode
@@ -154,7 +159,6 @@ async function handleMcpRequest(request: NextRequest, context: RouteContext): Pr
             }
         });
 
-        // Convert the Node.js response back to a Fetch Response
         return await toFetchResponse(nodeRes);
     } catch (error) {
         console.error(`[MCP Server/${orgSlug}] Error handling request:`, error);
@@ -177,9 +181,6 @@ async function handleMcpRequest(request: NextRequest, context: RouteContext): Pr
 
 /**
  * POST /api/mcp/server/{orgSlug}
- *
- * Main MCP Streamable HTTP endpoint. Handles JSON-RPC messages from
- * MCP clients (initialize, tools/list, tools/call, etc.)
  */
 export async function POST(request: NextRequest, context: RouteContext): Promise<Response> {
     return handleMcpRequest(request, context);
@@ -187,27 +188,29 @@ export async function POST(request: NextRequest, context: RouteContext): Promise
 
 /**
  * GET /api/mcp/server/{orgSlug}
- *
- * Handles SSE stream connections for MCP Streamable HTTP.
- * Also serves as a health check / discovery endpoint.
  */
 export async function GET(request: NextRequest, context: RouteContext): Promise<Response> {
     const { orgSlug } = await context.params;
 
-    // Check if this is an MCP protocol request (has Accept header for SSE)
+    // Check if this is an MCP protocol request (SSE)
     const accept = request.headers.get("accept") || "";
     if (accept.includes("text/event-stream")) {
         return handleMcpRequest(request, context);
     }
 
-    // Otherwise return server info for discovery
+    // For non-SSE GET without auth, return discovery info with auth hint
+    const authResult = await authenticateRequest(orgSlug, request);
+    if (!authResult) {
+        return unauthorizedResponse(request, orgSlug);
+    }
+
     return new Response(
         JSON.stringify({
             name: "Mastra Agents MCP Server",
             version: "1.0.0",
             protocol: "mcp-streamable-http",
             organization: orgSlug,
-            description: `Remote MCP server for organization "${orgSlug}". Exposes agents, workflows, and networks as MCP tools.`,
+            description: `Remote MCP server for organization "${orgSlug}".`,
             endpoints: {
                 mcp: `/api/mcp/server/${orgSlug}`
             },
@@ -222,8 +225,6 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 
 /**
  * DELETE /api/mcp/server/{orgSlug}
- *
- * Handles session termination for MCP Streamable HTTP.
  */
 export async function DELETE(request: NextRequest, context: RouteContext): Promise<Response> {
     return handleMcpRequest(request, context);

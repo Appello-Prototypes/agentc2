@@ -665,23 +665,30 @@ main().catch(console.error);
                                         <span className="text-muted-foreground font-medium">
                                             OAuth Client ID:
                                         </span>
-                                        <span className="text-muted-foreground italic">
-                                            (leave blank)
-                                        </span>
+                                        <code>{organization?.slug || "<org-slug>"}</code>
                                     </div>
                                     <div className="grid grid-cols-[140px_1fr] gap-2">
                                         <span className="text-muted-foreground font-medium">
                                             OAuth Client Secret:
                                         </span>
-                                        <span className="text-muted-foreground italic">
-                                            {mcpApiKey
-                                                ? "(paste your MCP API key from Step 2)"
-                                                : "(generate a key in Step 2 first)"}
+                                        <span>
+                                            {mcpApiKey ? (
+                                                <code className="text-xs break-all">
+                                                    {showMcpApiKey
+                                                        ? mcpApiKey
+                                                        : mcpApiKey.substring(0, 8) + "..."}
+                                                </code>
+                                            ) : (
+                                                <span className="text-muted-foreground italic">
+                                                    (generate a key in Step 2 first)
+                                                </span>
+                                            )}
                                         </span>
                                     </div>
                                 </div>
                                 <p className="text-muted-foreground text-sm">
-                                    Click <strong>Add</strong> and Claude will connect to your
+                                    Click <strong>Add</strong>. Claude will complete the OAuth flow
+                                    automatically using your credentials, then connect to your
                                     Mastra agents. You can verify by asking Claude to list available
                                     tools.
                                 </p>
