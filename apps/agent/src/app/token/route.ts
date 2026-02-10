@@ -1,9 +1,8 @@
-import { NextRequest } from "next/server";
-import { createHash } from "crypto";
-import { prisma } from "@repo/database";
-import { authCodes } from "@/app/authorize/route";
+import { NextRequest } from "next/server"
+import { createHash } from "crypto"
+import { consumeAuthCode, validateClientCredentials } from "@/lib/mcp-oauth"
 
-export const dynamic = "force-dynamic";
+export const dynamic = "force-dynamic"
 
 /**
  * Verify PKCE code_verifier against stored code_challenge.
@@ -11,54 +10,37 @@ export const dynamic = "force-dynamic";
  */
 function verifyPkce(codeVerifier: string, codeChallenge: string, method: string): boolean {
     if (method === "S256") {
-        const hash = createHash("sha256").update(codeVerifier).digest("base64url");
-        return hash === codeChallenge;
+        const hash = createHash("sha256").update(codeVerifier).digest("base64url")
+        return hash === codeChallenge
     }
-    // Plain method (not recommended but handle it)
-    return codeVerifier === codeChallenge;
+    // Plain method fallback
+    return codeVerifier === codeChallenge
 }
 
 /**
- * Validate client_id (org slug) + client_secret (MCP API key) against the database.
+ * Extract client credentials from the request body and/or Authorization header.
+ * Supports both client_secret_post and client_secret_basic auth methods.
  */
-async function validateClientCredentials(clientId: string, clientSecret: string): Promise<boolean> {
-    // client_id is the org slug
-    const org = await prisma.organization.findUnique({
-        where: { slug: clientId },
-        select: { id: true }
-    });
-    if (!org) return false;
+function resolveClientCredentials(
+    params: Record<string, string>,
+    authHeader: string | null
+): { clientId: string; clientSecret: string } {
+    let clientId = params.client_id || ""
+    let clientSecret = params.client_secret || ""
 
-    // client_secret is the MCP API key -- check against the org's stored key
-    const credential = await prisma.toolCredential.findUnique({
-        where: {
-            organizationId_toolId: {
-                organizationId: org.id,
-                toolId: "mastra-mcp-api"
-            }
-        },
-        select: { credentials: true, isActive: true }
-    });
-
-    const credentialPayload = credential?.credentials;
-    const storedKey =
-        credentialPayload &&
-        typeof credentialPayload === "object" &&
-        !Array.isArray(credentialPayload)
-            ? (credentialPayload as { apiKey?: string }).apiKey
-            : undefined;
-
-    if (credential?.isActive && storedKey && storedKey === clientSecret) {
-        return true;
+    // client_secret_basic: Authorization: Basic base64(client_id:client_secret)
+    if (authHeader?.startsWith("Basic ")) {
+        const decoded = Buffer.from(authHeader.slice(6), "base64").toString()
+        const colonIndex = decoded.indexOf(":")
+        if (colonIndex > 0) {
+            const basicId = decoded.substring(0, colonIndex)
+            const basicSecret = decoded.substring(colonIndex + 1)
+            if (!clientId) clientId = basicId
+            if (!clientSecret) clientSecret = basicSecret
+        }
     }
 
-    // Also accept global MCP_API_KEY
-    const globalKey = process.env.MCP_API_KEY;
-    if (globalKey && clientSecret === globalKey) {
-        return true;
-    }
-
-    return false;
+    return { clientId, clientSecret }
 }
 
 /**
@@ -66,186 +48,195 @@ async function validateClientCredentials(clientId: string, clientSecret: string)
  *
  * OAuth 2.1 Token Endpoint.
  *
- * Supports grant_type=authorization_code:
- *   - Validates the authorization code
+ * grant_type=authorization_code:
+ *   - Consumes the single-use authorization code
  *   - Validates PKCE code_verifier
- *   - Validates client_id + client_secret against the org's MCP API key
- *   - Returns an access token (the MCP API key itself)
+ *   - Validates client_id + client_secret (MCP API key) -- REQUIRED
+ *   - Returns access_token = the MCP API key (so the MCP endpoint can validate it)
  *
- * Also supports grant_type=refresh_token for token refresh.
+ * grant_type=refresh_token:
+ *   - Re-validates client credentials
+ *   - Re-issues the same access token
  */
 export async function POST(request: NextRequest): Promise<Response> {
-    // Token requests can be application/x-www-form-urlencoded or JSON
-    const contentType = request.headers.get("content-type") || "";
-    let params: Record<string, string>;
+    // Parse request body (form-encoded or JSON)
+    const contentType = request.headers.get("content-type") || ""
+    let params: Record<string, string>
 
     if (contentType.includes("application/x-www-form-urlencoded")) {
-        const formData = await request.formData();
-        params = Object.fromEntries(Array.from(formData.entries()).map(([k, v]) => [k, String(v)]));
+        const formData = await request.formData()
+        params = Object.fromEntries(
+            Array.from(formData.entries()).map(([k, v]) => [k, String(v)])
+        )
     } else {
-        params = await request.json();
+        try {
+            params = await request.json()
+        } catch {
+            return new Response(
+                JSON.stringify({
+                    error: "invalid_request",
+                    error_description: "Invalid request body",
+                }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            )
+        }
     }
 
-    const grantType = params.grant_type;
-    const clientId = params.client_id;
-    const clientSecret = params.client_secret;
+    const grantType = params.grant_type
+    const authHeader = request.headers.get("authorization")
+    const { clientId, clientSecret } = resolveClientCredentials(params, authHeader)
 
-    // Also check for client credentials in the Authorization header (Basic auth)
-    let headerClientId = clientId;
-    let headerClientSecret = clientSecret;
-    const authHeader = request.headers.get("authorization");
-    if (authHeader?.startsWith("Basic ")) {
-        const decoded = Buffer.from(authHeader.slice(6), "base64").toString();
-        const [id, secret] = decoded.split(":");
-        if (id && !headerClientId) headerClientId = id;
-        if (secret && !headerClientSecret) headerClientSecret = secret;
-    }
-
-    const resolvedClientId = headerClientId || "";
-    const resolvedClientSecret = headerClientSecret || "";
+    // ── authorization_code grant ──
 
     if (grantType === "authorization_code") {
-        const code = params.code;
-        const codeVerifier = params.code_verifier;
-        const redirectUri = params.redirect_uri;
+        const code = params.code
+        const codeVerifier = params.code_verifier
+        const redirectUri = params.redirect_uri
 
-        if (!code || !resolvedClientId) {
-            return new Response(JSON.stringify({ error: "invalid_request" }), {
-                status: 400,
-                headers: { "Content-Type": "application/json" }
-            });
+        if (!code || !clientId) {
+            return new Response(
+                JSON.stringify({
+                    error: "invalid_request",
+                    error_description: "Missing code or client_id",
+                }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            )
         }
 
-        // Look up the stored auth code
-        const storedCode = authCodes.get(code);
+        // Consume the single-use auth code
+        const storedCode = consumeAuthCode(code)
         if (!storedCode) {
             return new Response(
                 JSON.stringify({
                     error: "invalid_grant",
-                    error_description: "Invalid or expired authorization code"
+                    error_description: "Invalid or expired authorization code",
                 }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
-            );
-        }
-
-        // Delete the code (one-time use)
-        authCodes.delete(code);
-
-        // Check expiration
-        if (storedCode.expiresAt < Date.now()) {
-            return new Response(
-                JSON.stringify({
-                    error: "invalid_grant",
-                    error_description: "Authorization code expired"
-                }),
-                { status: 400, headers: { "Content-Type": "application/json" } }
-            );
+            )
         }
 
         // Validate client_id matches
-        if (storedCode.clientId !== resolvedClientId) {
+        if (storedCode.clientId !== clientId) {
             return new Response(
-                JSON.stringify({ error: "invalid_grant", error_description: "Client ID mismatch" }),
+                JSON.stringify({
+                    error: "invalid_grant",
+                    error_description: "Client ID mismatch",
+                }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
-            );
+            )
         }
 
-        // Validate redirect_uri matches
+        // Validate redirect_uri matches (if provided)
         if (redirectUri && storedCode.redirectUri !== redirectUri) {
             return new Response(
                 JSON.stringify({
                     error: "invalid_grant",
-                    error_description: "Redirect URI mismatch"
+                    error_description: "Redirect URI mismatch",
                 }),
                 { status: 400, headers: { "Content-Type": "application/json" } }
-            );
+            )
         }
 
-        // Validate PKCE code_verifier
+        // Validate PKCE code_verifier (if provided)
         if (codeVerifier) {
             if (
-                !verifyPkce(codeVerifier, storedCode.codeChallenge, storedCode.codeChallengeMethod)
+                !verifyPkce(
+                    codeVerifier,
+                    storedCode.codeChallenge,
+                    storedCode.codeChallengeMethod
+                )
             ) {
                 return new Response(
                     JSON.stringify({
                         error: "invalid_grant",
-                        error_description: "PKCE verification failed"
+                        error_description: "PKCE verification failed",
                     }),
                     { status: 400, headers: { "Content-Type": "application/json" } }
-                );
+                )
             }
         }
 
-        // Validate client credentials (client_secret = MCP API key)
-        if (resolvedClientSecret) {
-            const valid = await validateClientCredentials(resolvedClientId, resolvedClientSecret);
-            if (!valid) {
-                return new Response(
-                    JSON.stringify({
-                        error: "invalid_client",
-                        error_description: "Invalid client credentials"
-                    }),
-                    { status: 401, headers: { "Content-Type": "application/json" } }
-                );
-            }
+        // Always require client_secret -- this is the MCP API key
+        if (!clientSecret) {
+            return new Response(
+                JSON.stringify({
+                    error: "invalid_client",
+                    error_description: "Client secret is required",
+                }),
+                { status: 401, headers: { "Content-Type": "application/json" } }
+            )
         }
 
-        // Issue access token -- use the client_secret (MCP API key) as the token
-        // so the MCP endpoint can validate it against the same DB credential
-        const accessToken = resolvedClientSecret || resolvedClientId;
+        const validation = await validateClientCredentials(clientId, clientSecret)
+        if (!validation) {
+            return new Response(
+                JSON.stringify({
+                    error: "invalid_client",
+                    error_description: "Invalid client credentials",
+                }),
+                { status: 401, headers: { "Content-Type": "application/json" } }
+            )
+        }
+
+        // Issue access token = the MCP API key itself, so the MCP endpoint
+        // can validate it against the same DB credential
         return new Response(
             JSON.stringify({
-                access_token: accessToken,
-                token_type: "Bearer",
-                expires_in: 86400, // 24 hours
-                scope: "mcp"
-            }),
-            {
-                status: 200,
-                headers: {
-                    "Content-Type": "application/json",
-                    "Cache-Control": "no-store"
-                }
-            }
-        );
-    }
-
-    if (grantType === "refresh_token") {
-        // For refresh, just re-validate and re-issue
-        if (!resolvedClientId || !resolvedClientSecret) {
-            return new Response(JSON.stringify({ error: "invalid_request" }), {
-                status: 400,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        const valid = await validateClientCredentials(resolvedClientId, resolvedClientSecret);
-        if (!valid) {
-            return new Response(JSON.stringify({ error: "invalid_client" }), {
-                status: 401,
-                headers: { "Content-Type": "application/json" }
-            });
-        }
-
-        return new Response(
-            JSON.stringify({
-                access_token: resolvedClientSecret,
+                access_token: clientSecret,
                 token_type: "Bearer",
                 expires_in: 86400,
-                scope: "mcp"
+                scope: "mcp",
             }),
             {
                 status: 200,
                 headers: {
                     "Content-Type": "application/json",
-                    "Cache-Control": "no-store"
-                }
+                    "Cache-Control": "no-store",
+                },
             }
-        );
+        )
     }
 
-    return new Response(JSON.stringify({ error: "unsupported_grant_type" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" }
-    });
+    // ── refresh_token grant ──
+
+    if (grantType === "refresh_token") {
+        if (!clientId || !clientSecret) {
+            return new Response(
+                JSON.stringify({
+                    error: "invalid_request",
+                    error_description: "Missing client credentials",
+                }),
+                { status: 400, headers: { "Content-Type": "application/json" } }
+            )
+        }
+
+        const validation = await validateClientCredentials(clientId, clientSecret)
+        if (!validation) {
+            return new Response(
+                JSON.stringify({ error: "invalid_client" }),
+                { status: 401, headers: { "Content-Type": "application/json" } }
+            )
+        }
+
+        return new Response(
+            JSON.stringify({
+                access_token: clientSecret,
+                token_type: "Bearer",
+                expires_in: 86400,
+                scope: "mcp",
+            }),
+            {
+                status: 200,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Cache-Control": "no-store",
+                },
+            }
+        )
+    }
+
+    return new Response(
+        JSON.stringify({ error: "unsupported_grant_type" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+    )
 }

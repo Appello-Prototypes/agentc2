@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { buildMcpServer } from "@/lib/mcp-server";
+import { getPublicBaseUrl } from "@/lib/mcp-oauth";
 import { toReqRes, toFetchResponse } from "fetch-to-node";
 
 export const dynamic = "force-dynamic";
@@ -101,16 +102,6 @@ async function authenticateRequest(
  * Build a 401 response with proper WWW-Authenticate header
  * that points Claude to our OAuth discovery metadata.
  */
-function getPublicBaseUrl(request: NextRequest): string {
-    const forwardedHost = request.headers.get("x-forwarded-host");
-    const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
-    if (forwardedHost) {
-        return `${forwardedProto}://${forwardedHost}`;
-    }
-    const url = new URL(request.url);
-    return `${url.protocol}//${url.host}`;
-}
-
 function unauthorizedResponse(request: NextRequest, orgSlug: string): Response {
     const baseUrl = getPublicBaseUrl(request);
     const resourceMetadataUrl = `${baseUrl}/.well-known/oauth-protected-resource`;
