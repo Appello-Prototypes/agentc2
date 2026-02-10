@@ -43,16 +43,58 @@ async function getBotUserId(): Promise<string | null> {
 /**
  * Track threads the bot has participated in so it can auto-reply
  * without requiring @mention on every message.
- * Key: "channelId-threadTs" -> true
+ *
+ * Uses an in-memory LRU-style Map with timestamps for eviction.
+ * On cache miss, falls back to checking AgentRun records in the database
+ * (the threadId field stores "slack-{channelId}-{threadTs}").
+ * This means threads survive server restarts.
  */
-const activeThreads = new Set<string>();
+const THREAD_CACHE_MAX = 1000;
+const THREAD_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+const activeThreads = new Map<string, number>();
 
 function markThreadActive(channelId: string, threadTs: string) {
-    activeThreads.add(`${channelId}-${threadTs}`);
+    const key = `${channelId}-${threadTs}`;
+    activeThreads.set(key, Date.now());
+
+    // Evict oldest entries if cache grows too large
+    if (activeThreads.size > THREAD_CACHE_MAX) {
+        const cutoff = Date.now() - THREAD_CACHE_TTL_MS;
+        for (const [k, ts] of activeThreads) {
+            if (ts < cutoff) activeThreads.delete(k);
+        }
+        if (activeThreads.size > THREAD_CACHE_MAX) {
+            const entries = [...activeThreads.entries()].sort((a, b) => a[1] - b[1]);
+            for (const [k] of entries.slice(0, Math.floor(entries.length / 2))) {
+                activeThreads.delete(k);
+            }
+        }
+    }
 }
 
-function isThreadActive(channelId: string, threadTs: string): boolean {
-    return activeThreads.has(`${channelId}-${threadTs}`);
+/**
+ * Check if the bot has previously participated in a thread.
+ * First checks in-memory cache, then falls back to the database.
+ */
+async function isThreadActive(channelId: string, threadTs: string): Promise<boolean> {
+    const key = `${channelId}-${threadTs}`;
+    const ts = activeThreads.get(key);
+    if (ts && Date.now() - ts < THREAD_CACHE_TTL_MS) return true;
+
+    // DB fallback: check for prior runs in this thread
+    try {
+        const priorRun = await prisma.agentRun.findFirst({
+            where: { threadId: `slack-${channelId}-${threadTs}`, source: "slack" },
+            select: { id: true }
+        });
+        if (priorRun) {
+            markThreadActive(channelId, threadTs);
+            return true;
+        }
+    } catch {
+        // DB failure -- don't auto-reply
+    }
+    return false;
 }
 
 /**
@@ -203,46 +245,54 @@ function stripBotMention(text: string): string {
 function markdownToSlack(text: string): string {
     let result = text;
 
-    // Preserve code blocks from being modified (replace temporarily)
+    // Preserve code blocks from being modified
     const codeBlocks: string[] = [];
     result = result.replace(/```[\s\S]*?```/g, (match) => {
         codeBlocks.push(match);
-        return `__CODE_BLOCK_${codeBlocks.length - 1}__`;
+        return `\x00CB${codeBlocks.length - 1}\x00`;
     });
 
     // Preserve inline code
     const inlineCode: string[] = [];
     result = result.replace(/`[^`]+`/g, (match) => {
         inlineCode.push(match);
-        return `__INLINE_CODE_${inlineCode.length - 1}__`;
+        return `\x00IC${inlineCode.length - 1}\x00`;
     });
 
-    // Convert Markdown links [text](url) -> <url|text>
-    result = result.replace(/!?\[([^\]]+)\]\(([^)]+)\)/g, "<$2|$1>");
+    // Images ![alt](url) -> <url|alt>
+    result = result.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, "<$2|$1>");
 
-    // Convert headers: ## Header -> *Header*
+    // Links [text](url) -> <url|text>
+    result = result.replace(/\[([^\]]+)\]\(([^)]+)\)/g, "<$2|$1>");
+
+    // Headers: ## Header -> *Header*
     result = result.replace(/^#{1,6}\s+(.+)$/gm, "*$1*");
 
-    // Convert bold: **text** or __text__ -> *text*
+    // Bold+italic: ***text*** -> *_text_*
+    result = result.replace(/\*\*\*(.+?)\*\*\*/g, "*_$1_*");
+    result = result.replace(/___(.+?)___/g, "*_$1_*");
+
+    // Bold: **text** or __text__ -> *text*
     result = result.replace(/\*\*(.+?)\*\*/g, "*$1*");
     result = result.replace(/__(.+?)__/g, "*$1*");
 
-    // Convert italic: single *text* (not already bold) -> _text_
-    // Only match *word* patterns that aren't inside bold markers
-    // Skip this if the text is already using Slack bold (*text*)
-    // Markdown italic with underscores _text_ stays as _text_ (Slack italic)
+    // Strikethrough: ~~text~~ -> ~text~
+    result = result.replace(/~~(.+?)~~/g, "~$1~");
 
-    // Convert horizontal rules --- or *** -> ───
-    result = result.replace(/^[-*_]{3,}$/gm, "───");
+    // Unordered list: * item -> bullet (avoid Slack bold confusion)
+    result = result.replace(/^(\s*)\*\s+/gm, "$1\u2022 ");
+
+    // Horizontal rules
+    result = result.replace(/^[-*_]{3,}$/gm, "\u2500\u2500\u2500");
 
     // Restore inline code
     for (let i = 0; i < inlineCode.length; i++) {
-        result = result.replace(`__INLINE_CODE_${i}__`, inlineCode[i]);
+        result = result.replace(`\x00IC${i}\x00`, inlineCode[i]);
     }
 
     // Restore code blocks
     for (let i = 0; i < codeBlocks.length; i++) {
-        result = result.replace(`__CODE_BLOCK_${i}__`, codeBlocks[i]);
+        result = result.replace(`\x00CB${i}\x00`, codeBlocks[i]);
     }
 
     return result;
@@ -381,14 +431,50 @@ async function sendSlackMessage(
 }
 
 /**
+ * Slack limits chat.postMessage text to ~4000 chars. If the response
+ * exceeds this, split into multiple messages at paragraph boundaries.
+ */
+const SLACK_MAX_TEXT_LENGTH = 3900;
+
+async function sendSlackMessageSafe(
+    channelId: string,
+    text: string,
+    threadTs?: string,
+    identity?: { username?: string; icon_emoji?: string; icon_url?: string }
+): Promise<boolean> {
+    if (text.length <= SLACK_MAX_TEXT_LENGTH) {
+        return sendSlackMessage(channelId, text, threadTs, identity);
+    }
+
+    const chunks: string[] = [];
+    let remaining = text;
+
+    while (remaining.length > SLACK_MAX_TEXT_LENGTH) {
+        let splitIdx = remaining.lastIndexOf("\n\n", SLACK_MAX_TEXT_LENGTH);
+        if (splitIdx < SLACK_MAX_TEXT_LENGTH * 0.3) {
+            splitIdx = remaining.lastIndexOf("\n", SLACK_MAX_TEXT_LENGTH);
+        }
+        if (splitIdx < SLACK_MAX_TEXT_LENGTH * 0.3) {
+            splitIdx = SLACK_MAX_TEXT_LENGTH;
+        }
+        chunks.push(remaining.slice(0, splitIdx).trimEnd());
+        remaining = remaining.slice(splitIdx).trimStart();
+    }
+    if (remaining) chunks.push(remaining);
+
+    let success = true;
+    for (const chunk of chunks) {
+        const ok = await sendSlackMessage(channelId, chunk, threadTs, identity);
+        if (!ok) success = false;
+    }
+    return success;
+}
+
+/**
  * Add a reaction to a message (e.g., :eyes: while thinking).
  * This is a human-like "I see your message" acknowledgment.
  */
-async function addReaction(
-    channelId: string,
-    messageTs: string,
-    reaction: string
-): Promise<void> {
+async function addReaction(channelId: string, messageTs: string, reaction: string): Promise<void> {
     const botToken = process.env.SLACK_BOT_TOKEN;
     if (!botToken) return;
     try {
@@ -858,33 +944,36 @@ export async function POST(request: NextRequest) {
                 // Handle help / agent:list command
                 if (directive.isListCommand) {
                     const helpText = await listActiveAgents();
-                    await sendSlackMessage(mentionEvent.channel, helpText, threadTs);
+                    await sendSlackMessageSafe(mentionEvent.channel, helpText, threadTs);
                     return;
                 }
 
                 // Show "thinking" reaction while processing
                 await addReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
 
-                const result = await processMessage(
-                    directive.text,
-                    mentionEvent.user,
-                    mentionEvent.channel,
-                    threadTs,
-                    mentionEvent.ts,
-                    directive.slug || undefined
-                );
+                try {
+                    const result = await processMessage(
+                        directive.text,
+                        mentionEvent.user,
+                        mentionEvent.channel,
+                        threadTs,
+                        mentionEvent.ts,
+                        directive.slug || undefined
+                    );
 
-                // Remove thinking reaction, reply with agent identity
-                await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
-                await sendSlackMessage(
-                    mentionEvent.channel,
-                    result.text,
-                    threadTs,
-                    result.identity
-                );
+                    await sendSlackMessageSafe(
+                        mentionEvent.channel,
+                        result.text,
+                        threadTs,
+                        result.identity
+                    );
 
-                // Remember this thread so follow-up replies don't need @mention
-                markThreadActive(mentionEvent.channel, threadTs);
+                    // Remember this thread so follow-up replies don't need @mention
+                    markThreadActive(mentionEvent.channel, threadTs);
+                } finally {
+                    // Always remove thinking reaction, even on error
+                    await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
+                }
             });
 
             return NextResponse.json({ ok: true });
@@ -984,6 +1073,11 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true });
             }
 
+            // Skip messages with no text (file uploads, image-only, etc.)
+            if (!messageEvent.text?.trim()) {
+                return NextResponse.json({ ok: true });
+            }
+
             // Determine if this message should get a response:
             // 1. DMs always get a response
             // 2. Channel thread replies get a response if the bot participated in that thread
@@ -991,7 +1085,7 @@ export async function POST(request: NextRequest) {
             const isActiveThreadReply =
                 !isDM &&
                 messageEvent.thread_ts &&
-                isThreadActive(messageEvent.channel, messageEvent.thread_ts);
+                (await isThreadActive(messageEvent.channel, messageEvent.thread_ts));
 
             if (isDM || isActiveThreadReply) {
                 const directive = parseAgentDirective(messageEvent.text);
@@ -1002,33 +1096,36 @@ export async function POST(request: NextRequest) {
                     // Handle help / agent:list command
                     if (directive.isListCommand) {
                         const helpText = await listActiveAgents();
-                        await sendSlackMessage(messageEvent.channel, helpText, threadTs);
+                        await sendSlackMessageSafe(messageEvent.channel, helpText, threadTs);
                         return;
                     }
 
                     // Show "thinking" reaction while processing
                     await addReaction(messageEvent.channel, messageEvent.ts, "eyes");
 
-                    const result = await processMessage(
-                        directive.text,
-                        messageEvent.user,
-                        messageEvent.channel,
-                        threadTs,
-                        messageEvent.ts,
-                        directive.slug || undefined
-                    );
+                    try {
+                        const result = await processMessage(
+                            directive.text,
+                            messageEvent.user,
+                            messageEvent.channel,
+                            threadTs,
+                            messageEvent.ts,
+                            directive.slug || undefined
+                        );
 
-                    // Remove thinking reaction, reply with agent identity
-                    await removeReaction(messageEvent.channel, messageEvent.ts, "eyes");
-                    await sendSlackMessage(
-                        messageEvent.channel,
-                        result.text,
-                        threadTs,
-                        result.identity
-                    );
+                        await sendSlackMessageSafe(
+                            messageEvent.channel,
+                            result.text,
+                            threadTs,
+                            result.identity
+                        );
 
-                    // Keep thread marked active
-                    markThreadActive(messageEvent.channel, threadTs);
+                        // Keep thread marked active
+                        markThreadActive(messageEvent.channel, threadTs);
+                    } finally {
+                        // Always remove thinking reaction, even on error
+                        await removeReaction(messageEvent.channel, messageEvent.ts, "eyes");
+                    }
                 });
 
                 return NextResponse.json({ ok: true });
