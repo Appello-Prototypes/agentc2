@@ -137,6 +137,7 @@ export default function ConfigurePage() {
     const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
     const [toolsLoading, setToolsLoading] = useState(true);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
+    const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
     const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
 
     // Extended thinking state (for form)
@@ -179,6 +180,7 @@ export default function ConfigurePage() {
                 setAvailableModels(data.models || []);
                 setAvailableScorers(data.scorers || []);
                 setToolCategoryOrder(data.toolCategoryOrder || []);
+                setServerErrors(data.serverErrors ?? {});
             }
         } catch (err) {
             console.error("Failed to fetch tools:", err);
@@ -415,9 +417,7 @@ export default function ConfigurePage() {
     // Check if all tools in a group are selected
     const areAllToolsSelectedForGroup = (group: ToolGroup) => {
         const currentTools = formData.tools || [];
-        return (
-            group.tools.length > 0 && group.tools.every((t) => currentTools.includes(t.id))
-        );
+        return group.tools.length > 0 && group.tools.every((t) => currentTools.includes(t.id));
     };
 
     // Select all tools
@@ -1154,14 +1154,14 @@ export default function ConfigurePage() {
                                                     </div>
                                                 )}
                                                 {groups.map((group) => {
-                                                    const selectedCount =
-                                                        group.tools.filter((t) =>
-                                                            formData.tools?.includes(t.id)
-                                                        ).length;
+                                                    const selectedCount = group.tools.filter((t) =>
+                                                        formData.tools?.includes(t.id)
+                                                    ).length;
                                                     const allSelected =
                                                         areAllToolsSelectedForGroup(group);
-                                                    const isCollapsed =
-                                                        collapsedToolGroups.has(group.key);
+                                                    const isCollapsed = collapsedToolGroups.has(
+                                                        group.key
+                                                    );
                                                     const isFirstMcp =
                                                         group.isMcp &&
                                                         groups.findIndex((g) => g.isMcp) ===
@@ -1231,50 +1231,45 @@ export default function ConfigurePage() {
                                                                 </div>
                                                                 {!isCollapsed && (
                                                                     <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
-                                                                        {group.tools.map(
-                                                                            (tool) => (
-                                                                                <label
-                                                                                    key={tool.id}
-                                                                                    className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                                        {group.tools.map((tool) => (
+                                                                            <label
+                                                                                key={tool.id}
+                                                                                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                                                    formData.tools?.includes(
+                                                                                        tool.id
+                                                                                    )
+                                                                                        ? "border-primary bg-primary/5"
+                                                                                        : "hover:bg-muted/50"
+                                                                                }`}
+                                                                            >
+                                                                                <input
+                                                                                    type="checkbox"
+                                                                                    checked={
                                                                                         formData.tools?.includes(
                                                                                             tool.id
+                                                                                        ) || false
+                                                                                    }
+                                                                                    onChange={() =>
+                                                                                        toggleTool(
+                                                                                            tool.id
                                                                                         )
-                                                                                            ? "border-primary bg-primary/5"
-                                                                                            : "hover:bg-muted/50"
-                                                                                    }`}
-                                                                                >
-                                                                                    <input
-                                                                                        type="checkbox"
-                                                                                        checked={
-                                                                                            formData.tools?.includes(
-                                                                                                tool.id
-                                                                                            ) ||
-                                                                                            false
-                                                                                        }
-                                                                                        onChange={() =>
-                                                                                            toggleTool(
-                                                                                                tool.id
-                                                                                            )
-                                                                                        }
-                                                                                        className="mt-0.5"
-                                                                                    />
-                                                                                    <div className="min-w-0 flex-1">
-                                                                                        <p className="text-sm font-medium">
+                                                                                    }
+                                                                                    className="mt-0.5"
+                                                                                />
+                                                                                <div className="min-w-0 flex-1">
+                                                                                    <p className="text-sm font-medium">
+                                                                                        {tool.name}
+                                                                                    </p>
+                                                                                    {tool.description && (
+                                                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
                                                                                             {
-                                                                                                tool.name
+                                                                                                tool.description
                                                                                             }
                                                                                         </p>
-                                                                                        {tool.description && (
-                                                                                            <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                                                                {
-                                                                                                    tool.description
-                                                                                                }
-                                                                                            </p>
-                                                                                        )}
-                                                                                    </div>
-                                                                                </label>
-                                                                            )
-                                                                        )}
+                                                                                    )}
+                                                                                </div>
+                                                                            </label>
+                                                                        ))}
                                                                     </div>
                                                                 )}
                                                             </div>
@@ -1289,6 +1284,33 @@ export default function ConfigurePage() {
                                             <p>No tools available</p>
                                             <p className="mt-1 text-sm">
                                                 Check MCP server connections
+                                            </p>
+                                        </div>
+                                    )}
+                                    {Object.keys(serverErrors).length > 0 && (
+                                        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                                            <p className="font-medium">
+                                                {Object.keys(serverErrors).length} MCP server(s)
+                                                failed to load
+                                            </p>
+                                            <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                                                {Object.entries(serverErrors).map(
+                                                    ([server, err]) => (
+                                                        <li key={server}>
+                                                            <span className="font-medium">
+                                                                {server}
+                                                            </span>
+                                                            :{" "}
+                                                            {err.length > 120
+                                                                ? err.slice(0, 120) + "..."
+                                                                : err}
+                                                        </li>
+                                                    )
+                                                )}
+                                            </ul>
+                                            <p className="mt-1 text-xs opacity-90">
+                                                Other servers loaded successfully. Check
+                                                Integrations (MCP) for details.
                                             </p>
                                         </div>
                                     )}

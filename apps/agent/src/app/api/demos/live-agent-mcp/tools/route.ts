@@ -44,7 +44,7 @@ export async function GET(request: NextRequest) {
     const format = searchParams.get("format");
 
     try {
-        const tools = await listMcpToolDefinitions();
+        const { definitions: tools } = await listMcpToolDefinitions();
 
         // Get server availability info
         const serverStatus = MCP_SERVER_CONFIGS.map((config) => ({

@@ -525,9 +525,7 @@ function AgentManagePageContent() {
 
     // Check if all tools in a group are selected
     const areAllToolsSelectedForGroup = (group: ToolGroup) => {
-        return (
-            group.tools.length > 0 && group.tools.every((t) => formData.tools.includes(t.id))
-        );
+        return group.tools.length > 0 && group.tools.every((t) => formData.tools.includes(t.id));
     };
 
     // Toggle scorer selection
@@ -752,59 +750,129 @@ function AgentManagePageContent() {
                     </div>
                 </div>
                 <div className="max-h-96 space-y-4 overflow-auto rounded-lg border p-4">
-                    {groupToolsBySource(availableTools).map((group) => {
-                        const selectedCount = group.tools.filter((t) =>
-                            formData.tools.includes(t.id)
+                    {(() => {
+                        const groups = groupTools(availableTools);
+                        const builtInCount = availableTools.filter(
+                            (t) => t.source === "registry"
                         ).length;
-                        const allSelected = areAllToolsSelectedForSource(group.source);
+                        const builtInSelected = availableTools.filter(
+                            (t) => t.source === "registry" && formData.tools.includes(t.id)
+                        ).length;
                         return (
-                            <div key={group.source} className="space-y-2">
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <div className="flex items-center gap-2">
-                                        <h4 className="font-medium">{group.displayName}</h4>
+                            <>
+                                {builtInCount > 0 && (
+                                    <div className="flex items-center gap-2 border-b pb-2">
+                                        <h3 className="text-sm font-semibold tracking-wide uppercase">
+                                            Built-in Tools
+                                        </h3>
                                         <Badge variant="outline" className="text-xs">
-                                            {selectedCount}/{group.tools.length}
+                                            {builtInSelected}/{builtInCount}
                                         </Badge>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                            allSelected
-                                                ? deselectAllToolsForSource(group.source)
-                                                : selectAllToolsForSource(group.source)
-                                        }
-                                    >
-                                        {allSelected ? "Deselect All" : "Select All"}
-                                    </Button>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                    {group.tools.map((tool) => (
-                                        <label
-                                            key={tool.id}
-                                            className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
-                                        >
-                                            <input
-                                                type="checkbox"
-                                                checked={formData.tools.includes(tool.id)}
-                                                onChange={() => toggleTool(tool.id)}
-                                                className="mt-0.5"
-                                            />
-                                            <div className="min-w-0 flex-1">
-                                                <p className="text-sm font-medium">{tool.name}</p>
-                                                {tool.description && (
-                                                    <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                        {tool.description}
-                                                    </p>
+                                )}
+                                {groups.map((group) => {
+                                    const selectedCount = group.tools.filter((t) =>
+                                        formData.tools.includes(t.id)
+                                    ).length;
+                                    const allSelected = areAllToolsSelectedForGroup(group);
+                                    const isCollapsed = collapsedToolGroups.has(group.key);
+                                    const isFirstMcp =
+                                        group.isMcp &&
+                                        groups.findIndex((g) => g.isMcp) === groups.indexOf(group);
+                                    return (
+                                        <div key={group.key}>
+                                            {isFirstMcp && (
+                                                <div className="mt-6 flex items-center gap-2 border-b pb-2">
+                                                    <h3 className="text-sm font-semibold tracking-wide uppercase">
+                                                        MCP Tools
+                                                    </h3>
+                                                </div>
+                                            )}
+                                            <div className="space-y-2">
+                                                <div className="flex items-center justify-between">
+                                                    <button
+                                                        type="button"
+                                                        className="flex items-center gap-2 text-left"
+                                                        onClick={() =>
+                                                            toggleToolGroupCollapse(group.key)
+                                                        }
+                                                    >
+                                                        <svg
+                                                            className={`h-3.5 w-3.5 shrink-0 transition-transform ${isCollapsed ? "" : "rotate-90"}`}
+                                                            fill="none"
+                                                            viewBox="0 0 24 24"
+                                                            stroke="currentColor"
+                                                            strokeWidth={2}
+                                                        >
+                                                            <path
+                                                                strokeLinecap="round"
+                                                                strokeLinejoin="round"
+                                                                d="M9 5l7 7-7 7"
+                                                            />
+                                                        </svg>
+                                                        <h4 className="text-sm font-medium">
+                                                            {group.displayName}
+                                                        </h4>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                        >
+                                                            {selectedCount}/{group.tools.length}
+                                                        </Badge>
+                                                    </button>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            allSelected
+                                                                ? deselectAllToolsForGroup(group)
+                                                                : selectAllToolsForGroup(group)
+                                                        }
+                                                    >
+                                                        {allSelected
+                                                            ? "Deselect All"
+                                                            : "Select All"}
+                                                    </Button>
+                                                </div>
+                                                {!isCollapsed && (
+                                                    <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
+                                                        {group.tools.map((tool) => (
+                                                            <label
+                                                                key={tool.id}
+                                                                className="hover:bg-muted/50 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
+                                                            >
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={formData.tools.includes(
+                                                                        tool.id
+                                                                    )}
+                                                                    onChange={() =>
+                                                                        toggleTool(tool.id)
+                                                                    }
+                                                                    className="mt-0.5"
+                                                                />
+                                                                <div className="min-w-0 flex-1">
+                                                                    <p className="text-sm font-medium">
+                                                                        {tool.name}
+                                                                    </p>
+                                                                    {tool.description && (
+                                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                                                            {tool.description}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                            </label>
+                                                        ))}
+                                                    </div>
                                                 )}
                                             </div>
-                                        </label>
-                                    ))}
-                                </div>
-                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </>
                         );
-                    })}
+                    })()}
                 </div>
             </div>
 

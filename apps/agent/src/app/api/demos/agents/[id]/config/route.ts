@@ -13,7 +13,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         // Handle MCP agent specially (dynamically created)
         if (registrationKey === "mcp-agent") {
-            const mcpTools = await listMcpToolDefinitions();
+            const { definitions: mcpTools } = await listMcpToolDefinitions();
             return NextResponse.json({
                 success: true,
                 agent: {

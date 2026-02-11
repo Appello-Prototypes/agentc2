@@ -49,7 +49,7 @@ export async function GET(
             connection.provider.providerType === "custom"
         ) {
             const serverId = resolveConnectionServerId(connection.provider.key, connection);
-            const tools = await getMcpTools({
+            const { tools } = await getMcpTools({
                 organizationId,
                 userId: session.user.id
             });

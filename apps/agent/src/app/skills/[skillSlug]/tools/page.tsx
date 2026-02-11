@@ -41,6 +41,7 @@ export default function SkillToolsPage() {
     const [toolsLoading, setToolsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [mcpError, setMcpError] = useState<string | null>(null);
+    const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
     const [hasOrgContext, setHasOrgContext] = useState(false);
     const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
@@ -76,6 +77,7 @@ export default function SkillToolsPage() {
                 setAvailableTools(data.tools || []);
                 setCategoryOrder(data.toolCategoryOrder || []);
                 setMcpError(data.mcpError ?? null);
+                setServerErrors(data.serverErrors ?? {});
                 setHasOrgContext(data.hasOrgContext ?? false);
             }
         } catch (err) {
@@ -282,8 +284,7 @@ export default function SkillToolsPage() {
                         // Add MCP section header before first MCP group
                         const isFirstMcp =
                             group.isMcp &&
-                            groups.findIndex((g) => g.isMcp) ===
-                                groups.indexOf(group);
+                            groups.findIndex((g) => g.isMcp) === groups.indexOf(group);
 
                         return (
                             <div key={group.key}>
@@ -299,15 +300,11 @@ export default function SkillToolsPage() {
                                         <button
                                             type="button"
                                             className="flex items-center gap-2 text-left"
-                                            onClick={() =>
-                                                toggleGroupCollapse(group.key)
-                                            }
+                                            onClick={() => toggleGroupCollapse(group.key)}
                                         >
                                             <svg
                                                 className={`h-3.5 w-3.5 shrink-0 transition-transform ${
-                                                    isCollapsed
-                                                        ? ""
-                                                        : "rotate-90"
+                                                    isCollapsed ? "" : "rotate-90"
                                                 }`}
                                                 fill="none"
                                                 viewBox="0 0 24 24"
@@ -323,12 +320,8 @@ export default function SkillToolsPage() {
                                             <h4 className="text-sm font-medium">
                                                 {group.displayName}
                                             </h4>
-                                            <Badge
-                                                variant="outline"
-                                                className="text-xs"
-                                            >
-                                                {selectedCount}/
-                                                {group.tools.length}
+                                            <Badge variant="outline" className="text-xs">
+                                                {selectedCount}/{group.tools.length}
                                             </Badge>
                                         </button>
                                         <Button
@@ -342,18 +335,14 @@ export default function SkillToolsPage() {
                                                     : selectAllForGroup(group)
                                             }
                                         >
-                                            {allSelected
-                                                ? "Deselect All"
-                                                : "Select All"}
+                                            {allSelected ? "Deselect All" : "Select All"}
                                         </Button>
                                     </div>
                                     {!isCollapsed && (
                                         <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
                                             {group.tools.map((tool) => {
-                                                const isChecked =
-                                                    attachedToolIds.has(tool.id);
-                                                const isToggling =
-                                                    actionLoading === tool.id;
+                                                const isChecked = attachedToolIds.has(tool.id);
+                                                const isToggling = actionLoading === tool.id;
                                                 return (
                                                     <label
                                                         key={tool.id}
@@ -366,14 +355,8 @@ export default function SkillToolsPage() {
                                                         <input
                                                             type="checkbox"
                                                             checked={isChecked}
-                                                            onChange={() =>
-                                                                toggleTool(
-                                                                    tool.id
-                                                                )
-                                                            }
-                                                            disabled={
-                                                                !!actionLoading
-                                                            }
+                                                            onChange={() => toggleTool(tool.id)}
+                                                            disabled={!!actionLoading}
                                                             className="mt-0.5"
                                                         />
                                                         <div className="min-w-0 flex-1">
@@ -382,9 +365,7 @@ export default function SkillToolsPage() {
                                                             </p>
                                                             {tool.description && (
                                                                 <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                                    {
-                                                                        tool.description
-                                                                    }
+                                                                    {tool.description}
                                                                 </p>
                                                             )}
                                                         </div>
@@ -399,25 +380,38 @@ export default function SkillToolsPage() {
                     })}
                     {mcpError && (
                         <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
-                            <p className="font-medium">MCP tools unavailable</p>
-                            <p className="mt-0.5">{mcpError}</p>
+                            <p className="font-medium">
+                                {Object.keys(serverErrors).length > 0
+                                    ? `${Object.keys(serverErrors).length} MCP server(s) failed to load`
+                                    : "MCP tools unavailable"}
+                            </p>
+                            {Object.keys(serverErrors).length > 0 ? (
+                                <ul className="mt-1 list-inside list-disc space-y-0.5 text-xs">
+                                    {Object.entries(serverErrors).map(([server, error]) => (
+                                        <li key={server}>
+                                            <span className="font-medium">{server}</span>:{" "}
+                                            {error.length > 120
+                                                ? error.slice(0, 120) + "..."
+                                                : error}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="mt-0.5">{mcpError}</p>
+                            )}
                             <p className="mt-1 text-xs opacity-90">
-                                Check Integrations (MCP) and test connections;
-                                ensure you are signed in so org-scoped connections
-                                are used.
+                                Check Integrations (MCP) and test connections. Other servers loaded
+                                successfully.
                             </p>
                         </div>
                     )}
                     {hasOrgContext &&
                         availableTools.length > 0 &&
-                        availableTools.every(
-                            (t) => t.source === "registry"
-                        ) && (
+                        availableTools.every((t) => t.source === "registry") && (
                             <div className="text-muted-foreground rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
                                 <p>
-                                    Only built-in tools are shown. To see MCP
-                                    tools here, add and connect MCP servers under{" "}
-                                    <strong>Integrations</strong> (same
+                                    Only built-in tools are shown. To see MCP tools here, add and
+                                    connect MCP servers under <strong>Integrations</strong> (same
                                     organization).
                                 </p>
                             </div>

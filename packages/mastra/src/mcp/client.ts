@@ -340,7 +340,8 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "atlas",
         name: "ATLAS",
-        description: "n8n MCP server (workflow automation). Name and description can be set from your n8n workflow or MCP config.",
+        description:
+            "n8n MCP server (workflow automation). Name and description can be set from your n8n workflow or MCP config.",
         category: "automation",
         authType: "apiKey",
         providerType: "mcp",
@@ -1989,25 +1990,98 @@ async function getMcpClientForOrganization(options?: {
 }
 
 /**
- * Get all available MCP tools
- * Use this when configuring an agent with static tools
+ * Get all available MCP tools with per-server error isolation.
  *
- * Tools are sanitized to fix schema issues that cause validation failures
- * with strict LLM providers like OpenAI GPT-4o-mini.
+ * Connects to each MCP server independently so one failing server
+ * (e.g. bad path, timeout) does not prevent tools from other servers
+ * from loading. Returns merged tools + per-server errors.
  */
 export async function getMcpTools(
     organizationIdOrOptions?:
         | string
         | null
         | { organizationId?: string | null; userId?: string | null }
-) {
+): Promise<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tools: Record<string, any>;
+    serverErrors: Record<string, string>;
+}> {
     const options =
         organizationIdOrOptions && typeof organizationIdOrOptions === "object"
             ? organizationIdOrOptions
             : { organizationId: organizationIdOrOptions };
-    const client = await getMcpClientForOrganization(options);
-    const tools = await client.listTools();
-    return sanitizeMcpTools(tools);
+
+    const servers = await buildServerConfigsForOptions(options);
+    return loadToolsPerServer(servers);
+}
+
+/**
+ * Build server configs for the given org/user options.
+ * Centralises the connection-loading + buildServerConfigs call.
+ */
+async function buildServerConfigsForOptions(options: {
+    organizationId?: string | null;
+    userId?: string | null;
+}): Promise<Record<string, MastraMCPServerDefinition>> {
+    const organizationId = options.organizationId;
+    if (!organizationId) {
+        return buildServerConfigs({ connections: [], allowEnvFallback: true });
+    }
+    const connections = await getIntegrationConnections({
+        organizationId,
+        userId: options.userId
+    });
+    return buildServerConfigs({ connections, allowEnvFallback: false });
+}
+
+/**
+ * Load tools from each server independently using Promise.allSettled.
+ * Returns merged tools and a map of serverId -> error message for failures.
+ */
+async function loadToolsPerServer(servers: Record<string, MastraMCPServerDefinition>): Promise<{
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tools: Record<string, any>;
+    serverErrors: Record<string, string>;
+}> {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mergedTools: Record<string, any> = {};
+    const serverErrors: Record<string, string> = {};
+
+    const serverEntries = Object.entries(servers);
+    if (serverEntries.length === 0) {
+        return { tools: mergedTools, serverErrors };
+    }
+
+    const results = await Promise.allSettled(
+        serverEntries.map(async ([serverId, serverDef]) => {
+            const client = new MCPClient({
+                id: `mastra-mcp-iso-${serverId}`,
+                servers: { [serverId]: serverDef },
+                timeout: serverId === "atlas" ? 60000 : 30000
+            });
+            try {
+                const tools = await client.listTools();
+                return { serverId, tools: sanitizeMcpTools(tools) };
+            } finally {
+                await client.disconnect().catch(() => {});
+            }
+        })
+    );
+
+    for (const result of results) {
+        if (result.status === "fulfilled") {
+            Object.assign(mergedTools, result.value.tools);
+        } else {
+            // Extract serverId from the error context
+            const idx = results.indexOf(result);
+            const serverId = serverEntries[idx]![0];
+            const message = formatTestError(result.reason);
+            serverErrors[serverId] = message;
+            console.warn(`[MCP] Server "${serverId}" failed to load tools: ${message}`);
+        }
+    }
+
+    return { tools: mergedTools, serverErrors };
 }
 
 async function resolveServerDefinitionById(options: {
@@ -2235,6 +2309,52 @@ export async function importMcpConfig(options: {
             if (!serverConfig) {
                 warnings.push(`Skipped '${serverName}': invalid server config`);
                 continue;
+            }
+
+            // Validate for local/relative paths that won't work in production
+            const localPathPrefixes = ["/Users/", "/home/", "C:\\"];
+            const localPathFragments = ["/.cursor/", "/.nvm/", "/AppData/", "/.local/"];
+
+            if (serverConfig.command) {
+                const cmd = serverConfig.command;
+                const isLocalCmd =
+                    localPathPrefixes.some((p) => cmd.startsWith(p)) ||
+                    localPathFragments.some((f) => cmd.includes(f));
+                if (isLocalCmd) {
+                    warnings.push(
+                        `Server '${serverName}': command is a local path (${cmd}). This will fail in production.`
+                    );
+                }
+                if (cmd.startsWith("./") || cmd.startsWith("../")) {
+                    warnings.push(
+                        `Server '${serverName}': command uses a relative path (${cmd}). This may not resolve correctly on the server.`
+                    );
+                }
+            }
+
+            if (serverConfig.args) {
+                for (const arg of serverConfig.args) {
+                    const isLocalArg =
+                        localPathPrefixes.some((p) => arg.startsWith(p)) ||
+                        localPathFragments.some((f) => arg.includes(f));
+                    if (isLocalArg) {
+                        warnings.push(
+                            `Server '${serverName}': arg contains a local path (${arg}). This will fail in production.`
+                        );
+                        break;
+                    }
+                }
+            }
+
+            if (serverConfig.url) {
+                if (
+                    !serverConfig.url.startsWith("http://") &&
+                    !serverConfig.url.startsWith("https://")
+                ) {
+                    warnings.push(
+                        `Server '${serverName}': url should start with http:// or https:// (got: ${serverConfig.url})`
+                    );
+                }
             }
 
             let provider =
@@ -2883,23 +3003,24 @@ export async function executeMcpTool(
 }
 
 /**
- * List all available MCP tool definitions
+ * List all available MCP tool definitions with per-server error isolation.
  *
  * Returns tool metadata suitable for configuring external systems
- * like ElevenLabs webhook tools.
+ * like ElevenLabs webhook tools. One failing server does not block others.
  */
 export async function listMcpToolDefinitions(
     organizationIdOrOptions?:
         | string
         | null
         | { organizationId?: string | null; userId?: string | null }
-): Promise<McpToolDefinition[]> {
+): Promise<{ definitions: McpToolDefinition[]; serverErrors: Record<string, string> }> {
     const options =
         organizationIdOrOptions && typeof organizationIdOrOptions === "object"
             ? organizationIdOrOptions
             : { organizationId: organizationIdOrOptions };
-    const client = await getMcpClientForOrganization(options);
-    const tools = await client.listTools();
+
+    const servers = await buildServerConfigsForOptions(options);
+    const { tools, serverErrors } = await loadToolsPerServer(servers);
     const definitions: McpToolDefinition[] = [];
 
     for (const [name, tool] of Object.entries(tools)) {
@@ -2922,5 +3043,5 @@ export async function listMcpToolDefinitions(
         });
     }
 
-    return definitions;
+    return { definitions, serverErrors };
 }

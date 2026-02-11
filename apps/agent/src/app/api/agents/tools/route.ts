@@ -29,11 +29,16 @@ export async function GET(request: NextRequest) {
         const staticTools = listAvailableTools();
 
         // Get MCP tools (dynamic, from org/user integration connections or global env)
+        // Per-server isolation: one failing server does not block the rest
         let mcpTools: { id: string; name: string; description: string; source: string }[] = [];
         let mcpError: string | null = null;
+        let serverErrors: Record<string, string> = {};
         const mcpServerStatus: Record<string, { connected: boolean; toolCount: number }> = {};
         try {
-            const mcpDefinitions = await listMcpToolDefinitions(mcpOptions);
+            const result = await listMcpToolDefinitions(mcpOptions);
+            const mcpDefinitions = result.definitions;
+            serverErrors = result.serverErrors;
+
             mcpTools = mcpDefinitions.map((def) => ({
                 id: def.name, // Full namespaced name: serverName_toolName
                 name: def.name,
@@ -48,6 +53,19 @@ export async function GET(request: NextRequest) {
                 }
                 mcpServerStatus[def.server]!.toolCount++;
             }
+
+            // Mark errored servers as disconnected
+            for (const serverId of Object.keys(serverErrors)) {
+                if (!mcpServerStatus[serverId]) {
+                    mcpServerStatus[serverId] = { connected: false, toolCount: 0 };
+                }
+            }
+
+            // Surface a summary mcpError if any servers failed
+            const errorCount = Object.keys(serverErrors).length;
+            if (errorCount > 0) {
+                mcpError = `${errorCount} MCP server(s) failed to load`;
+            }
         } catch (err) {
             // MCP tools are optional - log but don't fail
             mcpError = err instanceof Error ? err.message : "MCP tools not available";
@@ -55,10 +73,7 @@ export async function GET(request: NextRequest) {
         }
 
         // Combine all tools, marking source for UI differentiation
-        const allTools = [
-            ...staticTools.map((t) => ({ ...t, source: "registry" })),
-            ...mcpTools
-        ];
+        const allTools = [...staticTools.map((t) => ({ ...t, source: "registry" })), ...mcpTools];
 
         const models = getAvailableModels();
         const scorers = listAvailableScorers();
@@ -70,6 +85,7 @@ export async function GET(request: NextRequest) {
             scorers,
             mcpServerStatus,
             mcpError,
+            serverErrors,
             hasOrgContext: !!authContext,
             toolCategoryOrder
         });

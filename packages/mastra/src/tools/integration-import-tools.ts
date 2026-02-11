@@ -738,7 +738,7 @@ export const integrationImportMcpJsonTool = createTool({
                     connection.provider.providerType === "custom"
                 ) {
                     try {
-                        const tools = await getMcpTools({
+                        const { tools } = await getMcpTools({
                             organizationId: orgId,
                             userId: userId || null
                         });
@@ -954,7 +954,7 @@ export const integrationConnectionTestTool = createTool({
             connection.provider.providerType === "custom"
         ) {
             try {
-                const tools = await getMcpTools({
+                const { tools } = await getMcpTools({
                     organizationId: orgId,
                     userId: userId || null
                 });

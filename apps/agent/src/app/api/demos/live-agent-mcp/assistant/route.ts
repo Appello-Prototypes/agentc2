@@ -94,7 +94,7 @@ export async function POST(request: NextRequest) {
         addStep("thinking", `Received question: "${question}"`);
 
         // Get available tools (for observability)
-        const toolDefs = await listMcpToolDefinitions();
+        const { definitions: toolDefs } = await listMcpToolDefinitions();
         const availableTools = toolDefs.map((t) => t.name);
         addStep("thinking", `Loaded ${availableTools.length} available tools`);
 

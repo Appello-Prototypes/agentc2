@@ -50,7 +50,8 @@ async function populateMcpSkillTools() {
 
     try {
         console.log("  Discovering MCP tools from connected servers...");
-        const definitions = await listMcpToolDefinitions(null);
+        const result = await listMcpToolDefinitions(null);
+        const definitions = result.definitions;
 
         // Group by server
         const toolsByServer = new Map<string, string[]>();

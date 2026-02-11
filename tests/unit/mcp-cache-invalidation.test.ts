@@ -37,7 +37,9 @@ describe("MCP cache invalidation", () => {
     });
 
     it("invalidates MCP tools registry cache for an org", async () => {
-        const getMcpToolsMock = vi.fn().mockResolvedValue({ toolA: {} });
+        const getMcpToolsMock = vi
+            .fn()
+            .mockResolvedValue({ tools: { toolA: {} }, serverErrors: {} });
         vi.doMock("../../packages/mastra/src/mcp/client", () => ({
             getMcpTools: getMcpToolsMock
         }));

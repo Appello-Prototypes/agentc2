@@ -9,7 +9,7 @@ import { listMcpToolDefinitions } from "@repo/mastra";
 export async function GET() {
     try {
         // Get all tool definitions
-        const tools = await listMcpToolDefinitions();
+        const { definitions: tools } = await listMcpToolDefinitions();
 
         // Group tools by server (extract server from tool name prefix)
         const toolsByServer: Record<

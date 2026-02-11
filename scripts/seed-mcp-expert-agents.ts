@@ -62,7 +62,7 @@ function buildExpertSpecs() {
 async function seedMcpExpertAgents() {
     console.log("Seeding MCP expert agents...");
 
-    const toolDefinitions = await listMcpToolDefinitions();
+    const { definitions: toolDefinitions } = await listMcpToolDefinitions();
     const toolsByServer = toolDefinitions.reduce<Record<string, string[]>>((acc, toolDef) => {
         if (!acc[toolDef.server]) {
             acc[toolDef.server] = [];

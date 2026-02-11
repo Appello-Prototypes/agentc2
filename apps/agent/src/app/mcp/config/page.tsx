@@ -52,6 +52,12 @@ type ImportResult = {
     warnings?: string[];
 };
 
+type ServerTestResult = {
+    success: boolean;
+    toolCount?: number;
+    error?: string;
+};
+
 type McpConfigImpactAgent = {
     id: string;
     slug: string;
@@ -187,6 +193,8 @@ export default function McpConfigPage() {
     const [impactResult, setImpactResult] = useState<McpConfigImpact | null>(null);
     const [impactOpen, setImpactOpen] = useState(false);
     const [pendingConfig, setPendingConfig] = useState<McpConfig | null>(null);
+    const [testing, setTesting] = useState(false);
+    const [testResults, setTestResults] = useState<Record<string, ServerTestResult> | null>(null);
 
     const handleLoad = useCallback(async (options?: { preserveResult?: boolean }) => {
         setLoading(true);
@@ -265,6 +273,54 @@ export default function McpConfigPage() {
                         `Server '${serverName}' must include either 'command' or 'url'`
                     );
                 }
+
+                // Detect local/relative paths that won't work in production
+                if (normalized.command) {
+                    const cmd = normalized.command;
+                    const localPathPrefixes = ["/Users/", "/home/", "C:\\"];
+                    const localPathFragments = ["/.cursor/", "/.nvm/", "/AppData/", "/.local/"];
+                    const isLocalPath =
+                        localPathPrefixes.some((prefix) => cmd.startsWith(prefix)) ||
+                        localPathFragments.some((frag) => cmd.includes(frag));
+                    if (isLocalPath) {
+                        nextWarnings.push(
+                            `Server '${serverName}': command appears to be a local path (${cmd}). This will fail in production.`
+                        );
+                    }
+                    if (cmd.startsWith("./") || cmd.startsWith("../")) {
+                        nextWarnings.push(
+                            `Server '${serverName}': command uses a relative path (${cmd}). This may not resolve correctly on the server.`
+                        );
+                    }
+                }
+
+                // Also check args for local paths
+                for (const arg of normalized.args) {
+                    const localPathPrefixes = ["/Users/", "/home/", "C:\\"];
+                    const localPathFragments = ["/.cursor/", "/.nvm/", "/AppData/", "/.local/"];
+                    const isLocalPath =
+                        localPathPrefixes.some((prefix) => arg.startsWith(prefix)) ||
+                        localPathFragments.some((frag) => arg.includes(frag));
+                    if (isLocalPath) {
+                        nextWarnings.push(
+                            `Server '${serverName}': arg contains a local path (${arg}). This will fail in production.`
+                        );
+                        break; // One warning per server is enough
+                    }
+                }
+
+                // Validate URL format
+                if (normalized.url) {
+                    if (
+                        !normalized.url.startsWith("http://") &&
+                        !normalized.url.startsWith("https://")
+                    ) {
+                        nextWarnings.push(
+                            `Server '${serverName}': url should start with http:// or https:// (got: ${normalized.url})`
+                        );
+                    }
+                }
+
                 const provider = resolveProvider(providers, serverName, parsedConfig);
                 if (!provider) {
                     nextWarnings.push(`Server '${serverName}' will be created as custom`);
@@ -329,6 +385,72 @@ export default function McpConfigPage() {
             setSaveError(error instanceof Error ? error.message : "Failed to save config");
         } finally {
             setSaving(false);
+        }
+    };
+
+    const handleTestAll = async () => {
+        if (!parsedConfig?.mcpServers) return;
+        const serverKeys = Object.keys(parsedConfig.mcpServers);
+        if (serverKeys.length === 0) return;
+
+        setTesting(true);
+        setTestResults(null);
+        try {
+            const response = await fetch(`${getApiBase()}/api/integrations/mcp-config/test-all`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ serverKeys })
+            });
+            const data = await response.json();
+            if (data.success) {
+                setTestResults(data.results as Record<string, ServerTestResult>);
+            } else {
+                setSaveError(data.error || "Failed to test servers");
+            }
+        } catch (error) {
+            setSaveError(error instanceof Error ? error.message : "Failed to test servers");
+        } finally {
+            setTesting(false);
+        }
+    };
+
+    const handleDisableServer = async (serverKey: string) => {
+        try {
+            // Find the connection for this server by re-importing with isActive: false
+            // Use the individual server test endpoint to disable via connection PATCH
+            const response = await fetch(`${getApiBase()}/api/integrations/mcp-config`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    mcpServers: {
+                        // Send only the working servers (exclude the one being disabled)
+                        ...Object.fromEntries(
+                            Object.entries(parsedConfig?.mcpServers ?? {}).filter(
+                                ([key]) => key !== serverKey
+                            )
+                        )
+                    }
+                })
+            });
+            const data = await response.json();
+            if (data.success) {
+                // Update test results to show disabled
+                setTestResults((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              [serverKey]: {
+                                  ...prev[serverKey]!,
+                                  error: "Disabled"
+                              }
+                          }
+                        : prev
+                );
+                // Reload current config
+                await handleLoad({ preserveResult: true });
+            }
+        } catch (error) {
+            console.error("Failed to disable server:", error);
         }
     };
 
@@ -554,8 +676,84 @@ export default function McpConfigPage() {
                                     </div>
                                 ) : null}
                                 {saveResult.warnings?.length ? (
-                                    <div>Warnings: {saveResult.warnings.length}</div>
+                                    <div className="text-yellow-600">
+                                        <div className="font-medium">
+                                            {saveResult.warnings.length} warning(s):
+                                        </div>
+                                        {saveResult.warnings.map((w, i) => (
+                                            <div key={i} className="ml-2 text-xs">
+                                                {w}
+                                            </div>
+                                        ))}
+                                    </div>
                                 ) : null}
+                            </div>
+                        )}
+
+                        {/* Test All Servers button — shown after a successful save or when config is loaded */}
+                        {parsedConfig && Object.keys(parsedConfig.mcpServers || {}).length > 0 && (
+                            <div className="space-y-3 border-t pt-4">
+                                <div className="flex items-center gap-3">
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleTestAll}
+                                        disabled={testing}
+                                    >
+                                        {testing ? "Testing servers..." : "Test All Servers"}
+                                    </Button>
+                                    {testResults && (
+                                        <span className="text-muted-foreground text-xs">
+                                            {
+                                                Object.values(testResults).filter((r) => r.success)
+                                                    .length
+                                            }
+                                            /{Object.keys(testResults).length} passed
+                                        </span>
+                                    )}
+                                </div>
+
+                                {testResults && (
+                                    <div className="space-y-2">
+                                        {Object.entries(testResults).map(([serverKey, result]) => (
+                                            <div
+                                                key={serverKey}
+                                                className={`flex items-center justify-between rounded-md border px-3 py-2 text-sm ${
+                                                    result.success
+                                                        ? "border-emerald-500/50 bg-emerald-500/10"
+                                                        : "border-red-500/50 bg-red-500/10"
+                                                }`}
+                                            >
+                                                <div className="min-w-0 flex-1">
+                                                    <span className="font-medium">{serverKey}</span>
+                                                    {result.success ? (
+                                                        <span className="ml-2 text-xs text-emerald-700 dark:text-emerald-300">
+                                                            {result.toolCount ?? 0} tool(s) loaded
+                                                        </span>
+                                                    ) : (
+                                                        <span className="ml-2 text-xs text-red-700 dark:text-red-300">
+                                                            {result.error &&
+                                                            result.error.length > 100
+                                                                ? result.error.slice(0, 100) + "..."
+                                                                : result.error || "Failed"}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {!result.success && result.error !== "Disabled" && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="ml-2 shrink-0 text-xs text-red-600 hover:text-red-800"
+                                                        onClick={() =>
+                                                            handleDisableServer(serverKey)
+                                                        }
+                                                    >
+                                                        Disable
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </CardContent>

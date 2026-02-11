@@ -3,7 +3,7 @@
  * Run from repo root: bun run packages/mastra/scripts/test-atlas.ts
  * Or: cd packages/mastra && bun run scripts/test-atlas.ts
  */
-import { MCPClient } from "@mastra/mcp"
+import { MCPClient } from "@mastra/mcp";
 
 const atlasDefinition = {
     command: "npx",
@@ -20,26 +20,26 @@ const atlasDefinition = {
         "--reconnect-interval",
         "1000"
     ]
-}
+};
 
 const client = new MCPClient({
     id: "atlas-test",
     servers: { atlas: atlasDefinition },
     timeout: 60000
-})
+});
 
-console.log("Connecting to ATLAS (n8n SSE)...")
-const start = Date.now()
+console.log("Connecting to ATLAS (n8n SSE)...");
+const start = Date.now();
 try {
-    const tools = await client.listTools()
-    const ms = Date.now() - start
-    const names = Object.keys(tools)
-    console.log(`OK in ${ms}ms — ${names.length} tool(s):`)
-    names.slice(0, 20).forEach((n) => console.log("  -", n))
-    if (names.length > 20) console.log(`  ... and ${names.length - 20} more`)
-    await client.disconnect()
-    process.exit(0)
+    const tools = await client.listTools();
+    const ms = Date.now() - start;
+    const names = Object.keys(tools);
+    console.log(`OK in ${ms}ms — ${names.length} tool(s):`);
+    names.slice(0, 20).forEach((n) => console.log("  -", n));
+    if (names.length > 20) console.log(`  ... and ${names.length - 20} more`);
+    await client.disconnect();
+    process.exit(0);
 } catch (err) {
-    console.error("Error after", Date.now() - start, "ms:", (err as Error).message)
-    process.exit(1)
+    console.error("Error after", Date.now() - start, "ms:", (err as Error).message);
+    process.exit(1);
 }

@@ -623,7 +623,7 @@ async function getMcpToolsCached(organizationId?: string | null): Promise<Record
     }
 
     try {
-        const tools = await getMcpTools(organizationId);
+        const { tools } = await getMcpTools(organizationId);
         cachedMcpToolsByOrg.set(cacheKey, { tools, loadedAt: now });
         return tools;
     } catch (error) {

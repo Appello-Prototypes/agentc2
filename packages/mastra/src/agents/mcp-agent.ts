@@ -73,7 +73,7 @@ export const mcpAgent = new Agent({
  * Call this to get an agent with MCP tools attached
  */
 export async function createMcpAgent() {
-    const mcpTools = await getMcpTools();
+    const { tools: mcpTools } = await getMcpTools();
 
     return new Agent({
         id: "mcp-agent-configured",

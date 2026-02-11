@@ -48,10 +48,11 @@ export async function GET() {
 
         let toolSnapshot: Record<string, unknown> = {};
         try {
-            toolSnapshot = await getMcpTools({
+            const result = await getMcpTools({
                 organizationId,
                 userId: session.user.id
             });
+            toolSnapshot = result.tools;
         } catch (error) {
             console.error("[MCP Status] Failed to load MCP tools:", error);
         }

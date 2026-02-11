@@ -137,7 +137,7 @@ async function executeMcpQuery(
     // Use getMcpTools() which returns executable tool objects keyed by name
     // (e.g., "hubspot_hubspot-search-objects"). This is the same approach the
     // agent runtime uses and correctly handles tool resolution.
-    const tools = await getMcpTools(options.organizationId);
+    const { tools } = await getMcpTools(options.organizationId);
     const tool = tools[query.tool];
 
     if (!tool) {
