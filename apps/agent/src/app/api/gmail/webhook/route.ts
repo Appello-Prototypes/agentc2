@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
 
         const decoded = JSON.parse(Buffer.from(messageData, "base64").toString("utf8"));
         const gmailAddress = decoded.emailAddress as string | undefined;
-        const historyId = decoded.historyId as string | undefined;
+        const historyId = decoded.historyId != null ? String(decoded.historyId) : undefined;
 
         if (!gmailAddress || !historyId) {
             return NextResponse.json(

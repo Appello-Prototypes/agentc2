@@ -7,7 +7,7 @@ function slugify(value: string): string {
         .replace(/^-|-$/g, "");
 }
 
-function getEmailDomain(email: string): string | null {
+export function getEmailDomain(email: string): string | null {
     const parts = email.split("@");
     if (parts.length !== 2) return null;
     return parts[1]?.toLowerCase() || null;
@@ -43,6 +43,11 @@ export interface BootstrapResult {
         userId: string;
         organizationId: string;
         role: string;
+    };
+    suggestedOrg?: {
+        id: string;
+        name: string;
+        slug: string;
     };
     error?: string;
 }
@@ -115,7 +120,7 @@ export async function bootstrapUserOrganization(
         };
     }
 
-    // Try domain matching
+    // Try domain matching — return suggested org instead of auto-joining
     const domain = userEmail ? getEmailDomain(userEmail) : null;
     if (domain) {
         const orgDomain = await prisma.organizationDomain.findUnique({
@@ -124,23 +129,29 @@ export async function bootstrapUserOrganization(
         });
 
         if (orgDomain) {
-            const membership = await prisma.membership.create({
-                data: {
-                    userId,
-                    organizationId: orgDomain.organizationId,
-                    role: "member"
-                }
-            });
-
             return {
                 success: true,
-                organization: orgDomain.organization,
-                membership
+                suggestedOrg: {
+                    id: orgDomain.organization.id,
+                    name: orgDomain.organization.name,
+                    slug: orgDomain.organization.slug
+                }
             };
         }
     }
 
     // Fall back to creating a new org + workspace
+    return createNewOrganizationForUser(userId, userName);
+}
+
+/**
+ * Creates a brand-new organization, default workspace, and owner membership for a user.
+ * Reused by bootstrap (fallback) and the confirm-org API (create_new action).
+ */
+export async function createNewOrganizationForUser(
+    userId: string,
+    userName: string | null
+): Promise<BootstrapResult> {
     const baseName = userName?.trim() || "New Organization";
     const orgName = baseName.endsWith("Organization") ? baseName : `${baseName}'s Organization`;
     const baseSlug = slugify(orgName) || "organization";

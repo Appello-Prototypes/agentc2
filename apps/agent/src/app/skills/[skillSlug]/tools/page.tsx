@@ -246,6 +246,18 @@ export default function SkillToolsPage() {
         (t) => t.source === "registry" && attachedToolIds.has(t.id)
     ).length;
 
+    const allGroupKeys = groups.map((g) => g.key);
+    const allCollapsed =
+        allGroupKeys.length > 0 && allGroupKeys.every((k) => collapsedGroups.has(k));
+
+    const toggleCollapseAll = () => {
+        if (allCollapsed) {
+            setCollapsedGroups(new Set());
+        } else {
+            setCollapsedGroups(new Set(allGroupKeys));
+        }
+    };
+
     return (
         <Card>
             <CardHeader>
@@ -256,6 +268,11 @@ export default function SkillToolsPage() {
                             {attachedToolIds.size} of {availableTools.length} tools selected
                         </CardDescription>
                     </div>
+                    {groups.length > 0 && (
+                        <Button variant="outline" size="sm" onClick={toggleCollapseAll}>
+                            {allCollapsed ? "Expand All" : "Collapse All"}
+                        </Button>
+                    )}
                 </div>
             </CardHeader>
             <CardContent>

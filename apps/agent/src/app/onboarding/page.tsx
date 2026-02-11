@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getApiBase } from "@/lib/utils";
+import { JoinOrgStep } from "@/components/onboarding/JoinOrgStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { TemplateStep } from "@/components/onboarding/TemplateStep";
 import { ConfigureStep } from "@/components/onboarding/ConfigureStep";
@@ -11,6 +12,7 @@ import { TestStep } from "@/components/onboarding/TestStep";
 import { SuccessStep } from "@/components/onboarding/SuccessStep";
 
 export type OnboardingStep =
+    | "join-org"
     | "welcome"
     | "template"
     | "configure"
@@ -18,6 +20,12 @@ export type OnboardingStep =
     | "tools"
     | "test"
     | "success";
+
+interface SuggestedOrg {
+    id: string;
+    name: string;
+    slug: string;
+}
 
 export interface AgentTemplate {
     id: string;
@@ -185,6 +193,7 @@ export default function OnboardingPage() {
     // Restore state from localStorage if available
     const [initialized, setInitialized] = useState(false);
     const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
+    const [suggestedOrg, setSuggestedOrg] = useState<SuggestedOrg | null>(null);
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>(FALLBACK_TOOLS);
     const [data, setData] = useState<OnboardingData>({
         selectedTemplate: null,
@@ -201,19 +210,62 @@ export default function OnboardingPage() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [mcpWarning, setMcpWarning] = useState<string | null>(null);
 
-    // Initialize from persisted state
+    // Initialize: restore persisted state, then check membership status.
+    // If no membership exists but a suggested org is available, show join-org step.
     useEffect(() => {
-        const persisted = loadPersistedState();
-        if (persisted) {
-            setCurrentStep(persisted.step);
-            setData(persisted.data);
-        }
-        setInitialized(true);
+        const init = async () => {
+            // Restore persisted onboarding data
+            const persisted = loadPersistedState();
+            if (persisted) {
+                setData(persisted.data);
+            }
+
+            // Check if user has org membership
+            try {
+                const statusRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
+                    credentials: "include"
+                });
+                const statusResult = await statusRes.json();
+
+                if (statusResult.success && statusResult.needsBootstrap) {
+                    // No membership — check for suggested org by email domain
+                    const suggestedRes = await fetch(`${getApiBase()}/api/auth/suggested-org`, {
+                        credentials: "include"
+                    });
+                    const suggestedResult = await suggestedRes.json();
+
+                    if (suggestedResult.success && suggestedResult.organization) {
+                        setSuggestedOrg(suggestedResult.organization);
+                        setCurrentStep("join-org");
+                    } else {
+                        // No suggested org and no membership — create a new org for the user
+                        await fetch(`${getApiBase()}/api/auth/confirm-org`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ action: "create_new" })
+                        });
+                        setCurrentStep(persisted?.step ?? "welcome");
+                    }
+                } else {
+                    // User already has membership, use persisted step
+                    setCurrentStep(persisted?.step ?? "welcome");
+                }
+            } catch (error) {
+                console.error("Failed to check onboarding status:", error);
+                // Fallback to persisted step on error
+                setCurrentStep(persisted?.step ?? "welcome");
+            }
+
+            setInitialized(true);
+        };
+
+        init();
     }, []);
 
-    // Persist state on changes
+    // Persist state on changes (skip join-org; it's re-detected from API on each load)
     useEffect(() => {
-        if (initialized) {
+        if (initialized && currentStep !== "join-org") {
             persistState(currentStep, data);
         }
     }, [currentStep, data, initialized]);
@@ -418,6 +470,37 @@ export default function OnboardingPage() {
         }
     };
 
+    const handleJoinOrg = useCallback(async () => {
+        if (!suggestedOrg) return;
+        const response = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ action: "join", organizationId: suggestedOrg.id })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to join organization");
+        }
+        setSuggestedOrg(null);
+        setCurrentStep("welcome");
+    }, [suggestedOrg]);
+
+    const handleCreateOwnOrg = useCallback(async () => {
+        const response = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ action: "create_new" })
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) {
+            throw new Error(result.error || "Failed to create organization");
+        }
+        setSuggestedOrg(null);
+        setCurrentStep("welcome");
+    }, []);
+
     const handleSkipToDashboard = async () => {
         const success = await completeOnboarding();
         if (success) {
@@ -436,7 +519,10 @@ export default function OnboardingPage() {
     }
 
     const showProgress =
-        currentStep !== "welcome" && currentStep !== "success" && currentStep !== "test";
+        currentStep !== "join-org" &&
+        currentStep !== "welcome" &&
+        currentStep !== "success" &&
+        currentStep !== "test";
 
     return (
         <>
@@ -460,6 +546,14 @@ export default function OnboardingPage() {
             )}
 
             {/* Steps */}
+            {currentStep === "join-org" && suggestedOrg && (
+                <JoinOrgStep
+                    organization={suggestedOrg}
+                    onJoin={handleJoinOrg}
+                    onCreateOwn={handleCreateOwnOrg}
+                />
+            )}
+
             {currentStep === "welcome" && (
                 <WelcomeStep
                     onContinue={() => setCurrentStep("template")}

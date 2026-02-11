@@ -18,6 +18,8 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@ai-sdk/anthropic": "^2.0.0",
+    "@ai-sdk/google": "^3.0.0",
     "@ai-sdk/openai": "^3.0.23",
     "@aws-sdk/client-s3": "^3.982.0",
     "@mastra/evals": "^1.0.1",

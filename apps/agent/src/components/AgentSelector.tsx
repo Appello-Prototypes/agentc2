@@ -134,7 +134,7 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                     )}
                 </SelectValue>
             </SelectTrigger>
-            <SelectContent>
+            <SelectContent className="min-w-[260px]">
                 {(() => {
                     const userAgents = agents.filter((a) => a.type === "USER");
                     const systemAgents = agents.filter((a) => a.type === "SYSTEM");

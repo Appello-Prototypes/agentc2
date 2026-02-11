@@ -31,5 +31,13 @@ export type {
     ActiveSkillInfo
 } from "./resolver";
 
+// Model provider resolver for org-scoped API keys
+export {
+    resolveModelForOrg,
+    getOrgApiKey,
+    hasOrgApiKey,
+    getAiProviderStatus
+} from "./model-provider";
+
 // Network resolver for database-driven agent networks
 export { NetworkResolver, networkResolver } from "./network-resolver";

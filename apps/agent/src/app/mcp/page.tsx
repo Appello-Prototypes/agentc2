@@ -123,6 +123,7 @@ const StatusBadge = ({ status }: { status: ProviderStatus }) => {
 
 const CategoryBadge = ({ category }: { category: string }) => {
     const colors: Record<string, string> = {
+        ai: "bg-indigo-500/10 text-indigo-600",
         knowledge: "bg-blue-500/10 text-blue-600",
         web: "bg-purple-500/10 text-purple-600",
         crm: "bg-orange-500/10 text-orange-600",
@@ -574,6 +575,11 @@ export default function IntegrationsHubPage() {
         return sortProviders(withConnections);
     }, [providers]);
 
+    const aiProviders = useMemo(
+        () => sortProviders(providers.filter((p) => p.providerType === "ai-model")),
+        [providers]
+    );
+
     const oauthProviders = useMemo(
         () => sortProviders(providers.filter((p) => p.providerType === "oauth")),
         [providers]
@@ -626,13 +632,13 @@ export default function IntegrationsHubPage() {
                 )}
 
                 {!loading && !error && (
-                    <Tabs defaultValue="mcp" className="w-full">
-                        <TabsList className="grid w-full grid-cols-4">
-                            <TabsTrigger value="webhooks">
-                                Webhooks
-                                {webhooks.length > 0 && (
+                    <Tabs defaultValue="ai-providers" className="w-full">
+                        <TabsList className="grid w-full grid-cols-5">
+                            <TabsTrigger value="ai-providers">
+                                AI Providers
+                                {aiProviders.length > 0 && (
                                     <Badge variant="secondary" className="ml-2">
-                                        {webhooks.length}
+                                        {aiProviders.length}
                                     </Badge>
                                 )}
                             </TabsTrigger>
@@ -652,8 +658,32 @@ export default function IntegrationsHubPage() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
+                            <TabsTrigger value="webhooks">
+                                Webhooks
+                                {webhooks.length > 0 && (
+                                    <Badge variant="secondary" className="ml-2">
+                                        {webhooks.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
                             <TabsTrigger value="channels">Channels</TabsTrigger>
                         </TabsList>
+
+                        <TabsContent value="ai-providers" className="mt-4">
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle>AI Model Providers</CardTitle>
+                                    <CardDescription>
+                                        Configure API keys for the AI model providers your agents
+                                        use. Each organization needs its own keys to avoid shared
+                                        token costs.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <ProviderTable providers={aiProviders} />
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
 
                         <TabsContent value="webhooks" className="mt-4">
                             <WebhooksTab

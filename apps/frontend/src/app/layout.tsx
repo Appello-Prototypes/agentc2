@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
     title: {
-        default: "AgentC2",
+        default: "AgentC2 - Your AI Workforce, Orchestrated",
         template: "%s | AgentC2"
     },
     description:
-        "Build, deploy, and improve AI agents with workflows, networks, and continuous learning."
+        "Build, deploy, and orchestrate intelligent AI agents that connect to your tools, learn from experience, and work across every channel. 10+ integrations, visual workflows, voice agents, and more."
 };
 
 export default function RootLayout({
@@ -30,7 +30,7 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" className={dmSans.variable} suppressHydrationWarning>
+        <html lang="en" className={`${dmSans.variable} scroll-smooth`} suppressHydrationWarning>
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <AppProvidersWrapper>{children}</AppProvidersWrapper>
             </body>

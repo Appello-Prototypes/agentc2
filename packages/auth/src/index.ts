@@ -6,7 +6,11 @@ export type { Session, User } from "./auth";
 export { authClient, signIn, signUp, signOut, linkSocial, useSession } from "./auth-client";
 
 // Bootstrap utility
-export { bootstrapUserOrganization } from "./bootstrap";
+export {
+    bootstrapUserOrganization,
+    createNewOrganizationForUser,
+    getEmailDomain
+} from "./bootstrap";
 export type { BootstrapResult } from "./bootstrap";
 
 // Environment utilities

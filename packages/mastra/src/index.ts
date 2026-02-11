@@ -39,6 +39,9 @@ export type {
     ActiveSkillInfo
 } from "./agents";
 
+// Model provider resolver (org-scoped AI API keys)
+export { resolveModelForOrg, getOrgApiKey, hasOrgApiKey, getAiProviderStatus } from "./agents";
+
 // MCP
 export {
     mcpClient,

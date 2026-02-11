@@ -15,6 +15,7 @@ import { vector } from "../vector";
 import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
 import { getThreadSkillState } from "../skills/thread-state";
+import { resolveModelForOrg } from "./model-provider";
 
 // Use Prisma namespace for types
 type AgentRecord = Prisma.AgentGetPayload<{
@@ -374,9 +375,14 @@ export class AgentResolver {
         // Get scorers from registry (synchronous)
         const scorers = getScorersByNames(record.scorers);
 
-        // Build model string
+        // Resolve model — prefer org-scoped API key, fall back to string-based model router
         const modelName = resolveModelName(record.modelProvider, record.modelName);
-        const model = `${record.modelProvider}/${modelName}`;
+        const resolvedModel = await resolveModelForOrg(
+            record.modelProvider,
+            modelName,
+            organizationId
+        );
+        const model = resolvedModel ?? `${record.modelProvider}/${modelName}`;
 
         const defaultOptions = this.buildDefaultOptions(record);
 

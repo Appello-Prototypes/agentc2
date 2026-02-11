@@ -696,6 +696,65 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         providerType: "webhook"
     },
 
+    // ── AI Model Providers ─────────────────────────────────────────────
+    {
+        key: "openai",
+        name: "OpenAI",
+        description: "GPT-4o, GPT-4o-mini, GPT-4 Turbo, and text embeddings",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        configJson: {
+            requiredFields: ["OPENAI_API_KEY"],
+            fieldDefinitions: {
+                OPENAI_API_KEY: {
+                    label: "OpenAI API Key",
+                    description: "Create at https://platform.openai.com/api-keys",
+                    placeholder: "sk-...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "anthropic",
+        name: "Anthropic",
+        description: "Claude 4.5, Claude 4, Claude 3.5, and Claude 3 models",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        configJson: {
+            requiredFields: ["ANTHROPIC_API_KEY"],
+            fieldDefinitions: {
+                ANTHROPIC_API_KEY: {
+                    label: "Anthropic API Key",
+                    description: "Create at https://console.anthropic.com/settings/keys",
+                    placeholder: "sk-ant-...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "google",
+        name: "Google (Gemini)",
+        description: "Gemini 2.0 Flash, Gemini 1.5 Pro, and other Google AI models",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        configJson: {
+            requiredFields: ["GOOGLE_GENERATIVE_AI_API_KEY"],
+            fieldDefinitions: {
+                GOOGLE_GENERATIVE_AI_API_KEY: {
+                    label: "Google AI API Key",
+                    description: "Create at https://aistudio.google.com/apikey",
+                    placeholder: "AIza...",
+                    type: "password"
+                }
+            }
+        }
+    },
+
     // ── Channel Integrations (voice / messaging) ──────────────────────
     {
         key: "twilio-voice",

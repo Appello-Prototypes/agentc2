@@ -11,6 +11,7 @@ import { Memory } from "@mastra/memory";
 import { storage } from "../storage";
 import { getToolsByNames, getToolsByNamesAsync } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
+import { resolveModelForOrg } from "./model-provider";
 import type { RequestContext } from "./resolver";
 
 /**
@@ -296,12 +297,13 @@ export async function createAgentFromConfigAsync(
         ? interpolateInstructions(config.instructionsTemplate, requestContext || {})
         : config.instructions;
 
-    // Build model string in Mastra format: "provider/model"
+    // Resolve model — prefer org-scoped API key, fall back to string-based model router
     const modelName = resolveModelName(config.modelProvider, config.modelName);
-    const model = `${config.modelProvider}/${modelName}`;
+    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
+    const resolvedModel = await resolveModelForOrg(config.modelProvider, modelName, organizationId);
+    const model = resolvedModel ?? `${config.modelProvider}/${modelName}`;
 
     // Get tools from registry AND MCP (async)
-    const organizationId = requestContext?.resource?.tenantId || requestContext?.tenantId;
     const tools = await getToolsByNamesAsync(config.tools, organizationId);
 
     // Get scorers from registry

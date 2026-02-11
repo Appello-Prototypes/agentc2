@@ -163,9 +163,33 @@ export default function ConfigurePage() {
     const [skillBuilderOpen, setSkillBuilderOpen] = useState(false);
     const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
 
+    // AI provider API key status
+    const [aiProviderStatus, setAiProviderStatus] = useState<
+        Record<string, { hasOrgKey: boolean; hasEnvKey: boolean; connected: boolean }>
+    >({});
+    const [aiProviderStatusLoading, setAiProviderStatusLoading] = useState(true);
+
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
     const [hasChanges, setHasChanges] = useState(false);
+
+    // Fetch AI provider API key status
+    const fetchAiProviderStatus = useCallback(async () => {
+        try {
+            setAiProviderStatusLoading(true);
+            const res = await fetch(`${getApiBase()}/api/integrations/ai-providers/status`, {
+                credentials: "include"
+            });
+            const data = await res.json();
+            if (data.success) {
+                setAiProviderStatus(data.providers || {});
+            }
+        } catch (err) {
+            console.error("Failed to fetch AI provider status:", err);
+        } finally {
+            setAiProviderStatusLoading(false);
+        }
+    }, []);
 
     // Fetch available tools, models, and scorers
     const fetchToolsAndScorers = useCallback(async () => {
@@ -338,7 +362,14 @@ export default function ConfigurePage() {
         fetchToolsAndScorers();
         fetchAgentsAndWorkflows();
         fetchSkills();
-    }, [fetchAgent, fetchToolsAndScorers, fetchAgentsAndWorkflows, fetchSkills]);
+        fetchAiProviderStatus();
+    }, [
+        fetchAgent,
+        fetchToolsAndScorers,
+        fetchAgentsAndWorkflows,
+        fetchSkills,
+        fetchAiProviderStatus
+    ]);
 
     // Group tools: built-in by category, MCP by server
     const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
@@ -418,6 +449,18 @@ export default function ConfigurePage() {
     const areAllToolsSelectedForGroup = (group: ToolGroup) => {
         const currentTools = formData.tools || [];
         return group.tools.length > 0 && group.tools.every((t) => currentTools.includes(t.id));
+    };
+
+    // Collapse / expand all tool groups
+    const toggleCollapseAllToolGroups = () => {
+        const groups = groupTools(availableTools);
+        const allKeys = groups.map((g) => g.key);
+        const allCollapsed = allKeys.length > 0 && allKeys.every((k) => collapsedToolGroups.has(k));
+        if (allCollapsed) {
+            setCollapsedToolGroups(new Set());
+        } else {
+            setCollapsedToolGroups(new Set(allKeys));
+        }
     };
 
     // Select all tools
@@ -810,6 +853,46 @@ export default function ConfigurePage() {
                                 </div>
                             </div>
 
+                            {/* AI Provider API Key Status */}
+                            {!aiProviderStatusLoading &&
+                                formData.modelProvider &&
+                                (() => {
+                                    const status = aiProviderStatus[formData.modelProvider];
+                                    if (!status) return null;
+                                    if (status.connected) {
+                                        return (
+                                            <div className="flex items-center gap-2 rounded-lg border border-green-500/20 bg-green-500/10 px-4 py-2.5">
+                                                <div className="h-2 w-2 rounded-full bg-green-500" />
+                                                <p className="text-sm text-green-700 dark:text-green-400">
+                                                    {status.hasOrgKey
+                                                        ? "API key configured via Integrations"
+                                                        : "Using platform API key (environment)"}
+                                                </p>
+                                            </div>
+                                        );
+                                    }
+                                    return (
+                                        <div className="flex items-center justify-between rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-2.5">
+                                            <div className="flex items-center gap-2">
+                                                <div className="h-2 w-2 rounded-full bg-amber-500" />
+                                                <p className="text-sm text-amber-700 dark:text-amber-400">
+                                                    No API key configured for{" "}
+                                                    <span className="font-medium capitalize">
+                                                        {formData.modelProvider}
+                                                    </span>
+                                                    . Agents using this provider will fail.
+                                                </p>
+                                            </div>
+                                            <a
+                                                href={`${getApiBase().replace(/\/agent$/, "")}/agent/mcp`}
+                                                className="text-primary text-sm font-medium whitespace-nowrap hover:underline"
+                                            >
+                                                Configure in Integrations
+                                            </a>
+                                        </div>
+                                    );
+                                })()}
+
                             <div className="space-y-4">
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
@@ -1099,6 +1182,24 @@ export default function ConfigurePage() {
                                     </CardDescription>
                                 </div>
                                 <div className="flex gap-2">
+                                    {availableTools.length > 0 && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={toggleCollapseAllToolGroups}
+                                        >
+                                            {(() => {
+                                                const groups = groupTools(availableTools);
+                                                const allKeys = groups.map((g) => g.key);
+                                                const allCollapsed =
+                                                    allKeys.length > 0 &&
+                                                    allKeys.every((k) =>
+                                                        collapsedToolGroups.has(k)
+                                                    );
+                                                return allCollapsed ? "Expand All" : "Collapse All";
+                                            })()}
+                                        </Button>
+                                    )}
                                     <Button
                                         variant="outline"
                                         size="sm"
