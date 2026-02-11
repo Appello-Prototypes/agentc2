@@ -402,6 +402,23 @@ export async function POST(request: NextRequest) {
         });
     } catch (error) {
         console.error("[Gmail Webhook] Error:", error);
+
+        // If Gmail API quota is exceeded, return 200 so Pub/Sub acknowledges
+        // the message and stops retrying. This prevents a cascade where backlogged
+        // notifications keep hammering the quota and never drain.
+        const isQuotaError =
+            error instanceof Error &&
+            (error.message.includes("Quota exceeded") ||
+                error.message.includes("Rate Limit Exceeded"));
+        if (isQuotaError) {
+            console.warn("[Gmail Webhook] Quota exceeded — acknowledging to drain backlog");
+            return NextResponse.json({
+                success: false,
+                error: "Quota exceeded, message acknowledged to prevent retry storm",
+                retryable: false
+            });
+        }
+
         return NextResponse.json(
             {
                 success: false,
