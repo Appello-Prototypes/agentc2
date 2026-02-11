@@ -1354,6 +1354,46 @@ function sanitizeToolSchema(schema: any): any {
     // Clone the schema to avoid mutations
     const result = { ...schema };
 
+    // ── Normalize nullable type arrays ────────────────────────────────
+    // JSON Schema type: ["string", "null"] → z.union([z.string(), z.null()])
+    // ZodNull is rejected by @mastra/schema-compat. Normalize to non-null type.
+    if (Array.isArray(result.type)) {
+        const nonNullTypes = result.type.filter((t: string) => t !== "null");
+        if (nonNullTypes.length === 0) {
+            result.type = "string"; // type: ["null"] → string fallback
+        } else if (nonNullTypes.length === 1) {
+            result.type = nonNullTypes[0]; // type: ["string", "null"] → "string"
+        } else {
+            result.type = nonNullTypes; // type: ["string", "number", "null"] → ["string", "number"]
+        }
+    }
+
+    // Handle pure null type: type: "null" → type: "string"
+    if (result.type === "null") {
+        result.type = "string";
+    }
+
+    // ── Normalize anyOf/oneOf with null ───────────────────────────────
+    // anyOf: [{type: "string"}, {type: "null"}] → type: "string"
+    for (const keyword of ["anyOf", "oneOf"] as const) {
+        if (Array.isArray(result[keyword])) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const nonNull = result[keyword].filter((s: any) => !(s && s.type === "null"));
+            if (nonNull.length < result[keyword].length) {
+                if (nonNull.length === 0) {
+                    delete result[keyword];
+                    result.type = "string";
+                } else if (nonNull.length === 1) {
+                    delete result[keyword];
+                    Object.assign(result, sanitizeToolSchema(nonNull[0]));
+                    return result; // Already recursed via the promoted schema
+                } else {
+                    result[keyword] = nonNull.map(sanitizeToolSchema);
+                }
+            }
+        }
+    }
+
     // Fix: Array type missing items definition
     // Handle both string type and array type (e.g., ["array", "null"])
     const isArrayType =
@@ -1404,10 +1444,18 @@ function sanitizeToolSchema(schema: any): any {
 }
 
 /**
- * Recursively fix Zod schemas that have ZodArray with ZodAny inner type.
- * When the AI SDK converts z.array(z.any()) to JSON Schema, it produces
- * { type: "array" } WITHOUT items, which fails validation. We replace
- * z.any() inner types with z.record(z.any()) which produces valid JSON Schema.
+ * Layer 2 of the two-layer schema defense. Sanitizes Zod schemas AFTER
+ * the zod-from-json-schema conversion, catching any unsupported types
+ * that slipped through Layer 1.
+ *
+ * @mastra/schema-compat defines these as UNSUPPORTED:
+ *   ZodIntersection, ZodNever, ZodNull, ZodTuple, ZodUndefined
+ *
+ * And these as SUPPORTED:
+ *   ZodObject, ZodArray, ZodUnion, ZodString, ZodNumber, ZodDate,
+ *   ZodAny, ZodDefault, ZodNullable
+ *
+ * This sanitizer converts unsupported types to safe supported equivalents.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeZodSchema(schema: any): any {
@@ -1417,29 +1465,108 @@ function sanitizeZodSchema(schema: any): any {
 
     const typeName = schema._def?.typeName;
 
+    // Helper: get zod lazily
+    const getZ = () => {
+        try {
+            return require("zod").z;
+        } catch {
+            return null;
+        }
+    };
+
+    // ── UNSUPPORTED TYPES (rejected by @mastra/schema-compat) ────────
+
+    // ZodNull → z.any().optional()
+    // Null-only parameters are meaningless for LLM tool calls.
+    if (typeName === "ZodNull") {
+        const z = getZ();
+        return z ? z.any().optional() : schema;
+    }
+
+    // ZodUndefined → z.any().optional()
+    if (typeName === "ZodUndefined") {
+        const z = getZ();
+        return z ? z.any().optional() : schema;
+    }
+
+    // ZodNever → z.any().optional()
+    if (typeName === "ZodNever") {
+        const z = getZ();
+        return z ? z.any().optional() : schema;
+    }
+
+    // ZodVoid → z.any().optional()
+    if (typeName === "ZodVoid") {
+        const z = getZ();
+        return z ? z.any().optional() : schema;
+    }
+
+    // ZodTuple → z.array(z.any())
+    // Tuples don't have clean JSON Schema representation for LLMs.
+    if (typeName === "ZodTuple") {
+        const z = getZ();
+        return z ? z.array(z.any()).optional() : schema;
+    }
+
+    // ZodIntersection → sanitize both sides, return first side
+    // Intersections (A & B) don't map to JSON Schema cleanly.
+    if (typeName === "ZodIntersection") {
+        const left = schema._def?.left;
+        const right = schema._def?.right;
+        if (left) {
+            return sanitizeZodSchema(left);
+        }
+        if (right) {
+            return sanitizeZodSchema(right);
+        }
+        const z = getZ();
+        return z ? z.any().optional() : schema;
+    }
+
+    // ── SUPPORTED TYPES THAT NEED RECURSIVE SANITIZATION ─────────────
+
+    // ZodUnion: recursively sanitize members, filter out unsupported null/undefined/never
+    if (typeName === "ZodUnion" && schema._def?.options) {
+        const z = getZ();
+        if (!z) return schema;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const options: any[] = schema._def.options;
+        const sanitized = options
+            .map(sanitizeZodSchema)
+            .filter((opt) => {
+                // Remove ZodNull, ZodUndefined, ZodNever, ZodVoid from unions
+                const tn = opt?._def?.typeName;
+                return tn !== "ZodNull" && tn !== "ZodUndefined" && tn !== "ZodNever" && tn !== "ZodVoid";
+            });
+
+        if (sanitized.length === 0) {
+            return z.any().optional();
+        }
+        if (sanitized.length === 1) {
+            // Unwrap single-member union
+            return sanitized[0].optional?.() || sanitized[0];
+        }
+        // Rebuild the union with sanitized members
+        return z.union(sanitized as [import("zod").ZodTypeAny, import("zod").ZodTypeAny, ...import("zod").ZodTypeAny[]]);
+    }
+
     // ZodArray: check if inner type is ZodAny — replace if so
     if (typeName === "ZodArray") {
         const innerTypeName = schema._def?.type?._def?.typeName;
         if (innerTypeName === "ZodAny" || innerTypeName === "ZodUnknown" || !schema._def?.type) {
-            // Import z dynamically to avoid circular deps
-            try {
-                const { z } = require("zod");
-                // Replace z.array(z.any()) with z.array(z.record(z.string(), z.any()))
-                // This produces valid JSON Schema: { type: "array", items: { type: "object" } }
-                return z.array(z.record(z.string(), z.any())).optional();
-            } catch {
-                return schema;
-            }
+            const z = getZ();
+            if (!z) return schema;
+            // Replace z.array(z.any()) with z.array(z.record(z.string(), z.any()))
+            // This produces valid JSON Schema: { type: "array", items: { type: "object" } }
+            return z.array(z.record(z.string(), z.any())).optional();
         }
         // Recursively fix the inner type
         const fixedInner = sanitizeZodSchema(schema._def.type);
         if (fixedInner !== schema._def.type) {
-            try {
-                const { z } = require("zod");
-                return z.array(fixedInner);
-            } catch {
-                return schema;
-            }
+            const z = getZ();
+            if (!z) return schema;
+            return z.array(fixedInner);
         }
         return schema;
     }
@@ -1456,12 +1583,9 @@ function sanitizeZodSchema(schema: any): any {
             newShape[key] = fixed;
         }
         if (changed) {
-            try {
-                const { z } = require("zod");
-                return z.object(newShape as Record<string, import("zod").ZodTypeAny>);
-            } catch {
-                return schema;
-            }
+            const z = getZ();
+            if (!z) return schema;
+            return z.object(newShape as Record<string, import("zod").ZodTypeAny>);
         }
         return schema;
     }
@@ -1482,6 +1606,45 @@ function sanitizeZodSchema(schema: any): any {
             return fixed.nullable?.() || schema;
         }
         return schema;
+    }
+
+    // ZodDefault: unwrap and fix inner
+    if (typeName === "ZodDefault" && schema._def?.innerType) {
+        const fixed = sanitizeZodSchema(schema._def.innerType);
+        if (fixed !== schema._def.innerType) {
+            return fixed;
+        }
+        return schema;
+    }
+
+    // ZodEffects: unwrap the inner schema
+    if (typeName === "ZodEffects" && schema._def?.schema) {
+        return sanitizeZodSchema(schema._def.schema);
+    }
+
+    // ZodLazy: evaluate and sanitize
+    if (typeName === "ZodLazy" && schema._def?.getter) {
+        try {
+            const inner = schema._def.getter();
+            return sanitizeZodSchema(inner);
+        } catch {
+            const z = getZ();
+            return z ? z.any().optional() : schema;
+        }
+    }
+
+    // ── CATCH-ALL for unrecognized types ─────────────────────────────
+    // If the type is not in the supported list and we haven't handled it,
+    // log a warning and return as-is (Layer 1 should have prevented most issues).
+    const supportedTypes = [
+        "ZodObject", "ZodArray", "ZodUnion", "ZodString", "ZodNumber",
+        "ZodDate", "ZodAny", "ZodDefault", "ZodNullable", "ZodOptional",
+        "ZodBoolean", "ZodEnum", "ZodLiteral", "ZodRecord", "ZodUnknown"
+    ];
+    if (typeName && !supportedTypes.includes(typeName)) {
+        console.warn(`[MCP Schema] Unrecognized Zod type "${typeName}" — converting to z.any()`);
+        const z = getZ();
+        return z ? z.any().optional() : schema;
     }
 
     return schema;
