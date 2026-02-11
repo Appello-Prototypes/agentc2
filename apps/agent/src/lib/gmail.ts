@@ -243,9 +243,17 @@ export const watchMailbox = async (gmail: ReturnType<typeof google.gmail>, topic
     return { historyId, expiration };
 };
 
+/**
+ * Fetch message IDs added since a given historyId.
+ *
+ * @param maxMessages  Stop collecting after this many unique message IDs.
+ *                     Prevents unbounded Gmail API calls when the stored
+ *                     historyId is very stale. Defaults to 25.
+ */
 export const listHistory = async (
     gmail: ReturnType<typeof google.gmail>,
-    startHistoryId: string
+    startHistoryId: string,
+    maxMessages = 25
 ) => {
     const messageIds = new Set<string>();
     let pageToken: string | undefined;
@@ -266,10 +274,37 @@ export const listHistory = async (
             });
         });
 
+        // Stop paginating once we have enough messages
+        if (messageIds.size >= maxMessages) break;
+
         pageToken = response.data.nextPageToken || undefined;
     } while (pageToken);
 
-    return Array.from(messageIds);
+    return Array.from(messageIds).slice(0, maxMessages);
+};
+
+/**
+ * Fetch full message details for a list of IDs with controlled concurrency.
+ *
+ * Instead of Promise.all (which fires every request at once), this processes
+ * messages in small batches to stay within Gmail API per-user quota limits.
+ * At 5 quota units per messages.get, a concurrency of 3 uses ~15 units per
+ * batch — well within the 15,000 units/min per-user limit.
+ */
+export const getMessagesWithConcurrency = async (
+    gmail: ReturnType<typeof google.gmail>,
+    messageIds: string[],
+    concurrency = 3
+) => {
+    const results: Awaited<ReturnType<typeof getMessage>>[] = [];
+
+    for (let i = 0; i < messageIds.length; i += concurrency) {
+        const batch = messageIds.slice(i, i + concurrency);
+        const batchResults = await Promise.all(batch.map((id) => getMessage(gmail, id)));
+        results.push(...batchResults);
+    }
+
+    return results;
 };
 
 const getHeaderValue = (

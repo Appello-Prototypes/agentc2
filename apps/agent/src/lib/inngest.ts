@@ -206,5 +206,19 @@ export const inngest = new Inngest({
                 payload: Record<string, unknown>;
             };
         };
+        // Gmail Processing Events
+        "gmail/message.process": {
+            data: {
+                integrationId: string;
+                gmailAddress: string;
+                organizationId: string;
+                triggerId: string;
+                agentId: string;
+                workspaceId: string | null;
+                slackUserId: string | null;
+                previousHistoryId: string;
+                newHistoryId: string;
+            };
+        };
     }>()
 });

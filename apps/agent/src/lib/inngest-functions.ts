@@ -29,7 +29,7 @@ import {
     resolveRunSource,
     resolveRunTriggerType
 } from "./unified-triggers";
-import { getGmailClient, watchMailbox } from "./gmail";
+import { getGmailClient, watchMailbox, listHistory, getMessagesWithConcurrency } from "./gmail";
 import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
 import { updateTriggerEventRecord } from "./trigger-events";
 
@@ -4065,6 +4065,357 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
 );
 
 /**
+ * Gmail Message Processor
+ *
+ * Async worker that handles the heavy Gmail API work dispatched by the
+ * thin webhook receiver at /api/gmail/webhook.
+ *
+ * Flow:
+ *   1. Authenticate with Gmail API
+ *   2. Fetch new message IDs via history.list (capped at 25)
+ *   3. Fetch full messages with controlled concurrency (3 at a time)
+ *   4. Enrich messages (sender domain, business hours, etc.)
+ *   5. Write EmailThread / EmailMessage / CrmAuditLog records
+ *   6. Create TriggerEvent records
+ *   7. Fire agent/trigger.fire events to invoke the agent
+ *
+ * If history.list returns 404 (expired historyId), we skip gracefully —
+ * the webhook already advanced the historyId so the next notification
+ * will work from a fresh baseline.
+ *
+ * Inngest provides automatic retries with exponential backoff if any
+ * transient errors occur (network, 5xx, quota).
+ */
+export const gmailMessageProcessFunction = inngest.createFunction(
+    {
+        id: "gmail-message-process",
+        retries: 3,
+        concurrency: {
+            limit: 2, // At most 2 concurrent Gmail processing jobs
+            key: "event.data.gmailAddress"
+        }
+    },
+    { event: "gmail/message.process" },
+    async ({ event, step }) => {
+        const {
+            integrationId,
+            gmailAddress,
+            organizationId,
+            triggerId,
+            agentId,
+            workspaceId,
+            slackUserId,
+            previousHistoryId,
+            newHistoryId
+        } = event.data;
+
+        // ── Step 1: Fetch message IDs from history ─────────────────────
+        const messageIds = await step.run("list-history", async () => {
+            const gmail = await getGmailClient(organizationId, gmailAddress);
+            try {
+                return await listHistory(gmail, previousHistoryId, 25);
+            } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                // historyId expired — skip gracefully. The webhook already
+                // advanced the stored historyId, so next notification works.
+                if (message.includes("Requested entity was not found") || message.includes("404")) {
+                    console.warn(
+                        `[Gmail Process] historyId ${previousHistoryId} expired for ${gmailAddress} — skipping`
+                    );
+                    return [] as string[];
+                }
+                throw err;
+            }
+        });
+
+        if (messageIds.length === 0) {
+            return { processed: 0, gmailAddress };
+        }
+
+        // ── Step 2: Fetch full messages with concurrency control ───────
+        const messages = await step.run("fetch-messages", async () => {
+            const gmail = await getGmailClient(organizationId, gmailAddress);
+            return getMessagesWithConcurrency(gmail, messageIds, 3);
+        });
+
+        // ── Step 3: Find integration connection for email records ──────
+        const connectionId = await step.run("resolve-connection", async () => {
+            const gmailProvider = await prisma.integrationProvider.findUnique({
+                where: { key: "gmail" }
+            });
+            if (!gmailProvider) return null;
+
+            const connection = await prisma.integrationConnection.findFirst({
+                where: {
+                    providerId: gmailProvider.id,
+                    organizationId,
+                    credentials: {
+                        path: ["gmailAddress"],
+                        equals: gmailAddress
+                    }
+                }
+            });
+
+            // Link integration to connection if not already linked
+            if (connection) {
+                const integration = await prisma.gmailIntegration.findUnique({
+                    where: { id: integrationId },
+                    select: { integrationConnectionId: true }
+                });
+                if (!integration?.integrationConnectionId) {
+                    await prisma.gmailIntegration.update({
+                        where: { id: integrationId },
+                        data: { integrationConnectionId: connection.id }
+                    });
+                }
+            }
+
+            return connection?.id || null;
+        });
+
+        // ── Step 4: Enrich messages and create trigger events ──────────
+        const result = await step.run("enrich-and-trigger", async () => {
+            const DEFAULT_BUSINESS_HOURS = { start: 9, end: 17, timezone: "UTC" };
+
+            const getSenderDomain = (email?: string) => {
+                if (!email) return null;
+                const parts = email.split("@");
+                if (parts.length !== 2) return null;
+                return parts[1]?.toLowerCase() || null;
+            };
+
+            const isWithinBusinessHours = (
+                date: Date,
+                timezone: string,
+                start: number,
+                end: number
+            ) => {
+                const formatter = new Intl.DateTimeFormat("en-US", {
+                    timeZone: timezone,
+                    hour: "2-digit",
+                    hour12: false
+                });
+                const hour = Number(formatter.format(date));
+                return hour >= start && hour < end;
+            };
+
+            const organizationDomains = await prisma.organizationDomain.findMany({
+                where: { organizationId },
+                select: { domain: true }
+            });
+            const domainSet = new Set(
+                organizationDomains.map((entry) => entry.domain.toLowerCase())
+            );
+
+            const { buildTriggerPayloadSnapshot } = await import("../lib/trigger-events");
+            const { createTriggerEventRecord } = await import("../lib/trigger-events");
+            const { resolveIdentity } = await import("../lib/identity");
+
+            const triggerEventIds: string[] = [];
+
+            for (const message of messages) {
+                const senderEmail = message.parsedFrom[0];
+                const senderDomain = getSenderDomain(senderEmail);
+                const senderType = senderDomain
+                    ? domainSet.has(senderDomain)
+                        ? "internal"
+                        : "external"
+                    : "unknown";
+                const receivedAt = message.internalDate
+                    ? new Date(Number(message.internalDate))
+                    : message.date
+                      ? new Date(message.date)
+                      : new Date();
+                const inBusinessHours = isWithinBusinessHours(
+                    receivedAt,
+                    DEFAULT_BUSINESS_HOURS.timezone,
+                    DEFAULT_BUSINESS_HOURS.start,
+                    DEFAULT_BUSINESS_HOURS.end
+                );
+                const isForwarded = message.subject?.toLowerCase().startsWith("fwd:") || false;
+                const isImportant = (message.labels || []).some((label: string) =>
+                    ["IMPORTANT", "STARRED"].includes(label)
+                );
+
+                const payload = {
+                    gmailAddress,
+                    integrationConnectionId: connectionId,
+                    threadId: message.threadId,
+                    messageId: message.messageId,
+                    from: message.from,
+                    to: message.to,
+                    cc: message.cc,
+                    bcc: message.bcc,
+                    parsedTo: message.parsedTo,
+                    parsedCc: message.parsedCc,
+                    parsedBcc: message.parsedBcc,
+                    subject: message.subject,
+                    snippet: message.snippet,
+                    date: message.date,
+                    labels: message.labels,
+                    hasAttachments: message.hasAttachments,
+                    attachments: message.attachments,
+                    bodyText: message.bodyText,
+                    bodyHtml: message.bodyHtml,
+                    senderEmail,
+                    senderDomain,
+                    senderType,
+                    isForwarded,
+                    isImportant,
+                    inBusinessHours,
+                    receivedAt: receivedAt.toISOString(),
+                    _slackUserId: slackUserId
+                };
+
+                // Create trigger event record
+                const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
+                const triggerEvent = await createTriggerEventRecord({
+                    triggerId,
+                    agentId,
+                    workspaceId,
+                    status: TriggerEventStatus.RECEIVED,
+                    sourceType: "integration",
+                    triggerType: "event",
+                    entityType: "agent",
+                    integrationKey: "gmail",
+                    integrationId: connectionId || integrationId,
+                    eventName: "gmail.message.received",
+                    payload: normalizedPayload
+                });
+
+                triggerEventIds.push(triggerEvent?.id || "");
+
+                // Write email records if we have a connection
+                if (connectionId) {
+                    const direction =
+                        senderEmail && senderEmail.toLowerCase() === gmailAddress.toLowerCase()
+                            ? "outbound"
+                            : "inbound";
+
+                    const thread = await prisma.emailThread.upsert({
+                        where: {
+                            integrationConnectionId_threadId: {
+                                integrationConnectionId: connectionId,
+                                threadId: message.threadId
+                            }
+                        },
+                        create: {
+                            organizationId,
+                            workspaceId,
+                            integrationConnectionId: connectionId,
+                            threadId: message.threadId,
+                            subject: message.subject || null,
+                            participantsJson: {
+                                from: message.parsedFrom,
+                                to: message.parsedTo,
+                                cc: message.parsedCc
+                            },
+                            lastMessageAt: receivedAt,
+                            lastInboundAt: direction === "inbound" ? receivedAt : null,
+                            lastOutboundAt: direction === "outbound" ? receivedAt : null
+                        },
+                        update: {
+                            subject: message.subject || null,
+                            lastMessageAt: receivedAt,
+                            lastInboundAt: direction === "inbound" ? receivedAt : undefined,
+                            lastOutboundAt: direction === "outbound" ? receivedAt : undefined
+                        }
+                    });
+
+                    await prisma.emailMessage.upsert({
+                        where: {
+                            integrationConnectionId_messageId: {
+                                integrationConnectionId: connectionId,
+                                messageId: message.messageId
+                            }
+                        },
+                        create: {
+                            threadId: thread.id,
+                            integrationConnectionId: connectionId,
+                            messageId: message.messageId,
+                            direction,
+                            fromAddress: message.from || null,
+                            toAddressesJson: message.parsedTo,
+                            ccAddressesJson: message.parsedCc,
+                            bccAddressesJson: message.parsedBcc,
+                            subject: message.subject || null,
+                            snippet: message.snippet || null,
+                            bodyText: message.bodyText || null,
+                            bodyHtml: message.bodyHtml || null,
+                            receivedAt,
+                            labelsJson: message.labels,
+                            hasAttachments: message.hasAttachments,
+                            attachmentsJson: message.attachments,
+                            metadata: {
+                                gmailThreadId: message.threadId,
+                                gmailInternalDate: message.internalDate,
+                                messageIdHeader: message.messageIdHeader
+                            }
+                        },
+                        update: {}
+                    });
+
+                    await prisma.crmAuditLog.create({
+                        data: {
+                            organizationId,
+                            workspaceId,
+                            integrationConnectionId: connectionId,
+                            eventType: "gmail.message.ingested",
+                            recordType: "email_message",
+                            recordId: message.messageId,
+                            sourceType: "gmail",
+                            sourceId: message.messageId,
+                            payloadJson: {
+                                threadId: thread.threadId,
+                                subject: message.subject,
+                                from: message.from,
+                                to: message.to,
+                                direction
+                            }
+                        }
+                    });
+
+                    if (senderEmail) {
+                        await resolveIdentity({
+                            organizationId,
+                            email: senderEmail
+                        });
+                    }
+                }
+
+                // Fire agent trigger
+                await inngest.send({
+                    name: "agent/trigger.fire",
+                    data: {
+                        triggerId,
+                        agentId,
+                        triggerEventId: triggerEvent?.id,
+                        payload
+                    }
+                });
+            }
+
+            return {
+                processed: messages.length,
+                triggerEventIds
+            };
+        });
+
+        console.log(
+            `[Gmail Process] Processed ${result.processed} messages for ${gmailAddress} ` +
+                `(history ${previousHistoryId} → ${newHistoryId})`
+        );
+
+        return {
+            processed: result.processed,
+            gmailAddress,
+            previousHistoryId,
+            newHistoryId
+        };
+    }
+);
+
+/**
  * Gmail Follow-up Monitor
  *
  * Creates action items for email threads awaiting responses.
@@ -4451,6 +4802,7 @@ export const inngestFunctions = [
     // Scheduler
     scheduleTriggerFunction,
     agentScheduleTriggerFunction,
+    gmailMessageProcessFunction,
     gmailFollowUpFunction,
     agentTriggerFireFunction,
     // AI Insights generation
