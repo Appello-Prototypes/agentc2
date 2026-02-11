@@ -6,7 +6,7 @@
 - **User:** root
 - **SSH Key:** ~/.ssh/appello_digitalocean
 - **App Directory:** /var/www/mastra
-- **Domain:** https://mastra.useappello.app
+- **Domain:** https://agentc2.ai
 
 ## Quick Deploy
 
@@ -75,6 +75,6 @@ sudo systemctl status caddy
 sudo journalctl -u caddy -f
 
 # Test endpoints
-curl -I https://mastra.useappello.app
-curl https://mastra.useappello.app/api/mcp -H "X-API-Key: $MCP_API_KEY" -H "X-Organization-Slug: appello"
+curl -I https://agentc2.ai
+curl https://agentc2.ai/api/mcp -H "X-API-Key: $MCP_API_KEY" -H "X-Organization-Slug: appello"
 ```

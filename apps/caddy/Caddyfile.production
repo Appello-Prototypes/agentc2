@@ -9,7 +9,7 @@
 #
 # This file is automatically deployed by the CI/CD pipeline
 
-mastra.useappello.app {
+agentc2.ai {
     # Enable compression
     encode gzip zstd
 
@@ -55,6 +55,6 @@ mastra.useappello.app {
 }
 
 # Redirect www to non-www
-www.mastra.useappello.app {
-    redir https://mastra.useappello.app{uri} permanent
+www.agentc2.ai {
+    redir https://agentc2.ai{uri} permanent
 }

@@ -216,7 +216,7 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
             endpoints: {
                 mcp: `/api/mcp/server/${orgSlug}`
             },
-            docs: "https://mastra.useappello.app/mcp/setup"
+            docs: "https://agentc2.ai/mcp/setup"
         }),
         {
             status: 200,

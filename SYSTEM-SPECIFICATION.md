@@ -1087,7 +1087,7 @@ The Overview page includes a Learning widget showing:
 ### Target: Digital Ocean
 
 - **Host:** 138.197.150.253
-- **Domain:** https://mastra.useappello.app
+- **Domain:** https://agentc2.ai
 - **Process Manager:** PM2
 - **Reverse Proxy:** Caddy
 - SSE for real-time (not WebSocket)

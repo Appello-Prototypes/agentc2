@@ -59,8 +59,8 @@ export const securityHeaders = [
             // In development, allow connections to other local services (frontend auth, etc.)
             // Also allow ElevenLabs API for voice features and production domain for cross-app auth
             isDevelopment
-                ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001 https://catalyst.localhost https://api.elevenlabs.io wss://api.elevenlabs.io https://mastra.useappello.app"
-                : "connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://mastra.useappello.app",
+                ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001 https://catalyst.localhost https://api.elevenlabs.io wss://api.elevenlabs.io https://agentc2.ai"
+                : "connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://agentc2.ai",
             "frame-ancestors 'none'"
         ].join("; ")
     }

@@ -17,7 +17,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js"
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 // Default to production URL
-const API_URL = process.env.MASTRA_API_URL || "https://mastra.useappello.app";
+const API_URL = process.env.MASTRA_API_URL || "https://agentc2.ai";
 const API_KEY = process.env.MASTRA_API_KEY;
 const ORGANIZATION_SLUG =
     process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;

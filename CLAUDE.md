@@ -419,7 +419,7 @@ pm2 status
 ### Server Details
 
 - **Host:** 138.197.150.253
-- **Domain:** https://mastra.useappello.app
+- **Domain:** https://agentc2.ai
 - **SSH Key:** ~/.ssh/appello_digitalocean
 - **Process Manager:** PM2
 - **Reverse Proxy:** Caddy
