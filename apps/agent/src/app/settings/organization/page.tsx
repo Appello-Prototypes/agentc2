@@ -12,7 +12,12 @@ import {
     Skeleton,
     Alert,
     AlertDescription,
-    Textarea
+    Textarea,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 
@@ -22,7 +27,14 @@ interface Organization {
     slug: string;
     description: string | null;
     logoUrl: string | null;
+    metadata: Record<string, unknown> | null;
     createdAt: string;
+}
+
+interface AgentOption {
+    slug: string;
+    name: string;
+    type: string;
 }
 
 interface Membership {
@@ -43,8 +55,14 @@ export default function OrganizationSettingsPage() {
     const [description, setDescription] = useState("");
     const [logoUrl, setLogoUrl] = useState("");
 
+    // Integrations state
+    const [slackDefaultAgent, setSlackDefaultAgent] = useState("assistant");
+    const [agents, setAgents] = useState<AgentOption[]>([]);
+    const [savingSlack, setSavingSlack] = useState(false);
+
     useEffect(() => {
         fetchOrganization();
+        fetchAgents();
     }, []);
 
     async function fetchOrganization() {
@@ -58,6 +76,10 @@ export default function OrganizationSettingsPage() {
                 setSlug(data.organization.slug || "");
                 setDescription(data.organization.description || "");
                 setLogoUrl(data.organization.logoUrl || "");
+                const meta = data.organization.metadata as Record<string, unknown> | null;
+                if (meta?.slackDefaultAgentSlug && typeof meta.slackDefaultAgentSlug === "string") {
+                    setSlackDefaultAgent(meta.slackDefaultAgentSlug);
+                }
             }
         } catch (err) {
             console.error("Failed to fetch organization:", err);
@@ -66,6 +88,51 @@ export default function OrganizationSettingsPage() {
             setLoading(false);
         }
     }
+
+    async function fetchAgents() {
+        try {
+            const res = await fetch(`${getApiBase()}/api/agents`);
+            const data = await res.json();
+            if (data.success && data.agents) {
+                setAgents(
+                    data.agents
+                        .filter((a: AgentOption) => a.type !== "DEMO")
+                        .map((a: AgentOption) => ({ slug: a.slug, name: a.name, type: a.type }))
+                );
+            }
+        } catch (err) {
+            console.error("Failed to fetch agents:", err);
+        }
+    }
+
+    const handleSaveSlack = async () => {
+        setSavingSlack(true);
+        setError(null);
+        setSuccess(null);
+
+        try {
+            const res = await fetch(`${getApiBase()}/api/organizations/${organization?.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    metadata: { slackDefaultAgentSlug: slackDefaultAgent }
+                })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                setOrganization(data.organization);
+                setSuccess("Slack configuration updated successfully");
+            } else {
+                setError(data.error || "Failed to update Slack configuration");
+            }
+        } catch (err) {
+            console.error("Failed to update Slack configuration:", err);
+            setError("Failed to update Slack configuration");
+        } finally {
+            setSavingSlack(false);
+        }
+    };
 
     const handleSave = async () => {
         setSaving(true);
@@ -255,6 +322,55 @@ export default function OrganizationSettingsPage() {
                         <div className="flex justify-end">
                             <Button onClick={handleSave} disabled={saving}>
                                 {saving ? "Saving..." : "Save Changes"}
+                            </Button>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Slack Configuration */}
+            <Card>
+                <CardHeader>
+                    <CardTitle>Slack Integration</CardTitle>
+                    <CardDescription>
+                        Configure which agent handles incoming Slack messages by default
+                    </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                    <div>
+                        <label className="text-sm font-medium">Default Slack Agent</label>
+                        <p className="text-muted-foreground mb-2 text-xs">
+                            Messages sent to the bot without an{" "}
+                            <code className="bg-muted rounded px-1">agent:slug</code> prefix will
+                            be routed to this agent.
+                        </p>
+                        <Select
+                            value={slackDefaultAgent}
+                            onValueChange={(v: string | null) => {
+                                if (v) setSlackDefaultAgent(v);
+                            }}
+                            disabled={!canEdit}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select an agent">
+                                    {agents.find((a) => a.slug === slackDefaultAgent)?.name ||
+                                        slackDefaultAgent}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {agents.map((agent) => (
+                                    <SelectItem key={agent.slug} value={agent.slug}>
+                                        {agent.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {canEdit && (
+                        <div className="flex justify-end">
+                            <Button onClick={handleSaveSlack} disabled={savingSlack}>
+                                {savingSlack ? "Saving..." : "Save Slack Settings"}
                             </Button>
                         </div>
                     )}

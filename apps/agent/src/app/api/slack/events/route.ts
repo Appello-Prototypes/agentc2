@@ -9,10 +9,10 @@ import { handleSlackApprovalReaction } from "@/lib/approvals";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
- * Default agent to use for Slack conversations
- * Can be overridden via SLACK_DEFAULT_AGENT_SLUG env var
+ * Hardcoded last-resort fallback when neither the database nor the env var
+ * specifies a default Slack agent.
  */
-const DEFAULT_AGENT_SLUG = process.env.SLACK_DEFAULT_AGENT_SLUG || "assistant";
+const FALLBACK_AGENT_SLUG = "assistant";
 
 /**
  * Cache the bot's own Slack user ID to detect own messages and thread participation.
@@ -303,11 +303,14 @@ function markdownToSlack(text: string): string {
  * Parse an optional agent directive from the message text.
  * Supports:
  *   "agent:research What is X?" -> { slug: "research", text: "What is X?" }
- *   "What is X?"                -> { slug: DEFAULT_AGENT_SLUG, text: "What is X?" }
+ *   "What is X?"                -> { slug: defaultSlug, text: "What is X?" }
  *   "agent:list"                -> { slug: null, text: "", isListCommand: true }
  *   "help"                      -> { slug: null, text: "", isListCommand: true }
  */
-function parseAgentDirective(text: string): {
+function parseAgentDirective(
+    text: string,
+    defaultSlug: string
+): {
     slug: string | null;
     text: string;
     isListCommand: boolean;
@@ -326,14 +329,14 @@ function parseAgentDirective(text: string): {
     }
 
     // No directive -- use default agent
-    return { slug: DEFAULT_AGENT_SLUG, text: trimmed, isListCommand: false };
+    return { slug: defaultSlug, text: trimmed, isListCommand: false };
 }
 
 /**
  * List active agents from the database and format as a Slack message.
  * Excludes DEMO agents -- only SYSTEM and USER agents are shown.
  */
-async function listActiveAgents(): Promise<string> {
+async function listActiveAgents(defaultSlug: string): Promise<string> {
     const agents = await prisma.agent.findMany({
         where: { isActive: true, type: { in: ["SYSTEM", "USER"] } },
         select: { slug: true, name: true, description: true },
@@ -354,7 +357,7 @@ async function listActiveAgents(): Promise<string> {
         "",
         ...lines,
         "",
-        `_Default agent: \`${DEFAULT_AGENT_SLUG}\`_`,
+        `_Default agent: \`${defaultSlug}\`_`,
         "_Usage: prefix your message with `agent:<slug>` to talk to a specific agent._"
     ].join("\n");
 }
@@ -525,9 +528,33 @@ async function removeReaction(
     }
 }
 
+/**
+ * Resolve the default agent slug for Slack.
+ * Priority: org metadata > env var > hardcoded fallback.
+ */
+async function resolveDefaultAgentSlug(organizationId: string | null): Promise<string> {
+    if (organizationId) {
+        try {
+            const org = await prisma.organization.findUnique({
+                where: { id: organizationId },
+                select: { metadata: true }
+            });
+            const meta = org?.metadata as Record<string, unknown> | null;
+            if (meta?.slackDefaultAgentSlug && typeof meta.slackDefaultAgentSlug === "string") {
+                return meta.slackDefaultAgentSlug;
+            }
+        } catch {
+            // DB failure -- fall through to env/fallback
+        }
+    }
+    return process.env.SLACK_DEFAULT_AGENT_SLUG || FALLBACK_AGENT_SLUG;
+}
+
 const resolveSlackWorkspaceContext = async () => {
+    // Use env var slug as a starting point to find the workspace/org
+    const envSlug = process.env.SLACK_DEFAULT_AGENT_SLUG || FALLBACK_AGENT_SLUG;
     const agentRecord = await prisma.agent.findFirst({
-        where: { slug: DEFAULT_AGENT_SLUG },
+        where: { slug: envSlug },
         select: { id: true, workspaceId: true }
     });
 
@@ -701,7 +728,7 @@ async function processMessage(
     messageTs: string,
     agentSlug?: string
 ): Promise<ProcessMessageResult> {
-    const slug = agentSlug || DEFAULT_AGENT_SLUG;
+    const slug = agentSlug || FALLBACK_AGENT_SLUG;
     const slackThreadId = `slack-${channelId}-${threadTs}`;
 
     console.log(`\n${"=".repeat(60)}`);
@@ -952,6 +979,10 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
+        // Resolve org-level default agent slug (DB > env > "assistant")
+        const slackCtx = await resolveSlackWorkspaceContext();
+        const defaultAgentSlug = await resolveDefaultAgentSlug(slackCtx.organizationId);
+
         // Handle app_mention events (when someone @mentions the bot)
         if (event.type === "app_mention") {
             const mentionEvent = event as SlackAppMentionEvent;
@@ -963,7 +994,7 @@ export async function POST(request: NextRequest) {
             }
 
             // Parse agent directive (e.g. "agent:research What is X?" or "help")
-            const directive = parseAgentDirective(cleanText);
+            const directive = parseAgentDirective(cleanText, defaultAgentSlug);
 
             // Process asynchronously to respond within 3 seconds
             setImmediate(async () => {
@@ -971,7 +1002,7 @@ export async function POST(request: NextRequest) {
 
                 // Handle help / agent:list command
                 if (directive.isListCommand) {
-                    const helpText = await listActiveAgents();
+                    const helpText = await listActiveAgents(defaultAgentSlug);
                     await sendSlackMessageSafe(mentionEvent.channel, helpText, threadTs);
                     return;
                 }
@@ -1116,14 +1147,14 @@ export async function POST(request: NextRequest) {
                 (await isThreadActive(messageEvent.channel, messageEvent.thread_ts));
 
             if (isDM || isActiveThreadReply) {
-                const directive = parseAgentDirective(messageEvent.text);
+                const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);
 
                 setImmediate(async () => {
                     const threadTs = messageEvent.thread_ts || messageEvent.ts;
 
                     // Handle help / agent:list command
                     if (directive.isListCommand) {
-                        const helpText = await listActiveAgents();
+                        const helpText = await listActiveAgents(defaultAgentSlug);
                         await sendSlackMessageSafe(messageEvent.channel, helpText, threadTs);
                         return;
                     }
@@ -1174,7 +1205,8 @@ export async function POST(request: NextRequest) {
 export async function GET() {
     const hasSigningSecret = !!process.env.SLACK_SIGNING_SECRET;
     const hasBotToken = !!process.env.SLACK_BOT_TOKEN;
-    const defaultAgent = DEFAULT_AGENT_SLUG;
+    const slackCtx = await resolveSlackWorkspaceContext();
+    const defaultAgent = await resolveDefaultAgentSlug(slackCtx.organizationId);
 
     return NextResponse.json({
         status: "Slack integration active",

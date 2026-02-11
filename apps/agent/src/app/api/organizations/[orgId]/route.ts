@@ -94,6 +94,7 @@ export async function GET(
                 slug: org!.slug,
                 description: org!.description,
                 logoUrl: org!.logoUrl,
+                metadata: org!.metadata,
                 workspacesCount: org!._count.workspaces,
                 membersCount: org!._count.memberships,
                 createdAt: org!.createdAt,
@@ -149,14 +150,10 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { name, slug, description, logoUrl } = body;
+        const { name, slug, description, logoUrl, metadata } = body;
 
-        const updateData: {
-            name?: string;
-            slug?: string;
-            description?: string | null;
-            logoUrl?: string | null;
-        } = {};
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const updateData: Record<string, any> = {};
 
         if (name !== undefined) {
             if (typeof name !== "string" || name.trim().length === 0) {
@@ -200,6 +197,19 @@ export async function PATCH(
             updateData.logoUrl = logoUrl ? logoUrl.trim() : null;
         }
 
+        if (metadata !== undefined && typeof metadata === "object" && metadata !== null) {
+            // Shallow-merge with existing metadata so other keys aren't wiped
+            const existing = await prisma.organization.findUnique({
+                where: { id: organization.id },
+                select: { metadata: true }
+            });
+            const prev =
+                existing?.metadata && typeof existing.metadata === "object"
+                    ? (existing.metadata as Record<string, unknown>)
+                    : {};
+            updateData.metadata = { ...prev, ...metadata };
+        }
+
         const updatedOrg = await prisma.organization.update({
             where: { id: organization.id },
             data: updateData
@@ -222,6 +232,7 @@ export async function PATCH(
                 slug: updatedOrg.slug,
                 description: updatedOrg.description,
                 logoUrl: updatedOrg.logoUrl,
+                metadata: updatedOrg.metadata,
                 createdAt: updatedOrg.createdAt,
                 updatedAt: updatedOrg.updatedAt
             }
