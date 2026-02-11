@@ -111,7 +111,8 @@ const getImportHints = (provider: Provider) => {
         matchArgs: normalizeStringArray(hintsRecord.matchArgs),
         matchUrls: normalizeStringArray(hintsRecord.matchUrls),
         envAliases: normalizeStringRecord(hintsRecord.envAliases),
-        headerAliases: normalizeStringRecord(hintsRecord.headerAliases)
+        headerAliases: normalizeStringRecord(hintsRecord.headerAliases),
+        argValueMap: normalizeStringRecord(hintsRecord.argValueMap)
     };
 };
 
@@ -280,11 +281,21 @@ export default function McpConfigPage() {
                 const hints = getImportHints(provider);
                 const envAliases = hints.envAliases ?? {};
                 const headerAliases = hints.headerAliases ?? {};
+                const argValueMap = hints.argValueMap ?? {};
                 const envKeys = Object.keys(normalized.env).map((key) => envAliases[key] ?? key);
                 const headerKeys = Object.keys(normalized.headers).map(
                     (key) => headerAliases[key] ?? key
                 );
-                const availableKeys = new Set([...envKeys, ...headerKeys]);
+                const argKeys: string[] = [];
+                if (normalized.args && Object.keys(argValueMap).length > 0) {
+                    normalized.args.forEach((arg, index) => {
+                        const targetKey = argValueMap[arg];
+                        if (targetKey && normalized.args[index + 1]) {
+                            argKeys.push(targetKey);
+                        }
+                    });
+                }
+                const availableKeys = new Set([...envKeys, ...headerKeys, ...argKeys]);
                 const missing = required.filter((key) => !availableKeys.has(key));
                 if (missing.length > 0) {
                     nextWarnings.push(

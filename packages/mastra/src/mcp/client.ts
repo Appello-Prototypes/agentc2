@@ -839,6 +839,7 @@ type ProviderImportHints = {
     matchUrls?: string[];
     envAliases?: Record<string, string>;
     headerAliases?: Record<string, string>;
+    argValueMap?: Record<string, string>;
 };
 
 const normalizeStringArray = (value: unknown) =>
@@ -874,7 +875,8 @@ const getImportHints = (provider: IntegrationProvider | IntegrationProviderSeed)
         matchArgs: normalizeStringArray((hints as Record<string, unknown>).matchArgs),
         matchUrls: normalizeStringArray((hints as Record<string, unknown>).matchUrls),
         envAliases: normalizeStringRecord((hints as Record<string, unknown>).envAliases),
-        headerAliases: normalizeStringRecord((hints as Record<string, unknown>).headerAliases)
+        headerAliases: normalizeStringRecord((hints as Record<string, unknown>).headerAliases),
+        argValueMap: normalizeStringRecord((hints as Record<string, unknown>).argValueMap)
     };
 };
 
@@ -1046,6 +1048,16 @@ const buildCredentialsForProvider = (
             normalizedValue = normalizedValue.slice(7);
         }
         credentials[alias] = normalizedValue;
+    }
+
+    const argValueMap = hints.argValueMap ?? {};
+    if (serverConfig.args?.length && Object.keys(argValueMap).length > 0) {
+        serverConfig.args.forEach((arg, index) => {
+            const targetKey = argValueMap[arg];
+            if (targetKey && serverConfig.args[index + 1]) {
+                credentials[targetKey] = serverConfig.args[index + 1];
+            }
+        });
     }
 
     return credentials;

@@ -1,36 +1,38 @@
-import { NextResponse } from "next/server";
-import { headers } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
 import {
     listAvailableTools,
     getAvailableModels,
     listAvailableScorers,
     listMcpToolDefinitions
 } from "@repo/mastra";
-import { auth } from "@repo/auth";
-import { getUserOrganizationId } from "@/lib/organization";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/agents/tools
  *
  * List all available tools, models, and scorers for agent configuration
- * Includes both static tools from the registry and dynamic MCP tools
+ * Includes both static tools from the registry and dynamic MCP tools.
+ * Uses the same auth context as Integrations (authenticateRequest) so
+ * org- and user-scoped MCP connections are included when listing tools.
  */
-export async function GET() {
+export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        const organizationId = session?.user ? await getUserOrganizationId(session.user.id) : null;
+        const authContext = await authenticateRequest(request);
+
+        // Same org + user context as Integrations API so MCP connections match
+        const mcpOptions = authContext
+            ? { organizationId: authContext.organizationId, userId: authContext.userId }
+            : null;
 
         // Get static tools from registry
         const staticTools = listAvailableTools();
 
-        // Get MCP tools (dynamic, from connected MCP servers)
+        // Get MCP tools (dynamic, from org/user integration connections or global env)
         let mcpTools: { id: string; name: string; description: string; source: string }[] = [];
         let mcpError: string | null = null;
         const mcpServerStatus: Record<string, { connected: boolean; toolCount: number }> = {};
         try {
-            const mcpDefinitions = await listMcpToolDefinitions(organizationId);
+            const mcpDefinitions = await listMcpToolDefinitions(mcpOptions);
             mcpTools = mcpDefinitions.map((def) => ({
                 id: def.name, // Full namespaced name: serverName_toolName
                 name: def.name,
