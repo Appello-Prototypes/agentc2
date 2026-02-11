@@ -588,8 +588,20 @@ export default function UnifiedChatPage() {
                 setModelOverride(null);
                 setThinkingEnabled(false);
 
+                // CRITICAL: Finalize the current conversation run before switching agents.
+                // Without this, subsequent messages would try to add turns to the OLD agent's run.
+                if (currentRunId) {
+                    fetch(`${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ runId: currentRunId })
+                    }).catch((e) => console.warn("[Chat] Failed to finalize run on agent switch:", e));
+                }
+                setCurrentRunId(null);
+
                 if (hasMessagesRef.current) {
-                    // Mid-conversation: keep threadId and messages, insert divider
+                    // Mid-conversation: start fresh thread for new agent, insert divider
+                    setThreadId(`chat-${newSlug}-${Date.now()}`);
                     setMessages((prev) => [
                         ...prev,
                         {
@@ -599,7 +611,7 @@ export default function UnifiedChatPage() {
                             parts: [
                                 {
                                     type: "text" as const,
-                                    text: `> **Switched to ${agent.name}** — continuing the conversation.`
+                                    text: `> **Switched to ${agent.name}** — starting a new conversation.`
                                 }
                             ]
                         }
@@ -611,7 +623,7 @@ export default function UnifiedChatPage() {
                 }
             }
         },
-        [setMessages, selectedAgentSlug]
+        [setMessages, selectedAgentSlug, currentRunId]
     );
 
     const handleSend = useCallback(
