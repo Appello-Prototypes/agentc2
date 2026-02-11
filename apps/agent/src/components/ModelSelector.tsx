@@ -56,7 +56,7 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
     return (
         <div className="flex items-center gap-1">
             <Select value={displayValue} onValueChange={handleChange} disabled={disabled}>
-                <SelectTrigger className="w-[180px]">
+                <SelectTrigger className="w-[160px]">
                     <SelectValue placeholder="Model">
                         <div className="flex items-center gap-1">
                             <span className="text-sm">{getModelDisplayName(displayValue)}</span>

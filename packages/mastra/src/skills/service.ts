@@ -182,11 +182,7 @@ export async function listSkills(input: ListSkillsInput = {}) {
     // Workspace scoping: show skills from the user's workspace + global skills (no workspace)
     // SYSTEM skills are always visible regardless of workspace
     if (input.workspaceId) {
-        where.OR = [
-            { workspaceId: input.workspaceId },
-            { workspaceId: null },
-            { type: "SYSTEM" }
-        ];
+        where.OR = [{ workspaceId: input.workspaceId }, { workspaceId: null }, { type: "SYSTEM" }];
     }
     if (input.category) where.category = input.category;
     if (input.type) where.type = input.type;

@@ -18,6 +18,11 @@ import {
     Conversation,
     ConversationContent,
     ConversationScrollButton,
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
     Message,
     MessageContent,
     MessageActions,
@@ -77,7 +82,8 @@ import {
     LayoutGridIcon,
     MessageCircleIcon,
     ZapIcon,
-    ClipboardListIcon
+    ClipboardListIcon,
+    CheckIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
 import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/components/ModelSelector";
@@ -179,6 +185,27 @@ const INPUT_MODE_CONFIG: Record<
         icon: LayoutGridIcon,
         placeholder: "Describe the dashboard or report you want to create...",
         prefix: "Create a canvas: "
+    }
+};
+
+const INTERACTION_MODE_CONFIG: Record<
+    InteractionMode,
+    { icon: typeof MessageCircleIcon; label: string; description: string }
+> = {
+    ask: {
+        icon: MessageCircleIcon,
+        label: "Ask",
+        description: "Ask questions without making changes"
+    },
+    agent: {
+        icon: ZapIcon,
+        label: "Agent",
+        description: "Full agent with tools and actions"
+    },
+    plan: {
+        icon: ClipboardListIcon,
+        label: "Plan",
+        description: "Create a plan before executing"
     }
 };
 
@@ -786,6 +813,10 @@ export default function UnifiedChatPage() {
         ? INPUT_MODE_CONFIG[inputMode].placeholder
         : "How can I help you today?";
 
+    // ── Mode dropdown config ────────────────────────────────────────────
+    const activeModeConfig = INTERACTION_MODE_CONFIG[interactionMode];
+    const ActiveModeIcon = activeModeConfig.icon;
+
     // ── Shared input component ───────────────────────────────────────────
     const chatInput = (
         <PromptInput
@@ -803,45 +834,54 @@ export default function UnifiedChatPage() {
                     className="min-h-[48px] text-[15px]"
                 />
             </PromptInputBody>
-            <PromptInputFooter>
-                <PromptInputTools>
-                    {/* Mode Selector: Ask / Agent / Plan */}
-                    <div className="bg-muted/50 inline-flex items-center rounded-md border p-0.5">
-                        {(
-                            [
-                                {
-                                    mode: "ask" as InteractionMode,
-                                    icon: MessageCircleIcon,
-                                    label: "Ask"
-                                },
-                                {
-                                    mode: "agent" as InteractionMode,
-                                    icon: ZapIcon,
-                                    label: "Agent"
-                                },
-                                {
-                                    mode: "plan" as InteractionMode,
-                                    icon: ClipboardListIcon,
-                                    label: "Plan"
-                                }
-                            ] as const
-                        ).map(({ mode, icon: ModeIcon, label }) => (
-                            <button
-                                key={mode}
-                                type="button"
-                                onClick={() => setInteractionMode(mode)}
-                                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
-                                    interactionMode === mode
-                                        ? "bg-background text-foreground shadow-sm"
-                                        : "text-muted-foreground hover:text-foreground"
-                                }`}
-                                title={`${label} Mode`}
-                            >
-                                <ModeIcon className="size-3" />
-                                {label}
-                            </button>
-                        ))}
-                    </div>
+            <PromptInputFooter className="flex-wrap">
+                <PromptInputTools className="min-w-0 flex-wrap">
+                    {/* Mode Selector Dropdown: Ask / Agent / Plan */}
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <button
+                                    type="button"
+                                    className="bg-muted/50 hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
+                                >
+                                    <ActiveModeIcon className="size-3.5" />
+                                    {activeModeConfig.label}
+                                    <ChevronDownIcon className="text-muted-foreground size-3" />
+                                </button>
+                            }
+                        />
+                        <DropdownMenuContent align="start" className="w-56">
+                            {(
+                                Object.entries(INTERACTION_MODE_CONFIG) as [
+                                    InteractionMode,
+                                    (typeof INTERACTION_MODE_CONFIG)[InteractionMode]
+                                ][]
+                            ).map(([mode, config]) => {
+                                const ModeIcon = config.icon;
+                                return (
+                                    <DropdownMenuItem
+                                        key={mode}
+                                        onClick={() => setInteractionMode(mode)}
+                                    >
+                                        <div className="flex w-full items-center gap-2.5">
+                                            <ModeIcon className="text-muted-foreground size-4 shrink-0" />
+                                            <div className="flex min-w-0 flex-1 flex-col">
+                                                <span className="text-sm font-medium">
+                                                    {config.label}
+                                                </span>
+                                                <span className="text-muted-foreground text-xs">
+                                                    {config.description}
+                                                </span>
+                                            </div>
+                                            {interactionMode === mode && (
+                                                <CheckIcon className="text-primary size-4 shrink-0" />
+                                            )}
+                                        </div>
+                                    </DropdownMenuItem>
+                                );
+                            })}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <ChatInputActions setInputMode={setInputMode} />
                     <VoiceInputButton />
                     <AgentSelector
@@ -862,6 +902,7 @@ export default function UnifiedChatPage() {
                     />
                 </PromptInputTools>
                 <PromptInputSubmit
+                    className="shrink-0"
                     status={submitStatus}
                     onStop={stop}
                     disabled={!selectedAgentSlug}

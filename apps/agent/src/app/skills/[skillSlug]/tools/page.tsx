@@ -1,152 +1,288 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
-import { Badge, Button, Card, CardContent, Input, Skeleton } from "@repo/ui";
-import { PlusIcon, XIcon } from "lucide-react";
+import {
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+    Skeleton
+} from "@repo/ui";
 
-interface SkillToolData {
+interface ToolInfo {
     id: string;
-    type: string;
-    tools: Array<{ toolId: string }>;
+    name: string;
+    description: string;
+    source: string;
+}
+
+interface ToolGroup {
+    source: string;
+    displayName: string;
+    tools: ToolInfo[];
 }
 
 export default function SkillToolsPage() {
     const params = useParams();
     const skillSlug = params.skillSlug as string;
-    const [skill, setSkill] = useState<SkillToolData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [actionLoading, setActionLoading] = useState(false);
-    const [newToolId, setNewToolId] = useState("");
 
-    const fetchSkill = async () => {
+    const [skillId, setSkillId] = useState("");
+    const [attachedToolIds, setAttachedToolIds] = useState<Set<string>>(new Set());
+    const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [toolsLoading, setToolsLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+    // Fetch skill data (attached tools)
+    const fetchSkill = useCallback(async () => {
         try {
             const res = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
             if (res.ok) {
                 const data = await res.json();
                 const s = data.skill || data;
-                setSkill({ id: s.id, type: s.type, tools: s.tools || [] });
+                setSkillId(s.id);
+                setAttachedToolIds(
+                    new Set((s.tools || []).map((t: { toolId: string }) => t.toolId))
+                );
             }
         } catch (err) {
-            console.error("Failed to load:", err);
+            console.error("Failed to load skill:", err);
         } finally {
             setLoading(false);
         }
-    };
+    }, [skillSlug]);
+
+    // Fetch all available tools (registry + MCP)
+    const fetchTools = useCallback(async () => {
+        setToolsLoading(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/agents/tools`);
+            if (res.ok) {
+                const data = await res.json();
+                setAvailableTools(data.tools || []);
+            }
+        } catch (err) {
+            console.error("Failed to load available tools:", err);
+        } finally {
+            setToolsLoading(false);
+        }
+    }, []);
 
     useEffect(() => {
         fetchSkill();
-    }, [skillSlug]);
+        fetchTools();
+    }, [fetchSkill, fetchTools]);
 
-    const handleAttach = async () => {
-        if (!skill || !newToolId.trim() || actionLoading) return;
-        setActionLoading(true);
-        try {
-            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}/tools`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ toolId: newToolId.trim() })
-            });
-            if (res.ok) {
-                setNewToolId("");
-                fetchSkill();
-            }
-        } catch (err) {
-            console.error("Failed to attach tool:", err);
-        } finally {
-            setActionLoading(false);
-        }
+    // Group tools by source
+    const groupToolsBySource = (tools: ToolInfo[]): ToolGroup[] => {
+        const groups: Record<string, ToolInfo[]> = {};
+        tools.forEach((tool) => {
+            const source = tool.source || "registry";
+            if (!groups[source]) groups[source] = [];
+            groups[source]!.push(tool);
+        });
+        const sortedKeys = Object.keys(groups).sort((a, b) => {
+            if (a === "registry") return -1;
+            if (b === "registry") return 1;
+            return a.localeCompare(b);
+        });
+        return sortedKeys.map((key) => ({
+            source: key,
+            displayName: key === "registry" ? "Built-in Tools" : key.replace("mcp:", ""),
+            tools: groups[key]!
+        }));
     };
 
-    const handleDetach = async (toolId: string) => {
-        if (!skill || actionLoading) return;
-        setActionLoading(true);
+    // Toggle a single tool
+    const toggleTool = async (toolId: string) => {
+        if (!skillId || actionLoading) return;
+        setActionLoading(toolId);
+
+        const isAttached = attachedToolIds.has(toolId);
+
         try {
-            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}/tools`, {
-                method: "DELETE",
+            const res = await fetch(`${getApiBase()}/api/skills/${skillId}/tools`, {
+                method: isAttached ? "DELETE" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ toolId })
             });
-            if (res.ok) fetchSkill();
+            if (res.ok) {
+                setAttachedToolIds((prev) => {
+                    const next = new Set(prev);
+                    if (isAttached) {
+                        next.delete(toolId);
+                    } else {
+                        next.add(toolId);
+                    }
+                    return next;
+                });
+            }
         } catch (err) {
-            console.error("Failed to detach tool:", err);
+            console.error("Failed to toggle tool:", err);
         } finally {
-            setActionLoading(false);
+            setActionLoading(null);
         }
     };
 
-    if (loading) return <Skeleton className="h-64 w-full" />;
-    if (!skill) return <p className="text-muted-foreground">Skill not found.</p>;
+    // Select all tools in a source group
+    const selectAllForSource = async (source: string) => {
+        if (!skillId || actionLoading) return;
+        const sourceTools = availableTools.filter((t) => t.source === source);
+        const unattached = sourceTools.filter((t) => !attachedToolIds.has(t.id));
+        if (unattached.length === 0) return;
 
-    const isSystem = skill.type === "SYSTEM";
+        setActionLoading("bulk");
+        try {
+            for (const tool of unattached) {
+                await fetch(`${getApiBase()}/api/skills/${skillId}/tools`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ toolId: tool.id })
+                });
+            }
+            // Refresh from server
+            await fetchSkill();
+        } catch (err) {
+            console.error("Failed to select all:", err);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    // Deselect all tools in a source group
+    const deselectAllForSource = async (source: string) => {
+        if (!skillId || actionLoading) return;
+        const sourceTools = availableTools.filter((t) => t.source === source);
+        const attached = sourceTools.filter((t) => attachedToolIds.has(t.id));
+        if (attached.length === 0) return;
+
+        setActionLoading("bulk");
+        try {
+            for (const tool of attached) {
+                await fetch(`${getApiBase()}/api/skills/${skillId}/tools`, {
+                    method: "DELETE",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ toolId: tool.id })
+                });
+            }
+            await fetchSkill();
+        } catch (err) {
+            console.error("Failed to deselect all:", err);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    if (loading || toolsLoading) {
+        return (
+            <div className="space-y-4">
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-32 w-full" />
+                <Skeleton className="h-8 w-48" />
+                <Skeleton className="h-32 w-full" />
+            </div>
+        );
+    }
+
+    const groups = groupToolsBySource(availableTools);
 
     return (
-        <div className="space-y-4">
-            <div className="flex items-center justify-between">
-                <h2 className="text-lg font-semibold">Tools ({skill.tools.length})</h2>
-            </div>
-
-            {/* Attach tool (USER skills only) */}
-            {!isSystem && (
-                <div className="flex items-center gap-2">
-                    <Input
-                        placeholder="Tool ID (e.g., web-fetch, calculator)"
-                        value={newToolId}
-                        onChange={(e) => setNewToolId(e.target.value)}
-                        className="max-w-sm"
-                        onKeyDown={(e) => e.key === "Enter" && handleAttach()}
-                    />
-                    <Button
-                        size="sm"
-                        onClick={handleAttach}
-                        disabled={actionLoading || !newToolId.trim()}
-                    >
-                        <PlusIcon className="mr-1.5 h-3.5 w-3.5" />
-                        Attach Tool
-                    </Button>
+        <Card>
+            <CardHeader>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <CardTitle>Tools</CardTitle>
+                        <CardDescription>
+                            {attachedToolIds.size} of {availableTools.length} tools selected
+                        </CardDescription>
+                    </div>
                 </div>
-            )}
+            </CardHeader>
+            <CardContent>
+                <div className="max-h-[600px] space-y-6 overflow-auto">
+                    {groups.map((group) => {
+                        const selectedCount = group.tools.filter((t) =>
+                            attachedToolIds.has(t.id)
+                        ).length;
+                        const allSelected =
+                            group.tools.length > 0 &&
+                            group.tools.every((t) => attachedToolIds.has(t.id));
 
-            {/* Tool list */}
-            {skill.tools.length > 0 ? (
-                <Card>
-                    <CardContent className="p-0">
-                        <div className="divide-y">
-                            {skill.tools.map((t) => (
-                                <div
-                                    key={t.toolId}
-                                    className="flex items-center justify-between px-4 py-3"
-                                >
-                                    <Badge variant="outline" className="font-mono text-xs">
-                                        {t.toolId}
-                                    </Badge>
-                                    {!isSystem && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleDetach(t.toolId)}
-                                            disabled={actionLoading}
-                                        >
-                                            <XIcon className="h-3.5 w-3.5" />
-                                        </Button>
-                                    )}
+                        return (
+                            <div key={group.source} className="space-y-3">
+                                <div className="flex items-center justify-between border-b pb-2">
+                                    <div className="flex items-center gap-2">
+                                        <h4 className="font-medium">{group.displayName}</h4>
+                                        <Badge variant="outline" className="text-xs">
+                                            {selectedCount}/{group.tools.length}
+                                        </Badge>
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={!!actionLoading}
+                                        onClick={() =>
+                                            allSelected
+                                                ? deselectAllForSource(group.source)
+                                                : selectAllForSource(group.source)
+                                        }
+                                    >
+                                        {allSelected ? "Deselect All" : "Select All"}
+                                    </Button>
                                 </div>
-                            ))}
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {group.tools.map((tool) => {
+                                        const isChecked = attachedToolIds.has(tool.id);
+                                        const isToggling = actionLoading === tool.id;
+                                        return (
+                                            <label
+                                                key={tool.id}
+                                                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                    isChecked
+                                                        ? "border-primary bg-primary/5"
+                                                        : "hover:bg-muted/50"
+                                                } ${isToggling ? "opacity-50" : ""}`}
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleTool(tool.id)}
+                                                    disabled={!!actionLoading}
+                                                    className="mt-0.5"
+                                                />
+                                                <div className="min-w-0 flex-1">
+                                                    <p className="text-sm font-medium">
+                                                        {tool.name}
+                                                    </p>
+                                                    {tool.description && (
+                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                                            {tool.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        );
+                    })}
+                    {availableTools.length === 0 && (
+                        <div className="text-muted-foreground py-8 text-center">
+                            <p>No tools available</p>
+                            <p className="mt-1 text-sm">
+                                Check MCP server connections in Integrations
+                            </p>
                         </div>
-                    </CardContent>
-                </Card>
-            ) : (
-                <Card>
-                    <CardContent className="py-8 text-center">
-                        <p className="text-muted-foreground text-sm italic">
-                            {skill.type === "SYSTEM" && skill.tools.length === 0
-                                ? "This is an MCP integration skill. Tools are resolved dynamically at runtime from the connected MCP server."
-                                : "No tools attached. Add tools to define what this skill can do."}
-                        </p>
-                    </CardContent>
-                </Card>
-            )}
-        </div>
+                    )}
+                </div>
+            </CardContent>
+        </Card>
     );
 }

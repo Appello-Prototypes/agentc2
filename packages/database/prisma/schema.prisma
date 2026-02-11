@@ -263,12 +263,14 @@ model IntegrationConnection {
     updatedAt      DateTime            @updatedAt
 
     // Relations
-    gmailIntegrations  GmailIntegration[]
-    emailThreads       EmailThread[]
-    chatMessages       ChatMessage[]
-    meetingTranscripts MeetingTranscript[]
-    crmAuditLogs       CrmAuditLog[]
-    EmailMessage       EmailMessage[]
+    gmailIntegrations    GmailIntegration[]
+    emailThreads         EmailThread[]
+    chatMessages         ChatMessage[]
+    meetingTranscripts   MeetingTranscript[]
+    crmAuditLogs         CrmAuditLog[]
+    EmailMessage         EmailMessage[]
+    webhookSubscriptions WebhookSubscription[]
+    calendarEvents       CalendarEvent[]
 
     @@index([organizationId])
     @@index([providerId])
@@ -2816,4 +2818,68 @@ model CanvasVersion {
     @@unique([canvasId, version])
     @@index([canvasId])
     @@map("canvas_version")
+}
+
+// ==============================
+// Webhook Subscription Lifecycle
+// ==============================
+
+// WebhookSubscription - Tracks external push subscriptions (Graph, Dropbox, etc.)
+model WebhookSubscription {
+    id                      String                @id @default(cuid())
+    integrationConnectionId String
+    integrationConnection   IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+    providerKey             String // "microsoft-mail", "microsoft-calendar", "dropbox"
+    externalSubscriptionId  String? // Graph subscription ID (null for Dropbox)
+    resourcePath            String? // "/me/mailFolders('Inbox')/messages" etc
+    clientState             String? // HMAC secret for Graph webhook verification
+    notificationUrl         String? // Full webhook URL
+    cursor                  String? // Dropbox delta cursor
+    expiresAt               DateTime? // Graph subscription expiry (3-day max)
+    lastRenewedAt           DateTime?
+    errorCount              Int                   @default(0)
+    errorMessage            String?               @db.Text
+    isActive                Boolean               @default(true)
+    metadata                Json?
+    createdAt               DateTime              @default(now())
+    updatedAt               DateTime              @updatedAt
+
+    @@unique([integrationConnectionId, providerKey, resourcePath])
+    @@index([providerKey, isActive])
+    @@index([expiresAt])
+    @@map("webhook_subscription")
+}
+
+// ==============================
+// Calendar Event Primitive
+// ==============================
+
+// CalendarEvent - Normalized calendar events from Outlook/Google Calendar
+model CalendarEvent {
+    id                      String                 @id @default(cuid())
+    organizationId          String
+    integrationConnectionId String?
+    integrationConnection   IntegrationConnection? @relation(fields: [integrationConnectionId], references: [id], onDelete: SetNull)
+    externalEventId         String // Provider event ID (Graph event ID, Google event ID)
+    calendarId              String? // Which calendar within the account
+    subject                 String?
+    bodyPreview             String?                @db.Text
+    startAt                 DateTime?
+    endAt                   DateTime?
+    isAllDay                Boolean                @default(false)
+    location                String?
+    organizerEmail          String?
+    attendeesJson           Json? // [{email, name, status}]
+    recurrenceJson          Json? // Recurrence rule
+    status                  String? // "confirmed", "tentative", "cancelled"
+    sensitivity             String? // "normal", "personal", "private", "confidential"
+    webLink                 String? // URL to open in browser
+    metadata                Json?
+    createdAt               DateTime               @default(now())
+    updatedAt               DateTime               @updatedAt
+
+    @@unique([integrationConnectionId, externalEventId])
+    @@index([organizationId])
+    @@index([startAt])
+    @@map("calendar_event")
 }

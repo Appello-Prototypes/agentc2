@@ -347,14 +347,14 @@ export function SkillDetailSheet({
                                         View Full Page
                                     </Button>
                                 </Link>
-                                {skill.type === "SYSTEM" && onFork && (
+                                {onFork && (
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         className="flex-1"
                                         onClick={() => onFork(skill.id)}
                                     >
-                                        Customize
+                                        Duplicate
                                     </Button>
                                 )}
                                 {onDetach && (

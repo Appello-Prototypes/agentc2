@@ -873,7 +873,7 @@ export type PromptInputFooterProps = Omit<ComponentProps<typeof InputGroupAddon>
 export const PromptInputFooter = ({ className, ...props }: PromptInputFooterProps) => (
     <InputGroupAddon
         align="block-end"
-        className={cn("justify-between gap-1", className)}
+        className={cn("justify-between gap-1 gap-y-1.5", className)}
         {...props}
     />
 );
@@ -881,7 +881,7 @@ export const PromptInputFooter = ({ className, ...props }: PromptInputFooterProp
 export type PromptInputToolsProps = HTMLAttributes<HTMLDivElement>;
 
 export const PromptInputTools = ({ className, ...props }: PromptInputToolsProps) => (
-    <div className={cn("flex items-center gap-1", className)} {...props} />
+    <div className={cn("flex items-center gap-1 gap-y-1.5", className)} {...props} />
 );
 
 export type PromptInputButtonProps = ComponentProps<typeof InputGroupButton>;

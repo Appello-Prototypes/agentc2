@@ -63,8 +63,6 @@ export default function SkillDocumentsPage() {
     if (loading) return <Skeleton className="h-64 w-full" />;
     if (!skill) return <p className="text-muted-foreground">Skill not found.</p>;
 
-    const isSystem = skill.type === "SYSTEM";
-
     return (
         <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -98,16 +96,14 @@ export default function SkillDocumentsPage() {
                                             </Badge>
                                         )}
                                     </div>
-                                    {!isSystem && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() => handleDetach(d.documentId)}
-                                            disabled={actionLoading}
-                                        >
-                                            <XIcon className="h-3.5 w-3.5" />
-                                        </Button>
-                                    )}
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleDetach(d.documentId)}
+                                        disabled={actionLoading}
+                                    >
+                                        <XIcon className="h-3.5 w-3.5" />
+                                    </Button>
                                 </div>
                             ))}
                         </div>

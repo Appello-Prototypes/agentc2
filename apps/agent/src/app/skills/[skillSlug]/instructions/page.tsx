@@ -3,22 +3,12 @@
 import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
-import {
-    Badge,
-    Button,
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    Skeleton,
-    Textarea
-} from "@repo/ui";
+import { Button, Card, CardContent, Skeleton, Textarea } from "@repo/ui";
 
 export default function SkillInstructionsPage() {
     const params = useParams();
     const skillSlug = params.skillSlug as string;
     const [instructions, setInstructions] = useState("");
-    const [skillType, setSkillType] = useState("");
     const [skillId, setSkillId] = useState("");
     const [loading, setLoading] = useState(true);
     const [editing, setEditing] = useState(false);
@@ -34,7 +24,6 @@ export default function SkillInstructionsPage() {
                     const data = await res.json();
                     const s = data.skill || data;
                     setInstructions(s.instructions || "");
-                    setSkillType(s.type || "");
                     setSkillId(s.id || "");
                 }
             } catch (err) {
@@ -71,7 +60,6 @@ export default function SkillInstructionsPage() {
 
     if (loading) return <Skeleton className="h-64 w-full" />;
 
-    const isSystem = skillType === "SYSTEM";
     const charCount = instructions.length;
     const estimatedTokens = Math.ceil(charCount / 4);
 
@@ -98,7 +86,7 @@ export default function SkillInstructionsPage() {
                             Raw
                         </button>
                     </div>
-                    {!isSystem && !editing && (
+                    {!editing && (
                         <Button
                             variant="outline"
                             size="sm"
@@ -109,11 +97,6 @@ export default function SkillInstructionsPage() {
                         >
                             Edit
                         </Button>
-                    )}
-                    {isSystem && (
-                        <Badge variant="secondary" className="text-xs">
-                            Read-only (SYSTEM)
-                        </Badge>
                     )}
                 </div>
             </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import {
@@ -10,10 +10,12 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
+    Input,
     Separator,
-    Skeleton
+    Skeleton,
+    Textarea
 } from "@repo/ui";
-import { Trash2Icon } from "lucide-react";
+import { PencilIcon, Trash2Icon, CheckIcon, XIcon } from "lucide-react";
 
 interface SkillFull {
     id: string;
@@ -29,8 +31,15 @@ interface SkillFull {
     createdAt: string;
     updatedAt: string;
     tools: Array<{ toolId: string }>;
-    documents: Array<{ documentId: string; role: string | null; document: { name: string } }>;
-    agents: Array<{ agentId: string; agent: { slug: string; name: string } }>;
+    documents: Array<{
+        documentId: string;
+        role: string | null;
+        document: { name: string };
+    }>;
+    agents: Array<{
+        agentId: string;
+        agent: { slug: string; name: string };
+    }>;
 }
 
 export default function SkillOverviewPage() {
@@ -41,34 +50,93 @@ export default function SkillOverviewPage() {
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
 
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const res = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setSkill(data.skill || data);
-                }
-            } catch (err) {
-                console.error("Failed to load skill:", err);
-            } finally {
-                setLoading(false);
+    // Inline editing state
+    const [editingField, setEditingField] = useState<string | null>(null);
+    const [editValue, setEditValue] = useState("");
+    const [editTags, setEditTags] = useState("");
+    const [saving, setSaving] = useState(false);
+
+    const fetchSkill = useCallback(async () => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
+            if (res.ok) {
+                const data = await res.json();
+                setSkill(data.skill || data);
             }
-        };
-        load();
+        } catch (err) {
+            console.error("Failed to load skill:", err);
+        } finally {
+            setLoading(false);
+        }
     }, [skillSlug]);
 
+    useEffect(() => {
+        fetchSkill();
+    }, [fetchSkill]);
+
     const handleDelete = async () => {
-        if (!skill || !confirm(`Delete skill "${skill.name}"? This cannot be undone.`)) return;
+        if (
+            !skill ||
+            !confirm(
+                `Delete skill "${skill.name}"?\n\nThis skill is used by ${skill.agents.length} agent(s). Deleting it will affect those agents.\n\nThis cannot be undone.`
+            )
+        )
+            return;
         setDeleting(true);
         try {
-            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}`, { method: "DELETE" });
+            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}`, {
+                method: "DELETE"
+            });
             if (res.ok) router.push("/skills");
         } catch (err) {
             console.error("Failed to delete:", err);
         } finally {
             setDeleting(false);
         }
+    };
+
+    const handleSaveField = async (field: string) => {
+        if (!skill) return;
+        setSaving(true);
+        try {
+            const body: Record<string, unknown> = {};
+            if (field === "tags") {
+                body.tags = editTags
+                    .split(",")
+                    .map((t) => t.trim())
+                    .filter(Boolean);
+            } else {
+                body[field] = editValue;
+            }
+
+            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(body)
+            });
+            if (res.ok) {
+                setEditingField(null);
+                await fetchSkill();
+            }
+        } catch (err) {
+            console.error("Failed to save:", err);
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const startEditing = (field: string, currentValue: string) => {
+        setEditingField(field);
+        setEditValue(currentValue);
+        if (field === "tags") {
+            setEditTags(currentValue);
+        }
+    };
+
+    const cancelEditing = () => {
+        setEditingField(null);
+        setEditValue("");
+        setEditTags("");
     };
 
     if (loading) {
@@ -83,36 +151,109 @@ export default function SkillOverviewPage() {
 
     return (
         <div className="space-y-6">
+            {/* Header with Name (editable) */}
             <div className="flex items-start justify-between">
-                <div>
-                    <h1 className="text-xl font-bold">{skill.name}</h1>
+                <div className="flex-1">
+                    {editingField === "name" ? (
+                        <div className="flex items-center gap-2">
+                            <Input
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                className="text-xl font-bold"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                    if (e.key === "Enter") handleSaveField("name");
+                                    if (e.key === "Escape") cancelEditing();
+                                }}
+                            />
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleSaveField("name")}
+                                disabled={saving}
+                            >
+                                <CheckIcon className="h-4 w-4" />
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={cancelEditing}>
+                                <XIcon className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="group flex items-center gap-2">
+                            <h1 className="text-xl font-bold">{skill.name}</h1>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                className="opacity-0 group-hover:opacity-100"
+                                onClick={() => startEditing("name", skill.name)}
+                            >
+                                <PencilIcon className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                    )}
                     <p className="text-muted-foreground font-mono text-xs">{skill.slug}</p>
                 </div>
-                {skill.type === "USER" && (
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleDelete}
-                        disabled={deleting}
-                        className="text-destructive"
-                    >
-                        <Trash2Icon className="mr-1.5 h-3.5 w-3.5" />
-                        Delete
-                    </Button>
-                )}
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDelete}
+                    disabled={deleting}
+                    className="text-destructive"
+                >
+                    <Trash2Icon className="mr-1.5 h-3.5 w-3.5" />
+                    Delete
+                </Button>
             </div>
 
-            {/* Description */}
-            {skill.description && (
-                <Card>
-                    <CardHeader className="pb-2">
+            {/* Description (editable) */}
+            <Card>
+                <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
                         <CardTitle className="text-sm">Description</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm">{skill.description}</p>
-                    </CardContent>
-                </Card>
-            )}
+                        {editingField !== "description" && (
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => startEditing("description", skill.description || "")}
+                            >
+                                <PencilIcon className="h-3.5 w-3.5" />
+                            </Button>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {editingField === "description" ? (
+                        <div className="space-y-2">
+                            <Textarea
+                                value={editValue}
+                                onChange={(e) => setEditValue(e.target.value)}
+                                rows={3}
+                                autoFocus
+                            />
+                            <div className="flex justify-end gap-2">
+                                <Button size="sm" variant="outline" onClick={cancelEditing}>
+                                    Cancel
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    onClick={() => handleSaveField("description")}
+                                    disabled={saving}
+                                >
+                                    {saving ? "Saving..." : "Save"}
+                                </Button>
+                            </div>
+                        </div>
+                    ) : (
+                        <p className="text-sm">
+                            {skill.description || (
+                                <span className="text-muted-foreground italic">
+                                    No description. Click edit to add one.
+                                </span>
+                            )}
+                        </p>
+                    )}
+                </CardContent>
+            </Card>
 
             {/* Quick Stats */}
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -142,7 +283,7 @@ export default function SkillOverviewPage() {
                 </Card>
             </div>
 
-            {/* Metadata */}
+            {/* Metadata (editable category and tags) */}
             <Card>
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm">Metadata</CardTitle>
@@ -157,28 +298,124 @@ export default function SkillOverviewPage() {
                             {skill.type}
                         </Badge>
                     </div>
-                    {skill.category && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs font-medium">
-                                Category:
-                            </span>
-                            <Badge variant="outline" className="text-xs">
-                                {skill.category}
-                            </Badge>
-                        </div>
-                    )}
-                    {skill.tags.length > 0 && (
-                        <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-xs font-medium">Tags:</span>
-                            <div className="flex flex-wrap gap-1">
-                                {skill.tags.map((t) => (
-                                    <Badge key={t} variant="secondary" className="text-[10px]">
-                                        {t}
-                                    </Badge>
-                                ))}
+
+                    {/* Category (editable) */}
+                    <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground text-xs font-medium">Category:</span>
+                        {editingField === "category" ? (
+                            <div className="flex items-center gap-1">
+                                <Input
+                                    value={editValue}
+                                    onChange={(e) => setEditValue(e.target.value)}
+                                    className="h-7 w-40 text-xs"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSaveField("category");
+                                        if (e.key === "Escape") cancelEditing();
+                                    }}
+                                />
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => handleSaveField("category")}
+                                    disabled={saving}
+                                >
+                                    <CheckIcon className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={cancelEditing}
+                                >
+                                    <XIcon className="h-3 w-3" />
+                                </Button>
                             </div>
-                        </div>
-                    )}
+                        ) : (
+                            <div className="group flex items-center gap-1">
+                                <Badge variant="outline" className="text-xs">
+                                    {skill.category || "none"}
+                                </Badge>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                    onClick={() => startEditing("category", skill.category || "")}
+                                >
+                                    <PencilIcon className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Tags (editable) */}
+                    <div className="flex items-start gap-2">
+                        <span className="text-muted-foreground mt-0.5 text-xs font-medium">
+                            Tags:
+                        </span>
+                        {editingField === "tags" ? (
+                            <div className="flex flex-1 items-center gap-1">
+                                <Input
+                                    value={editTags}
+                                    onChange={(e) => setEditTags(e.target.value)}
+                                    placeholder="tag1, tag2, tag3"
+                                    className="h-7 text-xs"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Enter") handleSaveField("tags");
+                                        if (e.key === "Escape") cancelEditing();
+                                    }}
+                                />
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={() => handleSaveField("tags")}
+                                    disabled={saving}
+                                >
+                                    <CheckIcon className="h-3 w-3" />
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-7 w-7 p-0"
+                                    onClick={cancelEditing}
+                                >
+                                    <XIcon className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="group flex items-center gap-1">
+                                <div className="flex flex-wrap gap-1">
+                                    {skill.tags.length > 0 ? (
+                                        skill.tags.map((t) => (
+                                            <Badge
+                                                key={t}
+                                                variant="secondary"
+                                                className="text-[10px]"
+                                            >
+                                                {t}
+                                            </Badge>
+                                        ))
+                                    ) : (
+                                        <span className="text-muted-foreground text-xs italic">
+                                            none
+                                        </span>
+                                    )}
+                                </div>
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                    onClick={() => startEditing("tags", skill.tags.join(", "))}
+                                >
+                                    <PencilIcon className="h-3 w-3" />
+                                </Button>
+                            </div>
+                        )}
+                    </div>
+
                     <Separator />
                     <div className="text-muted-foreground flex gap-4 text-xs">
                         <span>Created: {new Date(skill.createdAt).toLocaleDateString()}</span>

@@ -108,7 +108,7 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
 
     if (loading) {
         return (
-            <div className="bg-muted/50 flex h-9 w-[220px] items-center gap-2 rounded-md border px-3">
+            <div className="bg-muted/50 flex h-9 w-[180px] items-center gap-2 rounded-md border px-3">
                 <span className="bg-muted size-2 animate-pulse rounded-full" />
                 <span className="bg-muted h-3 w-20 animate-pulse rounded" />
             </div>
@@ -117,7 +117,7 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
 
     return (
         <Select value={value} onValueChange={handleValueChange} disabled={disabled}>
-            <SelectTrigger className="w-[220px]">
+            <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Select an agent">
                     {selectedAgent ? (
                         <div className="flex items-center gap-2">

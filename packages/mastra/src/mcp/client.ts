@@ -507,6 +507,170 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     description: "New email received"
                 }
             ]
+        },
+        actionsJson: {
+            actions: [
+                {
+                    key: "gmail-archive-email",
+                    description: "Archive a Gmail email by removing it from the inbox"
+                }
+            ]
+        }
+    },
+    {
+        key: "microsoft",
+        name: "Microsoft (Outlook)",
+        description:
+            "Outlook Mail and Calendar via Microsoft Graph — send/read email, manage calendar events",
+        category: "communication",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: [
+                "Mail.Read",
+                "Mail.ReadWrite",
+                "Mail.Send",
+                "Calendars.Read",
+                "Calendars.ReadWrite",
+                "offline_access",
+                "User.Read"
+            ],
+            oauthConfig: {
+                provider: "microsoft",
+                scopes: [
+                    "Mail.Read",
+                    "Mail.ReadWrite",
+                    "Mail.Send",
+                    "Calendars.Read",
+                    "Calendars.ReadWrite",
+                    "offline_access",
+                    "User.Read"
+                ],
+                authorizationEndpoint:
+                    "https://login.microsoftonline.com/common/oauth2/v2.0/authorize",
+                tokenEndpoint: "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+                statusEndpoint: "/api/integrations/microsoft/status",
+                startEndpoint: "/api/integrations/microsoft/start",
+                callbackEndpoint: "/api/integrations/microsoft/callback"
+            },
+            setupUrl: "/mcp/microsoft",
+            setupLabel: "Connect Microsoft Account"
+        },
+        triggersJson: {
+            triggers: [
+                {
+                    key: "microsoft.mail.received",
+                    description: "New email received in Outlook inbox"
+                },
+                {
+                    key: "microsoft.calendar.event.created",
+                    description: "New calendar event created"
+                },
+                {
+                    key: "microsoft.calendar.event.updated",
+                    description: "Calendar event updated"
+                }
+            ]
+        },
+        actionsJson: {
+            actions: [
+                {
+                    key: "outlook-mail-send-email",
+                    description: "Send an email via Outlook"
+                },
+                {
+                    key: "outlook-mail-archive-email",
+                    description: "Archive an Outlook email (move to Archive folder)"
+                },
+                {
+                    key: "outlook-mail-list-emails",
+                    description: "List recent emails from Outlook inbox"
+                },
+                {
+                    key: "outlook-mail-get-email",
+                    description: "Get a specific Outlook email by ID"
+                },
+                {
+                    key: "outlook-calendar-list-events",
+                    description: "List upcoming calendar events"
+                },
+                {
+                    key: "outlook-calendar-get-event",
+                    description: "Get a specific calendar event by ID"
+                },
+                {
+                    key: "outlook-calendar-create-event",
+                    description: "Create a new calendar event"
+                },
+                {
+                    key: "outlook-calendar-update-event",
+                    description: "Update an existing calendar event"
+                }
+            ]
+        }
+    },
+    {
+        key: "dropbox",
+        name: "Dropbox",
+        description: "File storage — list, read, upload, search, and share files via Dropbox",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: [
+                "files.metadata.read",
+                "files.content.read",
+                "files.content.write",
+                "sharing.read"
+            ],
+            oauthConfig: {
+                provider: "dropbox",
+                scopes: [
+                    "files.metadata.read",
+                    "files.content.read",
+                    "files.content.write",
+                    "sharing.read"
+                ],
+                authorizationEndpoint: "https://www.dropbox.com/oauth2/authorize",
+                tokenEndpoint: "https://api.dropboxapi.com/oauth2/token",
+                statusEndpoint: "/api/integrations/dropbox/status",
+                startEndpoint: "/api/integrations/dropbox/start",
+                callbackEndpoint: "/api/integrations/dropbox/callback"
+            },
+            setupUrl: "/mcp/dropbox",
+            setupLabel: "Connect Dropbox Account"
+        },
+        triggersJson: {
+            triggers: [
+                {
+                    key: "dropbox.file.changed",
+                    description: "File or folder changed in Dropbox"
+                }
+            ]
+        },
+        actionsJson: {
+            actions: [
+                {
+                    key: "dropbox-list-files",
+                    description: "List files and folders in a Dropbox path"
+                },
+                {
+                    key: "dropbox-get-file",
+                    description: "Download or read a file from Dropbox"
+                },
+                {
+                    key: "dropbox-upload-file",
+                    description: "Upload a file to Dropbox"
+                },
+                {
+                    key: "dropbox-search-files",
+                    description: "Search for files in Dropbox"
+                },
+                {
+                    key: "dropbox-get-sharing-links",
+                    description: "Get sharing links for a Dropbox file"
+                }
+            ]
         }
     },
     {
