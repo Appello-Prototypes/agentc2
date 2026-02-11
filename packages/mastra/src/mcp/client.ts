@@ -43,16 +43,29 @@ if (!global.__mcpSchemaPatched) {
 const ORG_MCP_CACHE_TTL = 60000;
 const orgMcpClients = new Map<string, { client: MCPClient; loadedAt: number }>();
 
+/** Cache for per-server tool-loading results (keyed by orgId or "__default__") */
+const perServerToolsCache = new Map<
+    string,
+    {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tools: Record<string, any>;
+        serverErrors: Record<string, string>;
+        loadedAt: number;
+    }
+>();
+
 export function invalidateMcpCacheForOrg(organizationId: string) {
     for (const key of orgMcpClients.keys()) {
         if (key.startsWith(`${organizationId}:`)) {
             orgMcpClients.delete(key);
         }
     }
+    perServerToolsCache.delete(organizationId);
 }
 
 export function resetMcpClients() {
     orgMcpClients.clear();
+    perServerToolsCache.clear();
     global.mcpClient = undefined;
 }
 
@@ -2011,8 +2024,19 @@ export async function getMcpTools(
             ? organizationIdOrOptions
             : { organizationId: organizationIdOrOptions };
 
+    const cacheKey = options.organizationId
+        ? `${options.organizationId}:${options.userId || "org"}`
+        : "__default__";
+    const now = Date.now();
+    const cached = perServerToolsCache.get(cacheKey);
+    if (cached && now - cached.loadedAt < ORG_MCP_CACHE_TTL) {
+        return { tools: cached.tools, serverErrors: cached.serverErrors };
+    }
+
     const servers = await buildServerConfigsForOptions(options);
-    return loadToolsPerServer(servers);
+    const result = await loadToolsPerServer(servers);
+    perServerToolsCache.set(cacheKey, { ...result, loadedAt: now });
+    return result;
 }
 
 /**
@@ -2057,7 +2081,7 @@ async function loadToolsPerServer(servers: Record<string, MastraMCPServerDefinit
             const client = new MCPClient({
                 id: `mastra-mcp-iso-${serverId}`,
                 servers: { [serverId]: serverDef },
-                timeout: serverId === "atlas" ? 60000 : 30000
+                timeout: 60000 // 60s — npx servers need time to download/start
             });
             try {
                 const tools = await client.listTools();
@@ -3014,13 +3038,8 @@ export async function listMcpToolDefinitions(
         | null
         | { organizationId?: string | null; userId?: string | null }
 ): Promise<{ definitions: McpToolDefinition[]; serverErrors: Record<string, string> }> {
-    const options =
-        organizationIdOrOptions && typeof organizationIdOrOptions === "object"
-            ? organizationIdOrOptions
-            : { organizationId: organizationIdOrOptions };
-
-    const servers = await buildServerConfigsForOptions(options);
-    const { tools, serverErrors } = await loadToolsPerServer(servers);
+    // Reuse getMcpTools so we benefit from the per-server results cache
+    const { tools, serverErrors } = await getMcpTools(organizationIdOrOptions);
     const definitions: McpToolDefinition[] = [];
 
     for (const [name, tool] of Object.entries(tools)) {
