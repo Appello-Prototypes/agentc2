@@ -169,8 +169,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 evaluation: {
                     select: { scoresJson: true }
                 },
-                feedback: {
-                    select: { thumbs: true, rating: true }
+                feedbacks: {
+                    select: { thumbs: true, rating: true, turnId: true }
                 },
                 trace: {
                     select: {
@@ -232,8 +232,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     completionTokens: run.completionTokens ?? traceTokens?.completion ?? 0,
                     totalTokens: run.totalTokens ?? traceTokens?.total ?? 0,
                     costUsd: run.costUsd,
+                    turnCount: run.turnCount,
                     evaluation: run.evaluation?.scoresJson,
-                    feedback: run.feedback,
+                    feedback: run.feedbacks,
                     traceTokens: run.trace?.tokensJson,
                     traceScores: run.trace?.scoresJson,
                     traceModel: run.trace?.modelJson,

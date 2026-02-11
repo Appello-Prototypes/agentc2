@@ -147,31 +147,34 @@ export function useFeedback({
 }
 
 /**
- * Extract runId from message data parts.
+ * Extract runId and turnId from message data parts.
  *
- * The chat API sends runId in a data-run-metadata message after text-start.
- * This helper extracts it from the message's parts.
+ * The chat API sends runId + turnId in a data-run-metadata message after text-start.
+ * This helper extracts them from the message's parts.
  *
  * @example
  * ```tsx
- * const runId = extractRunIdFromMessage(message);
+ * const { runId, turnId } = extractRunMetadataFromMessage(message);
  * if (runId) {
- *   submitFeedback(runId, true);
+ *   submitFeedback(runId, true, turnId);
  * }
  * ```
  */
-export function extractRunIdFromMessage(
+export function extractRunMetadataFromMessage(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     message: { parts?: Array<{ type: string; data?: any }> } | undefined
-): string | null {
-    if (!message?.parts) return null;
+): { runId: string | null; turnId: string | null } {
+    if (!message?.parts) return { runId: null, turnId: null };
 
     for (const part of message.parts) {
         // Check for data-run-metadata type (our custom type)
         if (part.type === "data-run-metadata" && part.data) {
             const data = part.data;
             if (typeof data === "object" && data !== null && "runId" in data) {
-                return (data as { runId: string }).runId;
+                return {
+                    runId: (data as { runId: string }).runId,
+                    turnId: (data as { turnId?: string }).turnId || null
+                };
             }
         }
         // Also check for generic data parts with runId
@@ -181,16 +184,32 @@ export function extractRunIdFromMessage(
             if (Array.isArray(data)) {
                 for (const item of data) {
                     if (typeof item === "object" && item !== null && "runId" in item) {
-                        return (item as { runId: string }).runId;
+                        return {
+                            runId: (item as { runId: string }).runId,
+                            turnId: (item as { turnId?: string }).turnId || null
+                        };
                     }
                 }
             }
             // Handle object format
             if (typeof data === "object" && data !== null && "runId" in data) {
-                return (data as { runId: string }).runId;
+                return {
+                    runId: (data as { runId: string }).runId,
+                    turnId: (data as { turnId?: string }).turnId || null
+                };
             }
         }
     }
 
-    return null;
+    return { runId: null, turnId: null };
+}
+
+/**
+ * Extract runId from message data parts (legacy wrapper).
+ */
+export function extractRunIdFromMessage(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    message: { parts?: Array<{ type: string; data?: any }> } | undefined
+): string | null {
+    return extractRunMetadataFromMessage(message).runId;
 }

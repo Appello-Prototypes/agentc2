@@ -653,6 +653,7 @@ export const metricsAgentRunsTool = createTool({
                     modelName: run.modelName,
                     totalTokens: run.totalTokens ?? traceTokens?.total ?? 0,
                     costUsd: run.costUsd ?? 0,
+                    turnCount: (run as { turnCount?: number }).turnCount ?? 0,
                     toolCallsCount,
                     stepsCount,
                     triggerId: run.triggerId,

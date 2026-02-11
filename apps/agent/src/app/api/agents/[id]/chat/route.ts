@@ -10,9 +10,11 @@ import { agentResolver, getScorersByNames } from "@repo/mastra";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
-    startRun,
+    startConversationRun,
+    continueTurn,
     type RunSource,
     type RunRecorderHandle,
+    type TurnHandle,
     type ToolCallData
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
@@ -166,7 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const { id } = await params;
         const body = await request.json();
-        const { threadId, requestContext, messages, modelOverride, thinkingOverride } = body;
+        const { threadId, requestContext, messages, modelOverride, thinkingOverride, runId: existingRunId, interactionMode } = body;
 
         // Determine source based on mode parameter in requestContext
         // "live" mode = production run (PROD), otherwise test run (TEST)
@@ -185,7 +187,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             requestContext
         });
 
-        console.log(`[Agent Chat] Resolved agent '${id}' from ${source} (mode: ${runSource})`);
+        console.log(`[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`);
 
         // Apply model override if provided (user selected a different model in the UI)
         if (modelOverride && modelOverride.provider && modelOverride.name) {
@@ -211,6 +213,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             console.log(
                 `[Agent Chat] Model override: ${overriddenModel}${thinkingOverride ? " (thinking)" : ""}`
             );
+        }
+
+        // ── Interaction Mode Handling ──────────────────────────────────────
+        // Ask Mode: Filter tools to read-only only (no destructive operations)
+        // Plan Mode: Inject createPlan tool instruction into system prompt
+        // Agent Mode: Default behavior, no changes
+        if (interactionMode === "ask") {
+            // In ask mode, we modify the agent to remove destructive tools.
+            // For now, prepend a strong instruction since tool filtering requires
+            // knowing which tools are read-only (to be done via registry metadata).
+            const { Agent: AgentClass } = await import("@mastra/core/agent");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const baseConfig = (agent as any).__config || {};
+            const askPrefix =
+                "IMPORTANT: You are in Ask Mode. Only answer questions and perform lookups. Do NOT call any tools that create, update, delete, or modify data. Only use search, read, list, and get tools.\n\n";
+            agent = new AgentClass({
+                ...baseConfig,
+                instructions: askPrefix + (baseConfig.instructions || "")
+            });
+            console.log(`[Agent Chat] Ask Mode: Added read-only instruction prefix`);
+        } else if (interactionMode === "plan") {
+            const { Agent: AgentClass } = await import("@mastra/core/agent");
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const baseConfig = (agent as any).__config || {};
+            const planSuffix =
+                "\n\nIMPORTANT: You are in Plan Mode. Before taking any action, first outline a structured plan of what you will do. Format it as:\n1. Step description\n2. Step description\n...\n\nAfter presenting the plan, wait for the user to confirm before executing.";
+            agent = new AgentClass({
+                ...baseConfig,
+                instructions: (baseConfig.instructions || "") + planSuffix
+            });
+            console.log(`[Agent Chat] Plan Mode: Added planning instruction suffix`);
         }
 
         // Extract the last user message with all content parts (text + files/images)
@@ -262,49 +295,109 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             ? createHash("sha256").update(mergedInstructions).digest("hex")
             : undefined;
 
-        // Start recording the run (fire-and-forget to avoid blocking the stream).
-        // The run handle is captured asynchronously and used later by the stream writer.
+        // Start or continue conversation-level run recording.
+        // First message: no existingRunId -> startConversationRun()
+        // Subsequent messages: existingRunId present -> continueTurn()
         let run: RunRecorderHandle | null = null;
+        let turnHandle: TurnHandle | null = null;
         let runReady: Promise<void> | null = null;
         if (agentId) {
-            runReady = startRun({
-                agentId,
-                agentSlug: id,
-                input: lastUserMessage,
-                source: runSource,
-                userId: resourceId,
-                threadId: userThreadId,
-                skillsJson: activeSkills.length > 0 ? activeSkills : undefined,
-                toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
-                instructionsHash,
-                instructionsSnapshot: mergedInstructions || undefined
-            })
-                .then((handle) => {
-                    run = handle;
-                    console.log(`[Agent Chat] Started run ${handle.runId} for agent ${id}`);
-
-                    // Record trigger event (non-blocking, best-effort)
-                    const isCanvasChat = resourceId === "canvas-builder";
-                    createTriggerEventRecord({
-                        agentId,
-                        workspaceId: record?.workspaceId || null,
-                        runId: handle.runId,
-                        sourceType: isCanvasChat ? "canvas_chat" : "chat",
-                        eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
-                        entityType: "agent",
-                        payload: { input: lastUserMessage },
-                        metadata: {
-                            threadId: userThreadId,
-                            resourceId,
-                            mode
-                        }
-                    }).catch((e) => {
-                        console.warn("[Agent Chat] Failed to record trigger event:", e);
-                    });
+            if (existingRunId) {
+                // Subsequent message in an existing conversation
+                runReady = continueTurn({
+                    runId: existingRunId,
+                    input: lastUserMessage,
+                    agentId,
+                    agentSlug: id,
+                    toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                    tenantId: record?.tenantId || undefined
                 })
-                .catch((e) => {
-                    console.warn("[Agent Chat] Failed to start run:", e);
-                });
+                    .then((handle) => {
+                        turnHandle = handle;
+                        // Create a legacy-compatible run handle for downstream code
+                        run = {
+                            runId: handle.runId,
+                            traceId: handle.traceId,
+                            complete: handle.completeTurn,
+                            fail: handle.failTurn,
+                            addToolCall: handle.addToolCall
+                        };
+                        console.log(`[Agent Chat] Continued run ${handle.runId} with turn ${handle.turnIndex} for agent ${id}`);
+
+                        // Record trigger event (non-blocking, best-effort)
+                        const isCanvasChat = resourceId === "canvas-builder";
+                        createTriggerEventRecord({
+                            agentId,
+                            workspaceId: record?.workspaceId || null,
+                            runId: handle.runId,
+                            sourceType: isCanvasChat ? "canvas_chat" : "chat",
+                            eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
+                            entityType: "agent",
+                            payload: { input: lastUserMessage },
+                            metadata: {
+                                threadId: userThreadId,
+                                resourceId,
+                                mode,
+                                turnIndex: handle.turnIndex
+                            }
+                        }).catch((e) => {
+                            console.warn("[Agent Chat] Failed to record trigger event:", e);
+                        });
+                    })
+                    .catch((e) => {
+                        console.warn("[Agent Chat] Failed to continue turn:", e);
+                    });
+            } else {
+                // First message in a new conversation
+                runReady = startConversationRun({
+                    agentId,
+                    agentSlug: id,
+                    input: lastUserMessage,
+                    source: runSource,
+                    userId: resourceId,
+                    threadId: userThreadId,
+                    skillsJson: activeSkills.length > 0 ? activeSkills : undefined,
+                    toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                    instructionsHash,
+                    instructionsSnapshot: mergedInstructions || undefined,
+                    tenantId: record?.tenantId || undefined
+                })
+                    .then((handle) => {
+                        turnHandle = handle;
+                        // Create a legacy-compatible run handle for downstream code
+                        run = {
+                            runId: handle.runId,
+                            traceId: handle.traceId,
+                            complete: handle.completeTurn,
+                            fail: handle.failTurn,
+                            addToolCall: handle.addToolCall
+                        };
+                        console.log(`[Agent Chat] Started conversation run ${handle.runId} (turn 0) for agent ${id}`);
+
+                        // Record trigger event (non-blocking, best-effort)
+                        const isCanvasChat = resourceId === "canvas-builder";
+                        createTriggerEventRecord({
+                            agentId,
+                            workspaceId: record?.workspaceId || null,
+                            runId: handle.runId,
+                            sourceType: isCanvasChat ? "canvas_chat" : "chat",
+                            eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
+                            entityType: "agent",
+                            payload: { input: lastUserMessage },
+                            metadata: {
+                                threadId: userThreadId,
+                                resourceId,
+                                mode,
+                                turnIndex: 0
+                            }
+                        }).catch((e) => {
+                            console.warn("[Agent Chat] Failed to record trigger event:", e);
+                        });
+                    })
+                    .catch((e) => {
+                        console.warn("[Agent Chat] Failed to start conversation run:", e);
+                    });
+            }
         } else {
             console.log(
                 `[Agent Chat] Skipping run recording for fallback agent '${id}' (no DB record)`
@@ -384,7 +477,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     if (run) {
                         writer.write({
                             type: "data-run-metadata",
-                            data: { runId: run.runId, messageId }
+                            data: {
+                                runId: run.runId,
+                                turnId: turnHandle?.turnId,
+                                turnIndex: turnHandle?.turnIndex,
+                                messageId
+                            }
                         });
                     }
 

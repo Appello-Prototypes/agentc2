@@ -201,12 +201,14 @@ export const runCompletedFunction = inngest.createFunction(
                 });
 
                 if (run) {
-                    // Check if cost event already exists
-                    const existing = await prisma.costEvent.findUnique({
+                    // Check if cost event already exists for this run
+                    // (CostEvent.runId is no longer @unique -- conversation runs have per-turn cost events)
+                    const existingCount = await prisma.costEvent.count({
                         where: { runId }
                     });
 
-                    if (!existing) {
+                    // For legacy runs (turnCount=0) or runs without any cost events, create one
+                    if (existingCount === 0) {
                         await prisma.costEvent.create({
                             data: {
                                 runId,
@@ -564,10 +566,29 @@ export const runEvaluationFunction = inngest.createFunction(
         }
 
         // Step 3: Run evaluations
+        // For conversation runs (turnCount > 0), build full conversation context
         const scores = await step.run("run-scorers", async () => {
             const scoreResults: Record<string, number> = {};
-            const input = runData.inputText;
-            const output = runData.outputText || "";
+            let input = runData.inputText;
+            let output = runData.outputText || "";
+
+            // Conversation runs: use full conversation context for better evaluation
+            if (runData.turnCount > 0) {
+                const turns = await prisma.agentRunTurn.findMany({
+                    where: { runId },
+                    orderBy: { turnIndex: "asc" },
+                    select: { inputText: true, outputText: true, turnIndex: true }
+                });
+                if (turns.length > 0) {
+                    // Build conversation context string
+                    const conversationParts = turns.map(
+                        (t) =>
+                            `User: ${t.inputText}\nAssistant: ${t.outputText || "(no response)"}`
+                    );
+                    input = conversationParts.join("\n\n");
+                    output = turns[turns.length - 1]?.outputText || output;
+                }
+            }
 
             // Always run helpfulness (fast, heuristic-based)
             const helpfulness = evaluateHelpfulness(input, output);
@@ -4291,6 +4312,55 @@ export const agentTriggerFireFunction = inngest.createFunction(
 );
 
 /**
+ * Idle Conversation Finalizer
+ *
+ * Scheduled cron function that runs every 15 minutes to finalize
+ * conversation runs that have been idle for > 30 minutes.
+ * Safety net for cases where the frontend's sendBeacon on tab close fails.
+ */
+const idleConversationFinalizerFunction = inngest.createFunction(
+    {
+        id: "idle-conversation-finalizer",
+        retries: 1
+    },
+    { cron: "*/15 * * * *" }, // Every 15 minutes
+    async ({ step }) => {
+        const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+
+        const idleRuns = await step.run("find-idle-runs", async () => {
+            return prisma.agentRun.findMany({
+                where: {
+                    status: "RUNNING",
+                    turnCount: { gt: 0 }, // Only conversation runs, not legacy
+                    createdAt: { lt: thirtyMinutesAgo }
+                },
+                select: { id: true, agentId: true, turnCount: true }
+            });
+        });
+
+        if (idleRuns.length === 0) {
+            return { finalized: 0 };
+        }
+
+        let finalized = 0;
+        for (const run of idleRuns) {
+            await step.run(`finalize-${run.id}`, async () => {
+                const { finalizeConversationRun } = await import("@/lib/run-recorder");
+                const success = await finalizeConversationRun(run.id);
+                if (success) finalized++;
+                return success;
+            });
+        }
+
+        console.log(
+            `[IdleConversationFinalizer] Finalized ${finalized}/${idleRuns.length} idle conversation runs`
+        );
+
+        return { finalized, total: idleRuns.length };
+    }
+);
+
+/**
  * All Inngest functions to register
  */
 export const inngestFunctions = [
@@ -4326,5 +4396,7 @@ export const inngestFunctions = [
     bimIfcParseFunction,
     // Simulation functions
     simulationSessionStartFunction,
-    simulationBatchRunFunction
+    simulationBatchRunFunction,
+    // Conversation run finalization
+    idleConversationFinalizerFunction
 ];

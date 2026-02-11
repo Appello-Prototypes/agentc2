@@ -60,7 +60,7 @@ const messageHandler: MessageHandler = async (message, agent) => {
         source: "voice",
         userId: message.from,
         sessionId: message.from, // Use caller ID as session
-        threadId: `voice-${message.from}-${Date.now()}`
+        threadId: `voice-${message.from}` // Session-based grouping by caller ID
     });
 
     // Record trigger event for unified triggers dashboard

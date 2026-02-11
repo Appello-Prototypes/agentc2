@@ -150,6 +150,60 @@ export { Loader, LoaderIcon, type LoaderProps, type LoaderIconProps } from "./lo
 // Streaming Status
 export { StreamingStatus, type StreamingStatusProps, type ToolActivity } from "./streaming-status";
 
+// Shimmer
+export { Shimmer, ShimmerText, type ShimmerProps, type ShimmerTextProps } from "./shimmer";
+
+// Plan
+export {
+    Plan,
+    PlanHeader,
+    PlanTitle,
+    PlanDescription,
+    PlanTrigger,
+    PlanContent,
+    PlanStep,
+    PlanFooter,
+    PlanAction,
+    type PlanProps,
+    type PlanHeaderProps,
+    type PlanTitleProps,
+    type PlanDescriptionProps,
+    type PlanTriggerProps,
+    type PlanContentProps,
+    type PlanStepProps,
+    type PlanFooterProps,
+    type PlanActionProps
+} from "./plan";
+
+// Queue
+export {
+    Queue,
+    QueueSection,
+    QueueSectionTrigger,
+    QueueSectionLabel,
+    QueueSectionContent,
+    QueueList,
+    QueueItem,
+    QueueItemIndicator,
+    QueueItemContent,
+    QueueItemDescription,
+    QueueItemActions,
+    type QueueProps,
+    type QueueSectionProps,
+    type QueueSectionTriggerProps,
+    type QueueSectionLabelProps,
+    type QueueSectionContentProps,
+    type QueueListProps,
+    type QueueItemProps,
+    type QueueItemIndicatorProps,
+    type QueueItemContentProps,
+    type QueueItemDescriptionProps,
+    type QueueItemActionsProps,
+    type QueueMessagePart,
+    type QueueMessage,
+    type QueueTodo
+} from "./queue";
+
 // Code Block
 export {
     CodeBlock,

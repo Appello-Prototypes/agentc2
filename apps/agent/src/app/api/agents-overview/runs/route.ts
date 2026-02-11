@@ -66,8 +66,8 @@ export async function GET(request: NextRequest) {
                 evaluation: {
                     select: { scoresJson: true }
                 },
-                feedback: {
-                    select: { thumbs: true, rating: true }
+                feedbacks: {
+                    select: { thumbs: true, rating: true, turnId: true }
                 },
                 _count: {
                     select: {
@@ -153,8 +153,9 @@ export async function GET(request: NextRequest) {
                     costUsd: run.costUsd,
                     toolCallCount,
                     stepCount,
+                    turnCount: run.turnCount,
                     evaluation: run.evaluation?.scoresJson,
-                    feedback: run.feedback
+                    feedback: run.feedbacks
                 };
             }),
             counts,

@@ -367,6 +367,10 @@ export const PromptInput = ({
                 .filter(Boolean);
 
             return patterns.some((pattern) => {
+                // Wildcard patterns -- accept all files
+                if (pattern === "*" || pattern === "*/*") {
+                    return true;
+                }
                 if (pattern.endsWith("/*")) {
                     const prefix = pattern.slice(0, -1); // e.g: image/* -> image/
                     return f.type.startsWith(prefix);

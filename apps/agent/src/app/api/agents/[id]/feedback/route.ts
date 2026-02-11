@@ -111,7 +111,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const { id } = await params;
         const body = await request.json();
 
-        const { runId, thumbs, rating, comment } = body;
+        const { runId, turnId, thumbs, rating, comment } = body;
 
         if (!runId) {
             return NextResponse.json(
@@ -149,23 +149,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Upsert feedback
-        const feedback = await prisma.agentFeedback.upsert({
-            where: { runId },
-            update: {
-                thumbs: thumbs ?? undefined,
-                rating: rating ?? undefined,
-                comment: comment ?? undefined
-            },
-            create: {
+        // Find existing feedback for this run+turn combination, or create new
+        const existingFeedback = await prisma.agentFeedback.findFirst({
+            where: {
                 runId,
-                agentId: agent.id,
-                tenantId: agent.tenantId,
-                thumbs: thumbs ?? null,
-                rating: rating ?? null,
-                comment: comment ?? null
+                ...(turnId ? { turnId } : { turnId: null })
             }
         });
+
+        let feedback;
+        if (existingFeedback) {
+            feedback = await prisma.agentFeedback.update({
+                where: { id: existingFeedback.id },
+                data: {
+                    thumbs: thumbs ?? undefined,
+                    rating: rating ?? undefined,
+                    comment: comment ?? undefined
+                }
+            });
+        } else {
+            feedback = await prisma.agentFeedback.create({
+                data: {
+                    runId,
+                    turnId: turnId || null,
+                    agentId: agent.id,
+                    tenantId: agent.tenantId,
+                    thumbs: thumbs ?? null,
+                    rating: rating ?? null,
+                    comment: comment ?? null
+                }
+            });
+        }
 
         return NextResponse.json({
             success: true,

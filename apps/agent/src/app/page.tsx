@@ -37,6 +37,25 @@ import {
     PromptInputActionMenuItem,
     usePromptInputAttachments,
     StreamingStatus,
+    Plan,
+    PlanHeader,
+    PlanTitle,
+    PlanDescription,
+    PlanTrigger,
+    PlanContent,
+    PlanStep,
+    PlanFooter,
+    PlanAction,
+    Queue,
+    QueueSection,
+    QueueSectionTrigger,
+    QueueSectionLabel,
+    QueueSectionContent,
+    QueueList,
+    QueueItem,
+    QueueItemIndicator,
+    QueueItemContent,
+    QueueItemDescription,
     type PromptInputMessage,
     type ToolActivity
 } from "@repo/ui";
@@ -55,7 +74,10 @@ import {
     XIcon,
     MicIcon,
     FileIcon,
-    LayoutGridIcon
+    LayoutGridIcon,
+    MessageCircleIcon,
+    ZapIcon,
+    ClipboardListIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
 import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/components/ModelSelector";
@@ -133,6 +155,8 @@ function getGreeting(name?: string | null): string {
 // ─── Input mode types and sub-components ─────────────────────────────────────
 
 type InputMode = "knowledge-search" | "fetch-url" | "create-canvas" | null;
+
+type InteractionMode = "ask" | "agent" | "plan";
 
 const INPUT_MODE_CONFIG: Record<
     NonNullable<InputMode>,
@@ -443,6 +467,7 @@ export default function UnifiedChatPage() {
     const [modelOverride, setModelOverride] = useState<ModelOverride | null>(null);
     const [thinkingEnabled, setThinkingEnabled] = useState(false);
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
+    const [currentRunId, setCurrentRunId] = useState<string | null>(null);
     const [agentDefaultModel, setAgentDefaultModel] = useState<string | undefined>(undefined);
     const [agentName, setAgentName] = useState<string>("");
     const [showSuggestions, setShowSuggestions] = useState(true);
@@ -450,6 +475,7 @@ export default function UnifiedChatPage() {
         {}
     );
     const [inputMode, setInputMode] = useState<InputMode>(null);
+    const [interactionMode, setInteractionMode] = useState<InteractionMode>("agent");
 
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
@@ -470,15 +496,20 @@ export default function UnifiedChatPage() {
             threadId,
             requestContext: { userId: "chat-user", mode: "live" }
         };
+        // Send runId for conversation continuation (subsequent messages in same conversation)
+        if (currentRunId) bodyExtra.runId = currentRunId;
+        // Send interaction mode for mode-aware tool filtering
+        bodyExtra.interactionMode = interactionMode;
         if (modelOverride) bodyExtra.modelOverride = modelOverride;
         if (thinkingEnabled && isAnthropicModel(modelOverride?.name || null)) {
             bodyExtra.thinkingOverride = { type: "enabled", budgetTokens: 10000 };
         }
+        console.log(`[Chat Transport] Building transport for agent: ${selectedAgentSlug}`);
         return new DefaultChatTransport({
             api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
             body: bodyExtra
         });
-    }, [selectedAgentSlug, threadId, modelOverride, thinkingEnabled]);
+    }, [selectedAgentSlug, threadId, modelOverride, thinkingEnabled, currentRunId, interactionMode]);
 
     const { messages, setMessages, sendMessage, status, stop } = useChat({ transport });
     const isStreaming = status === "streaming";
@@ -515,6 +546,37 @@ export default function UnifiedChatPage() {
         }
         return tools;
     }, [submitStatus, messages]);
+
+    // Extract runId from the first assistant message's data-run-metadata part.
+    // This persists the runId so subsequent messages are added as turns to the same conversation run.
+    // The setState call inside useEffect is intentional here -- we need to sync stream-derived
+    // metadata into component state for use in the transport body.
+    useEffect(() => {
+        if (currentRunId) return; // Already have a runId
+        for (const message of messages) {
+            if (message.role !== "assistant") continue;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            for (const part of (message.parts || []) as any[]) {
+                if (part.type === "data-run-metadata" && part.data?.runId) {
+                    // eslint-disable-next-line react-hooks/set-state-in-effect
+                    setCurrentRunId(part.data.runId);
+                    return;
+                }
+            }
+        }
+    }, [messages, currentRunId]);
+
+    // Finalize the current conversation run on page unload
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (currentRunId && selectedAgentSlug) {
+                const url = `${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`;
+                navigator.sendBeacon(url, JSON.stringify({ runId: currentRunId }));
+            }
+        };
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [currentRunId, selectedAgentSlug]);
 
     // Handlers
     const handleAgentChange = useCallback(
@@ -578,13 +640,22 @@ export default function UnifiedChatPage() {
     );
 
     const handleNewConversation = useCallback(() => {
+        // Finalize the current conversation run before starting a new one
+        if (currentRunId && selectedAgentSlug) {
+            fetch(`${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ runId: currentRunId })
+            }).catch((e) => console.warn("[Chat] Failed to finalize run:", e));
+        }
+        setCurrentRunId(null);
         setMessages([]);
         setThreadId(`chat-${selectedAgentSlug}-${Date.now()}`);
         setQuestionAnswers({});
         conversationTitleRef.current = "";
         conversationCreatedRef.current = new Date().toISOString();
         titleGenFiredRef.current = false;
-    }, [selectedAgentSlug, setMessages]);
+    }, [selectedAgentSlug, setMessages, currentRunId]);
 
     const handleLoadConversation = useCallback(
         (convId: string) => {
@@ -698,7 +769,6 @@ export default function UnifiedChatPage() {
     const chatInput = (
         <PromptInput
             onSubmit={handleSend}
-            accept="*"
             multiple
             maxFiles={10}
             maxFileSize={10 * 1024 * 1024}
@@ -714,6 +784,43 @@ export default function UnifiedChatPage() {
             </PromptInputBody>
             <PromptInputFooter>
                 <PromptInputTools>
+                    {/* Mode Selector: Ask / Agent / Plan */}
+                    <div className="bg-muted/50 inline-flex items-center rounded-md border p-0.5">
+                        {(
+                            [
+                                {
+                                    mode: "ask" as InteractionMode,
+                                    icon: MessageCircleIcon,
+                                    label: "Ask"
+                                },
+                                {
+                                    mode: "agent" as InteractionMode,
+                                    icon: ZapIcon,
+                                    label: "Agent"
+                                },
+                                {
+                                    mode: "plan" as InteractionMode,
+                                    icon: ClipboardListIcon,
+                                    label: "Plan"
+                                }
+                            ] as const
+                        ).map(({ mode, icon: ModeIcon, label }) => (
+                            <button
+                                key={mode}
+                                type="button"
+                                onClick={() => setInteractionMode(mode)}
+                                className={`inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors ${
+                                    interactionMode === mode
+                                        ? "bg-background text-foreground shadow-sm"
+                                        : "text-muted-foreground hover:text-foreground"
+                                }`}
+                                title={`${label} Mode`}
+                            >
+                                <ModeIcon className="size-3" />
+                                {label}
+                            </button>
+                        ))}
+                    </div>
                     <ChatInputActions setInputMode={setInputMode} />
                     <VoiceInputButton />
                     <AgentSelector
@@ -816,6 +923,95 @@ export default function UnifiedChatPage() {
 
             return <CollapsibleToolCall key={index} toolName={toolName} hasResult={hasResult} />;
         }
+
+        // ── Custom data parts (AI SDK Elements) ────────────────────────
+        if (part.type === "data-plan" && part.data) {
+            const plan = part.data;
+            return (
+                <Plan key={index} isStreaming={!plan.complete}>
+                    <PlanHeader>
+                        <PlanTitle>{plan.title || "Execution Plan"}</PlanTitle>
+                        {plan.description && (
+                            <PlanDescription>{plan.description}</PlanDescription>
+                        )}
+                    </PlanHeader>
+                    <PlanTrigger />
+                    <PlanContent>
+                        {(plan.steps || []).map(
+                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                            (step: any, si: number) => (
+                                <PlanStep
+                                    key={si}
+                                    label={step.label || step.title || `Step ${si + 1}`}
+                                    status={step.status || "pending"}
+                                />
+                            )
+                        )}
+                    </PlanContent>
+                    {plan.complete && (
+                        <PlanFooter>
+                            <PlanAction
+                                onClick={() => {
+                                    void sendMessage({ text: "Execute the plan above." });
+                                }}
+                            >
+                                Build
+                            </PlanAction>
+                        </PlanFooter>
+                    )}
+                </Plan>
+            );
+        }
+
+        if (part.type === "data-queue" && part.data) {
+            const queue = part.data;
+            return (
+                <Queue key={index}>
+                    {(queue.sections || [{ label: "Tasks", items: queue.items || [] }]).map(
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (section: any, si: number) => (
+                            <QueueSection key={si} defaultOpen>
+                                <QueueSectionTrigger>
+                                    <QueueSectionLabel
+                                        label={section.label || "Tasks"}
+                                        count={section.items?.length}
+                                    />
+                                </QueueSectionTrigger>
+                                <QueueSectionContent>
+                                    <QueueList>
+                                        {(section.items || []).map(
+                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                            (item: any, ii: number) => (
+                                                <QueueItem key={ii}>
+                                                    <QueueItemIndicator
+                                                        completed={item.status === "completed"}
+                                                    />
+                                                    <div>
+                                                        <QueueItemContent
+                                                            completed={
+                                                                item.status === "completed"
+                                                            }
+                                                        >
+                                                            {item.title}
+                                                        </QueueItemContent>
+                                                        {item.description && (
+                                                            <QueueItemDescription>
+                                                                {item.description}
+                                                            </QueueItemDescription>
+                                                        )}
+                                                    </div>
+                                                </QueueItem>
+                                            )
+                                        )}
+                                    </QueueList>
+                                </QueueSectionContent>
+                            </QueueSection>
+                        )
+                    )}
+                </Queue>
+            );
+        }
+
         return null;
     };
 
@@ -939,6 +1135,16 @@ export default function UnifiedChatPage() {
                                     <MessageContent>
                                         {message.parts && message.parts.length > 0 ? (
                                             message.parts.map(renderPart)
+                                        ) : message.role === "assistant" &&
+                                          (isStreaming || isSubmitted) &&
+                                          message.id ===
+                                              messages[messages.length - 1]?.id ? (
+                                            // Shimmer skeleton for empty assistant message while streaming
+                                            <div className="flex flex-col gap-2 py-1">
+                                                <div className="bg-muted/60 h-3 w-3/4 animate-pulse rounded" />
+                                                <div className="bg-muted/40 h-3 w-1/2 animate-pulse rounded" />
+                                                <div className="bg-muted/30 h-3 w-2/3 animate-pulse rounded" />
+                                            </div>
                                         ) : (
                                             <MessageResponse>
                                                 {String(
@@ -948,38 +1154,65 @@ export default function UnifiedChatPage() {
                                             </MessageResponse>
                                         )}
                                     </MessageContent>
-                                    {message.role === "assistant" && (
-                                        <MessageActions>
-                                            <MessageAction
-                                                tooltip="Copy"
-                                                onClick={() => {
-                                                    const text =
-                                                        message.parts
-                                                            ?.filter((p) => p.type === "text")
-                                                            .map(
-                                                                (p) => (p as { text: string }).text
-                                                            )
-                                                            .join("\n") || "";
-                                                    navigator.clipboard.writeText(text);
-                                                }}
-                                            >
-                                                <CopyIcon className="size-3.5" />
-                                            </MessageAction>
-                                        </MessageActions>
-                                    )}
+                                    {message.role === "assistant" &&
+                                        (() => {
+                                            const hasTextContent = message.parts?.some(
+                                                (p) =>
+                                                    p.type === "text" &&
+                                                    (p as { text: string }).text.trim().length > 0
+                                            );
+                                            const isLastMessage =
+                                                message.id ===
+                                                messages[messages.length - 1]?.id;
+                                            const isCurrentlyStreaming =
+                                                isLastMessage && (isStreaming || isSubmitted);
+                                            if (!hasTextContent || isCurrentlyStreaming) return null;
+                                            return (
+                                                <MessageActions>
+                                                    <MessageAction
+                                                        tooltip="Copy"
+                                                        onClick={() => {
+                                                            const text =
+                                                                message.parts
+                                                                    ?.filter(
+                                                                        (p) => p.type === "text"
+                                                                    )
+                                                                    .map(
+                                                                        (p) =>
+                                                                            (
+                                                                                p as {
+                                                                                    text: string;
+                                                                                }
+                                                                            ).text
+                                                                    )
+                                                                    .join("\n") || "";
+                                                            navigator.clipboard.writeText(text);
+                                                        }}
+                                                    >
+                                                        <CopyIcon className="size-3.5" />
+                                                    </MessageAction>
+                                                </MessageActions>
+                                            );
+                                        })()}
                                 </Message>
                             ))}
                             <StreamingStatus
                                 status={submitStatus}
-                                hasVisibleContent={messages.some(
-                                    (m) =>
-                                        m.role === "assistant" &&
-                                        m.parts?.some(
+                                hasVisibleContent={(() => {
+                                    // Only check the LATEST assistant message, not all messages.
+                                    // Previous assistant messages always have text, which would
+                                    // cause StreamingStatus to hide immediately on follow-up messages.
+                                    const lastAssistant = [...messages]
+                                        .reverse()
+                                        .find((m) => m.role === "assistant");
+                                    return (
+                                        lastAssistant?.parts?.some(
                                             (p) =>
                                                 p.type === "text" &&
                                                 (p as { text: string }).text.length > 0
-                                        )
-                                )}
+                                        ) ?? false
+                                    );
+                                })()}
                                 agentName={agentName || undefined}
                                 activeTools={activeTools}
                             />

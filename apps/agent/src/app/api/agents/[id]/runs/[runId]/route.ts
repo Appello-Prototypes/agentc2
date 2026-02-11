@@ -35,6 +35,10 @@ export async function GET(
                 agentId: agent.id
             },
             include: {
+                turns: {
+                    orderBy: { turnIndex: "asc" },
+                    include: { toolCalls: true }
+                },
                 trace: {
                     include: {
                         steps: {
@@ -44,8 +48,8 @@ export async function GET(
                     }
                 },
                 evaluation: true,
-                feedback: true,
-                costEvent: true,
+                feedbacks: true,
+                costEvents: true,
                 guardrailEvents: true
             }
         });
@@ -106,9 +110,11 @@ export async function GET(
                 totalTokens: run.totalTokens,
                 costUsd: run.costUsd,
                 trace: traceData,
+                turnCount: run.turnCount,
+                turns: run.turns,
                 evaluation: run.evaluation,
-                feedback: run.feedback,
-                costEvent: run.costEvent,
+                feedback: run.feedbacks,
+                costEvent: run.costEvents,
                 guardrailEvents: run.guardrailEvents,
                 version
             }

@@ -100,10 +100,22 @@ export interface RunDetail {
     completionTokens: number | null;
     totalTokens: number | null;
     costUsd: number | null;
+    turnCount?: number;
+    turns?: Array<{
+        id: string;
+        turnIndex: number;
+        inputText: string;
+        outputText: string | null;
+        durationMs: number | null;
+        promptTokens: number | null;
+        completionTokens: number | null;
+        costUsd: number | null;
+        toolCalls?: ToolCall[];
+    }>;
     trace: Trace | null;
     evaluation: Evaluation | Evaluation[] | null;
     feedback: Feedback | Feedback[] | null;
-    costEvent: CostEvent | null;
+    costEvent: CostEvent | CostEvent[] | null;
     guardrailEvents: GuardrailEvent[] | null;
     version: VersionInfo | null;
 }

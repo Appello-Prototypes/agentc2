@@ -89,6 +89,10 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
         if (!newValue) return;
         const agent = agents.find((a) => a.slug === newValue);
         if (agent) {
+            // Persist selection as default so it survives page refreshes
+            setDefaultAgentSlug(newValue);
+            setDefaultSlug(newValue);
+            console.log(`[AgentSelector] User selected agent: ${newValue} (${agent.name})`);
             onChange(newValue, agent);
         }
     };

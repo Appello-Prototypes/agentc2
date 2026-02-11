@@ -1102,6 +1102,11 @@ model AgentRun {
     userId           String?
     createdAt        DateTime  @default(now())
 
+    // Conversation turn tracking (One Run = One Conversation)
+    // For chat: turnCount > 0, tokens/cost are aggregates across turns
+    // For non-chat (Slack, Voice, etc.): turnCount = 0, legacy single-message run
+    turnCount Int @default(0)
+
     // Continuous Learning: Experiment linkage for shadow A/B testing
     experimentId    String? // Links run to active experiment for A/B testing
     experiment      LearningExperiment? @relation(fields: [experimentId], references: [id], onDelete: SetNull)
@@ -1118,12 +1123,13 @@ model AgentRun {
     threadId    String? // Thread/conversation ID within a channel
 
     // Relations
+    turns           AgentRunTurn[]
     trace           AgentTrace?
     toolCalls       AgentToolCall[]
     workflowSteps   WorkflowRunStep[]
     evaluation      AgentEvaluation?
-    feedback        AgentFeedback?
-    costEvent       CostEvent?
+    feedbacks       AgentFeedback[]
+    costEvents      CostEvent[]
     guardrailEvents GuardrailEvent[]
     conversation    AgentConversation?
     testRun         AgentTestRun?
@@ -1137,6 +1143,36 @@ model AgentRun {
     @@index([sessionId])
     @@index([threadId])
     @@map("agent_run")
+}
+
+// Agent Run Turn - Individual message round-trips within a conversation run
+model AgentRunTurn {
+    id               String    @id @default(cuid())
+    runId            String
+    run              AgentRun  @relation(fields: [runId], references: [id], onDelete: Cascade)
+    turnIndex        Int // 0-based order within the conversation
+    inputText        String    @db.Text
+    outputText       String?   @db.Text
+    durationMs       Int?
+    startedAt        DateTime  @default(now())
+    completedAt      DateTime?
+    promptTokens     Int?
+    completionTokens Int?
+    totalTokens      Int?
+    costUsd          Float?
+    modelProvider    String?
+    modelName        String?
+    stepsJson        Json? // Execution steps for this turn
+    createdAt        DateTime  @default(now())
+
+    // Relations
+    toolCalls  AgentToolCall[]
+    costEvents CostEvent[]
+    feedbacks  AgentFeedback[]
+
+    @@unique([runId, turnIndex])
+    @@index([runId, turnIndex])
+    @@map("agent_run_turn")
 }
 
 // Agent Trace - Detailed execution trace per run
@@ -1188,23 +1224,26 @@ model AgentTraceStep {
 
 // Agent Tool Call - Tool call records
 model AgentToolCall {
-    id          String      @id @default(cuid())
+    id          String        @id @default(cuid())
     runId       String?
-    run         AgentRun?   @relation(fields: [runId], references: [id], onDelete: Cascade)
+    run         AgentRun?     @relation(fields: [runId], references: [id], onDelete: Cascade)
     traceId     String?
-    trace       AgentTrace? @relation(fields: [traceId], references: [id], onDelete: Cascade)
+    trace       AgentTrace?   @relation(fields: [traceId], references: [id], onDelete: Cascade)
+    turnId      String?
+    turn        AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
     tenantId    String?
     toolKey     String
     mcpServerId String?
     toolSource  String? // "registry", "mcp:hubspot", "skill:research-assistant"
     inputJson   Json?
     outputJson  Json?
-    success     Boolean     @default(true)
-    error       String?     @db.Text
+    success     Boolean       @default(true)
+    error       String?       @db.Text
     durationMs  Int?
-    createdAt   DateTime    @default(now())
+    createdAt   DateTime      @default(now())
 
     @@index([runId])
+    @@index([turnId])
     @@index([traceId, toolKey])
     @@index([tenantId])
     @@map("agent_tool_call")
@@ -1261,20 +1300,23 @@ model AgentEvaluation {
     @@map("agent_evaluation")
 }
 
-// Agent Feedback - User feedback per run
+// Agent Feedback - User feedback per turn or per conversation
 model AgentFeedback {
-    id        String   @id @default(cuid())
-    runId     String   @unique
-    run       AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+    id        String        @id @default(cuid())
+    runId     String
+    run       AgentRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+    turnId    String?
+    turn      AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
     agentId   String
-    agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    agent     Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId  String?
     thumbs    Boolean? // true = up, false = down
     rating    Int? // 1-5 scale
-    comment   String?  @db.Text
-    createdAt DateTime @default(now())
+    comment   String?       @db.Text
+    createdAt DateTime      @default(now())
 
     @@index([runId])
+    @@index([turnId])
     @@index([agentId])
     @@index([tenantId])
     @@map("agent_feedback")
@@ -1362,11 +1404,13 @@ model BudgetPolicy {
 
 // Cost Event - Token/cost tracking per run
 model CostEvent {
-    id               String   @id @default(cuid())
-    runId            String   @unique
-    run              AgentRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+    id               String        @id @default(cuid())
+    runId            String
+    run              AgentRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+    turnId           String?
+    turn             AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
     agentId          String
-    agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    agent            Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId         String?
     provider         String
     modelName        String
@@ -1374,8 +1418,10 @@ model CostEvent {
     completionTokens Int?
     totalTokens      Int?
     costUsd          Float?
-    createdAt        DateTime @default(now())
+    createdAt        DateTime      @default(now())
 
+    @@index([runId])
+    @@index([turnId])
     @@index([agentId, createdAt])
     @@index([tenantId])
     @@map("cost_event")

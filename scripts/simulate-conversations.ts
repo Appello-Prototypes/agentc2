@@ -2,7 +2,7 @@
 import { randomUUID } from "node:crypto";
 import { prisma } from "../packages/database/src";
 import { agentResolver } from "../packages/mastra/src";
-import { extractTokenUsage, extractToolCalls, startRun } from "../apps/agent/src/lib/run-recorder";
+import { extractTokenUsage, extractToolCalls, startRun, startConversationRun, finalizeConversationRun } from "../apps/agent/src/lib/run-recorder";
 
 type ConversationMessage = {
     role: "user";
@@ -247,15 +247,29 @@ async function main() {
 
         const limitedMessages = messages.slice(0, turns);
 
+        // Use conversation-level run: one run per simulated conversation
+        let conversationHandle: Awaited<ReturnType<typeof startConversationRun>> | null = null;
+        let isFirstMessage = true;
+
         for (const message of limitedMessages) {
-            const runHandle = await startRun({
-                agentId: targetResolved.record.id,
-                agentSlug: targetResolved.record.slug,
-                input: message.content,
-                source: "test",
-                threadId: conversationId,
-                sessionId
-            });
+            let turnHandle;
+
+            if (isFirstMessage) {
+                conversationHandle = await startConversationRun({
+                    agentId: targetResolved.record.id,
+                    agentSlug: targetResolved.record.slug,
+                    input: message.content,
+                    source: "simulation",
+                    threadId: conversationId,
+                    sessionId
+                });
+                turnHandle = conversationHandle;
+                isFirstMessage = false;
+            } else if (conversationHandle) {
+                turnHandle = await conversationHandle.addTurn(message.content);
+            } else {
+                break;
+            }
 
             try {
                 const response = await targetResolved.agent.generate(message.content, {
@@ -265,10 +279,10 @@ async function main() {
                 const toolCalls = extractToolCalls(response);
 
                 for (const toolCall of toolCalls) {
-                    await runHandle.addToolCall(toolCall);
+                    await turnHandle.addToolCall(toolCall);
                 }
 
-                await runHandle.complete({
+                await turnHandle.completeTurn({
                     output: response.text,
                     modelProvider: targetResolved.record.modelProvider,
                     modelName: targetResolved.record.modelName,
@@ -278,9 +292,14 @@ async function main() {
 
                 successCount += 1;
             } catch (error) {
-                await runHandle.fail(error instanceof Error ? error : String(error));
+                await turnHandle.failTurn(error instanceof Error ? error : String(error));
                 failureCount += 1;
             }
+        }
+
+        // Finalize the conversation run
+        if (conversationHandle) {
+            await conversationHandle.finalizeRun();
         }
 
         return { conversationId, ok: true };
