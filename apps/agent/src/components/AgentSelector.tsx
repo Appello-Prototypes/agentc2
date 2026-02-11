@@ -51,12 +51,6 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                 if (data.success && data.agents) {
                     const fetched: AgentInfo[] = data.agents;
                     setAgents(fetched);
-
-                    // Fire initial callback so the parent gets model info on mount
-                    const matched = fetched.find((a) => a.slug === valueRef.current);
-                    if (matched) {
-                        onChangeRef.current(matched.slug, matched);
-                    }
                 }
             } catch (error) {
                 console.error("Failed to fetch agents:", error);
@@ -66,6 +60,16 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
         }
         fetchAgents();
     }, []);
+
+    // Sync parent whenever value or agents change (handles initial mount,
+    // external agent switches from suggestion cards, and loaded conversations)
+    useEffect(() => {
+        if (agents.length === 0) return;
+        const matched = agents.find((a) => a.slug === value);
+        if (matched) {
+            onChangeRef.current(matched.slug, matched);
+        }
+    }, [value, agents]);
 
     const handleValueChange = (newValue: string | null) => {
         if (!newValue) return;

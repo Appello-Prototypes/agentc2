@@ -162,9 +162,17 @@ export function formatValue(
 ): string {
     if (value == null) return "";
 
+    // Normalize common format aliases
+    const normalizedFormat =
+        format === "percentage"
+            ? "percent"
+            : format === "decimal"
+              ? "number"
+              : format;
+
     let formatted: string;
 
-    switch (format) {
+    switch (normalizedFormat) {
         case "currency":
             formatted = new Intl.NumberFormat("en-US", {
                 style: "currency",

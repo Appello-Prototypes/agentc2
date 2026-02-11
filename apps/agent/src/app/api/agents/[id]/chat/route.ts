@@ -265,11 +265,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     console.log(`[Agent Chat] Started run ${handle.runId} for agent ${id}`);
 
                     // Record trigger event (non-blocking, best-effort)
+                    const isCanvasChat = resourceId === "canvas-builder";
                     createTriggerEventRecord({
                         agentId,
                         workspaceId: record?.workspaceId || null,
                         runId: handle.runId,
-                        sourceType: "chat",
+                        sourceType: isCanvasChat ? "canvas_chat" : "chat",
+                        eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
                         entityType: "agent",
                         payload: { input: lastUserMessage },
                         metadata: {

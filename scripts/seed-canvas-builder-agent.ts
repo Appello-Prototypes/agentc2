@@ -102,9 +102,32 @@ Use \`{{ }}\` expressions to bind data:
 - \`{{ formatPercent(avg(queries.stats, 'rate')) }}\` — Format as percentage
 - \`{{ count(queries.deals) }}\` — Count records
 - \`{{ round(avg(queries.stats, 'value'), 1) }}\` — Round to N decimal places
+- \`{{ filter(queries.deals, 'stage', 'Active') }}\` — Filter array by field value
+- \`{{ sortBy(queries.deals, 'amount', 'desc') }}\` — Sort array
+
+## Expression Restrictions (CRITICAL)
+NEVER use JavaScript syntax in expressions. The expression engine only supports whitelisted functions.
+
+BAD:  \`{{ queries.deals.filter(d => d.stage !== 'Lost') }}\`
+GOOD: \`{{ filter(queries.deals, 'stage', 'Active') }}\`
+
+BAD:  \`{{ Math.round(avg(queries.stats, 'rate') * 100) }}\`
+GOOD: \`{{ round(avg(queries.stats, 'rate'), 0) }}\`
+
+BAD:  \`{{ queries.deals.length }}\`
+GOOD: \`{{ count(queries.deals) }}\`
+
+BAD:  \`{{ queries.deals.map(d => d.amount).reduce((a, b) => a + b, 0) }}\`
+GOOD: \`{{ sum(queries.deals, 'amount') }}\`
+
+BAD:  \`{{ queries.data.filter(d => d.dealstage !== 'Closed Lost') }}\`
+GOOD: \`{{ filter(queries.data, 'dealstage', 'Open') }}\`
 
 ## KPI Card Formatting Rules (CRITICAL)
 KPI cards MUST always have proper formatting. Never display raw unformatted numbers.
+
+Valid format values: \`currency\`, \`number\`, \`percent\`, \`date\`, \`datetime\`, \`boolean\`
+DO NOT use \`percentage\` or \`decimal\` — these are NOT valid format names.
 
 **Always set \`format\` on KPI cards:**
 - Use \`"format": "currency"\` for money values (renders as $1,234.56)
@@ -124,8 +147,7 @@ KPI cards MUST always have proper formatting. Never display raw unformatted numb
 - \`"suffix": "%"\` for percentages
 - \`"suffix": " ms"\` for durations
 
-## New Block Types
-In addition to the core blocks, these are also available:
+## Additional Block Types
 - **progress-bar** — Horizontal progress/completion bar with label and percentage
 - **metric-row** — Horizontal row of small metrics, great for summary strips
 - **stat-card** — Enhanced KPI card with icon support and optional inline sparkline
@@ -141,14 +163,16 @@ In addition to the core blocks, these are also available:
 - Data tables typically use span of 12 (full-width)
 - Always include a title and description for the canvas
 - NEVER leave numeric KPI values unformatted — always use format, prefix/suffix, or formatting expressions
-- When using static data for charts, ensure data is an array of objects with consistent keys`,
+- When using static data for charts, ensure data is an array of objects with consistent keys
+- NEVER use JavaScript syntax (.filter(), .map(), .length, Math.*, arrow functions) in expressions`,
     modelProvider: "anthropic",
     modelName: "claude-sonnet-4-20250514",
     temperature: 0.3,
     maxSteps: 10,
     maxTokens: 8192,
     modelConfig: {
-        toolChoice: "auto" as const
+        toolChoice: "auto" as const,
+        cacheControl: { type: "ephemeral" as const }
     },
     memoryEnabled: true,
     memoryConfig: {
@@ -173,7 +197,8 @@ const CANVAS_BUILDER_TOOLS = [
     "canvas-delete",
     "canvas-list",
     "canvas-query-preview",
-    "canvas-list-blocks"
+    "canvas-list-blocks",
+    "date-time"
 ];
 
 async function seedCanvasBuilderAgent() {
@@ -216,6 +241,17 @@ async function seedCanvasBuilderAgent() {
                     toolId
                 }
             });
+        }
+
+        // Remove any extra tools not in the canonical list
+        const deleted = await prisma.agentTool.deleteMany({
+            where: {
+                agentId: existing.id,
+                toolId: { notIn: CANVAS_BUILDER_TOOLS }
+            }
+        });
+        if (deleted.count > 0) {
+            console.log(`  Removed ${deleted.count} extra tools`);
         }
         console.log(`  Updated with ${CANVAS_BUILDER_TOOLS.length} tools`);
     } else {

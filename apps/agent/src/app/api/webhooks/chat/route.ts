@@ -109,6 +109,7 @@ export async function POST(request: NextRequest) {
                         agentId,
                         runId: handle.runId,
                         sourceType: "chat",
+                        eventName: "webhook.chat.message",
                         entityType: "agent",
                         payload: { input: lastUserMessage },
                         metadata: { threadId: userThreadId, source: "webhook-chat" }

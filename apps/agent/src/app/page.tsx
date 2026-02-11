@@ -239,6 +239,8 @@ export default function UnifiedChatPage() {
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
     const titleGenFiredRef = useRef<boolean>(false);
+    const pendingMessageRef = useRef<string | null>(null);
+    const hasMessagesRef = useRef(false);
     const [titleVersion, setTitleVersion] = useState(0);
 
     const currentModelName = modelOverride?.name || agentDefaultModel || null;
@@ -280,10 +282,30 @@ export default function UnifiedChatPage() {
             setAgentName(agent.name);
             if (newSlug !== selectedAgentSlug) {
                 setSelectedAgentSlug(newSlug);
-                setMessages([]);
-                setThreadId(`chat-${newSlug}-${Date.now()}`);
                 setModelOverride(null);
                 setThinkingEnabled(false);
+
+                if (hasMessagesRef.current) {
+                    // Mid-conversation: keep threadId and messages, insert divider
+                    setMessages((prev) => [
+                        ...prev,
+                        {
+                            id: `agent-switch-${Date.now()}`,
+                            role: "assistant" as const,
+                            content: "",
+                            parts: [
+                                {
+                                    type: "text" as const,
+                                    text: `> **Switched to ${agent.name}** — continuing the conversation.`
+                                }
+                            ]
+                        }
+                    ]);
+                } else {
+                    // No messages yet: clean start with new threadId
+                    setMessages([]);
+                    setThreadId(`chat-${newSlug}-${Date.now()}`);
+                }
             }
         },
         [setMessages, selectedAgentSlug]
@@ -329,11 +351,31 @@ export default function UnifiedChatPage() {
 
     const handleSuggestionSelect = useCallback(
         (prompt: string, agentSlug?: string) => {
-            if (agentSlug) setSelectedAgentSlug(agentSlug);
-            void sendMessage({ text: prompt });
+            if (agentSlug && agentSlug !== selectedAgentSlug) {
+                // Agent switch needed -- defer send until transport rebuilds
+                pendingMessageRef.current = prompt;
+                setSelectedAgentSlug(agentSlug);
+                setThreadId(`chat-${agentSlug}-${Date.now()}`);
+            } else {
+                void sendMessage({ text: prompt });
+            }
         },
-        [sendMessage]
+        [sendMessage, selectedAgentSlug]
     );
+
+    // Process deferred sends after agent switch completes
+    useEffect(() => {
+        if (pendingMessageRef.current) {
+            const msg = pendingMessageRef.current;
+            pendingMessageRef.current = null;
+            void sendMessage({ text: msg });
+        }
+    }, [selectedAgentSlug, sendMessage]);
+
+    // Keep hasMessagesRef in sync for use in event handlers (handleAgentChange)
+    useEffect(() => {
+        hasMessagesRef.current = messages.length > 0;
+    }, [messages.length]);
 
     // Auto-save (debounced)
     useEffect(() => {

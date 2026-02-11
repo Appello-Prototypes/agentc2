@@ -1580,7 +1580,7 @@ function getMcpClient(): MCPClient {
     if (!global.mcpClient) {
         const servers = buildServerConfigs({
             connections: [],
-            allowEnvFallback: false
+            allowEnvFallback: true
         });
 
         global.mcpClient = new MCPClient({

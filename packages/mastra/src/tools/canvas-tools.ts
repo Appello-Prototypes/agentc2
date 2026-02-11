@@ -199,7 +199,7 @@ export const canvasQueryPreviewTool = createTool({
         query: z.string().optional().describe("SQL query (for sql source) or RAG query text")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ source, tool, params, query }) => {
+    execute: async ({ source, tool, params, query }, context) => {
         // Build a temporary query and execute it via the data endpoint
         // For preview, we use a direct internal call
         const queryDef = {
@@ -211,9 +211,17 @@ export const canvasQueryPreviewTool = createTool({
             prompt: source === "rag" ? query : undefined
         };
 
+        // Extract organizationId from execution context if available.
+        // This allows MCP tool queries to resolve against the correct
+        // organization's configured MCP servers.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reqCtx = context?.requestContext as Record<string, any> | undefined;
+        const organizationId =
+            reqCtx?.organizationId || reqCtx?.tenantId || null;
+
         // Use executeSingleQuery directly
         const { executeSingleQuery } = await import("../canvas/query-executor");
-        const result = await executeSingleQuery(queryDef);
+        const result = await executeSingleQuery(queryDef, { organizationId });
 
         return {
             success: !result.error,
