@@ -85,6 +85,14 @@ interface ToolInfo {
     name: string;
     description: string;
     source: string; // "registry" or "mcp:serverName"
+    category?: string;
+}
+
+interface ToolGroup {
+    key: string;
+    displayName: string;
+    tools: ToolInfo[];
+    isMcp: boolean;
 }
 
 interface ModelInfo {
@@ -137,6 +145,8 @@ function AgentManagePageContent() {
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
     const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
+    const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
+    const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(new Set());
 
     // UI state
     const [selectedAgent, setSelectedAgent] = useState<StoredAgent | null>(null);
@@ -200,6 +210,7 @@ function AgentManagePageContent() {
                 setAvailableTools(data.tools);
                 setAvailableModels(data.models);
                 setAvailableScorers(data.scorers || []);
+                setToolCategoryOrder(data.toolCategoryOrder || []);
             }
         } catch (error) {
             console.error("Failed to fetch tools:", error);
@@ -421,27 +432,61 @@ function AgentManagePageContent() {
         }));
     };
 
-    // Group tools by source
-    const groupToolsBySource = (tools: ToolInfo[]) => {
-        const groups: Record<string, ToolInfo[]> = {};
+    // Group tools: built-in by category, MCP by server
+    const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
+        const builtInByCategory: Record<string, ToolInfo[]> = {};
+        const mcpByServer: Record<string, ToolInfo[]> = {};
+
         tools.forEach((tool) => {
-            const source = tool.source || "registry";
-            if (!groups[source]) {
-                groups[source] = [];
+            if (tool.source === "registry") {
+                const cat = tool.category || "Other";
+                if (!builtInByCategory[cat]) builtInByCategory[cat] = [];
+                builtInByCategory[cat]!.push(tool);
+            } else {
+                const server = tool.source;
+                if (!mcpByServer[server]) mcpByServer[server] = [];
+                mcpByServer[server]!.push(tool);
             }
-            groups[source].push(tool);
         });
-        // Sort groups: registry first, then MCP servers alphabetically
-        const sortedKeys = Object.keys(groups).sort((a, b) => {
-            if (a === "registry") return -1;
-            if (b === "registry") return 1;
-            return a.localeCompare(b);
-        });
-        return sortedKeys.map((key) => ({
-            source: key,
-            displayName: key === "registry" ? "Built-in Tools" : key.replace("mcp:", ""),
-            tools: groups[key]
+
+        const orderedCategories = [
+            ...toolCategoryOrder.filter((cat) => builtInByCategory[cat]),
+            ...Object.keys(builtInByCategory)
+                .filter((cat) => !toolCategoryOrder.includes(cat))
+                .sort()
+        ];
+
+        const groups: ToolGroup[] = orderedCategories.map((cat) => ({
+            key: `builtin:${cat}`,
+            displayName: cat,
+            tools: builtInByCategory[cat]!,
+            isMcp: false
         }));
+
+        const sortedServers = Object.keys(mcpByServer).sort();
+        for (const server of sortedServers) {
+            groups.push({
+                key: server,
+                displayName: server.replace("mcp:", ""),
+                tools: mcpByServer[server]!,
+                isMcp: true
+            });
+        }
+
+        return groups;
+    };
+
+    // Toggle collapse for a tool group
+    const toggleToolGroupCollapse = (key: string) => {
+        setCollapsedToolGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
     };
 
     // Select all tools
@@ -460,28 +505,29 @@ function AgentManagePageContent() {
         }));
     };
 
-    // Select all tools for a specific source
-    const selectAllToolsForSource = (source: string) => {
-        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+    // Select all tools in a group
+    const selectAllToolsForGroup = (group: ToolGroup) => {
+        const groupToolIds = group.tools.map((t) => t.id);
         setFormData((prev) => ({
             ...prev,
-            tools: [...new Set([...prev.tools, ...sourceToolIds])]
+            tools: [...new Set([...prev.tools, ...groupToolIds])]
         }));
     };
 
-    // Deselect all tools for a specific source
-    const deselectAllToolsForSource = (source: string) => {
-        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
+    // Deselect all tools in a group
+    const deselectAllToolsForGroup = (group: ToolGroup) => {
+        const groupToolIds = new Set(group.tools.map((t) => t.id));
         setFormData((prev) => ({
             ...prev,
-            tools: prev.tools.filter((t) => !sourceToolIds.includes(t))
+            tools: prev.tools.filter((t) => !groupToolIds.has(t))
         }));
     };
 
-    // Check if all tools for a source are selected
-    const areAllToolsSelectedForSource = (source: string) => {
-        const sourceToolIds = availableTools.filter((t) => t.source === source).map((t) => t.id);
-        return sourceToolIds.length > 0 && sourceToolIds.every((id) => formData.tools.includes(id));
+    // Check if all tools in a group are selected
+    const areAllToolsSelectedForGroup = (group: ToolGroup) => {
+        return (
+            group.tools.length > 0 && group.tools.every((t) => formData.tools.includes(t.id))
+        );
     };
 
     // Toggle scorer selection

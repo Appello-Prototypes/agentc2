@@ -129,6 +129,8 @@ export { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
 // Tool registry for stored agents
 export {
     toolRegistry,
+    toolCategoryMap,
+    toolCategoryOrder,
     listAvailableTools,
     getToolsByNames,
     getToolsByNamesAsync,

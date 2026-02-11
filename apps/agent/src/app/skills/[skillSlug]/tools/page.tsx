@@ -19,12 +19,14 @@ interface ToolInfo {
     name: string;
     description: string;
     source: string;
+    category?: string;
 }
 
 interface ToolGroup {
-    source: string;
+    key: string;
     displayName: string;
     tools: ToolInfo[];
+    isMcp: boolean;
 }
 
 export default function SkillToolsPage() {
@@ -34,11 +36,13 @@ export default function SkillToolsPage() {
     const [skillId, setSkillId] = useState("");
     const [attachedToolIds, setAttachedToolIds] = useState<Set<string>>(new Set());
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
+    const [categoryOrder, setCategoryOrder] = useState<string[]>([]);
     const [loading, setLoading] = useState(true);
     const [toolsLoading, setToolsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
     const [mcpError, setMcpError] = useState<string | null>(null);
     const [hasOrgContext, setHasOrgContext] = useState(false);
+    const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
 
     // Fetch skill data (attached tools)
     const fetchSkill = useCallback(async () => {
@@ -70,6 +74,7 @@ export default function SkillToolsPage() {
             if (res.ok) {
                 const data = await res.json();
                 setAvailableTools(data.tools || []);
+                setCategoryOrder(data.toolCategoryOrder || []);
                 setMcpError(data.mcpError ?? null);
                 setHasOrgContext(data.hasOrgContext ?? false);
             }
@@ -85,24 +90,63 @@ export default function SkillToolsPage() {
         fetchTools();
     }, [fetchSkill, fetchTools]);
 
-    // Group tools by source
-    const groupToolsBySource = (tools: ToolInfo[]): ToolGroup[] => {
-        const groups: Record<string, ToolInfo[]> = {};
+    // Group tools: built-in tools by category, MCP tools by server
+    const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
+        const builtInByCategory: Record<string, ToolInfo[]> = {};
+        const mcpByServer: Record<string, ToolInfo[]> = {};
+
         tools.forEach((tool) => {
-            const source = tool.source || "registry";
-            if (!groups[source]) groups[source] = [];
-            groups[source]!.push(tool);
+            if (tool.source === "registry") {
+                const cat = tool.category || "Other";
+                if (!builtInByCategory[cat]) builtInByCategory[cat] = [];
+                builtInByCategory[cat]!.push(tool);
+            } else {
+                const server = tool.source;
+                if (!mcpByServer[server]) mcpByServer[server] = [];
+                mcpByServer[server]!.push(tool);
+            }
         });
-        const sortedKeys = Object.keys(groups).sort((a, b) => {
-            if (a === "registry") return -1;
-            if (b === "registry") return 1;
-            return a.localeCompare(b);
-        });
-        return sortedKeys.map((key) => ({
-            source: key,
-            displayName: key === "registry" ? "Built-in Tools" : key.replace("mcp:", ""),
-            tools: groups[key]!
+
+        // Sort built-in categories by defined order
+        const orderedCategories = [
+            ...categoryOrder.filter((cat) => builtInByCategory[cat]),
+            ...Object.keys(builtInByCategory)
+                .filter((cat) => !categoryOrder.includes(cat))
+                .sort()
+        ];
+
+        const groups: ToolGroup[] = orderedCategories.map((cat) => ({
+            key: `builtin:${cat}`,
+            displayName: cat,
+            tools: builtInByCategory[cat]!,
+            isMcp: false
         }));
+
+        // Add MCP server groups after built-in
+        const sortedServers = Object.keys(mcpByServer).sort();
+        for (const server of sortedServers) {
+            groups.push({
+                key: server,
+                displayName: server.replace("mcp:", ""),
+                tools: mcpByServer[server]!,
+                isMcp: true
+            });
+        }
+
+        return groups;
+    };
+
+    // Toggle collapse for a group
+    const toggleGroupCollapse = (key: string) => {
+        setCollapsedGroups((prev) => {
+            const next = new Set(prev);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
     };
 
     // Toggle a single tool
@@ -136,11 +180,10 @@ export default function SkillToolsPage() {
         }
     };
 
-    // Select all tools in a source group
-    const selectAllForSource = async (source: string) => {
+    // Select all tools in a group
+    const selectAllForGroup = async (group: ToolGroup) => {
         if (!skillId || actionLoading) return;
-        const sourceTools = availableTools.filter((t) => t.source === source);
-        const unattached = sourceTools.filter((t) => !attachedToolIds.has(t.id));
+        const unattached = group.tools.filter((t) => !attachedToolIds.has(t.id));
         if (unattached.length === 0) return;
 
         setActionLoading("bulk");
@@ -161,11 +204,10 @@ export default function SkillToolsPage() {
         }
     };
 
-    // Deselect all tools in a source group
-    const deselectAllForSource = async (source: string) => {
+    // Deselect all tools in a group
+    const deselectAllForGroup = async (group: ToolGroup) => {
         if (!skillId || actionLoading) return;
-        const sourceTools = availableTools.filter((t) => t.source === source);
-        const attached = sourceTools.filter((t) => attachedToolIds.has(t.id));
+        const attached = group.tools.filter((t) => attachedToolIds.has(t.id));
         if (attached.length === 0) return;
 
         setActionLoading("bulk");
@@ -196,7 +238,11 @@ export default function SkillToolsPage() {
         );
     }
 
-    const groups = groupToolsBySource(availableTools);
+    const groups = groupTools(availableTools);
+    const builtInCount = availableTools.filter((t) => t.source === "registry").length;
+    const builtInSelected = availableTools.filter(
+        (t) => t.source === "registry" && attachedToolIds.has(t.id)
+    ).length;
 
     return (
         <Card>
@@ -211,7 +257,19 @@ export default function SkillToolsPage() {
                 </div>
             </CardHeader>
             <CardContent>
-                <div className="max-h-[600px] space-y-6 overflow-auto">
+                <div className="max-h-[600px] space-y-4 overflow-auto">
+                    {/* Built-in tools header */}
+                    {builtInCount > 0 && (
+                        <div className="flex items-center gap-2 border-b pb-2">
+                            <h3 className="text-sm font-semibold tracking-wide uppercase">
+                                Built-in Tools
+                            </h3>
+                            <Badge variant="outline" className="text-xs">
+                                {builtInSelected}/{builtInCount}
+                            </Badge>
+                        </div>
+                    )}
+
                     {groups.map((group) => {
                         const selectedCount = group.tools.filter((t) =>
                             attachedToolIds.has(t.id)
@@ -219,63 +277,122 @@ export default function SkillToolsPage() {
                         const allSelected =
                             group.tools.length > 0 &&
                             group.tools.every((t) => attachedToolIds.has(t.id));
+                        const isCollapsed = collapsedGroups.has(group.key);
+
+                        // Add MCP section header before first MCP group
+                        const isFirstMcp =
+                            group.isMcp &&
+                            groups.findIndex((g) => g.isMcp) ===
+                                groups.indexOf(group);
 
                         return (
-                            <div key={group.source} className="space-y-3">
-                                <div className="flex items-center justify-between border-b pb-2">
-                                    <div className="flex items-center gap-2">
-                                        <h4 className="font-medium">{group.displayName}</h4>
-                                        <Badge variant="outline" className="text-xs">
-                                            {selectedCount}/{group.tools.length}
-                                        </Badge>
+                            <div key={group.key}>
+                                {isFirstMcp && (
+                                    <div className="mt-6 flex items-center gap-2 border-b pb-2">
+                                        <h3 className="text-sm font-semibold tracking-wide uppercase">
+                                            MCP Tools
+                                        </h3>
                                     </div>
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        disabled={!!actionLoading}
-                                        onClick={() =>
-                                            allSelected
-                                                ? deselectAllForSource(group.source)
-                                                : selectAllForSource(group.source)
-                                        }
-                                    >
-                                        {allSelected ? "Deselect All" : "Select All"}
-                                    </Button>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                                    {group.tools.map((tool) => {
-                                        const isChecked = attachedToolIds.has(tool.id);
-                                        const isToggling = actionLoading === tool.id;
-                                        return (
-                                            <label
-                                                key={tool.id}
-                                                className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
-                                                    isChecked
-                                                        ? "border-primary bg-primary/5"
-                                                        : "hover:bg-muted/50"
-                                                } ${isToggling ? "opacity-50" : ""}`}
+                                )}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <button
+                                            type="button"
+                                            className="flex items-center gap-2 text-left"
+                                            onClick={() =>
+                                                toggleGroupCollapse(group.key)
+                                            }
+                                        >
+                                            <svg
+                                                className={`h-3.5 w-3.5 shrink-0 transition-transform ${
+                                                    isCollapsed
+                                                        ? ""
+                                                        : "rotate-90"
+                                                }`}
+                                                fill="none"
+                                                viewBox="0 0 24 24"
+                                                stroke="currentColor"
+                                                strokeWidth={2}
                                             >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => toggleTool(tool.id)}
-                                                    disabled={!!actionLoading}
-                                                    className="mt-0.5"
+                                                <path
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                    d="M9 5l7 7-7 7"
                                                 />
-                                                <div className="min-w-0 flex-1">
-                                                    <p className="text-sm font-medium">
-                                                        {tool.name}
-                                                    </p>
-                                                    {tool.description && (
-                                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
-                                                            {tool.description}
-                                                        </p>
-                                                    )}
-                                                </div>
-                                            </label>
-                                        );
-                                    })}
+                                            </svg>
+                                            <h4 className="text-sm font-medium">
+                                                {group.displayName}
+                                            </h4>
+                                            <Badge
+                                                variant="outline"
+                                                className="text-xs"
+                                            >
+                                                {selectedCount}/
+                                                {group.tools.length}
+                                            </Badge>
+                                        </button>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={!!actionLoading}
+                                            onClick={() =>
+                                                allSelected
+                                                    ? deselectAllForGroup(group)
+                                                    : selectAllForGroup(group)
+                                            }
+                                        >
+                                            {allSelected
+                                                ? "Deselect All"
+                                                : "Select All"}
+                                        </Button>
+                                    </div>
+                                    {!isCollapsed && (
+                                        <div className="grid grid-cols-1 gap-2 pl-5 md:grid-cols-2">
+                                            {group.tools.map((tool) => {
+                                                const isChecked =
+                                                    attachedToolIds.has(tool.id);
+                                                const isToggling =
+                                                    actionLoading === tool.id;
+                                                return (
+                                                    <label
+                                                        key={tool.id}
+                                                        className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                                                            isChecked
+                                                                ? "border-primary bg-primary/5"
+                                                                : "hover:bg-muted/50"
+                                                        } ${isToggling ? "opacity-50" : ""}`}
+                                                    >
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={isChecked}
+                                                            onChange={() =>
+                                                                toggleTool(
+                                                                    tool.id
+                                                                )
+                                                            }
+                                                            disabled={
+                                                                !!actionLoading
+                                                            }
+                                                            className="mt-0.5"
+                                                        />
+                                                        <div className="min-w-0 flex-1">
+                                                            <p className="text-sm font-medium">
+                                                                {tool.name}
+                                                            </p>
+                                                            {tool.description && (
+                                                                <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                                                    {
+                                                                        tool.description
+                                                                    }
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </label>
+                                                );
+                                            })}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         );
@@ -285,15 +402,26 @@ export default function SkillToolsPage() {
                             <p className="font-medium">MCP tools unavailable</p>
                             <p className="mt-0.5">{mcpError}</p>
                             <p className="mt-1 text-xs opacity-90">
-                                Check Integrations (MCP) and test connections; ensure you are signed in so org-scoped connections are used.
+                                Check Integrations (MCP) and test connections;
+                                ensure you are signed in so org-scoped connections
+                                are used.
                             </p>
                         </div>
                     )}
-                    {hasOrgContext && availableTools.length > 0 && availableTools.every((t) => t.source === "registry") && (
-                        <div className="text-muted-foreground rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
-                            <p>Only built-in tools are shown. To see MCP tools here, add and connect MCP servers under <strong>Integrations</strong> (same organization).</p>
-                        </div>
-                    )}
+                    {hasOrgContext &&
+                        availableTools.length > 0 &&
+                        availableTools.every(
+                            (t) => t.source === "registry"
+                        ) && (
+                            <div className="text-muted-foreground rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
+                                <p>
+                                    Only built-in tools are shown. To see MCP
+                                    tools here, add and connect MCP servers under{" "}
+                                    <strong>Integrations</strong> (same
+                                    organization).
+                                </p>
+                            </div>
+                        )}
                     {availableTools.length === 0 && (
                         <div className="text-muted-foreground py-8 text-center">
                             <p>No tools available</p>

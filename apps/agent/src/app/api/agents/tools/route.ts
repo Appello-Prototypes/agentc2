@@ -3,7 +3,8 @@ import {
     listAvailableTools,
     getAvailableModels,
     listAvailableScorers,
-    listMcpToolDefinitions
+    listMcpToolDefinitions,
+    toolCategoryOrder
 } from "@repo/mastra";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -54,7 +55,10 @@ export async function GET(request: NextRequest) {
         }
 
         // Combine all tools, marking source for UI differentiation
-        const allTools = [...staticTools.map((t) => ({ ...t, source: "registry" })), ...mcpTools];
+        const allTools = [
+            ...staticTools.map((t) => ({ ...t, source: "registry" })),
+            ...mcpTools
+        ];
 
         const models = getAvailableModels();
         const scorers = listAvailableScorers();
@@ -66,7 +70,8 @@ export async function GET(request: NextRequest) {
             scorers,
             mcpServerStatus,
             mcpError,
-            hasOrgContext: !!authContext
+            hasOrgContext: !!authContext,
+            toolCategoryOrder
         });
     } catch (error) {
         console.error("[Agents Tools] Error:", error);

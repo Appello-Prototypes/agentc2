@@ -104,6 +104,8 @@ export {
     mcpToolDefinitions,
     mcpToolRoutes,
     toolRegistry,
+    toolCategoryMap,
+    toolCategoryOrder,
     listAvailableTools,
     getToolsByNames,
     getToolsByNamesAsync,

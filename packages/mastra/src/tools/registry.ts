@@ -187,6 +187,215 @@ import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./ski
 import { getMcpTools } from "../mcp/client";
 
 /**
+ * Logical category for each built-in tool.
+ * Used by the UI to group the flat list of 145+ tools into collapsible sections.
+ */
+export const toolCategoryMap: Record<string, string> = {
+    // Utilities
+    "date-time": "Utilities",
+    calculator: "Utilities",
+    "generate-id": "Utilities",
+    "web-fetch": "Utilities",
+    "memory-recall": "Utilities",
+    "json-parser": "Utilities",
+    "ask-questions": "Utilities",
+
+    // Agent Management
+    "agent-create": "Agent Management",
+    "agent-read": "Agent Management",
+    "agent-update": "Agent Management",
+    "agent-delete": "Agent Management",
+    "agent-list": "Agent Management",
+    "agent-overview": "Agent Management",
+    "agent-analytics": "Agent Management",
+    "agent-costs": "Agent Management",
+    "agent-budget-get": "Agent Management",
+    "agent-budget-update": "Agent Management",
+
+    // Agent Quality & Runs
+    "agent-feedback-submit": "Agent Quality & Runs",
+    "agent-feedback-list": "Agent Quality & Runs",
+    "agent-guardrails-get": "Agent Quality & Runs",
+    "agent-guardrails-update": "Agent Quality & Runs",
+    "agent-guardrails-events": "Agent Quality & Runs",
+    "agent-test-cases-list": "Agent Quality & Runs",
+    "agent-test-cases-create": "Agent Quality & Runs",
+    "agent-run-cancel": "Agent Quality & Runs",
+    "agent-run-rerun": "Agent Quality & Runs",
+    "agent-run-trace": "Agent Quality & Runs",
+
+    // Learning & Simulations
+    "agent-learning-sessions": "Learning & Simulations",
+    "agent-learning-start": "Learning & Simulations",
+    "agent-learning-session-get": "Learning & Simulations",
+    "agent-learning-proposal-approve": "Learning & Simulations",
+    "agent-learning-proposal-reject": "Learning & Simulations",
+    "agent-learning-experiments": "Learning & Simulations",
+    "agent-learning-metrics": "Learning & Simulations",
+    "agent-learning-policy": "Learning & Simulations",
+    "agent-simulations-list": "Learning & Simulations",
+    "agent-simulations-start": "Learning & Simulations",
+    "agent-simulations-get": "Learning & Simulations",
+
+    // Workflows
+    "workflow-create": "Workflows",
+    "workflow-read": "Workflows",
+    "workflow-update": "Workflows",
+    "workflow-delete": "Workflows",
+    "workflow-execute": "Workflows",
+    "workflow-list-runs": "Workflows",
+    "workflow-get-run": "Workflows",
+    "workflow-resume": "Workflows",
+    "workflow-metrics": "Workflows",
+    "workflow-versions": "Workflows",
+    "workflow-stats": "Workflows",
+
+    // Networks
+    "network-create": "Networks",
+    "network-read": "Networks",
+    "network-update": "Networks",
+    "network-delete": "Networks",
+    "network-execute": "Networks",
+    "network-list-runs": "Networks",
+    "network-get-run": "Networks",
+    "network-metrics": "Networks",
+    "network-versions": "Networks",
+    "network-stats": "Networks",
+
+    // Triggers
+    "trigger-unified-list": "Triggers",
+    "trigger-unified-get": "Triggers",
+    "trigger-unified-create": "Triggers",
+    "trigger-unified-update": "Triggers",
+    "trigger-unified-delete": "Triggers",
+    "trigger-unified-enable": "Triggers",
+    "trigger-unified-disable": "Triggers",
+
+    // RAG & Knowledge
+    "rag-query": "RAG & Knowledge",
+    "rag-ingest": "RAG & Knowledge",
+    "rag-documents-list": "RAG & Knowledge",
+    "rag-document-delete": "RAG & Knowledge",
+
+    // Documents
+    "document-create": "Documents",
+    "document-read": "Documents",
+    "document-update": "Documents",
+    "document-delete": "Documents",
+    "document-list": "Documents",
+    "document-search": "Documents",
+
+    // Skills
+    "skill-create": "Skills",
+    "skill-read": "Skills",
+    "skill-update": "Skills",
+    "skill-delete": "Skills",
+    "skill-list": "Skills",
+    "skill-attach-document": "Skills",
+    "skill-detach-document": "Skills",
+    "skill-attach-tool": "Skills",
+    "skill-detach-tool": "Skills",
+    "agent-attach-skill": "Skills",
+    "agent-detach-skill": "Skills",
+    "skill-get-versions": "Skills",
+    "search-skills": "Skills",
+    "activate-skill": "Skills",
+    "list-active-skills": "Skills",
+
+    // Monitoring & Metrics
+    "metrics-live-summary": "Monitoring & Metrics",
+    "metrics-agent-analytics": "Monitoring & Metrics",
+    "metrics-agent-runs": "Monitoring & Metrics",
+    "metrics-workflow-daily": "Monitoring & Metrics",
+    "metrics-network-daily": "Monitoring & Metrics",
+    "live-runs": "Monitoring & Metrics",
+    "live-metrics": "Monitoring & Metrics",
+    "live-stats": "Monitoring & Metrics",
+    "audit-logs-list": "Monitoring & Metrics",
+
+    // Integrations
+    "integration-import-mcp-json": "Integrations",
+    "integration-mcp-config": "Integrations",
+    "integration-connection-test": "Integrations",
+    "integration-providers-list": "Integrations",
+    "integration-connections-list": "Integrations",
+    "integration-connection-create": "Integrations",
+    "webhook-list-agents": "Integrations",
+    "webhook-create": "Integrations",
+
+    // Organization
+    "org-list": "Organization",
+    "org-get": "Organization",
+    "org-members-list": "Organization",
+    "org-member-add": "Organization",
+    "org-workspaces-list": "Organization",
+    "org-workspace-create": "Organization",
+    "goal-create": "Organization",
+    "goal-list": "Organization",
+    "goal-get": "Organization",
+    "workspace-intent-recommendation": "Organization",
+
+    // Email & Calendar
+    "gmail-archive-email": "Email & Calendar",
+    "outlook-mail-list-emails": "Email & Calendar",
+    "outlook-mail-get-email": "Email & Calendar",
+    "outlook-mail-send-email": "Email & Calendar",
+    "outlook-mail-archive-email": "Email & Calendar",
+    "outlook-calendar-list-events": "Email & Calendar",
+    "outlook-calendar-get-event": "Email & Calendar",
+    "outlook-calendar-create-event": "Email & Calendar",
+    "outlook-calendar-update-event": "Email & Calendar",
+
+    // File Storage
+    "dropbox-list-files": "File Storage",
+    "dropbox-get-file": "File Storage",
+    "dropbox-upload-file": "File Storage",
+    "dropbox-search-files": "File Storage",
+    "dropbox-get-sharing-links": "File Storage",
+
+    // BIM
+    "bim-query": "BIM",
+    "bim-takeoff": "BIM",
+    "bim-diff": "BIM",
+    "bim-clash": "BIM",
+    "bim-handover": "BIM",
+
+    // Canvas
+    "canvas-create": "Canvas",
+    "canvas-read": "Canvas",
+    "canvas-update": "Canvas",
+    "canvas-delete": "Canvas",
+    "canvas-list": "Canvas",
+    "canvas-query-preview": "Canvas",
+    "canvas-list-blocks": "Canvas",
+    "canvas-execute-queries": "Canvas"
+};
+
+/**
+ * Display order for tool categories.
+ * Categories not listed here will appear at the end in alphabetical order.
+ */
+export const toolCategoryOrder: string[] = [
+    "Utilities",
+    "Agent Management",
+    "Agent Quality & Runs",
+    "Learning & Simulations",
+    "Workflows",
+    "Networks",
+    "Triggers",
+    "RAG & Knowledge",
+    "Documents",
+    "Skills",
+    "Monitoring & Metrics",
+    "Integrations",
+    "Organization",
+    "Email & Calendar",
+    "File Storage",
+    "BIM",
+    "Canvas"
+];
+
+/**
  * Tool registry mapping names to tool instances.
  * Add new tools here to make them available for stored agents.
  * Using Record<string, unknown> to avoid complex Mastra Tool typing issues.
@@ -430,6 +639,7 @@ export interface ToolInfo {
     id: string;
     name: string;
     description: string;
+    category: string;
 }
 
 /**
@@ -440,7 +650,8 @@ export function listAvailableTools(): ToolInfo[] {
         id,
         name: id,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        description: (tool as any).description || ""
+        description: (tool as any).description || "",
+        category: toolCategoryMap[id] || "Other"
     }));
 }
 
