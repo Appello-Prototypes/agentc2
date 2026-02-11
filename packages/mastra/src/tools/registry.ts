@@ -164,6 +164,7 @@ import {
     canvasExecuteQueriesTool
 } from "./canvas-tools";
 import { askQuestionsTool } from "./ask-questions";
+import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./skill-discovery-tools";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -344,7 +345,12 @@ export const toolRegistry: Record<string, any> = {
     "canvas-execute-queries": canvasExecuteQueriesTool,
 
     // Interactive UI tools
-    "ask-questions": askQuestionsTool
+    "ask-questions": askQuestionsTool,
+
+    // Skill discovery meta-tools (Dynamic ReAct pattern)
+    "search-skills": searchSkillsTool,
+    "activate-skill": activateSkillTool,
+    "list-active-skills": listActiveSkillsTool
 };
 
 /**

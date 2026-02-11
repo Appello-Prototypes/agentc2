@@ -509,7 +509,14 @@ export default function UnifiedChatPage() {
             api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
             body: bodyExtra
         });
-    }, [selectedAgentSlug, threadId, modelOverride, thinkingEnabled, currentRunId, interactionMode]);
+    }, [
+        selectedAgentSlug,
+        threadId,
+        modelOverride,
+        thinkingEnabled,
+        currentRunId,
+        interactionMode
+    ]);
 
     const { messages, setMessages, sendMessage, status, stop } = useChat({ transport });
     const isStreaming = status === "streaming";
@@ -595,7 +602,9 @@ export default function UnifiedChatPage() {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ runId: currentRunId })
-                    }).catch((e) => console.warn("[Chat] Failed to finalize run on agent switch:", e));
+                    }).catch((e) =>
+                        console.warn("[Chat] Failed to finalize run on agent switch:", e)
+                    );
                 }
                 setCurrentRunId(null);
 
@@ -943,9 +952,7 @@ export default function UnifiedChatPage() {
                 <Plan key={index} isStreaming={!plan.complete}>
                     <PlanHeader>
                         <PlanTitle>{plan.title || "Execution Plan"}</PlanTitle>
-                        {plan.description && (
-                            <PlanDescription>{plan.description}</PlanDescription>
-                        )}
+                        {plan.description && <PlanDescription>{plan.description}</PlanDescription>}
                     </PlanHeader>
                     <PlanTrigger />
                     <PlanContent>
@@ -1000,9 +1007,7 @@ export default function UnifiedChatPage() {
                                                     />
                                                     <div>
                                                         <QueueItemContent
-                                                            completed={
-                                                                item.status === "completed"
-                                                            }
+                                                            completed={item.status === "completed"}
                                                         >
                                                             {item.title}
                                                         </QueueItemContent>
@@ -1149,8 +1154,7 @@ export default function UnifiedChatPage() {
                                             message.parts.map(renderPart)
                                         ) : message.role === "assistant" &&
                                           (isStreaming || isSubmitted) &&
-                                          message.id ===
-                                              messages[messages.length - 1]?.id ? (
+                                          message.id === messages[messages.length - 1]?.id ? (
                                             // Shimmer skeleton for empty assistant message while streaming
                                             <div className="flex flex-col gap-2 py-1">
                                                 <div className="bg-muted/60 h-3 w-3/4 animate-pulse rounded" />
@@ -1174,11 +1178,11 @@ export default function UnifiedChatPage() {
                                                     (p as { text: string }).text.trim().length > 0
                                             );
                                             const isLastMessage =
-                                                message.id ===
-                                                messages[messages.length - 1]?.id;
+                                                message.id === messages[messages.length - 1]?.id;
                                             const isCurrentlyStreaming =
                                                 isLastMessage && (isStreaming || isSubmitted);
-                                            if (!hasTextContent || isCurrentlyStreaming) return null;
+                                            if (!hasTextContent || isCurrentlyStreaming)
+                                                return null;
                                             return (
                                                 <MessageActions>
                                                     <MessageAction

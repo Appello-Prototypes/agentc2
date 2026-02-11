@@ -32,10 +32,7 @@ export async function POST(request: NextRequest) {
         }
 
         if (!runId) {
-            return NextResponse.json(
-                { success: false, error: "Missing runId" },
-                { status: 400 }
-            );
+            return NextResponse.json({ success: false, error: "Missing runId" }, { status: 400 });
         }
 
         const finalized = await finalizeConversationRun(runId);

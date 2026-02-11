@@ -101,7 +101,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         try {
             ({ agent, record, source } = await agentResolver.resolve({
                 slug: id,
-                requestContext: context
+                requestContext: context,
+                threadId: context?.threadId || context?.thread?.id
             }));
         } catch (resolveError) {
             const msg = resolveError instanceof Error ? resolveError.message : String(resolveError);

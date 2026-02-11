@@ -735,7 +735,11 @@ function buildTurnMethods(
     startTime: number,
     toolOriginMap?: Record<string, string>,
     tenantId?: string
-): { completeTurn: TurnHandle["completeTurn"]; failTurn: TurnHandle["failTurn"]; addToolCall: TurnHandle["addToolCall"] } {
+): {
+    completeTurn: TurnHandle["completeTurn"];
+    failTurn: TurnHandle["failTurn"];
+    addToolCall: TurnHandle["addToolCall"];
+} {
     const recordedToolCalls: ToolCallData[] = [];
 
     return {
@@ -882,7 +886,9 @@ function buildTurnMethods(
                 });
             });
 
-            console.error(`[RunRecorder] Turn ${turnIndex} of run ${runId} failed: ${errorMessage}`);
+            console.error(
+                `[RunRecorder] Turn ${turnIndex} of run ${runId} failed: ${errorMessage}`
+            );
         },
 
         async addToolCall(toolCall: ToolCallData): Promise<void> {
@@ -1148,7 +1154,9 @@ export async function startConversationRun(
                     }
                 });
             } catch (inngestError) {
-                console.warn(`[RunRecorder] Failed to emit run/completed for conversation: ${inngestError}`);
+                console.warn(
+                    `[RunRecorder] Failed to emit run/completed for conversation: ${inngestError}`
+                );
             }
 
             console.log(`[RunRecorder] Finalized conversation run ${run.id}`);

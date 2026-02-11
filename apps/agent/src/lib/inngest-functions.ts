@@ -582,8 +582,7 @@ export const runEvaluationFunction = inngest.createFunction(
                 if (turns.length > 0) {
                     // Build conversation context string
                     const conversationParts = turns.map(
-                        (t) =>
-                            `User: ${t.inputText}\nAssistant: ${t.outputText || "(no response)"}`
+                        (t) => `User: ${t.inputText}\nAssistant: ${t.outputText || "(no response)"}`
                     );
                     input = conversationParts.join("\n\n");
                     output = turns[turns.length - 1]?.outputText || output;

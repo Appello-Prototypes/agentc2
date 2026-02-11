@@ -160,19 +160,17 @@ export const QueueItemDescription = memo(
 
 export type QueueItemActionsProps = ComponentProps<"div">;
 
-export const QueueItemActions = memo(
-    ({ className, children, ...props }: QueueItemActionsProps) => (
-        <div
-            className={cn(
-                "ml-auto flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100",
-                className
-            )}
-            {...props}
-        >
-            {children}
-        </div>
-    )
-);
+export const QueueItemActions = memo(({ className, children, ...props }: QueueItemActionsProps) => (
+    <div
+        className={cn(
+            "ml-auto flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100",
+            className
+        )}
+        {...props}
+    >
+        {children}
+    </div>
+));
 
 // ─── Type Exports ────────────────────────────────────────────────────────────
 

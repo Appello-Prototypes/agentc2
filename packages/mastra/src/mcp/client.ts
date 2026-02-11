@@ -1532,13 +1532,13 @@ function sanitizeZodSchema(schema: any): any {
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const options: any[] = schema._def.options;
-        const sanitized = options
-            .map(sanitizeZodSchema)
-            .filter((opt) => {
-                // Remove ZodNull, ZodUndefined, ZodNever, ZodVoid from unions
-                const tn = opt?._def?.typeName;
-                return tn !== "ZodNull" && tn !== "ZodUndefined" && tn !== "ZodNever" && tn !== "ZodVoid";
-            });
+        const sanitized = options.map(sanitizeZodSchema).filter((opt) => {
+            // Remove ZodNull, ZodUndefined, ZodNever, ZodVoid from unions
+            const tn = opt?._def?.typeName;
+            return (
+                tn !== "ZodNull" && tn !== "ZodUndefined" && tn !== "ZodNever" && tn !== "ZodVoid"
+            );
+        });
 
         if (sanitized.length === 0) {
             return z.any().optional();
@@ -1548,7 +1548,13 @@ function sanitizeZodSchema(schema: any): any {
             return sanitized[0].optional?.() || sanitized[0];
         }
         // Rebuild the union with sanitized members
-        return z.union(sanitized as [import("zod").ZodTypeAny, import("zod").ZodTypeAny, ...import("zod").ZodTypeAny[]]);
+        return z.union(
+            sanitized as [
+                import("zod").ZodTypeAny,
+                import("zod").ZodTypeAny,
+                ...import("zod").ZodTypeAny[]
+            ]
+        );
     }
 
     // ZodArray: check if inner type is ZodAny — replace if so
@@ -1637,9 +1643,21 @@ function sanitizeZodSchema(schema: any): any {
     // If the type is not in the supported list and we haven't handled it,
     // log a warning and return as-is (Layer 1 should have prevented most issues).
     const supportedTypes = [
-        "ZodObject", "ZodArray", "ZodUnion", "ZodString", "ZodNumber",
-        "ZodDate", "ZodAny", "ZodDefault", "ZodNullable", "ZodOptional",
-        "ZodBoolean", "ZodEnum", "ZodLiteral", "ZodRecord", "ZodUnknown"
+        "ZodObject",
+        "ZodArray",
+        "ZodUnion",
+        "ZodString",
+        "ZodNumber",
+        "ZodDate",
+        "ZodAny",
+        "ZodDefault",
+        "ZodNullable",
+        "ZodOptional",
+        "ZodBoolean",
+        "ZodEnum",
+        "ZodLiteral",
+        "ZodRecord",
+        "ZodUnknown"
     ];
     if (typeName && !supportedTypes.includes(typeName)) {
         console.warn(`[MCP Schema] Unrecognized Zod type "${typeName}" — converting to z.any()`);

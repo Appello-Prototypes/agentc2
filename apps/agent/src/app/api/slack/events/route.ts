@@ -755,7 +755,8 @@ async function processMessage(
                     channelId,
                     threadTs
                 }
-            }
+            },
+            threadId: slackThreadId
         });
 
         agent = resolved.agent;

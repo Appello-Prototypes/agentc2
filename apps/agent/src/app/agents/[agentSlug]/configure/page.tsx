@@ -73,11 +73,13 @@ interface Agent {
 interface AttachedSkill {
     id: string;
     skillId: string;
+    pinned: boolean;
     skill: {
         id: string;
         slug: string;
         name: string;
         description: string | null;
+        category: string | null;
         version: number;
     };
 }
@@ -1226,9 +1228,52 @@ export default function ConfigurePage() {
                                                     <Badge variant="outline" className="text-xs">
                                                         v{as.skill.version}
                                                     </Badge>
+                                                    <Badge
+                                                        variant={
+                                                            as.pinned ? "default" : "secondary"
+                                                        }
+                                                        className="cursor-pointer text-xs"
+                                                        onClick={async () => {
+                                                            if (skillActionLoading) return;
+                                                            setSkillActionLoading(true);
+                                                            try {
+                                                                const res = await fetch(
+                                                                    `${getApiBase()}/api/agents/${agent!.id}/skills`,
+                                                                    {
+                                                                        method: "PATCH",
+                                                                        headers: {
+                                                                            "Content-Type":
+                                                                                "application/json"
+                                                                        },
+                                                                        body: JSON.stringify({
+                                                                            skillId: as.skillId,
+                                                                            pinned: !as.pinned
+                                                                        })
+                                                                    }
+                                                                );
+                                                                if (res.ok) {
+                                                                    fetchAgent();
+                                                                }
+                                                            } catch (err) {
+                                                                console.error(
+                                                                    "Toggle pinned failed:",
+                                                                    err
+                                                                );
+                                                            } finally {
+                                                                setSkillActionLoading(false);
+                                                            }
+                                                        }}
+                                                    >
+                                                        {as.pinned ? "Pinned" : "Discoverable"}
+                                                    </Badge>
                                                 </div>
                                                 <p className="text-muted-foreground font-mono text-xs">
                                                     {as.skill.slug}
+                                                    {as.skill.category && (
+                                                        <span className="ml-2 opacity-60">
+                                                            [{as.skill.category}]
+                                                        </span>
+                                                    )}
                                                 </p>
                                                 {as.skill.description && (
                                                     <p className="text-muted-foreground mt-1 line-clamp-1 text-xs">

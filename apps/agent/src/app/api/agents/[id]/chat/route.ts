@@ -168,7 +168,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     try {
         const { id } = await params;
         const body = await request.json();
-        const { threadId, requestContext, messages, modelOverride, thinkingOverride, runId: existingRunId, interactionMode } = body;
+        const {
+            threadId,
+            requestContext,
+            messages,
+            modelOverride,
+            thinkingOverride,
+            runId: existingRunId,
+            interactionMode
+        } = body;
 
         // Determine source based on mode parameter in requestContext
         // "live" mode = production run (PROD), otherwise test run (TEST)
@@ -184,10 +192,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // eslint-disable-next-line prefer-const
         let { agent, record, source, activeSkills, toolOriginMap } = await agentResolver.resolve({
             slug: id,
-            requestContext
+            requestContext,
+            threadId: userThreadId
         });
 
-        console.log(`[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`);
+        console.log(
+            `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
+        );
 
         // Apply model override if provided (user selected a different model in the UI)
         if (modelOverride && modelOverride.provider && modelOverride.name) {
@@ -309,7 +320,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     input: lastUserMessage,
                     agentId,
                     agentSlug: id,
-                    toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                    toolOriginMap:
+                        Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                     tenantId: record?.tenantId || undefined
                 })
                     .then((handle) => {
@@ -322,7 +334,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             fail: handle.failTurn,
                             addToolCall: handle.addToolCall
                         };
-                        console.log(`[Agent Chat] Continued run ${handle.runId} with turn ${handle.turnIndex} for agent ${id}`);
+                        console.log(
+                            `[Agent Chat] Continued run ${handle.runId} with turn ${handle.turnIndex} for agent ${id}`
+                        );
 
                         // Record trigger event (non-blocking, best-effort)
                         const isCanvasChat = resourceId === "canvas-builder";
@@ -357,7 +371,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     userId: resourceId,
                     threadId: userThreadId,
                     skillsJson: activeSkills.length > 0 ? activeSkills : undefined,
-                    toolOriginMap: Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
+                    toolOriginMap:
+                        Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                     instructionsHash,
                     instructionsSnapshot: mergedInstructions || undefined,
                     tenantId: record?.tenantId || undefined
@@ -372,7 +387,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             fail: handle.failTurn,
                             addToolCall: handle.addToolCall
                         };
-                        console.log(`[Agent Chat] Started conversation run ${handle.runId} (turn 0) for agent ${id}`);
+                        console.log(
+                            `[Agent Chat] Started conversation run ${handle.runId} (turn 0) for agent ${id}`
+                        );
 
                         // Record trigger event (non-blocking, best-effort)
                         const isCanvasChat = resourceId === "canvas-builder";

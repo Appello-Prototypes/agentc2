@@ -386,7 +386,8 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
         skills: agent.skills.map((s) => ({
             skillId: s.skillId,
             skillSlug: s.skill.slug,
-            skillVersion: s.skill.version
+            skillVersion: s.skill.version,
+            pinned: s.pinned
         })),
         isPublic: agent.isPublic,
         isActive: agent.isActive,

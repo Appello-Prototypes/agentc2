@@ -92,7 +92,7 @@ export type PlanTitleProps = ComponentProps<"h3"> & {
 };
 
 export const PlanTitle = memo(({ className, children, ...props }: PlanTitleProps) => (
-    <h3 className={cn("text-sm font-semibold leading-tight", className)} {...props}>
+    <h3 className={cn("text-sm leading-tight font-semibold", className)} {...props}>
         {children}
     </h3>
 ));

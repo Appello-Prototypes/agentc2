@@ -2723,14 +2723,32 @@ model SkillTool {
 }
 
 model AgentSkill {
-    id      String @id @default(cuid())
+    id      String  @id @default(cuid())
     agentId String
-    agent   Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
     skillId String
-    skill   Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    pinned  Boolean @default(false) // true = always loaded at resolution, false = discoverable via meta-tools
 
     @@unique([agentId, skillId])
     @@map("agent_skill")
+}
+
+// Thread Skill State - Persists activated skills per conversation thread
+// When an agent activates a skill via meta-tools during a conversation,
+// the activation is stored here so subsequent turns in the same thread
+// automatically load those skills without re-discovery.
+model ThreadSkillState {
+    id         String   @id @default(cuid())
+    threadId   String   @unique
+    agentId    String // Agent this state belongs to
+    skillSlugs String[] // Activated skill slugs
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+
+    @@index([threadId])
+    @@index([agentId])
+    @@map("thread_skill_state")
 }
 
 // ==============================

@@ -30,6 +30,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                                     slug: true,
                                     name: true,
                                     description: true,
+                                    category: true,
                                     version: true
                                 }
                             }

@@ -12,8 +12,9 @@ import { prisma, Prisma } from "@repo/database";
 import { mastra } from "../mastra";
 import { storage } from "../storage";
 import { vector } from "../vector";
-import { getToolsByNamesAsync, getAllMcpTools } from "../tools/registry";
+import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
+import { getThreadSkillState } from "../skills/thread-state";
 
 // Use Prisma namespace for types
 type AgentRecord = Prisma.AgentGetPayload<{
@@ -111,6 +112,8 @@ export interface ResolveOptions {
     id?: string;
     requestContext?: RequestContext;
     fallbackToSystem?: boolean;
+    /** Thread ID for loading thread-activated skills (progressive disclosure) */
+    threadId?: string;
 }
 
 /**
@@ -188,7 +191,7 @@ export class AgentResolver {
      * @throws Error if agent not found
      */
     async resolve(options: ResolveOptions): Promise<HydratedAgent> {
-        const { slug, id, requestContext, fallbackToSystem = true } = options;
+        const { slug, id, requestContext, fallbackToSystem = true, threadId } = options;
 
         if (!slug && !id) {
             throw new Error("Either slug or id must be provided");
@@ -201,7 +204,7 @@ export class AgentResolver {
         });
 
         if (record) {
-            const result = await this.hydrate(record, requestContext);
+            const result = await this.hydrate(record, requestContext, threadId);
             return { ...result, record, source: "database" };
         }
 
@@ -231,11 +234,13 @@ export class AgentResolver {
     /**
      * Hydrate an Agent instance from a database record
      * Supports both static registry tools and MCP tools
+     * Supports progressive skill disclosure via pinned vs discoverable skills
      * Returns agent + skill metadata + tool origin map for observability
      */
     private async hydrate(
         record: AgentRecordWithTools,
-        context?: RequestContext
+        context?: RequestContext,
+        threadId?: string
     ): Promise<{
         agent: Agent;
         activeSkills: ActiveSkillInfo[];
@@ -260,15 +265,40 @@ export class AgentResolver {
             record.workspace?.organizationId ||
             record.tenantId;
 
-        // Parallelize independent async work: tools, skills, sub-agents, and MCP tools
         const metadata = record.metadata as Record<string, unknown> | null;
+
+        // Check if agent has skills — if so, use skill-based loading
+        const hasSkills = await prisma.agentSkill.count({ where: { agentId: record.id } });
+
+        // Warn about deprecated mcpEnabled when agent has skills
+        if (hasSkills > 0 && metadata?.mcpEnabled) {
+            console.warn(
+                `[AgentResolver] DEPRECATION: Agent "${record.slug}" has skills AND mcpEnabled=true. ` +
+                    `mcpEnabled is ignored when skills are present. MCP tools should be accessed through MCP skills.`
+            );
+        }
+
+        // Load thread-activated skills (from previous conversation turns)
+        const threadActivatedSlugs = threadId ? await getThreadSkillState(threadId) : [];
+
+        // Parallelize independent async work: tools, skills, sub-agents, and MCP tools
         const [registryTools, skillResult, subAgents, mcpTools] = await Promise.all([
             getToolsByNamesAsync(toolNames, organizationId),
-            this.loadSkills(record.id, organizationId),
+            this.loadSkills(record.id, organizationId, threadActivatedSlugs),
             this.loadSubAgents(record.subAgents, context),
-            metadata?.mcpEnabled ? getAllMcpTools(organizationId) : Promise.resolve({})
+            // Only load ALL MCP tools for legacy agents without skills
+            hasSkills === 0 && metadata?.mcpEnabled
+                ? getAllMcpTools(organizationId)
+                : Promise.resolve({})
         ]);
-        const { skillInstructions, skillTools, skillDocumentIds, activeSkills } = skillResult;
+        const {
+            skillInstructions,
+            skillTools,
+            skillDocumentIds,
+            activeSkills,
+            hasDiscoverableSkills,
+            discoverableSkillManifests
+        } = skillResult;
 
         // Build tool origin map before merging (tracks where each tool came from)
         const toolOriginMap: Record<string, string> = {};
@@ -277,22 +307,50 @@ export class AgentResolver {
             toolOriginMap[key] = `mcp:${serverName}`;
         }
         for (const key of Object.keys(skillTools)) {
-            // Find which skill owns this tool
+            // Find which skill owns this tool — use dual origin format
             const ownerSkill = activeSkills.find(
                 (s) => skillResult.skillToolMapping?.[key] === s.skillSlug
             );
-            toolOriginMap[key] = ownerSkill ? `skill:${ownerSkill.skillSlug}` : "skill:unknown";
+            const skillOrigin = ownerSkill ? `skill:${ownerSkill.skillSlug}` : "skill:unknown";
+            // Check if the tool is an MCP tool (contains underscore prefix pattern)
+            const serverName = key.split("_")[0];
+            const isMcpTool = serverName && key.includes("_") && serverName !== key;
+            toolOriginMap[key] = isMcpTool ? `${skillOrigin}|mcp:${serverName}` : skillOrigin;
         }
         for (const key of Object.keys(registryTools)) {
             toolOriginMap[key] = "registry";
         }
 
         // Merge tools: MCP tools (lowest priority) -> skill tools -> registry tools (highest)
-        const tools = { ...mcpTools, ...skillTools, ...registryTools };
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const tools: Record<string, any> = { ...mcpTools, ...skillTools, ...registryTools };
 
-        if (metadata?.mcpEnabled && Object.keys(mcpTools).length > 0) {
+        // Inject skill discovery meta-tools if agent has discoverable (non-pinned) skills
+        if (hasDiscoverableSkills) {
+            // Add the three meta-tools for progressive skill discovery
+            if (toolRegistry["search-skills"]) {
+                tools["search-skills"] = toolRegistry["search-skills"];
+                toolOriginMap["search-skills"] = "meta";
+            }
+            if (toolRegistry["activate-skill"]) {
+                tools["activate-skill"] = toolRegistry["activate-skill"];
+                toolOriginMap["activate-skill"] = "meta";
+            }
+            if (toolRegistry["list-active-skills"]) {
+                tools["list-active-skills"] = toolRegistry["list-active-skills"];
+                toolOriginMap["list-active-skills"] = "meta";
+            }
+
             console.log(
-                `[AgentResolver] MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
+                `[AgentResolver] Skill discovery enabled for "${record.slug}": ` +
+                    `${activeSkills.length} active skills, ` +
+                    `${discoverableSkillManifests.length} discoverable skills via meta-tools`
+            );
+        }
+
+        if (hasSkills === 0 && metadata?.mcpEnabled && Object.keys(mcpTools).length > 0) {
+            console.log(
+                `[AgentResolver] Legacy MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
             );
         }
 
@@ -300,6 +358,17 @@ export class AgentResolver {
         let finalInstructions = instructions;
         if (skillInstructions) {
             finalInstructions += `\n\n---\n# Skills & Domain Knowledge\n${skillInstructions}`;
+        }
+
+        // Append discoverable skill manifests as a guide for meta-tool usage
+        if (hasDiscoverableSkills && discoverableSkillManifests.length > 0) {
+            finalInstructions += `\n\n---\n# Available Skills (Not Yet Loaded)\n`;
+            finalInstructions += `You have access to additional skills that can be activated on demand. `;
+            finalInstructions += `Use the search-skills and activate-skill tools to discover and load them.\n\n`;
+            finalInstructions += `Available skills:\n`;
+            for (const manifest of discoverableSkillManifests) {
+                finalInstructions += `- **${manifest.name}** (\`${manifest.slug}\`): ${manifest.description}\n`;
+            }
         }
 
         // Get scorers from registry (synchronous)
@@ -357,12 +426,19 @@ export class AgentResolver {
 
     /**
      * Load skills attached to an agent via AgentSkill junction.
+     *
+     * Supports progressive disclosure:
+     * - Pinned skills (pinned=true): Always loaded, tools + instructions included
+     * - Thread-activated skills: Previously activated via meta-tools, loaded from ThreadSkillState
+     * - Discoverable skills (pinned=false, not thread-activated): Only manifests returned
+     *
      * Returns merged skill instructions, resolved skill tools, document IDs,
-     * active skill metadata, and a mapping of tool IDs to skill slugs.
+     * active skill metadata, discoverable skill manifests, and tool-to-skill mapping.
      */
     private async loadSkills(
         agentId: string,
-        organizationId?: string | null
+        organizationId?: string | null,
+        threadActivatedSlugs?: string[]
     ): Promise<{
         skillInstructions: string;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -370,6 +446,12 @@ export class AgentResolver {
         skillDocumentIds: string[];
         activeSkills: ActiveSkillInfo[];
         skillToolMapping: Record<string, string>;
+        hasDiscoverableSkills: boolean;
+        discoverableSkillManifests: Array<{
+            slug: string;
+            name: string;
+            description: string;
+        }>;
     }> {
         const agentSkills = await prisma.agentSkill.findMany({
             where: { agentId },
@@ -395,7 +477,9 @@ export class AgentResolver {
                 skillTools: {},
                 skillDocumentIds: [],
                 activeSkills: [],
-                skillToolMapping: {}
+                skillToolMapping: {},
+                hasDiscoverableSkills: false,
+                discoverableSkillManifests: []
             };
         }
 
@@ -404,33 +488,55 @@ export class AgentResolver {
         const skillDocumentIds: string[] = [];
         const activeSkills: ActiveSkillInfo[] = [];
         const skillToolMapping: Record<string, string> = {};
+        const discoverableSkillManifests: Array<{
+            slug: string;
+            name: string;
+            description: string;
+        }> = [];
 
-        for (const { skill } of agentSkills) {
-            // Track active skill metadata
-            activeSkills.push({
-                skillId: skill.id,
-                skillSlug: skill.slug,
-                skillVersion: skill.version
-            });
+        const activatedSet = new Set(threadActivatedSlugs || []);
 
-            skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
-            if (skill.examples) {
-                skillInstructions += `\n\n### Examples:\n${skill.examples}`;
-            }
+        for (const agentSkill of agentSkills) {
+            const { skill } = agentSkill;
+            const isPinned = agentSkill.pinned;
+            const isThreadActivated = activatedSet.has(skill.slug);
 
-            // Append associated document info to skill instructions (for RAG scoping)
-            if (skill.documents.length > 0) {
-                skillInstructions += `\n\n### Associated Knowledge Base Documents:`;
-                for (const sd of skill.documents) {
-                    const roleSuffix = sd.role ? ` (${sd.role})` : "";
-                    skillInstructions += `\n- ${sd.document.name}${roleSuffix}`;
-                    skillDocumentIds.push(sd.documentId);
+            // Skill is "active" if it's pinned OR thread-activated
+            const shouldLoadFull = isPinned || isThreadActivated;
+
+            if (shouldLoadFull) {
+                // Full load: include tools, instructions, documents
+                activeSkills.push({
+                    skillId: skill.id,
+                    skillSlug: skill.slug,
+                    skillVersion: skill.version
+                });
+
+                skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
+                if (skill.examples) {
+                    skillInstructions += `\n\n### Examples:\n${skill.examples}`;
                 }
-            }
 
-            for (const st of skill.tools) {
-                skillToolIds.push(st.toolId);
-                skillToolMapping[st.toolId] = skill.slug;
+                if (skill.documents.length > 0) {
+                    skillInstructions += `\n\n### Associated Knowledge Base Documents:`;
+                    for (const sd of skill.documents) {
+                        const roleSuffix = sd.role ? ` (${sd.role})` : "";
+                        skillInstructions += `\n- ${sd.document.name}${roleSuffix}`;
+                        skillDocumentIds.push(sd.documentId);
+                    }
+                }
+
+                for (const st of skill.tools) {
+                    skillToolIds.push(st.toolId);
+                    skillToolMapping[st.toolId] = skill.slug;
+                }
+            } else {
+                // Discoverable: only include manifest (description) for meta-tool discovery
+                discoverableSkillManifests.push({
+                    slug: skill.slug,
+                    name: skill.name,
+                    description: skill.description || skill.instructions.slice(0, 200)
+                });
             }
         }
 
@@ -442,7 +548,9 @@ export class AgentResolver {
             skillTools,
             skillDocumentIds,
             activeSkills,
-            skillToolMapping
+            skillToolMapping,
+            hasDiscoverableSkills: discoverableSkillManifests.length > 0,
+            discoverableSkillManifests
         };
     }
 
