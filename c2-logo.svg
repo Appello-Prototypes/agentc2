@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400">
+  <rect width="400" height="400" fill="#ffffff"/>
+  
+  <!-- 
+    C2 Logo - Deep navy monogram
+    Large bold "C" with subscript "2" nested in the opening
+  -->
+  
+  <!-- Large C - outer arc (counterclockwise from top-right opening to bottom-right opening) -->
+  <path d="
+    M 230 45
+    A 160 160 0 1 0 230 355
+    L 230 310
+    A 115 115 0 1 1 230 90
+    Z
+  " fill="#1a2744"/>
+  
+  <!-- Number 2 - positioned in the opening of the C, subscript style -->
+  <g transform="translate(222, 170)">
+    <!-- Top curve of 2 -->
+    <path d="
+      M 10 30
+      C 10 10 30 -5 55 -5
+      C 80 -5 100 10 100 35
+      C 100 55 90 65 75 82
+      L 20 145
+      L 105 145
+      L 105 175
+      L -5 175
+      L -5 150
+      L 60 80
+      C 72 66 77 58 77 45
+      C 77 30 67 22 55 22
+      C 43 22 33 30 33 45
+      Z
+    " fill="#1a2744"/>
+  </g>
+</svg>

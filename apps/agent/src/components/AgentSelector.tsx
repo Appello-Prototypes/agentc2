@@ -13,6 +13,18 @@ import {
     SelectTrigger,
     SelectValue
 } from "@repo/ui";
+import { StarIcon } from "lucide-react";
+
+const DEFAULT_AGENT_KEY = "mastra-default-agent";
+
+export function getDefaultAgentSlug(): string {
+    if (typeof window === "undefined") return "assistant";
+    return localStorage.getItem(DEFAULT_AGENT_KEY) || "assistant";
+}
+
+export function setDefaultAgentSlug(slug: string): void {
+    localStorage.setItem(DEFAULT_AGENT_KEY, slug);
+}
 
 export interface AgentInfo {
     id: string;
@@ -34,6 +46,7 @@ interface AgentSelectorProps {
 export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps) {
     const [agents, setAgents] = useState<AgentInfo[]>([]);
     const [loading, setLoading] = useState(true);
+    const [defaultSlug, setDefaultSlug] = useState<string>(() => getDefaultAgentSlug());
 
     // Stable ref to onChange so the effect doesn't re-fire on every render
     const onChangeRef = useRef(onChange);
@@ -50,7 +63,8 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                 const data = await res.json();
                 if (data.success && data.agents) {
                     const fetched: AgentInfo[] = data.agents;
-                    setAgents(fetched);
+                    // Filter out DEMO agents
+                    setAgents(fetched.filter((a) => a.type !== "DEMO"));
                 }
             } catch (error) {
                 console.error("Failed to fetch agents:", error);
@@ -77,6 +91,13 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
         if (agent) {
             onChange(newValue, agent);
         }
+    };
+
+    const handleSetDefault = (e: React.MouseEvent, slug: string) => {
+        e.stopPropagation();
+        e.preventDefault();
+        setDefaultAgentSlug(slug);
+        setDefaultSlug(slug);
     };
 
     const selectedAgent = agents.find((a) => a.slug === value);
@@ -113,17 +134,13 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                 {(() => {
                     const userAgents = agents.filter((a) => a.type === "USER");
                     const systemAgents = agents.filter((a) => a.type === "SYSTEM");
-                    const demoAgents = agents.filter((a) => a.type === "DEMO");
-                    const groups: { label: string; items: AgentInfo[]; muted?: boolean }[] = [];
+                    const groups: { label: string; items: AgentInfo[] }[] = [];
 
                     if (userAgents.length > 0) {
                         groups.push({ label: "Your Agents", items: userAgents });
                     }
                     if (systemAgents.length > 0) {
                         groups.push({ label: "System", items: systemAgents });
-                    }
-                    if (demoAgents.length > 0) {
-                        groups.push({ label: "Examples", items: demoAgents, muted: true });
                     }
 
                     if (groups.length === 0) {
@@ -141,22 +158,42 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                                 <SelectLabel>{group.label}</SelectLabel>
                                 {group.items.map((agent) => (
                                     <SelectItem key={agent.slug} value={agent.slug}>
-                                        <div className="flex items-center gap-2">
-                                            <span
-                                                className={cn(
-                                                    "size-2 rounded-full",
-                                                    agent.isActive
-                                                        ? "bg-green-500"
-                                                        : "bg-muted-foreground"
-                                                )}
-                                            />
-                                            <span
-                                                className={
-                                                    group.muted ? "text-muted-foreground" : ""
+                                        <div className="flex w-full items-center justify-between gap-2">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className={cn(
+                                                        "size-2 rounded-full",
+                                                        agent.isActive
+                                                            ? "bg-green-500"
+                                                            : "bg-muted-foreground"
+                                                    )}
+                                                />
+                                                <span>{agent.name}</span>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                title={
+                                                    defaultSlug === agent.slug
+                                                        ? "Default agent"
+                                                        : "Set as default"
                                                 }
+                                                onPointerDown={(e) =>
+                                                    handleSetDefault(e, agent.slug)
+                                                }
+                                                className={cn(
+                                                    "ml-auto shrink-0 rounded p-0.5 transition-colors",
+                                                    defaultSlug === agent.slug
+                                                        ? "text-yellow-500"
+                                                        : "text-muted-foreground/40 hover:text-yellow-500"
+                                                )}
                                             >
-                                                {agent.name}
-                                            </span>
+                                                <StarIcon
+                                                    className={cn(
+                                                        "size-3",
+                                                        defaultSlug === agent.slug && "fill-current"
+                                                    )}
+                                                />
+                                            </button>
                                         </div>
                                     </SelectItem>
                                 ))}

@@ -164,11 +164,7 @@ export function formatValue(
 
     // Normalize common format aliases
     const normalizedFormat =
-        format === "percentage"
-            ? "percent"
-            : format === "decimal"
-              ? "number"
-              : format;
+        format === "percentage" ? "percent" : format === "decimal" ? "number" : format;
 
     let formatted: string;
 

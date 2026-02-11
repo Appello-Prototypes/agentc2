@@ -27,15 +27,18 @@ import {
     PromptInputBody,
     PromptInputTextarea,
     PromptInputSubmit,
+    PromptInputHeader,
     PromptInputFooter,
     PromptInputTools,
+    PromptInputButton,
     PromptInputActionMenu,
     PromptInputActionMenuTrigger,
     PromptInputActionMenuContent,
     PromptInputActionMenuItem,
     usePromptInputAttachments,
     StreamingStatus,
-    type PromptInputMessage
+    type PromptInputMessage,
+    type ToolActivity
 } from "@repo/ui";
 import {
     PlusIcon,
@@ -48,9 +51,13 @@ import {
     SearchIcon,
     GlobeIcon,
     ImageIcon,
-    PaperclipIcon
+    PaperclipIcon,
+    XIcon,
+    MicIcon,
+    FileIcon,
+    LayoutGridIcon
 } from "lucide-react";
-import { AgentSelector, type AgentInfo } from "@/components/AgentSelector";
+import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
 import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/components/ModelSelector";
 import { ThinkingToggle } from "@/components/ThinkingToggle";
 import { TaskSuggestions } from "@/components/TaskSuggestions";
@@ -123,11 +130,216 @@ function getGreeting(name?: string | null): string {
     return greeting;
 }
 
+// ─── Input mode types and sub-components ─────────────────────────────────────
+
+type InputMode = "knowledge-search" | "fetch-url" | "create-canvas" | null;
+
+const INPUT_MODE_CONFIG: Record<
+    NonNullable<InputMode>,
+    { label: string; icon: typeof SearchIcon; placeholder: string; prefix: string }
+> = {
+    "knowledge-search": {
+        label: "Knowledge Search",
+        icon: SearchIcon,
+        placeholder: "Enter a search query...",
+        prefix: "Search the knowledge base for: "
+    },
+    "fetch-url": {
+        label: "Fetch from URL",
+        icon: GlobeIcon,
+        placeholder: "Enter a URL to fetch...",
+        prefix: "Fetch and summarize the content from this URL: "
+    },
+    "create-canvas": {
+        label: "Create Canvas",
+        icon: LayoutGridIcon,
+        placeholder: "Describe the dashboard or report you want to create...",
+        prefix: "Create a canvas: "
+    }
+};
+
+/**
+ * Renders attachment previews (image thumbnails & file chips) + active mode chip
+ * inside the PromptInputHeader. Returns null when nothing to show.
+ * Must live inside PromptInput to access attachment context.
+ */
+function InputHeaderArea({ mode, onClearMode }: { mode: InputMode; onClearMode: () => void }) {
+    const attachments = usePromptInputAttachments();
+    const hasAttachments = attachments.files.length > 0;
+    if (!hasAttachments && !mode) return null;
+
+    return (
+        <PromptInputHeader>
+            {/* Attachment previews */}
+            {hasAttachments && (
+                <div className="flex flex-wrap gap-2 px-3 pt-2">
+                    {attachments.files.map((file) => {
+                        const isImage = file.mediaType?.startsWith("image/");
+                        return (
+                            <div key={file.id} className="group relative">
+                                {isImage ? (
+                                    /* eslint-disable-next-line @next/next/no-img-element -- user-uploaded blob URL, not optimizable */
+                                    <img
+                                        src={file.url}
+                                        alt={file.filename || "Image"}
+                                        className="h-16 w-16 rounded-lg border object-cover"
+                                    />
+                                ) : (
+                                    <div className="bg-secondary flex items-center gap-2 rounded-lg border px-3 py-2 text-xs">
+                                        <FileIcon className="size-4 opacity-60" />
+                                        <span className="max-w-[120px] truncate">
+                                            {file.filename || "File"}
+                                        </span>
+                                    </div>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => attachments.remove(file.id)}
+                                    className="bg-foreground/80 text-background absolute -top-1.5 -right-1.5 rounded-full p-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+                                >
+                                    <XIcon className="size-3" />
+                                </button>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+            {/* Active input mode chip */}
+            {mode && (
+                <div className="flex items-center gap-1 px-3 pt-1.5">
+                    {(() => {
+                        const config = INPUT_MODE_CONFIG[mode];
+                        const Icon = config.icon;
+                        return (
+                            <span className="bg-primary/10 text-primary flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium">
+                                <Icon className="size-3" />
+                                {config.label}
+                                <button
+                                    type="button"
+                                    onClick={onClearMode}
+                                    className="hover:bg-primary/20 ml-0.5 rounded-full p-0.5"
+                                >
+                                    <XIcon className="size-3" />
+                                </button>
+                            </span>
+                        );
+                    })()}
+                </div>
+            )}
+        </PromptInputHeader>
+    );
+}
+
+/**
+ * Voice-to-text microphone button using the existing STT endpoint (Whisper).
+ * Records audio via MediaRecorder, transcribes, and inserts text into the textarea.
+ */
+function VoiceInputButton() {
+    const [isRecording, setIsRecording] = useState(false);
+    const [isTranscribing, setIsTranscribing] = useState(false);
+    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    const audioChunksRef = useRef<Blob[]>([]);
+
+    const insertTextIntoTextarea = useCallback((text: string) => {
+        const textarea = document.querySelector(
+            'textarea[name="message"]'
+        ) as HTMLTextAreaElement | null;
+        if (!textarea) return;
+        const nativeSetter = Object.getOwnPropertyDescriptor(
+            window.HTMLTextAreaElement.prototype,
+            "value"
+        )?.set;
+        const current = textarea.value;
+        const newValue = current ? `${current} ${text}` : text;
+        nativeSetter?.call(textarea, newValue);
+        textarea.dispatchEvent(new Event("input", { bubbles: true }));
+        textarea.focus();
+    }, []);
+
+    const startRecording = useCallback(async () => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+            audioChunksRef.current = [];
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(event.data);
+                }
+            };
+
+            mediaRecorder.onstop = async () => {
+                stream.getTracks().forEach((track) => track.stop());
+                const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+                setIsTranscribing(true);
+
+                try {
+                    const formData = new FormData();
+                    formData.append("audio", audioBlob, "recording.webm");
+                    const response = await fetch(`${getApiBase()}/api/demos/voice/stt`, {
+                        method: "POST",
+                        body: formData
+                    });
+                    const data = await response.json();
+                    if (data.transcript) {
+                        insertTextIntoTextarea(data.transcript);
+                    }
+                } catch (error) {
+                    console.error("Transcription failed:", error);
+                } finally {
+                    setIsTranscribing(false);
+                }
+            };
+
+            mediaRecorderRef.current = mediaRecorder;
+            mediaRecorder.start();
+            setIsRecording(true);
+        } catch (error) {
+            console.error("Microphone access denied:", error);
+        }
+    }, [insertTextIntoTextarea]);
+
+    const stopRecording = useCallback(() => {
+        if (mediaRecorderRef.current && mediaRecorderRef.current.state === "recording") {
+            mediaRecorderRef.current.stop();
+            setIsRecording(false);
+        }
+    }, []);
+
+    const toggleRecording = useCallback(() => {
+        if (isRecording) {
+            stopRecording();
+        } else {
+            void startRecording();
+        }
+    }, [isRecording, startRecording, stopRecording]);
+
+    // Hide if browser doesn't support MediaRecorder
+    if (typeof window !== "undefined" && !navigator.mediaDevices?.getUserMedia) {
+        return null;
+    }
+
+    return (
+        <PromptInputButton
+            onClick={toggleRecording}
+            disabled={isTranscribing}
+            className={isRecording ? "animate-pulse text-red-500" : undefined}
+            aria-label={isRecording ? "Stop recording" : "Voice input"}
+        >
+            {isTranscribing ? (
+                <LoaderIcon className="size-4 animate-spin" />
+            ) : (
+                <MicIcon className="size-4" />
+            )}
+        </PromptInputButton>
+    );
+}
+
 /**
  * Action menu items -- must live inside PromptInput to access attachment context.
  * Each action is fully functional.
  */
-function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => void }) {
+function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) => void }) {
     const attachments = usePromptInputAttachments();
     const imageInputRef = useRef<HTMLInputElement>(null);
 
@@ -174,32 +386,34 @@ function ChatInputActions({ onSendPrompt }: { onSendPrompt: (text: string) => vo
                         Upload image
                     </PromptInputActionMenuItem>
 
-                    {/* Search knowledge base -- sends a prompt */}
+                    {/* Search knowledge base -- sets inline input mode */}
                     <PromptInputActionMenuItem
                         onClick={() => {
-                            const query = window.prompt("What would you like to search for?");
-                            if (query?.trim()) {
-                                onSendPrompt(`Search the knowledge base for: ${query.trim()}`);
-                            }
+                            setInputMode("knowledge-search");
                         }}
                     >
                         <SearchIcon className="mr-2 size-4 opacity-60" />
                         Search knowledge base
                     </PromptInputActionMenuItem>
 
-                    {/* Fetch from URL -- prompts for URL then sends */}
+                    {/* Fetch from URL -- sets inline input mode */}
                     <PromptInputActionMenuItem
                         onClick={() => {
-                            const url = window.prompt("Enter the URL to fetch:");
-                            if (url?.trim()) {
-                                onSendPrompt(
-                                    `Fetch and summarize the content from this URL: ${url.trim()}`
-                                );
-                            }
+                            setInputMode("fetch-url");
                         }}
                     >
                         <GlobeIcon className="mr-2 size-4 opacity-60" />
                         Fetch from URL
+                    </PromptInputActionMenuItem>
+
+                    {/* Create Canvas -- sets inline input mode */}
+                    <PromptInputActionMenuItem
+                        onClick={() => {
+                            setInputMode("create-canvas");
+                        }}
+                    >
+                        <LayoutGridIcon className="mr-2 size-4 opacity-60" />
+                        Create canvas
                     </PromptInputActionMenuItem>
                 </PromptInputActionMenuContent>
             </PromptInputActionMenu>
@@ -224,7 +438,7 @@ export default function UnifiedChatPage() {
     const { data: session } = useSession();
 
     const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>(
-        searchParams.get("agent") || "assistant"
+        searchParams.get("agent") || getDefaultAgentSlug()
     );
     const [modelOverride, setModelOverride] = useState<ModelOverride | null>(null);
     const [thinkingEnabled, setThinkingEnabled] = useState(false);
@@ -235,6 +449,7 @@ export default function UnifiedChatPage() {
     const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>(
         {}
     );
+    const [inputMode, setInputMode] = useState<InputMode>(null);
 
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
@@ -275,6 +490,32 @@ export default function UnifiedChatPage() {
           ? ("streaming" as const)
           : undefined;
 
+    // Derive active tool calls from the latest assistant message during streaming
+    const activeTools: ToolActivity[] = useMemo(() => {
+        if (!submitStatus) return [];
+        // Find the last assistant message (the one being streamed)
+        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+        if (!lastAssistant?.parts) return [];
+
+        const tools: ToolActivity[] = [];
+        for (const part of lastAssistant.parts) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const p = part as any;
+            if (p.type === "tool-invocation" && p.toolInvocation) {
+                const toolName = p.toolInvocation.toolName || "unknown";
+                const callId = p.toolInvocation.toolCallId || toolName;
+                const hasResult = "result" in p.toolInvocation;
+                tools.push({
+                    id: callId,
+                    name: toolName,
+                    status: hasResult ? "complete" : "running",
+                    durationMs: undefined
+                });
+            }
+        }
+        return tools;
+    }, [submitStatus, messages]);
+
     // Handlers
     const handleAgentChange = useCallback(
         (newSlug: string, agent: AgentInfo) => {
@@ -314,13 +555,26 @@ export default function UnifiedChatPage() {
     const handleSend = useCallback(
         (message: PromptInputMessage) => {
             if (!message.text.trim() || !selectedAgentSlug) return;
+
+            // Apply input mode prefix (knowledge search, fetch URL, create canvas)
+            let text = message.text;
+            if (inputMode) {
+                const config = INPUT_MODE_CONFIG[inputMode];
+                text = `${config.prefix}${text}`;
+            }
+
             if (message.files && message.files.length > 0) {
-                void sendMessage({ text: message.text, files: message.files });
+                void sendMessage({ text, files: message.files });
             } else {
-                void sendMessage({ text: message.text });
+                void sendMessage({ text });
+            }
+
+            // Reset input mode after sending
+            if (inputMode) {
+                setInputMode(null);
             }
         },
-        [sendMessage, selectedAgentSlug]
+        [sendMessage, selectedAgentSlug, inputMode]
     );
 
     const handleNewConversation = useCallback(() => {
@@ -435,13 +689,10 @@ export default function UnifiedChatPage() {
         isStreaming
     ]);
 
-    // Quick-send for action menu items (search knowledge base, fetch URL)
-    const quickSend = useCallback(
-        (text: string) => {
-            void sendMessage({ text });
-        },
-        [sendMessage]
-    );
+    // Compute dynamic placeholder based on active input mode
+    const textareaPlaceholder = inputMode
+        ? INPUT_MODE_CONFIG[inputMode].placeholder
+        : "How can I help you today?";
 
     // ── Shared input component ───────────────────────────────────────────
     const chatInput = (
@@ -453,16 +704,18 @@ export default function UnifiedChatPage() {
             maxFileSize={10 * 1024 * 1024}
             className="border-none shadow-none"
         >
+            <InputHeaderArea mode={inputMode} onClearMode={() => setInputMode(null)} />
             <PromptInputBody>
                 <PromptInputTextarea
-                    placeholder="How can I help you today?"
+                    placeholder={textareaPlaceholder}
                     disabled={isStreaming}
                     className="min-h-[48px] text-[15px]"
                 />
             </PromptInputBody>
             <PromptInputFooter>
                 <PromptInputTools>
-                    <ChatInputActions onSendPrompt={quickSend} />
+                    <ChatInputActions setInputMode={setInputMode} />
+                    <VoiceInputButton />
                     <AgentSelector
                         value={selectedAgentSlug}
                         onChange={handleAgentChange}
@@ -494,6 +747,26 @@ export default function UnifiedChatPage() {
     const renderPart = (part: any, index: number) => {
         if (part.type === "text") {
             return <MessageResponse key={index}>{part.text}</MessageResponse>;
+        }
+        if (part.type === "file") {
+            const isImage = part.mediaType?.startsWith("image/");
+            if (isImage && part.url) {
+                return (
+                    /* eslint-disable-next-line @next/next/no-img-element -- user-uploaded data URL in chat message */
+                    <img
+                        key={index}
+                        src={part.url}
+                        alt={part.filename || "Image"}
+                        className="max-h-64 max-w-full rounded-lg"
+                    />
+                );
+            }
+            return (
+                <div key={index} className="text-muted-foreground flex items-center gap-2 text-sm">
+                    <FileIcon className="size-4" />
+                    <span>{part.filename || "File"}</span>
+                </div>
+            );
         }
         if (part.type === "reasoning") {
             return <CollapsibleThinking key={index} text={part.reasoning || part.text || ""} />;
@@ -708,6 +981,7 @@ export default function UnifiedChatPage() {
                                         )
                                 )}
                                 agentName={agentName || undefined}
+                                activeTools={activeTools}
                             />
                         </ConversationContent>
                     </Conversation>

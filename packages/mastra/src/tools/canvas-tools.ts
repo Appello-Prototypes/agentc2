@@ -216,8 +216,7 @@ export const canvasQueryPreviewTool = createTool({
         // organization's configured MCP servers.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const reqCtx = context?.requestContext as Record<string, any> | undefined;
-        const organizationId =
-            reqCtx?.organizationId || reqCtx?.tenantId || null;
+        const organizationId = reqCtx?.organizationId || reqCtx?.tenantId || null;
 
         // Use executeSingleQuery directly
         const { executeSingleQuery } = await import("../canvas/query-executor");

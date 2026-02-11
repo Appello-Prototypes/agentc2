@@ -341,8 +341,8 @@ export default function OrganizationSettingsPage() {
                         <label className="text-sm font-medium">Default Slack Agent</label>
                         <p className="text-muted-foreground mb-2 text-xs">
                             Messages sent to the bot without an{" "}
-                            <code className="bg-muted rounded px-1">agent:slug</code> prefix will
-                            be routed to this agent.
+                            <code className="bg-muted rounded px-1">agent:slug</code> prefix will be
+                            routed to this agent.
                         </p>
                         <Select
                             value={slackDefaultAgent}

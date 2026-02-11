@@ -213,19 +213,38 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Convert AI SDK v5 messages to get the last user message
-        const lastUserMessage = messages
-            ?.filter((m: { role: string }) => m.role === "user")
-            .map((m: { content: string; parts?: Array<{ type: string; text?: string }> }) => {
-                if (m.parts && Array.isArray(m.parts)) {
-                    const textPart = m.parts.find((p) => p.type === "text");
-                    return textPart?.text || "";
-                }
-                return m.content || "";
-            })
-            .pop();
+        // Extract the last user message with all content parts (text + files/images)
+        interface UserMessagePart {
+            type: string;
+            text?: string;
+            url?: string;
+            mediaType?: string;
+            filename?: string;
+        }
+        const lastUserMsg = messages?.filter((m: { role: string }) => m.role === "user").pop() as
+            | { content?: string; parts?: UserMessagePart[] }
+            | undefined;
 
-        if (!lastUserMessage) {
+        let lastUserMessage = "";
+        const imageParts: Array<{ type: "image"; image: string }> = [];
+
+        if (lastUserMsg?.parts && Array.isArray(lastUserMsg.parts)) {
+            for (const part of lastUserMsg.parts) {
+                if (part.type === "text" && part.text) {
+                    lastUserMessage = part.text;
+                } else if (part.type === "file" && part.url) {
+                    if (part.mediaType?.startsWith("image/") && part.url.startsWith("data:")) {
+                        imageParts.push({ type: "image", image: part.url });
+                    } else if (part.filename) {
+                        lastUserMessage += `\n[Attached file: ${part.filename}]`;
+                    }
+                }
+            }
+        } else if (lastUserMsg?.content) {
+            lastUserMessage = lastUserMsg.content;
+        }
+
+        if (!lastUserMessage && imageParts.length === 0) {
             return NextResponse.json(
                 { success: false, error: "No user message provided" },
                 { status: 400 }
@@ -316,8 +335,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             { toolName: string; args: Record<string, unknown>; startTime: number }
         >();
 
+        // Build stream input -- multimodal (text + images) when image parts present
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let streamInput: any = lastUserMessage;
+        if (imageParts.length > 0) {
+            streamInput = [
+                {
+                    role: "user" as const,
+                    content: [
+                        ...(lastUserMessage
+                            ? [{ type: "text" as const, text: lastUserMessage }]
+                            : []),
+                        ...imageParts
+                    ]
+                }
+            ];
+        }
+
         // Stream the response using the resolved agent
-        const responseStream = await agent.stream(lastUserMessage, {
+        const responseStream = await agent.stream(streamInput, {
             maxSteps,
             memory: {
                 thread: userThreadId,

@@ -148,7 +148,7 @@ export {
 export { Loader, LoaderIcon, type LoaderProps, type LoaderIconProps } from "./loader";
 
 // Streaming Status
-export { StreamingStatus, type StreamingStatusProps } from "./streaming-status";
+export { StreamingStatus, type StreamingStatusProps, type ToolActivity } from "./streaming-status";
 
 // Code Block
 export {
