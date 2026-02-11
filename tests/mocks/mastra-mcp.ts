@@ -22,3 +22,11 @@ export class MCPClient {
         MCPClient.calls.push(options);
     }
 }
+
+// Mock InternalMastraMCPClient for the MCP client schema patching
+export class InternalMastraMCPClient {
+    convertInputSchema = vi.fn().mockResolvedValue({});
+}
+
+// Mock MastraMCPServerDefinition type
+export type MastraMCPServerDefinition = Record<string, unknown>;

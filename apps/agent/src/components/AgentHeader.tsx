@@ -15,6 +15,7 @@ const navItems = [
     { label: "Live Runs", href: "/live" },
     { label: "Automations", href: "/triggers" },
     { label: "Knowledge", href: "/knowledge" },
+    { label: "Skills", href: "/skills" },
     { label: "Integrations", href: "/mcp" }
 ];
 

@@ -188,6 +188,7 @@ export {
     attachToAgent as skillAttachToAgent,
     detachFromAgent as skillDetachFromAgent,
     getSkillVersions,
+    forkSkill,
     getThreadSkillState,
     addThreadSkillActivations,
     setThreadSkillState,

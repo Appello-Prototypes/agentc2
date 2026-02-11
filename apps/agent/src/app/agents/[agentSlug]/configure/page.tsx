@@ -29,6 +29,7 @@ import {
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { SkillBuilderPanel } from "@/components/skills/SkillBuilderPanel";
+import { SkillDetailSheet } from "@/components/skills/SkillDetailSheet";
 
 interface ModelConfig {
     thinking?: {
@@ -149,6 +150,7 @@ export default function ConfigurePage() {
     const [skillsLoading, setSkillsLoading] = useState(false);
     const [skillActionLoading, setSkillActionLoading] = useState(false);
     const [skillBuilderOpen, setSkillBuilderOpen] = useState(false);
+    const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
 
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
@@ -1210,6 +1212,21 @@ export default function ConfigurePage() {
                                 </SheetContent>
                             </Sheet>
                         )}
+
+                        {/* Skill Detail Sheet */}
+                        <SkillDetailSheet
+                            skillId={selectedSkillId}
+                            open={!!selectedSkillId}
+                            onOpenChange={(open) => {
+                                if (!open) setSelectedSkillId(null);
+                            }}
+                            agentId={agent?.id}
+                            onDetach={(skillId) => {
+                                setSelectedSkillId(null);
+                                handleDetachSkill(skillId);
+                            }}
+                        />
+
                         <CardContent className="space-y-6">
                             {/* Attached Skills */}
                             {attachedSkills.length > 0 ? (
@@ -1222,9 +1239,15 @@ export default function ConfigurePage() {
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-2">
-                                                    <p className="text-sm font-medium">
+                                                    <button
+                                                        type="button"
+                                                        className="text-primary text-sm font-medium hover:underline"
+                                                        onClick={() =>
+                                                            setSelectedSkillId(as.skillId)
+                                                        }
+                                                    >
                                                         {as.skill.name}
-                                                    </p>
+                                                    </button>
                                                     <Badge variant="outline" className="text-xs">
                                                         v{as.skill.version}
                                                     </Badge>

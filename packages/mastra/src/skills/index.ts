@@ -11,6 +11,7 @@ export {
     attachToAgent,
     detachFromAgent,
     getSkillVersions,
+    forkSkill,
     type CreateSkillInput,
     type UpdateSkillInput,
     type ListSkillsInput

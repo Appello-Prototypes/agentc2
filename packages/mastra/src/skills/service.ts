@@ -179,7 +179,15 @@ export async function getSkill(idOrSlug: string) {
 export async function listSkills(input: ListSkillsInput = {}) {
     const where: Record<string, unknown> = {};
 
-    if (input.workspaceId) where.workspaceId = input.workspaceId;
+    // Workspace scoping: show skills from the user's workspace + global skills (no workspace)
+    // SYSTEM skills are always visible regardless of workspace
+    if (input.workspaceId) {
+        where.OR = [
+            { workspaceId: input.workspaceId },
+            { workspaceId: null },
+            { type: "SYSTEM" }
+        ];
+    }
     if (input.category) where.category = input.category;
     if (input.type) where.type = input.type;
     if (input.tags && input.tags.length > 0) {
@@ -469,6 +477,76 @@ export async function detachFromAgent(agentIdOrSlug: string, skillIdOrSlug: stri
     );
 
     return { agentVersion: newVersion };
+}
+
+/**
+ * Fork a skill — create a USER copy of an existing skill (typically SYSTEM).
+ * Copies instructions, description, category, tags, tools, and documents.
+ * Adds forkedFrom metadata to track origin.
+ */
+export async function forkSkill(
+    idOrSlug: string,
+    options?: { slug?: string; name?: string; createdBy?: string }
+) {
+    const sourceId = await resolveSkillId(idOrSlug);
+    const source = await prisma.skill.findUniqueOrThrow({
+        where: { id: sourceId },
+        include: {
+            tools: { select: { toolId: true } },
+            documents: { select: { documentId: true, role: true } }
+        }
+    });
+
+    const newSlug = options?.slug || `${source.slug}-custom`;
+    const newName = options?.name || `${source.name} (Custom)`;
+
+    // Create the forked skill
+    const forked = await prisma.skill.create({
+        data: {
+            slug: newSlug,
+            name: newName,
+            description: source.description,
+            instructions: source.instructions,
+            examples: source.examples,
+            category: source.category,
+            tags: source.tags,
+            metadata: {
+                forkedFrom: {
+                    skillId: source.id,
+                    skillSlug: source.slug,
+                    skillVersion: source.version
+                }
+            } as unknown as Prisma.InputJsonValue,
+            workspaceId: source.workspaceId,
+            type: "USER",
+            createdBy: options?.createdBy
+        }
+    });
+
+    // Copy tool attachments
+    if (source.tools.length > 0) {
+        await prisma.skillTool.createMany({
+            data: source.tools.map((t) => ({
+                skillId: forked.id,
+                toolId: t.toolId
+            })),
+            skipDuplicates: true
+        });
+    }
+
+    // Copy document attachments
+    if (source.documents.length > 0) {
+        await prisma.skillDocument.createMany({
+            data: source.documents.map((d) => ({
+                skillId: forked.id,
+                documentId: d.documentId,
+                role: d.role
+            })),
+            skipDuplicates: true
+        });
+    }
+
+    return forked;
 }
 
 /**
