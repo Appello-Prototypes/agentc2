@@ -382,7 +382,7 @@ export async function listFiles(
 
     if (result.has_more) {
         let cursor = result.cursor;
-        let hasMore = result.has_more;
+        let hasMore: boolean = result.has_more;
         while (hasMore) {
             const more = await callDropboxApi<DropboxListFolderResult>({
                 connectionId,

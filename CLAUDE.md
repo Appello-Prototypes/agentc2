@@ -201,6 +201,23 @@ GITHUB_PERSONAL_ACCESS_TOKEN="ghp_..."
 
 # Google Drive - File storage and search
 GDRIVE_CREDENTIALS_PATH="./credentials/gdrive-oauth.json"
+
+# Microsoft OAuth (Azure AD - Outlook Mail + Calendar)
+MICROSOFT_CLIENT_ID="..."          # Azure AD app client ID
+MICROSOFT_CLIENT_SECRET="..."      # Azure AD app client secret
+MICROSOFT_TENANT_ID="common"       # "common" for multi-tenant, or specific tenant ID
+
+# Dropbox OAuth
+DROPBOX_APP_KEY="..."              # Dropbox app key (= client ID)
+DROPBOX_APP_SECRET="..."           # Dropbox app secret
+```
+
+### Credential Encryption
+
+```bash
+# AES-256-GCM encryption key for OAuth tokens at rest
+# Generate with: openssl rand -hex 32
+CREDENTIAL_ENCRYPTION_KEY="..."
 ```
 
 ### Slack Integration
@@ -443,6 +460,16 @@ The system uses Mastra's MCP client to connect to external tools:
 | **Slack**        | Communication | Channels, messages, users, search                 |
 | **Google Drive** | Productivity  | File search, list, read (Docs/Sheets/Slides)      |
 | **GitHub**       | Productivity  | Repos, issues, PRs, code, actions                 |
+
+### Native OAuth Integrations
+
+| Integration   | Category      | Capabilities                                                              |
+| ------------- | ------------- | ------------------------------------------------------------------------- |
+| **Gmail**     | Communication | Email ingestion, archive, send (Google OAuth)                             |
+| **Microsoft** | Communication | Outlook Mail (send, list, archive) + Calendar (CRUD events) via Graph API |
+| **Dropbox**   | Productivity  | File list, read, upload, search, sharing links                            |
+
+OAuth integrations use standalone OAuth2 flows with PKCE, encrypted token storage (AES-256-GCM via `CREDENTIAL_ENCRYPTION_KEY`), automatic token refresh, and webhook-based triggers.
 
 ### MCP Tool Execution
 

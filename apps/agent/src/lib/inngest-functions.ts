@@ -4360,6 +4360,82 @@ const idleConversationFinalizerFunction = inngest.createFunction(
 );
 
 /**
+ * Webhook Subscription Renewal
+ *
+ * Cron: every 12 hours. Finds Microsoft Graph subscriptions expiring
+ * within 24 hours and renews them. Also cleans up error-heavy subscriptions.
+ */
+const webhookSubscriptionRenewalFunction = inngest.createFunction(
+    {
+        id: "webhook-subscription-renewal",
+        retries: 2
+    },
+    { cron: "0 */12 * * *" },
+    async ({ step }) => {
+        const results = await step.run("renew-expiring-subscriptions", async () => {
+            const renewalWindow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+            const subscriptions = await prisma.webhookSubscription.findMany({
+                where: {
+                    isActive: true,
+                    providerKey: { startsWith: "microsoft-" },
+                    expiresAt: { lt: renewalWindow }
+                },
+                include: {
+                    integrationConnection: { select: { id: true, isActive: true } }
+                }
+            });
+
+            let renewed = 0;
+            let failed = 0;
+
+            for (const sub of subscriptions) {
+                if (!sub.integrationConnection.isActive || !sub.externalSubscriptionId) {
+                    continue;
+                }
+
+                try {
+                    if (sub.providerKey === "microsoft-mail") {
+                        const { renewMailSubscription } = await import("./outlook-mail");
+                        await renewMailSubscription(
+                            sub.integrationConnectionId,
+                            sub.externalSubscriptionId
+                        );
+                    } else if (sub.providerKey === "microsoft-calendar") {
+                        const { renewCalendarSubscription } = await import("./outlook-calendar");
+                        await renewCalendarSubscription(
+                            sub.integrationConnectionId,
+                            sub.externalSubscriptionId
+                        );
+                    }
+                    renewed++;
+                } catch (error) {
+                    failed++;
+                    await prisma.webhookSubscription.update({
+                        where: { id: sub.id },
+                        data: {
+                            errorCount: { increment: 1 },
+                            errorMessage: error instanceof Error ? error.message : "Renewal failed"
+                        }
+                    });
+
+                    // Disable after 3 consecutive failures
+                    if (sub.errorCount >= 2) {
+                        await prisma.webhookSubscription.update({
+                            where: { id: sub.id },
+                            data: { isActive: false }
+                        });
+                    }
+                }
+            }
+
+            return { total: subscriptions.length, renewed, failed };
+        });
+
+        return results;
+    }
+);
+
+/**
  * All Inngest functions to register
  */
 export const inngestFunctions = [
@@ -4397,5 +4473,7 @@ export const inngestFunctions = [
     simulationSessionStartFunction,
     simulationBatchRunFunction,
     // Conversation run finalization
-    idleConversationFinalizerFunction
+    idleConversationFinalizerFunction,
+    // Webhook subscription lifecycle
+    webhookSubscriptionRenewalFunction
 ];

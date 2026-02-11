@@ -7,6 +7,25 @@
  */
 
 import { gmailArchiveEmailTool } from "./gmail";
+import {
+    outlookMailListEmailsTool,
+    outlookMailGetEmailTool,
+    outlookMailSendEmailTool,
+    outlookMailArchiveEmailTool
+} from "./outlook-mail";
+import {
+    outlookCalendarListEventsTool,
+    outlookCalendarGetEventTool,
+    outlookCalendarCreateEventTool,
+    outlookCalendarUpdateEventTool
+} from "./outlook-calendar";
+import {
+    dropboxListFilesTool,
+    dropboxGetFileTool,
+    dropboxUploadFileTool,
+    dropboxSearchFilesTool,
+    dropboxGetSharingLinksTool
+} from "./dropbox";
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { memoryRecallTool } from "./memory-recall";
@@ -333,6 +352,25 @@ export const toolRegistry: Record<string, any> = {
 
     // Gmail tools
     "gmail-archive-email": gmailArchiveEmailTool,
+
+    // Outlook Mail tools
+    "outlook-mail-list-emails": outlookMailListEmailsTool,
+    "outlook-mail-get-email": outlookMailGetEmailTool,
+    "outlook-mail-send-email": outlookMailSendEmailTool,
+    "outlook-mail-archive-email": outlookMailArchiveEmailTool,
+
+    // Outlook Calendar tools
+    "outlook-calendar-list-events": outlookCalendarListEventsTool,
+    "outlook-calendar-get-event": outlookCalendarGetEventTool,
+    "outlook-calendar-create-event": outlookCalendarCreateEventTool,
+    "outlook-calendar-update-event": outlookCalendarUpdateEventTool,
+
+    // Dropbox tools
+    "dropbox-list-files": dropboxListFilesTool,
+    "dropbox-get-file": dropboxGetFileTool,
+    "dropbox-upload-file": dropboxUploadFileTool,
+    "dropbox-search-files": dropboxSearchFilesTool,
+    "dropbox-get-sharing-links": dropboxGetSharingLinksTool,
 
     // Canvas tools
     "canvas-create": canvasCreateTool,

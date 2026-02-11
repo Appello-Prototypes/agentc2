@@ -114,6 +114,31 @@ export {
 } from "./tools";
 export type { ToolInfo } from "./tools";
 
+// Outlook Mail tools
+export {
+    outlookMailListEmailsTool,
+    outlookMailGetEmailTool,
+    outlookMailSendEmailTool,
+    outlookMailArchiveEmailTool
+} from "./tools/outlook-mail";
+
+// Outlook Calendar tools
+export {
+    outlookCalendarListEventsTool,
+    outlookCalendarGetEventTool,
+    outlookCalendarCreateEventTool,
+    outlookCalendarUpdateEventTool
+} from "./tools/outlook-calendar";
+
+// Dropbox tools
+export {
+    dropboxListFilesTool,
+    dropboxGetFileTool,
+    dropboxUploadFileTool,
+    dropboxSearchFilesTool,
+    dropboxGetSharingLinksTool
+} from "./tools/dropbox";
+
 // Workflows
 export {
     analysisWorkflow,

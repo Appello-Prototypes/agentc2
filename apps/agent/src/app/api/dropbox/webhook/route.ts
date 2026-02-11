@@ -1,8 +1,8 @@
-import { NextRequest, NextResponse } from "next/server"
-import { prisma, TriggerEventStatus } from "@repo/database"
-import { inngest } from "@/lib/inngest"
-import { getChangesSinceCursor } from "@/lib/dropbox"
-import { buildTriggerPayloadSnapshot, createTriggerEventRecord } from "@/lib/trigger-events"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma, TriggerEventStatus } from "@repo/database";
+import { inngest } from "@/lib/inngest";
+import { getChangesSinceCursor } from "@/lib/dropbox";
+import { buildTriggerPayloadSnapshot, createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
  * GET /api/dropbox/webhook
@@ -10,20 +10,20 @@ import { buildTriggerPayloadSnapshot, createTriggerEventRecord } from "@/lib/tri
  * Dropbox webhook verification. Echoes back the challenge parameter.
  */
 export async function GET(request: NextRequest) {
-    const { searchParams } = new URL(request.url)
-    const challenge = searchParams.get("challenge")
+    const { searchParams } = new URL(request.url);
+    const challenge = searchParams.get("challenge");
 
     if (!challenge) {
-        return new NextResponse("Missing challenge parameter", { status: 400 })
+        return new NextResponse("Missing challenge parameter", { status: 400 });
     }
 
     return new NextResponse(challenge, {
         status: 200,
         headers: {
             "Content-Type": "text/plain",
-            "X-Content-Type-Options": "nosniff",
-        },
-    })
+            "X-Content-Type-Options": "nosniff"
+        }
+    });
 }
 
 /**
@@ -36,107 +36,99 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
     try {
         const body = (await request.json()) as {
-            list_folder?: { accounts?: string[] }
-            delta?: { users?: number[] }
-        }
+            list_folder?: { accounts?: string[] };
+            delta?: { users?: number[] };
+        };
 
-        const accountIds = body.list_folder?.accounts || []
+        const accountIds = body.list_folder?.accounts || [];
 
         if (accountIds.length === 0) {
-            return NextResponse.json({ success: true, processed: 0 })
+            return NextResponse.json({ success: true, processed: 0 });
         }
 
         // Look up all active Dropbox connections matching these account IDs
         const provider = await prisma.integrationProvider.findUnique({
-            where: { key: "dropbox" },
-        })
+            where: { key: "dropbox" }
+        });
 
         if (!provider) {
-            return NextResponse.json({ success: true, processed: 0 })
+            return NextResponse.json({ success: true, processed: 0 });
         }
 
         // Find connections with matching accountId in metadata
         const allConnections = await prisma.integrationConnection.findMany({
             where: {
                 providerId: provider.id,
-                isActive: true,
+                isActive: true
             },
             include: {
                 webhookSubscriptions: {
                     where: {
                         providerKey: "dropbox",
-                        isActive: true,
-                    },
-                },
-            },
-        })
+                        isActive: true
+                    }
+                }
+            }
+        });
 
         // Filter to connections matching the notified account IDs
         const matchedConnections = allConnections.filter((conn) => {
             const meta =
                 conn.metadata && typeof conn.metadata === "object"
                     ? (conn.metadata as Record<string, unknown>)
-                    : {}
-            return accountIds.includes(meta.accountId as string)
-        })
+                    : {};
+            return accountIds.includes(meta.accountId as string);
+        });
 
-        let totalProcessed = 0
+        let totalProcessed = 0;
 
         for (const connection of matchedConnections) {
             try {
-                const processed = await processDropboxChanges(connection)
-                totalProcessed += processed
+                const processed = await processDropboxChanges(connection);
+                totalProcessed += processed;
             } catch (error) {
                 console.error(
                     `[Dropbox Webhook] Error processing connection ${connection.id}:`,
                     error
-                )
+                );
             }
         }
 
-        return NextResponse.json({ success: true, processed: totalProcessed })
+        return NextResponse.json({ success: true, processed: totalProcessed });
     } catch (error) {
-        console.error("[Dropbox Webhook] Error:", error)
+        console.error("[Dropbox Webhook] Error:", error);
         return NextResponse.json(
             {
                 success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to process Dropbox webhook",
+                error: error instanceof Error ? error.message : "Failed to process Dropbox webhook"
             },
             { status: 500 }
-        )
+        );
     }
 }
 
 // ── Change Processing ──────────────────────────────────────────────
 
-async function processDropboxChanges(
-    connection: {
-        id: string
-        organizationId: string
-        webhookSubscriptions: Array<{
-            id: string
-            cursor: string | null
-        }>
-    }
-): Promise<number> {
-    const sub = connection.webhookSubscriptions[0]
-    if (!sub?.cursor) return 0
+async function processDropboxChanges(connection: {
+    id: string;
+    organizationId: string;
+    webhookSubscriptions: Array<{
+        id: string;
+        cursor: string | null;
+    }>;
+}): Promise<number> {
+    const sub = connection.webhookSubscriptions[0];
+    if (!sub?.cursor) return 0;
 
-    const { entries, newCursor } = await getChangesSinceCursor(
-        connection.id,
-        sub.cursor
-    )
+    const { entries, newCursor } = await getChangesSinceCursor(connection.id, sub.cursor);
 
     // Update cursor
     await prisma.webhookSubscription.update({
         where: { id: sub.id },
-        data: { cursor: newCursor, updatedAt: new Date() },
-    })
+        data: { cursor: newCursor, updatedAt: new Date() }
+    });
 
-    if (entries.length === 0) return 0
+    if (entries.length === 0) return 0;
 
     // Find the trigger for Dropbox file changes
     const trigger = await prisma.agentTrigger.findFirst({
@@ -146,15 +138,15 @@ async function processDropboxChanges(
             isActive: true,
             agent: {
                 isActive: true,
-                workspace: { organizationId: connection.organizationId },
-            },
+                workspace: { organizationId: connection.organizationId }
+            }
         },
         include: {
-            agent: { select: { id: true, slug: true } },
-        },
-    })
+            agent: { select: { id: true, slug: true } }
+        }
+    });
 
-    if (!trigger) return 0
+    if (!trigger) return 0;
 
     // Send one trigger event per batch of changes (not per file)
     const payload = {
@@ -165,12 +157,12 @@ async function processDropboxChanges(
             name: entry.name,
             path: entry.path_display || entry.path_lower,
             size: entry.size,
-            serverModified: entry.server_modified,
+            serverModified: entry.server_modified
         })),
-        truncated: entries.length > 50,
-    }
+        truncated: entries.length > 50
+    };
 
-    const { normalizedPayload } = buildTriggerPayloadSnapshot(payload)
+    const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
 
     const triggerEvent = await createTriggerEventRecord({
         triggerId: trigger.id,
@@ -183,8 +175,8 @@ async function processDropboxChanges(
         integrationKey: "dropbox",
         integrationId: connection.id,
         eventName: "dropbox.file.changed",
-        payload: normalizedPayload,
-    })
+        payload: normalizedPayload
+    });
 
     await inngest.send({
         name: "agent/trigger.fire",
@@ -192,9 +184,9 @@ async function processDropboxChanges(
             triggerId: trigger.id,
             agentId: trigger.agent.id,
             triggerEventId: triggerEvent?.id,
-            payload,
-        },
-    })
+            payload
+        }
+    });
 
-    return entries.length
+    return entries.length;
 }

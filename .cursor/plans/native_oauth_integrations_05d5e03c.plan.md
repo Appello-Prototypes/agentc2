@@ -22,49 +22,49 @@ todos:
       status: completed
     - id: outlook-mail-routes
       content: "Create API routes for Outlook Mail: start (with state+PKCE), callback (validates state, exchanges code), status, CRUD, webhook (Graph validation handshake + clientState verification)"
-      status: in_progress
+      status: completed
     - id: outlook-mail-tools
       content: "Create Outlook Mail action tools with auto-refresh + connection health: send, archive, list, get email in packages/mastra/src/tools/outlook-mail/"
-      status: pending
+      status: completed
     - id: outlook-mail-ui
       content: Create setup UI page at apps/agent/src/app/mcp/outlook-mail/page.tsx with connection health display and re-auth flow
-      status: pending
+      status: completed
     - id: outlook-calendar-lib
       content: Create apps/agent/src/lib/outlook-calendar.ts (Calendar Graph API helpers, subscription create/renew)
       status: completed
     - id: outlook-calendar-routes
       content: "Create API routes for Outlook Calendar: start, callback, status, CRUD, webhook"
-      status: pending
+      status: completed
     - id: outlook-calendar-tools
       content: "Create Outlook Calendar action tools: list, get, create, update events in packages/mastra/src/tools/outlook-calendar/"
-      status: pending
+      status: completed
     - id: outlook-calendar-ui
       content: Create setup UI page at apps/agent/src/app/mcp/outlook-calendar/page.tsx
-      status: pending
+      status: completed
     - id: dropbox-lib
       content: "Create apps/agent/src/lib/dropbox.ts: OAuth helper (with PKCE+state, clientId/secret as params), Dropbox API client, delta cursor tracking, app-level webhook fanout"
       status: completed
     - id: dropbox-routes
       content: "Create API routes for Dropbox: start, callback, status, CRUD, webhook (GET challenge verification + POST multi-account fanout)"
-      status: pending
+      status: completed
     - id: dropbox-tools
       content: "Create Dropbox action tools: list, get, upload, search, sharing links in packages/mastra/src/tools/dropbox/"
-      status: pending
+      status: completed
     - id: dropbox-ui
       content: Create setup UI page at apps/agent/src/app/mcp/dropbox/page.tsx
-      status: pending
+      status: completed
     - id: registry
       content: Register all new tools in packages/mastra/src/tools/registry.ts and export from packages/mastra/src/index.ts
-      status: pending
+      status: completed
     - id: inngest-subscriptions
       content: "Add Inngest cron function for webhook subscription lifecycle: Graph subscription renewal (3-day TTL), Dropbox cursor refresh, dead-connection cleanup"
       status: pending
     - id: env-docs
       content: Update .env (CREDENTIAL_ENCRYPTION_KEY, MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, DROPBOX_APP_KEY, DROPBOX_APP_SECRET, webhook URLs) and CLAUDE.md with full documentation
-      status: pending
+      status: completed
     - id: build-verify
       content: Run bun run type-check, bun run lint, bun run build to verify everything compiles
-      status: pending
+      status: completed
 isProject: false
 ---
 
