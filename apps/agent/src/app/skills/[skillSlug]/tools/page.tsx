@@ -37,6 +37,8 @@ export default function SkillToolsPage() {
     const [loading, setLoading] = useState(true);
     const [toolsLoading, setToolsLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState<string | null>(null);
+    const [mcpError, setMcpError] = useState<string | null>(null);
+    const [hasOrgContext, setHasOrgContext] = useState(false);
 
     // Fetch skill data (attached tools)
     const fetchSkill = useCallback(async () => {
@@ -57,14 +59,19 @@ export default function SkillToolsPage() {
         }
     }, [skillSlug]);
 
-    // Fetch all available tools (registry + MCP)
+    // Fetch all available tools (registry + MCP). credentials: 'include' so session
+    // is sent and org-scoped MCP connections are used (same as Integrations page).
     const fetchTools = useCallback(async () => {
         setToolsLoading(true);
         try {
-            const res = await fetch(`${getApiBase()}/api/agents/tools`);
+            const res = await fetch(`${getApiBase()}/api/agents/tools`, {
+                credentials: "include"
+            });
             if (res.ok) {
                 const data = await res.json();
                 setAvailableTools(data.tools || []);
+                setMcpError(data.mcpError ?? null);
+                setHasOrgContext(data.hasOrgContext ?? false);
             }
         } catch (err) {
             console.error("Failed to load available tools:", err);
@@ -273,6 +280,20 @@ export default function SkillToolsPage() {
                             </div>
                         );
                     })}
+                    {mcpError && (
+                        <div className="rounded-md border border-amber-500/50 bg-amber-500/10 px-4 py-3 text-sm text-amber-800 dark:text-amber-200">
+                            <p className="font-medium">MCP tools unavailable</p>
+                            <p className="mt-0.5">{mcpError}</p>
+                            <p className="mt-1 text-xs opacity-90">
+                                Check Integrations (MCP) and test connections; ensure you are signed in so org-scoped connections are used.
+                            </p>
+                        </div>
+                    )}
+                    {hasOrgContext && availableTools.length > 0 && availableTools.every((t) => t.source === "registry") && (
+                        <div className="text-muted-foreground rounded-md border border-blue-500/30 bg-blue-500/5 px-4 py-3 text-sm">
+                            <p>Only built-in tools are shown. To see MCP tools here, add and connect MCP servers under <strong>Integrations</strong> (same organization).</p>
+                        </div>
+                    )}
                     {availableTools.length === 0 && (
                         <div className="text-muted-foreground py-8 text-center">
                             <p>No tools available</p>

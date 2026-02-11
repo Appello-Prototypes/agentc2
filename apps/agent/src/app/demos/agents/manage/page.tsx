@@ -192,7 +192,9 @@ function AgentManagePageContent() {
     // Fetch available tools, models, and scorers
     const fetchToolsAndModels = useCallback(async () => {
         try {
-            const res = await fetch(`${getApiBase()}/api/agents/tools`);
+            const res = await fetch(`${getApiBase()}/api/agents/tools`, {
+                credentials: "include"
+            });
             const data = await res.json();
             if (data.success) {
                 setAvailableTools(data.tools);

@@ -30,12 +30,13 @@ export async function POST(
         }
 
         const { serverKey } = await params;
+        const timeoutMs = serverKey === "atlas" ? 60000 : 30000;
         const result = await testMcpServer({
             serverId: serverKey,
             organizationId,
             userId: session.user.id,
             allowEnvFallback: true,
-            timeoutMs: 10000
+            timeoutMs
         });
 
         return NextResponse.json(result);

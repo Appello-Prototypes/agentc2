@@ -65,7 +65,8 @@ export async function GET(request: NextRequest) {
             models,
             scorers,
             mcpServerStatus,
-            mcpError
+            mcpError,
+            hasOrgContext: !!authContext
         });
     } catch (error) {
         console.error("[Agents Tools] Error:", error);

@@ -68,7 +68,7 @@ export default function NetworkPrimitivesPage() {
                 fetch(`${getApiBase()}/api/networks/${networkSlug}`),
                 fetch(`${getApiBase()}/api/agents`),
                 fetch(`${getApiBase()}/api/workflows`),
-                fetch(`${getApiBase()}/api/agents/tools`)
+                fetch(`${getApiBase()}/api/agents/tools`, { credentials: "include" })
             ]);
             const networkData = await networkRes.json();
             const agentsData = await agentsRes.json();

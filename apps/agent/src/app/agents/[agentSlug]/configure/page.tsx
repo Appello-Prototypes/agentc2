@@ -160,7 +160,9 @@ export default function ConfigurePage() {
     const fetchToolsAndScorers = useCallback(async () => {
         try {
             setToolsLoading(true);
-            const res = await fetch(`${getApiBase()}/api/agents/tools`);
+            const res = await fetch(`${getApiBase()}/api/agents/tools`, {
+                credentials: "include"
+            });
             const data = await res.json();
             if (data.success) {
                 setAvailableTools(data.tools || []);

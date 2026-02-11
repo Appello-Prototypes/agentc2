@@ -257,7 +257,9 @@ export default function OnboardingPage() {
 
         const fetchTools = async () => {
             try {
-                const response = await fetch(`${getApiBase()}/api/agents/tools`);
+                const response = await fetch(`${getApiBase()}/api/agents/tools`, {
+                    credentials: "include"
+                });
                 const result = await response.json();
                 if (result.success && Array.isArray(result.tools) && result.tools.length > 0) {
                     const filtered = (result.tools as ToolInfo[]).filter(isAgentRelevantTool);

@@ -340,7 +340,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "atlas",
         name: "ATLAS",
-        description: "Custom n8n workflow automation and business processes",
+        description: "n8n MCP server (workflow automation). Name and description can be set from your n8n workflow or MCP config.",
         category: "automation",
         authType: "apiKey",
         providerType: "mcp",
@@ -1069,8 +1069,8 @@ async function ensureIntegrationProviders() {
             prisma.integrationProvider.upsert({
                 where: { key: seed.key },
                 update: {
-                    name: seed.name,
-                    description: seed.description,
+                    // Do not overwrite name/description so imported config or server-provided
+                    // metadata (e.g. from MCP initialize serverInfo) can persist.
                     category: seed.category,
                     authType: seed.authType,
                     providerType: seed.providerType,

@@ -72,12 +72,15 @@ export async function POST(
             connection.provider.providerType === "custom"
         ) {
             const serverId = resolveConnectionServerId(connection.provider.key, connection);
+            // ATLAS (supergateway/SSE) and other remote MCP servers may need >10s to connect
+            const timeoutMs =
+                connection.provider.key === "atlas" ? 60000 : 30000;
             const testResult: McpServerTestResult = await testMcpServer({
                 serverId,
                 organizationId,
                 userId: session.user.id,
                 allowEnvFallback: false,
-                timeoutMs: 10000
+                timeoutMs
             });
             const success = testResult.success;
             const errorDetail = testResult.phases.find((phase) => phase.status === "fail")?.detail;
