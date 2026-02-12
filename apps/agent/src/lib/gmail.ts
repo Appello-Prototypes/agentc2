@@ -300,8 +300,17 @@ export const getMessagesWithConcurrency = async (
 
     for (let i = 0; i < messageIds.length; i += concurrency) {
         const batch = messageIds.slice(i, i + concurrency);
-        const batchResults = await Promise.all(batch.map((id) => getMessage(gmail, id)));
-        results.push(...batchResults);
+        const batchResults = await Promise.allSettled(batch.map((id) => getMessage(gmail, id)));
+
+        for (const result of batchResults) {
+            if (result.status === "fulfilled") {
+                results.push(result.value);
+            } else {
+                // Skip messages that were deleted or are no longer accessible (404)
+                const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+                console.warn(`[Gmail] Skipping inaccessible message: ${msg}`);
+            }
+        }
     }
 
     return results;
