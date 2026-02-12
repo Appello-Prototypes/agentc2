@@ -6,7 +6,13 @@
  * Also supports MCP tools dynamically via getMcpTools().
  */
 
-import { gmailArchiveEmailTool } from "./gmail";
+import {
+    gmailArchiveEmailTool,
+    gmailSearchEmailsTool,
+    gmailReadEmailTool,
+    gmailDraftEmailTool
+} from "./gmail";
+import { googleCalendarSearchEventsTool } from "./google-calendar";
 import {
     outlookMailListEmailsTool,
     outlookMailGetEmailTool,
@@ -337,6 +343,10 @@ export const toolCategoryMap: Record<string, string> = {
 
     // Email & Calendar
     "gmail-archive-email": "Email & Calendar",
+    "gmail-search-emails": "Email & Calendar",
+    "gmail-read-email": "Email & Calendar",
+    "gmail-draft-email": "Email & Calendar",
+    "google-calendar-search-events": "Email & Calendar",
     "outlook-mail-list-emails": "Email & Calendar",
     "outlook-mail-get-email": "Email & Calendar",
     "outlook-mail-send-email": "Email & Calendar",
@@ -561,6 +571,12 @@ export const toolRegistry: Record<string, any> = {
 
     // Gmail tools
     "gmail-archive-email": gmailArchiveEmailTool,
+    "gmail-search-emails": gmailSearchEmailsTool,
+    "gmail-read-email": gmailReadEmailTool,
+    "gmail-draft-email": gmailDraftEmailTool,
+
+    // Google Calendar tools
+    "google-calendar-search-events": googleCalendarSearchEventsTool,
 
     // Outlook Mail tools
     "outlook-mail-list-emails": outlookMailListEmailsTool,
