@@ -163,29 +163,22 @@ Key failures:
 
 ## Best-in-Class Comparison
 
-| Product      | Integration-First Pattern                                          | Time to Value |
-| ------------ | ------------------------------------------------------------------ | ------------- |
-| **Zapier**   | Pick trigger app -> pick action app -> test with real data -> live | Under 2 min   |
-| **Retool**   | Connect database -> auto-generate UI from real schema -> customize | Under 3 min   |
-| **Vercel**   | Connect GitHub repo -> auto-deploy real code -> live site          | Under 2 min   |
-| **Plaid**    | Connect bank account -> see real transactions immediately          | Under 1 min   |
-| **Calendly** | Connect Google Calendar -> see real availability -> share link     | Under 1 min   |
+Common pattern across best-in-class SaaS: Zapier, Retool, Vercel, Plaid, Calendly all connect ONE real data source first, then immediately show value with real data. None show 10 empty badges.
 
-**Common pattern: Connect real data source FIRST, then show value with that real data.**
-
-None of these products show you 10 empty "not connected" badges. They guide you to connect ONE thing, then immediately demonstrate value with it.
+**Our edge**: Unlike Zapier (connect and automate), we have an intelligent agent that ACTS on the data with memory, skills, observability, learning, and dashboard generation. The onboarding should show this.
 
 ---
 
-## Proposed Redesign: Integration-First Onboarding
+## Proposed Redesign: Integration-First, Platform-Showcasing Onboarding
 
 ### Design Principles
 
-1. **Connections before configuration** -- Get at least one real integration connected before asking ANY questions about agents
-2. **Leverage the sign-up method** -- Google OAuth users already have Gmail; use it immediately
-3. **Real data, not demos** -- Show the user their actual emails, not a canned "What can you help me with?"
-4. **Slack is the second domino** -- Once they see Gmail value, Slack is the natural next step for notifications
-5. **Progressive power** -- Each new connection visibly increases what agents can do
+1. **Connections before configuration** -- Get Gmail connected instantly via Google OAuth; prompt Slack as second domino
+2. **Show, don't tell** -- The onboarding agent USES memory, tools, and canvas to demonstrate the platform. No feature bullet lists
+3. **Real data, not demos** -- Show the user's actual emails, not "What can you help me with?"
+4. **Use existing components** -- Build with existing UI library (Conversation, PromptInput, Card, Badge, etc.)
+5. **Graceful degradation** -- Every edge case has a fallback path. Partial scopes? Skip Gmail. Empty inbox? Show capabilities
+6. **Feature flag safety** -- Old flow preserved behind `FEATURE_NEW_ONBOARDING`. Rollback in one env var change
 
 ### Flow Architecture
 
@@ -193,233 +186,274 @@ None of these products show you 10 empty "not connected" badges. They guide you 
 flowchart TD
     signup[Sign Up] --> method{Sign-up method?}
 
-    method -->|Google OAuth| googlePath[Auto-sync Gmail]
-    method -->|Email/Password| emailPath[Connect Step: Prompt Google OAuth]
+    method -->|Google OAuth| gmailSync["Auto-sync Gmail tokens (server-side)"]
+    method -->|Email/Password| noTokens[No tokens available]
 
-    googlePath --> orgCheck{Has org membership?}
-    emailPath --> orgCheck
+    gmailSync --> scopeCheck{Gmail scopes granted?}
+    scopeCheck -->|Yes| gmailReady[Gmail Connected]
+    scopeCheck -->|No - partial| scopeFallback["Fallback: prompt re-auth or skip"]
 
-    orgCheck -->|No membership + domain match| joinStep[Join Org Step]
-    orgCheck -->|No membership + no match| autoOrg[Auto-create Org]
-    orgCheck -->|Has membership via invite| teamWelcome[Team Welcome]
+    noTokens --> orgCheck{Org membership?}
+    gmailReady --> orgCheck
+    scopeFallback --> orgCheck
 
-    joinStep -->|Joins| teamWelcome
-    joinStep -->|Creates own| autoOrg
+    orgCheck -->|Domain match found| joinStep["Join Org Step (keep existing)"]
+    orgCheck -->|No match| autoOrg[Auto-create Org + Workspace]
+    orgCheck -->|Invite code| inviteJoin[Join via invite]
 
-    autoOrg --> connectStep[Connect Step]
+    joinStep -->|Joins existing| teamPath[Team Welcome Path]
+    joinStep -->|Creates own| newOrgPath[New Org Path]
+    autoOrg --> newOrgPath
+    inviteJoin --> teamPath
 
-    connectStep --> autoAgent[Auto-create Agent with connected tools]
-    teamWelcome --> autoAgent
+    newOrgPath --> connectStep["ConnectStep: Gmail status + Slack prompt"]
+    connectStep --> bootstrapAgent["Auto-create starter agent with memory, tools, scorers"]
 
-    autoAgent --> liveDemo[Live Demo: Agent acts on REAL data]
-    liveDemo --> slackPrompt[Prompt: Connect Slack for notifications]
-    slackPrompt --> dashboard[Dashboard with Connection Power Bar]
+    teamPath --> teamWelcome["TeamWelcomeStep: team agents + integrations"]
+    teamWelcome --> bootstrapAgent
+
+    bootstrapAgent --> cowork["Redirect to real CoWork chat -- Agent acts on real data -- Platform features visible in interaction"]
 ```
 
-### Path 1: Google OAuth Sign-Up (First in Org)
+### Path 1: Google OAuth Sign-Up (First in Org) -- The Golden Path
 
-This is the golden path. The user has already granted Gmail access during sign-up.
-
-**What the user sees:**
-
-```
-[Sign Up with Google -- already done, Gmail tokens captured]
-        |
-        v
-Step 1: CONNECT (single screen, ~5 seconds)
-  "Gmail is connected! Here's what your agent can do with your email."
-  [Preview: 3 recent email subjects from their inbox]
-
-  "Supercharge with Slack" [Connect Slack button]
-  "You can always add more integrations later"
-
-  [Continue ->]
-        |
-        v
-Step 2: LIVE DEMO (in real CoWork chat)
-  Agent auto-created with Gmail tools + core tools
-  Agent's first message:
-    "Welcome! I've already connected to your Gmail.
-     Here's a quick look at your inbox:
-     - [3 important unread emails with sender, subject, snippet]
-     Want me to summarize any of these? Or ask me anything about your email."
-
-  [Floating: Connection Power Bar showing Gmail connected, Slack suggested]
-        |
-        v
-[Onboarding complete -- user is in the product with real value]
-```
-
-**Total time to value: ~15 seconds (sign-up + one screen + live email data)**
-
-**Backend sequence:**
+**Step 0 (invisible to user): Server-side Bootstrap**
 
 1. Google OAuth completes -> Better Auth stores tokens in `Account`
-2. Bootstrap fires -> auto-creates org + workspace
-3. NEW: Immediately sync Gmail tokens from `Account` -> `IntegrationConnection` (guaranteed, not async)
-4. NEW: Auto-create agent with Gmail tools + core tools (no user input needed)
-5. Redirect to `/onboarding` -> Connect Step shows Gmail already connected
-6. User clicks Continue -> redirected to CoWork chat
-7. Agent greets with real email summary (calls `gmail-search-emails` + `gmail-read-email`)
-8. Onboarding marked complete
+2. `bootstrapUserOrganization()` runs:
+
+- Creates org + default workspace
+- NEW: Calls `syncGmailFromAccount()` server-side
+- Edge case: if Gmail scopes missing, sets `gmailSyncStatus: "partial_scopes"` in membership metadata
+- Creates `IntegrationConnection` for Gmail (org-scoped, AES-256-GCM encrypted)
+
+1. Redirect to `/onboarding`
+
+**Step 1: ConnectStep (single screen, ~5 seconds)**
+Built with existing `Card`, `Badge`, `Button`, `Separator` components.
+
+- Top: Gmail status card with green Badge ("Connected"), user's email, "4 email tools unlocked"
+- Middle: Slack CTA card with "Connect Slack" button (popup OAuth -- stays on page)
+- Bottom: "Continue" button + "Add more integrations anytime"
+- Edge case: Gmail sync failed -> Yellow badge, "Re-authorize" button using `linkSocial` with `include_granted_scopes`
+
+**Step 2: Redirect to Real CoWork Chat**
+
+- `POST /api/onboarding/bootstrap-agent` creates starter agent (see "Starter Agent Design" below)
+- `POST /api/onboarding/complete` marks onboarding done, records `onboardingPath: "google_oauth"`
+- Redirect to `/?agent=<slug>&firstRun=true`
+- CoWork detects `firstRun`, auto-sends first message
+- Agent searches Gmail, shows real inbox summary, demonstrates tool calls in existing Tool component UI
+- User is now in the real product with real value
+
+**Total time: Sign up -> 1 screen -> real product. Under 30 seconds.**
 
 ### Path 2: Email/Password Sign-Up (First in Org)
 
-The user has no pre-existing connections. We need to motivate them to connect.
+Same ConnectStep, but Gmail shows "not connected" with:
 
-**What the user sees:**
+- Large "Connect with Google" CTA card (triggers `linkSocial` with Gmail scopes)
+- Clear value prop: "Unlock email management, calendar awareness, and smart drafts"
+- Subtle "Skip for now" link
 
-```
-[Sign Up with email/password -- no tokens]
-        |
-        v
-Step 1: CONNECT (single screen)
-  "Your agents are most powerful when connected to your tools."
-
-  [Big card] "Connect Google"
-    -> Unlock: Email management, calendar awareness, drafts
-    -> Preview: "Your agent will be able to read, search, and
-                 organize your inbox"
-
-  [Secondary] "Connect Slack"
-    -> Unlock: Notifications, team messaging, channel management
-
-  [Subtle] "Skip for now -- explore with basic tools"
-
-  [Continue ->]
-        |
-        v
-  [If connected Google] -> Same as Path 1 from Step 2
-  [If skipped] ->
-
-Step 2: LITE DEMO (in real CoWork chat)
-  Agent auto-created with core tools only (calculator, web-fetch, etc.)
-  Agent's first message:
-    "Welcome! I'm your AI assistant. I can help with research,
-     calculations, and general tasks.
-
-     Tip: Connect Gmail to let me manage your inbox, or
-     connect Slack for team notifications. [Connect now]"
-
-  [Connection Power Bar: 0/5 connected, "Connect Gmail to unlock email tools"]
-```
-
-**Total time to value: ~30 seconds (reduced, but without real data the aha is weaker)**
+If they connect Google, tokens sync immediately -> same as Path 1 from Step 2.
+If they skip, agent created with core tools only. Connection Power Bar persists in app sidebar.
 
 ### Path 3: Joining Existing Org (via Invite or Domain Match)
 
-The org likely already has integrations connected. The user inherits team connections.
+**TeamWelcomeStep** (built with existing Card, Avatar, Badge components):
 
-**What the user sees:**
+- "Welcome to [Org Name]!" with org avatar
+- Connected integrations shown as Badge row (inherits org-scoped connections)
+- Team agent cards (name, description, tool count) using same pattern as `/agents` grid
+- "Start Chatting" CTA -> CoWork with team's default agent
+- Edge case: org has no USER agents -> show SYSTEM agents (`assistant`, `workspace-concierge`)
+- Edge case: org has no integrations -> skip integration badges, show "Your team can add integrations"
+
+**Total time: ~5 seconds (everything already set up)**
+
+### Path 4: Domain Match Creates Own Org
+
+After `JoinOrgStep` (keep existing -- works correctly), flows into Path 1 or 2.
+
+---
+
+## The Starter Agent: Showcasing the Platform
+
+This is the most important design decision. The auto-created agent must demonstrate what makes AgentC2 different from ChatGPT.
+
+### Agent Configuration
+
+```typescript
+{
+  name: "Your Assistant",  // "Inbox Assistant" if Gmail connected
+  slug: auto-generated,
+  type: "USER",
+  isOnboardingAgent: true,
+  modelProvider: "openai",
+  modelName: "gpt-4o",
+
+  // MEMORY -- demonstrates memory from the start
+  memoryEnabled: true,
+  memoryConfig: {
+    lastMessages: 15,
+    workingMemory: {
+      enabled: true,
+      template: `# About You\n- **Name**: \n- **Role**: \n- **Key tools**: \n- **Preferences**: \n# Priorities\n- \n# Things Learned\n- `
+    },
+    semanticRecall: { topK: 3, messageRange: 2 }
+  },
+
+  // TOOLS -- based on connected integrations
+  tools: [
+    "date-time", "calculator", "web-fetch", "memory-recall", "json-parser",
+    // If Gmail: "gmail-search-emails", "gmail-read-email", "gmail-archive-email",
+    //           "gmail-draft-email", "google-calendar-search-events"
+    // If Slack: Slack tools added dynamically
+  ],
+
+  // SCORERS -- quality tracking from day one
+  scorers: ["relevancy", "completeness"],
+}
+```
+
+### Agent Instructions (Engineered to Showcase Platform)
 
 ```
-[Sign Up with invite code or domain match]
-        |
-        v
-Step 1: TEAM WELCOME (single screen)
-  "Welcome to [Org Name]!"
+You are the user's personal AI assistant on AgentC2. You have real tools
+connected to their accounts and you can take real actions.
 
-  Connected integrations: [Gmail icon] [Slack icon] [HubSpot icon]
-  "Your team has 4 agents and 3 integrations ready to use."
+FIRST INTERACTION:
+1. If Gmail connected: Search inbox for 5 most recent important emails
+   (skip newsletters/promotions). Summarize with sender, subject, key point.
+   Ask which to dig into.
+2. If no Gmail: Greet warmly, explain capabilities, suggest connecting Gmail.
 
-  [Agent cards showing team's agents with descriptions]
-
-  [Start Chatting ->] (drops into CoWork with all team agents)
-  [Or: Create your own agent]
-        |
-        v
-[Onboarding complete -- user has full access to team's ecosystem]
+ONGOING BEHAVIOR:
+- Use tools visibly. When you search email, check calendar, draft a reply --
+  show what you're doing. The user should SEE the platform working.
+- Remember what you learn about the user. Update working memory with name,
+  role, preferences, key contacts as you learn them.
+- When appropriate, suggest platform capabilities:
+  - "I could set up a daily email digest automatically" (Triggers)
+  - "Want me to create a dashboard showing email volume trends?" (Canvas)
+  - "I can draft a workflow that routes urgent emails to Slack" (Workflows)
+- If user asks about something needing an unconnected integration,
+  explain what's possible and how to connect it.
 ```
 
-**Total time to value: ~5 seconds (everything is already set up)**
+### What the User Experiences (Platform Features in Action)
 
-### Path 4: Domain Match -- Creates Own Org
+| Platform Feature  | How It's Demonstrated During Onboarding                                                 |
+| ----------------- | --------------------------------------------------------------------------------------- |
+| **Tools**         | Agent calls `gmail-search-emails`, user sees tool call UI (existing Tool component)     |
+| **Memory**        | Agent remembers name, role, preferences across messages. Working memory visibly updates |
+| **Observability** | Each message creates `AgentRun` with trace. Available in runs/analytics pages           |
+| **Evaluation**    | Scorers run on each turn. Quality tracked from day one                                  |
+| **Real data**     | Agent shows THEIR emails, not generic responses                                         |
+| **Canvas**        | Agent suggests creating a dashboard (user can try it)                                   |
+| **Workflows**     | Agent suggests automations (plants the seed for exploration)                            |
+| **Triggers**      | Agent mentions "I could do this automatically every morning"                            |
 
-Same as Path 1 (Google) or Path 2 (email/password) after the org decision.
+**The user doesn't read about features. They experience them.**
 
 ---
 
 ## The Connection Power Bar
 
-Replaces both the old Integrations step and the post-onboarding Setup Guide. This is a persistent, non-blocking component visible across the app.
+Persistent, non-blocking component. Built with existing `Badge`, `Button`, `Collapsible`, `Tooltip` components.
 
-**Concept:**
+### Compact Mode (in sidebar/header after onboarding)
 
-```
-[===Gmail====][===Slack====][           ][           ][           ]
- Connected     Connected    + HubSpot    + Jira        + More
- 4 tools       8 tools      "Unlock CRM" "Unlock PM"
+Shows as a row of Badges in the app header: `[Gmail] [Slack] [+3 more]`
 
- Your agents can: Read email, Send notifications
- Next unlock: Connect HubSpot to manage deals and contacts
-```
+### Expanded Mode (on /mcp page and first week after sign-up)
 
-**Behavior:**
+Shows tiers with tool counts and next-unlock suggestions. Clicking unconnected integration opens popup OAuth.
 
-- Shows during onboarding as a floating bar
-- Persists in dashboard sidebar/header as a compact indicator
-- Each connection shows: what tools it unlocked, what the agent can now do
-- "Next unlock" suggests the most impactful next connection based on usage patterns
-- Clicking an unconnected integration starts the OAuth flow inline (no page navigation)
-- Dismissible after 3+ connections or manually
+### Smart "Next Unlock" Suggestions
 
-**Integration power tiers:**
+Based on what tools the user has TRIED to use but couldn't (tracked via failed tool calls in `AgentRun` or agent mentions of unconnected services):
 
-| Tier   | Integrations             | Agent Capabilities                                           |
-| ------ | ------------------------ | ------------------------------------------------------------ |
-| Tier 0 | None                     | Generic chat, web search, calculations                       |
-| Tier 1 | Gmail                    | Read/search/archive email, draft replies, calendar awareness |
-| Tier 2 | Gmail + Slack            | Email triage with Slack notifications, team updates          |
-| Tier 3 | Gmail + Slack + CRM      | Full customer context, deal tracking, lead scoring           |
-| Tier 4 | Gmail + Slack + CRM + PM | Cross-system automation, ticket/deal correlation             |
-| Tier 5 | All major integrations   | Complete business operations autopilot                       |
+- User asks about CRM data -> suggest HubSpot
+- User asks about project tracking -> suggest Jira
+- User asks about meetings -> suggest Fathom
 
----
+### Integration Power Tiers
 
-## Auto-Created Starter Agent
-
-Instead of asking users to configure an agent, we auto-create one based on what integrations are available:
-
-**With Gmail connected:**
-
-- Name: "Inbox Assistant"
-- Instructions: Email-focused -- triage, summarize, draft replies, find important messages
-- Tools: `gmail-search-emails`, `gmail-read-email`, `gmail-archive-email`, `gmail-draft-email`, `google-calendar-search-events`, `date-time`, `memory-recall`, `web-fetch`
-- First message: Actual inbox summary using real data
-
-**With Gmail + Slack:**
-
-- Name: "Work Assistant"
-- Instructions: Email + communication -- triage email, notify via Slack, team coordination
-- Tools: All Gmail tools + all Slack tools + core tools
-- First message: Inbox summary + "I can also post updates to your Slack channels"
-
-**With no integrations:**
-
-- Name: "Assistant"
-- Instructions: General purpose with strong prompts to connect tools
-- Tools: `calculator`, `web-fetch`, `date-time`, `memory-recall`, `json-parser`
-- First message: Capability overview with integration prompts
-
-The agent is automatically upgraded when new integrations are connected (tools added, instructions updated).
+| Tier | Integrations    | New Agent Capabilities                                      |
+| ---- | --------------- | ----------------------------------------------------------- |
+| 0    | None            | Generic chat, web search, calculations                      |
+| 1    | Gmail           | Email management, calendar awareness, drafts                |
+| 2    | Gmail + Slack   | Notifications, team messaging, email-to-Slack workflows     |
+| 3    | + CRM (HubSpot) | Customer context, deal tracking, contact enrichment         |
+| 4    | + PM (Jira)     | Ticket management, sprint tracking, cross-system automation |
+| 5    | + All           | Complete business operations with full observability        |
 
 ---
 
 ## Slack as the Second Domino
 
-Slack is strategically critical because it transforms agents from "tools you query" into "assistants that proactively help you." The onboarding should make Slack the natural next step after Gmail:
+Slack transforms agents from "tools you query" into "assistants that proactively help." Three touch points:
 
-**In-onboarding prompt (Connect Step):**
-After showing Gmail is connected, show Slack as the recommended next connection with a clear value proposition: "Get Slack notifications when important emails arrive."
+1. **ConnectStep**: After Gmail status, Slack card: "Get notified when important emails arrive"
+2. **In-chat**: Agent suggests: "Want me to Slack you when VIP contacts email? [Connect Slack]"
+3. **Connection Power Bar**: "Add Slack to unlock notifications and team messaging"
 
-**In-chat prompt (Live Demo):**
-After the agent shows the email summary, suggest: "Want me to send you a Slack message when you get emails from VIP contacts? [Connect Slack]"
+**Inline OAuth implementation**: Slack connect opens `window.open()` popup. Modified `/api/slack/callback` detects `mode=popup` query param, returns HTML page that calls `window.opener.postMessage({ type: 'slack-connected', teamId, teamName })` and closes. Parent page listens for message, refreshes connection state, invalidates MCP cache.
 
-**Post-onboarding prompt (Connection Power Bar):**
-"You have Gmail connected. Add Slack to unlock notifications and team messaging."
+Edge case: Browser blocks popup -> fall back to full-page redirect with `returnTo` param.
 
-**Inline Slack OAuth:**
-The Slack connect button should trigger OAuth in a popup/modal, not navigate away from the current page. The user stays in context, Slack connects in the background, and new tools appear immediately.
+---
+
+## Edge Cases and Fallbacks
+
+### Google OAuth Edge Cases
+
+| Edge Case                             | Detection                              | Fallback                                                                                                    |
+| ------------------------------------- | -------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| User denies Gmail scopes              | `Account.scope` missing `gmail.modify` | ConnectStep shows "Gmail needs permissions" + re-auth button via `linkSocial` with `include_granted_scopes` |
+| Access token expired before sync      | `Account.accessTokenExpiresAt` in past | Use refresh token. If refresh fails, prompt re-auth                                                         |
+| Previous sign-up without Gmail scopes | `Account.scope` incomplete             | Treat as email/password path                                                                                |
+| Gmail API rate limit                  | 429 response                           | Retry 3x with exponential backoff. If fails, defer to `GmailSyncOnLogin` fallback                           |
+| Multiple Google accounts              | Multiple `Account` records             | Use most recently updated for active session                                                                |
+| Empty inbox                           | `gmail-search-emails` returns 0        | Agent: "Inbox is empty! I'll be ready when emails arrive. Here's what else I can do..."                     |
+
+### Slack OAuth Edge Cases
+
+| Edge Case       | Detection                   | Fallback                                           |
+| --------------- | --------------------------- | -------------------------------------------------- |
+| Not Slack admin | `error: "access_denied"`    | "Ask your Slack admin to install AgentC2, or skip" |
+| Popup blocked   | `window.open` returns null  | Full-page redirect with `returnTo`                 |
+| Enterprise Grid | `isEnterpriseInstall: true` | Handle normally (already supported)                |
+| Callback fails  | Error param in callback     | Show retry button in ConnectStep                   |
+
+### Migration and Existing Users
+
+| Edge Case                             | Detection                                          | Handling                                                                                |
+| ------------------------------------- | -------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| User already completed old onboarding | `membership.onboardingCompletedAt` is set          | Do NOT re-onboard. App loads normally. Connection Power Bar appears if < 3 integrations |
+| User mid-old-onboarding               | `onboardingStep` set, `onboardingCompletedAt` null | If `FEATURE_NEW_ONBOARDING=true`, reset step and show new flow                          |
+| Auto-agent slug collision             | Slug conflicts with existing                       | `generateUniqueSlug()` with suffix                                                      |
+| Feature flag rollback                 | `FEATURE_NEW_ONBOARDING=false`                     | Old flow fully functional, not deleted                                                  |
+| `FEATURE_DB_AGENTS=false`             | Env var check                                      | Onboarding still works -- uses SYSTEM agents instead of auto-creating                   |
+
+### Multi-Tenant Edge Cases
+
+| Edge Case                                     | Detection                                                | Handling                                                                                         |
+| --------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| User joins org with existing Gmail connection | `IntegrationConnection` exists for gmail, `scope: "org"` | User inherits. No need to sync their own tokens                                                  |
+| User-scoped and org-scoped conflict           | Both exist for same provider                             | `isDefault` flag determines priority in agent resolver                                           |
+| MCP cache stale after connection              | New connection not reflected                             | `invalidateMcpCacheForOrg()` called on create. 60s TTL as safety net                             |
+| Bootstrap fails mid-way                       | Partial state                                            | Each step idempotent. Gmail sync retries on next login via `GmailSyncOnLogin` (kept as fallback) |
+
+### Privacy and Consent
+
+| Concern                         | Handling                                                                                              |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| User alarmed about email access | ConnectStep shows clear scope: "Read and search emails, create drafts (never sends without approval)" |
+| Revoking access                 | Settings > Integrations has "Disconnect" per integration                                              |
+| GDPR                            | Gmail tools read-only by design. Archive is only "write" action                                       |
 
 ---
 
@@ -427,77 +461,118 @@ The Slack connect button should trigger OAuth in a popup/modal, not navigate awa
 
 ### Modified Files
 
-- `[apps/agent/src/app/onboarding/page.tsx](apps/agent/src/app/onboarding/page.tsx)` -- Complete rewrite: 3-step flow with path branching
-- `[apps/agent/src/app/onboarding/layout.tsx](apps/agent/src/app/onboarding/layout.tsx)` -- Simplify layout, add Connection Power Bar slot
-- `[packages/auth/src/bootstrap.ts](packages/auth/src/bootstrap.ts)` -- Add guaranteed Gmail sync during bootstrap for Google OAuth users
-- `[apps/agent/src/app/api/integrations/gmail/sync/route.ts](apps/agent/src/app/api/integrations/gmail/sync/route.ts)` -- Make callable from bootstrap (not just from client component)
-- `[apps/agent/src/components/AppProvidersWrapper.tsx](apps/agent/src/components/AppProvidersWrapper.tsx)` -- Remove `GmailSyncOnLogin` (sync now happens in bootstrap)
-- `[apps/agent/src/app/api/slack/install/route.ts](apps/agent/src/app/api/slack/install/route.ts)` -- Support popup-mode OAuth callback for inline connect
+- [`apps/agent/src/app/onboarding/page.tsx`](apps/agent/src/app/onboarding/page.tsx) -- Feature-flagged rewrite with path branching
+- [`packages/auth/src/bootstrap.ts`](packages/auth/src/bootstrap.ts) -- Add `syncGmailFromAccount()` call during bootstrap
+- [`apps/agent/src/app/api/integrations/gmail/sync/route.ts`](apps/agent/src/app/api/integrations/gmail/sync/route.ts) -- Extract core logic into importable function
+- [`apps/agent/src/components/AppProvidersWrapper.tsx`](apps/agent/src/components/AppProvidersWrapper.tsx) -- KEEP `GmailSyncOnLogin` as fallback
+- [`apps/agent/src/app/api/slack/install/route.ts`](apps/agent/src/app/api/slack/install/route.ts) -- Add `mode=popup` query param
+- [`apps/agent/src/app/api/slack/callback/route.ts`](apps/agent/src/app/api/slack/callback/route.ts) -- Add popup close + `postMessage`
+- [`packages/database/prisma/schema.prisma`](packages/database/prisma/schema.prisma) -- Add fields to Membership and Agent
 
 ### New Files
 
-- `apps/agent/src/components/onboarding/ConnectStep.tsx` -- Integration connection screen (shows Gmail status, Slack prompt)
-- `apps/agent/src/components/onboarding/LiveDemoStep.tsx` -- Redirects to CoWork with auto-created agent and first-message override
-- `apps/agent/src/components/onboarding/TeamWelcomeStep.tsx` -- For users joining orgs with existing integrations/agents
-- `apps/agent/src/components/ConnectionPowerBar.tsx` -- Persistent integration progress indicator
-- `apps/agent/src/app/api/onboarding/bootstrap-agent/route.ts` -- Auto-creates starter agent based on connected integrations
-- `packages/auth/src/gmail-sync.ts` -- Extracted Gmail sync logic callable from bootstrap (server-side, not client)
+- `apps/agent/src/components/onboarding/ConnectStep.tsx` -- Integration connection screen
+- `apps/agent/src/components/onboarding/TeamWelcomeStep.tsx` -- Team onboarding path
+- `apps/agent/src/components/ConnectionPowerBar.tsx` -- Persistent integration progress
+- `apps/agent/src/app/api/onboarding/bootstrap-agent/route.ts` -- Auto-creates starter agent
+- `packages/auth/src/gmail-sync.ts` -- Extracted Gmail sync (server-callable)
 
-### Deprecated Files (archive, do not delete yet)
+### Preserved Files
 
-- `apps/agent/src/components/onboarding/WelcomeStep.tsx` -- Replaced by ConnectStep
-- `apps/agent/src/components/onboarding/TemplateStep.tsx` -- Replaced by auto-creation
-- `apps/agent/src/components/onboarding/ConfigureStep.tsx` -- Replaced by auto-creation
-- `apps/agent/src/components/onboarding/IntegrationsStep.tsx` -- Replaced by ConnectStep + ConnectionPowerBar
-- `apps/agent/src/components/onboarding/ToolStep.tsx` -- Replaced by auto-creation
-- `apps/agent/src/components/onboarding/TestStep.tsx` -- Replaced by LiveDemoStep (real CoWork chat)
-- `apps/agent/src/components/onboarding/SuccessStep.tsx` -- Replaced by ConnectionPowerBar
+All existing step components remain behind `FEATURE_NEW_ONBOARDING` flag. `JoinOrgStep.tsx` reused in new flow. `GmailSyncOnLogin` kept as fallback.
 
-### Database Changes
+### Database Migration
 
-- Add to `Membership` model:
-    - `onboardingPath` (String?) -- "google_oauth" | "email_password" | "invite_join" | "domain_join" | "domain_create" (for analytics)
-    - `connectedDuringOnboarding` (String[]?) -- Which integrations were connected during onboarding
-    - `setupProgress` (Json?) -- Tracks Connection Power Bar state
-- Add to `Agent` model:
-    - `isOnboardingAgent` (Boolean, default false) -- Identifies auto-created starter agents for upgrade logic
+Add to `Membership`: `onboardingPath` (String?), `connectedDuringOnboarding` (String[], default []), `setupProgress` (Json?)
+Add to `Agent`: `isOnboardingAgent` (Boolean, default false)
+
+All new fields nullable/defaulted. No data loss. No re-onboarding for existing users.
+
+---
+
+## Existing Components to Reuse
+
+| New Feature | Existing Components |
+|------------|-------------------|
+| ConnectStep layout | `Card`, `CardContent`, `CardHeader`, `Badge`, `Button`, `Separator` |
+| Gmail status indicator | `Badge` with variant coloring |
+| Integration tiles | `Card` pattern from current IntegrationsStep |
+| TeamWelcomeStep | `Card`, `Badge`, `Avatar` (same as `/agents` grid) |
+| Connection Power Bar | `Badge`, `Button`, `Tooltip`, `Collapsible` |
+| Live demo | Full CoWork: `Conversation`, `PromptInput`, `Message`, `MessageContent` |
+| Tool calls | `Tool` component from `packages/ui/src/components/ai-elements/tool.tsx` |
+| Loading states | `Skeleton`, `Loader`, `Shimmer` |
+| Empty states | `ConversationEmptyState` pattern |
 
 ---
 
 ## Implementation Phases
 
-### Phase 1: Gmail Auto-Sync on Bootstrap (foundation)
+### Phase 1: Foundation (Gmail sync + DB schema)
+- Extract Gmail sync from route handler into `packages/auth/src/gmail-sync.ts`
+- Call from `bootstrapUserOrganization()` when Google Account has Gmail scopes
+- Edge case handling: partial scopes, expired tokens, retry logic
+- Add `FEATURE_NEW_ONBOARDING` env var (default: false)
+- `prisma migrate` for new fields
+- **Test**: Google sign-up -> `IntegrationConnection` created for Gmail before redirect
 
-Extract Gmail sync logic into a server-callable function. Call it from `bootstrapUserOrganization()` when the user has a Google Account with Gmail scopes. This ensures Gmail is connected before the user sees any onboarding screen.
+### Phase 2: ConnectStep + Bootstrap Agent
+- Build `ConnectStep.tsx` using existing Card, Badge, Button
+- Build `POST /api/onboarding/bootstrap-agent` route
+- Agent created with memory config, scorers, tools based on connections
+- **Test**: Google sign-up -> ConnectStep shows Gmail connected -> Continue creates agent
 
-### Phase 2: ConnectStep + Auto-Agent Creation
+### Phase 3: Live Demo (CoWork integration)
+- Wire onboarding completion to redirect to `/?agent=<slug>&firstRun=true`
+- CoWork detects `firstRun`, auto-sends first message to agent
+- Agent instructions cause Gmail search and inbox summary
+- Tool calls visible in existing Tool component UI
+- **Test**: Full golden path. Google sign-up -> 1 screen -> chatting with real email data
 
-Build the new ConnectStep component and the `bootstrap-agent` API. ConnectStep shows Gmail as already connected (for Google users) and prompts Slack. Auto-agent creation builds the right agent based on available connections.
+### Phase 4: Team Welcome + Path Branching
+- Build `TeamWelcomeStep.tsx` using existing Card, Avatar, Badge
+- Rewrite `onboarding/page.tsx` with feature-flagged path branching
+- **Test**: All 4 paths end-to-end
 
-### Phase 3: LiveDemoStep + Real Data
+### Phase 5: Connection Power Bar + Inline OAuth
+- Build `ConnectionPowerBar.tsx` (compact + expanded)
+- Add to main layout after onboarding
+- Modify Slack install/callback for popup mode (`window.postMessage`)
+- **Test**: Connect Slack from Power Bar without page navigation
 
-Build the LiveDemoStep that drops users into CoWork chat where the auto-created agent immediately acts on real data (inbox summary for Gmail users, general greeting for others).
-
-### Phase 4: Connection Power Bar
-
-Build the persistent integration progress indicator. Shows across the app, suggests next connections, enables inline OAuth.
-
-### Phase 5: TeamWelcomeStep + Full Path Branching
-
-Build the team onboarding path for invite/domain-match users. Complete the path branching logic in the rewritten onboarding page.
-
-### Phase 6: Inline Slack OAuth + Agent Upgrade
-
-Build popup-mode Slack OAuth so users can connect without leaving the current page. Implement agent auto-upgrade when new integrations are connected (add tools, update instructions).
+### Phase 6: Polish, Edge Cases, Rollback
+- Handle all edge cases from tables above
+- Privacy consent copy on ConnectStep
+- Empty inbox fallback in agent instructions
+- Feature flag verified: `FEATURE_NEW_ONBOARDING=false` reverts cleanly
+- Analytics: track `onboardingPath`, `connectedDuringOnboarding`
+- **Test**: Partial scopes, expired tokens, Slack non-admin, empty inbox, popup blocked
 
 ---
 
 ## Success Metrics
 
-- **Time to first real-data interaction**: Target under 30 seconds for Google OAuth users (currently 3-5 minutes)
-- **Gmail connection rate during onboarding**: Target 95%+ for Google users (currently requires manual sync)
-- **Slack connection rate within first session**: Target 40%+ (currently near 0% during onboarding)
-- **Onboarding completion rate**: Target 95%+ (fewer steps = less drop-off)
-- **Integration connection rate within 7 days**: Target 60%+ (Connection Power Bar drives ongoing connection)
-- **Second-day retention**: Measure improvement from real-data aha moment vs generic chat
-- **Integrations per org at 30 days**: Target 3+ (Zapier benchmark: value correlates with connections)
+| Metric | Current | Target | Measurement |
+|--------|---------|--------|------------|
+| Time to first real-data interaction | 3-5 min | Under 30s (Google path) | Timestamp: sign-up to first `AgentRun` with Gmail tool call |
+| Gmail connection rate (Google users) | ~0% manual | 95%+ | `connectedDuringOnboarding` includes "gmail" |
+| Slack connection rate (first session) | ~0% | 30%+ | `connectedDuringOnboarding` includes "slack" |
+| Onboarding completion rate | Unknown | 95%+ | `onboardingCompletedAt` set / sign-ups |
+| Platform features experienced | 0 | 4+ in first session | Agent uses memory, tools, suggests canvas/workflows |
+| Second-day retention | Baseline | +20% | User returns within 24h |
+| Integrations per org at 30 days | Baseline | 3+ average | Active `IntegrationConnection` count |
+
+---
+
+## What Makes This Industry-Leading
+
+| Aspect | Typical SaaS Onboarding | AgentC2 Onboarding |
+|--------|------------------------|-------------------|
+| Integration timing | "Configure integrations later" page | Auto-connected from sign-up OAuth |
+| First value | Feature tour or generic demo | Agent acts on user's real email data |
+| AI differentiation | Chatbot greeting | Memory, tool calls visible, canvas suggested, workflows mentioned |
+| Progressive complexity | Feature dump or slow reveal | Platform capabilities discovered organically through agent behavior |
+| Observability | Hidden | Every interaction creates traced, evaluated, scored runs |
+| Personalization | None until manual config | Working memory template learns user's context from first conversation |
+| Team experience | Same flow as solo | Shows team's ecosystem, existing agents, shared integrations |
+| Rollback safety | No fallback | Feature-flagged, old flow preserved, `GmailSyncOnLogin` as backup |

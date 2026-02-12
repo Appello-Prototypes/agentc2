@@ -725,7 +725,6 @@ export default function IntegrationsHubPage() {
                                         onTest={handleTestServer}
                                         testResults={testResults}
                                         testingServers={testingServers}
-                                        showManage={false}
                                     />
                                 </CardContent>
                             </Card>

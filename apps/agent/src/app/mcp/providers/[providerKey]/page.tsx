@@ -144,10 +144,59 @@ const mergeRequiredValues = (
     return merged;
 };
 
-const extractRequiredValues = (credentials: Record<string, unknown>, requiredFields: string[]) => {
+/**
+ * Alternative credential key names that buildMcpConfig() also accepts at runtime.
+ * Mirrors the CREDENTIAL_ALIASES in integrations.ts so the edit form pre-fills
+ * values stored under OAuth-style keys (e.g. "botToken" for "SLACK_BOT_TOKEN").
+ */
+const CREDENTIAL_ALIASES: Record<string, string[]> = {
+    SLACK_BOT_TOKEN: ["botToken"],
+    SLACK_TEAM_ID: ["teamId"],
+    HUBSPOT_ACCESS_TOKEN: ["PRIVATE_APP_ACCESS_TOKEN"],
+    PRIVATE_APP_ACCESS_TOKEN: ["HUBSPOT_ACCESS_TOKEN"],
+};
+
+const extractRequiredValues = (
+    credentials: Record<string, unknown>,
+    requiredFields: string[],
+    metadata?: Record<string, unknown> | null
+) => {
     const values: Record<string, string> = {};
+    const meta = metadata && typeof metadata === "object" ? metadata : {};
     requiredFields.forEach((field) => {
-        const value = credentials[field];
+        // Check canonical key first
+        let value = credentials[field];
+
+        // Check credential aliases
+        if (value === undefined || value === null) {
+            const aliases = CREDENTIAL_ALIASES[field];
+            if (aliases) {
+                for (const alias of aliases) {
+                    if (credentials[alias] !== undefined && credentials[alias] !== null) {
+                        value = credentials[alias];
+                        break;
+                    }
+                }
+            }
+        }
+
+        // Check metadata (e.g. SLACK_TEAM_ID stored as metadata.teamId)
+        if (value === undefined || value === null) {
+            const aliases = CREDENTIAL_ALIASES[field];
+            if (aliases) {
+                for (const alias of aliases) {
+                    if (meta[alias] !== undefined && meta[alias] !== null) {
+                        value = meta[alias];
+                        break;
+                    }
+                }
+            }
+            // Also check metadata under the canonical key name
+            if ((value === undefined || value === null) && meta[field] !== undefined) {
+                value = meta[field];
+            }
+        }
+
         if (value !== undefined && value !== null) {
             values[field] = String(value);
         }
@@ -664,7 +713,7 @@ export default function ProviderDetailPage() {
                     isActive: connection.isActive,
                     credentialsJson: formatJson(credentials),
                     metadataJson: formatJson(metadata),
-                    requiredValues: extractRequiredValues(credentials, requiredFields),
+                    requiredValues: extractRequiredValues(credentials, requiredFields, metadata),
                     errorMessage: connection.errorMessage || null
                 }
             }));

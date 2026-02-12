@@ -240,7 +240,7 @@ function CostPerRunChart({
                     <polyline
                         points={linePoints}
                         fill="none"
-                        stroke="hsl(var(--primary))"
+                        stroke="#3b82f6"
                         strokeWidth={2}
                         strokeLinejoin="round"
                         strokeLinecap="round"
@@ -266,11 +266,10 @@ function CostPerRunChart({
                             r={hoveredIndex === i ? 5 : 3}
                             fill={
                                 run.costUsd > averageCost
-                                    ? "hsl(var(--destructive))"
-                                    : "hsl(var(--primary))"
+                                    ? "#ef4444"
+                                    : "#3b82f6"
                             }
-                            stroke="hsl(var(--background))"
-                            strokeWidth={1.5}
+                            stroke="none"
                             className="transition-all duration-150"
                         />
                     </g>
