@@ -46,14 +46,12 @@ const SEVERITY_MAP = {
 // Slack Configuration
 // =============================================================================
 
-const SLACK_BOT_TOKEN = process.env.SLACK_BOT_TOKEN;
-const SLACK_ALERTS_CHANNEL = process.env.SLACK_ALERTS_CHANNEL;
-
 /**
- * Check if Slack alerting is configured
+ * Check if Slack alerting is configured (env var fallback).
+ * Multi-tenant: prefer resolving from IntegrationConnection via org context.
  */
 export function isSlackConfigured(): boolean {
-    return !!(SLACK_BOT_TOKEN && SLACK_ALERTS_CHANNEL);
+    return !!(process.env.SLACK_BOT_TOKEN && process.env.SLACK_ALERTS_CHANNEL);
 }
 
 // =============================================================================
@@ -61,13 +59,18 @@ export function isSlackConfigured(): boolean {
 // =============================================================================
 
 /**
- * Send an alert through all configured channels
+ * Send an alert through all configured channels.
+ * Accepts optional organizationId for multi-tenant Slack token resolution.
  */
-export async function sendAlert(params: SendAlertParams): Promise<{
+export async function sendAlert(
+    params: SendAlertParams & {
+        organizationId?: string;
+    }
+): Promise<{
     alertId: string;
     slackSent: boolean;
 }> {
-    const { agentId, agentSlug, severity, type, message, metadata } = params;
+    const { agentId, agentSlug, severity, type, message, metadata, organizationId } = params;
 
     // 1. Create AgentAlert record in database
     // Note: AgentAlert uses SYSTEM as source since learning-specific sources aren't in the enum
@@ -98,9 +101,48 @@ export async function sendAlert(params: SendAlertParams): Promise<{
         }
     });
 
-    // 3. Send to Slack if configured
+    // 3. Send to Slack -- try org-scoped connection first, then env var fallback
     let slackSent = false;
-    if (isSlackConfigured()) {
+    let resolvedBotToken: string | undefined;
+    let resolvedAlertChannel: string | undefined;
+
+    if (organizationId) {
+        try {
+            const provider = await prisma.integrationProvider.findUnique({
+                where: { key: "slack" }
+            });
+            if (provider) {
+                const { decryptCredentials } = await import("@/lib/credential-crypto");
+                const connection = await prisma.integrationConnection.findFirst({
+                    where: {
+                        organizationId,
+                        providerId: provider.id,
+                        isActive: true
+                    },
+                    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+                });
+                if (connection?.credentials) {
+                    const creds = decryptCredentials(connection.credentials) as Record<
+                        string,
+                        unknown
+                    >;
+                    const meta = (connection.metadata || {}) as Record<string, unknown>;
+                    resolvedBotToken = (creds.botToken || creds.SLACK_BOT_TOKEN) as
+                        | string
+                        | undefined;
+                    resolvedAlertChannel = (meta.alertsChannelId as string) || undefined;
+                }
+            }
+        } catch {
+            // Fall through to env var fallback
+        }
+    }
+
+    // Env var fallback
+    const botToken = resolvedBotToken || process.env.SLACK_BOT_TOKEN;
+    const alertsChannel = resolvedAlertChannel || process.env.SLACK_ALERTS_CHANNEL;
+
+    if (botToken && alertsChannel) {
         try {
             await sendSlackAlert({
                 agentId,
@@ -108,7 +150,9 @@ export async function sendAlert(params: SendAlertParams): Promise<{
                 severity,
                 type,
                 message,
-                metadata
+                metadata,
+                botToken,
+                alertsChannel
             });
             slackSent = true;
         } catch (error) {
@@ -132,8 +176,12 @@ async function sendSlackAlert(params: {
     type: AlertType;
     message: string;
     metadata?: Record<string, unknown>;
+    botToken?: string;
+    alertsChannel?: string;
 }): Promise<void> {
-    const { agentSlug, severity, type, message, metadata } = params;
+    const { agentSlug, severity, type, message, metadata, botToken, alertsChannel } = params;
+    const token = botToken || process.env.SLACK_BOT_TOKEN;
+    const channel = alertsChannel || process.env.SLACK_ALERTS_CHANNEL;
 
     // Severity to emoji mapping
     const severityEmoji: Record<AlertSeverity, string> = {
@@ -200,11 +248,11 @@ async function sendSlackAlert(params: {
     const response = await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
         headers: {
-            Authorization: `Bearer ${SLACK_BOT_TOKEN}`,
+            Authorization: `Bearer ${token}`,
             "Content-Type": "application/json"
         },
         body: JSON.stringify({
-            channel: SLACK_ALERTS_CHANNEL,
+            channel,
             text: `${severityEmoji[severity]} [${agentSlug}] ${message}`,
             attachments: [
                 {

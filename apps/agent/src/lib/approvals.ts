@@ -33,6 +33,8 @@ type CreateApprovalOptions = {
     payload?: Record<string, unknown> | null;
     action?: ApprovalAction | null;
     metadata?: Record<string, unknown> | null;
+    /** Explicit bot token for multi-tenant Slack support */
+    botToken?: string;
 };
 
 const normalizeJson = (value: unknown) =>
@@ -173,7 +175,8 @@ export const createApprovalRequest = async (options: CreateApprovalOptions) => {
             });
             const slackResponse = await sendSlackApprovalRequest({
                 userId: options.slackUserId,
-                text: message
+                text: message,
+                botToken: options.botToken
             });
             await prisma.approvalRequest.update({
                 where: { id: approval.id },

@@ -1,7 +1,7 @@
 # Mastra MCP Tools - Production Test Report
 
 **Date:** 2026-02-05  
-**Environment:** Production (https://mastra.useappello.app)  
+**Environment:** Production (https://agentc2.ai)  
 **Total Tools Tested:** 33  
 **Overall Status:** ✅ ALL PASSED
 
@@ -126,7 +126,7 @@ All test resources were successfully deleted:
         "command": "/Users/coreyshelson/.nvm/versions/node/v24.11.1/bin/node",
         "args": ["/Users/coreyshelson/mastra-experiment/scripts/mcp-server/index.js"],
         "env": {
-            "MASTRA_API_URL": "https://mastra.useappello.app",
+            "MASTRA_API_URL": "https://agentc2.ai",
             "MASTRA_API_KEY": "***REDACTED***",
             "MASTRA_ORGANIZATION_SLUG": "appello"
         }

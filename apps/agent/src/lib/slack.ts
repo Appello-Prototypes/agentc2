@@ -13,12 +13,22 @@ const getSlackToken = () => {
     return token;
 };
 
-const callSlackApi = async <T>(endpoint: string, body: Record<string, unknown>) => {
+/**
+ * Call a Slack API endpoint.
+ * Accepts an explicit botToken for multi-tenant support; falls back to env var.
+ */
+const callSlackApi = async <T>(
+    endpoint: string,
+    body: Record<string, unknown>,
+    botToken?: string
+) => {
+    const token = botToken || getSlackToken();
+
     const response = await fetch(`${SLACK_API_BASE}/${endpoint}`, {
         method: "POST",
         headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${getSlackToken()}`
+            Authorization: `Bearer ${token}`
         },
         body: JSON.stringify(body)
     });
@@ -31,36 +41,40 @@ const callSlackApi = async <T>(endpoint: string, body: Record<string, unknown>) 
     return data;
 };
 
-export const openDmChannel = async (userId: string) => {
-    const data = await callSlackApi<{ channel: { id: string } }>("conversations.open", {
-        users: userId
-    });
+export const openDmChannel = async (userId: string, botToken?: string) => {
+    const data = await callSlackApi<{ channel: { id: string } }>(
+        "conversations.open",
+        { users: userId },
+        botToken
+    );
     return data.channel.id;
 };
 
-export const sendSlackMessage = async (channelId: string, text: string) => {
-    await callSlackApi("chat.postMessage", {
-        channel: channelId,
-        text
-    });
+export const sendSlackMessage = async (channelId: string, text: string, botToken?: string) => {
+    await callSlackApi("chat.postMessage", { channel: channelId, text }, botToken);
 };
 
 export const sendSlackApprovalRequest = async (options: {
     userId: string;
     text: string;
     blocks?: Record<string, unknown>[];
+    botToken?: string;
 }) => {
-    const channelId = await openDmChannel(options.userId);
-    const response = await callSlackApi<{ ts: string }>("chat.postMessage", {
-        channel: channelId,
-        text: options.text,
-        ...(options.blocks ? { blocks: options.blocks } : {})
-    });
+    const channelId = await openDmChannel(options.userId, options.botToken);
+    const response = await callSlackApi<{ ts: string }>(
+        "chat.postMessage",
+        {
+            channel: channelId,
+            text: options.text,
+            ...(options.blocks ? { blocks: options.blocks } : {})
+        },
+        options.botToken
+    );
 
     return { channelId, messageTs: response.ts };
 };
 
-export const sendSlackDM = async (userId: string, text: string) => {
-    const channelId = await openDmChannel(userId);
-    await sendSlackMessage(channelId, text);
+export const sendSlackDM = async (userId: string, text: string, botToken?: string) => {
+    const channelId = await openDmChannel(userId, botToken);
+    await sendSlackMessage(channelId, text, botToken);
 };

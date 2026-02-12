@@ -55,7 +55,7 @@ Key implementation details:
 - Uses `MCPServer` with `startHTTP()` in **serverless mode** (`serverless: true`) since each Next.js request is stateless
 - Exposes the same agents that the existing `/api/mcp` gateway exposes (fetched from the database)
 - Authenticates via the existing MCP API key system (passed as a Bearer token or custom client secret)
-- Accessible at `https://mastra.useappello.app/agent/api/mcp/server`
+- Accessible at `https://agentc2.ai/agent/api/mcp/server`
 
 ### 2. MCPServer factory module
 
@@ -91,7 +91,7 @@ Changes:
 - Move existing Cursor content under the "Cursor IDE" tab (unchanged)
 - Add new "Claude CoWork" tab with simple 3-step instructions:
     1. **Generate MCP API Key** -- reuses the existing org key section already on the page
-    2. **Copy Remote MCP Server URL** -- shows `https://mastra.useappello.app/agent/api/mcp/server` with a copy button
+    2. **Copy Remote MCP Server URL** -- shows `https://agentc2.ai/agent/api/mcp/server` with a copy button
     3. **Add to Claude** -- instructions to go to Claude Settings > Connectors > Add Custom Connector, paste the URL, and optionally add the API key as the client secret
 - Include a screenshot/description matching the Claude "Add custom connector" dialog
 - Keep the "Available Agents" and "Help" sections shared across both tabs
@@ -123,4 +123,4 @@ This matches the screenshot the user shared -- the OAuth fields are marked "(opt
 1. Start dev server locally: `bun run dev:local`
 2. Test with curl: `curl -X POST http://localhost:3001/api/mcp/server -H "Content-Type: application/json" -d '{"jsonrpc":"2.0","method":"initialize","id":1,"params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"test","version":"1.0"}}}'`
 3. Test with [MCP Inspector](https://github.com/modelcontextprotocol/inspector) pointing at `http://localhost:3001/api/mcp/server`
-4. Deploy to production and test in Claude CoWork by adding as custom connector at `https://mastra.useappello.app/agent/api/mcp/server`
+4. Deploy to production and test in Claude CoWork by adding as custom connector at `https://agentc2.ai/agent/api/mcp/server`

@@ -165,7 +165,8 @@ const OAUTH_PROVIDER_MAP: Record<string, OAuthConfig> = {
         socialProvider: "google",
         scopes: [
             "https://www.googleapis.com/auth/gmail.modify",
-            "https://www.googleapis.com/auth/gmail.send"
+            "https://www.googleapis.com/auth/gmail.send",
+            "https://www.googleapis.com/auth/calendar.readonly"
         ],
         statusEndpoint: "/api/integrations/gmail/status",
         syncEndpoint: "/api/integrations/gmail/sync"

@@ -7,6 +7,12 @@ import { calculateCost } from "@/lib/cost-calculator";
 import { resolveIdentity } from "@/lib/identity";
 import { handleSlackApprovalReaction } from "@/lib/approvals";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import {
+    resolveSlackInstallation,
+    isDuplicateSlackEvent,
+    getBotUserIdForInstallation,
+    type SlackInstallationContext
+} from "@/lib/slack-tokens";
 
 /**
  * Hardcoded last-resort fallback when neither the database nor the env var
@@ -15,83 +21,32 @@ import { createTriggerEventRecord } from "@/lib/trigger-events";
 const FALLBACK_AGENT_SLUG = "assistant";
 
 /**
- * Cache the bot's own Slack user ID to detect own messages and thread participation.
- * Resolved once via auth.test on first use.
- */
-let cachedBotUserId: string | null = null;
-
-async function getBotUserId(): Promise<string | null> {
-    if (cachedBotUserId) return cachedBotUserId;
-    const botToken = process.env.SLACK_BOT_TOKEN;
-    if (!botToken) return null;
-    try {
-        const res = await fetch("https://slack.com/api/auth.test", {
-            method: "POST",
-            headers: { Authorization: `Bearer ${botToken}` }
-        });
-        const data = await res.json();
-        if (data.ok && data.user_id) {
-            cachedBotUserId = data.user_id;
-            console.log(`[Slack] Bot user ID resolved: ${cachedBotUserId}`);
-            return cachedBotUserId;
-        }
-    } catch (error) {
-        console.error("[Slack] Failed to resolve bot user ID:", error);
-    }
-    return null;
-}
-
-/**
- * Track threads the bot has participated in so it can auto-reply
- * without requiring @mention on every message.
- *
- * Uses an in-memory LRU-style Map with timestamps for eviction.
- * On cache miss, falls back to checking AgentRun records in the database
- * (the threadId field stores "slack-{channelId}-{threadTs}").
- * This means threads survive server restarts.
- */
-const THREAD_CACHE_MAX = 1000;
-const THREAD_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
-const activeThreads = new Map<string, number>();
-
-function markThreadActive(channelId: string, threadTs: string) {
-    const key = `${channelId}-${threadTs}`;
-    activeThreads.set(key, Date.now());
-
-    // Evict oldest entries if cache grows too large
-    if (activeThreads.size > THREAD_CACHE_MAX) {
-        const cutoff = Date.now() - THREAD_CACHE_TTL_MS;
-        for (const [k, ts] of activeThreads) {
-            if (ts < cutoff) activeThreads.delete(k);
-        }
-        if (activeThreads.size > THREAD_CACHE_MAX) {
-            const entries = [...activeThreads.entries()].sort((a, b) => a[1] - b[1]);
-            for (const [k] of entries.slice(0, Math.floor(entries.length / 2))) {
-                activeThreads.delete(k);
-            }
-        }
-    }
-}
-
-/**
  * Check if the bot has previously participated in a thread.
- * First checks in-memory cache, then falls back to the database.
+ * Uses database as primary source (AgentRun records).
+ * Thread ID format: "slack-{teamId}-{channelId}-{threadTs}" (multi-tenant safe).
+ * Falls back to legacy "slack-{channelId}-{threadTs}" for existing Appello threads.
  */
-async function isThreadActive(channelId: string, threadTs: string): Promise<boolean> {
-    const key = `${channelId}-${threadTs}`;
-    const ts = activeThreads.get(key);
-    if (ts && Date.now() - ts < THREAD_CACHE_TTL_MS) return true;
-
-    // DB fallback: check for prior runs in this thread
+async function isThreadActive(
+    teamId: string,
+    channelId: string,
+    threadTs: string
+): Promise<boolean> {
     try {
+        // Check new format first
+        const newFormatId = `slack-${teamId}-${channelId}-${threadTs}`;
         const priorRun = await prisma.agentRun.findFirst({
-            where: { threadId: `slack-${channelId}-${threadTs}`, source: "slack" },
+            where: { threadId: newFormatId, source: "slack" },
             select: { id: true }
         });
-        if (priorRun) {
-            markThreadActive(channelId, threadTs);
-            return true;
-        }
+        if (priorRun) return true;
+
+        // Fallback: check legacy format for backward compatibility
+        const legacyFormatId = `slack-${channelId}-${threadTs}`;
+        const legacyRun = await prisma.agentRun.findFirst({
+            where: { threadId: legacyFormatId, source: "slack" },
+            select: { id: true }
+        });
+        if (legacyRun) return true;
     } catch {
         // DB failure -- don't auto-reply
     }
@@ -99,24 +54,75 @@ async function isThreadActive(channelId: string, threadTs: string): Promise<bool
 }
 
 /**
- * Deduplicate Slack events. Slack can retry delivery if it doesn't get
- * a timely 200 response, leading to duplicate processing.
- * Stores event IDs for the last 5 minutes.
+ * Build the thread ID for a Slack message. Includes teamId for multi-tenant isolation.
  */
-const processedEvents = new Map<string, number>();
-const EVENT_DEDUP_TTL_MS = 5 * 60 * 1000;
+function buildSlackThreadId(teamId: string, channelId: string, threadTs: string): string {
+    return `slack-${teamId}-${channelId}-${threadTs}`;
+}
 
-function isDuplicateEvent(eventId: string): boolean {
-    // Prune old entries periodically
-    const now = Date.now();
-    if (processedEvents.size > 500) {
-        for (const [id, ts] of processedEvents) {
-            if (now - ts > EVENT_DEDUP_TTL_MS) processedEvents.delete(id);
+/**
+ * Check rate limits for a Slack user within an org's Slack connection.
+ * Returns an error message string if rate limited, or null if allowed.
+ *
+ * Limits (configurable via IntegrationConnection.metadata):
+ *   - maxMessagesPerMinutePerUser: default 10
+ *   - maxInvocationsPerHour: default 100 (per connection/team)
+ */
+async function checkSlackRateLimit(connectionId: string, userId: string): Promise<string | null> {
+    try {
+        const connection = await prisma.integrationConnection.findUnique({
+            where: { id: connectionId },
+            select: { metadata: true }
+        });
+        const meta =
+            connection?.metadata && typeof connection.metadata === "object"
+                ? (connection.metadata as Record<string, unknown>)
+                : {};
+
+        const maxPerMinutePerUser =
+            typeof meta.maxMessagesPerMinutePerUser === "number"
+                ? meta.maxMessagesPerMinutePerUser
+                : 10;
+        const maxPerHour =
+            typeof meta.maxInvocationsPerHour === "number" ? meta.maxInvocationsPerHour : 100;
+
+        const oneMinuteAgo = new Date(Date.now() - 60_000);
+        const oneHourAgo = new Date(Date.now() - 3_600_000);
+
+        // Per-user per-minute: count recent Slack runs by this userId
+        const userRecentCount = await prisma.agentRun.count({
+            where: {
+                source: "slack",
+                userId,
+                createdAt: { gte: oneMinuteAgo }
+            }
+        });
+
+        if (userRecentCount >= maxPerMinutePerUser) {
+            return "You're sending messages too quickly. Please wait a moment before trying again.";
         }
+
+        // Per-org per-hour: count all Slack runs in this time window
+        // Use teamId prefix in threadId to scope to this org
+        const teamId = (meta.teamId as string) || "";
+        const threadPrefix = teamId ? `slack-${teamId}-` : "slack-";
+        const orgRecentCount = await prisma.agentRun.count({
+            where: {
+                source: "slack",
+                threadId: { startsWith: threadPrefix },
+                createdAt: { gte: oneHourAgo }
+            }
+        });
+
+        if (orgRecentCount >= maxPerHour) {
+            return "This workspace has reached its hourly message limit. Please try again later.";
+        }
+    } catch (error) {
+        // Rate limiting should never block processing on error
+        console.warn("[Slack] Rate limit check failed:", error);
     }
-    if (processedEvents.has(eventId)) return true;
-    processedEvents.set(eventId, now);
-    return false;
+
+    return null;
 }
 
 /**
@@ -336,9 +342,16 @@ function parseAgentDirective(
  * List active agents from the database and format as a Slack message.
  * Excludes DEMO agents -- only SYSTEM and USER agents are shown.
  */
-async function listActiveAgents(defaultSlug: string): Promise<string> {
+async function listActiveAgents(
+    defaultSlug: string,
+    organizationId?: string | null
+): Promise<string> {
     const agents = await prisma.agent.findMany({
-        where: { isActive: true, type: { in: ["SYSTEM", "USER"] } },
+        where: {
+            isActive: true,
+            type: { in: ["SYSTEM", "USER"] },
+            ...(organizationId ? { workspace: { organizationId } } : {})
+        },
         select: { slug: true, name: true, description: true },
         orderBy: { name: "asc" }
     });
@@ -389,17 +402,19 @@ function resolveSlackIdentity(record: { name: string; metadata: unknown }): {
  * Send a message to Slack using the Web API.
  * Supports per-message display identity (username, icon_emoji, icon_url)
  * via the chat:write.customize scope.
+ * Accepts an explicit botToken for multi-tenant support; falls back to env var.
  */
-async function sendSlackMessage(
+async function sendSlackMessageToChannel(
     channelId: string,
     text: string,
     threadTs?: string,
-    identity?: { username?: string; icon_emoji?: string; icon_url?: string }
+    identity?: { username?: string; icon_emoji?: string; icon_url?: string },
+    botToken?: string
 ): Promise<boolean> {
-    const botToken = process.env.SLACK_BOT_TOKEN;
+    const token = botToken || process.env.SLACK_BOT_TOKEN;
 
-    if (!botToken) {
-        console.error("[Slack] SLACK_BOT_TOKEN not configured");
+    if (!token) {
+        console.error("[Slack] No bot token available (neither passed nor in env)");
         return false;
     }
 
@@ -408,7 +423,7 @@ async function sendSlackMessage(
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${botToken}`
+                Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({
                 channel: channelId,
@@ -445,10 +460,11 @@ async function sendSlackMessageSafe(
     channelId: string,
     text: string,
     threadTs?: string,
-    identity?: { username?: string; icon_emoji?: string; icon_url?: string }
+    identity?: { username?: string; icon_emoji?: string; icon_url?: string },
+    botToken?: string
 ): Promise<boolean> {
     if (text.length <= SLACK_MAX_TEXT_LENGTH) {
-        return sendSlackMessage(channelId, text, threadTs, identity);
+        return sendSlackMessageToChannel(channelId, text, threadTs, identity, botToken);
     }
 
     const chunks: string[] = [];
@@ -469,7 +485,7 @@ async function sendSlackMessageSafe(
 
     let success = true;
     for (const chunk of chunks) {
-        const ok = await sendSlackMessage(channelId, chunk, threadTs, identity);
+        const ok = await sendSlackMessageToChannel(channelId, chunk, threadTs, identity, botToken);
         if (!ok) success = false;
     }
     return success;
@@ -479,15 +495,20 @@ async function sendSlackMessageSafe(
  * Add a reaction to a message (e.g., :eyes: while thinking).
  * This is a human-like "I see your message" acknowledgment.
  */
-async function addReaction(channelId: string, messageTs: string, reaction: string): Promise<void> {
-    const botToken = process.env.SLACK_BOT_TOKEN;
-    if (!botToken) return;
+async function addReaction(
+    channelId: string,
+    messageTs: string,
+    reaction: string,
+    botToken?: string
+): Promise<void> {
+    const token = botToken || process.env.SLACK_BOT_TOKEN;
+    if (!token) return;
     try {
         await fetch("https://slack.com/api/reactions.add", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${botToken}`
+                Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({
                 channel: channelId,
@@ -506,16 +527,17 @@ async function addReaction(channelId: string, messageTs: string, reaction: strin
 async function removeReaction(
     channelId: string,
     messageTs: string,
-    reaction: string
+    reaction: string,
+    botToken?: string
 ): Promise<void> {
-    const botToken = process.env.SLACK_BOT_TOKEN;
-    if (!botToken) return;
+    const token = botToken || process.env.SLACK_BOT_TOKEN;
+    if (!token) return;
     try {
         await fetch("https://slack.com/api/reactions.remove", {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
-                Authorization: `Bearer ${botToken}`
+                Authorization: `Bearer ${token}`
             },
             body: JSON.stringify({
                 channel: channelId,
@@ -550,34 +572,10 @@ async function resolveDefaultAgentSlug(organizationId: string | null): Promise<s
     return process.env.SLACK_DEFAULT_AGENT_SLUG || FALLBACK_AGENT_SLUG;
 }
 
-const resolveSlackWorkspaceContext = async () => {
-    // Use env var slug as a starting point to find the workspace/org
-    const envSlug = process.env.SLACK_DEFAULT_AGENT_SLUG || FALLBACK_AGENT_SLUG;
-    const agentRecord = await prisma.agent.findFirst({
-        where: { slug: envSlug },
-        select: { id: true, workspaceId: true }
-    });
-
-    if (!agentRecord?.workspaceId) {
-        return {
-            agentId: agentRecord?.id || null,
-            workspaceId: null,
-            organizationId: null
-        };
-    }
-
-    const workspace = await prisma.workspace.findUnique({
-        where: { id: agentRecord.workspaceId },
-        select: { organizationId: true }
-    });
-
-    return {
-        agentId: agentRecord.id,
-        workspaceId: agentRecord.workspaceId,
-        organizationId: workspace?.organizationId || null
-    };
-};
-
+/**
+ * Resolve the IntegrationConnection for Slack in a given org.
+ * Used for non-event-routing scenarios where we already have an orgId.
+ */
 const resolveSlackConnection = async (organizationId: string | null) => {
     if (!organizationId) return null;
     const provider = await prisma.integrationProvider.findUnique({
@@ -726,10 +724,12 @@ async function processMessage(
     channelId: string,
     threadTs: string,
     messageTs: string,
+    installation?: SlackInstallationContext | null,
     agentSlug?: string
 ): Promise<ProcessMessageResult> {
-    const slug = agentSlug || FALLBACK_AGENT_SLUG;
-    const slackThreadId = `slack-${channelId}-${threadTs}`;
+    const slug = agentSlug || installation?.defaultAgentSlug || FALLBACK_AGENT_SLUG;
+    const teamId = installation?.teamId || process.env.SLACK_TEAM_ID || "unknown";
+    const slackThreadId = buildSlackThreadId(teamId, channelId, threadTs);
 
     console.log(`\n${"=".repeat(60)}`);
     console.log(`[Slack] Processing message at ${new Date().toISOString()}`);
@@ -738,6 +738,17 @@ async function processMessage(
     console.log(`[Slack] Thread: ${threadTs}`);
     console.log(`[Slack] Agent: ${slug}`);
     console.log(`[Slack] Message: ${text}`);
+
+    // Rate limiting: check per-user messages per minute
+    if (installation?.connectionId) {
+        const rateLimitResult = await checkSlackRateLimit(installation.connectionId, userId);
+        if (rateLimitResult) {
+            return {
+                text: rateLimitResult,
+                identity: {}
+            };
+        }
+    }
 
     // Resolve the agent
     let agentId: string;
@@ -788,20 +799,68 @@ async function processMessage(
         : {};
 
     const workspaceId = record?.workspaceId || null;
-    const organizationId = workspaceId
-        ? (
-              await prisma.workspace.findUnique({
-                  where: { id: workspaceId },
-                  select: { organizationId: true }
-              })
-          )?.organizationId || null
-        : null;
-    const connection = await resolveSlackConnection(organizationId);
+    const organizationId =
+        installation?.organizationId ||
+        (workspaceId
+            ? (
+                  await prisma.workspace.findUnique({
+                      where: { id: workspaceId },
+                      select: { organizationId: true }
+                  })
+              )?.organizationId || null
+            : null);
+    const connection = installation?.connectionId
+        ? await prisma.integrationConnection.findUnique({
+              where: { id: installation.connectionId }
+          })
+        : await resolveSlackConnection(organizationId);
 
     if (organizationId) {
+        // Enrich identity mapping with Slack profile data
+        const slackMeta: Record<string, unknown> = {};
+        if (installation?.teamId) {
+            slackMeta.slackTeamId = installation.teamId;
+        }
+
+        // Lazy profile enrichment: fetch display name / avatar on first encounter
+        const existingIdentity = await prisma.identityMapping.findFirst({
+            where: { organizationId, slackUserId: userId },
+            select: { metadata: true }
+        });
+        const existingMeta =
+            existingIdentity?.metadata && typeof existingIdentity.metadata === "object"
+                ? (existingIdentity.metadata as Record<string, unknown>)
+                : {};
+
+        const resolvedBotToken = installation?.botToken || process.env.SLACK_BOT_TOKEN;
+        if (!existingMeta.slackDisplayName && resolvedBotToken) {
+            try {
+                const profileRes = await fetch(
+                    "https://slack.com/api/users.info?" + new URLSearchParams({ user: userId }),
+                    {
+                        headers: { Authorization: `Bearer ${resolvedBotToken}` }
+                    }
+                );
+                const profileData = (await profileRes.json()) as {
+                    ok: boolean;
+                    user?: {
+                        profile?: { display_name?: string; real_name?: string; image_48?: string };
+                    };
+                };
+                if (profileData.ok && profileData.user?.profile) {
+                    const p = profileData.user.profile;
+                    slackMeta.slackDisplayName = p.display_name || p.real_name || null;
+                    slackMeta.slackAvatarUrl = p.image_48 || null;
+                }
+            } catch {
+                // Non-critical, continue without profile
+            }
+        }
+
         await resolveIdentity({
             organizationId,
-            slackUserId: userId
+            slackUserId: userId,
+            metadata: Object.keys(slackMeta).length > 0 ? slackMeta : undefined
         });
     }
 
@@ -962,14 +1021,22 @@ export async function POST(request: NextRequest) {
     if (payload.type === "event_callback") {
         const event = payload.event;
 
-        // Deduplicate: Slack may retry events if it doesn't get a fast 200
-        if (isDuplicateEvent(payload.event_id)) {
+        // Deduplicate: Slack may retry events (DB-backed, cross-process safe)
+        if (await isDuplicateSlackEvent(payload.event_id)) {
             console.log(`[Slack] Duplicate event ${payload.event_id}, ignoring`);
             return NextResponse.json({ ok: true });
         }
 
-        // Resolve bot user ID for loop prevention and thread detection
-        const botUserId = await getBotUserId();
+        // Resolve the Slack installation from team_id (multi-tenant routing)
+        const installation = await resolveSlackInstallation(payload.team_id);
+
+        if (!installation) {
+            console.warn(`[Slack] No installation found for team_id=${payload.team_id}`);
+            return NextResponse.json({ ok: true });
+        }
+
+        // Resolve bot user ID for loop prevention (per-installation)
+        const botUserId = getBotUserIdForInstallation(installation);
 
         // Ignore messages from the bot itself (covers both bot_message subtype
         // and cases where the bot's user ID matches the event sender)
@@ -980,9 +1047,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ ok: true });
         }
 
-        // Resolve org-level default agent slug (DB > env > "assistant")
-        const slackCtx = await resolveSlackWorkspaceContext();
-        const defaultAgentSlug = await resolveDefaultAgentSlug(slackCtx.organizationId);
+        // Resolve org-level default agent slug from installation context
+        const defaultAgentSlug = await resolveDefaultAgentSlug(installation.organizationId);
 
         // Handle app_mention events (when someone @mentions the bot)
         if (event.type === "app_mention") {
@@ -1000,16 +1066,26 @@ export async function POST(request: NextRequest) {
             // Process asynchronously to respond within 3 seconds
             setImmediate(async () => {
                 const threadTs = mentionEvent.thread_ts || mentionEvent.ts;
+                const token = installation.botToken;
 
                 // Handle help / agent:list command
                 if (directive.isListCommand) {
-                    const helpText = await listActiveAgents(defaultAgentSlug);
-                    await sendSlackMessageSafe(mentionEvent.channel, helpText, threadTs);
+                    const helpText = await listActiveAgents(
+                        defaultAgentSlug,
+                        installation.organizationId
+                    );
+                    await sendSlackMessageSafe(
+                        mentionEvent.channel,
+                        helpText,
+                        threadTs,
+                        undefined,
+                        token
+                    );
                     return;
                 }
 
                 // Show "thinking" reaction while processing
-                await addReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
+                await addReaction(mentionEvent.channel, mentionEvent.ts, "eyes", token);
 
                 try {
                     const result = await processMessage(
@@ -1018,6 +1094,7 @@ export async function POST(request: NextRequest) {
                         mentionEvent.channel,
                         threadTs,
                         mentionEvent.ts,
+                        installation,
                         directive.slug || undefined
                     );
 
@@ -1025,14 +1102,12 @@ export async function POST(request: NextRequest) {
                         mentionEvent.channel,
                         result.text,
                         threadTs,
-                        result.identity
+                        result.identity,
+                        token
                     );
-
-                    // Remember this thread so follow-up replies don't need @mention
-                    markThreadActive(mentionEvent.channel, threadTs);
                 } finally {
                     // Always remove thinking reaction, even on error
-                    await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes");
+                    await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes", token);
                 }
             });
 
@@ -1043,19 +1118,19 @@ export async function POST(request: NextRequest) {
             const reactionEvent = event as SlackReactionEvent;
 
             setImmediate(async () => {
-                const context = await resolveSlackWorkspaceContext();
-                const connection = await resolveSlackConnection(context.organizationId);
-
-                if (context.organizationId) {
+                if (installation.organizationId) {
                     await resolveIdentity({
-                        organizationId: context.organizationId,
-                        slackUserId: reactionEvent.user
+                        organizationId: installation.organizationId,
+                        slackUserId: reactionEvent.user,
+                        metadata: installation.teamId
+                            ? { slackTeamId: installation.teamId }
+                            : undefined
                     });
 
                     await appendChatReaction({
-                        organizationId: context.organizationId,
-                        workspaceId: context.workspaceId,
-                        integrationConnectionId: connection?.id || null,
+                        organizationId: installation.organizationId,
+                        workspaceId: null,
+                        integrationConnectionId: installation.connectionId,
                         channelId: reactionEvent.item.channel,
                         messageTs: reactionEvent.item.ts,
                         reaction: reactionEvent.reaction,
@@ -1080,16 +1155,14 @@ export async function POST(request: NextRequest) {
 
             if (messageEvent.subtype === "message_changed") {
                 setImmediate(async () => {
-                    const context = await resolveSlackWorkspaceContext();
-                    const connection = await resolveSlackConnection(context.organizationId);
                     const changedMessage = messageEvent.message;
                     const messageTs = changedMessage?.ts || messageEvent.ts;
 
-                    if (context.organizationId && messageTs) {
+                    if (installation.organizationId && messageTs) {
                         await upsertChatMessage({
-                            organizationId: context.organizationId,
-                            workspaceId: context.workspaceId,
-                            integrationConnectionId: connection?.id || null,
+                            organizationId: installation.organizationId,
+                            workspaceId: null,
+                            integrationConnectionId: installation.connectionId,
                             channelId: messageEvent.channel,
                             messageTs,
                             userId: messageEvent.user,
@@ -1107,15 +1180,13 @@ export async function POST(request: NextRequest) {
 
             if (messageEvent.subtype === "message_deleted") {
                 setImmediate(async () => {
-                    const context = await resolveSlackWorkspaceContext();
-                    const connection = await resolveSlackConnection(context.organizationId);
                     const messageTs = messageEvent.deleted_ts || messageEvent.ts;
 
-                    if (context.organizationId && messageTs) {
+                    if (installation.organizationId && messageTs) {
                         await upsertChatMessage({
-                            organizationId: context.organizationId,
-                            workspaceId: context.workspaceId,
-                            integrationConnectionId: connection?.id || null,
+                            organizationId: installation.organizationId,
+                            workspaceId: null,
+                            integrationConnectionId: installation.connectionId,
                             channelId: messageEvent.channel,
                             messageTs,
                             userId: messageEvent.user,
@@ -1145,23 +1216,37 @@ export async function POST(request: NextRequest) {
             const isActiveThreadReply =
                 !isDM &&
                 messageEvent.thread_ts &&
-                (await isThreadActive(messageEvent.channel, messageEvent.thread_ts));
+                (await isThreadActive(
+                    installation.teamId,
+                    messageEvent.channel,
+                    messageEvent.thread_ts
+                ));
 
             if (isDM || isActiveThreadReply) {
                 const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);
 
                 setImmediate(async () => {
                     const threadTs = messageEvent.thread_ts || messageEvent.ts;
+                    const token = installation.botToken;
 
                     // Handle help / agent:list command
                     if (directive.isListCommand) {
-                        const helpText = await listActiveAgents(defaultAgentSlug);
-                        await sendSlackMessageSafe(messageEvent.channel, helpText, threadTs);
+                        const helpText = await listActiveAgents(
+                            defaultAgentSlug,
+                            installation.organizationId
+                        );
+                        await sendSlackMessageSafe(
+                            messageEvent.channel,
+                            helpText,
+                            threadTs,
+                            undefined,
+                            token
+                        );
                         return;
                     }
 
                     // Show "thinking" reaction while processing
-                    await addReaction(messageEvent.channel, messageEvent.ts, "eyes");
+                    await addReaction(messageEvent.channel, messageEvent.ts, "eyes", token);
 
                     try {
                         const result = await processMessage(
@@ -1170,6 +1255,7 @@ export async function POST(request: NextRequest) {
                             messageEvent.channel,
                             threadTs,
                             messageEvent.ts,
+                            installation,
                             directive.slug || undefined
                         );
 
@@ -1177,14 +1263,12 @@ export async function POST(request: NextRequest) {
                             messageEvent.channel,
                             result.text,
                             threadTs,
-                            result.identity
+                            result.identity,
+                            token
                         );
-
-                        // Keep thread marked active
-                        markThreadActive(messageEvent.channel, threadTs);
                     } finally {
                         // Always remove thinking reaction, even on error
-                        await removeReaction(messageEvent.channel, messageEvent.ts, "eyes");
+                        await removeReaction(messageEvent.channel, messageEvent.ts, "eyes", token);
                     }
                 });
 
@@ -1205,16 +1289,15 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
     const hasSigningSecret = !!process.env.SLACK_SIGNING_SECRET;
+    const hasClientId = !!process.env.SLACK_CLIENT_ID;
     const hasBotToken = !!process.env.SLACK_BOT_TOKEN;
-    const slackCtx = await resolveSlackWorkspaceContext();
-    const defaultAgent = await resolveDefaultAgentSlug(slackCtx.organizationId);
 
     return NextResponse.json({
         status: "Slack integration active",
         configuration: {
             signingSecretConfigured: hasSigningSecret,
-            botTokenConfigured: hasBotToken,
-            defaultAgent
+            oauthConfigured: hasClientId,
+            legacyBotTokenConfigured: hasBotToken
         },
         setup: {
             step1: "Create a Slack App at https://api.slack.com/apps",

@@ -6,5 +6,5 @@
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", "**/*.mts"],
-  "exclude": ["node_modules", ".next/types", ".next/dev/types"]
+  "exclude": ["node_modules", ".next/types", ".next/dev/types", "src/**/__tests__/**"]
 }

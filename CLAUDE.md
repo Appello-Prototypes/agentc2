@@ -223,12 +223,18 @@ CREDENTIAL_ENCRYPTION_KEY="..."
 ### Slack Integration
 
 ```bash
-# Slack App Configuration
-# Create app at https://api.slack.com/apps
-SLACK_BOT_TOKEN="xoxb-..."           # Bot User OAuth Token
-SLACK_SIGNING_SECRET="..."           # App Credentials > Signing Secret
-SLACK_DEFAULT_AGENT_SLUG="assistant" # Agent to use for Slack conversations
-SLACK_TEAM_ID="T..."                 # Workspace ID (for MCP server)
+# Slack App Configuration (Single App - multi-tenant)
+# One Slack App installed across multiple customer workspaces.
+# Per-workspace bot tokens stored in IntegrationConnection (database-driven).
+SLACK_CLIENT_ID="..."               # Slack App OAuth client ID (platform-level)
+SLACK_CLIENT_SECRET="..."           # Slack App OAuth client secret (platform-level)
+SLACK_SIGNING_SECRET="..."          # Per-app signing secret for webhook verification
+
+# Legacy fallbacks (migration period -- new installs use OAuth + database)
+SLACK_BOT_TOKEN="xoxb-..."          # Bot User OAuth Token (legacy)
+SLACK_DEFAULT_AGENT_SLUG="assistant" # Agent to use for Slack conversations (legacy)
+SLACK_TEAM_ID="T..."                # Workspace ID (legacy, for MCP server fallback)
+SLACK_ALERTS_CHANNEL=""             # Channel ID for system alerts (legacy)
 ```
 
 ### Webhooks & Tunneling (ngrok)

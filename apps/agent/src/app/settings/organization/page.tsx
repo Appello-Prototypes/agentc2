@@ -60,9 +60,25 @@ export default function OrganizationSettingsPage() {
     const [agents, setAgents] = useState<AgentOption[]>([]);
     const [savingSlack, setSavingSlack] = useState(false);
 
+    // Slack connection state
+    const [slackConnection, setSlackConnection] = useState<{
+        connected: boolean;
+        teamId?: string;
+        teamName?: string;
+        connectionId?: string;
+    } | null>(null);
+    const [slackChannels, setSlackChannels] = useState<
+        Array<{ id: string; name: string; isPrivate: boolean }>
+    >([]);
+    const [channelPrefs, setChannelPrefs] = useState<
+        Array<{ id: string; purposeKey: string; channelId: string; channelName: string | null }>
+    >([]);
+    const [savingChannels, setSavingChannels] = useState(false);
+
     useEffect(() => {
         fetchOrganization();
         fetchAgents();
+        fetchSlackStatus();
     }, []);
 
     async function fetchOrganization() {
@@ -102,6 +118,58 @@ export default function OrganizationSettingsPage() {
             }
         } catch (err) {
             console.error("Failed to fetch agents:", err);
+        }
+    }
+
+    async function fetchSlackStatus() {
+        try {
+            // Fetch channel preferences (also tells us if connection exists)
+            const prefRes = await fetch(`${getApiBase()}/api/slack/channels`);
+            if (prefRes.ok) {
+                const prefData = await prefRes.json();
+                setSlackConnection({
+                    connected: true,
+                    connectionId: prefData.connectionId
+                });
+                setChannelPrefs(prefData.preferences || []);
+
+                // Fetch available channels
+                const availRes = await fetch(`${getApiBase()}/api/slack/channels?available`);
+                if (availRes.ok) {
+                    const availData = await availRes.json();
+                    setSlackChannels(availData.channels || []);
+                }
+            } else {
+                setSlackConnection({ connected: false });
+            }
+        } catch {
+            setSlackConnection({ connected: false });
+        }
+    }
+
+    async function handleSlackInstall() {
+        window.location.href = `${getApiBase()}/api/slack/install`;
+    }
+
+    async function handleSaveChannelPref(purposeKey: string, channelId: string) {
+        setSavingChannels(true);
+        try {
+            const channel = slackChannels.find((c) => c.id === channelId);
+            await fetch(`${getApiBase()}/api/slack/channels`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    purposeKey,
+                    channelId,
+                    channelName: channel?.name || null
+                })
+            });
+            await fetchSlackStatus();
+            setSuccess(`Channel preference "${purposeKey}" updated`);
+        } catch {
+            setError("Failed to save channel preference");
+        } finally {
+            setSavingChannels(false);
         }
     }
 
@@ -333,10 +401,43 @@ export default function OrganizationSettingsPage() {
                 <CardHeader>
                     <CardTitle>Slack Integration</CardTitle>
                     <CardDescription>
-                        Configure which agent handles incoming Slack messages by default
+                        Connect your Slack workspace and configure agent routing
                     </CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-6">
+                    {/* Connection Status */}
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium">Connection Status</label>
+                        {slackConnection?.connected ? (
+                            <div className="bg-muted/50 flex items-center gap-2 rounded-md border p-3">
+                                <span className="inline-block h-2 w-2 rounded-full bg-green-500" />
+                                <span className="text-sm">Connected</span>
+                                {slackConnection.teamId && (
+                                    <span className="text-muted-foreground text-xs">
+                                        ({slackConnection.teamId})
+                                    </span>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                <div className="bg-muted/50 flex items-center gap-2 rounded-md border p-3">
+                                    <span className="inline-block h-2 w-2 rounded-full bg-gray-400" />
+                                    <span className="text-sm">Not Connected</span>
+                                </div>
+                                {canEdit && (
+                                    <Button
+                                        onClick={handleSlackInstall}
+                                        variant="outline"
+                                        size="sm"
+                                    >
+                                        Install to Slack
+                                    </Button>
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Default Agent */}
                     <div>
                         <label className="text-sm font-medium">Default Slack Agent</label>
                         <p className="text-muted-foreground mb-2 text-xs">
@@ -372,6 +473,49 @@ export default function OrganizationSettingsPage() {
                             <Button onClick={handleSaveSlack} disabled={savingSlack}>
                                 {savingSlack ? "Saving..." : "Save Slack Settings"}
                             </Button>
+                        </div>
+                    )}
+
+                    {/* Channel Preferences */}
+                    {slackConnection?.connected && (
+                        <div className="space-y-3">
+                            <label className="text-sm font-medium">Channel Preferences</label>
+                            <p className="text-muted-foreground text-xs">
+                                Map purpose keys to Slack channels so agents post to the right
+                                place.
+                            </p>
+                            {["support", "sales", "alerts", "general"].map((purposeKey) => {
+                                const pref = channelPrefs.find((p) => p.purposeKey === purposeKey);
+                                return (
+                                    <div key={purposeKey} className="flex items-center gap-3">
+                                        <span className="w-20 text-sm capitalize">
+                                            {purposeKey}
+                                        </span>
+                                        <Select
+                                            value={pref?.channelId || ""}
+                                            onValueChange={(v: string | null) => {
+                                                if (v) handleSaveChannelPref(purposeKey, v);
+                                            }}
+                                            disabled={!canEdit || savingChannels}
+                                        >
+                                            <SelectTrigger className="flex-1">
+                                                <SelectValue placeholder="Not configured">
+                                                    {pref?.channelName
+                                                        ? `#${pref.channelName.replace(/^#/, "")}`
+                                                        : pref?.channelId || "Not configured"}
+                                                </SelectValue>
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {slackChannels.map((ch) => (
+                                                    <SelectItem key={ch.id} value={ch.id}>
+                                                        #{ch.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                );
+                            })}
                         </div>
                     )}
                 </CardContent>

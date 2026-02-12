@@ -26,5 +26,5 @@ export const TOOL_OAUTH_REQUIREMENTS: Record<string, string> = {
     "dropbox-get-file": "dropbox",
     "dropbox-upload-file": "dropbox",
     "dropbox-search-files": "dropbox",
-    "dropbox-get-sharing-links": "dropbox",
+    "dropbox-get-sharing-links": "dropbox"
 };

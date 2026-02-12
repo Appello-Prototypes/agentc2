@@ -52,7 +52,14 @@ You can create, read, update, delete, and list AI agents.
 - Agent updates create a new version automatically`,
         category: "builder",
         tags: ["agents", "crud", "management"],
-        tools: ["agent-create", "agent-read", "agent-update", "agent-delete", "agent-list", "agent-overview"],
+        tools: [
+            "agent-create",
+            "agent-read",
+            "agent-update",
+            "agent-delete",
+            "agent-list",
+            "agent-overview"
+        ],
         type: "SYSTEM"
     },
     {

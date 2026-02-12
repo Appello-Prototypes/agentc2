@@ -227,9 +227,7 @@ export const checkGoogleScopes = async (
     });
 
     const creds = decrypt(connection?.credentials) as { scope?: string } | null;
-    const grantedScopes = new Set(
-        (creds?.scope || "").split(/[,\s]+/).filter(Boolean)
-    );
+    const grantedScopes = new Set((creds?.scope || "").split(/[,\s]+/).filter(Boolean));
     const missing = requiredScopes.filter((s) => !grantedScopes.has(s));
     return { ok: missing.length === 0, missing };
 };

@@ -308,7 +308,8 @@ export const getMessagesWithConcurrency = async (
                 results.push(result.value);
             } else {
                 // Skip messages that were deleted or are no longer accessible (404)
-                const msg = result.reason instanceof Error ? result.reason.message : String(result.reason);
+                const msg =
+                    result.reason instanceof Error ? result.reason.message : String(result.reason);
                 console.warn(`[Gmail] Skipping inaccessible message: ${msg}`);
             }
         }

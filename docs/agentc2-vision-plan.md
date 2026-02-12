@@ -68,7 +68,7 @@ Update `scripts/mcp-server/index.js` and `~/.cursor/mcp.json`:
         "command": "node",
         "args": ["scripts/mcp-server/index.js"],
         "env": {
-            "AGENTC2_API_URL": "https://mastra.useappello.app",
+            "AGENTC2_API_URL": "https://agentc2.ai",
             "AGENTC2_API_KEY": "...",
             "AGENTC2_ORGANIZATION_SLUG": "appello"
         }

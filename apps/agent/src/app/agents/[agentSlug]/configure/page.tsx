@@ -82,6 +82,7 @@ interface AttachedSkill {
         description: string | null;
         category: string | null;
         version: number;
+        _count: { tools: number; documents: number };
     };
 }
 
@@ -91,7 +92,9 @@ interface AvailableSkill {
     name: string;
     description: string | null;
     version: number;
-    _count: { documents: number; tools: number; agents: number };
+    tools: Array<{ toolId: string }>;
+    documents: Array<{ documentId: string }>;
+    agents: Array<{ agentId: string }>;
 }
 
 interface ModelInfo {
@@ -1554,6 +1557,12 @@ export default function ConfigurePage() {
                                                         {as.skill.description}
                                                     </p>
                                                 )}
+                                                <div className="text-muted-foreground mt-1 flex gap-3 text-[11px]">
+                                                    <span>{as.skill._count?.tools ?? 0} tools</span>
+                                                    <span>
+                                                        {as.skill._count?.documents ?? 0} docs
+                                                    </span>
+                                                </div>
                                             </div>
                                             <Button
                                                 variant="outline"
@@ -1607,6 +1616,14 @@ export default function ConfigurePage() {
                                                         <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
                                                             {skill.description || skill.slug}
                                                         </p>
+                                                        <div className="text-muted-foreground mt-1 flex gap-3 text-[11px]">
+                                                            <span>
+                                                                {skill.tools?.length ?? 0} tools
+                                                            </span>
+                                                            <span>
+                                                                {skill.documents?.length ?? 0} docs
+                                                            </span>
+                                                        </div>
                                                     </div>
                                                     <Button
                                                         variant="outline"

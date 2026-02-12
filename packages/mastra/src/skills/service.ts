@@ -205,6 +205,9 @@ export async function listSkills(input: ListSkillsInput = {}) {
                 },
                 agents: {
                     select: { agentId: true }
+                },
+                _count: {
+                    select: { tools: true, documents: true, agents: true }
                 }
             }
         }),

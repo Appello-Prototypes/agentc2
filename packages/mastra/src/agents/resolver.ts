@@ -249,9 +249,12 @@ export class AgentResolver {
         toolOriginMap: Record<string, string>;
         skillDocumentIds: string[];
     }> {
+        // Enrich context with Slack channel preferences for template interpolation
+        const enrichedContext = await this.enrichContextWithSlackChannels(record, context || {});
+
         // Interpolate instructions if template exists
         const instructions = record.instructionsTemplate
-            ? this.interpolateInstructions(record.instructionsTemplate, context || {})
+            ? this.interpolateInstructions(record.instructionsTemplate, enrichedContext)
             : record.instructions;
 
         // Build memory if enabled
@@ -608,6 +611,19 @@ export class AgentResolver {
         return template.replace(/\{\{([\w.]+)\}\}/g, (match, key: string) => {
             // Handle nested keys like resource.userId or thread.id
             const parts = key.split(".");
+
+            // Handle slack.channels.* pattern (e.g., {{slack.channels.support}})
+            if (parts.length === 3 && parts[0] === "slack" && parts[1] === "channels") {
+                const channelMap = normalized.metadata?._slackChannels as
+                    | Record<string, string>
+                    | undefined;
+                if (channelMap && parts[2] in channelMap) {
+                    return channelMap[parts[2]];
+                }
+                // Keep placeholder if channel not configured
+                return match;
+            }
+
             if (parts.length === 2) {
                 const [parent, child] = parts;
                 if (parent === "resource" && normalized.resource) {
@@ -650,6 +666,73 @@ export class AgentResolver {
             // Keep placeholder if not found
             return match;
         });
+    }
+
+    /**
+     * Enrich request context with Slack channel preferences.
+     *
+     * If the agent's organization has a Slack IntegrationConnection,
+     * resolves channel preferences and injects them into context.metadata
+     * so templates like {{slack.channels.support}} resolve correctly.
+     */
+    private async enrichContextWithSlackChannels(
+        record: AgentRecordWithTools,
+        context: RequestContext
+    ): Promise<RequestContext> {
+        const organizationId =
+            context.resource?.tenantId ||
+            context.tenantId ||
+            record.workspace?.organizationId ||
+            record.tenantId;
+
+        if (!organizationId) return context;
+
+        // Only enrich if the template references slack channels
+        const template = record.instructionsTemplate;
+        if (!template || !template.includes("{{slack.channels.")) return context;
+
+        try {
+            const provider = await prisma.integrationProvider.findUnique({
+                where: { key: "slack" }
+            });
+            if (!provider) return context;
+
+            const connection = await prisma.integrationConnection.findFirst({
+                where: {
+                    organizationId,
+                    providerId: provider.id,
+                    isActive: true
+                },
+                orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+            });
+            if (!connection) return context;
+
+            // Resolve channel map (purposeKey -> channelId)
+            const prefs = await prisma.slackChannelPreference.findMany({
+                where: { integrationConnectionId: connection.id }
+            });
+
+            const channelMap: Record<string, string> = {};
+            for (const p of prefs) {
+                // Org-wide defaults (userId null), can be overridden by user-specific
+                if (p.userId === null && !channelMap[p.purposeKey]) {
+                    channelMap[p.purposeKey] = p.channelName
+                        ? `#${p.channelName.replace(/^#/, "")}`
+                        : p.channelId;
+                }
+            }
+
+            return {
+                ...context,
+                metadata: {
+                    ...(context.metadata || {}),
+                    _slackChannels: channelMap
+                }
+            };
+        } catch (error) {
+            console.warn("[AgentResolver] Failed to enrich Slack channels:", error);
+            return context;
+        }
     }
 
     /**

@@ -263,14 +263,15 @@ model IntegrationConnection {
     updatedAt      DateTime            @updatedAt
 
     // Relations
-    gmailIntegrations    GmailIntegration[]
-    emailThreads         EmailThread[]
-    chatMessages         ChatMessage[]
-    meetingTranscripts   MeetingTranscript[]
-    crmAuditLogs         CrmAuditLog[]
-    EmailMessage         EmailMessage[]
-    webhookSubscriptions WebhookSubscription[]
-    calendarEvents       CalendarEvent[]
+    gmailIntegrations       GmailIntegration[]
+    emailThreads            EmailThread[]
+    chatMessages            ChatMessage[]
+    meetingTranscripts      MeetingTranscript[]
+    crmAuditLogs            CrmAuditLog[]
+    EmailMessage            EmailMessage[]
+    webhookSubscriptions    WebhookSubscription[]
+    calendarEvents          CalendarEvent[]
+    slackChannelPreferences SlackChannelPreference[]
 
     @@index([organizationId])
     @@index([providerId])
@@ -1144,6 +1145,8 @@ model AgentRun {
     @@index([source])
     @@index([sessionId])
     @@index([threadId])
+    @@index([source, userId, createdAt]) // Rate limiting: per-user per-source
+    @@index([source, threadId, createdAt]) // Rate limiting: per-org per-source via threadId prefix
     @@map("agent_run")
 }
 
@@ -2882,4 +2885,34 @@ model CalendarEvent {
     @@index([organizationId])
     @@index([startAt])
     @@map("calendar_event")
+}
+
+// SlackChannelPreference - Per-org/per-user channel routing for Slack agents
+// Maps purpose keys (e.g., "support", "sales", "alerts") to Slack channel IDs.
+// Linked to an IntegrationConnection (Slack installation) so each org has its own mappings.
+model SlackChannelPreference {
+    id                      String                @id @default(cuid())
+    integrationConnectionId String
+    integrationConnection   IntegrationConnection @relation(fields: [integrationConnectionId], references: [id], onDelete: Cascade)
+    userId                  String? // Platform user ID (null = org-wide default)
+    purposeKey              String // "support", "sales", "alerts", "general"
+    channelId               String // Slack channel ID (C...)
+    channelName             String? // Cached display name
+    createdAt               DateTime              @default(now())
+    updatedAt               DateTime              @updatedAt
+
+    @@unique([integrationConnectionId, userId, purposeKey])
+    @@index([integrationConnectionId])
+    @@map("slack_channel_preference")
+}
+
+// SlackEventDedup - Prevents duplicate Slack event processing across multiple processes.
+// Slack retries event delivery if it doesn't receive a timely 200. In a multi-process
+// PM2 deployment, the in-memory dedup set is per-process. This table provides
+// cross-process deduplication via a unique constraint on eventId.
+model SlackEventDedup {
+    eventId   String   @id
+    expiresAt DateTime
+
+    @@map("slack_event_dedup")
 }

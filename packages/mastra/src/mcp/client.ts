@@ -500,13 +500,15 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         configJson: {
             requiredScopes: [
                 "https://www.googleapis.com/auth/gmail.modify",
-                "https://www.googleapis.com/auth/gmail.send"
+                "https://www.googleapis.com/auth/gmail.send",
+                "https://www.googleapis.com/auth/calendar.readonly"
             ],
             oauthConfig: {
                 socialProvider: "google",
                 scopes: [
                     "https://www.googleapis.com/auth/gmail.modify",
-                    "https://www.googleapis.com/auth/gmail.send"
+                    "https://www.googleapis.com/auth/gmail.send",
+                    "https://www.googleapis.com/auth/calendar.readonly"
                 ],
                 statusEndpoint: "/api/integrations/gmail/status",
                 syncEndpoint: "/api/integrations/gmail/sync"
@@ -1330,6 +1332,10 @@ function buildServerDefinitionForProvider(options: {
 }): MastraMCPServerDefinition | null {
     const { provider, credentials, allowEnvFallback = false, connection } = options;
     const providerKey = provider.key;
+    const connectionMetadata =
+        connection?.metadata && typeof connection.metadata === "object"
+            ? (connection.metadata as Record<string, unknown>)
+            : undefined;
 
     if (provider.providerType === "custom") {
         if (!connection) return null;
@@ -1471,11 +1477,14 @@ function buildServerDefinitionForProvider(options: {
             };
         }
         case "slack": {
+            // Support both OAuth-stored "botToken" and legacy "SLACK_BOT_TOKEN" key names
             const slackToken =
-                getCredentialValue(credentials, ["SLACK_BOT_TOKEN"]) ||
+                getCredentialValue(credentials, ["botToken", "SLACK_BOT_TOKEN"]) ||
                 (allowEnvFallback ? process.env.SLACK_BOT_TOKEN : undefined);
+            // teamId from connection metadata or credentials
             const slackTeamId =
                 getCredentialValue(credentials, ["SLACK_TEAM_ID"]) ||
+                (connectionMetadata?.teamId as string | undefined) ||
                 (allowEnvFallback ? process.env.SLACK_TEAM_ID : undefined);
             if (!slackToken || !slackTeamId) return null;
             return {

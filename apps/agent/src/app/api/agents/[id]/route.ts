@@ -31,7 +31,13 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                                     name: true,
                                     description: true,
                                     category: true,
-                                    version: true
+                                    version: true,
+                                    _count: {
+                                        select: {
+                                            tools: true,
+                                            documents: true
+                                        }
+                                    }
                                 }
                             }
                         }

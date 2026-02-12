@@ -2,7 +2,7 @@
 
 **Session Start**: 2026-02-09T05:59:00Z
 **Session End**: 2026-02-09T06:15:00Z
-**Platform**: https://mastra.useappello.app
+**Platform**: https://agentc2.ai
 **Organization**: Appello Inc. (slug: appello)
 **Starting State**: Clean system after DB reset
 **Overall Result**: PASS
