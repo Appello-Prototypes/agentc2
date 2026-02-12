@@ -3622,9 +3622,24 @@ export const asyncInvokeFunction = inngest.createFunction(
                 costUsd?: number;
                 modelProvider?: string;
                 modelName?: string;
+                toolCalls?: Array<{
+                    toolKey: string;
+                    input: Record<string, unknown>;
+                    output?: unknown;
+                    success: boolean;
+                    error?: string;
+                    durationMs?: number;
+                }>;
+                executionSteps?: Array<{
+                    step: number;
+                    type: string;
+                    content: string;
+                    timestamp: string;
+                }>;
             }> => {
                 const { agentResolver } = await import("@repo/mastra");
                 const { calculateCost } = await import("./cost-calculator");
+                const { extractToolCalls } = await import("./run-recorder");
 
                 const { agent, record } = await agentResolver.resolve({
                     slug: agentSlug,
@@ -3658,6 +3673,80 @@ export const asyncInvokeFunction = inngest.createFunction(
                         completionTokens
                     );
 
+                    // Extract tool calls from the response
+                    const rawToolCalls = extractToolCalls(response);
+
+                    // Serialize tool calls for Inngest step data (must be JSON-safe)
+                    const serializedToolCalls = rawToolCalls.map((tc) => {
+                        let safeOutput: unknown;
+                        if (tc.output !== undefined) {
+                            try {
+                                const outputStr = JSON.stringify(tc.output);
+                                // Truncate large outputs to avoid Inngest step data limits
+                                safeOutput =
+                                    outputStr.length > 10000
+                                        ? JSON.parse(outputStr.slice(0, 10000) + "...")
+                                        : tc.output;
+                            } catch {
+                                safeOutput = String(tc.output).slice(0, 10000);
+                            }
+                        }
+                        return {
+                            toolKey: tc.toolKey || "unknown",
+                            input: tc.input || {},
+                            output: safeOutput,
+                            success: tc.success ?? true,
+                            error: tc.error,
+                            durationMs: tc.durationMs
+                        };
+                    });
+
+                    // Build execution steps for trace stepsJson
+                    const executionSteps: Array<{
+                        step: number;
+                        type: string;
+                        content: string;
+                        timestamp: string;
+                    }> = [];
+                    let stepCounter = 0;
+
+                    for (const tc of serializedToolCalls) {
+                        stepCounter++;
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_call",
+                            content: `Calling tool: ${tc.toolKey}\nArgs: ${JSON.stringify(tc.input, null, 2).slice(0, 500)}`,
+                            timestamp: new Date().toISOString()
+                        });
+
+                        if (tc.output !== undefined || tc.error) {
+                            stepCounter++;
+                            const preview =
+                                typeof tc.output === "string"
+                                    ? tc.output.slice(0, 500)
+                                    : JSON.stringify(tc.output ?? "").slice(0, 500);
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_result",
+                                content: tc.error
+                                    ? `Tool ${tc.toolKey} failed: ${tc.error}`
+                                    : `Tool ${tc.toolKey} result:\n${preview}`,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+
+                    // Add final response step
+                    stepCounter++;
+                    executionSteps.push({
+                        step: stepCounter,
+                        type: "response",
+                        content:
+                            (response.text || "").slice(0, 2000) +
+                            (response.text && response.text.length > 2000 ? "..." : ""),
+                        timestamp: new Date().toISOString()
+                    });
+
                     return {
                         success: true,
                         output: response.text,
@@ -3667,7 +3756,9 @@ export const asyncInvokeFunction = inngest.createFunction(
                         totalTokens,
                         costUsd,
                         modelProvider: record.modelProvider,
-                        modelName: record.modelName
+                        modelName: record.modelName,
+                        toolCalls: serializedToolCalls,
+                        executionSteps
                     };
                 } catch (error) {
                     const durationMs = Date.now() - startTime;
@@ -3733,6 +3824,57 @@ export const asyncInvokeFunction = inngest.createFunction(
                 });
             }
         });
+
+        // Step 3b: Record tool calls and execution steps in trace
+        if (result.toolCalls && result.toolCalls.length > 0) {
+            await step.run("record-tool-calls", async () => {
+                const trace = await prisma.agentTrace.findFirst({
+                    where: { runId },
+                    select: { id: true }
+                });
+
+                if (!trace) {
+                    console.warn(
+                        `[Inngest] No trace found for run ${runId}, skipping tool call recording`
+                    );
+                    return;
+                }
+
+                // Record each tool call as an AgentToolCall record
+                for (const tc of result.toolCalls!) {
+                    await prisma.agentToolCall.create({
+                        data: {
+                            runId,
+                            traceId: trace.id,
+                            toolKey: tc.toolKey,
+                            inputJson: (tc.input || {}) as Prisma.InputJsonValue,
+                            outputJson:
+                                tc.output !== undefined
+                                    ? (tc.output as Prisma.InputJsonValue)
+                                    : undefined,
+                            success: tc.success,
+                            error: tc.error,
+                            durationMs: tc.durationMs
+                        }
+                    });
+                }
+
+                // Update trace with execution steps
+                if (result.executionSteps && result.executionSteps.length > 0) {
+                    await prisma.agentTrace.update({
+                        where: { id: trace.id },
+                        data: {
+                            stepsJson:
+                                result.executionSteps as unknown as Prisma.JsonArray
+                        }
+                    });
+                }
+
+                console.log(
+                    `[Inngest] Recorded ${result.toolCalls!.length} tool calls for run ${runId}`
+                );
+            });
+        }
 
         if (result.success && result.output && context?.slackUserId) {
             await step.run("send-slack-dm", async () => {
