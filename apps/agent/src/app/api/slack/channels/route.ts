@@ -106,14 +106,13 @@ export async function GET(request: NextRequest) {
                 );
             }
 
-            const channels = (data.channels || [])
-                .filter((c) => c.is_member)
-                .map((c) => ({
-                    id: c.id,
-                    name: c.name,
-                    isPrivate: c.is_private,
-                    numMembers: c.num_members
-                }));
+            const channels = (data.channels || []).map((c) => ({
+                id: c.id,
+                name: c.name,
+                isPrivate: c.is_private,
+                isMember: c.is_member,
+                numMembers: c.num_members
+            }));
 
             return NextResponse.json({ channels });
         } catch (error) {

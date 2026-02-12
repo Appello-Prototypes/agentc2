@@ -68,7 +68,7 @@ export default function OrganizationSettingsPage() {
         connectionId?: string;
     } | null>(null);
     const [slackChannels, setSlackChannels] = useState<
-        Array<{ id: string; name: string; isPrivate: boolean }>
+        Array<{ id: string; name: string; isPrivate: boolean; isMember?: boolean }>
     >([]);
     const [channelPrefs, setChannelPrefs] = useState<
         Array<{ id: string; purposeKey: string; channelId: string; channelName: string | null }>
@@ -134,10 +134,16 @@ export default function OrganizationSettingsPage() {
                 setChannelPrefs(prefData.preferences || []);
 
                 // Fetch available channels
-                const availRes = await fetch(`${getApiBase()}/api/slack/channels?available`);
-                if (availRes.ok) {
-                    const availData = await availRes.json();
-                    setSlackChannels(availData.channels || []);
+                try {
+                    const availRes = await fetch(`${getApiBase()}/api/slack/channels?available`);
+                    if (availRes.ok) {
+                        const availData = await availRes.json();
+                        setSlackChannels(availData.channels || []);
+                    } else {
+                        console.error("[SlackChannels] Failed to load available channels:", availRes.status);
+                    }
+                } catch (availErr) {
+                    console.error("[SlackChannels] Error fetching available channels:", availErr);
                 }
             } else {
                 setSlackConnection({ connected: false });
@@ -484,33 +490,49 @@ export default function OrganizationSettingsPage() {
                                 Map purpose keys to Slack channels so agents post to the right
                                 place.
                             </p>
+                            {slackChannels.length === 0 && (
+                                <p className="text-muted-foreground text-xs italic">
+                                    No Slack channels found. Make sure the bot has access to
+                                    channels in your workspace.
+                                </p>
+                            )}
                             {["support", "sales", "alerts", "general"].map((purposeKey) => {
                                 const pref = channelPrefs.find((p) => p.purposeKey === purposeKey);
+                                const currentChannelId = pref?.channelId ?? undefined;
                                 return (
                                     <div key={purposeKey} className="flex items-center gap-3">
                                         <span className="w-20 text-sm capitalize">
                                             {purposeKey}
                                         </span>
                                         <Select
-                                            value={pref?.channelId || ""}
+                                            value={currentChannelId}
                                             onValueChange={(v: string | null) => {
                                                 if (v) handleSaveChannelPref(purposeKey, v);
                                             }}
-                                            disabled={!canEdit || savingChannels}
+                                            disabled={
+                                                !canEdit ||
+                                                savingChannels ||
+                                                slackChannels.length === 0
+                                            }
                                         >
                                             <SelectTrigger className="flex-1">
                                                 <SelectValue placeholder="Not configured">
                                                     {pref?.channelName
                                                         ? `#${pref.channelName.replace(/^#/, "")}`
-                                                        : pref?.channelId || "Not configured"}
+                                                        : pref?.channelId
+                                                          ? `#${pref.channelId}`
+                                                          : "Not configured"}
                                                 </SelectValue>
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {slackChannels.map((ch) => (
-                                                    <SelectItem key={ch.id} value={ch.id}>
-                                                        #{ch.name}
-                                                    </SelectItem>
-                                                ))}
+                                                {slackChannels
+                                                    .slice()
+                                                    .sort((a, b) => a.name.localeCompare(b.name))
+                                                    .map((ch) => (
+                                                        <SelectItem key={ch.id} value={ch.id}>
+                                                            #{ch.name}
+                                                        </SelectItem>
+                                                    ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
