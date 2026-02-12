@@ -143,7 +143,46 @@ async function populateFromKnownTools() {
             "firecrawl_firecrawl-crawl-status",
             "firecrawl_firecrawl-cancel-crawl"
         ],
-        "mcp-automation-atlas": ["atlas_atlas-trigger-workflow", "atlas_atlas-check-status"]
+        "mcp-automation-atlas": ["atlas_atlas-trigger-workflow", "atlas_atlas-check-status"],
+        "mcp-communication-slack": [
+            "slack_slack_post_message",
+            "slack_slack_list_channels",
+            "slack_slack_reply_to_thread",
+            "slack_slack_add_reaction",
+            "slack_slack_get_channel_history",
+            "slack_slack_get_thread_replies",
+            "slack_slack_get_users",
+            "slack_slack_get_user_profile"
+        ],
+        "mcp-knowledge-fathom": [
+            "fathom_list_meetings",
+            "fathom_get_meeting_summary",
+            "fathom_get_meeting_transcript",
+            "fathom_get_meeting_details"
+        ],
+        "mcp-code-github": [
+            "github_create_or_update_file",
+            "github_search_repositories",
+            "github_create_repository",
+            "github_get_file_contents",
+            "github_push_files",
+            "github_create_issue",
+            "github_create_pull_request",
+            "github_list_issues",
+            "github_update_issue",
+            "github_search_code",
+            "github_list_commits"
+        ],
+        "mcp-files-gdrive": [
+            "gdrive_gdrive-search-files",
+            "gdrive_gdrive-list-files",
+            "gdrive_gdrive-read-file"
+        ],
+        "mcp-communication-justcall": [
+            "justcall_justcall-get-call-logs",
+            "justcall_justcall-send-sms"
+        ],
+        "mcp-communication-twilio": ["twilio_twilio-make-call"]
     };
 
     for (const [skillSlug, toolIds] of Object.entries(knownTools)) {

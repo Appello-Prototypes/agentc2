@@ -191,3 +191,45 @@ export const callGmailApi = async (
 
     return response;
 };
+
+/**
+ * Check whether stored Google OAuth credentials include the required scopes.
+ * Returns { ok: true } if all required scopes are granted, or { ok: false, missing: [...] }.
+ */
+export const checkGoogleScopes = async (
+    gmailAddress: string,
+    requiredScopes: string[]
+): Promise<{ ok: boolean; missing: string[] }> => {
+    const provider = await prisma.integrationProvider.findUnique({
+        where: { key: "gmail" }
+    });
+    if (!provider) return { ok: false, missing: requiredScopes };
+
+    const integration = await prisma.gmailIntegration.findFirst({
+        where: { gmailAddress, isActive: true },
+        include: { workspace: { select: { organizationId: true } } }
+    });
+    if (!integration) return { ok: false, missing: requiredScopes };
+
+    const organizationId = integration.workspace?.organizationId;
+    if (!organizationId) return { ok: false, missing: requiredScopes };
+
+    const connection = await prisma.integrationConnection.findFirst({
+        where: {
+            organizationId,
+            providerId: provider.id,
+            isActive: true,
+            OR: [
+                { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+            ]
+        }
+    });
+
+    const creds = decrypt(connection?.credentials) as { scope?: string } | null;
+    const grantedScopes = new Set(
+        (creds?.scope || "").split(/[,\s]+/).filter(Boolean)
+    );
+    const missing = requiredScopes.filter((s) => !grantedScopes.has(s));
+    return { ok: missing.length === 0, missing };
+};

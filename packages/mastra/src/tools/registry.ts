@@ -175,6 +175,7 @@ import {
     skillAttachToolTool,
     skillDetachToolTool,
     agentAttachSkillTool,
+    agentSkillUpdateTool,
     agentDetachSkillTool,
     skillGetVersionsTool
 } from "./skill-tools";
@@ -566,6 +567,7 @@ export const toolRegistry: Record<string, any> = {
     "skill-attach-tool": skillAttachToolTool,
     "skill-detach-tool": skillDetachToolTool,
     "agent-attach-skill": agentAttachSkillTool,
+    "agent-skill-update": agentSkillUpdateTool,
     "agent-detach-skill": agentDetachSkillTool,
     "skill-get-versions": skillGetVersionsTool,
 

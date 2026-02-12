@@ -26,13 +26,17 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         const { id: agentId } = await context.params;
-        const { skillId } = await request.json();
+        const { skillId, pinned } = await request.json();
 
         if (!skillId) {
             return NextResponse.json({ error: "skillId is required" }, { status: 400 });
         }
 
-        const result = await skillAttachToAgent(agentId, skillId);
+        const result = await skillAttachToAgent(
+            agentId,
+            skillId,
+            typeof pinned === "boolean" ? pinned : undefined
+        );
 
         return NextResponse.json(result, { status: 201 });
     } catch (error) {

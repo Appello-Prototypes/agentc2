@@ -13,6 +13,7 @@ import { mastra } from "../mastra";
 import { storage } from "../storage";
 import { vector } from "../vector";
 import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/registry";
+import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
 import { getScorersByNames } from "../scorers/registry";
 import { getThreadSkillState } from "../skills/thread-state";
 import { resolveModelForOrg } from "./model-provider";
@@ -319,7 +320,13 @@ export class AgentResolver {
             toolOriginMap[key] = isMcpTool ? `${skillOrigin}|mcp:${serverName}` : skillOrigin;
         }
         for (const key of Object.keys(registryTools)) {
-            toolOriginMap[key] = "registry";
+            // If this tool also came from a skill, preserve dual-origin attribution
+            const existingSkillOrigin = toolOriginMap[key];
+            if (existingSkillOrigin && existingSkillOrigin.startsWith("skill:")) {
+                toolOriginMap[key] = `registry+${existingSkillOrigin}`;
+            } else {
+                toolOriginMap[key] = "registry";
+            }
         }
 
         // Merge tools: MCP tools (lowest priority) -> skill tools -> registry tools (highest)
@@ -347,6 +354,19 @@ export class AgentResolver {
                     `${activeSkills.length} active skills, ` +
                     `${discoverableSkillManifests.length} discoverable skills via meta-tools`
             );
+        }
+
+        // Connection-gate: remove OAuth tools without active connections for this org
+        const connectedProviders = await this.getConnectedProviderKeys(organizationId);
+        for (const [toolId, providerKey] of Object.entries(TOOL_OAUTH_REQUIREMENTS)) {
+            if (tools[toolId] && !connectedProviders.has(providerKey)) {
+                delete tools[toolId];
+                toolOriginMap[toolId] = `filtered:no-connection:${providerKey}`;
+                console.log(
+                    `[AgentResolver] Filtered out "${toolId}" -- ` +
+                        `requires "${providerKey}" OAuth connection (not connected)`
+                );
+            }
         }
 
         if (hasSkills === 0 && metadata?.mcpEnabled && Object.keys(mcpTools).length > 0) {
@@ -441,6 +461,20 @@ export class AgentResolver {
      * Returns merged skill instructions, resolved skill tools, document IDs,
      * active skill metadata, discoverable skill manifests, and tool-to-skill mapping.
      */
+
+    /**
+     * Get the set of OAuth provider keys that have active connections for an organization.
+     * Used to filter out OAuth-dependent tools when the required connection is missing.
+     */
+    private async getConnectedProviderKeys(orgId?: string | null): Promise<Set<string>> {
+        if (!orgId) return new Set();
+        const connections = await prisma.integrationConnection.findMany({
+            where: { organizationId: orgId, isActive: true },
+            include: { provider: { select: { key: true } } }
+        });
+        return new Set(connections.map((c) => c.provider.key));
+    }
+
     private async loadSkills(
         agentId: string,
         organizationId?: string | null,

@@ -113,7 +113,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "skill-attach-tool",
-        description: "Attach a tool to a skill.",
+        description: "Attach a tool to a skill. skillId accepts ID or slug.",
         inputSchema: {
             type: "object",
             properties: { skillId: { type: "string" }, toolId: { type: "string" } },
@@ -124,7 +124,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "skill-detach-tool",
-        description: "Detach a tool from a skill.",
+        description: "Detach a tool from a skill. skillId accepts ID or slug.",
         inputSchema: {
             type: "object",
             properties: { skillId: { type: "string" }, toolId: { type: "string" } },
@@ -135,11 +135,40 @@ export const skillToolDefinitions: McpToolDefinition[] = [
     },
     {
         name: "agent-attach-skill",
-        description: "Attach a skill to an agent.",
+        description:
+            "Attach a skill to an agent. Set pinned=true to inject skill tools directly, or false (default) for discoverable via meta-tools.",
         inputSchema: {
             type: "object",
-            properties: { agentId: { type: "string" }, skillId: { type: "string" } },
+            properties: {
+                agentId: { type: "string" },
+                skillId: { type: "string" },
+                pinned: {
+                    type: "boolean",
+                    description:
+                        "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: false."
+                }
+            },
             required: ["agentId", "skillId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "skills"
+    },
+    {
+        name: "agent-skill-update",
+        description:
+            "Update a skill's attachment state on an agent (e.g. toggle pinned). skillId accepts ID or slug.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: { type: "string" },
+                skillId: { type: "string" },
+                pinned: {
+                    type: "boolean",
+                    description:
+                        "Pin the skill (tools injected directly) vs discoverable (via meta-tools)."
+                }
+            },
+            required: ["agentId", "skillId", "pinned"]
         },
         invoke_url: "/api/mcp",
         category: "skills"
@@ -179,6 +208,7 @@ export const skillToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "skill-attach-tool" },
     { kind: "registry", name: "skill-detach-tool" },
     { kind: "registry", name: "agent-attach-skill" },
+    { kind: "registry", name: "agent-skill-update" },
     { kind: "registry", name: "agent-detach-skill" },
     { kind: "registry", name: "skill-get-versions" }
 ];

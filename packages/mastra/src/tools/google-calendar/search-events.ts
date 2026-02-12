@@ -7,7 +7,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getAccessToken, refreshAccessToken, decrypt } from "../gmail/shared";
+import { getAccessToken, refreshAccessToken, decrypt, checkGoogleScopes } from "../gmail/shared";
 import { prisma } from "@repo/database";
 
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -144,6 +144,20 @@ export const googleCalendarSearchEventsTool = createTool({
         const address = gmailAddress || "corey@useappello.com";
         const calendar = calendarId || "primary";
         try {
+            // Pre-flight scope check: verify calendar.readonly was granted
+            const scopeCheck = await checkGoogleScopes(address, [
+                "https://www.googleapis.com/auth/calendar.readonly"
+            ]);
+            if (!scopeCheck.ok) {
+                return {
+                    success: false,
+                    events: [],
+                    error:
+                        `Google Calendar requires scope: ${scopeCheck.missing.join(", ")}. ` +
+                        `Re-authorize Google OAuth to grant calendar access.`
+                };
+            }
+
             const response = await callCalendarApi(
                 address,
                 `/calendars/${encodeURIComponent(calendar)}/events`,

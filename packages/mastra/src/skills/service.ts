@@ -305,9 +305,11 @@ export async function detachDocument(skillId: string, documentId: string) {
 // ===========================
 
 /**
- * Attach a tool to a skill (creates skill version)
+ * Attach a tool to a skill (creates skill version).
+ * skillIdOrSlug accepts a CUID or slug.
  */
-export async function attachTool(skillId: string, toolId: string) {
+export async function attachTool(skillIdOrSlug: string, toolId: string) {
+    const skillId = await resolveSkillId(skillIdOrSlug);
     const junction = await prisma.skillTool.create({
         data: { skillId, toolId }
     });
@@ -318,9 +320,11 @@ export async function attachTool(skillId: string, toolId: string) {
 }
 
 /**
- * Detach a tool from a skill (creates skill version)
+ * Detach a tool from a skill (creates skill version).
+ * skillIdOrSlug accepts a CUID or slug.
  */
-export async function detachTool(skillId: string, toolId: string) {
+export async function detachTool(skillIdOrSlug: string, toolId: string) {
+    const skillId = await resolveSkillId(skillIdOrSlug);
     await prisma.skillTool.delete({
         where: {
             skillId_toolId: { skillId, toolId }
@@ -423,8 +427,13 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
 
 /**
  * Attach a skill to an agent (creates agent version)
+ * @param pinned - If true, skill tools are injected directly. If false (default), skill is discoverable via meta-tools.
  */
-export async function attachToAgent(agentIdOrSlug: string, skillIdOrSlug: string) {
+export async function attachToAgent(
+    agentIdOrSlug: string,
+    skillIdOrSlug: string,
+    pinned?: boolean
+) {
     const agentId = await resolveAgentId(agentIdOrSlug);
     const skillId = await resolveSkillId(skillIdOrSlug);
 
@@ -435,13 +444,13 @@ export async function attachToAgent(agentIdOrSlug: string, skillIdOrSlug: string
     });
 
     const junction = await prisma.agentSkill.create({
-        data: { agentId, skillId }
+        data: { agentId, skillId, pinned: pinned ?? false }
     });
 
     // Create agent version after the skill is attached
     const newVersion = await createAgentVersionForSkillChange(
         agentId,
-        `Attached skill: ${skill.slug}`
+        `Attached skill: ${skill.slug}${pinned ? " (pinned)" : ""}`
     );
 
     return { ...junction, agentVersion: newVersion };

@@ -52,27 +52,23 @@ You can create, read, update, delete, and list AI agents.
 - Agent updates create a new version automatically`,
         category: "builder",
         tags: ["agents", "crud", "management"],
-        tools: ["agent-create", "agent-read", "agent-update", "agent-delete", "agent-list"],
+        tools: ["agent-create", "agent-read", "agent-update", "agent-delete", "agent-list", "agent-overview"],
         type: "SYSTEM"
     },
     {
         slug: "platform-workflow-management",
         name: "Workflow Management",
         description:
-            "Build, validate, generate, and manage workflow definitions with versioning and rollback.",
+            "Create, read, update, delete, and version workflow definitions with rollback support.",
         instructions: `## Workflow Management
 
-You can create, read, update, delete, generate, validate, and version workflow definitions.
-
-### Workflow generation:
-- Use workflow-generate to create a workflow definition from a natural language prompt
-- Use workflow-validate to check a workflow definition before saving
-- Use workflow-designer-chat to iteratively refine an existing workflow
+You can create, read, update, delete, and version workflow definitions.
 
 ### When creating/updating workflows:
 - Workflows have a definitionJson with steps array
 - Each step has an id, type, and configuration
-- Workflows support input/output schemas for type safety`,
+- Workflows support input/output schemas for type safety
+- Use workflow-versions to inspect version history and roll back`,
         category: "builder",
         tags: ["workflows", "crud", "builder"],
         tools: [
@@ -80,9 +76,6 @@ You can create, read, update, delete, generate, validate, and version workflow d
             "workflow-read",
             "workflow-update",
             "workflow-delete",
-            "workflow-generate",
-            "workflow-validate",
-            "workflow-designer-chat",
             "workflow-versions"
         ],
         type: "SYSTEM"
@@ -121,20 +114,16 @@ You can execute workflows, list and inspect runs, resume suspended workflows, an
         slug: "platform-network-management",
         name: "Network Management",
         description:
-            "Build, validate, generate, and manage agent network definitions with versioning.",
+            "Create, read, update, delete, and version agent network definitions with rollback support.",
         instructions: `## Network Management
 
-You can create, read, update, delete, generate, validate, and version agent networks.
-
-### Network generation:
-- Use network-generate to create a network topology from a prompt
-- Use network-validate to check topology and primitives
-- Use network-designer-chat to iteratively refine an existing network
+You can create, read, update, delete, and version agent networks.
 
 ### Network structure:
 - Networks have a routing agent that delegates to sub-agents
 - Primitives define which agents, workflows, and tools are available
-- Networks require memory configuration for conversation state`,
+- Networks require memory configuration for conversation state
+- Use network-versions to inspect version history and roll back`,
         category: "builder",
         tags: ["networks", "crud", "builder"],
         tools: [
@@ -142,9 +131,6 @@ You can create, read, update, delete, generate, validate, and version agent netw
             "network-read",
             "network-update",
             "network-delete",
-            "network-generate",
-            "network-validate",
-            "network-designer-chat",
             "network-versions"
         ],
         type: "SYSTEM"
@@ -236,7 +222,11 @@ You can monitor live production runs, view agent analytics, track costs, manage 
             "agent-budget-get",
             "agent-budget-update",
             "metrics-agent-runs",
-            "audit-logs-list"
+            "audit-logs-list",
+            "metrics-live-summary",
+            "metrics-agent-analytics",
+            "metrics-workflow-daily",
+            "metrics-network-daily"
         ],
         type: "SYSTEM"
     },
@@ -406,7 +396,8 @@ You can manage skills — composable competency bundles that group tools, instru
             "skill-attach-tool",
             "skill-detach-tool",
             "agent-attach-skill",
-            "agent-detach-skill"
+            "agent-detach-skill",
+            "skill-get-versions"
         ],
         type: "SYSTEM"
     },
@@ -616,14 +607,78 @@ Tools for Building Information Modeling (BIM) analysis and reporting.
     },
     {
         slug: "email-management",
-        name: "Email Management",
-        description: "Email operations including archiving Gmail messages.",
-        instructions: `## Email Management
+        name: "Email & Calendar Management",
+        description:
+            "Full email and calendar operations across Google (Gmail, Google Calendar) and Microsoft (Outlook Mail, Outlook Calendar): search, read, draft, send, archive emails and list, create, update calendar events.",
+        instructions: `## Email & Calendar Management
 
-- **gmail-archive-email**: Archive a Gmail email by removing it from the inbox`,
+### Gmail
+- **gmail-search-emails**: Search Gmail for emails matching a query
+- **gmail-read-email**: Read the full content of a specific email
+- **gmail-draft-email**: Create a draft reply or new email in Gmail
+- **gmail-archive-email**: Archive a Gmail email by removing it from the inbox
+
+### Google Calendar
+- **google-calendar-search-events**: Search Google Calendar for events by query, date range, or attendees
+
+### Outlook Mail
+- **outlook-mail-list-emails**: List recent emails from Outlook inbox or folders
+- **outlook-mail-get-email**: Read a specific Outlook email by ID
+- **outlook-mail-send-email**: Send an email via Outlook
+- **outlook-mail-archive-email**: Archive an Outlook email
+
+### Outlook Calendar
+- **outlook-calendar-list-events**: List upcoming events from Outlook Calendar
+- **outlook-calendar-get-event**: Get details of a specific Outlook Calendar event
+- **outlook-calendar-create-event**: Create a new Outlook Calendar event
+- **outlook-calendar-update-event**: Update an existing Outlook Calendar event`,
         category: "domain",
-        tags: ["email", "gmail"],
-        tools: ["gmail-archive-email"],
+        tags: ["email", "gmail", "outlook", "calendar", "google-calendar"],
+        tools: [
+            "gmail-search-emails",
+            "gmail-read-email",
+            "gmail-draft-email",
+            "gmail-archive-email",
+            "google-calendar-search-events",
+            "outlook-mail-list-emails",
+            "outlook-mail-get-email",
+            "outlook-mail-send-email",
+            "outlook-mail-archive-email",
+            "outlook-calendar-list-events",
+            "outlook-calendar-get-event",
+            "outlook-calendar-create-event",
+            "outlook-calendar-update-event"
+        ],
+        type: "SYSTEM"
+    },
+    {
+        slug: "cloud-file-storage",
+        name: "Cloud File Storage",
+        description:
+            "Access and manage files in cloud storage: list, read, upload, search files and manage sharing links in Dropbox.",
+        instructions: `## Cloud File Storage
+
+Manage files in Dropbox cloud storage.
+
+### Capabilities:
+- **dropbox-list-files**: List files and folders in a Dropbox path
+- **dropbox-get-file**: Read the content of a specific file
+- **dropbox-upload-file**: Upload a file to Dropbox
+- **dropbox-search-files**: Search for files by name or content
+- **dropbox-get-sharing-links**: Get or create sharing links for files
+
+### Best practices:
+- Use search before listing to find files efficiently
+- Always check sharing link permissions before sharing externally`,
+        category: "domain",
+        tags: ["dropbox", "files", "storage", "cloud"],
+        tools: [
+            "dropbox-list-files",
+            "dropbox-get-file",
+            "dropbox-upload-file",
+            "dropbox-search-files",
+            "dropbox-get-sharing-links"
+        ],
         type: "SYSTEM"
     }
 ];

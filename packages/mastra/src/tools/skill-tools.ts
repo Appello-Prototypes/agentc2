@@ -238,16 +238,43 @@ export const skillDetachToolTool = createTool({
 
 export const agentAttachSkillTool = createTool({
     id: "agent-attach-skill",
-    description: "Attach a skill to an agent.",
+    description:
+        "Attach a skill to an agent. Set pinned=true to inject skill tools directly, or false (default) for discoverable via meta-tools.",
     inputSchema: z.object({
         agentId: z.string(),
-        skillId: z.string()
+        skillId: z.string(),
+        pinned: z
+            .boolean()
+            .optional()
+            .describe(
+                "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: false."
+            )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ agentId, skillId }) => {
+    execute: async ({ agentId, skillId, pinned }) => {
         return callInternalApi(`/api/agents/${encodeURIComponent(agentId)}/skills`, {
             method: "POST",
-            body: { skillId }
+            body: { skillId, ...(pinned !== undefined ? { pinned } : {}) }
+        });
+    }
+});
+
+export const agentSkillUpdateTool = createTool({
+    id: "agent-skill-update",
+    description:
+        "Update a skill's attachment state on an agent (e.g. toggle pinned). skillId accepts ID or slug.",
+    inputSchema: z.object({
+        agentId: z.string(),
+        skillId: z.string(),
+        pinned: z
+            .boolean()
+            .describe("Pin the skill (tools injected directly) vs discoverable (via meta-tools).")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ agentId, skillId, pinned }) => {
+        return callInternalApi(`/api/agents/${encodeURIComponent(agentId)}/skills`, {
+            method: "PATCH",
+            body: { skillId, pinned }
         });
     }
 });
