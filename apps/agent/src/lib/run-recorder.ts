@@ -45,6 +45,7 @@ export type RunSource =
     | "webhook"
     | "test"
     | "simulation"
+    | "embed"
     | "event"
     | "mcp"
     | "manual"

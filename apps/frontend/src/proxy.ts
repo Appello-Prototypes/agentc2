@@ -55,6 +55,6 @@ export const config = {
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
+        "/((?!api/auth|about|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };

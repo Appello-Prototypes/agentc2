@@ -62,6 +62,23 @@ agentc2.ai {
         }
     }
 
+    # Embed routes -- relax X-Frame-Options so external sites can iframe them
+    @embed_routes {
+        path /embed/*
+    }
+
+    handle @embed_routes {
+        header X-Frame-Options ""
+        header Content-Security-Policy "frame-ancestors *"
+        reverse_proxy localhost:3001 {
+            transport http {
+                read_timeout 300s
+                write_timeout 300s
+            }
+            flush_interval -1
+        }
+    }
+
     # All other traffic routes to agent app (primary app on port 3001)
     # Long timeouts for agent executions and SSE streams
     handle {

@@ -10,7 +10,28 @@ config({ path: resolve(__dirname, "../../.env") });
 const nextConfig: NextConfig = {
     env: sharedEnv,
     devIndicators,
-    headers: createHeadersConfig(),
+    async headers() {
+        const headersFn = createHeadersConfig();
+        const baseHeaders = headersFn ? await headersFn() : [];
+
+        return [
+            ...baseHeaders,
+            // Relax framing restrictions for /embed/* so pages can be iframed
+            // by the landing page (same origin) and third-party sites.
+            {
+                source: "/embed/:path*",
+                headers: [
+                    // Clear X-Frame-Options to allow framing
+                    { key: "X-Frame-Options", value: "" },
+                    // Override CSP to permit framing from any origin
+                    {
+                        key: "Content-Security-Policy",
+                        value: "frame-ancestors *"
+                    }
+                ]
+            }
+        ];
+    },
     turbopack: {},
     // Skip TypeScript checking in next build -- verified by CI/local type-check
     typescript: {

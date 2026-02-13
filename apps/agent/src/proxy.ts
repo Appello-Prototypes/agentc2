@@ -84,6 +84,6 @@ export const config = {
          * This allows each API endpoint to decide its own auth requirements
          * (e.g., some may be public, others require auth, some need specific roles).
          */
-        "/((?!api|login|signup|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
+        "/((?!api|embed|login|signup|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
     ]
 };

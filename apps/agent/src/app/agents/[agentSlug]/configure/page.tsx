@@ -67,6 +67,9 @@ interface Agent {
     scorers: string[];
     isActive: boolean;
     isPublic: boolean;
+    publicToken: string | null;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    metadata: Record<string, any> | null;
     type: "SYSTEM" | "USER" | "DEMO";
     version: number;
 }
@@ -510,6 +513,8 @@ export default function ConfigurePage() {
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 isPublic: agentData.isPublic ?? false,
+                publicToken: agentData.publicToken ?? null,
+                metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
                 version: agentData.version ?? 1
             };
@@ -724,6 +729,8 @@ export default function ConfigurePage() {
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 isPublic: agentData.isPublic ?? false,
+                publicToken: agentData.publicToken ?? null,
+                metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
                 version: agentData.version ?? 1
             };
@@ -939,6 +946,247 @@ export default function ConfigurePage() {
                                     <Label>Public</Label>
                                 </div>
                             </div>
+
+                            {/* Public Embed Settings Panel */}
+                            {formData.isPublic && (
+                                <div className="space-y-4 rounded-lg border p-4">
+                                    <h4 className="text-sm font-medium">Public Embed Settings</h4>
+
+                                    {/* Embed URL & Code */}
+                                    {agent?.publicToken && (
+                                        <div className="space-y-3">
+                                            <div className="space-y-1">
+                                                <Label className="text-muted-foreground text-xs">
+                                                    Embed URL
+                                                </Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        readOnly
+                                                        value={`${typeof window !== "undefined" ? window.location.origin : ""}/embed/${agent.slug}?token=${agent.publicToken}`}
+                                                        className="font-mono text-xs"
+                                                    />
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            window.open(
+                                                                `/embed/${agent.slug}?token=${agent.publicToken}`,
+                                                                "_blank"
+                                                            );
+                                                        }}
+                                                    >
+                                                        Open
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-muted-foreground text-xs">
+                                                    Embed Code
+                                                </Label>
+                                                <div className="relative">
+                                                    <pre className="bg-muted overflow-x-auto rounded-md p-3 text-xs">
+                                                        {`<iframe\n  src="${typeof window !== "undefined" ? window.location.origin : "https://agentc2.ai"}/embed/${agent.slug}?token=${agent.publicToken}"\n  width="100%" height="600"\n  style="border:none; border-radius:12px;"\n  allow="clipboard-write"\n></iframe>`}
+                                                    </pre>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="absolute top-1 right-1"
+                                                        onClick={() => {
+                                                            const code = `<iframe src="${window.location.origin}/embed/${agent.slug}?token=${agent.publicToken}" width="100%" height="600" style="border:none; border-radius:12px;" allow="clipboard-write"></iframe>`;
+                                                            navigator.clipboard.writeText(code);
+                                                        }}
+                                                    >
+                                                        Copy
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {!agent?.publicToken && (
+                                        <p className="text-muted-foreground text-xs">
+                                            Save to generate a public embed token and URL.
+                                        </p>
+                                    )}
+
+                                    {/* Greeting */}
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">Greeting Text</Label>
+                                        <Input
+                                            placeholder={`Hi, I'm ${formData.name}. How can I help you?`}
+                                            value={
+                                                (
+                                                    formData.metadata?.publicEmbed as Record<
+                                                        string,
+                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                        any
+                                                    >
+                                                )?.greeting || ""
+                                            }
+                                            onChange={(e) => {
+                                                const current = formData.metadata || {};
+                                                const embed =
+                                                    (current.publicEmbed as Record<
+                                                        string,
+                                                        unknown
+                                                    >) || {};
+                                                handleChange("metadata", {
+                                                    ...current,
+                                                    publicEmbed: {
+                                                        ...embed,
+                                                        greeting: e.target.value
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* Suggestion Chips */}
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">
+                                            Suggestion Chips (comma separated)
+                                        </Label>
+                                        <Input
+                                            placeholder="What can you do?, Help me with something"
+                                            value={
+                                                (
+                                                    (
+                                                        formData.metadata?.publicEmbed as Record<
+                                                            string,
+                                                            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                            any
+                                                        >
+                                                    )?.suggestions || []
+                                                ).join(", ") || ""
+                                            }
+                                            onChange={(e) => {
+                                                const current = formData.metadata || {};
+                                                const embed =
+                                                    (current.publicEmbed as Record<
+                                                        string,
+                                                        unknown
+                                                    >) || {};
+                                                handleChange("metadata", {
+                                                    ...current,
+                                                    publicEmbed: {
+                                                        ...embed,
+                                                        suggestions: e.target.value
+                                                            .split(",")
+                                                            .map((s: string) => s.trim())
+                                                            .filter(Boolean)
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                    </div>
+
+                                    {/* UI Visibility Toggles */}
+                                    <div className="space-y-2">
+                                        <Label className="text-xs">Visibility</Label>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {[
+                                                {
+                                                    key: "showToolActivity",
+                                                    label: "Tool Activity",
+                                                    defaultVal: true
+                                                },
+                                                {
+                                                    key: "showSignupCTA",
+                                                    label: "Signup CTA",
+                                                    defaultVal: false
+                                                },
+                                                {
+                                                    key: "showModeSelector",
+                                                    label: "Mode Selector",
+                                                    defaultVal: false
+                                                },
+                                                {
+                                                    key: "showFileUpload",
+                                                    label: "File Upload",
+                                                    defaultVal: false
+                                                },
+                                                {
+                                                    key: "showVoiceInput",
+                                                    label: "Voice Input",
+                                                    defaultVal: false
+                                                },
+                                                {
+                                                    key: "poweredByBadge",
+                                                    label: "Powered By Badge",
+                                                    defaultVal: true
+                                                }
+                                            ].map(({ key, label, defaultVal }) => (
+                                                <div key={key} className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={
+                                                            (
+                                                                formData.metadata
+                                                                    ?.publicEmbed as Record<
+                                                                    string,
+                                                                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                                    any
+                                                                >
+                                                            )?.[key] ?? defaultVal
+                                                        }
+                                                        onCheckedChange={(checked) => {
+                                                            const current = formData.metadata || {};
+                                                            const embed =
+                                                                (current.publicEmbed as Record<
+                                                                    string,
+                                                                    unknown
+                                                                >) || {};
+                                                            handleChange("metadata", {
+                                                                ...current,
+                                                                publicEmbed: {
+                                                                    ...embed,
+                                                                    [key]: checked
+                                                                }
+                                                            });
+                                                        }}
+                                                    />
+                                                    <Label className="text-xs">{label}</Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    {/* Max Messages Per Session */}
+                                    <div className="space-y-1">
+                                        <Label className="text-xs">
+                                            Max Messages Per Session (0 = unlimited)
+                                        </Label>
+                                        <Input
+                                            type="number"
+                                            min={0}
+                                            value={
+                                                (
+                                                    formData.metadata?.publicEmbed as Record<
+                                                        string,
+                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                        any
+                                                    >
+                                                )?.maxMessagesPerSession ?? 50
+                                            }
+                                            onChange={(e) => {
+                                                const current = formData.metadata || {};
+                                                const embed =
+                                                    (current.publicEmbed as Record<
+                                                        string,
+                                                        unknown
+                                                    >) || {};
+                                                handleChange("metadata", {
+                                                    ...current,
+                                                    publicEmbed: {
+                                                        ...embed,
+                                                        maxMessagesPerSession:
+                                                            parseInt(e.target.value) || 0
+                                                    }
+                                                });
+                                            }}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             {agent?.type === "SYSTEM" && (
                                 <div className="rounded-lg border border-yellow-500/20 bg-yellow-500/10 p-4">

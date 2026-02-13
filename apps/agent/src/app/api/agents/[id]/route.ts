@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 
@@ -207,7 +208,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
             if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
             if (body.scorers !== undefined) updateData.scorers = body.scorers;
-            if (body.isPublic !== undefined) updateData.isPublic = body.isPublic;
+            if (body.isPublic !== undefined) {
+                updateData.isPublic = body.isPublic;
+                // Auto-generate publicToken when making public and no token exists
+                if (body.isPublic && !existing.publicToken) {
+                    updateData.publicToken = randomUUID();
+                }
+            }
             if (body.metadata !== undefined) updateData.metadata = body.metadata;
             if (body.isActive !== undefined) updateData.isActive = body.isActive;
 

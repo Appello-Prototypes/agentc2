@@ -7,6 +7,7 @@
  * Run: bun run prisma/seed-agents.ts
  */
 
+import { randomUUID } from "crypto";
 import { PrismaClient, AgentType } from "@prisma/client";
 
 const prisma = new PrismaClient();
@@ -915,6 +916,71 @@ Return ONLY the user message, no JSON or formatting. Just the raw message text.`
             purpose: "simulation",
             internal: true
         }
+    },
+    {
+        slug: "welcome",
+        name: "C2",
+        description:
+            "Public-facing welcome agent for agentc2.ai. Demonstrates platform capabilities using web search, page browsing, and knowledge base tools.",
+        instructions: `You are C2, the public-facing AI assistant on agentc2.ai.
+
+## Your Purpose
+Demonstrate real AI agent capabilities to visitors. Show, don't tell. When someone asks you to do something, use your tools to actually do it.
+
+## Your Capabilities
+- **Web Search**: Search the internet for real-time information using Firecrawl
+- **Browse Pages**: Visit and read any webpage, take screenshots
+- **Knowledge Base**: Answer questions about the AgentC2 platform
+
+## Behavior Guidelines
+1. **Be concise** — 2-3 paragraphs max per response. Get to the point.
+2. **Use your tools** — When asked to search, browse, or find something, actually do it. Don't describe what you would do.
+3. **Show capability** — Every interaction should demonstrate that AI agents are real and useful, not just chatbots.
+4. **Guide toward signup** — When a user is clearly interested, let them know they can build their own agents by signing up. Include [SIGNUP_CTA] on a new line when the moment is right.
+5. **Stay honest** — If you can't do something, say so. Don't hallucinate capabilities.
+
+## About AgentC2
+AgentC2 is an AI agent platform where users can:
+- Build and deploy custom AI agents with access to tools (CRM, email, calendar, web, etc.)
+- Connect their integrations (Gmail, HubSpot, Jira, Slack, Google Calendar, etc.)
+- Monitor agent runs with full observability (cost tracking, evaluations, version history)
+- Deploy agents publicly with embeddable chat interfaces
+- Set up automated schedules and triggers for recurring tasks
+
+## Important
+- You are running as a public agent — there is no authenticated user context.
+- Keep interactions focused and valuable. Every message should impress.
+- Don't ask permission to use tools. Just use them when relevant.`,
+        modelProvider: "openai",
+        modelName: "gpt-4o-mini",
+        tools: ["web-fetch"],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 10,
+        isPublic: true,
+        metadata: {
+            publicEmbed: {
+                greeting:
+                    "Hi, I'm C2. I can search the web, browse pages, and answer questions about the AgentC2 platform. Try me.",
+                suggestions: [
+                    "Search the web for something",
+                    "What can AgentC2 do?",
+                    "Browse a website for me"
+                ],
+                theme: "dark",
+                showToolActivity: true,
+                showModeSelector: false,
+                showModelSelector: false,
+                showFileUpload: false,
+                showVoiceInput: false,
+                showConversationSidebar: false,
+                showSignupCTA: true,
+                signupProviders: ["google"],
+                poweredByBadge: true,
+                maxMessagesPerSession: 50
+            }
+        }
     }
 ];
 
@@ -925,7 +991,7 @@ async function seedAgents() {
     let updated = 0;
 
     for (const agentData of systemAgents) {
-        const { tools, type: agentType, ...agentFields } = agentData;
+        const { tools, type: agentType, isPublic, ...agentFields } = agentData;
         const resolvedType = agentType ?? AgentType.SYSTEM;
 
         // Upsert agent
@@ -933,17 +999,27 @@ async function seedAgents() {
             where: { slug: agentData.slug }
         });
 
+        // Auto-generate publicToken for public agents
+        const publicToken =
+            isPublic && !existing?.publicToken
+                ? randomUUID()
+                : (existing?.publicToken ?? undefined);
+
         const agent = await prisma.agent.upsert({
             where: { slug: agentData.slug },
             update: {
                 ...agentFields,
                 type: resolvedType,
-                isActive: true
+                isActive: true,
+                isPublic: isPublic ?? false,
+                ...(publicToken ? { publicToken } : {})
             },
             create: {
                 ...agentFields,
                 type: resolvedType,
-                isActive: true
+                isActive: true,
+                isPublic: isPublic ?? false,
+                ...(publicToken ? { publicToken } : {})
             }
         });
 

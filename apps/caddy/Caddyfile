@@ -52,6 +52,19 @@ https://catalyst.localhost {
         }
     }
 
+    # Embed routes -- relax framing restrictions for external iframe embedding
+    @embed_routes {
+        path /embed/*
+    }
+
+    handle @embed_routes {
+        header X-Frame-Options ""
+        header Content-Security-Policy "frame-ancestors *"
+        reverse_proxy localhost:3001 {
+            flush_interval -1
+        }
+    }
+
     # All other traffic routes to agent app (primary app on port 3001)
     handle {
         reverse_proxy localhost:3001 {

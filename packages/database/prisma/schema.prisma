@@ -666,6 +666,7 @@ model Agent {
     ownerId     String?
     owner       User?      @relation(fields: [ownerId], references: [id])
     isPublic    Boolean    @default(false)
+    publicToken String?    @unique // Token for public embed access (like Canvas pattern)
 
     // Policies
     requiresApproval Boolean @default(false) // Require human approval for runs
