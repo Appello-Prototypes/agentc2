@@ -385,11 +385,11 @@ function EmbedChat({
                                 </span>
                                 <AgentC2Logo size={32} />
                             </div>
-                            <h1 className="text-foreground/90 mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                                AI agents that connect to your tools.
+                            <h1 className="text-foreground/90 mb-2 text-xl font-semibold tracking-tight sm:text-3xl">
+                                Build and deploy agents that connect to your tools at scale.
                             </h1>
                             <p className="text-muted-foreground mx-auto max-w-md text-sm sm:text-base">
-                                I can search the web and read any page. Sign up to connect your
+                                Your command and control center for the agentic world. Connect your
                                 email, calendar, and CRM — then let agents do the rest.
                             </p>
 
@@ -402,7 +402,7 @@ function EmbedChat({
                         {/* Suggestion chips */}
                         {showSuggestions && safeConfig.suggestions.length > 0 && (
                             <div className="mb-4">
-                                <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:justify-center sm:px-0">
+                                <div className="flex flex-wrap justify-center gap-2 px-2 sm:px-0">
                                     {safeConfig.suggestions.map((s, i) => (
                                         <SuggestionChip
                                             key={i}

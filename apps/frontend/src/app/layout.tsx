@@ -26,12 +26,12 @@ export const metadata: Metadata = {
         template: "%s | AgentC2"
     },
     description:
-        "AgentC2 is an AI agent platform that lets you build, deploy, and orchestrate intelligent agents. Connect to Gmail, Google Calendar, Google Drive, HubSpot, Jira, Slack, and 10+ integrations. Visual workflows, voice agents, and enterprise-grade security.",
+        "Agent C2 is your command and control center for the agentic world. Build and deploy AI agents that connect to your tools at scale. Gmail, Google Calendar, Slack, HubSpot, Jira, and 10+ integrations. Visual workflows, voice agents, and enterprise-grade security.",
     metadataBase: new URL("https://agentc2.ai"),
     openGraph: {
         title: "AgentC2 - Your AI Workforce, Orchestrated",
         description:
-            "Build, deploy, and orchestrate intelligent AI agents that connect to your tools, learn from experience, and work across every channel.",
+            "Your command and control center for the agentic world. Build and deploy AI agents that connect to your tools at scale.",
         url: "https://agentc2.ai",
         siteName: "AgentC2",
         type: "website"

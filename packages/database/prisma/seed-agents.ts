@@ -994,7 +994,7 @@ When the moment is right (after you've shown value, answered a question well, or
         metadata: {
             publicEmbed: {
                 greeting:
-                    "AI agents that connect to your tools. I can search the web and read any page. Sign up to connect your email, calendar, and CRM — then let agents do the rest.",
+                    "Build and deploy agents that connect to your tools at scale. Your command and control center for the agentic world. Connect your email, calendar, and CRM — then let agents do the rest.",
                 suggestions: [
                     "What can you automate for me?",
                     "How would you triage my inbox?",
@@ -1080,7 +1080,7 @@ AgentC2 is NOT another chatbot. It's a platform where AI agents connect to your 
         metadata: {
             publicEmbed: {
                 greeting:
-                    "AI agents that connect to your tools. I can search the web and read any page. Sign up to connect your email, calendar, and CRM — then let agents do the rest.",
+                    "Build and deploy agents that connect to your tools at scale. Your command and control center for the agentic world. Connect your email, calendar, and CRM — then let agents do the rest.",
                 suggestions: [
                     "What can you automate for me?",
                     "How would you triage my inbox?",
