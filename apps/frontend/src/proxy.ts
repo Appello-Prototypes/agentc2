@@ -39,6 +39,7 @@ export default proxy;
  * Protects all routes except:
  * - Public root page (/)
  * - Sign up page (/signup)
+ * - Public legal pages (/terms, /privacy, /security)
  * - Auth API endpoints (/api/auth/*)
  * - Static assets (_next/*, favicon.ico, etc.)
  * - Files with extensions (robots.txt, manifest.json, images, etc.)
@@ -49,12 +50,15 @@ export const config = {
          * Match all request paths except:
          * - / (root/landing page)
          * - /signup (registration page)
+         * - /terms (Terms of Service)
+         * - /privacy (Privacy Policy)
+         * - /security (Security Policy)
          * - /api/auth/* (Better Auth endpoints)
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|about|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
+        "/((?!api/auth|about|terms$|privacy$|security$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };
