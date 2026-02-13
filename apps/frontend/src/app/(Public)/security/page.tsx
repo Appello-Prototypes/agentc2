@@ -5,7 +5,10 @@ import { AgentC2Logo } from "@repo/ui";
 export const metadata: Metadata = {
     title: "Security Policy",
     description:
-        "AgentC2 Security Policy — How we protect your data, credentials, and integrations."
+        "AgentC2 Security Policy — How we protect your data, credentials, and integrations.",
+    alternates: {
+        canonical: "https://agentc2.ai/security"
+    }
 };
 
 export default function SecurityPolicyPage() {
@@ -46,8 +49,11 @@ export default function SecurityPolicyPage() {
                 <h1 className="text-foreground mb-2 text-4xl font-bold tracking-tight">
                     Security Policy
                 </h1>
+                <p className="text-muted-foreground mb-4 text-sm">
+                    Effective Date: February 13, 2026
+                </p>
                 <p className="text-muted-foreground mb-12 text-sm">
-                    Last updated: February 12, 2026
+                    Last updated: February 13, 2026
                 </p>
 
                 <div className="max-w-none space-y-10">
