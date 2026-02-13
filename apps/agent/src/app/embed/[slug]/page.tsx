@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
@@ -96,113 +96,65 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
     );
 }
 
-function PoweredByBadge() {
+function TermsFooter() {
     return (
-        <div className="text-muted-foreground/50 py-2 text-center text-[10px]">
-            Powered by{" "}
+        <p className="text-muted-foreground/40 px-4 py-2 text-center text-[11px]">
+            By messaging C2, you agree to our{" "}
             <a
-                href="https://agentc2.ai"
+                href="https://agentc2.ai/terms"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="hover:text-muted-foreground underline transition-colors"
+                className="underline hover:text-white/50"
             >
-                AgentC2
+                Terms
+            </a>{" "}
+            and have read our{" "}
+            <a
+                href="https://agentc2.ai/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline hover:text-white/50"
+            >
+                Privacy Policy
             </a>
-        </div>
+            .
+        </p>
     );
 }
 
-function SignupCTA({ providers }: { providers: string[] }) {
-    const handleSignup = (provider: string) => {
-        // Open signup in a new tab (breaks out of iframe)
-        window.open(`https://agentc2.ai/signup?provider=${provider}`, "_blank");
-    };
+// ── Chat wrapper: only renders useChat once transport is available ───────
 
-    return (
-        <div className="border-border/40 mx-4 my-3 rounded-xl border p-4 text-center">
-            <p className="text-foreground/80 mb-3 text-sm">Want to build your own AI agent?</p>
-            <div className="flex flex-wrap justify-center gap-2">
-                {providers.map((provider) => (
-                    <button
-                        key={provider}
-                        onClick={() => handleSignup(provider)}
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex min-h-[44px] items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-                    >
-                        {provider === "google" && (
-                            <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" />
-                                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
-                                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
-                                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
-                            </svg>
-                        )}
-                        Sign up
-                        {providers.length > 1
-                            ? ` with ${provider.charAt(0).toUpperCase() + provider.slice(1)}`
-                            : ""}
-                    </button>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-// ── Main Page ────────────────────────────────────────────────────────────
-
-export default function EmbedPage({ params }: { params: Promise<{ slug: string }> }) {
-    const searchParams = useSearchParams();
-    const token = searchParams.get("token");
-    const isInternal = searchParams.get("internal") === "true";
-
-    const [slug, setSlug] = useState<string>("");
-    const [embedData, setEmbedData] = useState<EmbedData | null>(null);
-    const [error, setError] = useState<string | null>(null);
-    const [loading, setLoading] = useState(true);
+function EmbedChat({
+    embedData,
+    token,
+    slug,
+    isInternal
+}: {
+    embedData: EmbedData;
+    token: string;
+    slug: string;
+    isInternal: boolean;
+}) {
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [messageCount, setMessageCount] = useState(0);
 
-    // Resolve params (Next.js 16 async params)
-    useEffect(() => {
-        params.then((p) => setSlug(p.slug));
-    }, [params]);
-
-    // Ephemeral thread ID
+    // Ephemeral thread ID (stable for session)
     const [threadId] = useState<string>(
         () => `embed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     );
 
-    // Fetch embed config
-    useEffect(() => {
-        if (!slug || !token) return;
-
-        fetch(`/api/agents/${slug}/embed?token=${token}`)
-            .then((res) => {
-                if (!res.ok) throw new Error("Invalid token or agent not available");
-                return res.json();
-            })
-            .then((data: EmbedData) => {
-                setEmbedData(data);
-                setLoading(false);
-            })
-            .catch((err) => {
-                setError(err instanceof Error ? err.message : "Failed to load agent");
-                setLoading(false);
-            });
-    }, [slug, token]);
-
     // Transport for public chat API
-    const transport = useMemo(() => {
-        if (!slug || !token) return null;
-        return new DefaultChatTransport({
-            api: `/api/agents/${slug}/chat/public`,
-            body: { threadId },
-            headers: { Authorization: `Bearer ${token}` }
-        });
-    }, [slug, token, threadId]);
+    const transport = useMemo(
+        () =>
+            new DefaultChatTransport({
+                api: `/api/agents/${slug}/chat/public`,
+                body: { threadId },
+                headers: { Authorization: `Bearer ${token}` }
+            }),
+        [slug, token, threadId]
+    );
 
-    const { messages, sendMessage, status, stop } = useChat({
-        transport: transport!
-    });
+    const { messages, sendMessage, status, stop } = useChat({ transport });
 
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
@@ -213,10 +165,10 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
           ? ("streaming" as const)
           : undefined;
 
-    const config = embedData?.config;
+    const safeConfig = embedData.config;
 
     // Check session message limit
-    const maxMessages = config?.maxMessagesPerSession || 0;
+    const maxMessages = safeConfig.maxMessagesPerSession || 0;
     const isLimitReached = maxMessages > 0 && messageCount >= maxMessages;
 
     // Derive active tool calls for StreamingStatus
@@ -245,7 +197,7 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
     // ── Handlers ─────────────────────────────────────────────────────────
 
     const handleSend = (text: string) => {
-        if (isLimitReached) return;
+        if (isLimitReached || !text.trim()) return;
         setShowSuggestions(false);
         setMessageCount((c) => c + 1);
         void sendMessage({ text });
@@ -257,7 +209,7 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
         if (part.type === "text") {
             return <MessageResponse key={index}>{part.text}</MessageResponse>;
         }
-        if (part.type === "tool-invocation" && config?.showToolActivity) {
+        if (part.type === "tool-invocation" && safeConfig.showToolActivity) {
             const toolName = part.toolInvocation?.toolName || "unknown";
             const hasResult = "result" in (part.toolInvocation || {});
             return <CollapsibleToolCall key={index} toolName={toolName} hasResult={hasResult} />;
@@ -312,39 +264,6 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
         return null;
     };
 
-    // ── Loading / Error states ───────────────────────────────────────────
-
-    if (!token) {
-        return (
-            <div className="flex h-dvh items-center justify-center bg-black text-white">
-                <p className="text-muted-foreground text-sm">Missing token parameter</p>
-            </div>
-        );
-    }
-
-    if (loading) {
-        return (
-            <div className="flex h-dvh items-center justify-center bg-black">
-                <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
-            </div>
-        );
-    }
-
-    if (error || !embedData) {
-        return (
-            <div className="flex h-dvh items-center justify-center bg-black text-white">
-                <div className="text-center">
-                    <p className="text-muted-foreground text-sm">
-                        {error || "Agent not available"}
-                    </p>
-                </div>
-            </div>
-        );
-    }
-
-    // After this guard, embedData and config are guaranteed to be defined
-    const safeConfig = embedData.config;
-
     // ── Chat input ───────────────────────────────────────────────────────
 
     const chatInput = (
@@ -354,7 +273,7 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
                     placeholder={
                         isLimitReached
                             ? "Session limit reached. Sign up to continue."
-                            : "Type a message..."
+                            : "Ask anything"
                     }
                     disabled={isLimitReached}
                 />
@@ -370,20 +289,26 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
 
     if (!hasMessages) {
         return (
-            <div className="cowork-bg flex h-dvh flex-col">
+            <div className="flex h-full flex-col">
                 {/* Scrollable greeting area */}
                 <div className="flex flex-1 flex-col items-center justify-end overflow-y-auto">
                     <div className="w-full max-w-[680px] px-4 pb-4 sm:px-6">
                         {/* Greeting */}
                         <div className="mb-6 text-center sm:mb-8">
                             <SparklesIcon className="text-primary/70 mx-auto mb-3 size-7 sm:size-8" />
-                            <h1 className="text-foreground/90 mb-1 text-xl font-semibold tracking-tight sm:text-2xl">
-                                {embedData.name}
+                            <h1 className="text-foreground/90 mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+                                {safeConfig.greeting.split(".")[0] || embedData.name}
                             </h1>
-                            <p className="text-muted-foreground text-sm">{safeConfig.greeting}</p>
+                            <p className="text-muted-foreground text-sm sm:text-base">
+                                {safeConfig.greeting.includes(".")
+                                    ? safeConfig.greeting.substring(
+                                          safeConfig.greeting.indexOf(".") + 1
+                                      )
+                                    : ""}
+                            </p>
                         </div>
 
-                        {/* Suggestion chips (horizontally scrollable on mobile) */}
+                        {/* Suggestion chips */}
                         {showSuggestions && safeConfig.suggestions.length > 0 && (
                             <div className="mb-4">
                                 <div className="scrollbar-none -mx-4 flex gap-2 overflow-x-auto px-4 sm:mx-0 sm:flex-wrap sm:justify-center sm:px-0">
@@ -401,11 +326,11 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
                 </div>
 
                 {/* Input fixed at bottom */}
-                <div className="shrink-0 px-4 pb-3 sm:px-6 sm:pb-5">
+                <div className="shrink-0 px-4 pb-2 sm:px-6 sm:pb-3">
                     <div className="bg-card mx-auto max-w-[680px] rounded-2xl border shadow-sm">
                         {chatInput}
                     </div>
-                    {!isInternal && safeConfig.poweredByBadge && <PoweredByBadge />}
+                    <TermsFooter />
                 </div>
             </div>
         );
@@ -414,7 +339,7 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
     // ── Chat state ───────────────────────────────────────────────────────
 
     return (
-        <div className="cowork-bg flex h-dvh flex-col">
+        <div className="flex h-full flex-col">
             {/* Header bar */}
             <div className="flex items-center justify-between border-b px-4 py-2">
                 <div className="flex items-center gap-2">
@@ -476,9 +401,21 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
                 </Conversation>
             </div>
 
-            {/* Signup CTA */}
+            {/* Signup CTA when limit reached */}
             {safeConfig.showSignupCTA && isLimitReached && (
-                <SignupCTA providers={safeConfig.signupProviders} />
+                <div className="border-border/40 mx-4 my-3 rounded-xl border p-4 text-center">
+                    <p className="text-foreground/80 mb-3 text-sm">
+                        Want unlimited access? Sign up for free.
+                    </p>
+                    <a
+                        href="https://agentc2.ai/signup"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[44px] items-center gap-2 rounded-full bg-white px-6 py-2 text-sm font-medium text-black transition-colors hover:bg-white/90"
+                    >
+                        Sign up for free
+                    </a>
+                </div>
             )}
 
             {/* Input fixed at bottom */}
@@ -486,8 +423,140 @@ export default function EmbedPage({ params }: { params: Promise<{ slug: string }
                 <div className="bg-card mx-auto max-w-3xl rounded-2xl border shadow-sm">
                     {chatInput}
                 </div>
-                {!isInternal && safeConfig.poweredByBadge && <PoweredByBadge />}
             </div>
         </div>
+    );
+}
+
+// ── Top-level nav bar ───────────────────────────────────────────────────
+
+function EmbedNavBar({ agentName, isInternal }: { agentName: string; isInternal: boolean }) {
+    return (
+        <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
+            <div className="flex items-center gap-2">
+                <SparklesIcon className="text-primary size-5" />
+                <span className="text-foreground text-base font-semibold tracking-tight">
+                    {agentName}
+                </span>
+            </div>
+            <div className="flex items-center gap-2">
+                <a
+                    href={isInternal ? "/login" : "https://agentc2.ai/login"}
+                    target={isInternal ? "_parent" : "_blank"}
+                    rel="noopener noreferrer"
+                    className="text-foreground/70 hover:text-foreground inline-flex min-h-[36px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
+                >
+                    Log in
+                </a>
+                <a
+                    href={isInternal ? "/signup" : "https://agentc2.ai/signup"}
+                    target={isInternal ? "_parent" : "_blank"}
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-[36px] items-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
+                >
+                    Sign up
+                </a>
+            </div>
+        </nav>
+    );
+}
+
+// ── Main Page (outer shell) ─────────────────────────────────────────────
+
+function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
+    const searchParams = useSearchParams();
+    const token = searchParams.get("token");
+    const isInternal = searchParams.get("internal") === "true";
+
+    const [slug, setSlug] = useState<string>("");
+    const [embedData, setEmbedData] = useState<EmbedData | null>(null);
+    const [error, setError] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Resolve params (Next.js 16 async params)
+    useEffect(() => {
+        params.then((p) => setSlug(p.slug));
+    }, [params]);
+
+    // Fetch embed config
+    useEffect(() => {
+        if (!slug || !token) return;
+
+        fetch(`/api/agents/${slug}/embed?token=${token}`)
+            .then((res) => {
+                if (!res.ok) throw new Error("Invalid token or agent not available");
+                return res.json();
+            })
+            .then((data: EmbedData) => {
+                setEmbedData(data);
+                setLoading(false);
+            })
+            .catch((err) => {
+                setError(err instanceof Error ? err.message : "Failed to load agent");
+                setLoading(false);
+            });
+    }, [slug, token]);
+
+    // ── Loading / Error states ───────────────────────────────────────────
+
+    if (!token) {
+        return (
+            <div className="flex h-dvh items-center justify-center bg-black text-white">
+                <p className="text-muted-foreground text-sm">Missing token parameter</p>
+            </div>
+        );
+    }
+
+    if (loading) {
+        return (
+            <div className="flex h-dvh items-center justify-center bg-black">
+                <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
+            </div>
+        );
+    }
+
+    if (error || !embedData) {
+        return (
+            <div className="flex h-dvh items-center justify-center bg-black text-white">
+                <div className="text-center">
+                    <p className="text-muted-foreground text-sm">
+                        {error || "Agent not available"}
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
+    // ── Main layout ─────────────────────────────────────────────────────
+
+    return (
+        <div className="cowork-bg flex h-dvh flex-col">
+            {/* Top nav with Log In / Sign Up */}
+            <EmbedNavBar agentName={embedData.name} isInternal={isInternal} />
+
+            {/* Chat area fills remaining space */}
+            <div className="min-h-0 flex-1">
+                <EmbedChat
+                    embedData={embedData}
+                    token={token}
+                    slug={slug}
+                    isInternal={isInternal}
+                />
+            </div>
+        </div>
+    );
+}
+
+export default function EmbedPage({ params }: { params: Promise<{ slug: string }> }) {
+    return (
+        <Suspense
+            fallback={
+                <div className="flex h-dvh items-center justify-center bg-black">
+                    <LoaderIcon className="text-muted-foreground size-6 animate-spin" />
+                </div>
+            }
+        >
+            <EmbedPageInner params={params} />
+        </Suspense>
     );
 }

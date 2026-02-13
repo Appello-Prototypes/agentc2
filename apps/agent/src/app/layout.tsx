@@ -6,6 +6,7 @@ import { getAppUrl } from "@repo/auth";
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
 import { AgentHeader } from "@/components/AgentHeader";
+import { RootLayoutShell } from "@/components/RootLayoutShell";
 
 export const metadata: Metadata = {
     title: {
@@ -25,6 +26,7 @@ const appNavigation: AppNavigationConfig = {
 /**
  * Root layout for the agent app
  * Note: Authentication is handled by proxy.ts at the app level
+ * Embed pages (/embed/*) get a bare layout with no sidebar/header.
  */
 export default function RootLayout({
     children
@@ -34,15 +36,22 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body className="h-dvh overflow-hidden">
-                <Suspense fallback={null}>
-                    <AppProvidersWrapper>
-                        <div className="flex h-full flex-col">
-                            <AgentHeader />
-                            <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
-                        </div>
-                        <CommandPalette appNavigation={appNavigation} />
-                    </AppProvidersWrapper>
-                </Suspense>
+                <RootLayoutShell
+                    appShell={
+                        <Suspense fallback={null}>
+                            <AppProvidersWrapper>
+                                <div className="flex h-full flex-col">
+                                    <AgentHeader />
+                                    <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
+                                </div>
+                                <CommandPalette appNavigation={appNavigation} />
+                            </AppProvidersWrapper>
+                        </Suspense>
+                    }
+                    bareShell={children}
+                >
+                    {children}
+                </RootLayoutShell>
             </body>
         </html>
     );
