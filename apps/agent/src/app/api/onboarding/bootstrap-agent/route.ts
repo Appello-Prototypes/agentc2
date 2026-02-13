@@ -41,6 +41,8 @@ export async function POST(request: NextRequest) {
             : [];
 
         const hasGmail = connectedIntegrations.includes("gmail");
+        const hasCalendar = connectedIntegrations.includes("calendar");
+        const hasDrive = connectedIntegrations.includes("drive");
         const hasSlack = connectedIntegrations.includes("slack");
 
         // Check if user already has an onboarding agent
@@ -81,6 +83,16 @@ export async function POST(request: NextRequest) {
                 "gmail-draft-email"
             );
         }
+        if (hasCalendar) {
+            tools.push("google-calendar-search-events");
+        }
+        if (hasDrive) {
+            tools.push(
+                "google-drive-search-files",
+                "google-drive-read-file",
+                "google-drive-create-doc"
+            );
+        }
         if (hasSlack) {
             tools.push("slack-post-message", "slack-list-channels", "slack-get-channel-history");
         }
@@ -99,6 +111,8 @@ export async function POST(request: NextRequest) {
         const instructions = buildStarterInstructions(
             session.user.name || "there",
             hasGmail,
+            hasCalendar,
+            hasDrive,
             hasSlack
         );
 
@@ -124,7 +138,7 @@ export async function POST(request: NextRequest) {
   <name></name>
   <role></role>
   <preferences></preferences>
-  <connected_tools>${[hasGmail ? "Gmail" : null, hasSlack ? "Slack" : null].filter(Boolean).join(", ") || "None yet"}</connected_tools>
+  <connected_tools>${[hasGmail ? "Gmail" : null, hasCalendar ? "Calendar" : null, hasDrive ? "Drive" : null, hasSlack ? "Slack" : null].filter(Boolean).join(", ") || "None yet"}</connected_tools>
   <recent_topics></recent_topics>
 </user_profile>`
                     }
@@ -182,7 +196,13 @@ export async function POST(request: NextRequest) {
  * The agent is designed to "show, don't tell" — it uses memory, tools visibly,
  * and suggests advanced features organically.
  */
-function buildStarterInstructions(userName: string, hasGmail: boolean, hasSlack: boolean): string {
+function buildStarterInstructions(
+    userName: string,
+    hasGmail: boolean,
+    hasCalendar: boolean,
+    hasDrive: boolean,
+    hasSlack: boolean
+): string {
     const toolInstructions: string[] = [];
 
     if (hasGmail) {
@@ -191,11 +211,32 @@ function buildStarterInstructions(userName: string, hasGmail: boolean, hasSlack:
         );
     }
 
+    if (hasCalendar) {
+        toolInstructions.push(
+            `- You have access to Google Calendar. You can search events, check schedules, and see attendees. Use this to cross-reference meetings with email contacts for richer context.`
+        );
+    }
+
+    if (hasDrive) {
+        toolInstructions.push(
+            `- You have access to Google Drive. You can search files, read documents (Docs, Sheets, Slides), and **create new Google Docs**. When producing reports, summaries, or analyses, offer to save them as a Google Doc the user can open immediately.`
+        );
+    }
+
     if (hasSlack) {
         toolInstructions.push(
             `- You have access to Slack tools. You can check channels and send messages. Mention this capability when relevant.`
         );
     }
+
+    // Build first-interaction bullets
+    const firstInteraction: string[] = [];
+    if (hasGmail) firstInteraction.push("- Offer to summarize their latest emails");
+    if (hasCalendar)
+        firstInteraction.push("- Mention you can check their upcoming calendar events");
+    if (hasDrive) firstInteraction.push("- Note you can search their Drive and create Google Docs");
+    if (hasSlack) firstInteraction.push("- Mention you can also check their Slack channels");
+    if (firstInteraction.length === 0) firstInteraction.push("- Ask what they'd like help with");
 
     return `You are ${userName}'s personal AI assistant on the AgentC2 platform.
 
@@ -224,8 +265,7 @@ When relevant, naturally mention these capabilities. For example:
 
 ## First Interaction
 On your very first message, warmly greet ${userName} and:
-${hasGmail ? "- Offer to summarize their latest emails" : "- Ask what they'd like help with"}
-${hasSlack ? "- Mention you can also check their Slack channels" : ""}
+${firstInteraction.join("\n")}
 - Briefly note that you'll remember what you discuss for next time
 
 Keep it concise — 2-3 sentences max for the greeting.`;

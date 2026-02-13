@@ -12,7 +12,9 @@ const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
 const googleScopes = [
     "https://www.googleapis.com/auth/gmail.modify",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.readonly"
+    "https://www.googleapis.com/auth/calendar.readonly",
+    "https://www.googleapis.com/auth/drive.readonly",
+    "https://www.googleapis.com/auth/drive.file"
 ];
 
 // Build trusted origins based on environment

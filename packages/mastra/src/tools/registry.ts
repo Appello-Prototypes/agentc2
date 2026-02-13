@@ -14,6 +14,11 @@ import {
 } from "./gmail";
 import { googleCalendarSearchEventsTool } from "./google-calendar";
 import {
+    googleDriveSearchFilesTool,
+    googleDriveReadFileTool,
+    googleDriveCreateDocTool
+} from "./google-drive";
+import {
     outlookMailListEmailsTool,
     outlookMailGetEmailTool,
     outlookMailSendEmailTool,
@@ -360,7 +365,12 @@ export const toolCategoryMap: Record<string, string> = {
     "outlook-calendar-create-event": "Email & Calendar",
     "outlook-calendar-update-event": "Email & Calendar",
 
-    // File Storage
+    // Google Drive
+    "google-drive-search-files": "File Storage",
+    "google-drive-read-file": "File Storage",
+    "google-drive-create-doc": "File Storage",
+
+    // Dropbox
     "dropbox-list-files": "File Storage",
     "dropbox-get-file": "File Storage",
     "dropbox-upload-file": "File Storage",
@@ -584,6 +594,11 @@ export const toolRegistry: Record<string, any> = {
 
     // Google Calendar tools
     "google-calendar-search-events": googleCalendarSearchEventsTool,
+
+    // Google Drive tools
+    "google-drive-search-files": googleDriveSearchFilesTool,
+    "google-drive-read-file": googleDriveReadFileTool,
+    "google-drive-create-doc": googleDriveCreateDocTool,
 
     // Outlook Mail tools
     "outlook-mail-list-emails": outlookMailListEmailsTool,

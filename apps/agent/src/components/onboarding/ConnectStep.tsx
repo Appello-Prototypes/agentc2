@@ -8,7 +8,9 @@ import {
     MailIcon,
     MessageSquareIcon,
     AlertCircleIcon,
-    ShieldCheckIcon
+    ShieldCheckIcon,
+    CalendarIcon,
+    HardDriveIcon
 } from "lucide-react";
 
 interface ConnectStepProps {
@@ -106,12 +108,18 @@ export function ConnectStep({
 
     const handleContinue = useCallback(() => {
         const connected: string[] = [];
-        if (gmailConnected) connected.push("gmail");
+        if (gmailConnected) {
+            connected.push("gmail");
+            connected.push("calendar");
+            connected.push("drive");
+        }
         if (slackConnected) connected.push("slack");
         onContinue(connected);
     }, [gmailConnected, slackConnected, onContinue]);
 
-    const connectionCount = (gmailConnected ? 1 : 0) + (slackConnected ? 1 : 0);
+    // Google services auto-connected = 3 items (Gmail, Calendar, Drive)
+    const googleCount = gmailConnected ? 3 : 0;
+    const connectionCount = googleCount + (slackConnected ? 1 : 0);
 
     return (
         <div className="space-y-6">
@@ -126,65 +134,127 @@ export function ConnectStep({
                 <p className="text-muted-foreground mx-auto max-w-lg text-sm">
                     Integrations unlock your agent&apos;s real abilities.
                     {connectionCount === 0 && " Connect at least one to see your agent in action."}
-                    {connectionCount === 1 && " One more and your agent can work across tools."}
-                    {connectionCount === 2 && " Great — your agent is ready to go!"}
+                    {connectionCount >= 1 &&
+                        connectionCount <= 3 &&
+                        " Add Slack and your agent can work across tools."}
+                    {connectionCount >= 4 && " Your agent is fully loaded and ready to go!"}
                 </p>
             </div>
 
             <div className="mx-auto max-w-md space-y-3">
-                {/* Gmail Connection Card */}
-                <Card
-                    className={
-                        gmailConnected
-                            ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20"
-                            : ""
-                    }
-                >
-                    <CardContent className="flex items-center gap-4 p-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
-                            <MailIcon className="size-5 text-red-600 dark:text-red-400" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">Gmail</p>
-                                {gmailConnected && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                    >
-                                        Connected
-                                    </Badge>
-                                )}
+                {/* Google Services Group */}
+                {gmailConnected && (
+                    <div className="space-y-2">
+                        <p className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
+                            Google Account
+                            {gmailAddress ? ` \u2014 ${gmailAddress}` : ""}
+                        </p>
+
+                        {/* Gmail */}
+                        <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20">
+                            <CardContent className="flex items-center gap-4 p-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+                                    <MailIcon className="size-5 text-red-600 dark:text-red-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-medium">Gmail</p>
+                                        <Badge
+                                            variant="secondary"
+                                            className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        >
+                                            Connected
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">
+                                        Read, search, draft, and send emails
+                                    </p>
+                                </div>
+                                <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
+                            </CardContent>
+                        </Card>
+
+                        {/* Calendar */}
+                        <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20">
+                            <CardContent className="flex items-center gap-4 p-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/30">
+                                    <CalendarIcon className="size-5 text-blue-600 dark:text-blue-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-medium">Google Calendar</p>
+                                        <Badge
+                                            variant="secondary"
+                                            className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        >
+                                            Connected
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">
+                                        Search events, check schedules, view attendees
+                                    </p>
+                                </div>
+                                <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
+                            </CardContent>
+                        </Card>
+
+                        {/* Google Drive */}
+                        <Card className="border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20">
+                            <CardContent className="flex items-center gap-4 p-4">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-yellow-100 dark:bg-yellow-900/30">
+                                    <HardDriveIcon className="size-5 text-yellow-600 dark:text-yellow-400" />
+                                </div>
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center gap-2">
+                                        <p className="text-sm font-medium">Google Drive</p>
+                                        <Badge
+                                            variant="secondary"
+                                            className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        >
+                                            Connected
+                                        </Badge>
+                                    </div>
+                                    <p className="text-muted-foreground text-xs">
+                                        Search files, read docs, and create Google Docs
+                                    </p>
+                                </div>
+                                <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
+                            </CardContent>
+                        </Card>
+                    </div>
+                )}
+
+                {/* Gmail not connected — show single card prompting Google sign-in */}
+                {!gmailConnected && (
+                    <Card>
+                        <CardContent className="flex items-center gap-4 p-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-red-100 dark:bg-red-900/30">
+                                <MailIcon className="size-5 text-red-600 dark:text-red-400" />
                             </div>
-                            <p className="text-muted-foreground text-xs">
-                                {gmailConnected
-                                    ? gmailAddress
-                                        ? `Reading email from ${gmailAddress}`
-                                        : "Email access enabled"
-                                    : "Read, search, and act on your email"}
-                            </p>
-                        </div>
-                        {gmailConnected ? (
-                            <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
-                        ) : (
+                            <div className="min-w-0 flex-1">
+                                <p className="text-sm font-medium">Gmail, Calendar &amp; Drive</p>
+                                <p className="text-muted-foreground text-xs">
+                                    Sign in with Google to unlock 8 tools instantly
+                                </p>
+                            </div>
                             <Badge
                                 variant="outline"
                                 className="text-muted-foreground shrink-0 text-[10px]"
                             >
                                 Sign in with Google
                             </Badge>
-                        )}
-                    </CardContent>
-                </Card>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Gmail partial scopes warning */}
                 {!gmailConnected && gmailMissingScopes && gmailMissingScopes.length > 0 && (
                     <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50/50 p-3 dark:border-amber-800 dark:bg-amber-950/20">
                         <AlertCircleIcon className="mt-0.5 size-4 shrink-0 text-amber-600 dark:text-amber-400" />
                         <div className="text-xs text-amber-700 dark:text-amber-300">
-                            <p className="font-medium">Gmail needs additional permissions</p>
+                            <p className="font-medium">Google needs additional permissions</p>
                             <p className="mt-0.5">
-                                Your Google account was connected but email permissions weren&apos;t
+                                Your Google account was connected but some permissions weren&apos;t
                                 granted. You can re-authorize from{" "}
                                 <span className="font-medium">Settings &gt; Integrations</span>{" "}
                                 anytime.
@@ -194,52 +264,57 @@ export function ConnectStep({
                 )}
 
                 {/* Slack Connection Card */}
-                <Card
-                    className={
-                        slackConnected
-                            ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20"
-                            : ""
-                    }
-                >
-                    <CardContent className="flex items-center gap-4 p-4">
-                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
-                            <MessageSquareIcon className="size-5 text-purple-600 dark:text-purple-400" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                                <p className="text-sm font-medium">Slack</p>
-                                {slackConnected && (
-                                    <Badge
-                                        variant="secondary"
-                                        className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                    >
-                                        Connected
-                                    </Badge>
-                                )}
+                <div className="pt-1">
+                    <p className="text-muted-foreground mb-2 px-1 text-xs font-medium tracking-wide uppercase">
+                        Communication
+                    </p>
+                    <Card
+                        className={
+                            slackConnected
+                                ? "border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20"
+                                : ""
+                        }
+                    >
+                        <CardContent className="flex items-center gap-4 p-4">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-purple-100 dark:bg-purple-900/30">
+                                <MessageSquareIcon className="size-5 text-purple-600 dark:text-purple-400" />
                             </div>
-                            <p className="text-muted-foreground text-xs">
-                                {slackConnected
-                                    ? `Connected to ${slackTeamName || "your workspace"}`
-                                    : "Notifications, messaging, and team collaboration"}
-                            </p>
-                        </div>
-                        {slackConnected ? (
-                            <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
-                        ) : (
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleConnectSlack}
-                                disabled={slackConnecting}
-                            >
-                                {slackConnecting ? (
-                                    <Loader2Icon className="mr-1 size-3 animate-spin" />
-                                ) : null}
-                                {slackConnecting ? "Connecting..." : "Connect"}
-                            </Button>
-                        )}
-                    </CardContent>
-                </Card>
+                            <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <p className="text-sm font-medium">Slack</p>
+                                    {slackConnected && (
+                                        <Badge
+                                            variant="secondary"
+                                            className="bg-green-100 text-[10px] text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                        >
+                                            Connected
+                                        </Badge>
+                                    )}
+                                </div>
+                                <p className="text-muted-foreground text-xs">
+                                    {slackConnected
+                                        ? `Connected to ${slackTeamName || "your workspace"}`
+                                        : "Notifications, messaging, and team collaboration"}
+                                </p>
+                            </div>
+                            {slackConnected ? (
+                                <CheckCircleIcon className="size-5 shrink-0 text-green-600 dark:text-green-400" />
+                            ) : (
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={handleConnectSlack}
+                                    disabled={slackConnecting}
+                                >
+                                    {slackConnecting ? (
+                                        <Loader2Icon className="mr-1 size-3 animate-spin" />
+                                    ) : null}
+                                    {slackConnecting ? "Connecting..." : "Connect"}
+                                </Button>
+                            )}
+                        </CardContent>
+                    </Card>
+                </div>
 
                 {/* Slack error display */}
                 {slackError && (
@@ -267,9 +342,10 @@ export function ConnectStep({
                 <div className="flex items-start gap-2 rounded-lg p-2">
                     <ShieldCheckIcon className="text-muted-foreground mt-0.5 size-3.5 shrink-0" />
                     <p className="text-muted-foreground text-[11px] leading-relaxed">
-                        <span className="font-medium">Your data stays secure.</span> Gmail access
-                        lets your agent read and search emails, and create drafts.{" "}
+                        <span className="font-medium">Your data stays secure.</span> Gmail lets your
+                        agent read, search, and draft emails.{" "}
                         <span className="font-medium">It never sends without your approval.</span>{" "}
+                        Calendar is read-only. Drive allows searching, reading, and creating docs.
                         Slack is read-only for channels with write access for bot messages. You can
                         disconnect anytime from Settings.
                     </p>

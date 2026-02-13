@@ -10,6 +10,9 @@ export const TOOL_OAUTH_REQUIREMENTS: Record<string, string> = {
     "gmail-read-email": "gmail",
     "gmail-draft-email": "gmail",
     "google-calendar-search-events": "gmail",
+    "google-drive-search-files": "gmail",
+    "google-drive-read-file": "gmail",
+    "google-drive-create-doc": "gmail",
 
     // Microsoft (Outlook OAuth)
     "outlook-mail-list-emails": "microsoft",
