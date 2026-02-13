@@ -16,9 +16,9 @@ export default async function SignUpPage() {
     return (
         <div className="flex min-h-screen items-center justify-center p-4">
             <div className="w-full max-w-md">
-                <div className="mb-6 flex items-center justify-center gap-2">
-                    <AgentC2Logo size={28} />
-                    <span className="text-lg font-semibold">AgentC2</span>
+                <div className="mb-6 flex items-center justify-center gap-[2px]">
+                    <span className="text-base font-semibold">Agent</span>
+                    <AgentC2Logo size={26} />
                 </div>
                 <Card>
                     <CardHeader>

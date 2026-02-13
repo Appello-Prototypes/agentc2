@@ -1,5 +1,5 @@
 import "@/styles/globals.css";
-import { AgentC2Logo } from "@repo/ui";
+import { AgentBrand } from "@/components/AgentBrand";
 
 export const metadata = {
     title: "Get Started | AgentC2"
@@ -18,10 +18,7 @@ export default function OnboardingLayout({
         <div className="bg-background flex min-h-screen flex-col">
             {/* Minimal branded header */}
             <header className="flex shrink-0 items-center justify-center border-b px-4 py-3">
-                <div className="flex items-center gap-[2px]">
-                    <span className="text-base font-semibold">Agent</span>
-                    <AgentC2Logo size={26} />
-                </div>
+                <AgentBrand />
             </header>
 
             {/* Main content - vertically centered */}

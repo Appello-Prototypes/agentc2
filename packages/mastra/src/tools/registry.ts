@@ -34,6 +34,7 @@ import {
 } from "./dropbox";
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
+import { webSearchTool, webScrapeTool } from "./web-search";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
 import {
@@ -203,6 +204,8 @@ export const toolCategoryMap: Record<string, string> = {
     calculator: "Utilities",
     "generate-id": "Utilities",
     "web-fetch": "Utilities",
+    "web-search": "Utilities",
+    "web-scrape": "Utilities",
     "memory-recall": "Utilities",
     "json-parser": "Utilities",
     "ask-questions": "Utilities",
@@ -420,6 +423,8 @@ export const toolRegistry: Record<string, any> = {
 
     // Utility tools
     "web-fetch": webFetchTool,
+    "web-search": webSearchTool,
+    "web-scrape": webScrapeTool,
     "memory-recall": memoryRecallTool,
     "json-parser": jsonParserTool,
 

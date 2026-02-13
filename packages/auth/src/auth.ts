@@ -26,6 +26,25 @@ if (!isProduction) {
     );
 }
 
+// ── Post-bootstrap hook registry ──────────────────────────────────────
+// Allows consuming apps (e.g., agent app) to register callbacks that run
+// after a new user's organization is bootstrapped during social sign-up.
+// This pattern avoids circular dependencies between the auth package and
+// app-specific code (e.g., Gmail sync which depends on agent-app modules).
+
+type PostBootstrapCallback = (userId: string, organizationId: string) => Promise<void>;
+const postBootstrapCallbacks: PostBootstrapCallback[] = [];
+
+/**
+ * Register a callback to run after a new user's organization is bootstrapped.
+ * Called from the consuming app (e.g., agent app's instrumentation.ts).
+ *
+ * @param cb - Async callback receiving (userId, organizationId)
+ */
+export function onPostBootstrap(cb: PostBootstrapCallback): void {
+    postBootstrapCallbacks.push(cb);
+}
+
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql"
@@ -77,11 +96,25 @@ export const auth = betterAuth({
                     });
                     if (!existing) {
                         try {
-                            await bootstrapUserOrganization(
+                            const result = await bootstrapUserOrganization(
                                 newSession.user.id,
                                 newSession.user.name,
                                 newSession.user.email
                             );
+
+                            // Run post-bootstrap hooks (e.g., Gmail sync)
+                            if (result.success && result.organization) {
+                                for (const cb of postBootstrapCallbacks) {
+                                    try {
+                                        await cb(newSession.user.id, result.organization.id);
+                                    } catch (hookError) {
+                                        console.error(
+                                            "[Auth Hook] Post-bootstrap callback failed:",
+                                            hookError
+                                        );
+                                    }
+                                }
+                            }
                         } catch (error) {
                             console.error(
                                 "[Auth Hook] Bootstrap failed for social sign-up:",

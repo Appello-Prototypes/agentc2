@@ -1,6 +1,7 @@
 export { dateTimeTool, calculatorTool, generateIdTool, tools } from "./example-tools";
 export { askQuestionsTool } from "./ask-questions";
 export { webFetchTool } from "./web-fetch";
+export { webSearchTool, webScrapeTool } from "./web-search";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";

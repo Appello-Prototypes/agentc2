@@ -454,13 +454,7 @@ function EmbedNavBar({ agentName, isInternal }: { agentName: string; isInternal:
     return (
         <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-                <Image
-                    src="/c2-icon.png"
-                    alt="C2"
-                    width={28}
-                    height={28}
-                    className="rounded-md"
-                />
+                <Image src="/c2-icon.png" alt="C2" width={28} height={28} className="rounded-md" />
                 <span className="text-foreground text-base font-semibold tracking-tight">
                     {agentName}
                 </span>
