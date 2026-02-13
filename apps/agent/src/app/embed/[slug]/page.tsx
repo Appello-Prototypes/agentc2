@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect, Suspense } from "react";
+import { useState, useMemo, useEffect, Suspense, Fragment } from "react";
 import { useSearchParams } from "next/navigation";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
@@ -94,6 +94,67 @@ function SuggestionChip({ label, onClick }: { label: string; onClick: () => void
         >
             {label}
         </button>
+    );
+}
+
+function IntegrationPills() {
+    const integrations = ["Gmail", "Google Calendar", "Slack", "HubSpot", "Jira", "GitHub"];
+    return (
+        <div className="flex flex-wrap justify-center gap-1.5">
+            {integrations.map((name) => (
+                <span
+                    key={name}
+                    className="border-border/40 text-muted-foreground inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs"
+                >
+                    {name}
+                </span>
+            ))}
+        </div>
+    );
+}
+
+/** Inline Google signup card rendered when the agent outputs [SIGNUP_CTA]. */
+function SignupCTACard({ isInternal }: { isInternal: boolean }) {
+    const signupHref = isInternal
+        ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup`
+        : "https://agentc2.ai/signup";
+
+    return (
+        <div className="border-border/40 my-3 rounded-xl border p-4">
+            <p className="text-foreground/90 mb-1 text-sm font-medium">
+                Ready to put agents to work?
+            </p>
+            <p className="text-muted-foreground mb-3 text-xs">
+                Sign up with Google to connect your Gmail instantly. Your AI agent will start
+                triaging your inbox in minutes — no setup required.
+            </p>
+            <a
+                href={signupHref}
+                target="_top"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-[40px] items-center gap-2.5 rounded-full bg-white px-5 py-2 text-sm font-medium text-black shadow-sm transition-colors hover:bg-white/90"
+            >
+                <svg className="size-4" viewBox="0 0 24 24">
+                    <path
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                        fill="#4285F4"
+                    />
+                    <path
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                        fill="#34A853"
+                    />
+                    <path
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                        fill="#FBBC05"
+                    />
+                    <path
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                        fill="#EA4335"
+                    />
+                </svg>
+                Sign up with Google
+            </a>
+        </div>
     );
 }
 
@@ -208,7 +269,28 @@ function EmbedChat({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const renderPart = (part: any, index: number) => {
         if (part.type === "text") {
-            return <MessageResponse key={index}>{part.text}</MessageResponse>;
+            const text: string = part.text || "";
+
+            // Check for [SIGNUP_CTA] token and split text around it
+            if (text.includes("[SIGNUP_CTA]")) {
+                const segments = text.split("[SIGNUP_CTA]");
+                return (
+                    <Fragment key={index}>
+                        {segments.map((segment, si) => (
+                            <Fragment key={si}>
+                                {segment.trim() && (
+                                    <MessageResponse>{segment}</MessageResponse>
+                                )}
+                                {si < segments.length - 1 && (
+                                    <SignupCTACard isInternal={isInternal} />
+                                )}
+                            </Fragment>
+                        ))}
+                    </Fragment>
+                );
+            }
+
+            return <MessageResponse key={index}>{text}</MessageResponse>;
         }
         if (part.type === "tool-invocation" && safeConfig.showToolActivity) {
             const toolName = part.toolInvocation?.toolName || "unknown";
@@ -303,15 +385,17 @@ function EmbedChat({
                                 <AgentC2Logo size={32} />
                             </div>
                             <h1 className="text-foreground/90 mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
-                                {safeConfig.greeting.split(".")[0] || embedData.name}
+                                AI agents that connect to your tools.
                             </h1>
-                            <p className="text-muted-foreground text-sm sm:text-base">
-                                {safeConfig.greeting.includes(".")
-                                    ? safeConfig.greeting.substring(
-                                          safeConfig.greeting.indexOf(".") + 1
-                                      )
-                                    : ""}
+                            <p className="text-muted-foreground mx-auto max-w-md text-sm sm:text-base">
+                                I can search the web and read any page. Sign up to connect your
+                                email, calendar, and CRM — then let agents do the rest.
                             </p>
+
+                            {/* Integration pills */}
+                            <div className="mt-4">
+                                <IntegrationPills />
+                            </div>
                         </div>
 
                         {/* Suggestion chips */}
@@ -346,12 +430,23 @@ function EmbedChat({
 
     return (
         <div className="flex h-full flex-col">
-            {/* Header bar */}
+            {/* Header bar with CTA */}
             <div className="flex items-center justify-between border-b px-4 py-2">
                 <div className="flex items-center gap-[2px]">
                     <span className="text-sm font-semibold">Agent</span>
                     <AgentC2Logo size={20} />
                 </div>
+                <a
+                    href={
+                        isInternal
+                            ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup`
+                            : "https://agentc2.ai/signup"
+                    }
+                    target="_top"
+                    className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+                >
+                    Connect your tools &rarr;
+                </a>
             </div>
 
             {/* Messages */}
