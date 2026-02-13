@@ -23,8 +23,33 @@ export default async function HomePage() {
     if (!token) {
         // Fallback: show a simple message if welcome agent isn't configured
         return (
-            <main className="flex h-dvh w-full items-center justify-center bg-black text-white">
+            <main className="relative flex h-dvh w-full items-center justify-center bg-black text-white">
                 <p className="text-muted-foreground text-sm">AgentC2 is loading...</p>
+                <footer className="absolute right-0 bottom-0 left-0 flex items-center justify-between px-4 py-2">
+                    <span className="text-muted-foreground text-[11px]">
+                        &copy; {new Date().getFullYear()} AgentC2
+                    </span>
+                    <nav className="flex gap-4">
+                        <a
+                            href="/privacy"
+                            className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                        >
+                            Privacy Policy
+                        </a>
+                        <a
+                            href="/terms"
+                            className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                        >
+                            Terms of Service
+                        </a>
+                        <a
+                            href="/security"
+                            className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                        >
+                            Security
+                        </a>
+                    </nav>
+                </footer>
             </main>
         );
     }
@@ -36,12 +61,38 @@ export default async function HomePage() {
     const agentBase = appUrl.includes("localhost:3000") ? "http://localhost:3001" : "";
 
     return (
-        <main className="h-dvh w-full bg-black">
+        <main className="relative h-dvh w-full bg-black">
             <iframe
                 src={`${agentBase}/embed/welcome?token=${token}&internal=true`}
                 className="h-full w-full border-0"
                 allow="clipboard-write"
             />
+            {/* Fixed footer for Google OAuth verification compliance */}
+            <footer className="absolute right-0 bottom-0 left-0 flex items-center justify-between bg-black/80 px-4 py-2 backdrop-blur-sm">
+                <span className="text-muted-foreground text-[11px]">
+                    &copy; {new Date().getFullYear()} AgentC2
+                </span>
+                <nav className="flex gap-4">
+                    <a
+                        href="/privacy"
+                        className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                    >
+                        Privacy Policy
+                    </a>
+                    <a
+                        href="/terms"
+                        className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                    >
+                        Terms of Service
+                    </a>
+                    <a
+                        href="/security"
+                        className="text-muted-foreground hover:text-foreground text-[11px] transition-colors"
+                    >
+                        Security
+                    </a>
+                </nav>
+            </footer>
         </main>
     );
 }
