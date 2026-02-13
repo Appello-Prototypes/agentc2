@@ -7,7 +7,7 @@ export async function GET(
     { params }: { params: Promise<{ orgId: string }> }
 ) {
     try {
-        const admin = await requireAdminAction(request, "tenant:read");
+        await requireAdminAction(request, "tenant:read");
         const { orgId } = await params;
 
         const org = await prisma.organization.findUnique({

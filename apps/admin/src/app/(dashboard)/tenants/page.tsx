@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { Search, Building2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export default async function TenantsPage({
     const limit = 25;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
+    const where: Prisma.OrganizationWhereInput = {};
     if (search) {
         where.OR = [
             { name: { contains: search, mode: "insensitive" } },
@@ -29,7 +29,7 @@ export default async function TenantsPage({
 
     const [tenants, total] = await Promise.all([
         prisma.organization.findMany({
-            where: where as any,
+            where,
             orderBy: { createdAt: "desc" },
             skip,
             take: limit,
@@ -42,7 +42,7 @@ export default async function TenantsPage({
                 }
             }
         }),
-        prisma.organization.count({ where: where as any })
+        prisma.organization.count({ where })
     ]);
 
     const totalPages = Math.ceil(total / limit);
@@ -197,13 +197,12 @@ function RiskIndicator({ score }: { score: number | null }) {
 function FilterLink({
     href,
     label,
-    active,
-    search
+    active
 }: {
     href: string;
     label: string;
     active: boolean;
-    search: string;
+    search?: string;
 }) {
     return (
         <Link

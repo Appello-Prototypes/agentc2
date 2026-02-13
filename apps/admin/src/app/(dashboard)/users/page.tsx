@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { Search, Users as UsersIcon } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export default async function UsersPage({
     const limit = 25;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
+    const where: Prisma.UserWhereInput = {};
     if (search) {
         where.OR = [
             { name: { contains: search, mode: "insensitive" } },
@@ -25,12 +25,12 @@ export default async function UsersPage({
 
     const [users, total] = await Promise.all([
         prisma.user.findMany({
-            where: where as any,
+            where,
             orderBy: { createdAt: "desc" },
             skip,
             take: limit
         }),
-        prisma.user.count({ where: where as any })
+        prisma.user.count({ where })
     ]);
 
     // User has no memberships relation — look them up separately

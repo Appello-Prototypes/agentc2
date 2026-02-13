@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
-import { requireAdminAction } from "@repo/admin-auth";
-import { AdminAuthError } from "@repo/admin-auth";
+import { prisma, Prisma } from "@repo/database";
+import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 
 export async function GET(request: NextRequest) {
     try {
-        const admin = await requireAdminAction(request, "tenant:list");
+        await requireAdminAction(request, "tenant:list");
 
         const url = new URL(request.url);
         const search = url.searchParams.get("search") || "";
@@ -14,7 +13,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(url.searchParams.get("limit") || "25"), 100);
         const skip = (page - 1) * limit;
 
-        const where: Record<string, unknown> = {};
+        const where: Prisma.OrganizationWhereInput = {};
         if (search) {
             where.OR = [
                 { name: { contains: search, mode: "insensitive" } },
@@ -27,7 +26,7 @@ export async function GET(request: NextRequest) {
 
         const [tenants, total] = await Promise.all([
             prisma.organization.findMany({
-                where: where as any,
+                where,
                 orderBy: { createdAt: "desc" },
                 skip,
                 take: limit,
@@ -40,7 +39,7 @@ export async function GET(request: NextRequest) {
                     }
                 }
             }),
-            prisma.organization.count({ where: where as any })
+            prisma.organization.count({ where })
         ]);
 
         return NextResponse.json({

@@ -1,4 +1,4 @@
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { FileText } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -19,13 +19,13 @@ export default async function AuditLogPage({
     const limit = 50;
     const skip = (page - 1) * limit;
 
-    const where: Record<string, unknown> = {};
+    const where: Prisma.AdminAuditLogWhereInput = {};
     if (action) where.action = action;
     if (entityType) where.entityType = entityType;
 
     const [logs, total] = await Promise.all([
         prisma.adminAuditLog.findMany({
-            where: where as any,
+            where,
             orderBy: { createdAt: "desc" },
             skip,
             take: limit,
@@ -35,7 +35,7 @@ export default async function AuditLogPage({
                 }
             }
         }),
-        prisma.adminAuditLog.count({ where: where as any })
+        prisma.adminAuditLog.count({ where })
     ]);
 
     const totalPages = Math.ceil(total / limit);

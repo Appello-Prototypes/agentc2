@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 
 export async function GET(request: NextRequest) {
@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(url.searchParams.get("limit") || "25"), 100);
         const skip = (page - 1) * limit;
 
-        const where: Record<string, unknown> = {};
+        const where: Prisma.UserWhereInput = {};
         if (search) {
             where.OR = [
                 { name: { contains: search, mode: "insensitive" } },
@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
 
         const [users, total] = await Promise.all([
             prisma.user.findMany({
-                where: where as any,
+                where,
                 orderBy: { createdAt: "desc" },
                 skip,
                 take: limit,
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
                     emailVerified: true
                 }
             }),
-            prisma.user.count({ where: where as any })
+            prisma.user.count({ where })
         ]);
 
         return NextResponse.json({
