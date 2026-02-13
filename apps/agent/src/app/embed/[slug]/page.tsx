@@ -29,7 +29,8 @@ import {
     QueueItemDescription,
     type ToolActivity
 } from "@repo/ui";
-import { SparklesIcon, ChevronDownIcon, ChevronRightIcon, LoaderIcon } from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, LoaderIcon } from "lucide-react";
+import Image from "next/image";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -295,7 +296,13 @@ function EmbedChat({
                     <div className="w-full max-w-[680px] px-4 pb-4 sm:px-6">
                         {/* Greeting */}
                         <div className="mb-6 text-center sm:mb-8">
-                            <SparklesIcon className="text-primary/70 mx-auto mb-3 size-7 sm:size-8" />
+                            <Image
+                                src="/c2-icon.png"
+                                alt="C2"
+                                width={48}
+                                height={48}
+                                className="mx-auto mb-3 rounded-xl"
+                            />
                             <h1 className="text-foreground/90 mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
                                 {safeConfig.greeting.split(".")[0] || embedData.name}
                             </h1>
@@ -343,7 +350,13 @@ function EmbedChat({
             {/* Header bar */}
             <div className="flex items-center justify-between border-b px-4 py-2">
                 <div className="flex items-center gap-2">
-                    <SparklesIcon className="text-primary/70 size-4" />
+                    <Image
+                        src="/c2-icon.png"
+                        alt="C2"
+                        width={20}
+                        height={20}
+                        className="rounded-sm"
+                    />
                     <span className="text-sm font-medium">{embedData.name}</span>
                 </div>
             </div>
@@ -431,26 +444,39 @@ function EmbedChat({
 // ── Top-level nav bar ───────────────────────────────────────────────────
 
 function EmbedNavBar({ agentName, isInternal }: { agentName: string; isInternal: boolean }) {
+    // Build absolute login/signup URLs so OAuth state cookies stay on the correct origin.
+    // Using target="_top" breaks out of all iframe nesting for a clean full-page navigation.
+    const loginHref = isInternal ? `${window.location.origin}/login` : "https://agentc2.ai/login";
+    const signupHref = isInternal
+        ? `${window.location.origin}/signup`
+        : "https://agentc2.ai/signup";
+
     return (
         <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
             <div className="flex items-center gap-2">
-                <SparklesIcon className="text-primary size-5" />
+                <Image
+                    src="/c2-icon.png"
+                    alt="C2"
+                    width={28}
+                    height={28}
+                    className="rounded-md"
+                />
                 <span className="text-foreground text-base font-semibold tracking-tight">
                     {agentName}
                 </span>
             </div>
             <div className="flex items-center gap-2">
                 <a
-                    href={isInternal ? "/login" : "https://agentc2.ai/login"}
-                    target={isInternal ? "_parent" : "_blank"}
+                    href={loginHref}
+                    target="_top"
                     rel="noopener noreferrer"
                     className="text-foreground/70 hover:text-foreground inline-flex min-h-[36px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
                 >
                     Log in
                 </a>
                 <a
-                    href={isInternal ? "/signup" : "https://agentc2.ai/signup"}
-                    target={isInternal ? "_parent" : "_blank"}
+                    href={signupHref}
+                    target="_top"
                     rel="noopener noreferrer"
                     className="inline-flex min-h-[36px] items-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
                 >
@@ -472,6 +498,14 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
     const [embedData, setEmbedData] = useState<EmbedData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+
+    // Force dark mode on embed pages (no ThemeProvider in this layout)
+    useEffect(() => {
+        document.documentElement.classList.add("dark");
+        return () => {
+            document.documentElement.classList.remove("dark");
+        };
+    }, []);
 
     // Resolve params (Next.js 16 async params)
     useEffect(() => {

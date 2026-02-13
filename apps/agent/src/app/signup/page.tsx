@@ -1,9 +1,10 @@
 import { SignUpForm } from "@/components/auth/sign-up-form";
-import { AgentC2Logo, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@repo/ui";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,13 @@ export default async function SignUpPage() {
         <div className="flex min-h-screen items-center justify-center p-4">
             <div className="w-full max-w-md">
                 <div className="mb-6 flex items-center justify-center gap-2">
-                    <AgentC2Logo size={28} />
+                    <Image
+                        src="/c2-icon.png"
+                        alt="AgentC2"
+                        width={28}
+                        height={28}
+                        className="rounded-md"
+                    />
                     <span className="text-lg font-semibold">AgentC2</span>
                 </div>
                 <Card>

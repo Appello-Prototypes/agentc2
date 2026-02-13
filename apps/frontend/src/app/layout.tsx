@@ -39,7 +39,11 @@ export default function RootLayout({
     children: React.ReactNode;
 }>) {
     return (
-        <html lang="en" className={`${dmSans.variable} scroll-smooth`} suppressHydrationWarning>
+        <html
+            lang="en"
+            className={`dark ${dmSans.variable} scroll-smooth`}
+            suppressHydrationWarning
+        >
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
                 <AppProvidersWrapper>{children}</AppProvidersWrapper>
             </body>

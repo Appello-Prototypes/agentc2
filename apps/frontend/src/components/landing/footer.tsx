@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { AgentC2Logo } from "@repo/ui";
+import Image from "next/image";
 
 const columns = [
     {
@@ -50,7 +50,13 @@ export function Footer() {
                     {/* Brand column */}
                     <div>
                         <Link href="/" className="mb-4 flex items-center gap-2">
-                            <AgentC2Logo size={24} />
+                            <Image
+                                src="/c2-icon.png"
+                                alt="AgentC2"
+                                width={24}
+                                height={24}
+                                className="rounded-md"
+                            />
                             <span className="text-foreground text-base font-semibold">AgentC2</span>
                         </Link>
                         <p className="text-muted-foreground mb-3 max-w-xs text-sm leading-relaxed">

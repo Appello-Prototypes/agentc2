@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { AgentC2Logo, buttonVariants } from "@repo/ui";
+import Image from "next/image";
+import { buttonVariants } from "@repo/ui";
 import { cn } from "@repo/ui";
 
 export function NavBar() {
@@ -26,7 +27,13 @@ export function NavBar() {
             <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
                 {/* Logo */}
                 <Link href="/" className="flex items-center gap-2">
-                    <AgentC2Logo size={28} />
+                    <Image
+                        src="/c2-icon.png"
+                        alt="AgentC2"
+                        width={28}
+                        height={28}
+                        className="rounded-md"
+                    />
                     <span className="text-lg font-semibold tracking-tight">AgentC2</span>
                 </Link>
 
