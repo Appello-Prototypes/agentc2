@@ -511,7 +511,7 @@ function VoiceAgentPanel() {
 
 export default function LiveAgentMcpPage() {
     return (
-        <div className="container mx-auto max-w-6xl space-y-6 p-6">
+        <div className="container mx-auto max-w-6xl space-y-6 p-4 md:p-6">
             <div>
                 <h1 className="text-3xl font-bold">Live Agent (MCP Access)</h1>
                 <p className="text-muted-foreground mt-2">

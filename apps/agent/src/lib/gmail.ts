@@ -234,7 +234,8 @@ export const watchMailbox = async (gmail: ReturnType<typeof google.gmail>, topic
         userId: "me",
         requestBody: {
             topicName,
-            labelFilterAction: "include"
+            labelFilterAction: "include",
+            labelIds: ["INBOX"] // Only notify on INBOX changes (prevents feedback loops from agent label/archive actions)
         }
     });
 

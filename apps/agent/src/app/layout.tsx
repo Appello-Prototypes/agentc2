@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Suspense } from "react";
 import { CommandPalette, type AppNavigationConfig } from "@repo/ui";
 import { getAppUrl } from "@repo/auth";
@@ -7,6 +7,11 @@ import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
 import { AgentHeader } from "@/components/AgentHeader";
 import { RootLayoutShell } from "@/components/RootLayoutShell";
+
+export const viewport: Viewport = {
+    width: "device-width",
+    initialScale: 1
+};
 
 export const metadata: Metadata = {
     title: {

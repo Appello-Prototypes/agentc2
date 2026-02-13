@@ -1891,7 +1891,7 @@ export default function ConfigurePage() {
                                 <SheetContent
                                     side="right"
                                     showCloseButton
-                                    className="w-[480px] p-0 sm:max-w-[480px]"
+                                    className="w-full p-0 sm:w-[480px] sm:max-w-[480px]"
                                 >
                                     <SkillBuilderPanel
                                         agentId={agent.id}

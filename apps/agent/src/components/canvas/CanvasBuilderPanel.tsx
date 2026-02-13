@@ -26,6 +26,7 @@ import {
 import { CanvasRenderer, type CanvasSchemaForRenderer } from "@repo/ui/components/canvas";
 import { PanelLeftCloseIcon, PanelLeftIcon, ExternalLinkIcon, RefreshCwIcon } from "lucide-react";
 import Link from "next/link";
+import { useIsMobile, Tabs, TabsList, TabsTrigger, TabsContent } from "@repo/ui";
 
 const CANVAS_BUILDER_SLUG = "canvas-builder";
 
@@ -260,64 +261,31 @@ export function CanvasBuilderPanel({
     );
     const showWelcome = !hasVisibleContent;
 
-    return (
-        // Fixed height container accounting for the app header (56px / 3.5rem)
-        <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
-            {/* Chat Panel */}
-            {chatCollapsed ? (
-                <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        onClick={() => setChatCollapsed(false)}
-                    >
-                        <PanelLeftIcon className="size-4" />
-                    </Button>
+    const isMobile = useIsMobile();
+
+    // Shared chat panel content
+    const chatContent = (
+        <>
+            {/* Chat header */}
+            <div className="shrink-0 pt-3 pr-8 pb-2.5 pl-3">
+                <div className="mb-0 px-0.5">
+                    <h2 className="text-foreground text-sm font-semibold tracking-tight">
+                        {headerTitle}
+                    </h2>
+                    <p className="text-muted-foreground text-[11px]">
+                        {mode === "edit" ? "Edit your canvas with AI" : "Build a canvas with AI"}
+                    </p>
                 </div>
-            ) : (
-                <div
-                    className="relative flex shrink-0 flex-col border-r"
-                    style={{ width: sidebarWidth }}
-                >
-                    {/* Resize handle */}
-                    <div
-                        onMouseDown={handleResizeStart}
-                        className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
-                    />
+            </div>
 
-                    {/* Collapse toggle -- pinned to right edge */}
-                    <Button
-                        variant="ghost"
-                        size="icon"
-                        className="bg-background absolute top-2.5 right-0 z-30 size-7 translate-x-1/2 rounded-full border shadow-sm"
-                        onClick={() => setChatCollapsed(true)}
-                    >
-                        <PanelLeftCloseIcon className="size-3.5" />
-                    </Button>
+            {/* Messages */}
+            <div className="min-h-0 flex-1 overflow-hidden">
+                <Conversation>
+                    <ConversationContent>
+                        <ConversationScrollButton />
 
-                    {/* Chat header */}
-                    <div className="shrink-0 pt-3 pr-8 pb-2.5 pl-3">
-                        <div className="mb-0 px-0.5">
-                            <h2 className="text-foreground text-sm font-semibold tracking-tight">
-                                {headerTitle}
-                            </h2>
-                            <p className="text-muted-foreground text-[11px]">
-                                {mode === "edit"
-                                    ? "Edit your canvas with AI"
-                                    : "Build a canvas with AI"}
-                            </p>
-                        </div>
-                    </div>
-
-                    {/* Messages */}
-                    <div className="min-h-0 flex-1 overflow-hidden">
-                        <Conversation>
-                            <ConversationContent>
-                                <ConversationScrollButton />
-
-                                {/* Welcome message */}
-                                {showWelcome && (
+                        {/* Welcome message */}
+                        {showWelcome && (
                                     <div className="p-4">
                                         {mode === "edit" ? (
                                             <>
@@ -461,93 +429,155 @@ export function CanvasBuilderPanel({
                             </PromptInputFooter>
                         </PromptInput>
                     </div>
-                </div>
-            )}
+                </>
+            );
 
-            {/* Preview Panel */}
-            <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                {/* Preview header */}
-                <div className="bg-muted/30 flex shrink-0 items-center justify-between border-b px-4 py-2">
-                    <span className="text-muted-foreground text-sm">
-                        {canvasSlug ? `Preview: ${canvasSlug}` : "Canvas Preview"}
-                    </span>
-                    <div className="flex items-center gap-2">
-                        {canvasSlug && (
-                            <>
-                                <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => refreshPreview(canvasSlug)}
-                                    disabled={previewLoading}
-                                >
-                                    <RefreshCwIcon
-                                        className={`mr-1 size-3 ${previewLoading ? "animate-spin" : ""}`}
-                                    />
-                                    Refresh
+    // Shared preview content
+    const previewContent = (
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            {/* Preview header */}
+            <div className="bg-muted/30 flex shrink-0 items-center justify-between border-b px-4 py-2">
+                <span className="text-muted-foreground text-sm">
+                    {canvasSlug ? `Preview: ${canvasSlug}` : "Canvas Preview"}
+                </span>
+                <div className="flex items-center gap-2">
+                    {canvasSlug && (
+                        <>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => refreshPreview(canvasSlug)}
+                                disabled={previewLoading}
+                            >
+                                <RefreshCwIcon
+                                    className={`mr-1 size-3 ${previewLoading ? "animate-spin" : ""}`}
+                                />
+                                Refresh
+                            </Button>
+                            <Link href={`/canvas/${canvasSlug}`} target="_blank">
+                                <Button variant="ghost" size="sm">
+                                    <ExternalLinkIcon className="mr-1 size-3" />
+                                    Open
                                 </Button>
-                                <Link href={`/canvas/${canvasSlug}`} target="_blank">
-                                    <Button variant="ghost" size="sm">
-                                        <ExternalLinkIcon className="mr-1 size-3" />
-                                        Open
-                                    </Button>
-                                </Link>
-                            </>
-                        )}
-                    </div>
-                </div>
-
-                {/* Preview content */}
-                <div className="flex-1 overflow-auto">
-                    {previewLoading ? (
-                        <div className="p-4">
-                            <Skeleton className="mb-4 h-8 w-64" />
-                            <div className="grid grid-cols-12 gap-4">
-                                <Skeleton className="col-span-3 h-24" />
-                                <Skeleton className="col-span-3 h-24" />
-                                <Skeleton className="col-span-3 h-24" />
-                                <Skeleton className="col-span-3 h-24" />
-                                <Skeleton className="col-span-12 h-64" />
-                            </div>
-                        </div>
-                    ) : schema ? (
-                        <CanvasRenderer
-                            schema={schema}
-                            data={data}
-                            onRefresh={canvasSlug ? () => refreshPreview(canvasSlug) : undefined}
-                        />
-                    ) : (
-                        <div className="flex h-full items-center justify-center">
-                            <div className="text-center">
-                                <div className="bg-muted mx-auto mb-4 flex size-16 items-center justify-center rounded-full">
-                                    <svg
-                                        className="text-muted-foreground size-8"
-                                        fill="none"
-                                        viewBox="0 0 24 24"
-                                        stroke="currentColor"
-                                    >
-                                        <path
-                                            strokeLinecap="round"
-                                            strokeLinejoin="round"
-                                            strokeWidth={1.5}
-                                            d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"
-                                        />
-                                    </svg>
-                                </div>
-                                <p className="text-muted-foreground text-sm">
-                                    {mode === "edit"
-                                        ? "The canvas preview will update as you make changes."
-                                        : "Your canvas will appear here as you build it."}
-                                </p>
-                                <p className="text-muted-foreground mt-1 text-xs">
-                                    {mode === "edit"
-                                        ? "Describe your changes in the chat."
-                                        : "Start by describing what you want in the chat."}
-                                </p>
-                            </div>
-                        </div>
+                            </Link>
+                        </>
                     )}
                 </div>
             </div>
+
+            {/* Preview content */}
+            <div className="flex-1 overflow-auto">
+                {previewLoading ? (
+                    <div className="p-4">
+                        <Skeleton className="mb-4 h-8 w-64" />
+                        <div className="grid grid-cols-2 gap-4 md:grid-cols-12">
+                            <Skeleton className="h-24 md:col-span-3" />
+                            <Skeleton className="h-24 md:col-span-3" />
+                            <Skeleton className="h-24 md:col-span-3" />
+                            <Skeleton className="h-24 md:col-span-3" />
+                            <Skeleton className="col-span-2 h-64 md:col-span-12" />
+                        </div>
+                    </div>
+                ) : schema ? (
+                    <CanvasRenderer
+                        schema={schema}
+                        data={data}
+                        onRefresh={canvasSlug ? () => refreshPreview(canvasSlug) : undefined}
+                    />
+                ) : (
+                    <div className="flex h-full items-center justify-center">
+                        <div className="text-center">
+                            <div className="bg-muted mx-auto mb-4 flex size-16 items-center justify-center rounded-full">
+                                <svg
+                                    className="text-muted-foreground size-8"
+                                    fill="none"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={1.5}
+                                        d="M4 5a1 1 0 011-1h4a1 1 0 011 1v5a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v3a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM4 15a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1v-4zM14 13a1 1 0 011-1h4a1 1 0 011 1v6a1 1 0 01-1 1h-4a1 1 0 01-1-1v-6z"
+                                    />
+                                </svg>
+                            </div>
+                            <p className="text-muted-foreground text-sm">
+                                {mode === "edit"
+                                    ? "The canvas preview will update as you make changes."
+                                    : "Your canvas will appear here as you build it."}
+                            </p>
+                            <p className="text-muted-foreground mt-1 text-xs">
+                                {mode === "edit"
+                                    ? "Describe your changes in the chat."
+                                    : "Start by describing what you want in the chat."}
+                            </p>
+                        </div>
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+
+    // ── Mobile: tabbed layout ──
+    if (isMobile) {
+        return (
+            <Tabs defaultValue="chat" className="flex h-[calc(100dvh-3.5rem)] flex-col">
+                <TabsList className="mx-4 mt-2 grid w-auto grid-cols-2">
+                    <TabsTrigger value="chat">Chat</TabsTrigger>
+                    <TabsTrigger value="preview">Preview</TabsTrigger>
+                </TabsList>
+                <TabsContent value="chat" className="mt-0 flex min-h-0 flex-1 flex-col">
+                    {chatContent}
+                </TabsContent>
+                <TabsContent value="preview" className="mt-0 flex min-h-0 flex-1 flex-col">
+                    {previewContent}
+                </TabsContent>
+            </Tabs>
+        );
+    }
+
+    // ── Desktop: side-by-side layout ──
+    return (
+        <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
+            {/* Chat Panel */}
+            {chatCollapsed ? (
+                <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-8"
+                        onClick={() => setChatCollapsed(false)}
+                    >
+                        <PanelLeftIcon className="size-4" />
+                    </Button>
+                </div>
+            ) : (
+                <div
+                    className="relative flex shrink-0 flex-col border-r"
+                    style={{ width: sidebarWidth }}
+                >
+                    {/* Resize handle -- desktop only */}
+                    <div
+                        onMouseDown={handleResizeStart}
+                        className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
+                    />
+
+                    {/* Collapse toggle -- pinned to right edge */}
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="bg-background absolute top-2.5 right-0 z-30 size-7 translate-x-1/2 rounded-full border shadow-sm"
+                        onClick={() => setChatCollapsed(true)}
+                    >
+                        <PanelLeftCloseIcon className="size-3.5" />
+                    </Button>
+
+                    {chatContent}
+                </div>
+            )}
+
+            {previewContent}
         </div>
     );
 }

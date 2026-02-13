@@ -164,7 +164,7 @@ function TakeoffsPageContent() {
     };
 
     return (
-        <div className="container mx-auto max-w-7xl space-y-6 p-6">
+        <div className="container mx-auto max-w-7xl space-y-6 p-4 md:p-6">
             {/* Header */}
             <div className="flex items-start justify-between">
                 <div>

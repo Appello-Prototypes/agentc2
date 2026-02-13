@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { Badge, Button, HugeiconsIcon, Skeleton, cn, icons } from "@repo/ui";
+import { Badge, Button, HugeiconsIcon, cn, icons } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { DetailPageShell } from "@/components/DetailPageShell";
 
 interface WorkflowDetail {
     id: string;
@@ -55,31 +56,12 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
 
     const activePath = useMemo(() => {
         const basePath = `/workflows/${workflowSlug}`;
-        if (pathname === basePath) {
-            return "overview";
-        }
+        if (pathname === basePath) return "overview";
         const lastSegment = pathname.replace(basePath, "").split("/").filter(Boolean).pop();
         return lastSegment || "overview";
     }, [pathname, workflowSlug]);
 
-    if (loading) {
-        return (
-            <div className="flex h-full">
-                <div className="w-64 border-r p-4">
-                    <Skeleton className="mb-4 h-8 w-full" />
-                    <Skeleton className="mb-8 h-6 w-3/4" />
-                    {[1, 2, 3, 4, 5].map((i) => (
-                        <Skeleton key={i} className="mb-2 h-10 w-full" />
-                    ))}
-                </div>
-                <div className="flex-1 p-6">
-                    <Skeleton className="h-64 w-full" />
-                </div>
-            </div>
-        );
-    }
-
-    if (!workflow) {
+    if (!loading && !workflow) {
         return (
             <div className="flex h-full items-center justify-center">
                 <div className="text-center">
@@ -94,60 +76,70 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
     }
 
     return (
-        <div className="flex h-full overflow-hidden">
-            <aside className="bg-muted/30 flex w-64 flex-col border-r">
-                <div className="border-b p-3">
-                    <div className="flex items-start justify-between gap-2">
-                        <div>
-                            <div className="text-sm font-semibold">{workflow.name}</div>
-                            <div className="text-muted-foreground text-xs">
-                                {workflow.description || "No description"}
+        <DetailPageShell
+            loading={loading}
+            sidebarTitle={workflow?.name ?? "Workflow"}
+            sidebar={
+                workflow && (
+                    <>
+                        <div className="border-b p-3">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <div className="text-sm font-semibold">{workflow.name}</div>
+                                    <div className="text-muted-foreground text-xs">
+                                        {workflow.description || "No description"}
+                                    </div>
+                                </div>
+                                <Badge
+                                    variant={workflow.isActive ? "default" : "secondary"}
+                                    className="h-5 text-[10px]"
+                                >
+                                    {workflow.isActive ? "Active" : "Inactive"}
+                                </Badge>
                             </div>
-                        </div>
-                        <Badge
-                            variant={workflow.isActive ? "default" : "secondary"}
-                            className="h-5 text-[10px]"
-                        >
-                            {workflow.isActive ? "Active" : "Inactive"}
-                        </Badge>
-                    </div>
-                    <div className="text-muted-foreground mt-3 flex flex-wrap gap-2 text-[10px]">
-                        <span>Version {workflow.version}</span>
-                        <span>Runs {workflow.runCount}</span>
-                        <span>{workflow.isPublished ? "Published" : "Draft"}</span>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 w-full"
-                        onClick={() => router.push("/workflows")}
-                    >
-                        All workflows
-                    </Button>
-                </div>
-
-                <nav className="flex-1 overflow-y-auto p-2">
-                    {navItems.map((item) => {
-                        const isActive = activePath === item.id;
-                        return (
-                            <Link
-                                key={item.id}
-                                href={`/workflows/${workflow.slug}${item.path}`}
-                                className={cn(
-                                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    isActive
-                                        ? "bg-background text-foreground shadow-sm"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                )}
+                            <div className="text-muted-foreground mt-3 flex flex-wrap gap-2 text-[10px]">
+                                <span>Version {workflow.version}</span>
+                                <span>Runs {workflow.runCount}</span>
+                                <span>{workflow.isPublished ? "Published" : "Draft"}</span>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 w-full"
+                                onClick={() => router.push("/workflows")}
                             >
-                                <HugeiconsIcon icon={icons[item.icon]!} className="h-4 w-4" />
-                                {item.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
-            </aside>
-            <main className="flex-1 overflow-y-auto p-6">{children}</main>
-        </div>
+                                All workflows
+                            </Button>
+                        </div>
+
+                        <nav className="flex-1 overflow-y-auto p-2">
+                            {navItems.map((item) => {
+                                const isActive = activePath === item.id;
+                                return (
+                                    <Link
+                                        key={item.id}
+                                        href={`/workflows/${workflow.slug}${item.path}`}
+                                        className={cn(
+                                            "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                                            isActive
+                                                ? "bg-background text-foreground shadow-sm"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        <HugeiconsIcon
+                                            icon={icons[item.icon]!}
+                                            className="h-4 w-4"
+                                        />
+                                        {item.label}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                    </>
+                )
+            }
+        >
+            {children}
+        </DetailPageShell>
     );
 }

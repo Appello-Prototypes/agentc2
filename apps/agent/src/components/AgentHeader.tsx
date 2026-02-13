@@ -1,6 +1,6 @@
 "use client";
 
-import { AppTopBar } from "@repo/ui";
+import { AppTopBar, useCommand } from "@repo/ui";
 import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 import { usePathname, useRouter } from "next/navigation";
@@ -24,6 +24,7 @@ export function AgentHeader() {
     const { data: session } = useSession();
     const pathname = usePathname();
     const router = useRouter();
+    const { toggleCommand } = useCommand();
 
     // Hide full nav during onboarding -- layout provides its own minimal header
     if (pathname?.startsWith("/onboarding")) {
@@ -61,6 +62,7 @@ export function AgentHeader() {
                 navItems={navItems}
                 onSignOut={handleSignOut}
                 onSettings={handleSettings}
+                onSearchClick={toggleCommand}
                 isActive={isActive}
                 renderNavLink={(item, active) => (
                     <Link

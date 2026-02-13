@@ -137,23 +137,42 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ success: true, queued: false });
         }
 
-        // ── Advance historyId and dispatch to Inngest ──────────────────
+        // ── Advance historyId atomically ──────────────────────────────
         const previousHistoryId = integration.historyId;
-
-        // Always advance the stored historyId so subsequent notifications
-        // don't re-fetch the same range, even if Inngest processing fails.
-        await prisma.gmailIntegration.update({
-            where: { id: integration.id },
-            data: { historyId: newHistoryId }
-        });
 
         // If there was no previous historyId, this is the initial baseline.
         // Store the historyId but don't process — there's no range to query.
         if (!previousHistoryId) {
+            await prisma.gmailIntegration.update({
+                where: { id: integration.id },
+                data: { historyId: newHistoryId }
+            });
             console.log(
                 `[Gmail Webhook] Baseline historyId set to ${newHistoryId} for ${gmailAddress}`
             );
             return NextResponse.json({ success: true, queued: false, baseline: true });
+        }
+
+        // Optimistic lock: only advance if nobody else has yet.
+        // This prevents concurrent Pub/Sub duplicates from all dispatching.
+        // Google Pub/Sub has at-least-once delivery, so the same notification
+        // may arrive 2-4 times within milliseconds. Using updateMany with a
+        // WHERE clause on the current historyId ensures only ONE request wins.
+        const advanceResult = await prisma.gmailIntegration.updateMany({
+            where: {
+                id: integration.id,
+                historyId: previousHistoryId // <-- compare-and-swap
+            },
+            data: { historyId: newHistoryId }
+        });
+
+        if (advanceResult.count === 0) {
+            // Another webhook already advanced the historyId — this is a Pub/Sub duplicate
+            console.log(
+                `[Gmail Webhook] Duplicate Pub/Sub notification for ${gmailAddress} ` +
+                    `(historyId already advanced past ${previousHistoryId}) — skipping`
+            );
+            return NextResponse.json({ success: true, queued: false, deduplicated: true });
         }
 
         // Dispatch async processing via Inngest

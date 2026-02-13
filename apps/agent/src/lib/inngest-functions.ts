@@ -4893,7 +4893,11 @@ export const gmailMessageProcessFunction = inngest.createFunction(
         concurrency: {
             limit: 2, // At most 2 concurrent Gmail processing jobs
             key: "event.data.gmailAddress"
-        }
+        },
+        // Deduplicate events with the same history range for the same integration.
+        // If Pub/Sub delivers duplicates that slip past the webhook CAS lock,
+        // Inngest will drop the second invocation within the idempotency window.
+        idempotency: "event.data.integrationId + '-' + event.data.previousHistoryId + '-' + event.data.newHistoryId"
     },
     { event: "gmail/message.process" },
     async ({ event, step }) => {
@@ -5012,8 +5016,31 @@ export const gmailMessageProcessFunction = inngest.createFunction(
             const { resolveIdentity } = await import("../lib/identity");
 
             const triggerEventIds: string[] = [];
+            let skippedDuplicates = 0;
 
             for (const message of messages) {
+                // ── Dedup: skip if this messageId was already triggered ──
+                const existingTriggerEvent = await prisma.triggerEvent.findFirst({
+                    where: {
+                        triggerId,
+                        eventName: "gmail.message.received",
+                        payloadJson: {
+                            path: ["messageId"],
+                            equals: message.messageId
+                        }
+                    },
+                    select: { id: true }
+                });
+
+                if (existingTriggerEvent) {
+                    console.log(
+                        `[Gmail Process] Skipping duplicate trigger for messageId ${message.messageId} ` +
+                            `(existing triggerEvent ${existingTriggerEvent.id})`
+                    );
+                    skippedDuplicates++;
+                    continue;
+                }
+
                 const senderEmail = message.parsedFrom[0];
                 const senderDomain = getSenderDomain(senderEmail);
                 const senderType = senderDomain
@@ -5197,17 +5224,20 @@ export const gmailMessageProcessFunction = inngest.createFunction(
 
             return {
                 processed: messages.length,
-                triggerEventIds
+                triggerEventIds,
+                skippedDuplicates
             };
         });
 
         console.log(
             `[Gmail Process] Processed ${result.processed} messages for ${gmailAddress} ` +
-                `(history ${previousHistoryId} → ${newHistoryId})`
+                `(history ${previousHistoryId} → ${newHistoryId})` +
+                (result.skippedDuplicates > 0 ? ` [${result.skippedDuplicates} duplicates skipped]` : "")
         );
 
         return {
             processed: result.processed,
+            skippedDuplicates: result.skippedDuplicates,
             gmailAddress,
             previousHistoryId,
             newHistoryId

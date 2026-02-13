@@ -114,7 +114,7 @@ export default function SkillsPage() {
                         <PlusIcon className="mr-1.5 h-4 w-4" />
                         Create Skill
                     </Button>
-                    <SheetContent className="w-[480px] p-0 sm:max-w-[480px]">
+                    <SheetContent className="w-full p-0 sm:w-[480px] sm:max-w-[480px]">
                         <SkillBuilderPanel
                             agentId=""
                             agentSlug=""

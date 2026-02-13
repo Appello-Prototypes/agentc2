@@ -17,7 +17,13 @@ import {
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-    Input
+    Input,
+    Sheet,
+    SheetContent,
+    SheetHeader,
+    SheetTitle,
+    SheetDescription,
+    useIsMobile
 } from "@repo/ui";
 import {
     listConversations,
@@ -41,7 +47,9 @@ export function ConversationSidebar({
     onNewConversation,
     refreshKey
 }: ConversationSidebarProps) {
+    const isMobile = useIsMobile();
     const [collapsed, setCollapsed] = useState(false);
+    const [mobileOpen, setMobileOpen] = useState(false);
     const [sidebarWidth, setSidebarWidth] = useState(220);
     const [conversations, setConversations] = useState<ConversationMeta[]>([]);
     const [searchQuery, setSearchQuery] = useState("");
@@ -125,52 +133,27 @@ export function ConversationSidebar({
         [editValue, refreshConversations]
     );
 
-    // Collapsed state: thin strip with expand toggle
-    if (collapsed) {
-        return (
-            <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    onClick={() => setCollapsed(false)}
-                >
-                    <PanelLeftIcon className="size-4" />
-                </Button>
-                <Button
-                    variant="ghost"
-                    size="icon"
-                    className="mt-1 size-8"
-                    onClick={onNewConversation}
-                >
-                    <PlusIcon className="size-4" />
-                </Button>
-            </div>
-        );
-    }
+    const handleSelect = useCallback(
+        (id: string) => {
+            onSelect(id);
+            // Auto-close Sheet on mobile after selecting
+            if (isMobile) {
+                setMobileOpen(false);
+            }
+        },
+        [onSelect, isMobile]
+    );
 
-    // Expanded state: full sidebar
-    return (
-        <div
-            className="relative flex h-full shrink-0 flex-col border-r"
-            style={{ width: sidebarWidth }}
-        >
-            {/* Resize handle */}
-            <div
-                onMouseDown={handleResizeStart}
-                className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 h-full w-1 cursor-col-resize"
-            />
+    const handleNewConversation = useCallback(() => {
+        onNewConversation();
+        if (isMobile) {
+            setMobileOpen(false);
+        }
+    }, [onNewConversation, isMobile]);
 
-            {/* Collapse toggle -- pinned to right edge, outside content flow */}
-            <Button
-                variant="ghost"
-                size="icon"
-                className="bg-background absolute top-2.5 right-0 z-10 size-7 translate-x-1/2 rounded-full border shadow-sm"
-                onClick={() => setCollapsed(true)}
-            >
-                <PanelLeftCloseIcon className="size-3.5" />
-            </Button>
-
+    // Shared sidebar content used by both desktop and mobile
+    const sidebarContent = (
+        <>
             {/* Header */}
             <div className="px-3 pt-3 pb-2.5">
                 <div className="mb-2.5 px-0.5">
@@ -182,7 +165,7 @@ export function ConversationSidebar({
                 <Button
                     variant="default"
                     size="sm"
-                    onClick={onNewConversation}
+                    onClick={handleNewConversation}
                     className="h-8 w-full gap-1.5 text-xs font-medium shadow-sm"
                 >
                     <PlusIcon className="size-3.5" />
@@ -239,14 +222,21 @@ export function ConversationSidebar({
                                     />
                                 ) : (
                                     <button
-                                        onClick={() => onSelect(conv.id)}
+                                        onClick={() => handleSelect(conv.id)}
                                         className="flex-1 truncate text-left text-xs"
                                     >
                                         {conv.title}
                                     </button>
                                 )}
                                 <DropdownMenu>
-                                    <DropdownMenuTrigger className="hover:bg-accent flex size-5 shrink-0 items-center justify-center rounded opacity-0 group-hover:opacity-100">
+                                    <DropdownMenuTrigger
+                                        className={cn(
+                                            "hover:bg-accent flex size-6 shrink-0 items-center justify-center rounded",
+                                            isMobile
+                                                ? "opacity-100"
+                                                : "opacity-0 group-hover:opacity-100"
+                                        )}
+                                    >
                                         <MoreHorizontalIcon className="size-3" />
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent align="end" className="w-32">
@@ -276,6 +266,92 @@ export function ConversationSidebar({
 
             {/* Footer */}
             <div className="text-muted-foreground/60 px-3 py-2 text-[10px]">Stored locally</div>
+        </>
+    );
+
+    // ── Mobile: Sheet-based sidebar ──
+    if (isMobile) {
+        return (
+            <>
+                {/* Toggle button rendered as a thin strip */}
+                <div className="flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="size-9"
+                        onClick={() => setMobileOpen(true)}
+                    >
+                        <PanelLeftIcon className="size-4" />
+                    </Button>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="mt-1 size-9"
+                        onClick={handleNewConversation}
+                    >
+                        <PlusIcon className="size-4" />
+                    </Button>
+                </div>
+                <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
+                    <SheetContent side="left" className="w-72 p-0">
+                        <SheetHeader className="sr-only">
+                            <SheetTitle>Conversations</SheetTitle>
+                            <SheetDescription>Workspace conversations</SheetDescription>
+                        </SheetHeader>
+                        <div className="flex h-full flex-col">{sidebarContent}</div>
+                    </SheetContent>
+                </Sheet>
+            </>
+        );
+    }
+
+    // ── Desktop: collapsed thin strip ──
+    if (collapsed) {
+        return (
+            <div className="relative flex h-full w-10 shrink-0 flex-col items-center border-r pt-2">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="size-8"
+                    onClick={() => setCollapsed(false)}
+                >
+                    <PanelLeftIcon className="size-4" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="mt-1 size-8"
+                    onClick={onNewConversation}
+                >
+                    <PlusIcon className="size-4" />
+                </Button>
+            </div>
+        );
+    }
+
+    // ── Desktop: expanded sidebar ──
+    return (
+        <div
+            className="relative flex h-full shrink-0 flex-col border-r"
+            style={{ width: sidebarWidth }}
+        >
+            {/* Resize handle -- desktop only */}
+            <div
+                onMouseDown={handleResizeStart}
+                className="hover:bg-primary/20 active:bg-primary/30 absolute top-0 right-0 z-20 hidden h-full w-1 cursor-col-resize md:block"
+            />
+
+            {/* Collapse toggle */}
+            <Button
+                variant="ghost"
+                size="icon"
+                className="bg-background absolute top-2.5 right-0 z-10 size-7 translate-x-1/2 rounded-full border shadow-sm"
+                onClick={() => setCollapsed(true)}
+            >
+                <PanelLeftCloseIcon className="size-3.5" />
+            </Button>
+
+            {sidebarContent}
         </div>
     );
 }

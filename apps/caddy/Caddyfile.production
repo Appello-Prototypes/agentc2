@@ -64,7 +64,7 @@ agentc2.ai {
 
     # Embed routes -- relax X-Frame-Options so external sites can iframe them
     @embed_routes {
-        path /embed/*
+        path /embed/* /embed-v2/*
     }
 
     handle @embed_routes {

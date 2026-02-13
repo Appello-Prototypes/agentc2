@@ -441,7 +441,7 @@ export default function VersionsPage() {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-6 gap-4">
+                        <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
                             <div className="bg-background rounded-lg p-3 text-center">
                                 <p className="text-muted-foreground text-sm">Runs</p>
                                 <p className="text-xl font-bold">{activeVersion.stats.runs}</p>

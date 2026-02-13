@@ -870,6 +870,7 @@ model TriggerEvent {
 
     @@unique([runId])
     @@index([triggerId, createdAt])
+    @@index([triggerId, eventName])
     @@index([agentId, createdAt])
     @@index([workspaceId, createdAt])
     @@index([status, createdAt])

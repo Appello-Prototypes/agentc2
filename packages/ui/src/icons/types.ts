@@ -46,7 +46,8 @@ export type IconName =
     | "building"
     | "user-group"
     | "mail-send"
-    | "add";
+    | "add"
+    | "menu";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

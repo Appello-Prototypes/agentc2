@@ -554,7 +554,7 @@ main().catch(console.error);
 
     return (
         <div className="h-full overflow-y-auto">
-            <div className="container mx-auto max-w-5xl space-y-6 p-6">
+            <div className="container mx-auto max-w-5xl space-y-6 p-4 md:p-6">
                 {/* Header */}
                 <div>
                     <h1 className="mb-2 text-3xl font-bold">MCP Setup</h1>
@@ -651,25 +651,25 @@ main().catch(console.error);
                                         and fill in the following:
                                     </p>
                                     <div className="bg-muted space-y-2 rounded-lg border p-4 text-sm">
-                                        <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
                                             <span className="text-muted-foreground font-medium">
                                                 Name:
                                             </span>
                                             <span>Mastra Agents</span>
                                         </div>
-                                        <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
                                             <span className="text-muted-foreground font-medium">
                                                 Remote MCP URL:
                                             </span>
                                             <code className="break-all">{remoteMcpUrl}</code>
                                         </div>
-                                        <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
                                             <span className="text-muted-foreground font-medium">
                                                 OAuth Client ID:
                                             </span>
                                             <code>{organization?.slug || "<org-slug>"}</code>
                                         </div>
-                                        <div className="grid grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
                                             <span className="text-muted-foreground font-medium">
                                                 OAuth Client Secret:
                                             </span>

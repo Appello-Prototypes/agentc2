@@ -523,7 +523,7 @@ export function WorkflowVisualizer({
                 edges={edges}
                 nodeTypes={nodeTypes}
                 edgeTypes={workflowEdgeTypes}
-                className="h-[450px]"
+                className="h-[300px] md:h-[450px]"
                 showMiniMap={type === "branch"}
             />
         </div>

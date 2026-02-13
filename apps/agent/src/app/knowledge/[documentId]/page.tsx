@@ -289,7 +289,7 @@ export default function DocumentDetailPage() {
 
     if (loading) {
         return (
-            <div className="mx-auto max-w-5xl space-y-4 p-6">
+            <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
                 <Skeleton className="h-8 w-64" />
                 <Skeleton className="h-4 w-48" />
                 <Skeleton className="mt-6 h-64 w-full" />
@@ -311,7 +311,7 @@ export default function DocumentDetailPage() {
     }
 
     return (
-        <div className="mx-auto max-w-5xl space-y-6 p-6">
+        <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
             {/* Back navigation */}
             <Button
                 variant="ghost"

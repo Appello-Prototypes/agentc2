@@ -40,7 +40,7 @@ export default function CanvasEditPage() {
 
     if (error) {
         return (
-            <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center">
+            <div className="flex h-[calc(100dvh-3.5rem)] items-center justify-center">
                 <p className="text-muted-foreground">{error}</p>
             </div>
         );
@@ -48,7 +48,7 @@ export default function CanvasEditPage() {
 
     if (loading || !schema) {
         return (
-            <div className="flex h-[calc(100vh-3.5rem)] overflow-hidden">
+            <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
                 <div className="w-[400px] border-r p-4">
                     <Skeleton className="mb-4 h-8 w-48" />
                     <Skeleton className="mb-2 h-4 w-full" />

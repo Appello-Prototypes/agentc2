@@ -365,18 +365,18 @@ function WebhooksTab({
     };
 
     return (
-        <div className="flex gap-6" style={{ height: "calc(100vh - 18rem)" }}>
+        <div className="flex flex-col gap-6 md:flex-row" style={{ height: "calc(100vh - 18rem)" }}>
             {/* Left 1/3: Chat */}
             <WebhookChat
                 webhooksCount={webhooks.length}
                 onRefresh={onRefresh}
                 showHeader
                 headerTitle="Webhook Setup"
-                className="w-1/3"
+                className="w-full md:w-1/3"
             />
 
             {/* Right 2/3: Detail or table */}
-            <div className="flex min-h-0 w-2/3 flex-col gap-4 overflow-auto">
+            <div className="flex min-h-0 w-full flex-col gap-4 overflow-auto md:w-2/3">
                 {selectedWebhook ? (
                     /* Detail panel (when a webhook is selected) */
                     <WebhookDetail
@@ -633,7 +633,7 @@ export default function IntegrationsHubPage() {
 
                 {!loading && !error && (
                     <Tabs defaultValue="ai-providers" className="w-full">
-                        <TabsList className="grid w-full grid-cols-5">
+                        <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-5">
                             <TabsTrigger value="ai-providers">
                                 AI Providers
                                 {aiProviders.length > 0 && (

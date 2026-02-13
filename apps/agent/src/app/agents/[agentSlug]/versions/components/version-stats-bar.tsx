@@ -27,7 +27,7 @@ export function VersionStatsBar({ stats }: VersionStatsBarProps) {
     ];
 
     return (
-        <div className="grid grid-cols-6 gap-2">
+        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
             {items.map((item) => (
                 <div key={item.label} className="bg-muted rounded-lg p-2 text-center">
                     <p className="text-muted-foreground text-[10px]">{item.label}</p>

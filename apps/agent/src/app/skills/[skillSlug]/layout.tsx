@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
-import { Badge, Button, HugeiconsIcon, Skeleton, cn, icons } from "@repo/ui";
+import { Badge, Button, HugeiconsIcon, cn, icons } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { DetailPageShell } from "@/components/DetailPageShell";
 
 interface SkillDetail {
     id: string;
@@ -77,24 +78,7 @@ export default function SkillLayout({ children }: { children: React.ReactNode })
         return lastSegment || "overview";
     }, [pathname, skillSlug]);
 
-    if (loading) {
-        return (
-            <div className="flex h-full">
-                <div className="w-64 border-r p-4">
-                    <Skeleton className="mb-4 h-8 w-full" />
-                    <Skeleton className="mb-8 h-6 w-3/4" />
-                    {[1, 2, 3, 4, 5, 6].map((i) => (
-                        <Skeleton key={i} className="mb-2 h-10 w-full" />
-                    ))}
-                </div>
-                <div className="flex-1 p-6">
-                    <Skeleton className="h-64 w-full" />
-                </div>
-            </div>
-        );
-    }
-
-    if (!skill) {
+    if (!loading && !skill) {
         return (
             <div className="flex h-full items-center justify-center">
                 <div className="text-center">
@@ -109,61 +93,72 @@ export default function SkillLayout({ children }: { children: React.ReactNode })
     }
 
     return (
-        <div className="flex h-full overflow-hidden">
-            <aside className="bg-muted/30 flex w-64 flex-col border-r">
-                <div className="border-b p-3">
-                    <div className="flex items-start justify-between gap-2">
-                        <div>
-                            <div className="text-sm font-semibold">{skill.name}</div>
-                            <div className="text-muted-foreground text-xs">
-                                {skill.description || "No description"}
+        <DetailPageShell
+            loading={loading}
+            loadingNavCount={6}
+            sidebarTitle={skill?.name ?? "Skill"}
+            sidebar={
+                skill && (
+                    <>
+                        <div className="border-b p-3">
+                            <div className="flex items-start justify-between gap-2">
+                                <div>
+                                    <div className="text-sm font-semibold">{skill.name}</div>
+                                    <div className="text-muted-foreground text-xs">
+                                        {skill.description || "No description"}
+                                    </div>
+                                </div>
+                                <Badge
+                                    variant={skill.type === "SYSTEM" ? "default" : "secondary"}
+                                    className="h-5 text-[10px]"
+                                >
+                                    {skill.type}
+                                </Badge>
                             </div>
-                        </div>
-                        <Badge
-                            variant={skill.type === "SYSTEM" ? "default" : "secondary"}
-                            className="h-5 text-[10px]"
-                        >
-                            {skill.type}
-                        </Badge>
-                    </div>
-                    <div className="text-muted-foreground mt-3 flex flex-wrap gap-2 text-[10px]">
-                        <span>v{skill.version}</span>
-                        {skill.category && <span>{skill.category}</span>}
-                        <span>{skill.toolCount} tools</span>
-                        <span>{skill.agentCount} agents</span>
-                    </div>
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        className="mt-3 w-full"
-                        onClick={() => router.push("/skills")}
-                    >
-                        All skills
-                    </Button>
-                </div>
-
-                <nav className="flex-1 overflow-y-auto p-2">
-                    {navItems.map((item) => {
-                        const isActive = activePath === item.id;
-                        return (
-                            <Link
-                                key={item.id}
-                                href={`/skills/${skill.slug}${item.path}`}
-                                className={cn(
-                                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                                    isActive
-                                        ? "bg-background text-foreground shadow-sm"
-                                        : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                                )}
+                            <div className="text-muted-foreground mt-3 flex flex-wrap gap-2 text-[10px]">
+                                <span>v{skill.version}</span>
+                                {skill.category && <span>{skill.category}</span>}
+                                <span>{skill.toolCount} tools</span>
+                                <span>{skill.agentCount} agents</span>
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="mt-3 w-full"
+                                onClick={() => router.push("/skills")}
                             >
-                                <HugeiconsIcon icon={icons[item.icon]!} className="h-4 w-4" />
-                                {item.label}
-                            </Link>
-                        );
-                    })}
-                </nav>
-            </aside>
-            <main className="flex-1 overflow-y-auto p-6">{children}</main>
-        </div>
+                                All skills
+                            </Button>
+                        </div>
+
+                        <nav className="flex-1 overflow-y-auto p-2">
+                            {navItems.map((item) => {
+                                const isActive = activePath === item.id;
+                                return (
+                                    <Link
+                                        key={item.id}
+                                        href={`/skills/${skill.slug}${item.path}`}
+                                        className={cn(
+                                            "flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                                            isActive
+                                                ? "bg-background text-foreground shadow-sm"
+                                                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                                        )}
+                                    >
+                                        <HugeiconsIcon
+                                            icon={icons[item.icon]!}
+                                            className="h-4 w-4"
+                                        />
+                                        {item.label}
+                                    </Link>
+                                );
+                            })}
+                        </nav>
+                    </>
+                )
+            }
+        >
+            {children}
+        </DetailPageShell>
     );
 }

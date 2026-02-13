@@ -256,7 +256,7 @@ export default function CanvasViewerPage() {
 
             {/* Debug Panel */}
             {debugOpen && (
-                <div className="flex w-[480px] min-w-[480px] flex-col overflow-hidden border-l">
+                <div className="flex w-full flex-col overflow-hidden border-l md:w-[480px] md:min-w-[480px]">
                     {/* Debug header */}
                     <div className="flex shrink-0 items-center justify-between border-b px-4 py-2">
                         <span className="text-sm font-medium">Debug Inspector</span>

@@ -184,7 +184,7 @@ export default function SkillOverviewPage() {
                             <Button
                                 size="sm"
                                 variant="ghost"
-                                className="opacity-0 group-hover:opacity-100"
+                                className="opacity-100 md:opacity-0 md:group-hover:opacity-100"
                                 onClick={() => startEditing("name", skill.name)}
                             >
                                 <PencilIcon className="h-3.5 w-3.5" />
@@ -340,7 +340,7 @@ export default function SkillOverviewPage() {
                                 <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                    className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
                                     onClick={() => startEditing("category", skill.category || "")}
                                 >
                                     <PencilIcon className="h-3 w-3" />
@@ -407,7 +407,7 @@ export default function SkillOverviewPage() {
                                 <Button
                                     size="sm"
                                     variant="ghost"
-                                    className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                                    className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
                                     onClick={() => startEditing("tags", skill.tags.join(", "))}
                                 >
                                     <PencilIcon className="h-3 w-3" />

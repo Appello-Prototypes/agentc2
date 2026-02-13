@@ -102,7 +102,7 @@ function WorkflowCanvasInner({
     );
 
     return (
-        <div className={cn("bg-background h-[400px] w-full rounded-lg border", className)}>
+        <div className={cn("bg-background h-[300px] w-full rounded-lg border md:h-[400px]", className)}>
             <ReactFlow
                 nodes={displayNodes}
                 edges={displayEdges}
@@ -117,7 +117,8 @@ function WorkflowCanvasInner({
                 fitViewOptions={{ padding: 0.2 }}
                 panOnScroll={panOnScroll}
                 zoomOnScroll={zoomOnScroll}
-                minZoom={0.5}
+                panOnDrag
+                minZoom={0.3}
                 maxZoom={2}
                 proOptions={proOptions}
                 nodesDraggable={nodesDraggable}

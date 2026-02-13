@@ -101,7 +101,7 @@ export function SkillDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[520px] overflow-y-auto p-0 sm:max-w-[520px]">
+            <SheetContent className="w-full overflow-y-auto p-0 sm:w-[520px] sm:max-w-[520px]">
                 {loading ? (
                     <div className="space-y-4 p-6">
                         <Skeleton className="h-8 w-3/4" />

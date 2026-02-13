@@ -49,7 +49,7 @@ export function VersionCompareDialog({ versions, open, onOpenChange }: VersionCo
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-h-[85vh] max-w-5xl">
+            <DialogContent className="max-h-[85vh] max-w-[calc(100vw-2rem)] sm:max-w-5xl">
                 <DialogHeader>
                     <DialogTitle>
                         Compare Version {v1.version} vs Version {v2.version}
