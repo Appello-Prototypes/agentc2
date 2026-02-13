@@ -38,6 +38,15 @@ agentc2.ai {
         reverse_proxy localhost:3000
     }
 
+    # Public legal pages — route to frontend app (no auth required)
+    @public_legal {
+        path /terms /privacy /security
+    }
+
+    handle @public_legal {
+        reverse_proxy localhost:3000
+    }
+
     # Frontend static assets (namespaced via assetPrefix: '/_home')
     @frontend_assets {
         path /_home/*

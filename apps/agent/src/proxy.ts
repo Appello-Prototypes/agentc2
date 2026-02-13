@@ -73,6 +73,9 @@ export const config = {
          * - api (API routes handle their own authentication for fine-grained control)
          * - login (public login page)
          * - signup (public signup page)
+         * - terms (public Terms of Service)
+         * - privacy (public Privacy Policy)
+         * - security (public Security Policy)
          * - authorize (OAuth authorization endpoint for MCP server)
          * - token (OAuth token endpoint for MCP server)
          * - _next/static (static files)
@@ -84,6 +87,6 @@ export const config = {
          * This allows each API endpoint to decide its own auth requirements
          * (e.g., some may be public, others require auth, some need specific roles).
          */
-        "/((?!api|embed|embed-v2|login|signup|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
+        "/((?!api|embed|embed-v2|login|signup|terms$|privacy$|security$|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
     ]
 };
