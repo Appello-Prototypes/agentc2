@@ -4897,7 +4897,8 @@ export const gmailMessageProcessFunction = inngest.createFunction(
         // Deduplicate events with the same history range for the same integration.
         // If Pub/Sub delivers duplicates that slip past the webhook CAS lock,
         // Inngest will drop the second invocation within the idempotency window.
-        idempotency: "event.data.integrationId + '-' + event.data.previousHistoryId + '-' + event.data.newHistoryId"
+        idempotency:
+            "event.data.integrationId + '-' + event.data.previousHistoryId + '-' + event.data.newHistoryId"
     },
     { event: "gmail/message.process" },
     async ({ event, step }) => {
@@ -5020,14 +5021,28 @@ export const gmailMessageProcessFunction = inngest.createFunction(
 
             for (const message of messages) {
                 // ── Dedup: skip if this messageId was already triggered ──
+                // Check both payloadJson (structured query) and payloadPreview (string fallback).
+                // payloadJson is null when the payload exceeds 10KB (e.g. long email bodies),
+                // so we fall back to checking the payloadPreview string which always contains
+                // the messageId since it's in the first few hundred chars of the serialized payload.
                 const existingTriggerEvent = await prisma.triggerEvent.findFirst({
                     where: {
                         triggerId,
                         eventName: "gmail.message.received",
-                        payloadJson: {
-                            path: ["messageId"],
-                            equals: message.messageId
-                        }
+                        OR: [
+                            {
+                                payloadJson: {
+                                    path: ["messageId"],
+                                    equals: message.messageId
+                                }
+                            },
+                            {
+                                payloadTruncated: true,
+                                payloadPreview: {
+                                    contains: `"messageId":"${message.messageId}"`
+                                }
+                            }
+                        ]
                     },
                     select: { id: true }
                 });
@@ -5223,19 +5238,23 @@ export const gmailMessageProcessFunction = inngest.createFunction(
             }
 
             return {
-                processed: messages.length,
+                total: messages.length,
+                processed: messages.length - skippedDuplicates,
                 triggerEventIds,
                 skippedDuplicates
             };
         });
 
         console.log(
-            `[Gmail Process] Processed ${result.processed} messages for ${gmailAddress} ` +
+            `[Gmail Process] Processed ${result.processed}/${result.total} messages for ${gmailAddress} ` +
                 `(history ${previousHistoryId} → ${newHistoryId})` +
-                (result.skippedDuplicates > 0 ? ` [${result.skippedDuplicates} duplicates skipped]` : "")
+                (result.skippedDuplicates > 0
+                    ? ` [${result.skippedDuplicates} duplicates skipped]`
+                    : "")
         );
 
         return {
+            total: result.total,
             processed: result.processed,
             skippedDuplicates: result.skippedDuplicates,
             gmailAddress,

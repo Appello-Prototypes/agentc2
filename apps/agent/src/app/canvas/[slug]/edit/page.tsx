@@ -48,20 +48,20 @@ export default function CanvasEditPage() {
 
     if (loading || !schema) {
         return (
-            <div className="flex h-[calc(100dvh-3.5rem)] overflow-hidden">
-                <div className="w-[400px] border-r p-4">
+            <div className="flex h-[calc(100dvh-3.5rem)] flex-col overflow-hidden md:flex-row">
+                <div className="w-full border-b p-4 md:w-[400px] md:border-r md:border-b-0">
                     <Skeleton className="mb-4 h-8 w-48" />
                     <Skeleton className="mb-2 h-4 w-full" />
                     <Skeleton className="h-4 w-3/4" />
                 </div>
                 <div className="flex-1 p-4">
                     <Skeleton className="mb-4 h-8 w-64" />
-                    <div className="grid grid-cols-12 gap-4">
-                        <Skeleton className="col-span-3 h-24" />
-                        <Skeleton className="col-span-3 h-24" />
-                        <Skeleton className="col-span-3 h-24" />
-                        <Skeleton className="col-span-3 h-24" />
-                        <Skeleton className="col-span-12 h-64" />
+                    <div className="grid grid-cols-2 gap-4 md:grid-cols-12">
+                        <Skeleton className="h-24 md:col-span-3" />
+                        <Skeleton className="h-24 md:col-span-3" />
+                        <Skeleton className="h-24 md:col-span-3" />
+                        <Skeleton className="h-24 md:col-span-3" />
+                        <Skeleton className="col-span-2 h-64 md:col-span-12" />
                     </div>
                 </div>
             </div>

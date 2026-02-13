@@ -926,7 +926,7 @@ export default function ConfigurePage() {
                                 />
                             </div>
 
-                            <div className="flex items-center gap-8">
+                            <div className="flex flex-wrap items-center gap-4 md:gap-8">
                                 <div className="flex items-center gap-2">
                                     <Switch
                                         checked={formData.isActive}

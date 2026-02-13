@@ -792,7 +792,7 @@ export default function NetworksPage() {
                                         value={selectedNetwork ?? undefined}
                                         onValueChange={(value) => setSelectedNetwork(value ?? null)}
                                     >
-                                        <SelectTrigger className="w-64">
+                                        <SelectTrigger className="w-full sm:w-64">
                                             <SelectValue placeholder="Select network" />
                                         </SelectTrigger>
                                         <SelectContent>

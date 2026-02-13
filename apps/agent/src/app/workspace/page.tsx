@@ -1087,7 +1087,7 @@ export default function UnifiedChatPage() {
                 <div className="cowork-bg relative flex flex-1 flex-col">
                     {/* Scrollable area above */}
                     <div className="flex flex-1 flex-col items-center justify-end overflow-y-auto">
-                        <div className="w-full max-w-[780px] px-6 pb-4">
+                        <div className="w-full max-w-[780px] px-3 pb-4 md:px-6">
                             {/* Greeting */}
                             <div className="mb-8 text-center">
                                 <SparklesIcon className="text-primary/70 mx-auto mb-3 size-8" />
@@ -1132,7 +1132,7 @@ export default function UnifiedChatPage() {
                     </div>
 
                     {/* Input -- truly fixed at bottom */}
-                    <div className="shrink-0 px-6 pb-5">
+                    <div className="shrink-0 px-3 pb-5 md:px-6">
                         <div className="bg-card mx-auto max-w-[780px] rounded-2xl border shadow-sm">
                             {chatInput}
                         </div>
@@ -1185,7 +1185,7 @@ export default function UnifiedChatPage() {
                 {/* Messages */}
                 <div className="min-h-0 flex-1">
                     <Conversation className="h-full">
-                        <ConversationContent className="mx-auto max-w-3xl px-6">
+                        <ConversationContent className="mx-auto max-w-3xl px-3 md:px-6">
                             <ConversationScrollButton />
                             {messages.map((message) => (
                                 <Message key={message.id} from={message.role}>
@@ -1277,7 +1277,7 @@ export default function UnifiedChatPage() {
                 </div>
 
                 {/* Input -- fixed at bottom */}
-                <div className="shrink-0 px-6 py-3">
+                <div className="shrink-0 px-3 py-3 md:px-6">
                     <div className="bg-card mx-auto max-w-3xl rounded-2xl border shadow-sm">
                         {chatInput}
                     </div>

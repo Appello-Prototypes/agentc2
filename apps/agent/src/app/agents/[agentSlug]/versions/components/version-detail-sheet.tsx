@@ -66,7 +66,10 @@ export function VersionDetailSheet({
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[720px] overflow-y-auto sm:max-w-[720px]" side="right">
+            <SheetContent
+                className="w-full overflow-y-auto sm:w-[720px] sm:max-w-[720px]"
+                side="right"
+            >
                 <SheetHeader className="pb-4">
                     <SheetTitle className="flex items-center gap-2">
                         Version {version.version} Details

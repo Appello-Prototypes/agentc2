@@ -281,7 +281,7 @@ export default function GuardrailsPage() {
             )}
 
             {/* Stats */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>Total Runs (7d)</CardDescription>

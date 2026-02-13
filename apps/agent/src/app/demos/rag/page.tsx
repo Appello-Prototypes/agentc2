@@ -467,7 +467,7 @@ export default function RagDemoPage() {
                 </Accordion>
 
                 <Tabs defaultValue="ingest" className="w-full" onValueChange={handleTabChange}>
-                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-3">
                         <TabsTrigger value="ingest">1. Ingest Documents</TabsTrigger>
                         <TabsTrigger value="query">2. Query & Generate</TabsTrigger>
                         <TabsTrigger value="manage">3. Manage Documents</TabsTrigger>

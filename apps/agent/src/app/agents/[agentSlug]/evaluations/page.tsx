@@ -255,7 +255,7 @@ export default function EvaluationsPage() {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-8 w-48" />
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {[1, 2, 3, 4].map((i) => (
                         <Skeleton key={i} className="h-32" />
                     ))}
@@ -321,7 +321,7 @@ export default function EvaluationsPage() {
                         Quality metrics, feedback analysis, and improvement insights
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     {statusMessage && (
                         <span
                             className={`text-sm ${statusMessage.type === "error" ? "text-destructive" : "text-green-600"}`}

@@ -64,17 +64,13 @@ export function DetailPageShell({
     }
 
     // Sidebar content is reused in both modes
-    const sidebarContent = (
-        <div className="flex h-full flex-col">{sidebar}</div>
-    );
+    const sidebarContent = <div className="flex h-full flex-col">{sidebar}</div>;
 
     return (
         <div className="flex h-full overflow-hidden">
             {/* Desktop sidebar */}
             {!isMobile && (
-                <aside className="bg-muted/30 flex w-64 flex-col border-r">
-                    {sidebarContent}
-                </aside>
+                <aside className="bg-muted/30 flex w-64 flex-col border-r">{sidebarContent}</aside>
             )}
 
             {/* Mobile Sheet sidebar */}
@@ -85,9 +81,7 @@ export function DetailPageShell({
                             <SheetTitle>{sidebarTitle}</SheetTitle>
                             <SheetDescription>Detail page navigation</SheetDescription>
                         </SheetHeader>
-                        <div className="bg-muted/30 flex h-full flex-col">
-                            {sidebarContent}
-                        </div>
+                        <div className="bg-muted/30 flex h-full flex-col">{sidebarContent}</div>
                     </SheetContent>
                 </Sheet>
             )}

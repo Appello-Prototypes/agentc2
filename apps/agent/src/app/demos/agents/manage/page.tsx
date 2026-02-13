@@ -607,7 +607,7 @@ function AgentManagePageContent() {
             </div>
 
             {/* Model Configuration */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                 <div className="space-y-2">
                     <Label>Model Provider *</Label>
                     <Select
@@ -1239,7 +1239,7 @@ function AgentManagePageContent() {
                                                 <h3 className="mb-2 font-medium">
                                                     Model Configuration
                                                 </h3>
-                                                <div className="grid grid-cols-4 gap-4">
+                                                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                                                     <div>
                                                         <p className="text-muted-foreground text-sm">
                                                             Provider
@@ -1275,7 +1275,7 @@ function AgentManagePageContent() {
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-3 gap-4">
+                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                                 <div className="bg-muted rounded-lg p-4">
                                                     <h3 className="mb-2 font-medium">Memory</h3>
                                                     <Badge

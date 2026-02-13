@@ -173,14 +173,14 @@ export default function CanvasViewerPage() {
             <div className="mx-auto max-w-[1400px] p-4">
                 <Skeleton className="mb-4 h-8 w-64" />
                 <Skeleton className="mb-4 h-4 w-96" />
-                <div className="grid grid-cols-12 gap-4">
-                    <Skeleton className="col-span-3 h-32" />
-                    <Skeleton className="col-span-3 h-32" />
-                    <Skeleton className="col-span-3 h-32" />
-                    <Skeleton className="col-span-3 h-32" />
-                    <Skeleton className="col-span-8 h-64" />
-                    <Skeleton className="col-span-4 h-64" />
-                    <Skeleton className="col-span-12 h-48" />
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-12">
+                    <Skeleton className="h-32 md:col-span-3" />
+                    <Skeleton className="h-32 md:col-span-3" />
+                    <Skeleton className="h-32 md:col-span-3" />
+                    <Skeleton className="h-32 md:col-span-3" />
+                    <Skeleton className="col-span-2 h-64 md:col-span-8" />
+                    <Skeleton className="col-span-2 h-64 md:col-span-4" />
+                    <Skeleton className="col-span-2 h-48 md:col-span-12" />
                 </div>
             </div>
         );

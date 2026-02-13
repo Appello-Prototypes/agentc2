@@ -148,10 +148,7 @@ export function AppTopBar({
                             {navItems.map((item) => {
                                 const active = isActive(item.href);
                                 return renderNavLink ? (
-                                    <div
-                                        key={item.href}
-                                        onClick={() => setMobileMenuOpen(false)}
-                                    >
+                                    <div key={item.href} onClick={() => setMobileMenuOpen(false)}>
                                         {renderNavLink(item, active)}
                                     </div>
                                 ) : (

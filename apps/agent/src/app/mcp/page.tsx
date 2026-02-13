@@ -365,7 +365,7 @@ function WebhooksTab({
     };
 
     return (
-        <div className="flex flex-col gap-6 md:flex-row" style={{ height: "calc(100vh - 18rem)" }}>
+        <div className="flex flex-col gap-6 md:flex-row" style={{ height: "calc(100dvh - 18rem)" }}>
             {/* Left 1/3: Chat */}
             <WebhookChat
                 webhooksCount={webhooks.length}

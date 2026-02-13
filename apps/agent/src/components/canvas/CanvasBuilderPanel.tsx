@@ -286,151 +286,143 @@ export function CanvasBuilderPanel({
 
                         {/* Welcome message */}
                         {showWelcome && (
-                                    <div className="p-4">
-                                        {mode === "edit" ? (
-                                            <>
-                                                <p className="text-muted-foreground text-sm">
-                                                    Editing canvas:{" "}
-                                                    <code className="bg-muted rounded px-1">
-                                                        {existingSlug}
-                                                    </code>
-                                                </p>
-                                                {isStreaming || isSubmitted ? (
-                                                    <StreamingStatus
-                                                        status={submitStatus}
-                                                        className="mt-3 justify-start text-xs"
-                                                    />
-                                                ) : (
-                                                    <>
-                                                        <p className="text-muted-foreground mt-2 text-sm">
-                                                            Describe what you want to change. For
-                                                            example:
-                                                        </p>
-                                                        <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
-                                                            <li>
-                                                                &ldquo;Add a pie chart showing deal
-                                                                distribution by stage&rdquo;
-                                                            </li>
-                                                            <li>
-                                                                &ldquo;Change the table columns to
-                                                                show owner and close date&rdquo;
-                                                            </li>
-                                                            <li>
-                                                                &ldquo;Remove the KPI cards and add
-                                                                a filter bar instead&rdquo;
-                                                            </li>
-                                                        </ul>
-                                                    </>
-                                                )}
-                                            </>
+                            <div className="p-4">
+                                {mode === "edit" ? (
+                                    <>
+                                        <p className="text-muted-foreground text-sm">
+                                            Editing canvas:{" "}
+                                            <code className="bg-muted rounded px-1">
+                                                {existingSlug}
+                                            </code>
+                                        </p>
+                                        {isStreaming || isSubmitted ? (
+                                            <StreamingStatus
+                                                status={submitStatus}
+                                                className="mt-3 justify-start text-xs"
+                                            />
                                         ) : (
                                             <>
-                                                <p className="text-muted-foreground text-sm">
-                                                    Describe what you want to build. For example:
+                                                <p className="text-muted-foreground mt-2 text-sm">
+                                                    Describe what you want to change. For example:
                                                 </p>
                                                 <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
                                                     <li>
-                                                        &ldquo;Build a dashboard showing my HubSpot
-                                                        deals pipeline&rdquo;
+                                                        &ldquo;Add a pie chart showing deal
+                                                        distribution by stage&rdquo;
                                                     </li>
                                                     <li>
-                                                        &ldquo;Create a table of all Jira issues
-                                                        sorted by priority&rdquo;
+                                                        &ldquo;Change the table columns to show
+                                                        owner and close date&rdquo;
                                                     </li>
                                                     <li>
-                                                        &ldquo;Make a KPI dashboard with revenue,
-                                                        deal count, and avg deal size&rdquo;
+                                                        &ldquo;Remove the KPI cards and add a filter
+                                                        bar instead&rdquo;
                                                     </li>
                                                 </ul>
                                             </>
                                         )}
-                                    </div>
+                                    </>
+                                ) : (
+                                    <>
+                                        <p className="text-muted-foreground text-sm">
+                                            Describe what you want to build. For example:
+                                        </p>
+                                        <ul className="text-muted-foreground mt-2 space-y-1 text-xs">
+                                            <li>
+                                                &ldquo;Build a dashboard showing my HubSpot deals
+                                                pipeline&rdquo;
+                                            </li>
+                                            <li>
+                                                &ldquo;Create a table of all Jira issues sorted by
+                                                priority&rdquo;
+                                            </li>
+                                            <li>
+                                                &ldquo;Make a KPI dashboard with revenue, deal
+                                                count, and avg deal size&rdquo;
+                                            </li>
+                                        </ul>
+                                    </>
                                 )}
+                            </div>
+                        )}
 
-                                {displayMessages.map((message) => (
-                                    <Message key={message.id} from={message.role}>
-                                        <MessageContent>
-                                            {message.parts && message.parts.length > 0 ? (
-                                                message.parts.map((part, index) => {
-                                                    if (part.type === "text") {
-                                                        return (
-                                                            <MessageResponse key={index}>
-                                                                {part.text}
-                                                            </MessageResponse>
-                                                        );
+                        {displayMessages.map((message) => (
+                            <Message key={message.id} from={message.role}>
+                                <MessageContent>
+                                    {message.parts && message.parts.length > 0 ? (
+                                        message.parts.map((part, index) => {
+                                            if (part.type === "text") {
+                                                return (
+                                                    <MessageResponse key={index}>
+                                                        {part.text}
+                                                    </MessageResponse>
+                                                );
+                                            }
+                                            if (part.type === "tool-invocation") {
+                                                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                                                const toolPart = part as any;
+                                                const hasResult =
+                                                    "result" in (toolPart.toolInvocation || {});
+                                                return (
+                                                    <div
+                                                        key={index}
+                                                        className="my-2 flex items-center gap-2"
+                                                    >
+                                                        <Badge
+                                                            variant="outline"
+                                                            className="text-xs"
+                                                        >
+                                                            {toolPart.toolInvocation?.toolName}
+                                                        </Badge>
+                                                        {hasResult && (
+                                                            <Badge className="bg-green-100 text-xs text-green-800">
+                                                                Done
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                );
+                                            }
+                                            return null;
+                                        })
+                                    ) : (
+                                        <MessageResponse>
+                                            {String(
+                                                (
+                                                    message as unknown as {
+                                                        content?: string;
                                                     }
-                                                    if (part.type === "tool-invocation") {
-                                                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                                                        const toolPart = part as any;
-                                                        const hasResult =
-                                                            "result" in
-                                                            (toolPart.toolInvocation || {});
-                                                        return (
-                                                            <div
-                                                                key={index}
-                                                                className="my-2 flex items-center gap-2"
-                                                            >
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="text-xs"
-                                                                >
-                                                                    {
-                                                                        toolPart.toolInvocation
-                                                                            ?.toolName
-                                                                    }
-                                                                </Badge>
-                                                                {hasResult && (
-                                                                    <Badge className="bg-green-100 text-xs text-green-800">
-                                                                        Done
-                                                                    </Badge>
-                                                                )}
-                                                            </div>
-                                                        );
-                                                    }
-                                                    return null;
-                                                })
-                                            ) : (
-                                                <MessageResponse>
-                                                    {String(
-                                                        (
-                                                            message as unknown as {
-                                                                content?: string;
-                                                            }
-                                                        ).content || ""
-                                                    )}
-                                                </MessageResponse>
+                                                ).content || ""
                                             )}
-                                        </MessageContent>
-                                    </Message>
-                                ))}
+                                        </MessageResponse>
+                                    )}
+                                </MessageContent>
+                            </Message>
+                        ))}
 
-                                {!showWelcome && (
-                                    <StreamingStatus
-                                        status={submitStatus}
-                                        hasVisibleContent={hasVisibleContent}
-                                    />
-                                )}
-                            </ConversationContent>
-                        </Conversation>
-                    </div>
+                        {!showWelcome && (
+                            <StreamingStatus
+                                status={submitStatus}
+                                hasVisibleContent={hasVisibleContent}
+                            />
+                        )}
+                    </ConversationContent>
+                </Conversation>
+            </div>
 
-                    {/* Input */}
-                    <div className="shrink-0 border-t p-3">
-                        <PromptInput onSubmit={handleSend}>
-                            <PromptInputBody>
-                                <PromptInputTextarea
-                                    placeholder={placeholderText}
-                                    disabled={isStreaming}
-                                />
-                            </PromptInputBody>
-                            <PromptInputFooter>
-                                <PromptInputTools />
-                                <PromptInputSubmit status={submitStatus} onStop={stop} />
-                            </PromptInputFooter>
-                        </PromptInput>
-                    </div>
-                </>
-            );
+            {/* Input */}
+            <div className="shrink-0 border-t p-3">
+                <PromptInput onSubmit={handleSend}>
+                    <PromptInputBody>
+                        <PromptInputTextarea placeholder={placeholderText} disabled={isStreaming} />
+                    </PromptInputBody>
+                    <PromptInputFooter>
+                        <PromptInputTools />
+                        <PromptInputSubmit status={submitStatus} onStop={stop} />
+                    </PromptInputFooter>
+                </PromptInput>
+            </div>
+        </>
+    );
 
     // Shared preview content
     const previewContent = (

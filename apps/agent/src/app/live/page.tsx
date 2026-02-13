@@ -654,7 +654,7 @@ export default function LiveDashboardPage() {
                                 placeholder="Search run ID or keyword in input/output..."
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
-                                className="min-w-[240px] flex-1"
+                                className="min-w-0 flex-1 sm:min-w-[240px]"
                             />
                             <Select
                                 value={statusFilter}

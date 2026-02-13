@@ -500,7 +500,7 @@ export default function TracesPage() {
             </div>
 
             {/* Search and Filter */}
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
                 <Input
                     placeholder="Search traces by input or output..."
                     value={searchQuery}
@@ -692,7 +692,7 @@ export default function TracesPage() {
                             <CardContent className="overflow-y-auto">
                                 <div className="space-y-6">
                                     {/* Summary */}
-                                    <div className="grid grid-cols-4 gap-3">
+                                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                                         <div className="bg-muted rounded p-2 text-center">
                                             <p className="text-muted-foreground text-xs">Status</p>
                                             <StatusBadge status={selectedTrace.status} />

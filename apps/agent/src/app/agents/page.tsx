@@ -330,7 +330,7 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                 </div>
 
                 {/* Trends */}
-                <div className="mb-3 grid grid-cols-3 gap-2">
+                <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                     <SparklineMetric label="Runs" data={runTrend} labels={trendLabels} />
                     <SparklineMetric
                         label="Cost"

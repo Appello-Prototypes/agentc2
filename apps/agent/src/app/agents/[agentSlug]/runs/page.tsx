@@ -625,7 +625,7 @@ export default function RunsPage() {
                             </CardDescription>
                         )}
                         {selectedRun && (
-                            <div className="mt-2 grid grid-cols-4 gap-2">
+                            <div className="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
                                 <div className="bg-muted/50 rounded-lg p-2">
                                     <p className="text-muted-foreground text-xs">Status</p>
                                     <Badge

@@ -85,7 +85,7 @@ export function TeamWelcomeStep({ orgName, orgId, onContinue }: TeamWelcomeStepP
             </div>
 
             {/* Team stats */}
-            <div className="mx-auto grid max-w-md grid-cols-3 gap-3">
+            <div className="mx-auto grid max-w-md grid-cols-1 gap-3 sm:grid-cols-3">
                 <Card>
                     <CardContent className="p-4 text-center">
                         <BotIcon className="text-primary mx-auto mb-1 size-5" />

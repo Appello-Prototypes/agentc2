@@ -1712,7 +1712,7 @@ const aggregateStep = createStep({
                                             <h4 className="font-medium">Enrichment Results</h4>
 
                                             {/* Summary */}
-                                            <div className="grid grid-cols-3 gap-4">
+                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                                 <div className="bg-card rounded-lg border p-3 text-center">
                                                     <p className="text-2xl font-bold">
                                                         {
@@ -2502,7 +2502,7 @@ const conditionalApprovalStep = createStep({
                                     </div>
 
                                     {/* Input fields */}
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                                         <div>
                                             <label className="mb-1 block text-sm font-medium">
                                                 Customer Name

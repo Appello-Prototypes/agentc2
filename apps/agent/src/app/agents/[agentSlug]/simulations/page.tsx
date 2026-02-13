@@ -166,7 +166,7 @@ export default function SimulationsPage() {
 
     if (loading) {
         return (
-            <div className="space-y-6 p-6">
+            <div className="space-y-6 p-4 md:p-6">
                 <Skeleton className="h-8 w-48" />
                 <Skeleton className="h-48 w-full" />
                 <Skeleton className="h-64 w-full" />
@@ -175,7 +175,7 @@ export default function SimulationsPage() {
     }
 
     return (
-        <div className="space-y-6 p-6">
+        <div className="space-y-6 p-4 md:p-6">
             {/* Header */}
             <div>
                 <h1 className="text-2xl font-bold">Simulations</h1>

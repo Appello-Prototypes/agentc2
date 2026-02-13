@@ -651,25 +651,25 @@ main().catch(console.error);
                                         and fill in the following:
                                     </p>
                                     <div className="bg-muted space-y-2 rounded-lg border p-4 text-sm">
-                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] gap-2 sm:grid-cols-[140px_1fr]">
                                             <span className="text-muted-foreground font-medium">
                                                 Name:
                                             </span>
                                             <span>Mastra Agents</span>
                                         </div>
-                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] gap-2 sm:grid-cols-[140px_1fr]">
                                             <span className="text-muted-foreground font-medium">
                                                 Remote MCP URL:
                                             </span>
                                             <code className="break-all">{remoteMcpUrl}</code>
                                         </div>
-                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] gap-2 sm:grid-cols-[140px_1fr]">
                                             <span className="text-muted-foreground font-medium">
                                                 OAuth Client ID:
                                             </span>
                                             <code>{organization?.slug || "<org-slug>"}</code>
                                         </div>
-                                        <div className="grid grid-cols-[100px_1fr] sm:grid-cols-[140px_1fr] gap-2">
+                                        <div className="grid grid-cols-[100px_1fr] gap-2 sm:grid-cols-[140px_1fr]">
                                             <span className="text-muted-foreground font-medium">
                                                 OAuth Client Secret:
                                             </span>
@@ -808,7 +808,7 @@ main().catch(console.error);
                                     type={showMcpApiKey ? "text" : "password"}
                                     placeholder="No MCP API key generated yet"
                                     disabled
-                                    className="bg-muted min-w-[240px] flex-1"
+                                    className="bg-muted min-w-0 flex-1 sm:min-w-[240px]"
                                 />
                                 {mcpApiKey && <CopyButton text={mcpApiKey} />}
                                 <Button

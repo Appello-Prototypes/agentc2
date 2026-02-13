@@ -81,12 +81,12 @@ export function CanvasPreviewCard({ slug, title, hasResult }: CanvasPreviewCardP
                     </div>
                 </div>
                 <div className="p-4">
-                    <div className="grid grid-cols-12 gap-3">
-                        <Skeleton className="col-span-3 h-16" />
-                        <Skeleton className="col-span-3 h-16" />
-                        <Skeleton className="col-span-3 h-16" />
-                        <Skeleton className="col-span-3 h-16" />
-                        <Skeleton className="col-span-12 h-32" />
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-12">
+                        <Skeleton className="h-16 md:col-span-3" />
+                        <Skeleton className="h-16 md:col-span-3" />
+                        <Skeleton className="h-16 md:col-span-3" />
+                        <Skeleton className="h-16 md:col-span-3" />
+                        <Skeleton className="col-span-2 h-32 md:col-span-12" />
                     </div>
                 </div>
             </div>

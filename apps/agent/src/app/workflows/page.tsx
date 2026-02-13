@@ -715,7 +715,7 @@ export default function WorkflowsPage() {
                                             setSelectedWorkflow(value ?? null)
                                         }
                                     >
-                                        <SelectTrigger className="w-64">
+                                        <SelectTrigger className="w-full sm:w-64">
                                             <SelectValue placeholder="Select workflow" />
                                         </SelectTrigger>
                                         <SelectContent>

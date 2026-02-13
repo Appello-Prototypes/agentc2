@@ -288,7 +288,7 @@ export default function WorkflowRunsPage() {
                         placeholder="Search runs..."
                         value={searchQuery}
                         onChange={(event) => setSearchQuery(event.target.value)}
-                        className="min-w-[220px] flex-1"
+                        className="min-w-0 flex-1 sm:min-w-[220px]"
                     />
                     <Select
                         value={statusFilter}

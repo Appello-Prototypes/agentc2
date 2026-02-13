@@ -47,9 +47,7 @@ export function BuilderShell({
                     </div>
                 </TabsContent>
                 <TabsContent value="canvas" className="mt-0 min-h-0 flex-1">
-                    <div className={cn("mx-4 mb-4 min-w-0 flex-1", canvasClassName)}>
-                        {canvas}
-                    </div>
+                    <div className={cn("mx-4 mb-4 min-w-0 flex-1", canvasClassName)}>{canvas}</div>
                 </TabsContent>
                 <TabsContent value="inspector" className="mt-0 min-h-0 flex-1">
                     <div

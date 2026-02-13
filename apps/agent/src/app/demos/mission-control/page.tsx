@@ -201,7 +201,7 @@ export default function MissionControlPage() {
     );
 
     return (
-        <div className="container mx-auto space-y-6 p-6">
+        <div className="container mx-auto space-y-6 p-4 md:p-6">
             <div className="mb-8">
                 <h1 className="mb-2 text-3xl font-bold">Mission Control</h1>
                 <p className="text-muted-foreground">

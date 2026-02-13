@@ -179,7 +179,7 @@ export default function AnalyticsPage() {
         return (
             <div className="space-y-6">
                 <Skeleton className="h-8 w-48" />
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                     {[1, 2, 3, 4].map((i) => (
                         <Skeleton key={i} className="h-32" />
                     ))}
@@ -556,7 +556,7 @@ export default function AnalyticsPage() {
                             <CardDescription>Response time distribution</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="mb-6 grid grid-cols-4 gap-4">
+                            <div className="mb-6 grid grid-cols-2 gap-4 md:grid-cols-4">
                                 <div className="bg-muted rounded-lg p-4 text-center">
                                     <p className="text-muted-foreground text-sm">Average</p>
                                     <p className="text-2xl font-bold">

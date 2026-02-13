@@ -102,7 +102,12 @@ function WorkflowCanvasInner({
     );
 
     return (
-        <div className={cn("bg-background h-[300px] w-full rounded-lg border md:h-[400px]", className)}>
+        <div
+            className={cn(
+                "bg-background h-[300px] w-full rounded-lg border md:h-[400px]",
+                className
+            )}
+        >
             <ReactFlow
                 nodes={displayNodes}
                 edges={displayEdges}

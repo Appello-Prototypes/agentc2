@@ -224,7 +224,7 @@ function FeatureVisual({ type }: { type: string }) {
 
     // integrations
     return (
-        <div className="grid grid-cols-3 gap-3 p-8">
+        <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-3 sm:p-8">
             {[
                 "HubSpot",
                 "Jira",

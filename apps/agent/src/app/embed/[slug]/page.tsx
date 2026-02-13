@@ -190,12 +190,14 @@ function EmbedChat({
     embedData,
     token,
     slug,
-    isInternal
+    isInternal,
+    onChatActive
 }: {
     embedData: EmbedData;
     token: string;
     slug: string;
     isInternal: boolean;
+    onChatActive?: () => void;
 }) {
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [messageCount, setMessageCount] = useState(0);
@@ -262,6 +264,7 @@ function EmbedChat({
         if (isLimitReached || !text.trim()) return;
         setShowSuggestions(false);
         setMessageCount((c) => c + 1);
+        onChatActive?.();
         void sendMessage({ text });
     };
 
@@ -278,9 +281,7 @@ function EmbedChat({
                     <Fragment key={index}>
                         {segments.map((segment, si) => (
                             <Fragment key={si}>
-                                {segment.trim() && (
-                                    <MessageResponse>{segment}</MessageResponse>
-                                )}
+                                {segment.trim() && <MessageResponse>{segment}</MessageResponse>}
                                 {si < segments.length - 1 && (
                                     <SignupCTACard isInternal={isInternal} />
                                 )}
@@ -430,25 +431,6 @@ function EmbedChat({
 
     return (
         <div className="flex h-full flex-col">
-            {/* Header bar with CTA */}
-            <div className="flex items-center justify-between border-b px-4 py-2">
-                <div className="flex items-center gap-[2px]">
-                    <span className="text-sm font-semibold">Agent</span>
-                    <AgentC2Logo size={20} />
-                </div>
-                <a
-                    href={
-                        isInternal
-                            ? `${typeof window !== "undefined" ? window.location.origin : ""}/signup`
-                            : "https://agentc2.ai/signup"
-                    }
-                    target="_top"
-                    className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-                >
-                    Connect your tools &rarr;
-                </a>
-            </div>
-
             {/* Messages */}
             <div className="min-h-0 flex-1">
                 <Conversation className="h-full">
@@ -531,13 +513,40 @@ function EmbedChat({
 
 // ── Top-level nav bar ───────────────────────────────────────────────────
 
-function EmbedNavBar({ isInternal }: { agentName?: string; isInternal: boolean }) {
+function EmbedNavBar({
+    isInternal,
+    chatActive
+}: {
+    agentName?: string;
+    isInternal: boolean;
+    chatActive: boolean;
+}) {
     // Build absolute login/signup URLs so OAuth state cookies stay on the correct origin.
     // Using target="_top" breaks out of all iframe nesting for a clean full-page navigation.
     const loginHref = isInternal ? `${window.location.origin}/login` : "https://agentc2.ai/login";
     const signupHref = isInternal
         ? `${window.location.origin}/signup`
         : "https://agentc2.ai/signup";
+
+    // Compact header when chat is active — just logo + "Connect your tools" CTA
+    if (chatActive) {
+        return (
+            <nav className="flex items-center justify-between border-b px-4 py-2 sm:px-6">
+                <div className="flex items-center gap-[2px]">
+                    <span className="text-sm font-semibold">Agent</span>
+                    <AgentC2Logo size={20} />
+                </div>
+                <a
+                    href={signupHref}
+                    target="_top"
+                    rel="noopener noreferrer"
+                    className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+                >
+                    Connect your tools &rarr;
+                </a>
+            </nav>
+        );
+    }
 
     return (
         <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
@@ -578,6 +587,7 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
     const [embedData, setEmbedData] = useState<EmbedData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const [chatActive, setChatActive] = useState(false);
 
     // Force dark mode on embed pages (no ThemeProvider in this layout)
     useEffect(() => {
@@ -645,8 +655,12 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
 
     return (
         <div className="cowork-bg flex h-dvh flex-col">
-            {/* Top nav with Log In / Sign Up */}
-            <EmbedNavBar agentName={embedData.name} isInternal={isInternal} />
+            {/* Top nav — transforms to compact header when chat is active */}
+            <EmbedNavBar
+                agentName={embedData.name}
+                isInternal={isInternal}
+                chatActive={chatActive}
+            />
 
             {/* Chat area fills remaining space */}
             <div className="min-h-0 flex-1">
@@ -655,6 +669,7 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
                     token={token}
                     slug={slug}
                     isInternal={isInternal}
+                    onChatActive={() => setChatActive(true)}
                 />
             </div>
         </div>
