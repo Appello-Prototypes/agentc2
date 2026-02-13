@@ -264,11 +264,7 @@ function CostPerRunChart({
                             cx={xScale(i)}
                             cy={yScale(run.costUsd)}
                             r={hoveredIndex === i ? 5 : 3}
-                            fill={
-                                run.costUsd > averageCost
-                                    ? "#ef4444"
-                                    : "#3b82f6"
-                            }
+                            fill={run.costUsd > averageCost ? "#ef4444" : "#3b82f6"}
                             stroke="none"
                             className="transition-all duration-150"
                         />

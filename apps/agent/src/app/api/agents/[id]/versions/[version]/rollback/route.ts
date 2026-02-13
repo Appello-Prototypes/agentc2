@@ -57,8 +57,11 @@ export async function POST(
         // Get snapshot data
         const snapshot = targetVersionRecord.snapshot as Record<string, unknown>;
 
-        // Delete existing tool associations
+        // Delete existing tool and skill associations
         await prisma.agentTool.deleteMany({
+            where: { agentId: agent.id }
+        });
+        await prisma.agentSkill.deleteMany({
             where: { agentId: agent.id }
         });
 
@@ -98,6 +101,18 @@ export async function POST(
                     agentId: agent.id,
                     toolId: t.toolId,
                     config: t.config ? (t.config as Prisma.InputJsonValue) : Prisma.JsonNull
+                }))
+            });
+        }
+
+        // Restore skill associations
+        const skills = snapshot.skills as Array<{ skillId: string; pinned?: boolean }>;
+        if (skills && skills.length > 0) {
+            await prisma.agentSkill.createMany({
+                data: skills.map((s) => ({
+                    agentId: agent.id,
+                    skillId: s.skillId,
+                    pinned: s.pinned ?? false
                 }))
             });
         }

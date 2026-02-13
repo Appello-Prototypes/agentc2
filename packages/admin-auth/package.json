@@ -1,0 +1,27 @@
+{
+  "name": "@repo/admin-auth",
+  "version": "0.0.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./client": "./src/auth-client.ts",
+    "./permissions": "./src/permissions.ts"
+  },
+  "dependencies": {
+    "@repo/database": "workspace:*",
+    "bcryptjs": "^2.4.3"
+  },
+  "devDependencies": {
+    "@repo/typescript-config": "workspace:*",
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "react": "19.2.3",
+    "typescript": "^5"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  }
+}

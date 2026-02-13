@@ -29,7 +29,40 @@ agentc2.ai {
         -Server
     }
 
-    # All traffic routes to agent app (primary app on port 3001)
+    # Public landing page — exact root path routes to frontend app (port 3000)
+    @landing_page {
+        expression `{http.request.uri.path} == "/"`
+    }
+
+    handle @landing_page {
+        reverse_proxy localhost:3000
+    }
+
+    # Frontend static assets (namespaced via assetPrefix: '/_home')
+    @frontend_assets {
+        path /_home/*
+    }
+
+    handle @frontend_assets {
+        reverse_proxy localhost:3000
+    }
+
+    # Admin portal routes to admin app (port 3003)
+    @admin_routes {
+        path /admin*
+    }
+
+    handle @admin_routes {
+        reverse_proxy localhost:3003 {
+            transport http {
+                read_timeout 60s
+                write_timeout 60s
+            }
+            flush_interval -1
+        }
+    }
+
+    # All other traffic routes to agent app (primary app on port 3001)
     # Long timeouts for agent executions and SSE streams
     handle {
         reverse_proxy localhost:3001 {

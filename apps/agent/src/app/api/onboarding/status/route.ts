@@ -31,7 +31,8 @@ export async function GET() {
         return NextResponse.json({
             success: true,
             onboardingComplete: Boolean(membership.onboardingCompletedAt),
-            onboardingCompletedAt: membership.onboardingCompletedAt
+            onboardingCompletedAt: membership.onboardingCompletedAt,
+            organizationId: membership.organizationId
         });
     } catch (error) {
         console.error("[Onboarding Status] Error:", error);

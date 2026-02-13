@@ -34,6 +34,15 @@ interface EvaluationResult {
         comment?: string;
     };
     timestamp: string;
+    // New AI auditor fields
+    overallGrade?: number | null;
+    narrative?: string | null;
+    evaluationTier?: string | null;
+    confidenceScore?: number | null;
+    feedbackJson?: Record<string, { score: number; reasoning: string }> | null;
+    auditorModel?: string | null;
+    groundTruthUsed?: boolean;
+    skillAttributions?: Array<{ skillName: string; impact: string; suggestion: string }> | null;
 }
 
 interface EvaluationSummary {
@@ -103,22 +112,23 @@ export default function EvaluationsPage() {
 
             // Transform API response to match our interface
             const transformedEvals: EvaluationResult[] = result.evaluations.map(
-                (eval_: {
-                    id: string;
-                    runId: string;
-                    scoresJson: Record<string, number>;
-                    createdAt: string;
-                    run?: {
-                        inputPreview?: string;
-                        outputPreview?: string;
-                    };
-                }) => ({
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                (eval_: any) => ({
                     id: eval_.id,
                     runId: eval_.runId,
                     input: eval_.run?.inputPreview || "",
                     output: eval_.run?.outputPreview || "",
                     scores: eval_.scoresJson || {},
-                    timestamp: eval_.createdAt
+                    timestamp: eval_.createdAt,
+                    // AI auditor fields
+                    overallGrade: eval_.overallGrade,
+                    narrative: eval_.narrative,
+                    evaluationTier: eval_.evaluationTier,
+                    confidenceScore: eval_.confidenceScore,
+                    feedbackJson: eval_.feedbackJson,
+                    auditorModel: eval_.auditorModel,
+                    groundTruthUsed: eval_.groundTruthUsed,
+                    skillAttributions: eval_.skillAttributions
                 })
             );
 
@@ -374,6 +384,7 @@ export default function EvaluationsPage() {
             >
                 <TabsList>
                     <TabsTrigger value="scorers">Scorer Results</TabsTrigger>
+                    <TabsTrigger value="auditor">Auditor Reports</TabsTrigger>
                     <TabsTrigger value="feedback">User Feedback</TabsTrigger>
                     <TabsTrigger value="insights">AI Insights</TabsTrigger>
                     <TabsTrigger value="history">Evaluation History</TabsTrigger>
@@ -537,6 +548,342 @@ export default function EvaluationsPage() {
                             </div>
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Auditor Reports Tab */}
+                <TabsContent value="auditor" className="space-y-6">
+                    {(() => {
+                        const tier2Evals = evaluations.filter(
+                            (e) => e.evaluationTier === "tier2_auditor"
+                        );
+                        const tier1Count = evaluations.filter(
+                            (e) => e.evaluationTier === "tier1_heuristic"
+                        ).length;
+                        const avgGrade =
+                            tier2Evals.length > 0
+                                ? tier2Evals.reduce((s, e) => s + (e.overallGrade || 0), 0) /
+                                  tier2Evals.length
+                                : 0;
+
+                        return (
+                            <>
+                                {/* Tier overview cards */}
+                                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Tier 2 Reports</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {tier2Evals.length}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Full AI auditor evaluations
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Tier 1 Pre-screens</CardDescription>
+                                            <CardTitle className="text-2xl">{tier1Count}</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Heuristic-only evaluations
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Avg Overall Grade</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {tier2Evals.length > 0
+                                                    ? `${(avgGrade * 100).toFixed(0)}%`
+                                                    : "N/A"}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                                <div
+                                                    className="bg-primary h-full"
+                                                    style={{
+                                                        width: `${avgGrade * 100}%`
+                                                    }}
+                                                />
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Ground Truth Used</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {tier2Evals.filter((e) => e.groundTruthUsed).length}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Compared to expected output
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Per-criterion breakdown */}
+                                {tier2Evals.length > 0 && (
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle>Per-Criterion Scores</CardTitle>
+                                            <CardDescription>
+                                                Average scores across all audited runs by scorecard
+                                                criterion
+                                            </CardDescription>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {(() => {
+                                                const criterionTotals: Record<
+                                                    string,
+                                                    { sum: number; count: number }
+                                                > = {};
+                                                for (const e of tier2Evals) {
+                                                    if (e.feedbackJson) {
+                                                        for (const [key, val] of Object.entries(
+                                                            e.feedbackJson
+                                                        )) {
+                                                            if (!criterionTotals[key])
+                                                                criterionTotals[key] = {
+                                                                    sum: 0,
+                                                                    count: 0
+                                                                };
+                                                            criterionTotals[key].sum += val.score;
+                                                            criterionTotals[key].count++;
+                                                        }
+                                                    }
+                                                }
+                                                const entries = Object.entries(criterionTotals)
+                                                    .map(([key, data]) => ({
+                                                        criterion: key,
+                                                        avg: data.sum / data.count,
+                                                        count: data.count
+                                                    }))
+                                                    .sort((a, b) => a.avg - b.avg);
+
+                                                return (
+                                                    <div className="space-y-3">
+                                                        {entries.map((e) => (
+                                                            <div
+                                                                key={e.criterion}
+                                                                className="space-y-1"
+                                                            >
+                                                                <div className="flex items-center justify-between">
+                                                                    <span className="text-sm">
+                                                                        {e.criterion.replace(
+                                                                            /_/g,
+                                                                            " "
+                                                                        )}
+                                                                    </span>
+                                                                    <span className="text-sm font-medium">
+                                                                        {(e.avg * 100).toFixed(0)}%
+                                                                    </span>
+                                                                </div>
+                                                                <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                                                    <div
+                                                                        className={`h-full rounded-full ${
+                                                                            e.avg >= 0.8
+                                                                                ? "bg-green-500"
+                                                                                : e.avg >= 0.6
+                                                                                  ? "bg-yellow-500"
+                                                                                  : "bg-red-500"
+                                                                        }`}
+                                                                        style={{
+                                                                            width: `${e.avg * 100}%`
+                                                                        }}
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                        {entries.length === 0 && (
+                                                            <p className="text-muted-foreground py-4 text-center text-sm">
+                                                                No per-criterion data available
+                                                            </p>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </CardContent>
+                                    </Card>
+                                )}
+
+                                {/* Auditor Narratives */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle>Auditor Narratives</CardTitle>
+                                        <CardDescription>
+                                            Written feedback from the AI auditor for each evaluated
+                                            run
+                                        </CardDescription>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {tier2Evals.length > 0 ? (
+                                            <div className="space-y-4">
+                                                {tier2Evals.slice(0, 10).map((eval_) => (
+                                                    <div
+                                                        key={eval_.id}
+                                                        className="rounded-lg border p-4"
+                                                    >
+                                                        <div className="mb-2 flex items-center gap-2">
+                                                            <Badge
+                                                                variant={
+                                                                    (eval_.overallGrade || 0) >= 0.8
+                                                                        ? "default"
+                                                                        : (eval_.overallGrade ||
+                                                                                0) >= 0.6
+                                                                          ? "secondary"
+                                                                          : "destructive"
+                                                                }
+                                                            >
+                                                                {(
+                                                                    (eval_.overallGrade || 0) * 100
+                                                                ).toFixed(0)}
+                                                                %
+                                                            </Badge>
+                                                            {eval_.confidenceScore && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    Confidence:{" "}
+                                                                    {(
+                                                                        eval_.confidenceScore * 100
+                                                                    ).toFixed(0)}
+                                                                    %
+                                                                </Badge>
+                                                            )}
+                                                            {eval_.groundTruthUsed && (
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="text-xs"
+                                                                >
+                                                                    Ground Truth
+                                                                </Badge>
+                                                            )}
+                                                            <span className="text-muted-foreground ml-auto text-xs">
+                                                                {new Date(
+                                                                    eval_.timestamp
+                                                                ).toLocaleString()}
+                                                            </span>
+                                                        </div>
+                                                        <p className="mb-2 text-sm">
+                                                            <span className="text-muted-foreground">
+                                                                Input:{" "}
+                                                            </span>
+                                                            {eval_.input || "(no input)"}
+                                                        </p>
+                                                        {eval_.narrative && (
+                                                            <div className="bg-muted/50 mt-2 rounded p-3">
+                                                                <p className="text-sm whitespace-pre-line">
+                                                                    {eval_.narrative}
+                                                                </p>
+                                                            </div>
+                                                        )}
+                                                        {/* Per-criterion breakdown for this eval */}
+                                                        {eval_.feedbackJson && (
+                                                            <div className="mt-3 space-y-1">
+                                                                {Object.entries(
+                                                                    eval_.feedbackJson
+                                                                ).map(([key, val]) => (
+                                                                    <div
+                                                                        key={key}
+                                                                        className="flex items-center gap-2 text-xs"
+                                                                    >
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className={`text-xs ${
+                                                                                val.score >= 0.8
+                                                                                    ? "text-green-600"
+                                                                                    : val.score >=
+                                                                                        0.6
+                                                                                      ? "text-yellow-600"
+                                                                                      : "text-red-600"
+                                                                            }`}
+                                                                        >
+                                                                            {key.replace(/_/g, " ")}
+                                                                            :{" "}
+                                                                            {(
+                                                                                val.score * 100
+                                                                            ).toFixed(0)}
+                                                                            %
+                                                                        </Badge>
+                                                                        <span className="text-muted-foreground flex-1 truncate">
+                                                                            {val.reasoning}
+                                                                        </span>
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                        {/* Skill attributions */}
+                                                        {eval_.skillAttributions &&
+                                                            eval_.skillAttributions.length > 0 && (
+                                                                <div className="mt-3 border-t pt-2">
+                                                                    <p className="text-muted-foreground mb-1 text-xs font-medium">
+                                                                        Skill Impact:
+                                                                    </p>
+                                                                    {eval_.skillAttributions.map(
+                                                                        (sa, i) => (
+                                                                            <div
+                                                                                key={i}
+                                                                                className="text-xs"
+                                                                            >
+                                                                                <span className="font-medium">
+                                                                                    {sa.skillName}
+                                                                                </span>
+                                                                                {" — "}
+                                                                                <span
+                                                                                    className={
+                                                                                        sa.impact ===
+                                                                                        "negative"
+                                                                                            ? "text-red-600"
+                                                                                            : sa.impact ===
+                                                                                                "positive"
+                                                                                              ? "text-green-600"
+                                                                                              : ""
+                                                                                    }
+                                                                                >
+                                                                                    {sa.impact}
+                                                                                </span>
+                                                                                {sa.suggestion && (
+                                                                                    <span className="text-muted-foreground">
+                                                                                        {" "}
+                                                                                        (
+                                                                                        {
+                                                                                            sa.suggestion
+                                                                                        }
+                                                                                        )
+                                                                                    </span>
+                                                                                )}
+                                                                            </div>
+                                                                        )
+                                                                    )}
+                                                                </div>
+                                                            )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-col items-center justify-center py-12">
+                                                <p className="text-muted-foreground mb-2 text-sm">
+                                                    No AI auditor reports yet
+                                                </p>
+                                                <p className="text-muted-foreground text-xs">
+                                                    Configure a scorecard and run evaluations to see
+                                                    detailed auditor reports
+                                                </p>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </>
+                        );
+                    })()}
                 </TabsContent>
 
                 {/* User Feedback Tab */}
@@ -764,8 +1111,11 @@ export default function EvaluationsPage() {
                                                 <th className="px-4 py-3 text-left font-medium">
                                                     Input
                                                 </th>
+                                                <th className="px-4 py-3 text-center font-medium">
+                                                    Tier
+                                                </th>
                                                 <th className="px-4 py-3 text-right font-medium">
-                                                    Avg Score
+                                                    Grade
                                                 </th>
                                                 <th className="px-4 py-3 text-right font-medium">
                                                     Scores
@@ -780,12 +1130,19 @@ export default function EvaluationsPage() {
                                         </thead>
                                         <tbody>
                                             {evaluations.slice(0, 10).map((eval_) => {
-                                                const scoreValues = Object.values(eval_.scores);
-                                                const avg =
-                                                    scoreValues.length > 0
-                                                        ? scoreValues.reduce((a, b) => a + b, 0) /
-                                                          scoreValues.length
-                                                        : 0;
+                                                const grade =
+                                                    eval_.overallGrade ??
+                                                    (() => {
+                                                        const scoreValues = Object.values(
+                                                            eval_.scores
+                                                        );
+                                                        return scoreValues.length > 0
+                                                            ? scoreValues.reduce(
+                                                                  (a, b) => a + b,
+                                                                  0
+                                                              ) / scoreValues.length
+                                                            : 0;
+                                                    })();
                                                 return (
                                                     <tr
                                                         key={eval_.id}
@@ -794,8 +1151,22 @@ export default function EvaluationsPage() {
                                                         <td className="max-w-xs truncate px-4 py-3">
                                                             {eval_.input || "-"}
                                                         </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                            >
+                                                                {eval_.evaluationTier ===
+                                                                "tier2_auditor"
+                                                                    ? "Tier 2"
+                                                                    : eval_.evaluationTier ===
+                                                                        "tier1_heuristic"
+                                                                      ? "Tier 1"
+                                                                      : "Legacy"}
+                                                            </Badge>
+                                                        </td>
                                                         <td className="px-4 py-3 text-right font-mono">
-                                                            {(avg * 100).toFixed(0)}%
+                                                            {(grade * 100).toFixed(0)}%
                                                         </td>
                                                         <td className="px-4 py-3 text-right">
                                                             <div className="flex flex-wrap justify-end gap-1">

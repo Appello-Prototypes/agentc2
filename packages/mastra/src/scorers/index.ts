@@ -5,6 +5,24 @@ import {
     createToneScorer
 } from "@mastra/evals/scorers/prebuilt";
 
+// Re-export new scorecard system
+export type {
+    ScorecardCriterion,
+    AuditorOutput,
+    Tier1Result,
+    Tier2Result,
+    EvalContext,
+    CriterionResult,
+    SkillAttribution,
+    TurnEvaluation
+} from "./types";
+export { DEFAULT_SCORECARD_CRITERIA, validateCriteriaWeights, computeWeightedScore } from "./types";
+export { runTier2Auditor, buildAuditorPrompt } from "./auditor";
+export { runTier1Prescreen, shouldRunTier2 } from "./tier1";
+export { generateScorecard } from "./scorecard-generator";
+export { SCORECARD_TEMPLATES } from "./templates";
+export type { ScorecardTemplateDefinition } from "./templates";
+
 /**
  * Answer Relevancy Scorer
  *

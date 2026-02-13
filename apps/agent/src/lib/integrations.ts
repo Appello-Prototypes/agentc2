@@ -43,7 +43,7 @@ const CREDENTIAL_ALIASES: Record<string, string[]> = {
     SLACK_BOT_TOKEN: ["botToken"],
     SLACK_TEAM_ID: ["teamId"],
     HUBSPOT_ACCESS_TOKEN: ["PRIVATE_APP_ACCESS_TOKEN"],
-    PRIVATE_APP_ACCESS_TOKEN: ["HUBSPOT_ACCESS_TOKEN"],
+    PRIVATE_APP_ACCESS_TOKEN: ["HUBSPOT_ACCESS_TOKEN"]
 };
 
 /**
@@ -51,7 +51,7 @@ const CREDENTIAL_ALIASES: Record<string, string[]> = {
  * e.g. SLACK_TEAM_ID can come from connection metadata.teamId.
  */
 const METADATA_ALIASES: Record<string, string[]> = {
-    SLACK_TEAM_ID: ["teamId"],
+    SLACK_TEAM_ID: ["teamId"]
 };
 
 export const getConnectionMissingFields = (

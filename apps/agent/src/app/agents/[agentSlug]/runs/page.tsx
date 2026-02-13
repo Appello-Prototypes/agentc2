@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { getApiBase } from "@/lib/utils";
 import { calculateCost } from "@/lib/cost-calculator";
@@ -253,7 +253,9 @@ function resolveToolLabel(toolCall: ToolCall): string {
 
 export default function RunsPage() {
     const params = useParams();
+    const searchParamsHook = useSearchParams();
     const agentSlug = params.agentSlug as string;
+    const versionIdParam = searchParamsHook.get("versionId");
 
     const [loading, setLoading] = useState(true);
     const [runs, setRuns] = useState<Run[]>([]);
@@ -276,6 +278,7 @@ export default function RunsPage() {
             p.set("source", sourceFilter === "all" ? "all" : sourceFilter);
             if (statusFilter !== "all") p.set("status", statusFilter.toUpperCase());
             if (searchQuery) p.set("search", searchQuery);
+            if (versionIdParam) p.set("versionId", versionIdParam);
             p.set("limit", "50");
             const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/runs?${p.toString()}`);
             const data = await res.json();
@@ -339,7 +342,7 @@ export default function RunsPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug, statusFilter, sourceFilter, searchQuery]);
+    }, [agentSlug, statusFilter, sourceFilter, searchQuery, versionIdParam]);
 
     const fetchRunDetail = useCallback(
         async (run: Run) => {

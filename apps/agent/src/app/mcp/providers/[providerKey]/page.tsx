@@ -153,7 +153,7 @@ const CREDENTIAL_ALIASES: Record<string, string[]> = {
     SLACK_BOT_TOKEN: ["botToken"],
     SLACK_TEAM_ID: ["teamId"],
     HUBSPOT_ACCESS_TOKEN: ["PRIVATE_APP_ACCESS_TOKEN"],
-    PRIVATE_APP_ACCESS_TOKEN: ["HUBSPOT_ACCESS_TOKEN"],
+    PRIVATE_APP_ACCESS_TOKEN: ["HUBSPOT_ACCESS_TOKEN"]
 };
 
 const extractRequiredValues = (

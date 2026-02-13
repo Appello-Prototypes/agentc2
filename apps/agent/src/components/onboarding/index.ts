@@ -5,3 +5,5 @@ export { IntegrationsStep } from "./IntegrationsStep";
 export { ToolStep } from "./ToolStep";
 export { TestStep } from "./TestStep";
 export { SuccessStep } from "./SuccessStep";
+export { ConnectStep } from "./ConnectStep";
+export { TeamWelcomeStep } from "./TeamWelcomeStep";

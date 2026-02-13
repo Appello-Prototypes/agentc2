@@ -13,13 +13,11 @@ export async function requireMonitoringWorkspace(
 ) {
     // Try API key authentication first
     let userId: string | null = null;
-    let orgId: string | null = null;
 
     if (request) {
         const apiAuth = await authenticateRequest(request);
         if (apiAuth) {
             userId = apiAuth.userId;
-            orgId = apiAuth.organizationId;
         }
     }
 

@@ -18,7 +18,8 @@
     "db:migrate:deploy": "dotenv -e ../../.env -- sh -c 'DATABASE_URL=\"$DATABASE_URL_MIGRATE\" bun run --bun prisma migrate deploy'"
   },
   "dependencies": {
-    "@prisma/client": "^6.2.1"
+    "@prisma/client": "^6.2.1",
+    "bcryptjs": "^2.4.3"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

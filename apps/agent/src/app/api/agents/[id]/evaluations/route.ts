@@ -158,12 +158,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             data
         }));
 
+        // Compute summary with scorecard-aware weighted scores
+        const tier2Count = evaluations.filter((e) => e.evaluationTier === "tier2_auditor").length;
+        const tier1Count = evaluations.length - tier2Count;
+        const overallGrades = evaluations
+            .filter((e) => e.overallGrade !== null)
+            .map((e) => e.overallGrade as number);
+        const avgOverallGrade =
+            overallGrades.length > 0
+                ? Math.round(
+                      (overallGrades.reduce((a, b) => a + b, 0) / overallGrades.length) * 100
+                  ) / 100
+                : null;
+
         return NextResponse.json({
             success: true,
             evaluations: evaluations.map((eval_) => ({
                 id: eval_.id,
                 runId: eval_.runId,
                 scoresJson: eval_.scoresJson,
+                feedbackJson: eval_.feedbackJson,
+                overallGrade: eval_.overallGrade,
+                narrative: eval_.narrative,
+                evaluationTier: eval_.evaluationTier,
+                confidenceScore: eval_.confidenceScore,
+                groundTruthUsed: eval_.groundTruthUsed,
+                skillAttributions: eval_.skillAttributions,
+                turnEvaluations: eval_.turnEvaluations,
+                auditorModel: eval_.auditorModel,
+                scorecardVersion: eval_.scorecardVersion,
                 scorerVersion: eval_.scorerVersion,
                 createdAt: eval_.createdAt,
                 run: eval_.run
@@ -178,6 +201,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             })),
             summary: {
                 total: evaluations.length,
+                tier1Count,
+                tier2Count,
+                avgOverallGrade,
                 avgScores
             },
             // Feedback themes from database

@@ -492,23 +492,24 @@ All new fields nullable/defaulted. No data loss. No re-onboarding for existing u
 
 ## Existing Components to Reuse
 
-| New Feature | Existing Components |
-|------------|-------------------|
-| ConnectStep layout | `Card`, `CardContent`, `CardHeader`, `Badge`, `Button`, `Separator` |
-| Gmail status indicator | `Badge` with variant coloring |
-| Integration tiles | `Card` pattern from current IntegrationsStep |
-| TeamWelcomeStep | `Card`, `Badge`, `Avatar` (same as `/agents` grid) |
-| Connection Power Bar | `Badge`, `Button`, `Tooltip`, `Collapsible` |
-| Live demo | Full CoWork: `Conversation`, `PromptInput`, `Message`, `MessageContent` |
-| Tool calls | `Tool` component from `packages/ui/src/components/ai-elements/tool.tsx` |
-| Loading states | `Skeleton`, `Loader`, `Shimmer` |
-| Empty states | `ConversationEmptyState` pattern |
+| New Feature            | Existing Components                                                     |
+| ---------------------- | ----------------------------------------------------------------------- |
+| ConnectStep layout     | `Card`, `CardContent`, `CardHeader`, `Badge`, `Button`, `Separator`     |
+| Gmail status indicator | `Badge` with variant coloring                                           |
+| Integration tiles      | `Card` pattern from current IntegrationsStep                            |
+| TeamWelcomeStep        | `Card`, `Badge`, `Avatar` (same as `/agents` grid)                      |
+| Connection Power Bar   | `Badge`, `Button`, `Tooltip`, `Collapsible`                             |
+| Live demo              | Full CoWork: `Conversation`, `PromptInput`, `Message`, `MessageContent` |
+| Tool calls             | `Tool` component from `packages/ui/src/components/ai-elements/tool.tsx` |
+| Loading states         | `Skeleton`, `Loader`, `Shimmer`                                         |
+| Empty states           | `ConversationEmptyState` pattern                                        |
 
 ---
 
 ## Implementation Phases
 
 ### Phase 1: Foundation (Gmail sync + DB schema)
+
 - Extract Gmail sync from route handler into `packages/auth/src/gmail-sync.ts`
 - Call from `bootstrapUserOrganization()` when Google Account has Gmail scopes
 - Edge case handling: partial scopes, expired tokens, retry logic
@@ -517,12 +518,14 @@ All new fields nullable/defaulted. No data loss. No re-onboarding for existing u
 - **Test**: Google sign-up -> `IntegrationConnection` created for Gmail before redirect
 
 ### Phase 2: ConnectStep + Bootstrap Agent
+
 - Build `ConnectStep.tsx` using existing Card, Badge, Button
 - Build `POST /api/onboarding/bootstrap-agent` route
 - Agent created with memory config, scorers, tools based on connections
 - **Test**: Google sign-up -> ConnectStep shows Gmail connected -> Continue creates agent
 
 ### Phase 3: Live Demo (CoWork integration)
+
 - Wire onboarding completion to redirect to `/?agent=<slug>&firstRun=true`
 - CoWork detects `firstRun`, auto-sends first message to agent
 - Agent instructions cause Gmail search and inbox summary
@@ -530,17 +533,20 @@ All new fields nullable/defaulted. No data loss. No re-onboarding for existing u
 - **Test**: Full golden path. Google sign-up -> 1 screen -> chatting with real email data
 
 ### Phase 4: Team Welcome + Path Branching
+
 - Build `TeamWelcomeStep.tsx` using existing Card, Avatar, Badge
 - Rewrite `onboarding/page.tsx` with feature-flagged path branching
 - **Test**: All 4 paths end-to-end
 
 ### Phase 5: Connection Power Bar + Inline OAuth
+
 - Build `ConnectionPowerBar.tsx` (compact + expanded)
 - Add to main layout after onboarding
 - Modify Slack install/callback for popup mode (`window.postMessage`)
 - **Test**: Connect Slack from Power Bar without page navigation
 
 ### Phase 6: Polish, Edge Cases, Rollback
+
 - Handle all edge cases from tables above
 - Privacy consent copy on ConnectStep
 - Empty inbox fallback in agent instructions
@@ -552,27 +558,27 @@ All new fields nullable/defaulted. No data loss. No re-onboarding for existing u
 
 ## Success Metrics
 
-| Metric | Current | Target | Measurement |
-|--------|---------|--------|------------|
-| Time to first real-data interaction | 3-5 min | Under 30s (Google path) | Timestamp: sign-up to first `AgentRun` with Gmail tool call |
-| Gmail connection rate (Google users) | ~0% manual | 95%+ | `connectedDuringOnboarding` includes "gmail" |
-| Slack connection rate (first session) | ~0% | 30%+ | `connectedDuringOnboarding` includes "slack" |
-| Onboarding completion rate | Unknown | 95%+ | `onboardingCompletedAt` set / sign-ups |
-| Platform features experienced | 0 | 4+ in first session | Agent uses memory, tools, suggests canvas/workflows |
-| Second-day retention | Baseline | +20% | User returns within 24h |
-| Integrations per org at 30 days | Baseline | 3+ average | Active `IntegrationConnection` count |
+| Metric                                | Current    | Target                  | Measurement                                                 |
+| ------------------------------------- | ---------- | ----------------------- | ----------------------------------------------------------- |
+| Time to first real-data interaction   | 3-5 min    | Under 30s (Google path) | Timestamp: sign-up to first `AgentRun` with Gmail tool call |
+| Gmail connection rate (Google users)  | ~0% manual | 95%+                    | `connectedDuringOnboarding` includes "gmail"                |
+| Slack connection rate (first session) | ~0%        | 30%+                    | `connectedDuringOnboarding` includes "slack"                |
+| Onboarding completion rate            | Unknown    | 95%+                    | `onboardingCompletedAt` set / sign-ups                      |
+| Platform features experienced         | 0          | 4+ in first session     | Agent uses memory, tools, suggests canvas/workflows         |
+| Second-day retention                  | Baseline   | +20%                    | User returns within 24h                                     |
+| Integrations per org at 30 days       | Baseline   | 3+ average              | Active `IntegrationConnection` count                        |
 
 ---
 
 ## What Makes This Industry-Leading
 
-| Aspect | Typical SaaS Onboarding | AgentC2 Onboarding |
-|--------|------------------------|-------------------|
-| Integration timing | "Configure integrations later" page | Auto-connected from sign-up OAuth |
-| First value | Feature tour or generic demo | Agent acts on user's real email data |
-| AI differentiation | Chatbot greeting | Memory, tool calls visible, canvas suggested, workflows mentioned |
-| Progressive complexity | Feature dump or slow reveal | Platform capabilities discovered organically through agent behavior |
-| Observability | Hidden | Every interaction creates traced, evaluated, scored runs |
-| Personalization | None until manual config | Working memory template learns user's context from first conversation |
-| Team experience | Same flow as solo | Shows team's ecosystem, existing agents, shared integrations |
-| Rollback safety | No fallback | Feature-flagged, old flow preserved, `GmailSyncOnLogin` as backup |
+| Aspect                 | Typical SaaS Onboarding             | AgentC2 Onboarding                                                    |
+| ---------------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| Integration timing     | "Configure integrations later" page | Auto-connected from sign-up OAuth                                     |
+| First value            | Feature tour or generic demo        | Agent acts on user's real email data                                  |
+| AI differentiation     | Chatbot greeting                    | Memory, tool calls visible, canvas suggested, workflows mentioned     |
+| Progressive complexity | Feature dump or slow reveal         | Platform capabilities discovered organically through agent behavior   |
+| Observability          | Hidden                              | Every interaction creates traced, evaluated, scored runs              |
+| Personalization        | None until manual config            | Working memory template learns user's context from first conversation |
+| Team experience        | Same flow as solo                   | Shows team's ecosystem, existing agents, shared integrations          |
+| Rollback safety        | No fallback                         | Feature-flagged, old flow preserved, `GmailSyncOnLogin` as backup     |

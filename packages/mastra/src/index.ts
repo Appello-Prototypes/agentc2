@@ -78,7 +78,28 @@ export {
     scorers,
     evaluateHelpfulness,
     evaluateCodeQuality,
-    evaluators
+    evaluators,
+    // New scorecard system
+    DEFAULT_SCORECARD_CRITERIA,
+    validateCriteriaWeights,
+    computeWeightedScore,
+    runTier2Auditor,
+    buildAuditorPrompt,
+    runTier1Prescreen,
+    shouldRunTier2,
+    generateScorecard,
+    SCORECARD_TEMPLATES
+} from "./scorers";
+export type {
+    ScorecardCriterion,
+    AuditorOutput,
+    Tier1Result,
+    Tier2Result,
+    EvalContext,
+    CriterionResult,
+    SkillAttribution,
+    TurnEvaluation,
+    ScorecardTemplateDefinition
 } from "./scorers";
 
 // Scorer registry for database-driven agents

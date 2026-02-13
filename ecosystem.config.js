@@ -61,6 +61,29 @@ module.exports = {
             merge_logs: true,
             // Memory management - agent needs more for MCP processes
             max_memory_restart: "2G"
+        },
+        {
+            name: "admin",
+            cwd: "./apps/admin",
+            script: "node_modules/.bin/next",
+            args: "start",
+            instances: 1,
+            exec_mode: "fork",
+            env: {
+                NODE_ENV: "production",
+                PORT: 3003
+            },
+            // Restart policy
+            max_restarts: 10,
+            min_uptime: "10s",
+            restart_delay: 4000,
+            // Logging
+            log_date_format: "YYYY-MM-DD HH:mm:ss Z",
+            error_file: "/var/log/pm2/admin-error.log",
+            out_file: "/var/log/pm2/admin-out.log",
+            merge_logs: true,
+            // Memory management
+            max_memory_restart: "512M"
         }
     ],
 

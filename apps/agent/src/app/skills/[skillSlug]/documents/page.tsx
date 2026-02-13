@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
@@ -24,7 +24,7 @@ export default function SkillDocumentsPage() {
     const [loading, setLoading] = useState(true);
     const [actionLoading, setActionLoading] = useState(false);
 
-    const fetchSkill = async () => {
+    const fetchSkill = useCallback(async () => {
         try {
             const res = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
             if (res.ok) {
@@ -37,11 +37,11 @@ export default function SkillDocumentsPage() {
         } finally {
             setLoading(false);
         }
-    };
+    }, [skillSlug]);
 
     useEffect(() => {
         fetchSkill();
-    }, [skillSlug]);
+    }, [fetchSkill]);
 
     const handleDetach = async (documentId: string) => {
         if (!skill || actionLoading) return;

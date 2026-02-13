@@ -140,7 +140,10 @@ export default function OrganizationSettingsPage() {
                         const availData = await availRes.json();
                         setSlackChannels(availData.channels || []);
                     } else {
-                        console.error("[SlackChannels] Failed to load available channels:", availRes.status);
+                        console.error(
+                            "[SlackChannels] Failed to load available channels:",
+                            availRes.status
+                        );
                     }
                 } catch (availErr) {
                     console.error("[SlackChannels] Error fetching available channels:", availErr);

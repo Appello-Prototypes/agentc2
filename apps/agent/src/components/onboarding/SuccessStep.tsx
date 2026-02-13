@@ -21,7 +21,7 @@ const MODEL_DISPLAY: Record<string, string> = {
 
 const NEXT_STEPS = [
     {
-        href: "/",
+        href: "/workspace",
         title: "Chat with your agent",
         description: "Open the Workspace and start a conversation"
     },

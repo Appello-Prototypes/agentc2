@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { inngest } from "@/lib/inngest";
 
 /**
  * GET /api/agents/[id]/feedback/summary
@@ -179,6 +180,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     comment: comment ?? null
                 }
             });
+        }
+
+        // Emit feedback/submitted event for calibration pipeline
+        try {
+            await inngest.send({
+                name: "feedback/submitted",
+                data: {
+                    feedbackId: feedback.id,
+                    agentId: agent.id,
+                    runId,
+                    thumbs: feedback.thumbs,
+                    rating: feedback.rating,
+                    comment: feedback.comment
+                }
+            });
+        } catch (inngestError) {
+            // Non-blocking: don't fail the feedback submission if Inngest fails
+            console.error("[Agent Feedback] Inngest emit error:", inngestError);
         }
 
         return NextResponse.json({

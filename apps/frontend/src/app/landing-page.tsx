@@ -6,6 +6,7 @@ import { IntegrationBar } from "@/components/landing/integration-bar";
 import { FeatureAccordion } from "@/components/landing/feature-accordion";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { CapabilityGrid } from "@/components/landing/capability-grid";
+import { DataTransparency } from "@/components/landing/data-transparency";
 import { PricingSection } from "@/components/landing/pricing-section";
 import { FaqSection } from "@/components/landing/faq-section";
 import { CtaBanner } from "@/components/landing/cta-banner";
@@ -20,6 +21,7 @@ export function LandingPage() {
             <FeatureAccordion />
             <HowItWorks />
             <CapabilityGrid />
+            <DataTransparency />
             <PricingSection />
             <FaqSection />
             <CtaBanner />

@@ -206,6 +206,59 @@ export const inngest = new Inngest({
                 payload: Record<string, unknown>;
             };
         };
+        // Feedback & Calibration Events
+        "feedback/submitted": {
+            data: {
+                feedbackId: string;
+                agentId: string;
+                runId: string;
+                thumbs: boolean | null;
+                rating: number | null;
+                comment: string | null;
+            };
+        };
+        "calibration/drift.detected": {
+            data: {
+                agentId: string;
+                alignmentRate: number;
+                avgDisagreement: number;
+                bias: number;
+            };
+        };
+        // Admin Portal Events
+        "admin/tenant.suspended": {
+            data: {
+                orgId: string;
+                reason: string;
+                performedBy: string;
+            };
+        };
+        "admin/tenant.reactivated": {
+            data: {
+                orgId: string;
+                performedBy: string;
+            };
+        };
+        "admin/tenant.delete-requested": {
+            data: {
+                orgId: string;
+                performedBy: string;
+            };
+        };
+        "admin/health-check": {
+            data: {
+                timestamp?: string;
+            };
+        };
+        "admin/quota.warning": {
+            data: {
+                orgId: string;
+                metric: string;
+                currentValue: number;
+                limit: number;
+                percentUsed: number;
+            };
+        };
         // Gmail Processing Events
         "gmail/message.process": {
             data: {

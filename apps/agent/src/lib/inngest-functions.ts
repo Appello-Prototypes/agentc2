@@ -3,7 +3,6 @@ import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
 import { prisma, Prisma, RunStatus, RunTriggerType, TriggerEventStatus } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import {
-    evaluateHelpfulness,
     getBimObjectBuffer,
     ingestBimElementsForVersion,
     mastra,
@@ -373,7 +372,8 @@ export const runCompletedFunction = inngest.createFunction(
 /**
  * Evaluation Completed Handler
  *
- * Triggered when an evaluation job completes. Updates theme extraction and aggregates.
+ * Triggered when an evaluation job completes. Updates daily quality metrics
+ * using scorecard criterion IDs instead of hardcoded scorer keys.
  */
 export const evaluationCompletedFunction = inngest.createFunction(
     {
@@ -382,18 +382,222 @@ export const evaluationCompletedFunction = inngest.createFunction(
     },
     { event: "evaluation/completed" },
     async ({ event, step }) => {
-        const { evaluationId, agentId } = event.data;
+        const { evaluationId, agentId, scores } = event.data;
 
         console.log(`[Inngest] Processing evaluation completion: ${evaluationId}`);
 
-        // Step 1: Update quality metrics if needed
-        await step.run("update-metrics", async () => {
-            // This would typically trigger a cache invalidation
-            // For now, metrics are computed on-demand
-            console.log(`[Inngest] Metrics updated for agent: ${agentId}`);
+        // Update daily quality metrics for each criterion
+        await step.run("update-quality-metrics", async () => {
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
+            for (const [scorerKey, score] of Object.entries(scores)) {
+                if (typeof score !== "number") continue;
+
+                const existing = await prisma.agentQualityMetricDaily.findFirst({
+                    where: {
+                        agentId,
+                        scorerKey,
+                        date: today
+                    }
+                });
+
+                if (existing) {
+                    // Incrementally update average
+                    const newCount = existing.sampleCount + 1;
+                    const newAvg =
+                        ((existing.avgScore ?? 0) * existing.sampleCount + score) / newCount;
+                    await prisma.agentQualityMetricDaily.update({
+                        where: { id: existing.id },
+                        data: {
+                            avgScore: Math.round(newAvg * 1000) / 1000,
+                            sampleCount: newCount
+                        }
+                    });
+                } else {
+                    await prisma.agentQualityMetricDaily.create({
+                        data: {
+                            agentId,
+                            scorerKey,
+                            date: today,
+                            avgScore: score,
+                            sampleCount: 1
+                        }
+                    });
+                }
+            }
+
+            // Also update overall grade metric
+            const evaluation = await prisma.agentEvaluation.findUnique({
+                where: { id: evaluationId },
+                select: { overallGrade: true }
+            });
+            if (evaluation?.overallGrade !== null && evaluation?.overallGrade !== undefined) {
+                const existingOverall = await prisma.agentQualityMetricDaily.findFirst({
+                    where: { agentId, scorerKey: "overall", date: today }
+                });
+                if (existingOverall) {
+                    const newCount = existingOverall.sampleCount + 1;
+                    const newAvg =
+                        ((existingOverall.avgScore ?? 0) * existingOverall.sampleCount +
+                            evaluation.overallGrade) /
+                        newCount;
+                    await prisma.agentQualityMetricDaily.update({
+                        where: { id: existingOverall.id },
+                        data: {
+                            avgScore: Math.round(newAvg * 1000) / 1000,
+                            sampleCount: newCount
+                        }
+                    });
+                } else {
+                    await prisma.agentQualityMetricDaily.create({
+                        data: {
+                            agentId,
+                            scorerKey: "overall",
+                            date: today,
+                            avgScore: evaluation.overallGrade,
+                            sampleCount: 1
+                        }
+                    });
+                }
+            }
         });
 
         return { evaluationId, processed: true };
+    }
+);
+
+/**
+ * Calibration Check Function
+ *
+ * When human feedback is submitted, compares it against the AI auditor's grade
+ * to detect calibration drift. Creates CalibrationCheck records.
+ */
+export const calibrationCheckFunction = inngest.createFunction(
+    {
+        id: "calibration-check",
+        retries: 2
+    },
+    { event: "feedback/submitted" },
+    async ({ event, step }) => {
+        const { feedbackId, agentId, runId, thumbs, rating } = event.data;
+
+        // Step 1: Load the corresponding Tier 2 evaluation
+        const evalData = await step.run("load-evaluation", async () => {
+            const evaluation = await prisma.agentEvaluation.findUnique({
+                where: { runId },
+                select: {
+                    id: true,
+                    overallGrade: true,
+                    evaluationTier: true,
+                    agentId: true
+                }
+            });
+            return evaluation;
+        });
+
+        // Only create calibration checks for Tier 2 evaluations with an overall grade
+        if (
+            !evalData ||
+            evalData.evaluationTier !== "tier2_auditor" ||
+            evalData.overallGrade === null
+        ) {
+            return { skipped: true, reason: "No Tier 2 evaluation for this run" };
+        }
+
+        // Step 2: Create calibration check
+        const check = await step.run("create-calibration-check", async () => {
+            // Normalize human rating to 0-1 scale
+            let humanRating: number;
+            if (thumbs !== null && thumbs !== undefined) {
+                humanRating = thumbs ? 1.0 : 0.0;
+            } else if (rating !== null && rating !== undefined) {
+                humanRating = (rating - 1) / 4; // 1-5 scale -> 0-1
+            } else {
+                return null; // No rating data
+            }
+
+            const auditorGrade = evalData.overallGrade as number;
+            const disagreement = Math.abs(auditorGrade - humanRating);
+            const aligned = disagreement < 0.3;
+            const direction =
+                disagreement < 0.1
+                    ? "aligned"
+                    : auditorGrade > humanRating
+                      ? "auditor_higher"
+                      : "auditor_lower";
+
+            const agent = await prisma.agent.findUnique({
+                where: { id: agentId },
+                select: { tenantId: true }
+            });
+
+            return prisma.calibrationCheck.create({
+                data: {
+                    evaluationId: evalData.id,
+                    agentId,
+                    tenantId: agent?.tenantId ?? null,
+                    auditorGrade,
+                    humanRating,
+                    disagreement: Math.round(disagreement * 1000) / 1000,
+                    feedbackId,
+                    humanComment: event.data.comment ?? null,
+                    aligned,
+                    direction
+                }
+            });
+        });
+
+        if (!check) {
+            return { skipped: true, reason: "No usable rating data" };
+        }
+
+        // Step 3: Periodically check for drift (every 50 checks)
+        await step.run("check-drift", async () => {
+            const totalChecks = await prisma.calibrationCheck.count({
+                where: { agentId }
+            });
+
+            if (totalChecks > 0 && totalChecks % 50 === 0) {
+                const recentChecks = await prisma.calibrationCheck.findMany({
+                    where: { agentId },
+                    orderBy: { createdAt: "desc" },
+                    take: 50
+                });
+
+                const alignedCount = recentChecks.filter((c) => c.aligned).length;
+                const alignmentRate = alignedCount / recentChecks.length;
+                const avgDisagreement =
+                    recentChecks.reduce((sum, c) => sum + c.disagreement, 0) / recentChecks.length;
+                const avgBias =
+                    recentChecks.reduce((sum, c) => sum + (c.auditorGrade - c.humanRating), 0) /
+                    recentChecks.length;
+
+                if (alignmentRate < 0.7) {
+                    await inngest.send({
+                        name: "calibration/drift.detected",
+                        data: {
+                            agentId,
+                            alignmentRate,
+                            avgDisagreement,
+                            bias: avgBias
+                        }
+                    });
+
+                    // Create an insight about the drift
+                    await prisma.insight.create({
+                        data: {
+                            agentId,
+                            type: "quality",
+                            title: "Auditor Calibration Drift Detected",
+                            description: `AI auditor scores diverge from human feedback by ${Math.round(avgDisagreement * 100)}% on average (alignment rate: ${Math.round(alignmentRate * 100)}%). The auditor tends to be ${avgBias > 0.05 ? "too generous" : avgBias < -0.05 ? "too harsh" : "well calibrated"}. Consider reviewing the scorecard rubrics.`
+                        }
+                    });
+                }
+            }
+        });
+
+        return { checkId: check.id, aligned: check.aligned };
     }
 );
 
@@ -526,18 +730,28 @@ export const runEvaluationFunction = inngest.createFunction(
 
         console.log(`[Inngest] Running evaluation for run: ${runId}`);
 
-        // Step 1: Get the run and agent configuration
-        const runData = await step.run("get-run-data", async () => {
+        // Step 1: Load run data + agent + scorecard + trace
+        const context = await step.run("load-context", async () => {
             const run = await prisma.agentRun.findUnique({
                 where: { id: runId },
                 include: {
                     agent: {
-                        select: {
-                            scorers: true,
-                            id: true,
-                            slug: true
+                        include: {
+                            scorecard: true,
+                            tools: { select: { toolId: true } },
+                            skills: {
+                                include: {
+                                    skill: {
+                                        select: { name: true, slug: true, instructions: true }
+                                    }
+                                }
+                            }
                         }
-                    }
+                    },
+                    trace: true,
+                    toolCalls: true,
+                    turns: { orderBy: { turnIndex: "asc" } },
+                    testRun: { include: { testCase: true } }
                 }
             });
 
@@ -545,10 +759,76 @@ export const runEvaluationFunction = inngest.createFunction(
                 return null;
             }
 
-            return run;
+            return {
+                run: {
+                    id: run.id,
+                    inputText: run.inputText,
+                    outputText: run.outputText,
+                    durationMs: run.durationMs,
+                    totalTokens: run.totalTokens,
+                    promptTokens: run.promptTokens,
+                    completionTokens: run.completionTokens,
+                    costUsd: run.costUsd,
+                    status: run.status
+                },
+                agent: {
+                    id: run.agent.id,
+                    name: run.agent.name,
+                    slug: run.agent.slug,
+                    description: run.agent.description,
+                    instructions: run.agent.instructions,
+                    scorecard: run.agent.scorecard
+                        ? {
+                              criteria: run.agent.scorecard
+                                  .criteria as unknown as import("@repo/mastra").ScorecardCriterion[],
+                              version: run.agent.scorecard.version,
+                              samplingRate: run.agent.scorecard.samplingRate,
+                              auditorModel: run.agent.scorecard.auditorModel,
+                              evaluateTurns: run.agent.scorecard.evaluateTurns
+                          }
+                        : null,
+                    tools: run.agent.tools,
+                    skills: run.agent.skills.map((as) => ({
+                        skill: {
+                            name: as.skill.name,
+                            slug: as.skill.slug,
+                            instructions: as.skill.instructions
+                        }
+                    }))
+                },
+                toolCalls: run.toolCalls.map((tc) => ({
+                    toolKey: tc.toolKey,
+                    success: tc.success,
+                    error: tc.error,
+                    durationMs: tc.durationMs,
+                    inputJson: tc.inputJson,
+                    outputJson: tc.outputJson,
+                    toolSource: tc.toolSource
+                })),
+                trace: run.trace
+                    ? {
+                          stepsJson: run.trace.stepsJson,
+                          steps: [] as { stepNumber: number; content: string }[]
+                      }
+                    : null,
+                turns: run.turns.map((t) => ({
+                    turnIndex: t.turnIndex,
+                    inputText: t.inputText,
+                    outputText: t.outputText
+                })),
+                testRun: run.testRun
+                    ? {
+                          testCase: {
+                              expectedOutput: run.testRun.testCase?.expectedOutput ?? null
+                          }
+                      }
+                    : null,
+                skillsJson: run.skillsJson as { skillSlug: string; skillVersion?: number }[] | null,
+                tenantId: run.agent.tenantId ?? null
+            };
         });
 
-        if (!runData) {
+        if (!context) {
             console.log(`[Inngest] Run ${runId} not found or incomplete, skipping evaluation`);
             return { runId, skipped: true };
         }
@@ -565,64 +845,154 @@ export const runEvaluationFunction = inngest.createFunction(
             return { runId, skipped: true, existing: true };
         }
 
-        // Step 3: Run evaluations
-        // For conversation runs (turnCount > 0), build full conversation context
-        const scores = await step.run("run-scorers", async () => {
-            const scoreResults: Record<string, number> = {};
-            let input = runData.inputText;
-            let output = runData.outputText || "";
-
-            // Conversation runs: use full conversation context for better evaluation
-            if (runData.turnCount > 0) {
-                const turns = await prisma.agentRunTurn.findMany({
-                    where: { runId },
-                    orderBy: { turnIndex: "asc" },
-                    select: { inputText: true, outputText: true, turnIndex: true }
-                });
-                if (turns.length > 0) {
-                    // Build conversation context string
-                    const conversationParts = turns.map(
-                        (t) => `User: ${t.inputText}\nAssistant: ${t.outputText || "(no response)"}`
-                    );
-                    input = conversationParts.join("\n\n");
-                    output = turns[turns.length - 1]?.outputText || output;
-                }
-            }
-
-            // Always run helpfulness (fast, heuristic-based)
-            const helpfulness = evaluateHelpfulness(input, output);
-            scoreResults.helpfulness = helpfulness.score;
-
-            // Calculate simple relevancy heuristic
-            const inputWords = input.toLowerCase().split(/\s+/);
-            const outputWords = output.toLowerCase().split(/\s+/);
-            const overlap = inputWords.filter((w) => outputWords.includes(w) && w.length > 3);
-            scoreResults.relevancy = Math.min(overlap.length / Math.max(inputWords.length, 1), 1);
-
-            // Completeness heuristic
-            scoreResults.completeness = Math.min(output.length / 500, 1);
-
-            // Toxicity heuristic (simple check for known bad patterns)
-            const toxicPatterns = ["stupid", "idiot", "hate", "kill", "die"];
-            const hasToxic = toxicPatterns.some((p) => output.toLowerCase().includes(p));
-            scoreResults.toxicity = hasToxic ? 0.5 : 0;
-
-            return scoreResults;
+        // Step 3: Run Tier 1 heuristic pre-screen
+        const tier1Result = await step.run("tier1-prescreen", async () => {
+            const { runTier1Prescreen } = await import("@repo/mastra");
+            return runTier1Prescreen(context);
         });
 
-        // Step 4: Store evaluation
+        // Step 4: Decide whether to run Tier 2
+        const runTier2 = await step.run("tier2-decision", async () => {
+            const { shouldRunTier2 } = await import("@repo/mastra");
+            const samplingRate = context.agent.scorecard?.samplingRate ?? 1.0;
+            const hasGroundTruth = !!context.testRun?.testCase?.expectedOutput;
+            return shouldRunTier2(tier1Result, samplingRate, hasGroundTruth);
+        });
+
+        // Step 5: Run Tier 2 AI Auditor (if selected)
+        let tier2Result: import("@repo/mastra").Tier2Result | null = null;
+        if (runTier2) {
+            tier2Result = await step.run("tier2-auditor", async () => {
+                const { runTier2Auditor } = await import("@repo/mastra");
+                return runTier2Auditor(context);
+            });
+        }
+
+        // Step 6: Store evaluation
         const evaluation = await step.run("store-evaluation", async () => {
+            const result = tier2Result ?? {
+                scoresJson: tier1Result.scores,
+                feedbackJson: null,
+                overallGrade: tier1Result.avgScore,
+                narrative: null,
+                confidenceScore: null,
+                skillAttributions: null,
+                turnEvaluations: null
+            };
             return prisma.agentEvaluation.create({
                 data: {
                     runId,
                     agentId,
-                    scoresJson: scores,
-                    scorerVersion: "1.0.0"
+                    scoresJson: result.scoresJson,
+                    feedbackJson: result.feedbackJson
+                        ? (result.feedbackJson as unknown as Prisma.InputJsonValue)
+                        : Prisma.JsonNull,
+                    overallGrade: result.overallGrade,
+                    narrative: result.narrative,
+                    auditorModel: tier2Result
+                        ? (context.agent.scorecard?.auditorModel ?? "gpt-4o-mini")
+                        : null,
+                    scorecardVersion: context.agent.scorecard?.version ?? null,
+                    evaluationTier: tier2Result ? "tier2_auditor" : "tier1_heuristic",
+                    confidenceScore: result.confidenceScore,
+                    groundTruthUsed: !!context.testRun?.testCase?.expectedOutput,
+                    skillAttributions: result.skillAttributions
+                        ? (result.skillAttributions as unknown as Prisma.InputJsonValue)
+                        : Prisma.JsonNull,
+                    turnEvaluations: result.turnEvaluations
+                        ? (result.turnEvaluations as unknown as Prisma.InputJsonValue)
+                        : Prisma.JsonNull,
+                    traceContextJson: {
+                        toolCallCount: context.toolCalls?.length ?? 0,
+                        stepCount: context.trace?.steps?.length ?? 0,
+                        turnCount: context.turns?.length ?? 0,
+                        durationMs: context.run.durationMs,
+                        totalTokens: context.run.totalTokens,
+                        activeSkills: context.skillsJson ?? [],
+                        tier1Flags: tier1Result.flags
+                    },
+                    scorerVersion: "2.0.0"
                 }
             });
         });
 
-        // Step 5: Emit evaluation/completed event for downstream processing (insights, metrics)
+        const scores = (tier2Result?.scoresJson ?? tier1Result.scores) as Record<string, number>;
+
+        // Step 7: Extract themes from narrative (if Tier 2)
+        if (tier2Result?.narrative) {
+            await step.run("extract-themes", async () => {
+                // Simple keyword-based theme extraction (can be upgraded to LLM later)
+                const narrative = tier2Result!.narrative;
+                const themePatterns = [
+                    {
+                        pattern: /tool failure|tool error|failed tool/i,
+                        theme: "Tool Failures",
+                        sentiment: "negative"
+                    },
+                    {
+                        pattern: /incomplete|missing|partial/i,
+                        theme: "Incomplete Responses",
+                        sentiment: "negative"
+                    },
+                    {
+                        pattern: /incorrect|wrong|error/i,
+                        theme: "Accuracy Issues",
+                        sentiment: "negative"
+                    },
+                    {
+                        pattern: /excellent|great|well done|high quality/i,
+                        theme: "High Quality",
+                        sentiment: "positive"
+                    },
+                    {
+                        pattern: /efficient|fast|quick/i,
+                        theme: "Efficient Execution",
+                        sentiment: "positive"
+                    },
+                    {
+                        pattern: /hallucin|fabricat|made up/i,
+                        theme: "Hallucination Risk",
+                        sentiment: "negative"
+                    },
+                    {
+                        pattern: /safety|harmful|toxic/i,
+                        theme: "Safety Concerns",
+                        sentiment: "negative"
+                    },
+                    {
+                        pattern: /clear|well.structured|organized/i,
+                        theme: "Clear Communication",
+                        sentiment: "positive"
+                    }
+                ];
+
+                for (const { pattern, theme, sentiment } of themePatterns) {
+                    if (pattern.test(narrative)) {
+                        const existing = await prisma.evaluationTheme.findFirst({
+                            where: { agentId, theme }
+                        });
+                        if (existing) {
+                            await prisma.evaluationTheme.update({
+                                where: { id: existing.id },
+                                data: { count: existing.count + 1 }
+                            });
+                        } else {
+                            await prisma.evaluationTheme.create({
+                                data: {
+                                    agentId,
+                                    tenantId: context.tenantId,
+                                    theme,
+                                    sentiment,
+                                    count: 1
+                                }
+                            });
+                        }
+                    }
+                }
+            });
+        }
+
+        // Step 8: Emit evaluation/completed event for downstream processing
         await step.sendEvent("emit-evaluation-completed", {
             name: "evaluation/completed",
             data: {
@@ -633,29 +1003,29 @@ export const runEvaluationFunction = inngest.createFunction(
             }
         });
 
-        // Step 6: Check for low scores and emit signal event
+        // Step 9: Check for low scores and emit signal event
         await step.run("check-signals", async () => {
-            const avgScore =
-                Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length;
-
-            if (avgScore < 0.5) {
-                // Emit signal for learning pipeline
+            const overallGrade = tier2Result?.overallGrade ?? tier1Result.avgScore;
+            if (overallGrade < 0.5) {
                 await inngest.send({
                     name: "learning/signal.detected",
                     data: {
                         agentId,
                         runId,
                         signalType: "LOW_SCORE",
-                        severity: avgScore < 0.3 ? "high" : "medium",
+                        severity: overallGrade < 0.3 ? "high" : "medium",
                         scores
                     }
                 });
             }
         });
 
-        console.log(`[Inngest] Evaluation complete for run: ${runId}`, scores);
+        console.log(
+            `[Inngest] Evaluation complete for run: ${runId} (${tier2Result ? "Tier 2" : "Tier 1"})`,
+            scores
+        );
 
-        return { runId, evaluationId: evaluation.id, scores };
+        return { runId, evaluationId: evaluation.id, tier: tier2Result ? 2 : 1, scores };
     }
 );
 
@@ -1107,7 +1477,7 @@ export const learningSignalExtractionFunction = inngest.createFunction(
             throw new Error(`Dataset not found: ${datasetId}`);
         }
 
-        // Step 2: Analyze evaluations for low scores
+        // Step 2: Analyze evaluations for low scores (enriched with auditor narrative)
         const lowScoreSignals = await step.run("analyze-low-scores", async () => {
             const evals = await prisma.agentEvaluation.findMany({
                 where: {
@@ -1125,11 +1495,21 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                 type: "LOW_SCORE";
                 severity: string;
                 pattern: string;
-                evidence: { runId: string; scores: Record<string, number> }[];
+                evidence: {
+                    runId: string;
+                    scores: Record<string, number>;
+                    narrative?: string;
+                    overallGrade?: number;
+                }[];
             }> = [];
 
             const lowScoreRuns = evals.filter((e) => {
+                // Use overallGrade if available (from Tier 2), otherwise fallback to average
+                if (e.overallGrade !== null && e.overallGrade !== undefined) {
+                    return e.overallGrade < 0.5;
+                }
                 const scores = e.scoresJson as Record<string, number>;
+                if (!scores || Object.keys(scores).length === 0) return false;
                 const avg =
                     Object.values(scores).reduce((a, b) => a + b, 0) / Object.keys(scores).length;
                 return avg < 0.5;
@@ -1142,7 +1522,10 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                     pattern: `${lowScoreRuns.length} runs scored below 0.5 average`,
                     evidence: lowScoreRuns.map((e) => ({
                         runId: e.runId,
-                        scores: e.scoresJson as Record<string, number>
+                        scores: e.scoresJson as Record<string, number>,
+                        // Enrich with auditor narrative when available
+                        narrative: e.narrative ? e.narrative.slice(0, 500) : undefined,
+                        overallGrade: e.overallGrade ?? undefined
                     }))
                 });
             }
@@ -1240,9 +1623,9 @@ export const learningSignalExtractionFunction = inngest.createFunction(
             return signals;
         });
 
-        // Step 5: Analyze skill correlation with poor performance
+        // Step 5: Analyze skill correlation with poor performance (enriched with auditor attributions)
         const skillCorrelationSignals = await step.run("analyze-skill-correlation", async () => {
-            // Get runs with their skills and evaluations
+            // Get runs with their skills and evaluations (including auditor skill attributions)
             const runs = await prisma.agentRun.findMany({
                 where: {
                     id: { in: dataset.runIds },
@@ -1250,7 +1633,7 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                 },
                 include: {
                     evaluation: {
-                        select: { scoresJson: true }
+                        select: { scoresJson: true, skillAttributions: true }
                     }
                 }
             });
@@ -1277,6 +1660,11 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                     avgScoreWithSkill: number;
                     avgScoreWithout: number;
                     runCount: number;
+                    auditorAttributions?: Array<{
+                        skillName: string;
+                        impact: string;
+                        suggestion: string;
+                    }>;
                 }[];
             }> = [];
 
@@ -1294,6 +1682,25 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                 }
             }
             baselineAvg = baselineCount > 0 ? baselineAvg / baselineCount : 0.5;
+
+            // Collect auditor skill attributions for enrichment
+            const auditorAttribs: Record<
+                string,
+                Array<{ skillName: string; impact: string; suggestion: string }>
+            > = {};
+            for (const r of runs) {
+                const attribs = r.evaluation?.skillAttributions as Array<{
+                    skillName: string;
+                    impact: string;
+                    suggestion: string;
+                }> | null;
+                if (Array.isArray(attribs)) {
+                    for (const a of attribs) {
+                        if (!auditorAttribs[a.skillName]) auditorAttribs[a.skillName] = [];
+                        auditorAttribs[a.skillName].push(a);
+                    }
+                }
+            }
 
             // Group runs by skill slug and calculate avg score per skill
             const skillScores: Record<
@@ -1328,6 +1735,11 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                 avgScoreWithSkill: number;
                 avgScoreWithout: number;
                 runCount: number;
+                auditorAttributions?: Array<{
+                    skillName: string;
+                    impact: string;
+                    suggestion: string;
+                }>;
             }[] = [];
 
             for (const [slug, data] of Object.entries(skillScores)) {
@@ -1338,7 +1750,9 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                         skillSlug: slug,
                         avgScoreWithSkill: Math.round(avgWithSkill * 100) / 100,
                         avgScoreWithout: Math.round(baselineAvg * 100) / 100,
-                        runCount: data.runCount
+                        runCount: data.runCount,
+                        // Enrich with auditor skill attributions when available
+                        auditorAttributions: auditorAttribs[slug]?.slice(0, 5)
                     });
                 }
             }
@@ -1355,12 +1769,108 @@ export const learningSignalExtractionFunction = inngest.createFunction(
             return signals;
         });
 
-        // Step 6: Store all signals
+        // Step 6: Extract narrative patterns from Tier 2 auditor evaluations
+        const narrativeSignals = await step.run("analyze-auditor-narratives", async () => {
+            const tier2Evals = await prisma.agentEvaluation.findMany({
+                where: {
+                    runId: { in: dataset.runIds },
+                    agentId,
+                    evaluationTier: "tier2_auditor",
+                    narrative: { not: null }
+                },
+                select: {
+                    narrative: true,
+                    feedbackJson: true,
+                    skillAttributions: true,
+                    overallGrade: true
+                }
+            });
+
+            const signals: Array<{
+                type: "NARRATIVE_PATTERN";
+                severity: string;
+                pattern: string;
+                evidence: {
+                    description: string;
+                    frequency: number;
+                    severity: string;
+                    affected_criteria: string[];
+                    example_quotes: string[];
+                }[];
+            }> = [];
+
+            if (tier2Evals.length < 3) return signals; // Need minimum sample
+
+            // Collect all narratives and feedback
+            const narratives = tier2Evals.map((e) => e.narrative).filter((n): n is string => !!n);
+
+            if (narratives.length === 0) return signals;
+
+            // Use keyword-based extraction (fast, no LLM cost)
+            const patternChecks = [
+                {
+                    patterns: [/tool.*(fail|error|broken)/i, /failed to call/i, /api error/i],
+                    theme: "Recurring Tool Failures",
+                    criteria: ["tool_usage", "error_handling"]
+                },
+                {
+                    patterns: [/incomplete|missing.*information|partial/i],
+                    theme: "Incomplete Responses",
+                    criteria: ["response_quality", "task_accuracy", "data_completeness"]
+                },
+                {
+                    patterns: [/incorrect|wrong|inaccurat/i],
+                    theme: "Accuracy Issues",
+                    criteria: ["task_accuracy", "field_accuracy", "factual_accuracy"]
+                },
+                {
+                    patterns: [/hallucin|fabricat|made.?up|not.?real/i],
+                    theme: "Hallucination Concerns",
+                    criteria: ["factual_accuracy", "task_accuracy"]
+                },
+                {
+                    patterns: [/slow|inefficient|unnecessary.*step|redundant/i],
+                    theme: "Efficiency Problems",
+                    criteria: ["efficiency", "tool_usage"]
+                },
+                {
+                    patterns: [/confus|unclear|hard to follow|poorly.?structur/i],
+                    theme: "Clarity Issues",
+                    criteria: ["response_quality", "clarity", "response_clarity"]
+                }
+            ];
+
+            for (const check of patternChecks) {
+                const matches = narratives.filter((n) => check.patterns.some((p) => p.test(n)));
+                if (matches.length >= 2) {
+                    signals.push({
+                        type: "NARRATIVE_PATTERN",
+                        severity: matches.length > narratives.length * 0.5 ? "high" : "medium",
+                        pattern: check.theme,
+                        evidence: [
+                            {
+                                description: check.theme,
+                                frequency: matches.length,
+                                severity:
+                                    matches.length > narratives.length * 0.5 ? "high" : "medium",
+                                affected_criteria: check.criteria,
+                                example_quotes: matches.slice(0, 3).map((n) => n.slice(0, 200))
+                            }
+                        ]
+                    });
+                }
+            }
+
+            return signals;
+        });
+
+        // Step 7: Store all signals (including narrative patterns)
         const allSignals = [
             ...lowScoreSignals,
             ...toolFailureSignals,
             ...feedbackSignals,
-            ...skillCorrelationSignals
+            ...skillCorrelationSignals,
+            ...narrativeSignals
         ];
 
         await step.run("store-signals", async () => {
@@ -1373,7 +1883,8 @@ export const learningSignalExtractionFunction = inngest.createFunction(
                             | "LOW_SCORE"
                             | "TOOL_FAILURE"
                             | "NEGATIVE_FEEDBACK"
-                            | "SKILL_CORRELATION",
+                            | "SKILL_CORRELATION"
+                            | "NARRATIVE_PATTERN",
                         severity: signal.severity,
                         pattern: signal.pattern,
                         evidenceJson: signal.evidence,
@@ -1405,6 +1916,79 @@ export const learningSignalExtractionFunction = inngest.createFunction(
         return { sessionId, signalCount: allSignals.length };
     }
 );
+
+/**
+ * Generate a unified diff from narrative pattern themes.
+ * Maps AI auditor themes to concrete instruction additions.
+ */
+function generateNarrativeBasedDiff(
+    themes: Array<{
+        theme: string;
+        evidence:
+            | {
+                  description: string;
+                  frequency: number;
+                  severity: string;
+                  affected_criteria: string[];
+                  example_quotes: string[];
+              }
+            | undefined;
+    }>
+): string {
+    const lines = [
+        "--- Current Instructions",
+        "+++ Proposed Instructions",
+        "@@ Add guidance based on AI auditor feedback @@"
+    ];
+
+    const themeToGuidance: Record<string, string[]> = {
+        "Recurring Tool Failures": [
+            "+ - Validate all required parameters before calling tools",
+            "+ - If a tool call fails, explain the error clearly and try an alternative approach",
+            "+ - Never retry a failed tool call with the same parameters without modification"
+        ],
+        "Incomplete Responses": [
+            "+ - Always address ALL parts of the user's question",
+            "+ - Before finishing, review your response to ensure nothing was missed",
+            "+ - If information is unavailable, explicitly state what could not be found"
+        ],
+        "Accuracy Issues": [
+            "+ - Double-check data values, names, and figures before including them in responses",
+            "+ - Cross-reference information from tools when multiple sources are available",
+            "+ - Clearly distinguish between confirmed facts and inferences"
+        ],
+        "Hallucination Concerns": [
+            "+ - NEVER fabricate information — only report what tools and data confirm",
+            "+ - If unsure about a fact, say so rather than guessing",
+            "+ - Cite the source (tool call, document, etc.) for every factual claim"
+        ],
+        "Efficiency Problems": [
+            "+ - Plan your approach before executing — avoid redundant tool calls",
+            "+ - Combine related queries into fewer tool calls when possible",
+            "+ - Get to the answer directly; avoid unnecessary intermediate steps"
+        ],
+        "Clarity Issues": [
+            "+ - Structure responses with clear sections and formatting",
+            "+ - Use bullet points for lists and bold for key terms",
+            "+ - Lead with the main answer, then provide supporting details"
+        ]
+    };
+
+    for (const t of themes) {
+        const guidance = themeToGuidance[t.theme];
+        if (guidance) {
+            lines.push(`+ # ${t.theme}`, ...guidance);
+        } else {
+            // Generic guidance for unrecognized themes
+            lines.push(
+                `+ # ${t.theme}`,
+                `+ - Address the recurring pattern: ${t.evidence?.description || t.theme}`
+            );
+        }
+    }
+
+    return lines.join("\n");
+}
 
 /**
  * Learning Proposal Generation
@@ -1470,6 +2054,7 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                 instructionsDiff?: string;
                 expectedImpact: string;
                 confidenceScore: number;
+                generatedBy?: string;
             }> = [];
 
             const signals = sessionData.signals;
@@ -1562,6 +2147,45 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                 });
             }
 
+            // Analyze narrative pattern signals from AI auditor
+            const narrativePatternSignals = signals.filter((s) => s.type === "NARRATIVE_PATTERN");
+            if (narrativePatternSignals.length > 0) {
+                const themes = narrativePatternSignals.map((s) => {
+                    const evidence = s.evidenceJson as Array<{
+                        description: string;
+                        frequency: number;
+                        severity: string;
+                        affected_criteria: string[];
+                        example_quotes: string[];
+                    }>;
+                    return {
+                        theme: s.pattern,
+                        evidence: evidence[0]
+                    };
+                });
+
+                // Build context-specific instruction improvements from auditor themes
+                const highSeverity = themes.filter((t) => t.evidence?.severity === "high");
+                const affectedCriteria = [
+                    ...new Set(themes.flatMap((t) => t.evidence?.affected_criteria || []))
+                ];
+                const themeNames = themes.map((t) => t.theme).join(", ");
+
+                proposalsToCreate.push({
+                    proposalType: "instructions",
+                    title: `Address auditor-identified patterns: ${themeNames}`,
+                    description:
+                        `The AI auditor identified ${themes.length} recurring pattern(s) across recent evaluations: ${themeNames}. ` +
+                        `${highSeverity.length} of these are high severity. ` +
+                        `Affected quality criteria: ${affectedCriteria.join(", ")}. ` +
+                        `Example feedback: "${themes[0]?.evidence?.example_quotes?.[0]?.slice(0, 150) || "N/A"}"`,
+                    instructionsDiff: generateNarrativeBasedDiff(themes),
+                    expectedImpact: `Expected to address ${themes.length} recurring quality pattern(s) impacting ${affectedCriteria.length} criteria`,
+                    confidenceScore: highSeverity.length > 0 ? 0.75 : 0.6,
+                    generatedBy: "auditor"
+                });
+            }
+
             // Always generate at least one proposal if there are signals
             if (proposalsToCreate.length === 0 && signals.length > 0) {
                 proposalsToCreate.push({
@@ -1620,7 +2244,7 @@ export const learningProposalGenerationFunction = inngest.createFunction(
                         instructionsDiff: proposal.instructionsDiff,
                         expectedImpact: proposal.expectedImpact,
                         confidenceScore: proposal.confidenceScore,
-                        generatedBy: "heuristic",
+                        generatedBy: proposal.generatedBy || "heuristic",
                         isSelected: created.length === 0, // Select first proposal
                         // Risk classification
                         riskTier: riskResult.tier,
@@ -4965,6 +5589,227 @@ const webhookSubscriptionRenewalFunction = inngest.createFunction(
 /**
  * All Inngest functions to register
  */
+// ── Admin Portal Functions ───────────────────────────────────────────
+
+export const adminTenantSuspendedFunction = inngest.createFunction(
+    { id: "admin-tenant-suspended", name: "Admin: Tenant Suspended" },
+    { event: "admin/tenant.suspended" },
+    async ({ event, step }) => {
+        const { orgId, reason, performedBy } = event.data;
+
+        // Disable all scheduled triggers for the org's agents
+        await step.run("disable-agent-schedules", async () => {
+            const agents = await prisma.agent.findMany({
+                where: { workspace: { organizationId: orgId } },
+                select: { id: true }
+            });
+            const agentIds = agents.map((a) => a.id);
+            if (agentIds.length > 0) {
+                await prisma.agentSchedule.updateMany({
+                    where: { agentId: { in: agentIds } },
+                    data: { isActive: false }
+                });
+            }
+            return { disabledAgents: agentIds.length };
+        });
+
+        // Log lifecycle event
+        await step.run("log-lifecycle", async () => {
+            await prisma.tenantLifecycleEvent.create({
+                data: {
+                    organizationId: orgId,
+                    fromStatus: "active",
+                    toStatus: "suspended",
+                    reason,
+                    performedBy
+                }
+            });
+        });
+
+        return { success: true, orgId };
+    }
+);
+
+export const adminTenantReactivatedFunction = inngest.createFunction(
+    { id: "admin-tenant-reactivated", name: "Admin: Tenant Reactivated" },
+    { event: "admin/tenant.reactivated" },
+    async ({ event, step }) => {
+        const { orgId, performedBy } = event.data;
+
+        // Re-enable agent schedules
+        await step.run("re-enable-schedules", async () => {
+            const agents = await prisma.agent.findMany({
+                where: { workspace: { organizationId: orgId } },
+                select: { id: true }
+            });
+            const agentIds = agents.map((a) => a.id);
+            if (agentIds.length > 0) {
+                await prisma.agentSchedule.updateMany({
+                    where: { agentId: { in: agentIds } },
+                    data: { isActive: true }
+                });
+            }
+            return { reenabledAgents: agentIds.length };
+        });
+
+        await step.run("log-lifecycle", async () => {
+            await prisma.tenantLifecycleEvent.create({
+                data: {
+                    organizationId: orgId,
+                    fromStatus: "suspended",
+                    toStatus: "active",
+                    reason: "Reactivated by admin",
+                    performedBy
+                }
+            });
+        });
+
+        return { success: true, orgId };
+    }
+);
+
+export const adminTenantDeleteRequestedFunction = inngest.createFunction(
+    { id: "admin-tenant-delete-requested", name: "Admin: Tenant Delete Requested" },
+    { event: "admin/tenant.delete-requested" },
+    async ({ event, step }) => {
+        const { orgId, performedBy } = event.data;
+
+        // Soft-delete: mark org as deactivated and record the event
+        await step.run("soft-delete-org", async () => {
+            await prisma.organization.update({
+                where: { id: orgId },
+                data: {
+                    status: "deactivated",
+                    deletedAt: new Date()
+                }
+            });
+        });
+
+        // Disable all agents
+        await step.run("disable-agents", async () => {
+            await prisma.agent.updateMany({
+                where: { workspace: { organizationId: orgId } },
+                data: { isActive: false }
+            });
+        });
+
+        await step.run("log-lifecycle", async () => {
+            await prisma.tenantLifecycleEvent.create({
+                data: {
+                    organizationId: orgId,
+                    fromStatus: "suspended",
+                    toStatus: "deactivated",
+                    reason: "Deletion requested",
+                    performedBy
+                }
+            });
+        });
+
+        return { success: true, orgId };
+    }
+);
+
+export const adminHealthCheckFunction = inngest.createFunction(
+    {
+        id: "admin-health-check",
+        name: "Admin: Platform Health Check"
+    },
+    { cron: "0 */6 * * *" }, // Every 6 hours
+    async ({ step }) => {
+        // Check for organizations with high error rates
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+
+        const unhealthyOrgs = await step.run("check-error-rates", async () => {
+            const stats = (await prisma.$queryRaw`
+                SELECT
+                    o.id as org_id,
+                    o.name,
+                    o.slug,
+                    SUM(s."failedRuns") as failed,
+                    SUM(s."totalRuns") as total,
+                    CASE WHEN SUM(s."totalRuns") > 0
+                        THEN CAST(SUM(s."failedRuns") AS FLOAT) / SUM(s."totalRuns")
+                        ELSE 0
+                    END as error_rate
+                FROM agent_stats_daily s
+                JOIN agent a ON s."agentId" = a.id
+                JOIN workspace w ON a."workspaceId" = w.id
+                JOIN organization o ON w."organizationId" = o.id
+                WHERE s.date >= ${yesterday}
+                AND o.status = 'active'
+                GROUP BY o.id, o.name, o.slug
+                HAVING SUM(s."totalRuns") > 10
+                AND CAST(SUM(s."failedRuns") AS FLOAT) / SUM(s."totalRuns") > 0.5
+            `) as Array<{
+                org_id: string;
+                name: string;
+                slug: string;
+                failed: number;
+                total: number;
+                error_rate: number;
+            }>;
+            return stats;
+        });
+
+        // Update risk scores for unhealthy orgs
+        if (unhealthyOrgs.length > 0) {
+            await step.run("update-risk-scores", async () => {
+                for (const org of unhealthyOrgs) {
+                    await prisma.organization.update({
+                        where: { id: org.org_id },
+                        data: {
+                            riskScore: Math.min(org.error_rate * 100, 100),
+                            lastHealthCheck: new Date()
+                        }
+                    });
+                }
+            });
+        }
+
+        // Update lastHealthCheck for all active orgs
+        await step.run("update-healthy-orgs", async () => {
+            const unhealthyIds = unhealthyOrgs.map((o) => o.org_id);
+            await prisma.organization.updateMany({
+                where: {
+                    status: "active",
+                    id: { notIn: unhealthyIds }
+                },
+                data: {
+                    lastHealthCheck: new Date(),
+                    riskScore: 0
+                }
+            });
+        });
+
+        return {
+            unhealthyOrgs: unhealthyOrgs.length,
+            timestamp: new Date().toISOString()
+        };
+    }
+);
+
+export const adminQuotaWarningFunction = inngest.createFunction(
+    { id: "admin-quota-warning", name: "Admin: Quota Warning" },
+    { event: "admin/quota.warning" },
+    async ({ event, step }) => {
+        const { orgId, metric, currentValue, limit, percentUsed } = event.data;
+
+        // Log the warning
+        await step.run("log-quota-warning", async () => {
+            const org = await prisma.organization.findUnique({
+                where: { id: orgId },
+                select: { name: true, slug: true }
+            });
+            console.warn(
+                `[QUOTA WARNING] Org ${org?.name || orgId}: ${metric} at ${percentUsed.toFixed(1)}% (${currentValue}/${limit})`
+            );
+        });
+
+        return { success: true, orgId, metric, percentUsed };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -4985,6 +5830,7 @@ export const inngestFunctions = [
     generateInsightsFunction,
     // Closed-Loop Learning functions
     runEvaluationFunction,
+    calibrationCheckFunction,
     learningSignalDetectorFunction,
     scheduledLearningTriggerFunction, // Cron-triggered backstop
     learningSessionStartFunction,
@@ -5003,5 +5849,11 @@ export const inngestFunctions = [
     // Conversation run finalization
     idleConversationFinalizerFunction,
     // Webhook subscription lifecycle
-    webhookSubscriptionRenewalFunction
+    webhookSubscriptionRenewalFunction,
+    // Admin Portal functions
+    adminTenantSuspendedFunction,
+    adminTenantReactivatedFunction,
+    adminTenantDeleteRequestedFunction,
+    adminHealthCheckFunction,
+    adminQuotaWarningFunction
 ];

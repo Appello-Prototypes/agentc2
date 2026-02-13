@@ -2,6 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { getApiBase } from "@/lib/utils";
+
+// Old flow components (kept for rollback via feature flag)
 import { JoinOrgStep } from "@/components/onboarding/JoinOrgStep";
 import { WelcomeStep } from "@/components/onboarding/WelcomeStep";
 import { TemplateStep } from "@/components/onboarding/TemplateStep";
@@ -11,6 +13,12 @@ import { ToolStep } from "@/components/onboarding/ToolStep";
 import { TestStep } from "@/components/onboarding/TestStep";
 import { SuccessStep } from "@/components/onboarding/SuccessStep";
 
+// New flow components
+import { ConnectStep } from "@/components/onboarding/ConnectStep";
+import { TeamWelcomeStep } from "@/components/onboarding/TeamWelcomeStep";
+
+// ─── Shared Types ──────────────────────────────────────────────────────
+
 export type OnboardingStep =
     | "join-org"
     | "welcome"
@@ -19,7 +27,10 @@ export type OnboardingStep =
     | "integrations"
     | "tools"
     | "test"
-    | "success";
+    | "success"
+    // New flow steps
+    | "connect"
+    | "team-welcome";
 
 interface SuggestedOrg {
     id: string;
@@ -58,6 +69,8 @@ export interface OnboardingData {
     createdAgentId: string | null;
     createdAgentSlug: string | null;
 }
+
+// ─── Templates (used by old flow) ──────────────────────────────────────
 
 export const TEMPLATES: AgentTemplate[] = [
     {
@@ -154,13 +167,22 @@ Always show your work. Double-check calculations and be explicit about assumptio
 const FALLBACK_TOOLS: ToolInfo[] = [
     { id: "calculator", name: "Calculator", description: "Math and calculations" },
     { id: "web-fetch", name: "Web Fetch", description: "Fetch data from URLs" },
-    { id: "memory-recall", name: "Memory Recall", description: "Remember past conversations" },
+    {
+        id: "memory-recall",
+        name: "Memory Recall",
+        description: "Remember past conversations"
+    },
     { id: "json-parser", name: "JSON Parser", description: "Parse and validate JSON" },
     { id: "date-time", name: "Date & Time", description: "Current date and time info" },
-    { id: "generate-id", name: "Generate ID", description: "Create unique identifiers" }
+    {
+        id: "generate-id",
+        name: "Generate ID",
+        description: "Create unique identifiers"
+    }
 ];
 
-// Persist onboarding state to localStorage to survive refreshes
+// ─── Local Storage Persistence ──────────────────────────────────────────
+
 const STORAGE_KEY = "agentc2_onboarding_state";
 
 function loadPersistedState(): { step: OnboardingStep; data: OnboardingData } | null {
@@ -189,8 +211,13 @@ function clearPersistedState() {
     }
 }
 
+// ─── Feature flag check ──────────────────────────────────────────────
+
+const isNewOnboarding = process.env.NEXT_PUBLIC_FEATURE_NEW_ONBOARDING === "true";
+
+// ─── Page Component ──────────────────────────────────────────────────
+
 export default function OnboardingPage() {
-    // Restore state from localStorage if available
     const [initialized, setInitialized] = useState(false);
     const [currentStep, setCurrentStep] = useState<OnboardingStep>("welcome");
     const [suggestedOrg, setSuggestedOrg] = useState<SuggestedOrg | null>(null);
@@ -210,25 +237,39 @@ export default function OnboardingPage() {
     const [createError, setCreateError] = useState<string | null>(null);
     const [mcpWarning, setMcpWarning] = useState<string | null>(null);
 
-    // Initialize: restore persisted state, then check membership status.
-    // If no membership exists but a suggested org is available, show join-org step.
+    // New flow state
+    const [gmailConnected, setGmailConnected] = useState(false);
+    const [gmailAddress, setGmailAddress] = useState<string | undefined>();
+    const [gmailMissingScopes, setGmailMissingScopes] = useState<string[] | undefined>();
+    const [organizationId, setOrganizationId] = useState<string>("");
+    const [userId, setUserId] = useState<string>("");
+    const [onboardingPath, setOnboardingPath] = useState<string>("email_password");
+    const [joinedOrgName, setJoinedOrgName] = useState<string>("");
+
+    // ── Initialize ──────────────────────────────────────────────────────
+
     useEffect(() => {
         const init = async () => {
-            // Restore persisted onboarding data
             const persisted = loadPersistedState();
             if (persisted) {
                 setData(persisted.data);
             }
 
-            // Check if user has org membership
             try {
+                // Check onboarding + membership status
                 const statusRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
                     credentials: "include"
                 });
                 const statusResult = await statusRes.json();
 
+                if (statusResult.success && statusResult.onboardingComplete) {
+                    // Already completed — redirect to dashboard
+                    window.location.href = "/workspace";
+                    return;
+                }
+
                 if (statusResult.success && statusResult.needsBootstrap) {
-                    // No membership — check for suggested org by email domain
+                    // No membership — check for suggested org by domain
                     const suggestedRes = await fetch(`${getApiBase()}/api/auth/suggested-org`, {
                         credentials: "include"
                     });
@@ -238,41 +279,106 @@ export default function OnboardingPage() {
                         setSuggestedOrg(suggestedResult.organization);
                         setCurrentStep("join-org");
                     } else {
-                        // No suggested org and no membership — create a new org for the user
-                        await fetch(`${getApiBase()}/api/auth/confirm-org`, {
+                        // No suggested org — auto-create
+                        const createRes = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
                             method: "POST",
-                            headers: { "Content-Type": "application/json" },
+                            headers: {
+                                "Content-Type": "application/json"
+                            },
                             credentials: "include",
                             body: JSON.stringify({ action: "create_new" })
                         });
-                        setCurrentStep(persisted?.step ?? "welcome");
+                        const createResult = await createRes.json();
+                        if (createResult.success && createResult.organization) {
+                            setOrganizationId(createResult.organization.id);
+                        }
+
+                        if (isNewOnboarding) {
+                            setCurrentStep("connect");
+                        } else {
+                            setCurrentStep(persisted?.step ?? "welcome");
+                        }
                     }
                 } else {
-                    // User already has membership, use persisted step
-                    setCurrentStep(persisted?.step ?? "welcome");
+                    // User has membership
+                    if (isNewOnboarding) {
+                        setCurrentStep("connect");
+                    } else {
+                        setCurrentStep(persisted?.step ?? "welcome");
+                    }
+                }
+
+                // For new flow: ensure Gmail is synced and get user info
+                if (isNewOnboarding) {
+                    // Ensure Gmail sync
+                    const gmailRes = await fetch(
+                        `${getApiBase()}/api/onboarding/ensure-gmail-sync`,
+                        {
+                            method: "POST",
+                            credentials: "include"
+                        }
+                    );
+                    const gmailResult = await gmailRes.json();
+                    if (gmailResult.success && gmailResult.gmailConnected) {
+                        setGmailConnected(true);
+                        setGmailAddress(gmailResult.gmailAddress);
+                        setOnboardingPath("google_oauth");
+                    }
+                    // Track partial scope issues for display in ConnectStep
+                    if (
+                        gmailResult.missingScopes &&
+                        Array.isArray(gmailResult.missingScopes) &&
+                        gmailResult.missingScopes.length > 0
+                    ) {
+                        setGmailMissingScopes(gmailResult.missingScopes);
+                    }
+
+                    // Get session info for org/user IDs
+                    const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
+                        credentials: "include"
+                    });
+                    const sessionResult = await sessionRes.json();
+                    if (sessionResult?.user) {
+                        setUserId(sessionResult.user.id);
+                    }
+
+                    // Get org ID from membership if not already set
+                    if (!organizationId) {
+                        const membershipRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
+                            credentials: "include"
+                        });
+                        const membershipData = await membershipRes.json();
+                        if (membershipData.organizationId) {
+                            setOrganizationId(membershipData.organizationId);
+                        }
+                    }
                 }
             } catch (error) {
                 console.error("Failed to check onboarding status:", error);
-                // Fallback to persisted step on error
-                setCurrentStep(persisted?.step ?? "welcome");
+                if (isNewOnboarding) {
+                    setCurrentStep("connect");
+                } else {
+                    setCurrentStep(persisted?.step ?? "welcome");
+                }
             }
 
             setInitialized(true);
         };
 
         init();
-    }, []);
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Persist state on changes (skip join-org; it's re-detected from API on each load)
+    // Persist state on changes
     useEffect(() => {
         if (initialized && currentStep !== "join-org") {
             persistState(currentStep, data);
         }
     }, [currentStep, data, initialized]);
 
-    // Fetch available tools from the registry
-    // Filter out platform management tools that aren't relevant for agent configuration
+    // Fetch available tools (old flow)
     useEffect(() => {
+        if (isNewOnboarding) return; // New flow doesn't need this upfront
+
         const PLATFORM_TOOL_PREFIXES = [
             "agent-",
             "workflow-",
@@ -296,9 +402,7 @@ export default function OnboardingPage() {
         ];
 
         const isAgentRelevantTool = (tool: ToolInfo) => {
-            // MCP tools are always relevant
             if (tool.source?.startsWith("mcp:")) return true;
-            // Filter out platform management tools from registry
             if (tool.source === "registry") {
                 return !PLATFORM_TOOL_PREFIXES.some(
                     (prefix) => tool.id.startsWith(prefix) || tool.id === prefix
@@ -319,7 +423,6 @@ export default function OnboardingPage() {
                         setAvailableTools(filtered);
                     }
                 }
-                // Surface MCP connection warnings
                 if (result.mcpError) {
                     setMcpWarning(
                         "Some MCP integrations could not be reached. Their tools may not appear below."
@@ -333,17 +436,39 @@ export default function OnboardingPage() {
         fetchTools();
     }, []);
 
+    // ── Helpers ──────────────────────────────────────────────────────────
+
     const updateData = useCallback((updates: Partial<OnboardingData>) => {
         setData((prev) => ({ ...prev, ...updates }));
     }, []);
 
-    // ── Step flow ──────────────────────────────────────────────────────────
+    const completeOnboarding = async (extras?: {
+        onboardingPath?: string;
+        connectedDuringOnboarding?: string[];
+    }): Promise<boolean> => {
+        try {
+            const response = await fetch(`${getApiBase()}/api/onboarding/complete`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify(extras || {})
+            });
+            const result = await response.json();
+            if (response.ok && result.success) {
+                localStorage.setItem("agentc2_onboarding_complete", "true");
+                clearPersistedState();
+                return true;
+            }
+            console.error("Failed to complete onboarding:", result.error);
+            return false;
+        } catch (error) {
+            console.error("Failed to complete onboarding:", error);
+            return false;
+        }
+    };
 
-    /**
-     * Dynamic step order based on the selected template.
-     * Blank templates always go through tools; template-based agents
-     * also go through tools now (pre-selected) so users can customize.
-     */
+    // ── Old Flow Handlers ───────────────────────────────────────────────
+
     const getStepOrder = useCallback((): OnboardingStep[] => {
         return ["welcome", "template", "configure", "integrations", "tools", "test", "success"];
     }, []);
@@ -364,8 +489,6 @@ export default function OnboardingPage() {
         if (idx < 0) return 0;
         return Math.round((idx / (steps.length - 1)) * 100);
     }, [currentStep, getStepOrder]);
-
-    // ── Handlers ───────────────────────────────────────────────────────────
 
     const handleTemplateSelect = useCallback(
         (template: AgentTemplate) => {
@@ -441,30 +564,10 @@ export default function OnboardingPage() {
         setCurrentStep("success");
     }, []);
 
-    const completeOnboarding = async (): Promise<boolean> => {
-        try {
-            const response = await fetch(`${getApiBase()}/api/onboarding/complete`, {
-                method: "POST"
-            });
-            const result = await response.json();
-            if (response.ok && result.success) {
-                localStorage.setItem("agentc2_onboarding_complete", "true");
-                clearPersistedState();
-                return true;
-            }
-            console.error("Failed to complete onboarding:", result.error);
-            return false;
-        } catch (error) {
-            console.error("Failed to complete onboarding:", error);
-            return false;
-        }
-    };
-
     const handleFinish = async (navigateTo?: string) => {
         const success = await completeOnboarding();
         if (success) {
-            // Use hard navigation to avoid proxy race condition with client router
-            window.location.href = navigateTo || "/";
+            window.location.href = navigateTo || "/workspace";
         } else {
             setCreateError("Failed to complete onboarding. Please try again.");
         }
@@ -476,14 +579,25 @@ export default function OnboardingPage() {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
-            body: JSON.stringify({ action: "join", organizationId: suggestedOrg.id })
+            body: JSON.stringify({
+                action: "join",
+                organizationId: suggestedOrg.id
+            })
         });
         const result = await response.json();
         if (!response.ok || !result.success) {
             throw new Error(result.error || "Failed to join organization");
         }
+        setOrganizationId(suggestedOrg.id);
+        setJoinedOrgName(suggestedOrg.name);
+        setOnboardingPath("domain_join");
         setSuggestedOrg(null);
-        setCurrentStep("welcome");
+
+        if (isNewOnboarding) {
+            setCurrentStep("team-welcome");
+        } else {
+            setCurrentStep("welcome");
+        }
     }, [suggestedOrg]);
 
     const handleCreateOwnOrg = useCallback(async () => {
@@ -497,28 +611,96 @@ export default function OnboardingPage() {
         if (!response.ok || !result.success) {
             throw new Error(result.error || "Failed to create organization");
         }
+        if (result.organization) {
+            setOrganizationId(result.organization.id);
+        }
         setSuggestedOrg(null);
-        setCurrentStep("welcome");
+
+        if (isNewOnboarding) {
+            setCurrentStep("connect");
+        } else {
+            setCurrentStep("welcome");
+        }
     }, []);
 
     const handleSkipToDashboard = async () => {
-        const success = await completeOnboarding();
+        const success = await completeOnboarding({
+            onboardingPath
+        });
         if (success) {
-            window.location.href = "/";
+            window.location.href = "/workspace";
         } else {
-            // Fallback: still try to navigate even if API failed
             localStorage.setItem("agentc2_onboarding_complete", "true");
             clearPersistedState();
-            window.location.href = "/";
+            window.location.href = "/workspace";
         }
     };
 
-    // Don't render until we've checked localStorage for persisted state
+    // ── New Flow Handlers ───────────────────────────────────────────────
+
+    const handleConnectComplete = useCallback(
+        async (connectedIntegrations: string[]) => {
+            setIsCreating(true);
+            setCreateError(null);
+
+            try {
+                // Bootstrap the starter agent with connected integrations
+                const response = await fetch(`${getApiBase()}/api/onboarding/bootstrap-agent`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    credentials: "include",
+                    body: JSON.stringify({ connectedIntegrations })
+                });
+                const result = await response.json();
+
+                if (!result.success) {
+                    console.error("[Onboarding] Failed to bootstrap agent:", result.error);
+                }
+
+                // Complete onboarding
+                await completeOnboarding({
+                    onboardingPath,
+                    connectedDuringOnboarding: connectedIntegrations
+                });
+
+                // Redirect to the CoWork chat with the new agent
+                const agentSlug = result.agent?.slug;
+                if (agentSlug) {
+                    window.location.href = `/workspace/${agentSlug}?firstRun=true`;
+                } else {
+                    window.location.href = "/workspace";
+                }
+            } catch (error) {
+                console.error("[Onboarding] Error:", error);
+                setCreateError("Something went wrong. Redirecting to dashboard...");
+                // Fallback: complete and redirect
+                await completeOnboarding({ onboardingPath });
+                window.location.href = "/workspace";
+            } finally {
+                setIsCreating(false);
+            }
+        },
+        [onboardingPath]
+    );
+
+    const handleTeamWelcomeContinue = useCallback(async () => {
+        // For team joins, complete onboarding and redirect to dashboard
+        await completeOnboarding({
+            onboardingPath,
+            connectedDuringOnboarding: []
+        });
+        window.location.href = "/workspace";
+    }, [onboardingPath]);
+
+    // ── Render ──────────────────────────────────────────────────────────
+
     if (!initialized) {
         return null;
     }
 
+    // Progress bar only for old flow non-terminal steps
     const showProgress =
+        !isNewOnboarding &&
         currentStep !== "join-org" &&
         currentStep !== "welcome" &&
         currentStep !== "success" &&
@@ -526,7 +708,7 @@ export default function OnboardingPage() {
 
     return (
         <>
-            {/* Progress bar */}
+            {/* Progress bar (old flow only) */}
             {showProgress && (
                 <div className="mb-8">
                     <div className="bg-muted h-1.5 overflow-hidden rounded-full">
@@ -545,7 +727,7 @@ export default function OnboardingPage() {
                 </div>
             )}
 
-            {/* Steps */}
+            {/* ── Shared: Join Org Step ──────────────────────────────────── */}
             {currentStep === "join-org" && suggestedOrg && (
                 <JoinOrgStep
                     organization={suggestedOrg}
@@ -554,14 +736,35 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "welcome" && (
+            {/* ── New Flow Steps ─────────────────────────────────────────── */}
+            {isNewOnboarding && currentStep === "connect" && (
+                <ConnectStep
+                    gmailConnected={gmailConnected}
+                    gmailAddress={gmailAddress}
+                    gmailMissingScopes={gmailMissingScopes}
+                    organizationId={organizationId}
+                    userId={userId}
+                    onContinue={handleConnectComplete}
+                />
+            )}
+
+            {isNewOnboarding && currentStep === "team-welcome" && (
+                <TeamWelcomeStep
+                    orgName={joinedOrgName}
+                    orgId={organizationId}
+                    onContinue={handleTeamWelcomeContinue}
+                />
+            )}
+
+            {/* ── Old Flow Steps ──────────────────────────────────────────── */}
+            {!isNewOnboarding && currentStep === "welcome" && (
                 <WelcomeStep
                     onContinue={() => setCurrentStep("template")}
                     onSkip={handleSkipToDashboard}
                 />
             )}
 
-            {currentStep === "template" && (
+            {!isNewOnboarding && currentStep === "template" && (
                 <TemplateStep
                     templates={TEMPLATES}
                     onSelect={handleTemplateSelect}
@@ -569,7 +772,7 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "configure" && (
+            {!isNewOnboarding && currentStep === "configure" && (
                 <ConfigureStep
                     data={data}
                     updateData={updateData}
@@ -578,7 +781,7 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "integrations" && (
+            {!isNewOnboarding && currentStep === "integrations" && (
                 <IntegrationsStep
                     onContinue={handleIntegrationsComplete}
                     onBack={goBack}
@@ -586,7 +789,7 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "tools" && (
+            {!isNewOnboarding && currentStep === "tools" && (
                 <ToolStep
                     data={data}
                     updateData={updateData}
@@ -599,7 +802,7 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "test" && data.createdAgentSlug && (
+            {!isNewOnboarding && currentStep === "test" && data.createdAgentSlug && (
                 <TestStep
                     agentSlug={data.createdAgentSlug}
                     agentName={data.agentName}
@@ -609,7 +812,7 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {currentStep === "success" && (
+            {!isNewOnboarding && currentStep === "success" && (
                 <SuccessStep
                     agentName={data.agentName}
                     agentSlug={data.createdAgentSlug || ""}
@@ -620,8 +823,8 @@ export default function OnboardingPage() {
                 />
             )}
 
-            {/* Navigation error (shown when onboarding complete API fails) */}
-            {createError && currentStep === "success" && (
+            {/* Error display */}
+            {createError && (currentStep === "success" || currentStep === "connect") && (
                 <div className="mx-auto mt-4 max-w-md rounded-lg border border-red-200 bg-red-50 p-3 text-center text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
                     {createError}
                 </div>

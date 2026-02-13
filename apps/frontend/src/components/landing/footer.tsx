@@ -35,9 +35,9 @@ const columns = [
     {
         title: "Legal",
         links: [
-            { label: "Privacy Policy", href: "#" },
-            { label: "Terms of Service", href: "#" },
-            { label: "Security", href: "#" }
+            { label: "Privacy Policy", href: "/privacy" },
+            { label: "Terms of Service", href: "/terms" },
+            { label: "Security", href: "/security" }
         ]
     }
 ];
@@ -53,9 +53,15 @@ export function Footer() {
                             <AgentC2Logo size={24} />
                             <span className="text-foreground text-base font-semibold">AgentC2</span>
                         </Link>
-                        <p className="text-muted-foreground mb-6 max-w-xs text-sm leading-relaxed">
+                        <p className="text-muted-foreground mb-3 max-w-xs text-sm leading-relaxed">
                             Build, deploy, and orchestrate intelligent AI agents that connect to
                             your tools and work across every channel.
+                        </p>
+                        <p className="text-muted-foreground mb-6 max-w-xs text-xs">
+                            Hosted at{" "}
+                            <a href="https://agentc2.ai" className="text-primary hover:underline">
+                                agentc2.ai
+                            </a>
                         </p>
                         <div className="flex gap-4">
                             {/* Social icons */}

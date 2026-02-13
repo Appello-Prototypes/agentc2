@@ -9,6 +9,9 @@ config({ path: resolve(__dirname, "../../.env") });
 const isDevelopment = process.env.NODE_ENV === "development";
 
 const nextConfig: NextConfig = {
+    // Namespace static assets so they don't clash with the agent app behind Caddy.
+    // Caddy routes /_home/* to the frontend (port 3000).
+    assetPrefix: "/_home",
     env: sharedEnv,
     devIndicators,
     async headers() {

@@ -56,6 +56,12 @@ export function NavBar() {
                     >
                         FAQ
                     </Link>
+                    <Link
+                        href="/privacy"
+                        className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                    >
+                        Privacy
+                    </Link>
                 </div>
 
                 {/* Desktop CTAs */}
@@ -133,6 +139,13 @@ export function NavBar() {
                             onClick={() => setMobileOpen(false)}
                         >
                             FAQ
+                        </Link>
+                        <Link
+                            href="/privacy"
+                            className="text-foreground text-sm font-medium"
+                            onClick={() => setMobileOpen(false)}
+                        >
+                            Privacy
                         </Link>
                         <div className="border-border/50 flex flex-col gap-3 border-t pt-4">
                             <a

@@ -8,11 +8,15 @@ import { generateOAuthState } from "@/lib/oauth-security";
  * Initiates the Slack OAuth V2 flow.
  * Requires organizationId and userId as query params (from the platform UI).
  * Redirects the user to Slack's authorization page.
+ *
+ * Optional: mode=popup — stores popup mode in state so the callback can
+ * render a postMessage page instead of a full redirect.
  */
 export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const organizationId = searchParams.get("organizationId");
     const userId = searchParams.get("userId");
+    const mode = searchParams.get("mode"); // "popup" for inline OAuth
 
     if (!organizationId || !userId) {
         return NextResponse.json(
@@ -65,6 +69,17 @@ export async function GET(request: NextRequest) {
         maxAge: 600, // 10 minutes
         path: "/"
     });
+
+    // Set popup mode flag so the callback knows to render postMessage instead of redirect
+    if (mode === "popup") {
+        cookieStore.set("__oauth_popup_mode", "true", {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "lax",
+            maxAge: 600,
+            path: "/"
+        });
+    }
 
     return NextResponse.redirect(authorizeUrl.toString());
 }

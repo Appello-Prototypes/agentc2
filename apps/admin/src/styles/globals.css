@@ -1,0 +1,5 @@
+/* Import shared UI styles and theme from packages/ui */
+@import "../../../../packages/ui/src/styles/globals.css";
+
+/* Scan admin app source files for Tailwind classes */
+@source "../../**/*.{js,ts,jsx,tsx}";

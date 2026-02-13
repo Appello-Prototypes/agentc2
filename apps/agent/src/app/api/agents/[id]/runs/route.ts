@@ -92,6 +92,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const to = searchParams.get("to");
         const cursor = searchParams.get("cursor");
         const triggerId = searchParams.get("triggerId");
+        const versionId = searchParams.get("versionId");
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
         // Source filter: "production" (default, excludes simulations), "simulation", or "all"
         const source = searchParams.get("source") || "production";
@@ -158,6 +159,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 
         if (triggerId && triggerId !== "all") {
             where.triggerId = triggerId;
+        }
+
+        if (versionId) {
+            where.versionId = versionId;
         }
 
         // Query runs

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
@@ -8,8 +8,12 @@ import { getUserMembership } from "@/lib/organization";
  * POST /api/onboarding/complete
  *
  * Marks onboarding as completed for the current user.
+ *
+ * Optional body fields (for analytics tracking):
+ * - onboardingPath: "google_oauth" | "email_password" | "invite_join" | "domain_join"
+ * - connectedDuringOnboarding: string[] -- integration keys connected during onboarding
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
     try {
         const session = await auth.api.getSession({
             headers: await headers()
@@ -27,12 +31,28 @@ export async function POST() {
             );
         }
 
+        // Parse optional tracking fields from body
+        const body = await request.json().catch(() => ({}));
+        const onboardingPath =
+            typeof body?.onboardingPath === "string" ? body.onboardingPath : undefined;
+        const connectedDuringOnboarding = Array.isArray(body?.connectedDuringOnboarding)
+            ? body.connectedDuringOnboarding.filter((v: unknown) => typeof v === "string")
+            : undefined;
+
+        const updateData: Record<string, unknown> = {
+            onboardingCompletedAt: new Date(),
+            onboardingStep: null
+        };
+        if (onboardingPath) {
+            updateData.onboardingPath = onboardingPath;
+        }
+        if (connectedDuringOnboarding) {
+            updateData.connectedDuringOnboarding = connectedDuringOnboarding;
+        }
+
         const updated = await prisma.membership.update({
             where: { id: membership.id },
-            data: {
-                onboardingCompletedAt: new Date(),
-                onboardingStep: null
-            }
+            data: updateData
         });
 
         return NextResponse.json({

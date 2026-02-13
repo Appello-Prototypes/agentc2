@@ -166,6 +166,34 @@ export default function ConfigurePage() {
     const [skillBuilderOpen, setSkillBuilderOpen] = useState(false);
     const [selectedSkillId, setSelectedSkillId] = useState<string | null>(null);
 
+    // Scorecard state
+    interface ScorecardCriterion {
+        id: string;
+        name: string;
+        description: string;
+        rubric: string;
+        weight: number;
+        scoreDirection: "higher_better" | "lower_better";
+        category: "quality" | "safety" | "efficiency" | "compliance" | "custom";
+    }
+    interface Scorecard {
+        id: string;
+        criteria: ScorecardCriterion[];
+        version: number;
+        samplingRate: number;
+        auditorModel: string;
+        evaluateTurns: boolean;
+        templateId: string | null;
+    }
+    const [scorecard, setScorecard] = useState<Scorecard | null>(null);
+    const [, setScorecardLoading] = useState(false);
+    const [scorecardSaving, setScorecardSaving] = useState(false);
+    const [scorecardGenerating, setScorecardGenerating] = useState(false);
+    const [editingCriterion, setEditingCriterion] = useState<ScorecardCriterion | null>(null);
+    const [scorecardTemplates, setScorecardTemplates] = useState<
+        Array<{ id: string; slug: string; name: string; description: string; category: string }>
+    >([]);
+
     // AI provider API key status
     const [aiProviderStatus, setAiProviderStatus] = useState<
         Record<string, { hasOrgKey: boolean; hasEnvKey: boolean; connected: boolean }>
@@ -244,6 +272,159 @@ export default function ConfigurePage() {
         } finally {
             setSkillsLoading(false);
         }
+    }, []);
+
+    // Fetch scorecard for this agent
+    const fetchScorecard = useCallback(async () => {
+        if (!agent) return;
+        try {
+            setScorecardLoading(true);
+            const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard`, {
+                credentials: "include"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.scorecard) {
+                    setScorecard(data.scorecard);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fetch scorecard:", err);
+        } finally {
+            setScorecardLoading(false);
+        }
+    }, [agent]);
+
+    // Fetch scorecard templates
+    const fetchScorecardTemplates = useCallback(async () => {
+        if (!agent) return;
+        try {
+            const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard/templates`, {
+                credentials: "include"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setScorecardTemplates(data.templates || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch scorecard templates:", err);
+        }
+    }, [agent]);
+
+    // Save scorecard
+    const handleSaveScorecard = useCallback(async () => {
+        if (!agent || !scorecard) return;
+        try {
+            setScorecardSaving(true);
+            const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                credentials: "include",
+                body: JSON.stringify({
+                    criteria: scorecard.criteria,
+                    samplingRate: scorecard.samplingRate,
+                    auditorModel: scorecard.auditorModel,
+                    evaluateTurns: scorecard.evaluateTurns
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                setScorecard(data.scorecard);
+            }
+        } catch (err) {
+            console.error("Failed to save scorecard:", err);
+        } finally {
+            setScorecardSaving(false);
+        }
+    }, [agent, scorecard]);
+
+    // Auto-generate scorecard via AI
+    const handleGenerateScorecard = useCallback(async () => {
+        if (!agent) return;
+        try {
+            setScorecardGenerating(true);
+            const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard/generate`, {
+                method: "POST",
+                credentials: "include"
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.criteria) {
+                    setScorecard((prev) => ({
+                        id: prev?.id || "",
+                        criteria: data.criteria,
+                        version: (prev?.version || 0) + 1,
+                        samplingRate: prev?.samplingRate ?? 1.0,
+                        auditorModel: prev?.auditorModel ?? "gpt-4o-mini",
+                        evaluateTurns: prev?.evaluateTurns ?? false,
+                        templateId: null
+                    }));
+                }
+            }
+        } catch (err) {
+            console.error("Failed to generate scorecard:", err);
+        } finally {
+            setScorecardGenerating(false);
+        }
+    }, [agent]);
+
+    // Apply a template to the scorecard
+    const handleApplyTemplate = useCallback(
+        async (templateId: string) => {
+            if (!agent) return;
+            try {
+                setScorecardSaving(true);
+                const res = await fetch(
+                    `${getApiBase()}/api/agents/${agent.id}/scorecard/templates`,
+                    {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ templateId })
+                    }
+                );
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.scorecard) {
+                        setScorecard(data.scorecard);
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to apply template:", err);
+            } finally {
+                setScorecardSaving(false);
+            }
+        },
+        [agent]
+    );
+
+    // Remove a criterion from the scorecard
+    const handleRemoveCriterion = useCallback((criterionId: string) => {
+        setScorecard((prev) => {
+            if (!prev) return prev;
+            const updated = prev.criteria.filter((c) => c.id !== criterionId);
+            // Redistribute weights
+            const total = updated.reduce((s, c) => s + c.weight, 0);
+            return {
+                ...prev,
+                criteria: updated.map((c) => ({
+                    ...c,
+                    weight: total > 0 ? Math.round((c.weight / total) * 100) / 100 : 0
+                }))
+            };
+        });
+    }, []);
+
+    // Update a single criterion
+    const handleUpdateCriterion = useCallback((updated: ScorecardCriterion) => {
+        setScorecard((prev) => {
+            if (!prev) return prev;
+            return {
+                ...prev,
+                criteria: prev.criteria.map((c) => (c.id === updated.id ? updated : c))
+            };
+        });
+        setEditingCriterion(null);
     }, []);
 
     const handleAttachSkill = useCallback(
@@ -373,6 +554,14 @@ export default function ConfigurePage() {
         fetchSkills,
         fetchAiProviderStatus
     ]);
+
+    // Fetch scorecard when agent is loaded
+    useEffect(() => {
+        if (agent) {
+            fetchScorecard();
+            fetchScorecardTemplates();
+        }
+    }, [agent, fetchScorecard, fetchScorecardTemplates]);
 
     // Group tools: built-in by category, MCP by server
     const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
@@ -682,6 +871,7 @@ export default function ConfigurePage() {
                     <TabsTrigger value="orchestration">Orchestration</TabsTrigger>
                     <TabsTrigger value="memory">Memory</TabsTrigger>
                     <TabsTrigger value="evaluation">Evaluation</TabsTrigger>
+                    <TabsTrigger value="scorecard">Scorecard</TabsTrigger>
                 </TabsList>
 
                 {/* Basic Tab */}
@@ -1896,6 +2086,331 @@ export default function ConfigurePage() {
                             </div>
                         </CardContent>
                     </Card>
+                </TabsContent>
+
+                {/* Scorecard Tab */}
+                <TabsContent value="scorecard">
+                    <div className="space-y-6">
+                        {/* Scorecard Header */}
+                        <Card>
+                            <CardHeader>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle>AI Auditor Scorecard</CardTitle>
+                                        <CardDescription>
+                                            {scorecard
+                                                ? `${scorecard.criteria.length} criteria configured (v${scorecard.version})`
+                                                : "No scorecard configured — set up custom evaluation criteria for this agent"}
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={handleGenerateScorecard}
+                                            disabled={scorecardGenerating}
+                                        >
+                                            {scorecardGenerating ? "Generating..." : "AI Generate"}
+                                        </Button>
+                                        {scorecard && scorecard.criteria.length > 0 && (
+                                            <Button
+                                                size="sm"
+                                                onClick={handleSaveScorecard}
+                                                disabled={scorecardSaving}
+                                            >
+                                                {scorecardSaving ? "Saving..." : "Save Scorecard"}
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardHeader>
+                        </Card>
+
+                        {/* Templates */}
+                        {(!scorecard || scorecard.criteria.length === 0) && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-base">
+                                        Start from a Template
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Choose a pre-built scorecard for common agent types, or
+                                        generate one with AI.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    {scorecardTemplates.length > 0 ? (
+                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-3">
+                                            {scorecardTemplates.map((tpl) => (
+                                                <button
+                                                    key={tpl.id}
+                                                    onClick={() => handleApplyTemplate(tpl.id)}
+                                                    disabled={scorecardSaving}
+                                                    className="hover:border-primary hover:bg-primary/5 rounded-lg border p-4 text-left transition-colors"
+                                                >
+                                                    <p className="font-medium">{tpl.name}</p>
+                                                    <p className="text-muted-foreground mt-1 text-xs">
+                                                        {tpl.description}
+                                                    </p>
+                                                    <Badge variant="outline" className="mt-2">
+                                                        {tpl.category}
+                                                    </Badge>
+                                                </button>
+                                            ))}
+                                        </div>
+                                    ) : (
+                                        <div className="text-muted-foreground py-4 text-center text-sm">
+                                            Loading templates...
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Criteria List */}
+                        {scorecard && scorecard.criteria.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-base">Evaluation Criteria</CardTitle>
+                                    <CardDescription>
+                                        Weights must sum to 1.0 — current total:{" "}
+                                        {scorecard.criteria
+                                            .reduce((s, c) => s + c.weight, 0)
+                                            .toFixed(2)}
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    {scorecard.criteria.map((criterion) => (
+                                        <div key={criterion.id} className="rounded-lg border p-4">
+                                            {editingCriterion?.id === criterion.id ? (
+                                                <div className="space-y-3">
+                                                    <div className="grid grid-cols-2 gap-3">
+                                                        <div>
+                                                            <Label className="text-xs">Name</Label>
+                                                            <Input
+                                                                value={editingCriterion.name}
+                                                                onChange={(e) =>
+                                                                    setEditingCriterion({
+                                                                        ...editingCriterion,
+                                                                        name: e.target.value
+                                                                    })
+                                                                }
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <Label className="text-xs">
+                                                                Weight
+                                                            </Label>
+                                                            <Input
+                                                                type="number"
+                                                                step="0.05"
+                                                                min="0"
+                                                                max="1"
+                                                                value={editingCriterion.weight}
+                                                                onChange={(e) =>
+                                                                    setEditingCriterion({
+                                                                        ...editingCriterion,
+                                                                        weight:
+                                                                            parseFloat(
+                                                                                e.target.value
+                                                                            ) || 0
+                                                                    })
+                                                                }
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-xs">
+                                                            Description
+                                                        </Label>
+                                                        <Textarea
+                                                            value={editingCriterion.description}
+                                                            onChange={(e) =>
+                                                                setEditingCriterion({
+                                                                    ...editingCriterion,
+                                                                    description: e.target.value
+                                                                })
+                                                            }
+                                                            rows={2}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <Label className="text-xs">Rubric</Label>
+                                                        <Textarea
+                                                            value={editingCriterion.rubric}
+                                                            onChange={(e) =>
+                                                                setEditingCriterion({
+                                                                    ...editingCriterion,
+                                                                    rubric: e.target.value
+                                                                })
+                                                            }
+                                                            rows={3}
+                                                        />
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() =>
+                                                                handleUpdateCriterion(
+                                                                    editingCriterion
+                                                                )
+                                                            }
+                                                        >
+                                                            Save
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() =>
+                                                                setEditingCriterion(null)
+                                                            }
+                                                        >
+                                                            Cancel
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-start justify-between">
+                                                    <div className="flex-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-medium">
+                                                                {criterion.name}
+                                                            </p>
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="text-xs"
+                                                            >
+                                                                {criterion.category}
+                                                            </Badge>
+                                                            <Badge
+                                                                variant="secondary"
+                                                                className="text-xs"
+                                                            >
+                                                                {(criterion.weight * 100).toFixed(
+                                                                    0
+                                                                )}
+                                                                %
+                                                            </Badge>
+                                                        </div>
+                                                        <p className="text-muted-foreground mt-1 text-sm">
+                                                            {criterion.description}
+                                                        </p>
+                                                        <p className="text-muted-foreground mt-1 text-xs italic">
+                                                            {criterion.rubric.slice(0, 150)}
+                                                            {criterion.rubric.length > 150
+                                                                ? "..."
+                                                                : ""}
+                                                        </p>
+                                                    </div>
+                                                    <div className="flex gap-1">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() =>
+                                                                setEditingCriterion(criterion)
+                                                            }
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            className="text-destructive"
+                                                            onClick={() =>
+                                                                handleRemoveCriterion(criterion.id)
+                                                            }
+                                                        >
+                                                            Remove
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Scorecard Settings */}
+                        {scorecard && scorecard.criteria.length > 0 && (
+                            <Card>
+                                <CardHeader>
+                                    <CardTitle className="text-base">Scorecard Settings</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                                        <div className="space-y-2">
+                                            <Label>Sampling Rate</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                % of runs to evaluate with AI auditor
+                                            </p>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="range"
+                                                    min="0.1"
+                                                    max="1"
+                                                    step="0.1"
+                                                    value={scorecard.samplingRate}
+                                                    onChange={(e) =>
+                                                        setScorecard({
+                                                            ...scorecard,
+                                                            samplingRate: parseFloat(e.target.value)
+                                                        })
+                                                    }
+                                                    className="flex-1"
+                                                />
+                                                <span className="text-sm font-medium">
+                                                    {Math.round(scorecard.samplingRate * 100)}%
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Auditor Model</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                LLM used for AI evaluation
+                                            </p>
+                                            <Select
+                                                value={scorecard.auditorModel}
+                                                onValueChange={(v) =>
+                                                    setScorecard({
+                                                        ...scorecard,
+                                                        auditorModel: v ?? scorecard.auditorModel
+                                                    })
+                                                }
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="gpt-4o-mini">
+                                                        GPT-4o Mini (fast, low cost)
+                                                    </SelectItem>
+                                                    <SelectItem value="gpt-4o">
+                                                        GPT-4o (higher quality)
+                                                    </SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                        <div className="space-y-2">
+                                            <Label>Turn-Level Evaluation</Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Evaluate each conversation turn separately
+                                            </p>
+                                            <Switch
+                                                checked={scorecard.evaluateTurns}
+                                                onCheckedChange={(checked) =>
+                                                    setScorecard({
+                                                        ...scorecard,
+                                                        evaluateTurns: checked
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        )}
+                    </div>
                 </TabsContent>
             </Tabs>
         </div>

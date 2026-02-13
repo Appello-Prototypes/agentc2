@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.redirect(setupUrl);
     }
 
+    // Access cookies before try/catch so they're available in the catch block
+    const cookieStore = await cookies();
+
     try {
         // Validate CSRF state
-        const cookieStore = await cookies();
         const cookieName = getOAuthStateCookieName();
         const cookieValue = cookieStore.get(cookieName)?.value;
 
@@ -155,10 +157,72 @@ export async function GET(request: NextRequest) {
             });
         }
 
+        // Check if this was a popup-mode OAuth (inline onboarding flow)
+        const isPopupMode = cookieStore.get("__oauth_popup_mode")?.value === "true";
+        if (isPopupMode) {
+            cookieStore.delete("__oauth_popup_mode");
+            // Return an HTML page that posts a message to the opener and closes itself
+            const teamName = tokenData.team?.name || "Slack";
+            return new NextResponse(
+                `<!DOCTYPE html>
+<html><head><title>Slack Connected</title></head>
+<body>
+<script>
+  if (window.opener) {
+    window.opener.postMessage(
+      { type: "slack-oauth-success", teamName: ${JSON.stringify(teamName)} },
+      window.location.origin
+    );
+    window.close();
+  } else {
+    window.location.href = ${JSON.stringify(setupUrl.pathname + "?success=true")};
+  }
+</script>
+<p>Slack connected! This window should close automatically.</p>
+</body></html>`,
+                {
+                    status: 200,
+                    headers: { "Content-Type": "text/html" }
+                }
+            );
+        }
+
         setupUrl.searchParams.set("success", "true");
         return NextResponse.redirect(setupUrl);
     } catch (error) {
         console.error("[Slack OAuth Callback] Error:", error);
+
+        // Check popup mode for error case too
+        const isPopupError = cookieStore.get("__oauth_popup_mode")?.value === "true";
+        if (isPopupError) {
+            cookieStore.delete("__oauth_popup_mode");
+            const errorMsg =
+                error instanceof Error ? error.message : "Failed to complete Slack OAuth";
+            return new NextResponse(
+                `<!DOCTYPE html>
+<html><head><title>Slack Error</title></head>
+<body>
+<script>
+  if (window.opener) {
+    window.opener.postMessage(
+      { type: "slack-oauth-error", error: ${JSON.stringify(error instanceof Error ? error.message : "Unknown error")} },
+      window.location.origin
+    );
+    window.close();
+  } else {
+    window.location.href = ${JSON.stringify(setupUrl.pathname)}
+      + "?error=" + encodeURIComponent(${JSON.stringify(error instanceof Error ? error.message : "Unknown error")});
+  }
+</script>
+<p>Error: ${errorMsg}. This window should close automatically.</p>
+</body></html>`,
+                {
+                    status: 200,
+                    headers: { "Content-Type": "text/html" }
+                }
+            );
+        }
+
         setupUrl.searchParams.set(
             "error",
             error instanceof Error ? error.message : "Failed to complete Slack OAuth"

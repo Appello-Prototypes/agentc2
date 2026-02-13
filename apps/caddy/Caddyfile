@@ -23,8 +23,36 @@ https://catalyst.localhost {
         reverse_proxy localhost:3002
     }
 
-    # All traffic routes to agent app (now the primary app)
-    # Agent app serves at root without basePath
+    # Public landing page — exact root path routes to frontend app (port 3000)
+    @landing_page {
+        expression `{http.request.uri.path} == "/"`
+    }
+
+    handle @landing_page {
+        reverse_proxy localhost:3000
+    }
+
+    # Frontend static assets (namespaced via assetPrefix: '/_home')
+    @frontend_assets {
+        path /_home/*
+    }
+
+    handle @frontend_assets {
+        reverse_proxy localhost:3000
+    }
+
+    # Admin portal routes to admin app (port 3003)
+    @admin_routes {
+        path /admin*
+    }
+
+    handle @admin_routes {
+        reverse_proxy localhost:3003 {
+            flush_interval -1
+        }
+    }
+
+    # All other traffic routes to agent app (primary app on port 3001)
     handle {
         reverse_proxy localhost:3001 {
             # Disable buffering for SSE streams (real-time chat)

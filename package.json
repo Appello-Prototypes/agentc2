@@ -23,6 +23,7 @@
     "db:migrate": "turbo db:migrate",
     "db:studio": "turbo db:studio",
     "db:seed": "turbo db:seed",
+    "db:seed-admin": "bun run packages/database/prisma/seed-admin.ts",
     "format": "prettier --write .",
     "add-shadcn": "./scripts/add-shadcn.sh",
     "storybook": "turbo storybook",

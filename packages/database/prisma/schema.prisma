@@ -88,6 +88,26 @@ model Organization {
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
 
+    // Lifecycle
+    status          String    @default("active") // "provisioning","active","trial","suspended","past_due","deactivated"
+    suspendedAt     DateTime?
+    suspendedReason String?   @db.Text
+    deletedAt       DateTime? // soft delete
+    trialEndsAt     DateTime?
+
+    // Denormalized limits (from Plan, for fast enforcement)
+    maxAgents       Int?
+    maxWorkspaces   Int?
+    maxRunsPerMonth Int?
+    maxSeats        Int?
+
+    // Billing reference
+    stripeCustomerId String? @unique
+
+    // Risk
+    riskScore       Float?    @default(0)
+    lastHealthCheck DateTime?
+
     // Relations
     workspaces             Workspace[]
     memberships            Membership[]
@@ -103,7 +123,13 @@ model Organization {
     invites                OrganizationInvite[]
     domains                OrganizationDomain[]
 
+    // Admin portal relations
+    featureFlagOverrides  FeatureFlagOverride[]
+    lifecycleEvents       TenantLifecycleEvent[]
+    impersonationSessions ImpersonationSession[]
+
     @@index([slug])
+    @@index([status])
     @@map("organization")
 }
 
@@ -154,8 +180,14 @@ model Membership {
     role                  String       @default("member") // "owner", "admin", "member", "viewer"
     onboardingCompletedAt DateTime?
     onboardingStep        String?
-    createdAt             DateTime     @default(now())
-    updatedAt             DateTime     @updatedAt
+
+    // Onboarding analytics (Phase 1)
+    onboardingPath            String? // "google_oauth" | "email_password" | "invite_join" | "domain_join"
+    connectedDuringOnboarding String[] @default([]) // Integration keys connected during onboarding
+    setupProgress             Json? // Connection Power Bar state
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@unique([userId, organizationId])
     @@index([userId])
@@ -640,9 +672,10 @@ model Agent {
     maxSpendUsd      Float? // Max spend per run in USD
 
     // Metadata
-    metadata Json?
-    isActive Boolean @default(true)
-    version  Int     @default(1)
+    metadata          Json?
+    isActive          Boolean @default(true)
+    isOnboardingAgent Boolean @default(false) // Auto-created during onboarding
+    version           Int     @default(1)
 
     // Audit
     createdAt DateTime @default(now())
@@ -686,6 +719,8 @@ model Agent {
     TriggerEvent           TriggerEvent[]
     ApprovalRequest        ApprovalRequest[]
     skills                 AgentSkill[]
+    scorecard              AgentScorecard?
+    calibrationChecks      CalibrationCheck[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -1295,13 +1330,31 @@ model AgentEvaluation {
     agentId       String
     agent         Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId      String?
-    scoresJson    Json // {relevancy: 0.9, toxicity: 0.1, ...}
+    scoresJson    Json // {criterion_id: score} or legacy {relevancy: 0.9, ...}
     scorerVersion String?
-    createdAt     DateTime @default(now())
+
+    // AI Auditor fields
+    feedbackJson      Json? // {criterion_id: "written feedback per criterion"}
+    overallGrade      Float? // Weighted overall score from scorecard criteria
+    narrative         String? @db.Text // Overall written assessment from auditor
+    auditorModel      String? // Which model performed the evaluation (e.g., "gpt-4o-mini")
+    traceContextJson  Json? // Summary of what was evaluated (tool count, step count, etc.)
+    scorecardVersion  Int? // Which version of the scorecard was used
+    evaluationTier    String? // "tier1_heuristic" | "tier2_auditor"
+    confidenceScore   Float? // Auditor's self-assessed confidence (0-1)
+    groundTruthUsed   Boolean @default(false) // Whether expectedOutput was compared
+    skillAttributions Json? // {skillSlug: {impact, note}} per active skill
+    turnEvaluations   Json? // For conversations: [{turnIndex, scores, feedback}]
+
+    createdAt DateTime @default(now())
+
+    // Relations
+    calibrationChecks CalibrationCheck[]
 
     @@index([runId])
     @@index([agentId, createdAt])
     @@index([tenantId])
+    @@index([evaluationTier])
     @@map("agent_evaluation")
 }
 
@@ -1718,6 +1771,7 @@ enum LearningSignalType {
     ERROR // Run failed with error
     PATTERN // Detected pattern across runs
     SKILL_CORRELATION // Skill correlated with poor performance
+    NARRATIVE_PATTERN // Recurring pattern extracted from AI auditor narratives
 }
 
 // Risk Tier Enum for Continuous Learning
@@ -2285,6 +2339,7 @@ model NetworkRun {
     steps        NetworkRunStep[]
     workflowRuns WorkflowRun[]
     TriggerEvent TriggerEvent?
+    evaluation   NetworkRunEvaluation?
 
     @@index([networkId, createdAt])
     @@index([networkId, environment])
@@ -2915,4 +2970,229 @@ model SlackEventDedup {
     expiresAt DateTime
 
     @@map("slack_event_dedup")
+}
+
+// ==============================
+// Agent Scorecard & Calibration Models
+// ==============================
+
+// Scorecard Template - Reusable evaluation criteria templates for common agent types
+model ScorecardTemplate {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String  @db.Text
+    category    String // "crm", "email", "research", "support", "data", "general"
+    criteria    Json // Array of ScorecardCriterion objects
+    isSystem    Boolean @default(true) // System templates vs user-created
+
+    // Relations
+    scorecards AgentScorecard[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("scorecard_template")
+}
+
+// Agent Scorecard - Custom evaluation criteria per agent
+model AgentScorecard {
+    id       String  @id @default(cuid())
+    agentId  String  @unique
+    agent    Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId String?
+
+    // Core content
+    criteria Json // Array of ScorecardCriterion objects
+    version  Int  @default(1)
+
+    // Template tracking
+    templateId String?
+    template   ScorecardTemplate? @relation(fields: [templateId], references: [id])
+
+    // Evaluation config
+    samplingRate  Float   @default(1.0) // 0.0-1.0, % of runs that get Tier 2 AI audit
+    auditorModel  String  @default("gpt-4o-mini") // Which model for auditing
+    evaluateTurns Boolean @default(false) // Whether to evaluate individual turns
+
+    // Audit
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("agent_scorecard")
+}
+
+// Calibration Check - Compares AI auditor scores vs human feedback
+model CalibrationCheck {
+    id           String          @id @default(cuid())
+    evaluationId String
+    evaluation   AgentEvaluation @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+    agentId      String
+    agent        Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId     String?
+
+    // Comparison data
+    auditorGrade Float // The auditor's overall grade
+    humanRating  Float // Normalized human rating (thumbs mapped to 0/1, rating to 0-1)
+    disagreement Float // |auditorGrade - humanRating|
+    feedbackId   String // Reference to AgentFeedback record
+    humanComment String? @db.Text
+
+    // Classification
+    aligned   Boolean // disagreement < threshold (e.g., 0.3)
+    direction String? // "auditor_higher" | "auditor_lower" | "aligned"
+
+    createdAt DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([tenantId])
+    @@map("calibration_check")
+}
+
+// Network Run Evaluation - Routing quality assessment for network runs
+model NetworkRunEvaluation {
+    id           String     @id @default(cuid())
+    networkRunId String     @unique
+    networkRun   NetworkRun @relation(fields: [networkRunId], references: [id], onDelete: Cascade)
+    networkId    String
+    routingScore Float?
+    agentScores  Json? // {agentSlug: avgGrade} from nested agent evaluations
+    narrative    String?    @db.Text
+    createdAt    DateTime   @default(now())
+
+    @@map("network_run_evaluation")
+}
+
+// ==============================
+// Admin Portal Models
+// ==============================
+
+// AdminUser - Internal staff users for the admin portal (separate auth domain)
+model AdminUser {
+    id          String    @id @default(cuid())
+    email       String    @unique
+    name        String
+    password    String // bcrypt hashed
+    role        String    @default("viewer") // "super_admin","platform_admin","billing_admin","support_agent","viewer"
+    mfaEnabled  Boolean   @default(false)
+    mfaSecret   String?
+    isActive    Boolean   @default(true)
+    lastLoginAt DateTime?
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+
+    sessions       AdminSession[]
+    auditLogs      AdminAuditLog[]
+    impersonations ImpersonationSession[]
+
+    @@map("admin_user")
+}
+
+// AdminSession - Session tracking for admin users
+model AdminSession {
+    id          String    @id @default(cuid())
+    adminUserId String
+    adminUser   AdminUser @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+    token       String    @unique
+    ipAddress   String?
+    userAgent   String?
+    expiresAt   DateTime
+    createdAt   DateTime  @default(now())
+
+    @@index([adminUserId])
+    @@index([token])
+    @@map("admin_session")
+}
+
+// AdminAuditLog - Audit trail for all admin portal actions
+model AdminAuditLog {
+    id          String    @id @default(cuid())
+    adminUserId String
+    adminUser   AdminUser @relation(fields: [adminUserId], references: [id])
+    action      String // "TENANT_SUSPEND","USER_IMPERSONATE","FLAG_TOGGLE", etc.
+    entityType  String
+    entityId    String
+    beforeJson  Json?
+    afterJson   Json?
+    ipAddress   String
+    userAgent   String?
+    metadata    Json?
+    createdAt   DateTime  @default(now())
+
+    @@index([adminUserId, createdAt])
+    @@index([entityType, entityId])
+    @@index([action, createdAt])
+    @@map("admin_audit_log")
+}
+
+// FeatureFlag - Global feature flags managed via admin portal
+model FeatureFlag {
+    id           String   @id @default(cuid())
+    key          String   @unique
+    name         String
+    description  String?
+    flagType     String   @default("boolean") // "boolean","percentage","string"
+    defaultValue String   @default("false")
+    isActive     Boolean  @default(true)
+    createdAt    DateTime @default(now())
+    updatedAt    DateTime @updatedAt
+
+    overrides FeatureFlagOverride[]
+
+    @@map("feature_flag")
+}
+
+// FeatureFlagOverride - Per-tenant overrides for feature flags
+model FeatureFlagOverride {
+    id             String       @id @default(cuid())
+    flagId         String
+    flag           FeatureFlag  @relation(fields: [flagId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    value          String
+    reason         String?
+    setBy          String?
+    expiresAt      DateTime?
+    createdAt      DateTime     @default(now())
+
+    @@unique([flagId, organizationId])
+    @@map("feature_flag_override")
+}
+
+// TenantLifecycleEvent - Tracks status transitions for organizations
+model TenantLifecycleEvent {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    fromStatus     String
+    toStatus       String
+    reason         String?      @db.Text
+    performedBy    String? // AdminUser ID
+    metadata       Json?
+    createdAt      DateTime     @default(now())
+
+    @@index([organizationId, createdAt])
+    @@map("tenant_lifecycle_event")
+}
+
+// ImpersonationSession - Tracks when admin users impersonate customer users
+model ImpersonationSession {
+    id           String       @id @default(cuid())
+    adminUserId  String
+    adminUser    AdminUser    @relation(fields: [adminUserId], references: [id])
+    targetUserId String
+    targetOrgId  String
+    organization Organization @relation(fields: [targetOrgId], references: [id])
+    reason       String       @db.Text
+    ipAddress    String
+    startedAt    DateTime     @default(now())
+    endedAt      DateTime?
+    expiresAt    DateTime // auto-expire after 30 min
+
+    @@index([adminUserId, startedAt])
+    @@index([targetUserId])
+    @@map("impersonation_session")
 }
