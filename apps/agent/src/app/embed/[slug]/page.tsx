@@ -30,7 +30,7 @@ import {
     type ToolActivity
 } from "@repo/ui";
 import { ChevronDownIcon, ChevronRightIcon, LoaderIcon } from "lucide-react";
-import Image from "next/image";
+import { AgentC2Logo } from "@repo/ui";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -296,13 +296,12 @@ function EmbedChat({
                     <div className="w-full max-w-[680px] px-4 pb-4 sm:px-6">
                         {/* Greeting */}
                         <div className="mb-6 text-center sm:mb-8">
-                            <Image
-                                src="/c2-icon.png"
-                                alt="C2"
-                                width={48}
-                                height={48}
-                                className="mx-auto mb-3 rounded-xl"
-                            />
+                            <div className="mx-auto mb-3 flex items-center justify-center gap-[2px]">
+                                <span className="text-foreground text-2xl font-semibold">
+                                    Agent
+                                </span>
+                                <AgentC2Logo size={32} />
+                            </div>
                             <h1 className="text-foreground/90 mb-2 text-2xl font-semibold tracking-tight sm:text-3xl">
                                 {safeConfig.greeting.split(".")[0] || embedData.name}
                             </h1>
@@ -349,15 +348,9 @@ function EmbedChat({
         <div className="flex h-full flex-col">
             {/* Header bar */}
             <div className="flex items-center justify-between border-b px-4 py-2">
-                <div className="flex items-center gap-2">
-                    <Image
-                        src="/c2-icon.png"
-                        alt="C2"
-                        width={20}
-                        height={20}
-                        className="rounded-sm"
-                    />
-                    <span className="text-sm font-medium">{embedData.name}</span>
+                <div className="flex items-center gap-[2px]">
+                    <span className="text-sm font-semibold">Agent</span>
+                    <AgentC2Logo size={20} />
                 </div>
             </div>
 
@@ -443,7 +436,7 @@ function EmbedChat({
 
 // ── Top-level nav bar ───────────────────────────────────────────────────
 
-function EmbedNavBar({ agentName, isInternal }: { agentName: string; isInternal: boolean }) {
+function EmbedNavBar({ isInternal }: { agentName?: string; isInternal: boolean }) {
     // Build absolute login/signup URLs so OAuth state cookies stay on the correct origin.
     // Using target="_top" breaks out of all iframe nesting for a clean full-page navigation.
     const loginHref = isInternal ? `${window.location.origin}/login` : "https://agentc2.ai/login";
@@ -453,11 +446,9 @@ function EmbedNavBar({ agentName, isInternal }: { agentName: string; isInternal:
 
     return (
         <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-2">
-                <Image src="/c2-icon.png" alt="C2" width={28} height={28} className="rounded-md" />
-                <span className="text-foreground text-base font-semibold tracking-tight">
-                    {agentName}
-                </span>
+            <div className="flex items-center gap-[2px]">
+                <span className="text-foreground text-base font-semibold">Agent</span>
+                <AgentC2Logo size={26} />
             </div>
             <div className="flex items-center gap-2">
                 <a
