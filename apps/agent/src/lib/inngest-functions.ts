@@ -918,6 +918,89 @@ export const runEvaluationFunction = inngest.createFunction(
 
         const scores = (tier2Result?.scoresJson ?? tier1Result.scores) as Record<string, number>;
 
+        // Step 6b: Store AAR and create recommendations (if Tier 2 with AAR)
+        if (tier2Result?.aar) {
+            await step.run("store-aar-recommendations", async () => {
+                // Store AAR in evaluation record
+                await prisma.agentEvaluation.update({
+                    where: { id: evaluation.id },
+                    data: {
+                        aarJson: tier2Result!.aar as unknown as Prisma.InputJsonValue
+                    }
+                });
+
+                const aar = tier2Result!.aar!;
+                const allRecs = [
+                    ...aar.sustain.map((s) => ({
+                        ...s,
+                        type: "sustain" as const,
+                        recommendation: s.evidence
+                    })),
+                    ...aar.improve.map((i) => ({ ...i, type: "improve" as const }))
+                ];
+
+                for (const rec of allRecs) {
+                    // Dedup: check for existing active recommendation with same category and similar title
+                    const existing = await prisma.agentRecommendation.findFirst({
+                        where: {
+                            agentId,
+                            status: "active",
+                            type: rec.type,
+                            category: rec.category,
+                            title: { contains: rec.pattern.substring(0, 50) }
+                        }
+                    });
+
+                    if (existing) {
+                        // Increment frequency instead of creating duplicate
+                        await prisma.agentRecommendation.update({
+                            where: { id: existing.id },
+                            data: {
+                                frequency: { increment: 1 },
+                                updatedAt: new Date(),
+                                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                            }
+                        });
+                    } else {
+                        await prisma.agentRecommendation.create({
+                            data: {
+                                agentId,
+                                evaluationId: evaluation.id,
+                                tenantId: context.tenantId,
+                                type: rec.type,
+                                category: rec.category,
+                                title: rec.pattern,
+                                description:
+                                    rec.type === "improve" ? rec.recommendation : rec.evidence,
+                                evidence: {
+                                    traceEvidence: rec.evidence,
+                                    runId
+                                } as unknown as Prisma.InputJsonValue,
+                                priority: rec.type === "improve" ? "medium" : "low",
+                                expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                            }
+                        });
+                    }
+                }
+
+                // Emit learning signals for "improve" recommendations
+                for (const rec of allRecs.filter((r) => r.type === "improve")) {
+                    await inngest.send({
+                        name: "learning/signal.detected",
+                        data: {
+                            agentId,
+                            runId,
+                            signalType: "AAR_IMPROVE",
+                            pattern: rec.pattern,
+                            evidence: rec.evidence,
+                            category: rec.category,
+                            severity: rec.type === "improve" ? "medium" : "low"
+                        }
+                    });
+                }
+            });
+        }
+
         // Step 7: Extract themes from narrative (if Tier 2)
         if (tier2Result?.narrative) {
             await step.run("extract-themes", async () => {
@@ -5397,6 +5480,12 @@ export const agentTriggerFireFunction = inngest.createFunction(
             const triggerType = resolveRunTriggerType(trigger.triggerType);
             const source = resolveRunSource(trigger.triggerType);
 
+            // Extract threadId from payload for Gmail triggers (enables cross-run correlation)
+            const threadId =
+                typeof (payloadObj as Record<string, unknown>)?.threadId === "string"
+                    ? `gmail-${(payloadObj as Record<string, string>).threadId}`
+                    : undefined;
+
             const handle = await startRun({
                 agentId: trigger.agent.id,
                 agentSlug: trigger.agent.slug,
@@ -5404,6 +5493,7 @@ export const agentTriggerFireFunction = inngest.createFunction(
                 source,
                 triggerType,
                 triggerId: trigger.id,
+                threadId,
                 metadata: {
                     triggerId: trigger.id,
                     triggerName: trigger.name,
@@ -5811,6 +5901,323 @@ export const adminQuotaWarningFunction = inngest.createFunction(
     }
 );
 
+/**
+ * Recommendation Graduation
+ *
+ * Periodically checks for active recommendations that have been reinforced
+ * (frequency >= 3) and graduates them into skill updates or document creation.
+ * Also expires old, unreinforced recommendations.
+ */
+export const recommendationGraduationFunction = inngest.createFunction(
+    {
+        id: "recommendation-graduation",
+        name: "Recommendation Graduation"
+    },
+    { cron: "0 3 * * *" }, // Daily at 3 AM
+    async ({ step }) => {
+        // Step 1: Find recommendations eligible for graduation (frequency >= 3)
+        const graduatable = await step.run("find-graduatable", async () => {
+            return prisma.agentRecommendation.findMany({
+                where: {
+                    status: "active",
+                    frequency: { gte: 3 }
+                },
+                include: {
+                    agent: { select: { id: true, slug: true, name: true } }
+                },
+                orderBy: { frequency: "desc" },
+                take: 20
+            });
+        });
+
+        // Step 2: Graduate each recommendation
+        for (const rec of graduatable) {
+            await step.run(`graduate-${rec.id}`, async () => {
+                if (rec.type === "improve") {
+                    // Emit skill development event
+                    await inngest.send({
+                        name: "learning/skill.develop",
+                        data: {
+                            agentId: rec.agentId,
+                            recommendationId: rec.id,
+                            category: rec.category,
+                            description: rec.description,
+                            evidence: rec.evidence,
+                            title: rec.title
+                        }
+                    });
+                    await prisma.agentRecommendation.update({
+                        where: { id: rec.id },
+                        data: {
+                            status: "graduated",
+                            graduatedTo: "skill_update"
+                        }
+                    });
+                } else if (rec.type === "sustain") {
+                    // Create example document from positive pattern
+                    await inngest.send({
+                        name: "learning/document.create",
+                        data: {
+                            agentId: rec.agentId,
+                            recommendationId: rec.id,
+                            category: rec.category,
+                            description: rec.description,
+                            evidence: rec.evidence,
+                            title: rec.title,
+                            docType: "example"
+                        }
+                    });
+                    await prisma.agentRecommendation.update({
+                        where: { id: rec.id },
+                        data: {
+                            status: "graduated",
+                            graduatedTo: "document"
+                        }
+                    });
+                }
+            });
+        }
+
+        // Step 3: Expire old, unreinforced recommendations
+        const expired = await step.run("expire-stale", async () => {
+            const result = await prisma.agentRecommendation.updateMany({
+                where: {
+                    status: "active",
+                    frequency: 1,
+                    expiresAt: { lt: new Date() }
+                },
+                data: { status: "expired" }
+            });
+            return { count: result.count };
+        });
+
+        return {
+            graduated: graduatable.length,
+            expired: expired.count
+        };
+    }
+);
+
+/**
+ * Skill Development from Graduated Recommendations
+ *
+ * Uses an LLM to update skill instructions based on AAR recommendations
+ * that have been reinforced multiple times.
+ */
+export const learningSkillDevelopmentFunction = inngest.createFunction(
+    {
+        id: "learning-skill-development",
+        name: "Learning: Skill Development"
+    },
+    { event: "learning/skill.develop" },
+    async ({ event, step }) => {
+        const { agentId, recommendationId, category, description, title } = event.data;
+
+        // Step 1: Find matching skill by category
+        const skill = await step.run("find-skill", async () => {
+            // Map AAR categories to skill slugs
+            const categorySkillMap: Record<string, string[]> = {
+                classification: [],
+                enrichment: [
+                    "hubspot-email-enrichment",
+                    "jira-ticket-context",
+                    "calendar-email-enrichment",
+                    "fathom-meeting-context"
+                ],
+                tone: ["gmail-draft-response"],
+                routing: ["slack-channel-context"],
+                safety: []
+            };
+
+            const skillSlugs = categorySkillMap[category] || [];
+            if (skillSlugs.length === 0) return null;
+
+            // Find the skill attached to this agent
+            const agentSkill = await prisma.agentSkill.findFirst({
+                where: {
+                    agentId,
+                    skill: { slug: { in: skillSlugs } }
+                },
+                include: {
+                    skill: { select: { id: true, slug: true, name: true, instructions: true } }
+                }
+            });
+
+            return agentSkill?.skill || null;
+        });
+
+        if (!skill) {
+            console.log(
+                `[Learning] No matching skill found for category "${category}" on agent ${agentId}`
+            );
+            return { skipped: true, reason: "no-matching-skill" };
+        }
+
+        // Step 2: Generate updated instructions using LLM
+        const updatedInstructions = await step.run("generate-update", async () => {
+            const { generateText } = await import("ai");
+            const { openai } = await import("@ai-sdk/openai");
+
+            const result = await generateText({
+                model: openai("gpt-4o-mini"),
+                system: `You are a skill instruction editor. You update agent skill instructions to incorporate new recommendations from evaluations. Be concise and specific. Return ONLY the updated instructions text, nothing else.`,
+                prompt: `Current skill instructions for "${skill.name}":\n\n${skill.instructions}\n\n---\n\nRecommendation to incorporate:\nTitle: ${title}\nDescription: ${description}\nCategory: ${category}\n\nUpdate the skill instructions to incorporate this recommendation. Maintain the existing structure and add the new guidance in the appropriate section.`,
+                temperature: 0.3
+            });
+
+            return result.text;
+        });
+
+        // Step 3: Update skill with new instructions and version
+        await step.run("update-skill", async () => {
+            // Create version record
+            const currentSkill = await prisma.skill.findUnique({
+                where: { id: skill.id },
+                select: { version: true }
+            });
+            const newVersion = (currentSkill?.version ?? 1) + 1;
+
+            await prisma.skill.update({
+                where: { id: skill.id },
+                data: {
+                    instructions: updatedInstructions,
+                    version: newVersion
+                }
+            });
+
+            await prisma.skillVersion.create({
+                data: {
+                    skillId: skill.id,
+                    version: newVersion,
+                    instructions: updatedInstructions,
+                    changeSummary: `AAR recommendation: ${title}`
+                }
+            });
+
+            // Update recommendation with graduation ref
+            if (recommendationId) {
+                await prisma.agentRecommendation.update({
+                    where: { id: recommendationId },
+                    data: { graduatedRef: skill.id }
+                });
+            }
+        });
+
+        return {
+            skillId: skill.id,
+            skillSlug: skill.slug,
+            recommendationId,
+            updated: true
+        };
+    }
+);
+
+/**
+ * Document Accumulation from Graduated Recommendations
+ *
+ * Creates documents (examples, SOPs) from recommendations and attaches them to skills.
+ */
+export const learningDocumentCreateFunction = inngest.createFunction(
+    {
+        id: "learning-document-create",
+        name: "Learning: Document Creation"
+    },
+    { event: "learning/document.create" },
+    async ({ event, step }) => {
+        const { agentId, recommendationId, category, description, title, docType } = event.data;
+
+        // Step 1: Generate document content
+        const docContent = await step.run("generate-document", async () => {
+            const { generateText } = await import("ai");
+            const { openai } = await import("@ai-sdk/openai");
+
+            const typeLabel =
+                docType === "example" ? "positive example" : "standard operating procedure";
+
+            const result = await generateText({
+                model: openai("gpt-4o-mini"),
+                system: `You are a documentation writer creating ${typeLabel} documents for AI agent skill libraries. Write concise, actionable documents that can be referenced by agents during execution.`,
+                prompt: `Create a ${typeLabel} document based on this evaluation recommendation:\n\nTitle: ${title}\nCategory: ${category}\nDescription: ${description}\n\nWrite a concise document (200-500 words) that captures this pattern so the agent can reference it in future runs.`,
+                temperature: 0.3
+            });
+
+            return result.text;
+        });
+
+        // Step 2: Create document and ingest into RAG
+        const document = await step.run("create-document", async () => {
+            const slug = `aar-${docType}-${category}-${Date.now()}`;
+
+            const doc = await prisma.document.create({
+                data: {
+                    slug,
+                    name: `[AAR ${docType}] ${title}`,
+                    content: docContent,
+                    contentType: "markdown",
+                    category: `aar-${docType}`,
+                    description: `Auto-generated from AAR recommendation: ${description.substring(0, 200)}`,
+                    tags: ["aar", docType, category]
+                }
+            });
+
+            return doc;
+        });
+
+        // Step 3: Attach to relevant skill
+        await step.run("attach-to-skill", async () => {
+            // Find matching skill by category
+            const categorySkillMap: Record<string, string[]> = {
+                classification: [],
+                enrichment: [
+                    "hubspot-email-enrichment",
+                    "jira-ticket-context",
+                    "calendar-email-enrichment",
+                    "fathom-meeting-context"
+                ],
+                tone: ["gmail-draft-response"],
+                routing: ["slack-channel-context"],
+                safety: []
+            };
+
+            const skillSlugs = categorySkillMap[category] || [];
+            if (skillSlugs.length === 0) return;
+
+            const agentSkill = await prisma.agentSkill.findFirst({
+                where: {
+                    agentId,
+                    skill: { slug: { in: skillSlugs } }
+                },
+                include: { skill: { select: { id: true } } }
+            });
+
+            if (agentSkill?.skill) {
+                await prisma.skillDocument.create({
+                    data: {
+                        skillId: agentSkill.skill.id,
+                        documentId: document.id,
+                        role: docType === "example" ? "example" : "reference"
+                    }
+                });
+            }
+
+            // Update recommendation with graduation ref
+            if (recommendationId) {
+                await prisma.agentRecommendation.update({
+                    where: { id: recommendationId },
+                    data: { graduatedRef: document.id }
+                });
+            }
+        });
+
+        return {
+            documentId: document.id,
+            documentSlug: document.slug,
+            recommendationId,
+            created: true
+        };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -5856,5 +6263,9 @@ export const inngestFunctions = [
     adminTenantReactivatedFunction,
     adminTenantDeleteRequestedFunction,
     adminHealthCheckFunction,
-    adminQuotaWarningFunction
+    adminQuotaWarningFunction,
+    // AAR Self-Improving Lifecycle
+    recommendationGraduationFunction,
+    learningSkillDevelopmentFunction,
+    learningDocumentCreateFunction
 ];

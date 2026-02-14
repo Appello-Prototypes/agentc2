@@ -367,9 +367,9 @@ export function ConnectStep({
                         <span className="font-medium">Your data stays secure.</span> Gmail lets your
                         agent read, search, and draft emails.{" "}
                         <span className="font-medium">It never sends without your approval.</span>{" "}
-                        Calendar is read-only. Drive allows searching, reading, and creating docs.
-                        Slack is read-only for channels with write access for bot messages. You can
-                        disconnect anytime from Settings.
+                        Calendar allows viewing and managing events. Drive allows searching,
+                        reading, and creating docs. Slack is read-only for channels with write
+                        access for bot messages. You can disconnect anytime from Settings.
                     </p>
                 </div>
             </div>

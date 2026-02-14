@@ -722,6 +722,7 @@ model Agent {
     skills                 AgentSkill[]
     scorecard              AgentScorecard?
     calibrationChecks      CalibrationCheck[]
+    recommendations        AgentRecommendation[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -1287,6 +1288,7 @@ model AgentToolCall {
     @@index([runId])
     @@index([turnId])
     @@index([traceId, toolKey])
+    @@index([toolKey, runId]) // Enables fast lookup for Slack feedback detection
     @@index([tenantId])
     @@map("agent_tool_call")
 }
@@ -1348,10 +1350,14 @@ model AgentEvaluation {
     skillAttributions Json? // {skillSlug: {impact, note}} per active skill
     turnEvaluations   Json? // For conversations: [{turnIndex, scores, feedback}]
 
+    // AAR (After Action Review) structured output
+    aarJson Json? // {what_should_have_happened, what_actually_happened, why_difference, sustain[], improve[]}
+
     createdAt DateTime @default(now())
 
     // Relations
     calibrationChecks CalibrationCheck[]
+    recommendations   AgentRecommendation[]
 
     @@index([runId])
     @@index([agentId, createdAt])
@@ -1373,6 +1379,7 @@ model AgentFeedback {
     thumbs    Boolean? // true = up, false = down
     rating    Int? // 1-5 scale
     comment   String?       @db.Text
+    source    String? // "slack" | "ui" | "api" | "voice" | "whatsapp"
     createdAt DateTime      @default(now())
 
     @@index([runId])
@@ -3178,6 +3185,34 @@ model TenantLifecycleEvent {
 
     @@index([organizationId, createdAt])
     @@map("tenant_lifecycle_event")
+}
+
+// Agent Recommendation - AAR-generated recommendations with lifecycle management
+model AgentRecommendation {
+    id           String           @id @default(cuid())
+    agentId      String
+    agent        Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    evaluationId String?
+    evaluation   AgentEvaluation? @relation(fields: [evaluationId], references: [id])
+    tenantId     String?
+    type         String // "sustain" | "improve" | "skill_development" | "document_creation"
+    category     String // "classification" | "enrichment" | "tone" | "routing" | "safety"
+    title        String
+    description  String           @db.Text
+    evidence     Json? // Run/trace evidence supporting this recommendation
+    priority     String? // "high" | "medium" | "low"
+    status       String           @default("active") // "active" | "graduated" | "expired" | "rejected"
+    graduatedTo  String? // "instruction_change" | "skill_update" | "document" | "learning_signal"
+    graduatedRef String? // ID of the entity it graduated into
+    frequency    Int              @default(1) // Incremented on dedup match
+    expiresAt    DateTime?
+    createdAt    DateTime         @default(now())
+    updatedAt    DateTime         @updatedAt
+
+    @@index([agentId, status])
+    @@index([agentId, type])
+    @@index([tenantId])
+    @@map("agent_recommendation")
 }
 
 // ImpersonationSession - Tracks when admin users impersonate customer users

@@ -240,7 +240,7 @@ export default function OnboardingPage() {
     // New flow state
     const [gmailConnected, setGmailConnected] = useState(false);
     const [gmailAddress, setGmailAddress] = useState<string | undefined>();
-    const [gmailMissingScopes, setGmailMissingScopes] = useState<string[] | undefined>();
+    const [gmailMissingScopes] = useState<string[] | undefined>();
     const [organizationId, setOrganizationId] = useState<string>("");
     const [userId, setUserId] = useState<string>("");
     const [onboardingPath, setOnboardingPath] = useState<string>("email_password");
@@ -324,14 +324,12 @@ export default function OnboardingPage() {
                         setGmailAddress(gmailResult.gmailAddress);
                         setOnboardingPath("google_oauth");
                     }
-                    // Track partial scope issues for display in ConnectStep
-                    if (
-                        gmailResult.missingScopes &&
-                        Array.isArray(gmailResult.missingScopes) &&
-                        gmailResult.missingScopes.length > 0
-                    ) {
-                        setGmailMissingScopes(gmailResult.missingScopes);
-                    }
+                    // Note: we intentionally do NOT surface gmailResult.missingScopes
+                    // during onboarding. If the user signed up with Google but
+                    // deselected some scopes on the consent screen, showing a
+                    // "missing permissions" warning here creates a confusing
+                    // half-connected state. The "Sign in with Google" card is
+                    // sufficient — they can re-authorize from Settings later.
 
                     // Get session info for org/user IDs
                     const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {

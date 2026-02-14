@@ -91,3 +91,33 @@ export const goalGetTool = createTool({
         return callInternalApi(`/api/goals/${goalId}`);
     }
 });
+
+export const goalUpdateTool = createTool({
+    id: "goal-update",
+    description: "Update a goal (retry failed goals or cancel running goals).",
+    inputSchema: z.object({
+        goalId: z.string(),
+        action: z.enum(["retry", "cancel"]).describe("Action to perform")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ goalId, action }) => {
+        return callInternalApi(`/api/goals/${goalId}`, {
+            method: "PATCH",
+            body: { action }
+        });
+    }
+});
+
+export const goalDeleteTool = createTool({
+    id: "goal-delete",
+    description: "Delete a goal.",
+    inputSchema: z.object({
+        goalId: z.string()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ goalId }) => {
+        return callInternalApi(`/api/goals/${goalId}`, {
+            method: "DELETE"
+        });
+    }
+});

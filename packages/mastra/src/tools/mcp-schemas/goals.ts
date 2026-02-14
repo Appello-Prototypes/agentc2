@@ -38,11 +38,44 @@ export const goalToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "goals"
+    },
+    {
+        name: "goal-update",
+        description: "Update a goal (retry failed goals or cancel running goals).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                goalId: { type: "string", description: "Goal ID" },
+                action: {
+                    type: "string",
+                    enum: ["retry", "cancel"],
+                    description: "Action: 'retry' for failed goals, 'cancel' for running goals"
+                }
+            },
+            required: ["goalId", "action"]
+        },
+        invoke_url: "/api/mcp",
+        category: "goals"
+    },
+    {
+        name: "goal-delete",
+        description: "Delete a goal.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                goalId: { type: "string", description: "Goal ID" }
+            },
+            required: ["goalId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "goals"
     }
 ];
 
 export const goalToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "goal-create" },
     { kind: "registry", name: "goal-list" },
-    { kind: "registry", name: "goal-get" }
+    { kind: "registry", name: "goal-get" },
+    { kind: "registry", name: "goal-update" },
+    { kind: "registry", name: "goal-delete" }
 ];

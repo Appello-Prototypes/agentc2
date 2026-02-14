@@ -7,6 +7,7 @@ import { calculateCost } from "@/lib/cost-calculator";
 import { resolveIdentity } from "@/lib/identity";
 import { handleSlackApprovalReaction } from "@/lib/approvals";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { inngest } from "@/lib/inngest";
 import {
     resolveSlackInstallation,
     isDuplicateSlackEvent,
@@ -58,6 +59,119 @@ async function isThreadActive(
  */
 function buildSlackThreadId(teamId: string, channelId: string, threadTs: string): string {
     return `slack-${teamId}-${channelId}-${threadTs}`;
+}
+
+/**
+ * Detect if a Slack thread reply is feedback on an agent-originated message.
+ * Queries AgentToolCall for a slack_post_message that created the thread root.
+ * Returns the original run context if this is a feedback reply.
+ */
+async function detectFeedbackReply(threadTs: string): Promise<{
+    isFeedback: boolean;
+    runId?: string;
+    agentId?: string;
+    agentSlug?: string;
+}> {
+    try {
+        const result: Array<{
+            id: string;
+            runId: string;
+            agentId: string;
+            agentSlug: string;
+        }> = await prisma.$queryRaw`
+            SELECT atc.id, atc."runId", ar."agentId", a.slug as "agentSlug"
+            FROM agent_tool_call atc
+            JOIN agent_run ar ON ar.id = atc."runId"
+            JOIN agent a ON a.id = ar."agentId"
+            WHERE atc."toolKey" = 'slack_slack_post_message'
+              AND atc.success = true
+              AND atc."outputJson"->>'ts' = ${threadTs}
+            ORDER BY atc."createdAt" DESC
+            LIMIT 1
+        `;
+
+        if (result.length > 0) {
+            return {
+                isFeedback: true,
+                runId: result[0].runId,
+                agentId: result[0].agentId,
+                agentSlug: result[0].agentSlug
+            };
+        }
+    } catch (error) {
+        console.warn("[Slack] Feedback detection query failed:", error);
+    }
+    return { isFeedback: false };
+}
+
+/**
+ * Process a Slack thread reply as feedback on an agent run.
+ * Creates an AgentFeedback record and emits a feedback/submitted Inngest event.
+ */
+async function processSlackFeedback(params: {
+    runId: string;
+    agentId: string;
+    agentSlug: string;
+    text: string;
+    userId: string;
+    teamId: string;
+    channelId: string;
+    threadTs: string;
+    botToken: string;
+    organizationId: string | null;
+}): Promise<void> {
+    try {
+        // 1. Create AgentFeedback record -- store raw text, let AAR interpret
+        const feedback = await prisma.agentFeedback.create({
+            data: {
+                runId: params.runId,
+                agentId: params.agentId,
+                tenantId: params.organizationId,
+                comment: params.text,
+                source: "slack"
+            }
+        });
+
+        // 2. Emit feedback/submitted event for the evaluation pipeline
+        await inngest.send({
+            name: "feedback/submitted",
+            data: {
+                feedbackId: feedback.id,
+                runId: params.runId,
+                agentId: params.agentId,
+                thumbs: null,
+                rating: null,
+                source: "slack",
+                comment: params.text
+            }
+        });
+
+        // 3. Acknowledge in thread (configurable per agent via metadata)
+        const agent = await prisma.agent.findUnique({
+            where: { id: params.agentId },
+            select: { metadata: true }
+        });
+        const shouldAcknowledge =
+            (agent?.metadata as Record<string, unknown> | null)?.slack &&
+            typeof (agent?.metadata as Record<string, unknown>).slack === "object"
+                ? ((agent?.metadata as Record<string, Record<string, unknown>>).slack
+                      .feedbackAcknowledge ?? true) !== false
+                : true;
+
+        if (shouldAcknowledge) {
+            await sendSlackMessageSafe(
+                params.channelId,
+                ":memo: Feedback recorded. This will be used in my next evaluation.",
+                params.threadTs,
+                undefined,
+                params.botToken
+            );
+        }
+
+        console.log(`[Slack] Feedback recorded for run ${params.runId} from user ${params.userId}`);
+    } catch (error) {
+        console.error("[Slack] Failed to process feedback:", error);
+    }
 }
 
 /**
@@ -1221,6 +1335,35 @@ export async function POST(request: NextRequest) {
                     messageEvent.channel,
                     messageEvent.thread_ts
                 ));
+
+            // Feedback detection: check if this thread reply is feedback on an agent-posted message
+            if (messageEvent.thread_ts) {
+                const feedbackCheck = await detectFeedbackReply(messageEvent.thread_ts);
+                if (feedbackCheck.isFeedback && feedbackCheck.runId && feedbackCheck.agentId) {
+                    // Check for opt-out: if the reply starts with @bot or agent:, treat as conversation
+                    const trimmedText = messageEvent.text.trim();
+                    const isConversationRequest =
+                        trimmedText.startsWith("<@") || /^agent:/i.test(trimmedText);
+
+                    if (!isConversationRequest) {
+                        setImmediate(async () => {
+                            await processSlackFeedback({
+                                runId: feedbackCheck.runId!,
+                                agentId: feedbackCheck.agentId!,
+                                agentSlug: feedbackCheck.agentSlug || "unknown",
+                                text: messageEvent.text,
+                                userId: messageEvent.user,
+                                teamId: installation.teamId,
+                                channelId: messageEvent.channel,
+                                threadTs: messageEvent.thread_ts!,
+                                botToken: installation.botToken,
+                                organizationId: installation.organizationId
+                            });
+                        });
+                        return NextResponse.json({ ok: true });
+                    }
+                }
+            }
 
             if (isDM || isActiveThreadReply) {
                 const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);

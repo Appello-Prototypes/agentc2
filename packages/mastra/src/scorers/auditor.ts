@@ -8,7 +8,8 @@
 import { openai } from "@ai-sdk/openai";
 import { generateObject } from "ai";
 import { z } from "zod";
-import type { EvalContext, ScorecardCriterion, Tier2Result } from "./types";
+import { prisma } from "@repo/database";
+import type { EvalContext, ScorecardCriterion, Tier2Result, AarOutput } from "./types";
 import { DEFAULT_SCORECARD_CRITERIA, computeWeightedScore } from "./types";
 
 /**
@@ -51,7 +52,42 @@ const AuditorOutputSchema = z.object({
             })
         )
         .optional()
-        .describe("Only for multi-turn conversations if evaluateTurns is enabled")
+        .describe("Only for multi-turn conversations if evaluateTurns is enabled"),
+    aar: z
+        .object({
+            what_should_have_happened: z
+                .string()
+                .describe("What the agent was supposed to do per its instructions and scorecard"),
+            what_actually_happened: z
+                .string()
+                .describe("What the agent actually did based on the trace"),
+            why_difference: z.string().describe("Root cause analysis of any gaps"),
+            sustain: z
+                .array(
+                    z.object({
+                        pattern: z.string().describe("What the agent did well"),
+                        evidence: z.string().describe("Specific trace evidence"),
+                        category: z
+                            .string()
+                            .describe("classification|enrichment|tone|routing|safety")
+                    })
+                )
+                .describe("Patterns to reinforce"),
+            improve: z
+                .array(
+                    z.object({
+                        pattern: z.string().describe("What the agent did poorly or missed"),
+                        evidence: z.string().describe("Specific trace evidence"),
+                        category: z
+                            .string()
+                            .describe("classification|enrichment|tone|routing|safety"),
+                        recommendation: z.string().describe("Specific actionable recommendation")
+                    })
+                )
+                .describe("Patterns to fix")
+        })
+        .optional()
+        .describe("After Action Review: structured sustain/improve recommendations")
 });
 
 /**
@@ -67,12 +103,25 @@ RULES:
 5. Express your confidence in the overall assessment (0.0-1.0).
 6. Be consistent: the same quality of work should always receive the same score.
 
+## After Action Review (AAR) Methodology
+
+In addition to scoring each criterion, you MUST conduct a structured After Action Review:
+
+1. WHAT WAS THE PLAN? Review the agent's instructions and scorecard criteria. What was the agent supposed to do?
+2. WHAT ACTUALLY HAPPENED? Analyze the trace, tool calls, and output. What did the agent actually do?
+3. WHY WAS THERE A DIFFERENCE? If there's a gap, identify the root cause. Was it a classification error? Missing context? Wrong tool usage?
+4. WHAT SHOULD WE SUSTAIN? Identify specific patterns the agent did well. These become "sustain" recommendations that reinforce good behavior.
+5. WHAT SHOULD WE IMPROVE? Identify specific patterns that need fixing. These become "improve" recommendations with actionable suggestions.
+
+Every evaluation MUST have at least one sustain and one improve item, even for high-scoring runs.
+If human feedback is provided, weigh it heavily -- the human is the ground truth.
+
 OUTPUT FORMAT: JSON matching the provided schema exactly.`;
 
 /**
  * Build the user prompt for the auditor from the evaluation context.
  */
-export function buildAuditorPrompt(context: EvalContext): string {
+export async function buildAuditorPrompt(context: EvalContext): Promise<string> {
     const criteria = context.agent.scorecard?.criteria ?? DEFAULT_SCORECARD_CRITERIA;
     const parts: string[] = [];
 
@@ -165,7 +214,36 @@ export function buildAuditorPrompt(context: EvalContext): string {
         }
     }
 
-    // 7. Conversation turns (for multi-turn)
+    // 7. Human feedback (from Slack, UI, API, etc.)
+    if (context.run.id) {
+        try {
+            const feedbacks = await prisma.agentFeedback.findMany({
+                where: { runId: context.run.id },
+                orderBy: { createdAt: "asc" }
+            });
+
+            if (feedbacks.length > 0) {
+                parts.push(`## Human Feedback on This Run`);
+                for (const fb of feedbacks) {
+                    const source = fb.source ? ` (via ${fb.source})` : "";
+                    const sentiment =
+                        fb.thumbs === true
+                            ? "Positive"
+                            : fb.thumbs === false
+                              ? "Negative"
+                              : "Neutral";
+                    parts.push(`- ${sentiment}${source}: "${fb.comment || "(no comment)"}"`);
+                }
+                parts.push(
+                    `\nHuman feedback is ground truth. Weight it heavily in your assessment.`
+                );
+            }
+        } catch {
+            // Non-critical: continue without feedback
+        }
+    }
+
+    // 8. Conversation turns (for multi-turn)
     const evaluateTurns = context.agent.scorecard?.evaluateTurns ?? false;
     if (context.turns && context.turns.length > 1 && evaluateTurns) {
         parts.push(`## Conversation Turns (${context.turns.length})`);
@@ -193,7 +271,7 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
         context.agent.scorecard?.criteria ?? DEFAULT_SCORECARD_CRITERIA;
     const auditorModel = context.agent.scorecard?.auditorModel ?? "gpt-4o-mini";
 
-    const userPrompt = buildAuditorPrompt(context);
+    const userPrompt = await buildAuditorPrompt(context);
 
     const { object: auditorOutput } = await generateObject({
         model: openai(auditorModel),
@@ -233,6 +311,26 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
           }))
         : null;
 
+    // Build AAR output
+    const aar: AarOutput | null = auditorOutput.aar
+        ? {
+              what_should_have_happened: auditorOutput.aar.what_should_have_happened,
+              what_actually_happened: auditorOutput.aar.what_actually_happened,
+              why_difference: auditorOutput.aar.why_difference,
+              sustain: auditorOutput.aar.sustain.map((s) => ({
+                  pattern: s.pattern,
+                  evidence: s.evidence,
+                  category: s.category
+              })),
+              improve: auditorOutput.aar.improve.map((i) => ({
+                  pattern: i.pattern,
+                  evidence: i.evidence,
+                  category: i.category,
+                  recommendation: i.recommendation
+              }))
+          }
+        : null;
+
     return {
         scoresJson,
         feedbackJson,
@@ -240,6 +338,7 @@ export async function runTier2Auditor(context: EvalContext): Promise<Tier2Result
         narrative: auditorOutput.overall_narrative,
         confidenceScore: auditorOutput.confidence,
         skillAttributions,
-        turnEvaluations
+        turnEvaluations,
+        aar
     };
 }

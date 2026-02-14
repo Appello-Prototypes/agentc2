@@ -3,13 +3,9 @@
 import { useEffect, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { linkSocial } from "@repo/auth/client";
+import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
 import { AppProviders } from "@repo/ui";
 import { useSessionContext } from "@repo/auth/providers";
-
-const GMAIL_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.send"
-];
 
 function GmailSyncOnLogin() {
     const { session } = useSessionContext();
@@ -51,7 +47,7 @@ function GmailSyncOnLogin() {
                         })();
                         await linkSocial({
                             provider: "google",
-                            scopes: GMAIL_SCOPES,
+                            scopes: [...GOOGLE_OAUTH_SCOPES],
                             callbackURL
                         });
                     }

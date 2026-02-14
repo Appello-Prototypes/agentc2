@@ -169,7 +169,13 @@ import {
     orgWorkspacesListTool,
     orgWorkspaceCreateTool
 } from "./organization-tools";
-import { goalCreateTool, goalListTool, goalGetTool } from "./goal-tools";
+import {
+    goalCreateTool,
+    goalListTool,
+    goalGetTool,
+    goalUpdateTool,
+    goalDeleteTool
+} from "./goal-tools";
 import {
     documentCreateTool,
     documentReadTool,
@@ -356,6 +362,8 @@ export const toolCategoryMap: Record<string, string> = {
     "goal-create": "Organization",
     "goal-list": "Organization",
     "goal-get": "Organization",
+    "goal-update": "Organization",
+    "goal-delete": "Organization",
     "workspace-intent-recommendation": "Organization",
 
     // Email & Calendar
@@ -576,6 +584,8 @@ export const toolRegistry: Record<string, any> = {
     "goal-create": goalCreateTool,
     "goal-list": goalListTool,
     "goal-get": goalGetTool,
+    "goal-update": goalUpdateTool,
+    "goal-delete": goalDeleteTool,
 
     // Document tools
     "document-create": documentCreateTool,

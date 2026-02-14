@@ -188,6 +188,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 auditorModel: eval_.auditorModel,
                 scorecardVersion: eval_.scorecardVersion,
                 scorerVersion: eval_.scorerVersion,
+                aarJson: eval_.aarJson,
                 createdAt: eval_.createdAt,
                 run: eval_.run
                     ? {

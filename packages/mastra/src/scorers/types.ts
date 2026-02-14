@@ -66,6 +66,33 @@ export interface Tier1Result {
 }
 
 /**
+ * A sustain or improve item from the After Action Review (AAR).
+ */
+export interface AarSustainItem {
+    pattern: string;
+    evidence: string;
+    category: string; // "classification" | "enrichment" | "tone" | "routing" | "safety"
+}
+
+export interface AarImproveItem {
+    pattern: string;
+    evidence: string;
+    category: string;
+    recommendation: string;
+}
+
+/**
+ * Structured After Action Review output from the auditor.
+ */
+export interface AarOutput {
+    what_should_have_happened: string;
+    what_actually_happened: string;
+    why_difference: string;
+    sustain: AarSustainItem[];
+    improve: AarImproveItem[];
+}
+
+/**
  * Result from Tier 2 AI auditor evaluation.
  */
 export interface Tier2Result {
@@ -76,6 +103,7 @@ export interface Tier2Result {
     confidenceScore: number;
     skillAttributions: SkillAttribution[] | null;
     turnEvaluations: TurnEvaluation[] | null;
+    aar: AarOutput | null;
 }
 
 /**

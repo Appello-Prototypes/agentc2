@@ -23,6 +23,19 @@ import {
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 
+interface AarOutput {
+    what_should_have_happened: string;
+    what_actually_happened: string;
+    why_difference: string;
+    sustain: Array<{ pattern: string; evidence: string; category: string }>;
+    improve: Array<{
+        pattern: string;
+        evidence: string;
+        category: string;
+        recommendation: string;
+    }>;
+}
+
 interface EvaluationResult {
     id: string;
     runId: string;
@@ -43,6 +56,7 @@ interface EvaluationResult {
     auditorModel?: string | null;
     groundTruthUsed?: boolean;
     skillAttributions?: Array<{ skillName: string; impact: string; suggestion: string }> | null;
+    aarJson?: AarOutput | null;
 }
 
 interface EvaluationSummary {
@@ -73,6 +87,247 @@ interface Insight {
 interface TrendData {
     scorer: string;
     data: Array<{ date: string; score: number }>;
+}
+
+interface Recommendation {
+    id: string;
+    type: string;
+    category: string;
+    title: string;
+    description: string;
+    evidence: unknown;
+    priority: string | null;
+    status: string;
+    frequency: number;
+    graduatedTo: string | null;
+    graduatedRef: string | null;
+    expiresAt: string | null;
+    createdAt: string;
+    updatedAt: string;
+    evaluation: { id: string; overallGrade: number | null; createdAt: string } | null;
+}
+
+function InstitutionalMemoryPanel({ agentSlug }: { agentSlug: string }) {
+    const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+    const [stats, setStats] = useState<Record<string, number>>({});
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState<string>("active");
+
+    const fetchRecommendations = useCallback(async () => {
+        try {
+            setLoading(true);
+            const params = new URLSearchParams();
+            if (filter !== "all") params.set("status", filter);
+            const res = await fetch(
+                `${getApiBase()}/api/agents/${agentSlug}/recommendations?${params.toString()}`
+            );
+            const data = await res.json();
+            if (data.success) {
+                setRecommendations(data.recommendations);
+                setStats(data.stats);
+            }
+        } catch (err) {
+            console.error("Failed to load recommendations:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [agentSlug, filter]);
+
+    useEffect(() => {
+        fetchRecommendations();
+    }, [fetchRecommendations]);
+
+    const updateStatus = async (recId: string, newStatus: string) => {
+        try {
+            await fetch(`${getApiBase()}/api/agents/${agentSlug}/recommendations`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ recommendationId: recId, status: newStatus })
+            });
+            fetchRecommendations();
+        } catch (err) {
+            console.error("Failed to update recommendation:", err);
+        }
+    };
+
+    const priorityColor = (p: string | null) => {
+        switch (p) {
+            case "high":
+                return "text-red-600";
+            case "medium":
+                return "text-amber-600";
+            default:
+                return "text-muted-foreground";
+        }
+    };
+
+    if (loading) {
+        return (
+            <div className="space-y-4">
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+                <Skeleton className="h-24 w-full" />
+            </div>
+        );
+    }
+
+    return (
+        <>
+            {/* Stats Cards */}
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Active</CardDescription>
+                        <CardTitle className="text-2xl">{stats.active || 0}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground text-xs">
+                            Currently injected into agent context
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Graduated</CardDescription>
+                        <CardTitle className="text-2xl">{stats.graduated || 0}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground text-xs">
+                            Promoted to skills or documents
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Expired</CardDescription>
+                        <CardTitle className="text-2xl">{stats.expired || 0}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground text-xs">
+                            Not reinforced, naturally expired
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total</CardDescription>
+                        <CardTitle className="text-2xl">{stats.total || 0}</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <p className="text-muted-foreground text-xs">All-time recommendations</p>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Filter */}
+            <div className="flex items-center gap-3">
+                <span className="text-sm font-medium">Filter:</span>
+                <Select value={filter} onValueChange={(v) => v && setFilter(v)}>
+                    <SelectTrigger className="w-40">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="graduated">Graduated</SelectItem>
+                        <SelectItem value="expired">Expired</SelectItem>
+                        <SelectItem value="rejected">Rejected</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                </Select>
+            </div>
+
+            {/* Recommendations List */}
+            {recommendations.length > 0 ? (
+                <div className="space-y-3">
+                    {recommendations.map((rec) => (
+                        <Card key={rec.id}>
+                            <CardContent className="pt-4">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div className="min-w-0 flex-1">
+                                        <div className="mb-1 flex flex-wrap items-center gap-2">
+                                            <Badge
+                                                variant={
+                                                    rec.type === "sustain" ? "default" : "secondary"
+                                                }
+                                                className={
+                                                    rec.type === "sustain"
+                                                        ? "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                                                        : "bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200"
+                                                }
+                                            >
+                                                {rec.type}
+                                            </Badge>
+                                            <Badge variant="outline" className="text-xs">
+                                                {rec.category}
+                                            </Badge>
+                                            {rec.priority && (
+                                                <span
+                                                    className={`text-xs font-medium ${priorityColor(rec.priority)}`}
+                                                >
+                                                    {rec.priority} priority
+                                                </span>
+                                            )}
+                                            <Badge variant="outline" className="text-xs">
+                                                {rec.frequency}x reinforced
+                                            </Badge>
+                                            {rec.graduatedTo && (
+                                                <Badge
+                                                    variant="outline"
+                                                    className="text-xs text-blue-600"
+                                                >
+                                                    Graduated to {rec.graduatedTo}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <p className="text-sm font-medium">{rec.title}</p>
+                                        <p className="text-muted-foreground mt-1 text-sm">
+                                            {rec.description}
+                                        </p>
+                                        <div className="text-muted-foreground mt-2 flex items-center gap-3 text-xs">
+                                            <span>
+                                                Created{" "}
+                                                {new Date(rec.createdAt).toLocaleDateString()}
+                                            </span>
+                                            {rec.expiresAt && (
+                                                <span>
+                                                    Expires{" "}
+                                                    {new Date(rec.expiresAt).toLocaleDateString()}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+                                    {rec.status === "active" && (
+                                        <div className="flex shrink-0 gap-1">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => updateStatus(rec.id, "rejected")}
+                                                className="text-xs"
+                                            >
+                                                Reject
+                                            </Button>
+                                        </div>
+                                    )}
+                                </div>
+                            </CardContent>
+                        </Card>
+                    ))}
+                </div>
+            ) : (
+                <Card>
+                    <CardContent className="flex flex-col items-center justify-center py-12">
+                        <p className="text-muted-foreground mb-2 text-sm">
+                            No recommendations found
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                            Recommendations are generated from After Action Reviews when evaluations
+                            run
+                        </p>
+                    </CardContent>
+                </Card>
+            )}
+        </>
+    );
 }
 
 export default function EvaluationsPage() {
@@ -128,7 +383,8 @@ export default function EvaluationsPage() {
                     feedbackJson: eval_.feedbackJson,
                     auditorModel: eval_.auditorModel,
                     groundTruthUsed: eval_.groundTruthUsed,
-                    skillAttributions: eval_.skillAttributions
+                    skillAttributions: eval_.skillAttributions,
+                    aarJson: eval_.aarJson
                 })
             );
 
@@ -385,6 +641,8 @@ export default function EvaluationsPage() {
                 <TabsList>
                     <TabsTrigger value="scorers">Scorer Results</TabsTrigger>
                     <TabsTrigger value="auditor">Auditor Reports</TabsTrigger>
+                    <TabsTrigger value="aar">After Action Reviews</TabsTrigger>
+                    <TabsTrigger value="memory">Institutional Memory</TabsTrigger>
                     <TabsTrigger value="feedback">User Feedback</TabsTrigger>
                     <TabsTrigger value="insights">AI Insights</TabsTrigger>
                     <TabsTrigger value="history">Evaluation History</TabsTrigger>
@@ -884,6 +1142,261 @@ export default function EvaluationsPage() {
                             </>
                         );
                     })()}
+                </TabsContent>
+
+                {/* After Action Reviews Tab */}
+                <TabsContent value="aar" className="space-y-6">
+                    {(() => {
+                        const aarEvals = evaluations.filter(
+                            (e) => e.aarJson && e.evaluationTier === "tier2_auditor"
+                        );
+
+                        return (
+                            <>
+                                {/* AAR Summary Cards */}
+                                <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Total AARs</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {aarEvals.length}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Runs with after action reviews
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Sustain Patterns</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {aarEvals.reduce(
+                                                    (sum, e) =>
+                                                        sum + (e.aarJson?.sustain?.length || 0),
+                                                    0
+                                                )}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Things the agent is doing well
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Improve Patterns</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {aarEvals.reduce(
+                                                    (sum, e) =>
+                                                        sum + (e.aarJson?.improve?.length || 0),
+                                                    0
+                                                )}
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Areas needing improvement
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardDescription>Categories</CardDescription>
+                                            <CardTitle className="text-2xl">
+                                                {
+                                                    new Set(
+                                                        aarEvals.flatMap((e) => [
+                                                            ...(e.aarJson?.sustain?.map(
+                                                                (s) => s.category
+                                                            ) || []),
+                                                            ...(e.aarJson?.improve?.map(
+                                                                (i) => i.category
+                                                            ) || [])
+                                                        ])
+                                                    ).size
+                                                }
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <p className="text-muted-foreground text-xs">
+                                                Distinct evaluation categories
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Individual AAR Reports */}
+                                {aarEvals.length > 0 ? (
+                                    <div className="space-y-6">
+                                        {aarEvals.slice(0, 10).map((eval_) => {
+                                            const aar = eval_.aarJson!;
+                                            return (
+                                                <Card key={eval_.id}>
+                                                    <CardHeader>
+                                                        <div className="flex items-center justify-between">
+                                                            <CardTitle className="text-base">
+                                                                After Action Review
+                                                            </CardTitle>
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge
+                                                                    variant={
+                                                                        (eval_.overallGrade || 0) >=
+                                                                        0.8
+                                                                            ? "default"
+                                                                            : (eval_.overallGrade ||
+                                                                                    0) >= 0.6
+                                                                              ? "secondary"
+                                                                              : "destructive"
+                                                                    }
+                                                                >
+                                                                    {(
+                                                                        (eval_.overallGrade || 0) *
+                                                                        100
+                                                                    ).toFixed(0)}
+                                                                    %
+                                                                </Badge>
+                                                                <span className="text-muted-foreground text-xs">
+                                                                    {new Date(
+                                                                        eval_.timestamp
+                                                                    ).toLocaleString()}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <CardDescription>
+                                                            Run: {eval_.runId?.slice(0, 8)}...
+                                                        </CardDescription>
+                                                    </CardHeader>
+                                                    <CardContent className="space-y-4">
+                                                        {/* AAR Structured Analysis */}
+                                                        <div className="space-y-3">
+                                                            <div>
+                                                                <p className="mb-1 text-xs font-medium tracking-wide text-blue-600 uppercase">
+                                                                    What Should Have Happened
+                                                                </p>
+                                                                <p className="text-sm">
+                                                                    {aar.what_should_have_happened}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="mb-1 text-xs font-medium tracking-wide text-amber-600 uppercase">
+                                                                    What Actually Happened
+                                                                </p>
+                                                                <p className="text-sm">
+                                                                    {aar.what_actually_happened}
+                                                                </p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="mb-1 text-xs font-medium tracking-wide text-purple-600 uppercase">
+                                                                    Why the Difference
+                                                                </p>
+                                                                <p className="text-sm">
+                                                                    {aar.why_difference}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+
+                                                        {/* Sustain */}
+                                                        {aar.sustain && aar.sustain.length > 0 && (
+                                                            <div>
+                                                                <p className="mb-2 text-xs font-medium tracking-wide text-green-600 uppercase">
+                                                                    Sustain ({aar.sustain.length})
+                                                                </p>
+                                                                <div className="space-y-2">
+                                                                    {aar.sustain.map((s, i) => (
+                                                                        <div
+                                                                            key={i}
+                                                                            className="rounded-md border border-green-200 bg-green-50 p-3 dark:border-green-900 dark:bg-green-950/30"
+                                                                        >
+                                                                            <div className="flex items-start gap-2">
+                                                                                <Badge
+                                                                                    variant="outline"
+                                                                                    className="mt-0.5 shrink-0 text-xs"
+                                                                                >
+                                                                                    {s.category}
+                                                                                </Badge>
+                                                                                <div>
+                                                                                    <p className="text-sm font-medium">
+                                                                                        {s.pattern}
+                                                                                    </p>
+                                                                                    <p className="text-muted-foreground mt-1 text-xs">
+                                                                                        {s.evidence}
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Improve */}
+                                                        {aar.improve && aar.improve.length > 0 && (
+                                                            <div>
+                                                                <p className="mb-2 text-xs font-medium tracking-wide text-red-600 uppercase">
+                                                                    Improve ({aar.improve.length})
+                                                                </p>
+                                                                <div className="space-y-2">
+                                                                    {aar.improve.map((i, j) => (
+                                                                        <div
+                                                                            key={j}
+                                                                            className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30"
+                                                                        >
+                                                                            <div className="flex items-start gap-2">
+                                                                                <Badge
+                                                                                    variant="outline"
+                                                                                    className="mt-0.5 shrink-0 text-xs"
+                                                                                >
+                                                                                    {i.category}
+                                                                                </Badge>
+                                                                                <div>
+                                                                                    <p className="text-sm font-medium">
+                                                                                        {i.pattern}
+                                                                                    </p>
+                                                                                    <p className="text-muted-foreground mt-1 text-xs">
+                                                                                        {i.evidence}
+                                                                                    </p>
+                                                                                    <p className="mt-1 text-xs font-medium text-amber-700 dark:text-amber-400">
+                                                                                        Recommendation:{" "}
+                                                                                        {
+                                                                                            i.recommendation
+                                                                                        }
+                                                                                    </p>
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </CardContent>
+                                                </Card>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <Card>
+                                        <CardContent className="flex flex-col items-center justify-center py-12">
+                                            <p className="text-muted-foreground mb-2 text-sm">
+                                                No after action reviews yet
+                                            </p>
+                                            <p className="text-muted-foreground text-xs">
+                                                AARs are generated by the Tier 2 AI auditor when
+                                                evaluations run
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                )}
+                            </>
+                        );
+                    })()}
+                </TabsContent>
+
+                {/* Institutional Memory Tab */}
+                <TabsContent value="memory" className="space-y-6">
+                    <InstitutionalMemoryPanel agentSlug={agentSlug} />
                 </TabsContent>
 
                 {/* User Feedback Tab */}

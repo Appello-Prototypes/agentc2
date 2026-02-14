@@ -114,6 +114,16 @@ export const agentQualityToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "agent-quality"
+    },
+    {
+        name: "agent-scorers-list",
+        description: "List all available evaluation scorers that can be attached to agents.",
+        inputSchema: {
+            type: "object",
+            properties: {}
+        },
+        invoke_url: "/api/mcp",
+        category: "agent-quality"
     }
 ];
 
@@ -172,5 +182,11 @@ export const agentQualityToolRoutes: McpToolRoute[] = [
         path: "/api/agents/{agentId}/test-cases",
         pathParams: ["agentId"],
         bodyParams: ["name", "inputText", "expectedOutput", "tags", "createdBy"]
+    },
+    {
+        kind: "internal",
+        name: "agent-scorers-list",
+        method: "GET",
+        path: "/api/agents/scorers"
     }
 ];

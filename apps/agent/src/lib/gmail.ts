@@ -4,11 +4,9 @@ import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/mastra";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
 
-export const GMAIL_REQUIRED_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.events"
-];
+// Import from the single source of truth and re-export under the legacy name
+import { GOOGLE_REQUIRED_SCOPES } from "@repo/auth/google-scopes";
+export const GMAIL_REQUIRED_SCOPES = GOOGLE_REQUIRED_SCOPES;
 
 type StoredGmailCredentials = {
     gmailAddress: string;
@@ -40,7 +38,7 @@ export const getGmailAuthUrl = () => {
     return client.generateAuthUrl({
         access_type: "offline",
         prompt: "consent",
-        scope: GMAIL_REQUIRED_SCOPES
+        scope: [...GMAIL_REQUIRED_SCOPES]
     });
 };
 

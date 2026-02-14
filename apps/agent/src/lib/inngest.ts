@@ -94,6 +94,9 @@ export const inngest = new Inngest({
                 signalType: string;
                 severity: string;
                 scores?: Record<string, number>;
+                pattern?: string;
+                evidence?: string;
+                category?: string;
             };
         };
         "learning/session.start": {
@@ -215,6 +218,7 @@ export const inngest = new Inngest({
                 thumbs: boolean | null;
                 rating: number | null;
                 comment: string | null;
+                source?: string;
             };
         };
         "calibration/drift.detected": {
@@ -257,6 +261,28 @@ export const inngest = new Inngest({
                 currentValue: number;
                 limit: number;
                 percentUsed: number;
+            };
+        };
+        // AAR Self-Improving Lifecycle Events
+        "learning/skill.develop": {
+            data: {
+                agentId: string;
+                recommendationId: string;
+                category: string;
+                description: string;
+                evidence: unknown;
+                title: string;
+            };
+        };
+        "learning/document.create": {
+            data: {
+                agentId: string;
+                recommendationId: string;
+                category: string;
+                description: string;
+                evidence: unknown;
+                title: string;
+                docType: string;
             };
         };
         // Gmail Processing Events

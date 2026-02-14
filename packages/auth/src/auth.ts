@@ -4,18 +4,12 @@ import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@repo/database";
 import { getAppUrl } from "./env";
 import { bootstrapUserOrganization } from "./bootstrap";
+import { GOOGLE_OAUTH_SCOPES } from "./google-scopes";
 
 const isProduction = process.env.NODE_ENV === "production";
 const appUrl = isProduction ? getAppUrl("http://localhost:3000") : "http://localhost:3001";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
-const googleScopes = [
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.events",
-    "https://www.googleapis.com/auth/drive.readonly",
-    "https://www.googleapis.com/auth/drive.file"
-];
 
 // Build trusted origins based on environment
 const trustedOrigins = [appUrl];
@@ -63,7 +57,7 @@ export const auth = betterAuth({
                       clientSecret: googleClientSecret,
                       accessType: "offline",
                       prompt: "consent",
-                      scope: googleScopes,
+                      scope: [...GOOGLE_OAUTH_SCOPES],
                       disableImplicitSignUp: true
                   }
               }

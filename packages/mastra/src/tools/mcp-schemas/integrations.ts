@@ -79,6 +79,50 @@ export const integrationToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "integrations"
+    },
+    {
+        name: "integration-connection-update",
+        description: "Update an integration connection (name, credentials, active status).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                connectionId: { type: "string", description: "Connection ID" },
+                name: { type: "string", description: "New connection name" },
+                isDefault: { type: "boolean", description: "Set as default connection" },
+                isActive: { type: "boolean", description: "Enable or disable the connection" },
+                credentials: { type: "object", description: "Updated credentials payload" },
+                metadata: { type: "object", description: "Updated metadata" }
+            },
+            required: ["connectionId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-connection-delete",
+        description: "Delete an integration connection and its associated triggers.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                connectionId: { type: "string", description: "Connection ID to delete" }
+            },
+            required: ["connectionId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
+    },
+    {
+        name: "integration-connection-test",
+        description: "Test an integration connection by validating credentials and connectivity.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                connectionId: { type: "string", description: "Connection ID to test" }
+            },
+            required: ["connectionId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "integrations"
     }
 ];
 
@@ -108,5 +152,27 @@ export const integrationToolRoutes: McpToolRoute[] = [
         method: "POST",
         path: "/api/integrations/connections",
         bodyParams: ["providerKey", "name", "scope", "credentials", "metadata", "isDefault"]
+    },
+    {
+        kind: "internal",
+        name: "integration-connection-update",
+        method: "PATCH",
+        path: "/api/integrations/connections/{connectionId}",
+        pathParams: ["connectionId"],
+        bodyParams: ["name", "isDefault", "isActive", "credentials", "metadata"]
+    },
+    {
+        kind: "internal",
+        name: "integration-connection-delete",
+        method: "DELETE",
+        path: "/api/integrations/connections/{connectionId}",
+        pathParams: ["connectionId"]
+    },
+    {
+        kind: "internal",
+        name: "integration-connection-test",
+        method: "POST",
+        path: "/api/integrations/connections/{connectionId}/test",
+        pathParams: ["connectionId"]
     }
 ];

@@ -3,6 +3,7 @@
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { linkSocial } from "@repo/auth/client";
+import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
 import {
     Button,
     Card,
@@ -19,12 +20,6 @@ import {
     SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
-
-const REQUIRED_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.readonly"
-];
 
 interface AgentOption {
     id: string;
@@ -105,7 +100,7 @@ function GmailIntegrationClient() {
         try {
             await linkSocial({
                 provider: "google",
-                scopes: REQUIRED_SCOPES,
+                scopes: [...GOOGLE_OAUTH_SCOPES],
                 callbackURL: "/mcp/gmail"
             });
         } catch (err) {

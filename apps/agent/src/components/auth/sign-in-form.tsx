@@ -3,14 +3,9 @@
 import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@repo/auth/client";
+import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
 import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
 import Link from "next/link";
-
-const GMAIL_SCOPES = [
-    "https://www.googleapis.com/auth/gmail.modify",
-    "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/calendar.readonly"
-];
 
 export function SignInForm() {
     const router = useRouter();
@@ -64,7 +59,7 @@ export function SignInForm() {
                 provider: "google",
                 callbackURL: callbackUrl,
                 errorCallbackURL: "/login?error=no_account",
-                scopes: GMAIL_SCOPES
+                scopes: [...GOOGLE_OAUTH_SCOPES]
             });
         } catch (err) {
             setError("An unexpected error occurred");

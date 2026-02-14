@@ -395,6 +395,44 @@ export class AgentResolver {
             }
         }
 
+        // Append institutional knowledge from active recommendations
+        try {
+            const recommendations = await prisma.agentRecommendation.findMany({
+                where: {
+                    agentId: record.id,
+                    status: "active",
+                    OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }]
+                },
+                orderBy: [{ frequency: "desc" }, { createdAt: "desc" }],
+                take: 15 // Cap to prevent prompt bloat
+            });
+
+            if (recommendations.length > 0) {
+                const sustain = recommendations.filter((r) => r.type === "sustain");
+                const improve = recommendations.filter((r) => r.type === "improve");
+
+                let section = "\n\n---\n# Institutional Knowledge (from recent evaluations)\n";
+
+                if (sustain.length > 0) {
+                    section += "\n## Things to Sustain\n";
+                    for (const r of sustain) {
+                        section += `- ${r.description}\n`;
+                    }
+                }
+
+                if (improve.length > 0) {
+                    section += "\n## Things to Improve\n";
+                    for (const r of improve) {
+                        section += `- ${r.description}\n`;
+                    }
+                }
+
+                finalInstructions += section;
+            }
+        } catch {
+            // Non-critical: continue without recommendations
+        }
+
         // Get scorers from registry (synchronous)
         const scorers = getScorersByNames(record.scorers);
 

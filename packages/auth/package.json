@@ -7,7 +7,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/auth-client.ts",
-    "./providers": "./src/providers/index.ts"
+    "./providers": "./src/providers/index.ts",
+    "./google-scopes": "./src/google-scopes.ts"
   },
   "dependencies": {
     "@repo/database": "workspace:*",

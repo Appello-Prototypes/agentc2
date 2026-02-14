@@ -118,6 +118,53 @@ export const agentLearningToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "agent-learning"
+    },
+    {
+        name: "agent-learning-policy-update",
+        description: "Create or update the learning policy for an agent.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentId: { type: "string", description: "Agent slug or ID" },
+                enabled: { type: "boolean", description: "Enable/disable learning" },
+                autoPromotionEnabled: {
+                    type: "boolean",
+                    description: "Auto-promote winning candidates"
+                },
+                scheduledEnabled: {
+                    type: "boolean",
+                    description: "Enable scheduled learning triggers"
+                },
+                thresholdEnabled: {
+                    type: "boolean",
+                    description: "Enable threshold-based learning triggers"
+                },
+                signalThreshold: {
+                    type: "number",
+                    description: "Signal count to trigger learning"
+                },
+                signalWindowMinutes: {
+                    type: "number",
+                    description: "Time window for signal counting"
+                },
+                trafficSplitCandidate: {
+                    type: "number",
+                    description: "Traffic percentage for candidate version (0-1)"
+                },
+                minConfidenceForAuto: {
+                    type: "number",
+                    description: "Min confidence for auto-promotion (0-1)"
+                },
+                minWinRateForAuto: {
+                    type: "number",
+                    description: "Min win rate for auto-promotion (0-1)"
+                },
+                updatedBy: { type: "string", description: "Actor who made the change" }
+            },
+            required: ["agentId"]
+        },
+        invoke_url: "/api/mcp",
+        category: "agent-learning"
     }
 ];
 
@@ -183,5 +230,24 @@ export const agentLearningToolRoutes: McpToolRoute[] = [
         method: "GET",
         path: "/api/agents/{agentId}/learning/policy",
         pathParams: ["agentId"]
+    },
+    {
+        kind: "internal",
+        name: "agent-learning-policy-update",
+        method: "POST",
+        path: "/api/agents/{agentId}/learning/policy",
+        pathParams: ["agentId"],
+        bodyParams: [
+            "enabled",
+            "autoPromotionEnabled",
+            "scheduledEnabled",
+            "thresholdEnabled",
+            "signalThreshold",
+            "signalWindowMinutes",
+            "trafficSplitCandidate",
+            "minConfidenceForAuto",
+            "minWinRateForAuto",
+            "updatedBy"
+        ]
     }
 ];
