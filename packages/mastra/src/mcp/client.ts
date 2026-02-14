@@ -438,32 +438,9 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             }
         }
     },
-    {
-        key: "gdrive",
-        name: "Google Drive",
-        description: "File storage - search, list, and read Google Drive files",
-        category: "productivity",
-        authType: "apiKey",
-        providerType: "mcp",
-        configJson: {
-            requiredFields: ["GDRIVE_CREDENTIALS_PATH"],
-            fieldDefinitions: {
-                GDRIVE_CREDENTIALS_PATH: {
-                    label: "Google Drive credentials path",
-                    description: "Path to OAuth JSON credentials",
-                    placeholder: "./credentials/gdrive-oauth.json"
-                }
-            },
-            importHints: {
-                matchNames: ["Google Drive", "Google Workspace", "GDrive", "Google Suite"],
-                matchArgs: ["mcp-google-suite", "google-suite", "google-calendar-mcp"],
-                envAliases: {
-                    GOOGLE_OAUTH_CREDENTIALS: "GDRIVE_CREDENTIALS_PATH",
-                    GDRIVE_CREDENTIALS_PATH: "GDRIVE_CREDENTIALS_PATH"
-                }
-            }
-        }
-    },
+    // Google Drive MCP server deprecated — replaced by native OAuth tools
+    // (google-drive-search-files, google-drive-read-file, google-drive-create-doc)
+    // which use the same Google OAuth credentials as Gmail/Calendar.
     {
         key: "github",
         name: "GitHub",
@@ -1493,23 +1470,7 @@ function buildServerDefinitionForProvider(options: {
                 env: { SLACK_BOT_TOKEN: slackToken, SLACK_TEAM_ID: slackTeamId }
             };
         }
-        case "gdrive": {
-            const gdriveCredentialsPath =
-                getCredentialValue(credentials, ["GDRIVE_CREDENTIALS_PATH"]) ||
-                (allowEnvFallback ? process.env.GDRIVE_CREDENTIALS_PATH : undefined);
-            const gdriveOauthPath =
-                getCredentialValue(credentials, ["GDRIVE_OAUTH_PATH"]) ||
-                (allowEnvFallback ? process.env.GDRIVE_OAUTH_PATH : undefined);
-            if (!gdriveCredentialsPath) return null;
-            return {
-                command: "npx",
-                args: ["-y", "@modelcontextprotocol/server-gdrive"],
-                env: {
-                    GDRIVE_CREDENTIALS_PATH: gdriveCredentialsPath,
-                    ...(gdriveOauthPath ? { GDRIVE_OAUTH_PATH: gdriveOauthPath } : {})
-                }
-            };
-        }
+        // case "gdrive": deprecated — replaced by native OAuth Google Drive tools
         case "github": {
             const githubToken =
                 getCredentialValue(credentials, ["GITHUB_PERSONAL_ACCESS_TOKEN"]) ||

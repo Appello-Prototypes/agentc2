@@ -7,7 +7,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callGmailApi } from "./shared";
+import { callGmailApi, resolveGmailAddress } from "./shared";
 
 type GmailFullMessage = {
     id: string;
@@ -94,9 +94,8 @@ export const gmailReadEmailTool = createTool({
         messageId: z.string().describe("The Gmail message ID to read"),
         gmailAddress: z
             .string()
-            .email()
-            .default("corey@useappello.com")
-            .describe("The Gmail address (defaults to corey@useappello.com)")
+            .default("")
+            .describe("Google account email. Leave empty to auto-detect from connected account.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -124,7 +123,7 @@ export const gmailReadEmailTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ messageId, gmailAddress }) => {
-        const address = gmailAddress || "corey@useappello.com";
+        const address = await resolveGmailAddress(gmailAddress);
         try {
             const response = await callGmailApi(address, `/users/me/messages/${messageId}`, {
                 params: { format: "full" }

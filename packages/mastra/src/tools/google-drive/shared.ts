@@ -5,7 +5,13 @@
  * using the same Google OAuth credentials as Gmail/Calendar.
  */
 
-import { getAccessToken, refreshAccessToken, decrypt, checkGoogleScopes } from "../gmail/shared";
+import {
+    getAccessToken,
+    refreshAccessToken,
+    decrypt,
+    checkGoogleScopes,
+    resolveGmailAddress
+} from "../gmail/shared";
 import { prisma } from "@repo/database";
 
 export const DRIVE_API = "https://www.googleapis.com/drive/v3";
@@ -100,4 +106,4 @@ export const callDriveApi = async (
     return response;
 };
 
-export { checkGoogleScopes };
+export { checkGoogleScopes, resolveGmailAddress };

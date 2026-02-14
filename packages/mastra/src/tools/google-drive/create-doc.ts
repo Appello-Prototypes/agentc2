@@ -8,7 +8,13 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callDriveApi, DRIVE_UPLOAD_API, DRIVE_WRITE_SCOPES, checkGoogleScopes } from "./shared";
+import {
+    callDriveApi,
+    DRIVE_UPLOAD_API,
+    DRIVE_WRITE_SCOPES,
+    checkGoogleScopes,
+    resolveGmailAddress
+} from "./shared";
 
 export const googleDriveCreateDocTool = createTool({
     id: "google-drive-create-doc",
@@ -23,9 +29,8 @@ export const googleDriveCreateDocTool = createTool({
             ),
         gmailAddress: z
             .string()
-            .email()
-            .default("corey@useappello.com")
-            .describe("The Google account email (defaults to corey@useappello.com)")
+            .default("")
+            .describe("Google account email. Leave empty to auto-detect from connected account.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -35,7 +40,7 @@ export const googleDriveCreateDocTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ title, content, gmailAddress }) => {
-        const address = gmailAddress || "corey@useappello.com";
+        const address = await resolveGmailAddress(gmailAddress);
         try {
             // Pre-flight scope check
             const scopeCheck = await checkGoogleScopes(address, DRIVE_WRITE_SCOPES);

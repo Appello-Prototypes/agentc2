@@ -4,12 +4,18 @@
  * required OAuth connection is not active for the organization.
  */
 export const TOOL_OAUTH_REQUIREMENTS: Record<string, string> = {
-    // Google (Gmail OAuth — also covers Calendar)
+    // Google (Gmail OAuth — also covers Calendar and Drive)
     "gmail-archive-email": "gmail",
     "gmail-search-emails": "gmail",
     "gmail-read-email": "gmail",
     "gmail-draft-email": "gmail",
+    "gmail-send-email": "gmail",
     "google-calendar-search-events": "gmail",
+    "google-calendar-list-events": "gmail",
+    "google-calendar-get-event": "gmail",
+    "google-calendar-create-event": "gmail",
+    "google-calendar-update-event": "gmail",
+    "google-calendar-delete-event": "gmail",
     "google-drive-search-files": "gmail",
     "google-drive-read-file": "gmail",
     "google-drive-create-doc": "gmail",

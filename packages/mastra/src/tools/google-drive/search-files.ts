@@ -7,7 +7,13 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callDriveApi, DRIVE_API, DRIVE_READ_SCOPES, checkGoogleScopes } from "./shared";
+import {
+    callDriveApi,
+    DRIVE_API,
+    DRIVE_READ_SCOPES,
+    checkGoogleScopes,
+    resolveGmailAddress
+} from "./shared";
 
 type DriveFile = {
     id?: string;
@@ -42,9 +48,8 @@ export const googleDriveSearchFilesTool = createTool({
             .describe("Maximum number of results (1-50, default 10)"),
         gmailAddress: z
             .string()
-            .email()
-            .default("corey@useappello.com")
-            .describe("The Google account email (defaults to corey@useappello.com)")
+            .default("")
+            .describe("Google account email. Leave empty to auto-detect from connected account.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -62,7 +67,7 @@ export const googleDriveSearchFilesTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ query, maxResults, gmailAddress }) => {
-        const address = gmailAddress || "corey@useappello.com";
+        const address = await resolveGmailAddress(gmailAddress);
         try {
             // Pre-flight scope check
             const scopeCheck = await checkGoogleScopes(address, DRIVE_READ_SCOPES);

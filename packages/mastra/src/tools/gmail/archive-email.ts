@@ -2,6 +2,7 @@ import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { prisma } from "@repo/database";
 import { createDecipheriv } from "crypto";
+import { resolveGmailAddress } from "./shared";
 
 const GMAIL_API = "https://gmail.googleapis.com/gmail/v1";
 const TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
@@ -197,9 +198,8 @@ export const gmailArchiveEmailTool = createTool({
         messageId: z.string().describe("The Gmail message ID to archive"),
         gmailAddress: z
             .string()
-            .email()
-            .default("corey@useappello.com")
-            .describe("The Gmail address (defaults to corey@useappello.com)")
+            .default("")
+            .describe("Google account email. Leave empty to auto-detect from connected account.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -207,7 +207,7 @@ export const gmailArchiveEmailTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ messageId, gmailAddress }) => {
-        const address = gmailAddress || "corey@useappello.com";
+        const address = await resolveGmailAddress(gmailAddress);
         try {
             const result = await callGmailModify(address, messageId, {
                 removeLabelIds: ["INBOX"]

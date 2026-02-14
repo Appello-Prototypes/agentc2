@@ -10,9 +10,17 @@ import {
     gmailArchiveEmailTool,
     gmailSearchEmailsTool,
     gmailReadEmailTool,
-    gmailDraftEmailTool
+    gmailDraftEmailTool,
+    gmailSendEmailTool
 } from "./gmail";
-import { googleCalendarSearchEventsTool } from "./google-calendar";
+import {
+    googleCalendarSearchEventsTool,
+    googleCalendarListEventsTool,
+    googleCalendarGetEventTool,
+    googleCalendarCreateEventTool,
+    googleCalendarUpdateEventTool,
+    googleCalendarDeleteEventTool
+} from "./google-calendar";
 import {
     googleDriveSearchFilesTool,
     googleDriveReadFileTool,
@@ -355,7 +363,13 @@ export const toolCategoryMap: Record<string, string> = {
     "gmail-search-emails": "Email & Calendar",
     "gmail-read-email": "Email & Calendar",
     "gmail-draft-email": "Email & Calendar",
+    "gmail-send-email": "Email & Calendar",
     "google-calendar-search-events": "Email & Calendar",
+    "google-calendar-list-events": "Email & Calendar",
+    "google-calendar-get-event": "Email & Calendar",
+    "google-calendar-create-event": "Email & Calendar",
+    "google-calendar-update-event": "Email & Calendar",
+    "google-calendar-delete-event": "Email & Calendar",
     "outlook-mail-list-emails": "Email & Calendar",
     "outlook-mail-get-email": "Email & Calendar",
     "outlook-mail-send-email": "Email & Calendar",
@@ -591,9 +605,15 @@ export const toolRegistry: Record<string, any> = {
     "gmail-search-emails": gmailSearchEmailsTool,
     "gmail-read-email": gmailReadEmailTool,
     "gmail-draft-email": gmailDraftEmailTool,
+    "gmail-send-email": gmailSendEmailTool,
 
     // Google Calendar tools
     "google-calendar-search-events": googleCalendarSearchEventsTool,
+    "google-calendar-list-events": googleCalendarListEventsTool,
+    "google-calendar-get-event": googleCalendarGetEventTool,
+    "google-calendar-create-event": googleCalendarCreateEventTool,
+    "google-calendar-update-event": googleCalendarUpdateEventTool,
+    "google-calendar-delete-event": googleCalendarDeleteEventTool,
 
     // Google Drive tools
     "google-drive-search-files": googleDriveSearchFilesTool,

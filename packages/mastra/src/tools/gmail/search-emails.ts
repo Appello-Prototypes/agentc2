@@ -7,7 +7,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callGmailApi } from "./shared";
+import { callGmailApi, resolveGmailAddress } from "./shared";
 
 type GmailMessage = {
     id: string;
@@ -46,9 +46,8 @@ export const gmailSearchEmailsTool = createTool({
             .describe("Maximum number of results to return (1-20, default 5)"),
         gmailAddress: z
             .string()
-            .email()
-            .default("corey@useappello.com")
-            .describe("The Gmail address (defaults to corey@useappello.com)")
+            .default("")
+            .describe("Google account email. Leave empty to auto-detect from connected account.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -68,7 +67,7 @@ export const gmailSearchEmailsTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ query, maxResults, gmailAddress }) => {
-        const address = gmailAddress || "corey@useappello.com";
+        const address = await resolveGmailAddress(gmailAddress);
         try {
             // Step 1: Search for message IDs
             const listResponse = await callGmailApi(address, "/users/me/messages", {

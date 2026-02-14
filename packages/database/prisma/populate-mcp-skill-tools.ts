@@ -21,7 +21,7 @@ const SERVER_TO_SKILL: Record<string, string> = {
     slack: "mcp-communication-slack",
     justcall: "mcp-communication-justcall",
     twilio: "mcp-communication-twilio",
-    gdrive: "mcp-files-gdrive",
+    // gdrive: removed — native OAuth Google Drive tools replace MCP gdrive
     github: "mcp-code-github",
     fathom: "mcp-knowledge-fathom",
     atlas: "mcp-automation-atlas"
@@ -173,11 +173,7 @@ async function populateFromKnownTools() {
             "github_search_code",
             "github_list_commits"
         ],
-        "mcp-files-gdrive": [
-            "gdrive_gdrive-search-files",
-            "gdrive_gdrive-list-files",
-            "gdrive_gdrive-read-file"
-        ],
+        // mcp-files-gdrive: removed — native OAuth Google Drive tools replace MCP gdrive
         "mcp-communication-justcall": [
             "justcall_justcall-get-call-logs",
             "justcall_justcall-send-sms"

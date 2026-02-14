@@ -1,20 +1,20 @@
 /**
- * Gmail Draft Email Tool
+ * Gmail Send Email Tool
  *
- * Creates a draft email in Gmail for human review before sending.
- * Supports reply-to threading via In-Reply-To / References headers.
+ * Sends an email via Gmail. Includes a confirmSend safeguard —
+ * when confirmSend is false (default), returns a preview instead of sending.
+ * The agent must show the preview and get explicit user approval before
+ * calling again with confirmSend=true.
  */
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { callGmailApi, resolveGmailAddress } from "./shared";
 
-type GmailDraftResponse = {
+type GmailSendResponse = {
     id: string;
-    message?: {
-        id: string;
-        threadId: string;
-    };
+    threadId: string;
+    labelIds?: string[];
 };
 
 /**
@@ -57,24 +57,27 @@ const buildRawMessage = (params: {
         .replace(/=+$/, "");
 };
 
-export const gmailDraftEmailTool = createTool({
-    id: "gmail-draft-email",
+export const gmailSendEmailTool = createTool({
+    id: "gmail-send-email",
     description:
-        "Create a draft email in Gmail for human review. The draft appears in the Drafts folder and is NOT sent. Use for composing replies or new messages that Corey can review before sending.",
+        "Send an email via Gmail. IMPORTANT: You MUST show the user a preview of the email (recipients, subject, body) and get their explicit confirmation BEFORE calling this tool with confirmSend=true. When confirmSend is false (default), returns a preview without sending.",
     inputSchema: z.object({
         to: z.string().describe("Recipient email address(es), comma-separated"),
         subject: z.string().describe("Email subject line"),
         body: z.string().describe("Plain text email body"),
         cc: z.string().optional().describe("CC recipients, comma-separated"),
         bcc: z.string().optional().describe("BCC recipients, comma-separated"),
-        threadId: z
-            .string()
-            .optional()
-            .describe("Gmail thread ID to attach the draft to (for replies)"),
+        threadId: z.string().optional().describe("Gmail thread ID to send in (for replies)"),
         inReplyTo: z
             .string()
             .optional()
             .describe("Message-ID header of the email being replied to"),
+        confirmSend: z
+            .boolean()
+            .default(false)
+            .describe(
+                "Set to true only AFTER showing the user a preview and getting their explicit approval. When false, returns a preview instead of sending."
+            ),
         gmailAddress: z
             .string()
             .default("")
@@ -82,14 +85,38 @@ export const gmailDraftEmailTool = createTool({
     }),
     outputSchema: z.object({
         success: z.boolean(),
-        draftId: z.string().optional(),
+        preview: z.boolean().optional(),
         messageId: z.string().optional(),
         threadId: z.string().optional(),
+        to: z.string().optional(),
+        subject: z.string().optional(),
+        bodySnippet: z.string().optional(),
         error: z.string().optional()
     }),
-    execute: async ({ to, subject, body, cc, bcc, threadId, inReplyTo, gmailAddress }) => {
+    execute: async ({
+        to,
+        subject,
+        body,
+        cc,
+        bcc,
+        threadId,
+        inReplyTo,
+        confirmSend,
+        gmailAddress
+    }) => {
         const address = await resolveGmailAddress(gmailAddress);
         try {
+            // If confirmSend is false, return a preview
+            if (!confirmSend) {
+                return {
+                    success: true,
+                    preview: true,
+                    to,
+                    subject,
+                    bodySnippet: body.length > 200 ? body.slice(0, 200) + "..." : body
+                };
+            }
+
             const raw = buildRawMessage({
                 to,
                 subject,
@@ -101,16 +128,14 @@ export const gmailDraftEmailTool = createTool({
                 fromAddress: address
             });
 
-            const requestBody: Record<string, unknown> = {
-                message: { raw }
-            };
+            const requestBody: Record<string, unknown> = { raw };
 
             // Attach to existing thread for replies
             if (threadId) {
-                (requestBody.message as Record<string, unknown>).threadId = threadId;
+                requestBody.threadId = threadId;
             }
 
-            const response = await callGmailApi(address, "/users/me/drafts", {
+            const response = await callGmailApi(address, "/users/me/messages/send", {
                 method: "POST",
                 body: requestBody
             });
@@ -119,16 +144,16 @@ export const gmailDraftEmailTool = createTool({
                 const errorText = await response.text();
                 return {
                     success: false,
-                    error: `Gmail draft creation failed (${response.status}): ${errorText}`
+                    error: `Gmail send failed (${response.status}): ${errorText}`
                 };
             }
 
-            const data = (await response.json()) as GmailDraftResponse;
+            const data = (await response.json()) as GmailSendResponse;
             return {
                 success: true,
-                draftId: data.id,
-                messageId: data.message?.id,
-                threadId: data.message?.threadId
+                preview: false,
+                messageId: data.id,
+                threadId: data.threadId
             };
         } catch (error) {
             return {

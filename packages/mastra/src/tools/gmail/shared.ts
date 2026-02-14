@@ -193,6 +193,30 @@ export const callGmailApi = async (
 };
 
 /**
+ * Resolve the Gmail address to use for API calls.
+ * If provided and non-empty, use as-is.
+ * If empty/default, query the first active GmailIntegration from the database.
+ */
+export const resolveGmailAddress = async (gmailAddress?: string): Promise<string> => {
+    if (gmailAddress && gmailAddress.includes("@")) {
+        return gmailAddress;
+    }
+    // Fallback: find the first active Gmail integration
+    const integration = await prisma.gmailIntegration.findFirst({
+        where: { isActive: true },
+        orderBy: { updatedAt: "desc" },
+        select: { gmailAddress: true }
+    });
+    if (!integration?.gmailAddress) {
+        throw new Error(
+            "No Gmail address provided and no active Gmail integration found. " +
+                "Connect Google in Settings > Integrations first."
+        );
+    }
+    return integration.gmailAddress;
+};
+
+/**
  * Check whether stored Google OAuth credentials include the required scopes.
  * Returns { ok: true } if all required scopes are granted, or { ok: false, missing: [...] }.
  */

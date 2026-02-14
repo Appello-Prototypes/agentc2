@@ -4499,54 +4499,6 @@ export const asyncInvokeFunction = inngest.createFunction(
             });
         }
 
-        if (result.success && result.output && context?.slackUserId) {
-            await step.run("send-slack-dm", async () => {
-                try {
-                    const { sendSlackDM } = await import("./slack");
-                    const outputText =
-                        typeof result.output === "string" ? result.output : String(result.output);
-
-                    // Resolve bot token from org context for multi-tenant support
-                    let botToken: string | undefined;
-                    const orgId = context.organizationId as string | undefined;
-                    if (orgId) {
-                        try {
-                            const provider = await prisma.integrationProvider.findUnique({
-                                where: { key: "slack" }
-                            });
-                            if (provider) {
-                                const { decryptCredentials } =
-                                    await import("@/lib/credential-crypto");
-                                const conn = await prisma.integrationConnection.findFirst({
-                                    where: {
-                                        organizationId: orgId,
-                                        providerId: provider.id,
-                                        isActive: true
-                                    },
-                                    orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
-                                });
-                                if (conn?.credentials) {
-                                    const creds = decryptCredentials(conn.credentials) as Record<
-                                        string,
-                                        unknown
-                                    >;
-                                    botToken = (creds.botToken || creds.SLACK_BOT_TOKEN) as
-                                        | string
-                                        | undefined;
-                                }
-                            }
-                        } catch {
-                            // Fall through to env var fallback
-                        }
-                    }
-
-                    await sendSlackDM(String(context.slackUserId), outputText, botToken);
-                } catch (error) {
-                    console.error("[Inngest] Failed to send Slack DM:", error);
-                }
-            });
-        }
-
         // Step 4: Trigger run/completed pipeline for cost tracking, evaluations, etc.
         if (result.success) {
             await step.sendEvent("trigger-run-completed", {

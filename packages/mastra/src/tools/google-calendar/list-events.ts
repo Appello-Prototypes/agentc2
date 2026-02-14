@@ -1,7 +1,7 @@
 /**
- * Google Calendar Search Events Tool
+ * Google Calendar List Events Tool
  *
- * Searches Google Calendar events within a time range by text query.
+ * Lists upcoming Google Calendar events within a time range.
  * Uses the same Google OAuth credentials as Gmail (requires calendar scope).
  */
 
@@ -32,32 +32,27 @@ type CalendarListResponse = {
     nextPageToken?: string;
 };
 
-export const googleCalendarSearchEventsTool = createTool({
-    id: "google-calendar-search-events",
+export const googleCalendarListEventsTool = createTool({
+    id: "google-calendar-list-events",
     description:
-        "Search Google Calendar events by text query within a time range. Returns matching events with attendees, times, and locations. Useful for checking upcoming meetings with a company or person.",
+        "List upcoming Google Calendar events within a time range. Returns events with attendees, times, and locations. Use to check what meetings are scheduled for a day/week.",
     inputSchema: z.object({
-        query: z
-            .string()
-            .describe(
-                "Text to search for in event summaries, descriptions, locations, and attendees"
-            ),
         timeMin: z
             .string()
-            .describe("Start of time range in ISO 8601 format (e.g., '2026-02-12T00:00:00Z')"),
+            .describe("Start of time range in ISO 8601 format (e.g., '2026-02-13T00:00:00Z')"),
         timeMax: z
             .string()
-            .describe("End of time range in ISO 8601 format (e.g., '2026-02-19T00:00:00Z')"),
+            .describe("End of time range in ISO 8601 format (e.g., '2026-02-20T00:00:00Z')"),
         calendarId: z
             .string()
             .default("primary")
-            .describe("Calendar ID to search (defaults to 'primary')"),
+            .describe("Calendar ID to list (defaults to 'primary')"),
         maxResults: z
             .number()
             .min(1)
-            .max(20)
-            .default(10)
-            .describe("Maximum number of results (1-20, default 10)"),
+            .max(50)
+            .default(20)
+            .describe("Maximum number of results (1-50, default 20)"),
         gmailAddress: z
             .string()
             .default("")
@@ -84,19 +79,16 @@ export const googleCalendarSearchEventsTool = createTool({
         ),
         error: z.string().optional()
     }),
-    execute: async ({ query, timeMin, timeMax, calendarId, maxResults, gmailAddress }) => {
+    execute: async ({ timeMin, timeMax, calendarId, maxResults, gmailAddress }) => {
         const address = await resolveGmailAddress(gmailAddress);
         const calendar = calendarId || "primary";
         try {
-            // Pre-flight scope check: verify calendar.readonly was granted
             const scopeCheck = await checkGoogleScopes(address, CALENDAR_READ_SCOPES);
             if (!scopeCheck.ok) {
                 return {
                     success: false,
                     events: [],
-                    error:
-                        `Google Calendar requires scope: ${scopeCheck.missing.join(", ")}. ` +
-                        `Re-authorize Google OAuth to grant calendar access.`
+                    error: `Google Calendar requires scope: ${scopeCheck.missing.join(", ")}. Re-authorize Google OAuth to grant calendar access.`
                 };
             }
 
@@ -104,10 +96,9 @@ export const googleCalendarSearchEventsTool = createTool({
                 address,
                 `/calendars/${encodeURIComponent(calendar)}/events`,
                 {
-                    q: query,
                     timeMin: timeMin.includes("T") ? timeMin : `${timeMin}T00:00:00Z`,
                     timeMax: timeMax.includes("T") ? timeMax : `${timeMax}T23:59:59Z`,
-                    maxResults: String(maxResults || 10),
+                    maxResults: String(maxResults || 20),
                     singleEvents: "true",
                     orderBy: "startTime"
                 }
@@ -115,14 +106,6 @@ export const googleCalendarSearchEventsTool = createTool({
 
             if (!response.ok) {
                 const errorText = await response.text();
-                // Provide clear message if scope is missing
-                if (response.status === 403 || response.status === 401) {
-                    return {
-                        success: false,
-                        events: [],
-                        error: `Calendar access denied (${response.status}). The Google OAuth token may need calendar scopes. Re-authorize at /api/integrations/gmail/sync. Details: ${errorText}`
-                    };
-                }
                 return {
                     success: false,
                     events: [],
@@ -145,10 +128,7 @@ export const googleCalendarSearchEventsTool = createTool({
                 link: event.htmlLink || ""
             }));
 
-            return {
-                success: true,
-                events
-            };
+            return { success: true, events };
         } catch (error) {
             return {
                 success: false,

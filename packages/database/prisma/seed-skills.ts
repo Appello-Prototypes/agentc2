@@ -616,17 +616,23 @@ Tools for Building Information Modeling (BIM) analysis and reporting.
         slug: "email-management",
         name: "Email & Calendar Management",
         description:
-            "Full email and calendar operations across Google (Gmail, Google Calendar) and Microsoft (Outlook Mail, Outlook Calendar): search, read, draft, send, archive emails and list, create, update calendar events.",
+            "Full email and calendar operations across Google (Gmail, Google Calendar) and Microsoft (Outlook Mail, Outlook Calendar): search, read, draft, send, archive emails and list, search, create, update calendar events.",
         instructions: `## Email & Calendar Management
 
 ### Gmail
 - **gmail-search-emails**: Search Gmail for emails matching a query
 - **gmail-read-email**: Read the full content of a specific email
 - **gmail-draft-email**: Create a draft reply or new email in Gmail
+- **gmail-send-email**: Send an email via Gmail. ALWAYS show a preview first and get user confirmation before sending (use confirmSend=true only after approval).
 - **gmail-archive-email**: Archive a Gmail email by removing it from the inbox
 
 ### Google Calendar
-- **google-calendar-search-events**: Search Google Calendar for events by query, date range, or attendees
+- **google-calendar-search-events**: Search Google Calendar for events by text query and date range
+- **google-calendar-list-events**: List upcoming events in a date range
+- **google-calendar-get-event**: Get full details of a specific event by ID
+- **google-calendar-create-event**: Create a new calendar event. ALWAYS show a preview first and get user confirmation before creating (use confirmCreate=true only after approval).
+- **google-calendar-update-event**: Update an existing event (PATCH — only sends changed fields)
+- **google-calendar-delete-event**: Delete a calendar event. ALWAYS confirm with the user before deleting (use confirmDelete=true only after explicit approval).
 
 ### Outlook Mail
 - **outlook-mail-list-emails**: List recent emails from Outlook inbox or folders
@@ -645,8 +651,14 @@ Tools for Building Information Modeling (BIM) analysis and reporting.
             "gmail-search-emails",
             "gmail-read-email",
             "gmail-draft-email",
+            "gmail-send-email",
             "gmail-archive-email",
             "google-calendar-search-events",
+            "google-calendar-list-events",
+            "google-calendar-get-event",
+            "google-calendar-create-event",
+            "google-calendar-update-event",
+            "google-calendar-delete-event",
             "outlook-mail-list-emails",
             "outlook-mail-get-email",
             "outlook-mail-send-email",
@@ -656,6 +668,29 @@ Tools for Building Information Modeling (BIM) analysis and reporting.
             "outlook-calendar-create-event",
             "outlook-calendar-update-event"
         ],
+        type: "SYSTEM"
+    },
+    {
+        slug: "google-drive-files",
+        name: "Google Drive Files",
+        description:
+            "Native Google Drive file operations: search, read, and create Google Docs, Sheets, and Slides using Google OAuth.",
+        instructions: `## Google Drive Files
+
+Access Google Drive using native OAuth (same Google account as Gmail/Calendar).
+
+### Capabilities:
+- **google-drive-search-files**: Search files by name, content, or type using Drive query syntax
+- **google-drive-read-file**: Read content from Google Docs (as text), Sheets (as CSV), Slides, or other files
+- **google-drive-create-doc**: Create a new Google Doc with text content
+
+### Best practices:
+- Use search to find files before trying to read them
+- Google Docs/Sheets/Slides are automatically exported to text formats
+- File content is truncated at 50KB to avoid token explosion`,
+        category: "domain",
+        tags: ["google-drive", "files", "documents", "google"],
+        tools: ["google-drive-search-files", "google-drive-read-file", "google-drive-create-doc"],
         type: "SYSTEM"
     },
     {
@@ -846,19 +881,11 @@ Access Twilio voice call capabilities through MCP tools.
     {
         slug: "mcp-files-gdrive",
         name: "Google Drive Files",
-        description:
-            "File access via Google Drive: search, list, and read Google Docs, Sheets, and Slides.",
-        instructions: `## Google Drive Files Integration
-
-Access Google Drive files through MCP tools.
-
-### Capabilities:
-- Search files by name, content, or type
-- List files in folders
-- Read content from Google Docs, Sheets, and Slides
-- Access file metadata and sharing permissions`,
+        description: "DEPRECATED — replaced by google-drive-files skill. Do not use.",
+        instructions: `## DEPRECATED
+This MCP-based Google Drive skill has been replaced by the native OAuth google-drive-files skill.`,
         category: "integration",
-        tags: ["gdrive", "google-drive", "files", "documents"],
+        tags: ["deprecated"],
         tools: [],
         type: "SYSTEM"
     },

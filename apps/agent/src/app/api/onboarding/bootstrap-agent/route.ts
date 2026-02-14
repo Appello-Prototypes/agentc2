@@ -80,11 +80,19 @@ export async function POST(request: NextRequest) {
                 "gmail-search-emails",
                 "gmail-read-email",
                 "gmail-send-email",
-                "gmail-draft-email"
+                "gmail-draft-email",
+                "gmail-archive-email"
             );
         }
         if (hasCalendar) {
-            tools.push("google-calendar-search-events");
+            tools.push(
+                "google-calendar-search-events",
+                "google-calendar-list-events",
+                "google-calendar-get-event",
+                "google-calendar-create-event",
+                "google-calendar-update-event",
+                "google-calendar-delete-event"
+            );
         }
         if (hasDrive) {
             tools.push(
@@ -94,7 +102,26 @@ export async function POST(request: NextRequest) {
             );
         }
         if (hasSlack) {
-            tools.push("slack-post-message", "slack-list-channels", "slack-get-channel-history");
+            // Slack tools are MCP-based — use the correct MCP tool IDs
+            tools.push(
+                "slack_slack_post_message",
+                "slack_slack_list_channels",
+                "slack_slack_get_channel_history",
+                "slack_slack_reply_to_thread",
+                "slack_slack_get_users"
+            );
+        }
+
+        // Collect skill slugs to attach (pinned)
+        const skillSlugsToAttach: string[] = [];
+        if (hasGmail || hasCalendar) {
+            skillSlugsToAttach.push("email-management");
+        }
+        if (hasDrive) {
+            skillSlugsToAttach.push("google-drive-files");
+        }
+        if (hasSlack) {
+            skillSlugsToAttach.push("mcp-communication-slack");
         }
 
         // Generate a unique slug
@@ -171,6 +198,24 @@ export async function POST(request: NextRequest) {
             });
         }
 
+        // Attach skills (pinned) — injects skill instructions into system prompt
+        if (skillSlugsToAttach.length > 0) {
+            const skills = await prisma.skill.findMany({
+                where: { slug: { in: skillSlugsToAttach } },
+                select: { id: true, slug: true }
+            });
+            if (skills.length > 0) {
+                await prisma.agentSkill.createMany({
+                    data: skills.map((skill) => ({
+                        agentId: agent.id,
+                        skillId: skill.id,
+                        pinned: true
+                    })),
+                    skipDuplicates: true
+                });
+            }
+        }
+
         return NextResponse.json({
             success: true,
             agent: {
@@ -207,13 +252,13 @@ function buildStarterInstructions(
 
     if (hasGmail) {
         toolInstructions.push(
-            `- You have access to Gmail tools. When the user first interacts with you, proactively offer to summarize their recent unread emails. Use the gmail-search-emails tool visibly so they can see you working.`
+            `- You have access to Gmail tools. When the user first interacts with you, proactively offer to summarize their recent unread emails. Use the gmail-search-emails tool visibly so they can see you working. You can also send emails — ALWAYS show a preview and get confirmation before sending (use confirmSend=true only after explicit approval).`
         );
     }
 
     if (hasCalendar) {
         toolInstructions.push(
-            `- You have access to Google Calendar. You can search events, check schedules, and see attendees. Use this to cross-reference meetings with email contacts for richer context.`
+            `- You have access to Google Calendar. You can search events, list upcoming events, get event details, create new events, update existing events, and delete events. Use this to cross-reference meetings with email contacts for richer context. When creating, updating, or deleting events, ALWAYS show a preview first and get user confirmation.`
         );
     }
 
@@ -225,7 +270,7 @@ function buildStarterInstructions(
 
     if (hasSlack) {
         toolInstructions.push(
-            `- You have access to Slack tools. You can check channels and send messages. Mention this capability when relevant.`
+            `- You have access to Slack tools. You can check channels, send messages, reply to threads, and look up users. Mention this capability when relevant.`
         );
     }
 
