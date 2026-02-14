@@ -1,0 +1,39 @@
+---
+description: Enforce tool parity between Registry, MCP Schema, and Workspace Concierge
+globs:
+    - packages/mastra/src/tools/**
+    - packages/mastra/src/tools/mcp-schemas/**
+---
+
+# Tool Parity Rule
+
+When adding, removing, or renaming tools in the Mastra tool system, keep all three sources of truth in sync:
+
+1. **Tool Registry** (`packages/mastra/src/tools/registry.ts`)
+    - Add the tool to `toolRegistry` and `toolCategoryMap`.
+
+2. **MCP Schema** (`packages/mastra/src/tools/mcp-schemas/`)
+    - If the tool should be accessible via Cursor IDE / external MCP clients, add a definition to the appropriate schema file and re-export from `index.ts`.
+
+3. **Workspace Concierge Agent**
+    - After deploying, use `agent_update` (or the platform UI) to add the new tool ID to the Workspace Concierge agent's tool list.
+
+## Quick Checklist
+
+- [ ] New tool function created in `packages/mastra/src/tools/`
+- [ ] Imported and added to `toolRegistry` in `registry.ts`
+- [ ] Added to `toolCategoryMap` in `registry.ts`
+- [ ] (If MCP-exposed) Added to the appropriate `mcp-schemas/*.ts` file
+- [ ] (If MCP-exposed) Re-exported from `mcp-schemas/index.ts`
+- [ ] Tool ID added to Workspace Concierge agent
+
+## Verification
+
+Run the parity check script to confirm zero gaps:
+
+```bash
+bun run scripts/check-tool-parity.ts --skip-api   # Local check (registry vs MCP schema)
+bun run scripts/check-tool-parity.ts               # Full check (includes live Concierge)
+```
+
+The script exits with code 1 if gaps are found.

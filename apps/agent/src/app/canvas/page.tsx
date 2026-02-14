@@ -4,8 +4,28 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import { Button, Badge, Skeleton } from "@repo/ui";
-import { PlusIcon, SearchIcon, LayoutDashboardIcon, TrashIcon, PencilIcon } from "lucide-react";
+import {
+    PlusIcon,
+    SearchIcon,
+    LayoutDashboardIcon,
+    TrashIcon,
+    PencilIcon,
+    LayoutTemplateIcon,
+    Loader2Icon
+} from "lucide-react";
 import Link from "next/link";
+
+interface TemplateSummary {
+    slug: string;
+    title: string;
+    description: string;
+    category: string;
+    tags: string[];
+    preview: {
+        layout: { type: string; columns: number };
+        components: Array<{ type: string; span: number; title?: string }>;
+    };
+}
 
 interface PreviewComponent {
     type: string;
@@ -143,9 +163,12 @@ export default function CanvasGalleryPage() {
     const [search, setSearch] = useState("");
     const [categoryFilter, setCategoryFilter] = useState<string>("");
     const [deleteArmedSlug, setDeleteArmedSlug] = useState<string | null>(null);
+    const [templates, setTemplates] = useState<TemplateSummary[]>([]);
+    const [creatingTemplate, setCreatingTemplate] = useState<string | null>(null);
 
     useEffect(() => {
         fetchCanvases();
+        fetchTemplates();
     }, []);
 
     async function fetchCanvases() {
@@ -159,6 +182,40 @@ export default function CanvasGalleryPage() {
             console.error("Failed to fetch canvases:", err);
         } finally {
             setLoading(false);
+        }
+    }
+
+    async function fetchTemplates() {
+        try {
+            const res = await fetch(`${getApiBase()}/api/canvas/templates`);
+            if (res.ok) {
+                const data = await res.json();
+                setTemplates(data.templates || []);
+            }
+        } catch (err) {
+            console.error("Failed to fetch templates:", err);
+        }
+    }
+
+    async function handleCreateFromTemplate(templateSlug: string) {
+        setCreatingTemplate(templateSlug);
+        try {
+            const res = await fetch(`${getApiBase()}/api/canvas/templates`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ templateSlug })
+            });
+            if (res.ok) {
+                const canvas = await res.json();
+                router.push(`/canvas/${canvas.slug}`);
+            } else {
+                const err = await res.json();
+                console.error("Template creation failed:", err.error);
+            }
+        } catch (err) {
+            console.error("Failed to create from template:", err);
+        } finally {
+            setCreatingTemplate(null);
         }
     }
 
@@ -238,6 +295,63 @@ export default function CanvasGalleryPage() {
                     </select>
                 )}
             </div>
+
+            {/* Templates Section */}
+            {templates.length > 0 && (
+                <div className="mb-8">
+                    <div className="mb-3 flex items-center gap-2">
+                        <LayoutTemplateIcon className="text-muted-foreground size-4" />
+                        <h2 className="text-sm font-medium">Start from Template</h2>
+                    </div>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {templates.map((tpl) => (
+                            <button
+                                key={tpl.slug}
+                                onClick={() => handleCreateFromTemplate(tpl.slug)}
+                                disabled={creatingTemplate !== null}
+                                className="bg-card group cursor-pointer rounded-lg border border-dashed p-4 text-left transition-all hover:border-solid hover:shadow-md disabled:opacity-60"
+                            >
+                                {/* Mini preview */}
+                                <div className="bg-muted/50 mb-3 h-20 overflow-hidden rounded-md">
+                                    <CanvasMiniPreview
+                                        preview={{
+                                            layout: tpl.preview.layout,
+                                            components: tpl.preview.components.map((c) => ({
+                                                ...c,
+                                                row: undefined
+                                            }))
+                                        }}
+                                    />
+                                </div>
+                                <div className="flex items-start gap-2">
+                                    <div className="min-w-0 flex-1">
+                                        <h3 className="truncate text-sm font-semibold">
+                                            {tpl.title}
+                                        </h3>
+                                        <p className="text-muted-foreground mt-0.5 line-clamp-2 text-xs">
+                                            {tpl.description}
+                                        </p>
+                                    </div>
+                                    {creatingTemplate === tpl.slug && (
+                                        <Loader2Icon className="text-muted-foreground size-4 shrink-0 animate-spin" />
+                                    )}
+                                </div>
+                                <div className="mt-2 flex flex-wrap gap-1">
+                                    {tpl.tags.slice(0, 3).map((tag) => (
+                                        <Badge
+                                            key={tag}
+                                            variant="outline"
+                                            className="text-muted-foreground text-xs"
+                                        >
+                                            {tag}
+                                        </Badge>
+                                    ))}
+                                </div>
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
 
             {/* Canvas Grid */}
             {loading ? (

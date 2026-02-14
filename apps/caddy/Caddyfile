@@ -23,13 +23,13 @@ https://catalyst.localhost {
         reverse_proxy localhost:3002
     }
 
-    # Public landing page — exact root path routes to frontend app (port 3000)
+    # Public landing page — redirect root to welcome embed
     @landing_page {
         expression `{http.request.uri.path} == "/"`
     }
 
     handle @landing_page {
-        reverse_proxy localhost:3000
+        redir /embed-v2/welcome-v2 temporary
     }
 
     # Frontend static assets (namespaced via assetPrefix: '/_home')

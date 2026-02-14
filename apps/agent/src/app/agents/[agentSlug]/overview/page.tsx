@@ -83,6 +83,13 @@ interface OverviewData {
         version: number;
     };
     learning?: LearningData;
+    isAdversarialHardened?: boolean;
+    latestRedTeamSession?: {
+        id: string;
+        theme: string;
+        safetyScore: number | null;
+        completedAt: string | null;
+    } | null;
 }
 
 function HealthIndicator({ health }: { health: "healthy" | "warning" | "critical" }) {
@@ -141,7 +148,9 @@ export default function OverviewPage() {
                 alerts: result.alerts,
                 health: result.health,
                 agent: result.agent,
-                learning: result.learning
+                learning: result.learning,
+                isAdversarialHardened: result.isAdversarialHardened,
+                latestRedTeamSession: result.latestRedTeamSession
             });
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load overview");
@@ -193,6 +202,11 @@ export default function OverviewPage() {
                 </div>
                 <div className="flex items-center gap-4">
                     <HealthIndicator health={data?.health || "healthy"} />
+                    {data?.isAdversarialHardened && (
+                        <Badge variant="outline" className="border-green-500 text-green-600">
+                            Adversarial Hardened
+                        </Badge>
+                    )}
                     <Button onClick={() => router.push(`/agents/${agentSlug}/test`)}>
                         Run Test
                     </Button>

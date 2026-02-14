@@ -22,13 +22,21 @@ export {
 export type { StoredAgentConfig } from "./factory";
 
 // Agent resolver for database-driven agents
-export { AgentResolver, agentResolver } from "./resolver";
+export {
+    AgentResolver,
+    agentResolver,
+    classifyComplexity,
+    resolveRoutingDecision
+} from "./resolver";
 export type {
     RequestContext,
     ResolveOptions,
     HydratedAgent,
     AgentRecordWithTools,
-    ActiveSkillInfo
+    ActiveSkillInfo,
+    RoutingConfig,
+    RoutingTier,
+    RoutingDecision
 } from "./resolver";
 
 // Model provider resolver for org-scoped API keys

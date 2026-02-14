@@ -4,29 +4,51 @@ import { ModelRouterEmbeddingModel } from "@mastra/core/llm";
 import { createStep, createWorkflow } from "@mastra/core/workflows";
 import { z } from "zod";
 import { prisma } from "@repo/database";
-import { agentResolver } from "../agents/resolver";
+import { agentResolver, type RequestContext } from "../agents/resolver";
 import { storage } from "../storage";
 import { vector } from "../vector";
 import { getToolsByNamesAsync } from "../tools/registry";
 import { executeWorkflowDefinition, type WorkflowDefinition } from "../workflows/builder";
 
-function buildNetworkMemory(memoryConfig: Record<string, unknown>): Memory {
+/**
+ * Build memory for a network. Returns undefined when memory is disabled
+ * to avoid requiring the memory_messages table when it's not needed.
+ */
+function buildNetworkMemory(
+    memoryConfig: Record<string, unknown> | null | undefined
+): Memory | undefined {
+    // Guard: if no config or all memory features are disabled, skip Memory creation
+    if (!memoryConfig) return undefined;
+
+    const lastMessages = memoryConfig.lastMessages;
+    const semanticRecall = memoryConfig.semanticRecall;
+    const workingMemory = memoryConfig.workingMemory as { enabled?: boolean } | undefined | null;
+
+    const memoryDisabled =
+        (lastMessages === 0 || lastMessages === undefined) &&
+        (semanticRecall === false || semanticRecall === undefined) &&
+        (!workingMemory || workingMemory.enabled === false);
+
+    if (memoryDisabled) {
+        return undefined;
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const options: any = {};
-    if (memoryConfig.lastMessages !== undefined) {
-        options.lastMessages = memoryConfig.lastMessages;
+    if (lastMessages !== undefined) {
+        options.lastMessages = lastMessages;
     }
-    if (memoryConfig.semanticRecall !== undefined) {
-        options.semanticRecall = memoryConfig.semanticRecall;
+    if (semanticRecall !== undefined) {
+        options.semanticRecall = semanticRecall;
     }
-    if (memoryConfig.workingMemory !== undefined) {
-        options.workingMemory = memoryConfig.workingMemory;
+    if (workingMemory !== undefined) {
+        options.workingMemory = workingMemory;
     }
 
     const hasSemanticRecall =
-        memoryConfig.semanticRecall !== undefined &&
-        memoryConfig.semanticRecall !== false &&
-        typeof memoryConfig.semanticRecall === "object";
+        semanticRecall !== undefined &&
+        semanticRecall !== false &&
+        typeof semanticRecall === "object";
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const memoryArgs: any = {
@@ -42,29 +64,46 @@ function buildNetworkMemory(memoryConfig: Record<string, unknown>): Memory {
     return new Memory(memoryArgs);
 }
 
-async function buildWorkflowWrapper(workflowId: string) {
+/**
+ * Wrap a database workflow as a Mastra workflow step for use in a network.
+ * Accepts optional requestContext so MCP tools inside the workflow
+ * can resolve org-scoped connections.
+ */
+async function buildWorkflowWrapper(workflowId: string, requestContext?: RequestContext) {
     const dbWorkflow = await prisma.workflow.findUnique({ where: { id: workflowId } });
     if (!dbWorkflow?.definitionJson) {
+        console.warn(
+            `[NetworkRuntime] Workflow wrapper: workflow "${workflowId}" not found or has no definition`
+        );
         return null;
     }
 
     const step = createStep({
         id: `db-workflow-${dbWorkflow.slug}`,
-        description: dbWorkflow.description || "Database workflow",
+        description: dbWorkflow.description || `Database workflow: ${dbWorkflow.slug}`,
         inputSchema: z.any(),
         outputSchema: z.any(),
         execute: async ({ inputData }) => {
             const result = await executeWorkflowDefinition({
                 definition: dbWorkflow.definitionJson as unknown as WorkflowDefinition,
-                input: inputData
+                input: inputData,
+                requestContext
             });
             if (result.status === "success") {
                 return result.output;
             }
             if (result.status === "suspended") {
-                throw new Error("Workflow suspended");
+                // Return structured suspension instead of throwing
+                return {
+                    _suspended: true,
+                    stepId: result.suspended?.stepId,
+                    data: result.suspended?.data,
+                    message: `Workflow "${dbWorkflow.slug}" is suspended at step "${result.suspended?.stepId}"`
+                };
             }
-            throw new Error(result.error || "Workflow execution failed");
+            throw new Error(
+                result.error || `Workflow "${dbWorkflow.slug}" (id: ${workflowId}) execution failed`
+            );
         }
     });
 
@@ -106,38 +145,79 @@ export async function buildNetworkAgent(networkId: string) {
     const resolvedTools =
         toolIds.length > 0 ? await getToolsByNamesAsync(toolIds, organizationId) : {};
 
+    // Build requestContext for workflow wrappers
+    const requestContext: RequestContext | undefined = organizationId
+        ? { resource: { tenantId: organizationId } }
+        : undefined;
+
+    // Collect resolution errors for diagnostics
+    const resolutionErrors: string[] = [];
+
     for (const primitive of network.primitives) {
-        if (primitive.primitiveType === "agent" && primitive.agentId) {
-            const { agent, record } = await agentResolver.resolve({
-                id: primitive.agentId,
-                fallbackToSystem: true,
-                requestContext: organizationId
-                    ? { resource: { tenantId: organizationId } }
-                    : undefined
-            });
-            const key = record?.slug || primitive.agentId;
-            agents[key] = agent;
-        }
-        if (primitive.primitiveType === "workflow" && primitive.workflowId) {
-            const wrapper = (await buildWorkflowWrapper(primitive.workflowId)) as {
-                id: string;
-            } | null;
-            if (wrapper) {
-                workflows[wrapper.id] = wrapper;
+        try {
+            if (primitive.primitiveType === "agent" && primitive.agentId) {
+                const { agent, record } = await agentResolver.resolve({
+                    id: primitive.agentId,
+                    fallbackToSystem: true,
+                    requestContext
+                });
+                const key = record?.slug || primitive.agentId;
+                agents[key] = agent;
             }
-        }
-        if (primitive.primitiveType === "tool" && primitive.toolId) {
-            const tool = resolvedTools[primitive.toolId];
-            if (tool) {
-                tools[primitive.toolId] = tool;
+            if (primitive.primitiveType === "workflow" && primitive.workflowId) {
+                const wrapper = (await buildWorkflowWrapper(
+                    primitive.workflowId,
+                    requestContext
+                )) as {
+                    id: string;
+                } | null;
+                if (wrapper) {
+                    workflows[wrapper.id] = wrapper;
+                } else {
+                    resolutionErrors.push(
+                        `Workflow "${primitive.workflowId}" could not be wrapped (no definition)`
+                    );
+                }
             }
+            if (primitive.primitiveType === "tool" && primitive.toolId) {
+                const tool = resolvedTools[primitive.toolId];
+                if (tool) {
+                    tools[primitive.toolId] = tool;
+                } else {
+                    resolutionErrors.push(`Tool "${primitive.toolId}" not found in registry`);
+                }
+            }
+        } catch (error) {
+            const msg = error instanceof Error ? error.message : String(error);
+            resolutionErrors.push(
+                `${primitive.primitiveType} "${primitive.agentId || primitive.workflowId || primitive.toolId}": ${msg}`
+            );
         }
     }
 
-    const model = `${network.modelProvider}/${network.modelName}`;
-    const memory = buildNetworkMemory(network.memoryConfig as Record<string, unknown>);
+    // Log any resolution issues
+    if (resolutionErrors.length > 0) {
+        console.warn(
+            `[NetworkRuntime] Primitive resolution warnings for network "${network.slug}":\n` +
+                resolutionErrors.map((e) => `  - ${e}`).join("\n")
+        );
+    }
 
-    const routingAgent = new Agent({
+    // Throw if nothing resolved at all
+    const totalPrimitives =
+        Object.keys(agents).length + Object.keys(workflows).length + Object.keys(tools).length;
+    if (totalPrimitives === 0 && network.primitives.length > 0) {
+        throw new Error(
+            `Network "${network.slug}": all ${network.primitives.length} primitives failed to resolve. ` +
+                `Errors: ${resolutionErrors.join("; ")}`
+        );
+    }
+
+    const model = `${network.modelProvider}/${network.modelName}`;
+    const memory = buildNetworkMemory(network.memoryConfig as Record<string, unknown> | null);
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const agentArgs: any = {
         id: network.id,
         name: network.name,
         description: network.description || undefined,
@@ -145,9 +225,15 @@ export async function buildNetworkAgent(networkId: string) {
         model,
         agents,
         workflows,
-        tools,
-        memory
-    } as ConstructorParameters<typeof Agent>[0]);
+        tools
+    };
+
+    // Only add memory if it was actually created
+    if (memory) {
+        agentArgs.memory = memory;
+    }
+
+    const routingAgent = new Agent(agentArgs);
 
     return { network, agent: routingAgent };
 }

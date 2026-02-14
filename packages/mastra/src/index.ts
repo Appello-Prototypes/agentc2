@@ -26,6 +26,9 @@ export {
     // Agent resolver for database-driven agents
     AgentResolver,
     agentResolver,
+    // Model routing
+    classifyComplexity,
+    resolveRoutingDecision,
     // Network resolver for database-driven agent networks
     NetworkResolver,
     networkResolver
@@ -36,7 +39,10 @@ export type {
     ResolveOptions,
     HydratedAgent,
     AgentRecordWithTools,
-    ActiveSkillInfo
+    ActiveSkillInfo,
+    RoutingConfig,
+    RoutingTier,
+    RoutingDecision
 } from "./agents";
 
 // Model provider resolver (org-scoped AI API keys)
@@ -176,6 +182,15 @@ export {
 } from "./workflows";
 
 export { buildNetworkAgent } from "./networks/runtime";
+
+// Guardrails
+export {
+    enforceInputGuardrails,
+    enforceOutputGuardrails,
+    getExecutionLimits,
+    type GuardrailConfig,
+    type GuardrailResult
+} from "./guardrails";
 export {
     buildNetworkTopologyFromPrimitives,
     isNetworkTopologyEmpty,
@@ -344,6 +359,34 @@ export {
     type VoiceCall,
     type VoiceCallRequest
 } from "./channels";
+
+// Integrations (MCP OAuth, Auto-provisioning, Blueprints)
+export {
+    discoverAuthServer,
+    buildMcpAuthorizationUrl,
+    exchangeMcpCodeForTokens,
+    refreshMcpAccessToken,
+    tokenNeedsRefresh,
+    tokenIsExpired,
+    provisionIntegration,
+    deprovisionIntegration,
+    syncBlueprintVersions,
+    rediscoverToolsForConnection,
+    getBlueprint,
+    getAllBlueprints,
+    hasBlueprint,
+    getBlueprintCount
+} from "./integrations";
+export type {
+    McpAuthServerMetadata,
+    McpOAuthTokens,
+    McpOAuthStartResult,
+    IntegrationBlueprint,
+    ProvisionResult,
+    DeprovisionResult,
+    BlueprintSyncResult,
+    ToolRediscoveryResult
+} from "./integrations";
 
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";

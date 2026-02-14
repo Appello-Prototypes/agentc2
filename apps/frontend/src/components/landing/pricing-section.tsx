@@ -68,7 +68,7 @@ const plans = {
             name: "Team",
             price: "$29",
             period: "/ user / month",
-            description: "For small teams collaborating on agents.",
+            description: "For teams deploying agents across departments.",
             cta: "Start Team Trial",
             ctaVariant: "outline" as const,
             href: "/signup?plan=team",
@@ -76,47 +76,47 @@ const plans = {
                 "Everything in Pro",
                 "5 team members included",
                 "Shared workspaces",
-                "Role-based access",
-                "Team analytics",
-                "Shared agent library",
-                "Audit logs"
+                "Role-based access control",
+                "Team analytics & cost allocation",
+                "Shared agent and skills library",
+                "Full audit logs & traceability"
             ]
         },
         {
             name: "Enterprise",
             price: "Custom",
             period: "",
-            description: "For organizations with advanced needs.",
-            cta: "Contact Sales",
+            description: "For organizations scaling AI agents across the business.",
+            cta: "Book a Demo",
             ctaVariant: "default" as const,
             href: "mailto:sales@agentc2.com",
             popular: true,
             features: [
                 "Everything in Team",
                 "Unlimited members",
-                "SSO / SAML",
-                "Custom integrations",
+                "SSO / SAML authentication",
+                "Custom MCP integrations",
                 "Dedicated infrastructure",
-                "On-premise deployment",
-                "99.99% SLA",
+                "On-premise deployment option",
+                "99.99% uptime SLA",
                 "Dedicated account manager",
-                "Custom training"
+                "Custom onboarding & training"
             ]
         },
         {
             name: "Enterprise+",
             price: "Custom",
             period: "",
-            description: "White-glove service for large deployments.",
+            description: "White-glove deployment for regulated industries.",
             cta: "Contact Sales",
             ctaVariant: "outline" as const,
             href: "mailto:sales@agentc2.com",
             features: [
                 "Everything in Enterprise",
                 "Multi-region deployment",
-                "Custom compliance",
-                "Professional services",
-                "Architecture review",
+                "Custom compliance (SOC 2, HIPAA)",
+                "Professional services & integration",
+                "Architecture review & optimization",
                 "Priority engineering support"
             ]
         }
@@ -124,7 +124,7 @@ const plans = {
 };
 
 export function PricingSection() {
-    const [tab, setTab] = useState<"individual" | "team">("individual");
+    const [tab, setTab] = useState<"individual" | "team">("team");
 
     return (
         <section id="pricing" className="bg-muted/30 scroll-mt-20 py-24">
@@ -135,25 +135,16 @@ export function PricingSection() {
                     </span>
                 </div>
                 <h2 className="text-foreground mb-4 text-center text-3xl font-bold tracking-tight md:text-4xl">
-                    Explore plans
+                    Plans that scale with your business
                 </h2>
                 <p className="text-muted-foreground mx-auto mb-10 max-w-2xl text-center text-lg">
-                    Start free and scale as you grow. No credit card required.
+                    Start with a free trial. Scale to enterprise with dedicated infrastructure, SSO,
+                    and custom SLAs.
                 </p>
 
                 {/* Toggle */}
                 <div className="mb-12 flex justify-center">
                     <div className="bg-muted inline-flex rounded-full p-1">
-                        <button
-                            onClick={() => setTab("individual")}
-                            className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
-                                tab === "individual"
-                                    ? "bg-background text-foreground shadow-sm"
-                                    : "text-muted-foreground hover:text-foreground"
-                            }`}
-                        >
-                            Individual plans
-                        </button>
                         <button
                             onClick={() => setTab("team")}
                             className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
@@ -163,6 +154,16 @@ export function PricingSection() {
                             }`}
                         >
                             Team & Enterprise
+                        </button>
+                        <button
+                            onClick={() => setTab("individual")}
+                            className={`rounded-full px-5 py-2 text-sm font-medium transition-all ${
+                                tab === "individual"
+                                    ? "bg-background text-foreground shadow-sm"
+                                    : "text-muted-foreground hover:text-foreground"
+                            }`}
+                        >
+                            Individual
                         </button>
                     </div>
                 </div>

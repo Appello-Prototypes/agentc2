@@ -128,6 +128,10 @@ export async function POST(
         let lastResult: Record<string, unknown> | undefined;
         let lastResultText: string | undefined;
 
+        // Token/cost tracking
+        let totalTokens = 0;
+        let totalCostUsd = 0;
+
         for await (const chunk of result) {
             const chunkAny = chunk as { type: string; payload?: Record<string, unknown> };
             const payload = chunkAny.payload || {};
@@ -138,6 +142,25 @@ export async function POST(
 
             if (chunkAny.type === "network-object-result") {
                 outputJson = payload as Record<string, unknown>;
+            }
+
+            // Extract token usage from step-finish or usage events
+            if (payload.usage && typeof payload.usage === "object") {
+                const usage = payload.usage as {
+                    promptTokens?: number;
+                    completionTokens?: number;
+                    totalTokens?: number;
+                };
+                if (usage.totalTokens) {
+                    totalTokens += usage.totalTokens;
+                } else if (usage.promptTokens || usage.completionTokens) {
+                    totalTokens += (usage.promptTokens || 0) + (usage.completionTokens || 0);
+                }
+            }
+
+            // Some events carry cost directly
+            if (typeof payload.costUsd === "number") {
+                totalCostUsd += payload.costUsd;
             }
 
             if (
@@ -209,14 +232,20 @@ export async function POST(
             });
         }
 
+        const completedAt = new Date();
+        const durationMs = completedAt.getTime() - run.createdAt.getTime();
+
         await prisma.networkRun.update({
             where: { id: run.id },
             data: {
                 status: RunStatus.COMPLETED,
                 outputText,
                 outputJson: outputJson ? (outputJson as Prisma.InputJsonValue) : Prisma.DbNull,
-                completedAt: new Date(),
-                stepsExecuted: steps.length
+                completedAt,
+                durationMs,
+                stepsExecuted: steps.length,
+                totalTokens: totalTokens > 0 ? totalTokens : undefined,
+                totalCostUsd: totalCostUsd > 0 ? totalCostUsd : undefined
             }
         });
         await refreshNetworkMetrics(network.id, new Date());

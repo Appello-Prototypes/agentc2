@@ -204,6 +204,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 updateData.modelConfig = Object.keys(nextConfig).length > 0 ? nextConfig : null;
             }
 
+            if (body.routingConfig !== undefined) updateData.routingConfig = body.routingConfig;
             if (body.memoryEnabled !== undefined) updateData.memoryEnabled = body.memoryEnabled;
             if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
             if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
@@ -312,6 +313,17 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
             if (body.metadata !== undefined && !jsonEqual(body.metadata, existing.metadata)) {
                 changes.push("Updated metadata");
+            }
+            if (
+                body.routingConfig !== undefined &&
+                !jsonEqual(body.routingConfig, existing.routingConfig)
+            ) {
+                const rc = body.routingConfig as { mode?: string } | null;
+                changes.push(
+                    rc?.mode
+                        ? `Routing: ${(existing.routingConfig as { mode?: string } | null)?.mode || "none"} → ${rc.mode}`
+                        : "Routing config cleared"
+                );
             }
             if (hasModelConfigUpdate && !jsonEqual(updateData.modelConfig, existing.modelConfig)) {
                 // Build specific change descriptions for modelConfig sub-fields
@@ -426,6 +438,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     temperature: existing.temperature,
                     maxTokens: existing.maxTokens,
                     modelConfig: existing.modelConfig,
+                    routingConfig: existing.routingConfig,
                     memoryEnabled: existing.memoryEnabled,
                     memoryConfig: existing.memoryConfig,
                     maxSteps: existing.maxSteps,

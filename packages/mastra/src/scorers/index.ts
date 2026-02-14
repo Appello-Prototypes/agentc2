@@ -1,5 +1,4 @@
 import {
-    createAnswerRelevancyScorer,
     createToxicityScorer,
     createCompletenessScorer,
     createToneScorer
@@ -26,12 +25,56 @@ export type { ScorecardTemplateDefinition } from "./templates";
 /**
  * Answer Relevancy Scorer
  *
- * Evaluates how well responses address the input query.
+ * Custom LLM-based scorer that evaluates semantic relevance directly.
+ * Replaces createAnswerRelevancyScorer which used reverse-question-generation
+ * and returned 0% for short answers and format-transformed outputs.
  * Score: 0-1 (higher is better)
  */
-export const relevancyScorer = createAnswerRelevancyScorer({
-    model: "openai/gpt-4o-mini"
-});
+export const relevancyScorer = {
+    name: "relevancy",
+    async run({ input, output }: { input: string; output: string }) {
+        const { generateText } = await import("ai");
+        const { openai } = await import("@ai-sdk/openai");
+
+        const prompt = `You are evaluating whether an AI agent's output is relevant to the input it received.
+
+IMPORTANT: Relevancy means the output addresses what the input asked for or required. It does NOT mean the output contains the same words as the input.
+
+Examples of HIGH relevancy:
+- Input: "What is the capital of France?" Output: "Paris" (directly answers the question)
+- Input: [raw email] Output: [triage classification to Slack] (fulfills the agent's purpose)
+- Input: "Schedule a meeting" Output: [calendar event created] (completes the requested action)
+
+Score 0.0-1.0 where:
+- 1.0 = Output directly and completely addresses what the input required
+- 0.7 = Output mostly addresses the input with minor gaps
+- 0.4 = Output partially relevant but missing key aspects
+- 0.1 = Output barely related to input
+- 0.0 = Output completely unrelated to input
+
+Input: ${JSON.stringify(input).slice(0, 2000)}
+Output: ${JSON.stringify(output).slice(0, 2000)}
+
+Return ONLY a JSON object with no other text: {"score": <number>, "reasoning": "<brief explanation>"}`;
+
+        try {
+            const result = await generateText({
+                model: openai("gpt-4o-mini"),
+                prompt,
+                temperature: 0.1
+            });
+
+            const parsed = JSON.parse(result.text.trim());
+            return {
+                score: Math.max(0, Math.min(1, parsed.score)),
+                reasoning: parsed.reasoning || ""
+            };
+        } catch (error) {
+            console.error("[relevancyScorer] Error:", error);
+            return { score: 0.5, reasoning: "Scorer error, defaulting to neutral" };
+        }
+    }
+};
 
 /**
  * Toxicity Scorer

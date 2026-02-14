@@ -17,22 +17,24 @@ export function HeroSection() {
                 {/* Left: Copy + Login */}
                 <div className="flex flex-col justify-center">
                     <span className="text-primary mb-4 inline-block w-fit rounded-full border border-current/20 bg-current/5 px-3 py-1 text-xs font-semibold tracking-wider uppercase">
-                        AI Agent Platform
+                        2026 is the year of the agent
                     </span>
 
                     <h1 className="text-foreground mb-6 text-4xl leading-tight font-bold tracking-tight md:text-5xl lg:text-6xl">
-                        Your AI workforce, <span className="text-primary">orchestrated.</span>
+                        Enterprise AI agents,{" "}
+                        <span className="text-primary">deployed in minutes.</span>
                     </h1>
 
                     <p className="text-muted-foreground mb-10 max-w-lg text-lg leading-relaxed">
-                        Build, deploy, and manage intelligent agents that connect to your tools,
-                        learn from experience, and work across every channel.
+                        The agent platform built for business. Connect your CRM, email, and project
+                        tools — then deploy autonomous agents with enterprise-grade observability,
+                        traceability, and RAG at scale.
                     </p>
 
                     {/* Login form */}
                     <div className="border-border/60 bg-card w-full max-w-md rounded-2xl border p-6 shadow-lg shadow-black/5">
                         <p className="text-foreground mb-4 text-sm font-medium">
-                            Get started for free
+                            Start building agents for your team
                         </p>
                         <Suspense fallback={<div className="h-48" />}>
                             <SignInForm />

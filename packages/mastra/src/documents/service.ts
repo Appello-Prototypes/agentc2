@@ -74,7 +74,49 @@ function validateSlug(slug: string): string {
 }
 
 /**
- * Create a document with automatic RAG embedding
+ * Embed a document into the RAG vector store and update its DB record.
+ * Runs as a background task -- callers should fire-and-forget.
+ */
+async function embedDocumentAsync(
+    documentId: string,
+    slug: string,
+    content: string,
+    options: {
+        type: string;
+        sourceName: string;
+        chunkOptions?: ChunkOptions;
+    }
+) {
+    const ragResult = await ragIngest(content, {
+        type: options.type as DocumentType,
+        sourceId: slug,
+        sourceName: options.sourceName,
+        chunkOptions: options.chunkOptions
+    });
+
+    // Update the document record with embedding results
+    await prisma.document.update({
+        where: { id: documentId },
+        data: {
+            vectorIds: ragResult.vectorIds,
+            chunkCount: ragResult.chunksIngested,
+            embeddedAt: new Date()
+        }
+    });
+
+    console.log(
+        `[DocumentService] Embedded "${slug}": ${ragResult.chunksIngested} chunks, ${ragResult.vectorIds.length} vectors`
+    );
+}
+
+/**
+ * Create a document with automatic RAG embedding.
+ *
+ * The DB record is created immediately and returned to the caller.
+ * RAG embedding runs asynchronously in the background so the MCP tool
+ * (and any other caller) is never blocked by slow OpenAI API calls.
+ *
+ * Check `embeddedAt` to know whether embedding has completed.
  */
 export async function createDocument(input: CreateDocumentInput) {
     const contentType = input.contentType || "markdown";
@@ -86,45 +128,37 @@ export async function createDocument(input: CreateDocumentInput) {
         throw new Error(`Document with slug "${slug}" already exists`);
     }
 
-    // Ingest into RAG vector store
-    const ragResult = await ragIngest(input.content, {
-        type: contentType,
-        sourceId: slug,
-        sourceName: input.name,
-        chunkOptions: input.chunkOptions
+    // Create Prisma record immediately (embedding runs async below)
+    const document = await prisma.document.create({
+        data: {
+            slug,
+            name: input.name,
+            description: input.description,
+            content: input.content,
+            contentType,
+            vectorIds: [],
+            chunkCount: 0,
+            // embeddedAt stays null until async embedding completes
+            category: input.category,
+            tags: input.tags || [],
+            metadata: (input.metadata || {}) as Prisma.InputJsonValue,
+            workspaceId: input.workspaceId,
+            type: input.type || "USER",
+            createdBy: input.createdBy
+        }
     });
 
-    // Create Prisma record -- if this fails, clean up vectors
-    try {
-        const document = await prisma.document.create({
-            data: {
-                slug,
-                name: input.name,
-                description: input.description,
-                content: input.content,
-                contentType,
-                vectorIds: ragResult.vectorIds,
-                chunkCount: ragResult.chunksIngested,
-                embeddedAt: new Date(),
-                category: input.category,
-                tags: input.tags || [],
-                metadata: (input.metadata || {}) as Prisma.InputJsonValue,
-                workspaceId: input.workspaceId,
-                type: input.type || "USER",
-                createdBy: input.createdBy
-            }
-        });
+    // Fire-and-forget: run RAG embedding in background
+    // The .catch ensures unhandled-rejection never crashes the process
+    embedDocumentAsync(document.id, slug, input.content, {
+        type: contentType,
+        sourceName: input.name,
+        chunkOptions: input.chunkOptions
+    }).catch((error) => {
+        console.error(`[DocumentService] Background embedding failed for "${slug}":`, error);
+    });
 
-        return document;
-    } catch (dbError) {
-        // Clean up orphaned vectors if DB insert failed
-        try {
-            await ragDelete(slug);
-        } catch {
-            // Best effort cleanup
-        }
-        throw dbError;
-    }
+    return document;
 }
 
 /**

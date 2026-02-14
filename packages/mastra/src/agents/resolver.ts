@@ -31,6 +31,7 @@ export interface ResourceContext {
     userId?: string;
     userName?: string;
     tenantId?: string;
+    workspaceId?: string;
 }
 
 /**
@@ -63,6 +64,8 @@ export interface RequestContext {
     tenantId?: string;
     /** @deprecated Use thread.sessionId instead */
     sessionId?: string;
+    /** Workspace ID for multi-tenant agent resolution */
+    workspaceId?: string;
 }
 
 /**
@@ -199,13 +202,34 @@ export class AgentResolver {
             throw new Error("Either slug or id must be provided");
         }
 
+        // Derive workspaceId from request context for tenant isolation
+        const workspaceId =
+            requestContext?.workspaceId || requestContext?.resource?.workspaceId || undefined;
+
+        // Build where clause with workspace isolation
+        // When workspaceId is available, prefer workspace-scoped agents but fall back to system agents (null workspaceId)
+        const slugWhere = slug
+            ? {
+                  slug,
+                  isActive: true,
+                  ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+              }
+            : undefined;
+
+        const idWhere = id ? { id, isActive: true } : undefined;
+
         // Try database first
         const record = await prisma.agent.findFirst({
-            where: slug ? { slug, isActive: true } : { id, isActive: true },
-            include: { tools: true, workspace: { select: { organizationId: true } } }
+            where: slugWhere || idWhere!,
+            include: { tools: true, workspace: { select: { organizationId: true } } },
+            // When workspace-scoped, prefer workspace agents over system agents
+            ...(workspaceId && slug ? { orderBy: { workspaceId: "asc" as const } } : {})
         });
 
         if (record) {
+            // Enforce hard budget limit before running the agent
+            await this.checkBudgetLimit(record.id);
+
             const result = await this.hydrate(record, requestContext, threadId);
             return { ...result, record, source: "database" };
         }
@@ -502,6 +526,41 @@ export class AgentResolver {
      * Returns merged skill instructions, resolved skill tools, document IDs,
      * active skill metadata, discoverable skill manifests, and tool-to-skill mapping.
      */
+
+    /**
+     * Check if an agent has exceeded its hard budget limit.
+     * Throws if the agent's monthly spend >= the configured limit with hardLimit enabled.
+     * Called before hydration to reject runs early without incurring tool/skill loading costs.
+     */
+    private async checkBudgetLimit(agentId: string): Promise<void> {
+        const budgetPolicy = await prisma.budgetPolicy.findUnique({
+            where: { agentId }
+        });
+
+        if (!budgetPolicy?.enabled || !budgetPolicy.hardLimit || !budgetPolicy.monthlyLimitUsd) {
+            return;
+        }
+
+        const startOfMonth = new Date();
+        startOfMonth.setDate(1);
+        startOfMonth.setHours(0, 0, 0, 0);
+
+        const costEvents = await prisma.costEvent.findMany({
+            where: {
+                agentId,
+                createdAt: { gte: startOfMonth }
+            },
+            select: { costUsd: true }
+        });
+
+        const currentMonthCost = costEvents.reduce((sum, e) => sum + (e.costUsd || 0), 0);
+
+        if (currentMonthCost >= budgetPolicy.monthlyLimitUsd) {
+            throw new Error(
+                `Agent budget exceeded: $${currentMonthCost.toFixed(2)} / $${budgetPolicy.monthlyLimitUsd} monthly limit`
+            );
+        }
+    }
 
     /**
      * Get the set of OAuth provider keys that have active connections for an organization.
@@ -967,21 +1026,31 @@ export class AgentResolver {
     }
 
     /**
-     * Check if an agent exists by slug
+     * Check if an agent exists by slug (optionally within a workspace)
      */
-    async exists(slug: string): Promise<boolean> {
+    async exists(slug: string, workspaceId?: string | null): Promise<boolean> {
         const count = await prisma.agent.count({
-            where: { slug, isActive: true }
+            where: {
+                slug,
+                isActive: true,
+                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+            }
         });
         return count > 0;
     }
 
     /**
-     * Get an agent record by slug (without hydration)
+     * Get an agent record by slug (without hydration, optionally workspace-scoped)
      */
-    async getRecord(slug: string): Promise<AgentRecordWithTools | null> {
-        return prisma.agent.findUnique({
-            where: { slug },
+    async getRecord(
+        slug: string,
+        workspaceId?: string | null
+    ): Promise<AgentRecordWithTools | null> {
+        return prisma.agent.findFirst({
+            where: {
+                slug,
+                ...(workspaceId ? { OR: [{ workspaceId }, { workspaceId: null }] } : {})
+            },
             include: { tools: true, workspace: { select: { organizationId: true } } }
         });
     }
@@ -991,3 +1060,122 @@ export class AgentResolver {
  * Singleton instance of AgentResolver
  */
 export const agentResolver = new AgentResolver();
+
+// ── Model Routing ────────────────────────────────────────────────────────────
+
+/**
+ * Routing configuration stored on the Agent record
+ */
+export interface RoutingConfig {
+    mode: "locked" | "auto";
+    fastModel?: { provider: string; name: string };
+    escalationModel?: { provider: string; name: string };
+    confidenceThreshold?: number; // 0-1, default 0.7
+    budgetAware?: boolean;
+}
+
+export type RoutingTier = "FAST" | "PRIMARY" | "ESCALATION";
+
+export interface RoutingDecision {
+    tier: RoutingTier;
+    model: { provider: string; name: string };
+    reason: string;
+}
+
+/**
+ * Classify the complexity of user input using lightweight heuristics.
+ * Returns a score from 0 (trivial) to 1 (very complex).
+ */
+export function classifyComplexity(input: string): {
+    score: number;
+    level: "simple" | "moderate" | "complex";
+} {
+    let score = 0;
+
+    // Length-based: longer inputs tend to be more complex
+    const wordCount = input.split(/\s+/).filter(Boolean).length;
+    if (wordCount > 100) score += 0.3;
+    else if (wordCount > 40) score += 0.15;
+    else if (wordCount > 15) score += 0.05;
+
+    // Multi-step indicators
+    const multiStepPatterns =
+        /\b(step\s*\d|first.*then|next.*after|please.*and.*also|multi[- ]?step|compare.*and|analyze.*and|1\.\s|2\.\s|3\.\s|\band\b.*\band\b)/i;
+    if (multiStepPatterns.test(input)) score += 0.25;
+
+    // Complex reasoning keywords
+    const complexKeywords =
+        /\b(analyze|synthesize|evaluate|compare|contrast|critique|refactor|architect|design|optimize|debug|troubleshoot|explain.*why|reason.*about|trade[- ]?off|pros?\s+and\s+cons?)\b/i;
+    if (complexKeywords.test(input)) score += 0.2;
+
+    // Code-related complexity
+    const codePatterns = /```[\s\S]*```|function\s+\w+|class\s+\w+|import\s+/;
+    if (codePatterns.test(input)) score += 0.15;
+
+    // Question complexity
+    const simpleQuestionPatterns = /^(what is|who is|when did|where is|how many|yes or no)\b/i;
+    if (simpleQuestionPatterns.test(input) && wordCount < 15) score -= 0.15;
+
+    // Greetings / simple messages
+    const greetingPatterns = /^(hi|hello|hey|thanks|thank you|ok|okay|sure|yes|no|bye|good)\b/i;
+    if (greetingPatterns.test(input) && wordCount < 5) score -= 0.3;
+
+    // Clamp to 0-1
+    score = Math.max(0, Math.min(1, score));
+
+    const level = score >= 0.5 ? "complex" : score >= 0.2 ? "moderate" : "simple";
+    return { score, level };
+}
+
+/**
+ * Determine which model tier to use based on routing config and input complexity.
+ * Returns null if routing is disabled (locked mode or no config).
+ */
+export function resolveRoutingDecision(
+    routingConfig: RoutingConfig | null | undefined,
+    primaryModel: { provider: string; name: string },
+    input: string,
+    budgetExceeded?: boolean
+): RoutingDecision | null {
+    if (!routingConfig || routingConfig.mode !== "auto") {
+        return null; // Routing disabled, use primary model as-is
+    }
+
+    const { score, level } = classifyComplexity(input);
+    const threshold = routingConfig.confidenceThreshold ?? 0.7;
+
+    // Budget-aware: if over budget threshold, bias toward fast model for moderate tasks
+    const budgetBias = routingConfig.budgetAware && budgetExceeded;
+
+    let tier: RoutingTier;
+    let model: { provider: string; name: string };
+    let reason: string;
+
+    if (level === "simple" || (level === "moderate" && budgetBias)) {
+        // Use fast model
+        tier = "FAST";
+        model = routingConfig.fastModel || primaryModel;
+        reason =
+            level === "simple"
+                ? `Simple input (score=${score.toFixed(2)})`
+                : `Moderate input biased to fast (budget-aware, score=${score.toFixed(2)})`;
+    } else if (level === "complex" || score >= threshold) {
+        // Use escalation model if configured, otherwise primary
+        if (routingConfig.escalationModel?.name) {
+            tier = "ESCALATION";
+            model = routingConfig.escalationModel;
+            reason = `Complex input (score=${score.toFixed(2)}, threshold=${threshold})`;
+        } else {
+            tier = "PRIMARY";
+            model = primaryModel;
+            reason = `Complex input, no escalation model configured (score=${score.toFixed(2)})`;
+        }
+    } else {
+        // Moderate -> primary model
+        tier = "PRIMARY";
+        model = primaryModel;
+        reason = `Moderate input (score=${score.toFixed(2)})`;
+    }
+
+    return { tier, model, reason };
+}

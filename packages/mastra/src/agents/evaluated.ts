@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { relevancyScorer, toxicityScorer, completenessScorer, toneScorer } from "../scorers";
+import { toxicityScorer, completenessScorer, toneScorer } from "../scorers";
 
 /**
  * Fully Evaluated Agent
@@ -20,10 +20,6 @@ Strive to provide excellent responses that score well on all metrics.`,
     model: "anthropic/claude-sonnet-4-20250514",
 
     scorers: {
-        relevancy: {
-            scorer: relevancyScorer,
-            sampling: { type: "ratio", rate: 1.0 }
-        },
         toxicity: {
             scorer: toxicityScorer,
             sampling: { type: "ratio", rate: 1.0 }

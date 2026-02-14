@@ -1,0 +1,63 @@
+---
+description: Canvas expression syntax conventions and known limitations
+globs: "**/canvas-templates.ts,**/canvas/**,**/canvas*.ts,**/canvas*.tsx"
+alwaysApply: false
+---
+
+# Canvas Expression Conventions
+
+When writing canvas templates or schema JSON with `{{ }}` expressions:
+
+## KPI / Scalar Values
+
+Use array bracket indexing to access fields from single-row queries:
+
+```
+// ✅ GOOD - works with client-side resolver
+"{{ queries.summary[0].totalRuns }}"
+
+// ❌ BAD - first() chaining breaks client-side resolver
+"{{ first(queries.summary).totalRuns }}"
+```
+
+The client-side `useResolvedValue` hook (`use-resolved-data.ts`) cannot chain
+`.property` after a function call like `first()`. The regex expects the expression
+to end with `)`. Use `[0]` bracket indexing instead.
+
+## Data Query IDs
+
+Prefer underscores over hyphens in query IDs:
+
+```
+// ✅ GOOD - safe for both client and server expression engines
+{ id: "agent_overview", source: "sql", query: "..." }
+
+// ⚠️ WORKS client-side but breaks server-side expression engine
+{ id: "agent-overview", source: "sql", query: "..." }
+```
+
+The server-side expression engine (`expressions.ts`) has an arithmetic parser that
+interprets `-` as subtraction. `queries.agent-overview` becomes `queries.agent - overview`.
+The client-side `resolvePath` in `use-resolved-data.ts` handles hyphens fine via
+`current[part]` bracket access, but server-side `resolveExpressions()` does not.
+
+## Nullable SQL Fields
+
+Always use `COALESCE` for nullable database fields displayed in tables:
+
+```sql
+-- ✅ GOOD
+COALESCE("actorId", 'system') as "actorId"
+
+-- ❌ BAD - renders as blank cell
+"actorId"
+```
+
+## Expression Resolution Chain
+
+- **Canvas Viewer Page** → `CanvasRenderer` → block components
+- **KPI cards** use `useResolvedValue()` (scalar) from `use-resolved-data.ts`
+- **Data tables / Lists** use `useResolvedData()` (array) from `use-resolved-data.ts`
+- Both use `resolvePath()` which supports: `queries.name`, `queries.name[0].field`
+- Server-side `resolveExpressions()` in `expressions.ts` is used by `query-executor`
+  but NOT by the canvas viewer rendering pipeline

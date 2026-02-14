@@ -109,18 +109,30 @@ export function runTier1Prescreen(context: EvalContext): Tier1Result {
         scores.efficiency = 0.8; // Unknown, assume reasonable
     }
 
-    // 6. Input/output relevance (basic word overlap)
+    // 6. Input/output relevance (structure-aware heuristic)
     if (input.length > 0 && output.length > 0) {
+        // If output has structure (lists, headers, emoji, formatting),
+        // it's likely a processed response, not noise
+        const hasStructure =
+            /[\*\-\#\:]/.test(output) || output.includes("\n") || output.length > 100;
+
+        // Check if output contains ANY key terms from input (relaxed threshold)
         const inputWords = new Set(
             input
                 .toLowerCase()
                 .split(/\s+/)
-                .filter((w) => w.length > 3)
+                .filter((w) => w.length > 2)
         );
         const outputWords = output.toLowerCase().split(/\s+/);
         const overlap = outputWords.filter((w) => inputWords.has(w)).length;
-        const relevance = inputWords.size > 0 ? Math.min(overlap / inputWords.size, 1.0) : 0.5;
-        scores.relevance = Math.max(relevance, 0.2); // Floor at 0.2
+        const wordRelevance =
+            inputWords.size > 0 ? Math.min(overlap / Math.min(inputWords.size, 10), 1.0) : 0.5;
+
+        // Structured, non-empty responses get a base score of 0.5
+        // Word overlap adds up to 0.5 more
+        scores.relevance = hasStructure
+            ? Math.max(0.5, 0.5 + wordRelevance * 0.5)
+            : Math.max(wordRelevance, 0.3);
     } else {
         scores.relevance = 0.5;
     }

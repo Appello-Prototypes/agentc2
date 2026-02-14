@@ -240,6 +240,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         authType: "apiKey",
         providerType: "mcp",
         configJson: {
+            hostedMcpUrl: "https://mcp.hubspot.com",
             requiredFields: ["HUBSPOT_ACCESS_TOKEN"],
             fieldDefinitions: {
                 HUBSPOT_ACCESS_TOKEN: {
@@ -267,6 +268,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         authType: "apiKey",
         providerType: "mcp",
         configJson: {
+            hostedMcpUrl: "https://mcp.atlassian.com/v1/mcp",
             requiredFields: ["JIRA_URL", "JIRA_USERNAME", "JIRA_API_TOKEN"],
             fieldDefinitions: {
                 JIRA_URL: {
@@ -449,6 +451,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         authType: "apiKey",
         providerType: "mcp",
         configJson: {
+            hostedMcpUrl: "https://api.githubcopilot.com/mcp/",
             requiredFields: ["GITHUB_PERSONAL_ACCESS_TOKEN"],
             fieldDefinitions: {
                 GITHUB_PERSONAL_ACCESS_TOKEN: {
@@ -475,18 +478,10 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         authType: "oauth",
         providerType: "oauth",
         configJson: {
-            requiredScopes: [
-                "https://www.googleapis.com/auth/gmail.modify",
-                "https://www.googleapis.com/auth/gmail.send",
-                "https://www.googleapis.com/auth/calendar.readonly"
-            ],
+            requiredScopes: ["https://www.googleapis.com/auth/gmail.modify"],
             oauthConfig: {
                 socialProvider: "google",
-                scopes: [
-                    "https://www.googleapis.com/auth/gmail.modify",
-                    "https://www.googleapis.com/auth/gmail.send",
-                    "https://www.googleapis.com/auth/calendar.readonly"
-                ],
+                scopes: ["https://www.googleapis.com/auth/gmail.modify"],
                 statusEndpoint: "/api/integrations/gmail/status",
                 syncEndpoint: "/api/integrations/gmail/sync"
             },
@@ -508,6 +503,50 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     description: "Archive a Gmail email by removing it from the inbox"
                 }
             ]
+        }
+    },
+    {
+        key: "google-calendar",
+        name: "Google Calendar",
+        description: "Calendar events — list, create, update, and delete via Google Calendar API",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: ["https://www.googleapis.com/auth/calendar.events"],
+            oauthConfig: {
+                socialProvider: "google",
+                scopes: ["https://www.googleapis.com/auth/calendar.events"],
+                statusEndpoint: "/api/integrations/gmail/status",
+                syncEndpoint: "/api/integrations/gmail/sync"
+            },
+            setupUrl: "/mcp/gmail",
+            setupLabel: "Open OAuth Setup"
+        }
+    },
+    {
+        key: "google-drive",
+        name: "Google Drive",
+        description: "File storage — search, read, and create documents via Google Drive API",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: [
+                "https://www.googleapis.com/auth/drive.readonly",
+                "https://www.googleapis.com/auth/drive.file"
+            ],
+            oauthConfig: {
+                socialProvider: "google",
+                scopes: [
+                    "https://www.googleapis.com/auth/drive.readonly",
+                    "https://www.googleapis.com/auth/drive.file"
+                ],
+                statusEndpoint: "/api/integrations/gmail/status",
+                syncEndpoint: "/api/integrations/gmail/sync"
+            },
+            setupUrl: "/mcp/gmail",
+            setupLabel: "Open OAuth Setup"
         }
     },
     {
@@ -666,6 +705,855 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             ]
         }
     },
+    // ── New Platform Integrations (hosted MCP / marketplace) ────────────
+    {
+        key: "linear",
+        name: "Linear",
+        description: "Issue tracking and project management — issues, projects, teams, sprints",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.linear.app/mcp",
+            importHints: {
+                matchNames: ["Linear", "linear"]
+            }
+        }
+    },
+    {
+        key: "notion",
+        name: "Notion",
+        description: "Workspace wiki and databases — pages, databases, search, create",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.notion.com/mcp",
+            importHints: {
+                matchNames: ["Notion", "notion"]
+            }
+        }
+    },
+    {
+        key: "asana",
+        name: "Asana",
+        description: "Work management — tasks, projects, portfolios, reporting",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.asana.com/v2/mcp",
+            importHints: {
+                matchNames: ["Asana", "asana"]
+            }
+        }
+    },
+    {
+        key: "monday",
+        name: "Monday.com",
+        description: "Work OS — boards, items, CRM activities, automations",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.monday.com/mcp",
+            importHints: {
+                matchNames: ["Monday", "monday", "monday.com"]
+            }
+        }
+    },
+    {
+        key: "airtable",
+        name: "Airtable",
+        description: "Flexible databases — bases, tables, records, search and analysis",
+        category: "data",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Airtable", "airtable"]
+            }
+        }
+    },
+    {
+        key: "stripe",
+        name: "Stripe",
+        description: "Payments and billing — customers, subscriptions, invoices, checkout",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.stripe.com",
+            requiredFields: ["STRIPE_API_KEY"],
+            fieldDefinitions: {
+                STRIPE_API_KEY: {
+                    label: "Stripe secret key",
+                    description: "From Stripe Dashboard > Developers > API keys",
+                    placeholder: "sk_live_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Stripe", "stripe"],
+                envAliases: {
+                    STRIPE_API_KEY: "STRIPE_API_KEY"
+                }
+            }
+        }
+    },
+    {
+        key: "shopify",
+        name: "Shopify",
+        description: "E-commerce — orders, products, customers, inventory management",
+        category: "ecommerce",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["SHOPIFY_ACCESS_TOKEN", "SHOPIFY_STORE_URL"],
+            fieldDefinitions: {
+                SHOPIFY_ACCESS_TOKEN: {
+                    label: "Shopify access token",
+                    description: "Admin API access token from your Shopify custom app",
+                    placeholder: "shpat_...",
+                    type: "password"
+                },
+                SHOPIFY_STORE_URL: {
+                    label: "Store URL",
+                    description: "Your Shopify store URL",
+                    placeholder: "https://your-store.myshopify.com",
+                    type: "url"
+                }
+            },
+            importHints: {
+                matchNames: ["Shopify", "shopify"],
+                envAliases: {
+                    SHOPIFY_ACCESS_TOKEN: "SHOPIFY_ACCESS_TOKEN",
+                    SHOPIFY_STORE_URL: "SHOPIFY_STORE_URL"
+                }
+            }
+        }
+    },
+    {
+        key: "salesforce",
+        name: "Salesforce",
+        description: "CRM platform — contacts, accounts, opportunities, reports",
+        category: "crm",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Salesforce", "salesforce"]
+            }
+        }
+    },
+    {
+        key: "intercom",
+        name: "Intercom",
+        description: "Customer messaging — conversations, contacts, help center search",
+        category: "support",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Intercom", "intercom"]
+            }
+        }
+    },
+    {
+        key: "confluence",
+        name: "Confluence",
+        description: "Team wiki and documentation — pages, spaces, search across knowledge base",
+        category: "knowledge",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.atlassian.com/v1/mcp",
+            requiredFields: ["CONFLUENCE_URL", "CONFLUENCE_USERNAME", "CONFLUENCE_API_TOKEN"],
+            fieldDefinitions: {
+                CONFLUENCE_URL: {
+                    label: "Confluence base URL",
+                    description: "Your Atlassian Cloud URL (e.g. https://your-org.atlassian.net)",
+                    placeholder: "https://your-org.atlassian.net",
+                    type: "url"
+                },
+                CONFLUENCE_USERNAME: {
+                    label: "Username (email)",
+                    description: "Same email used for your Atlassian API token",
+                    placeholder: "email@example.com"
+                },
+                CONFLUENCE_API_TOKEN: {
+                    label: "API token",
+                    description: "Atlassian API token (can be the same as Jira)",
+                    placeholder: "ATATT3x...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Confluence", "confluence"],
+                matchArgs: ["mcp-atlassian"],
+                envAliases: {
+                    CONFLUENCE_URL: "CONFLUENCE_URL",
+                    CONFLUENCE_USERNAME: "CONFLUENCE_USERNAME",
+                    CONFLUENCE_API_TOKEN: "CONFLUENCE_API_TOKEN"
+                }
+            }
+        }
+    },
+    {
+        key: "figma",
+        name: "Figma",
+        description: "Design tool — files, components, styles, design tokens and data",
+        category: "design",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.figma.com/mcp",
+            requiredFields: ["FIGMA_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                FIGMA_ACCESS_TOKEN: {
+                    label: "Figma personal access token",
+                    description: "From Figma Settings > Account > Personal Access Tokens",
+                    placeholder: "figd_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Figma", "figma"],
+                envAliases: {
+                    FIGMA_ACCESS_TOKEN: "FIGMA_ACCESS_TOKEN"
+                }
+            }
+        }
+    },
+
+    // ── Additional Remote MCP Providers ─────────────────────────────────
+    {
+        key: "zapier",
+        name: "Zapier",
+        description: "Workflow automation — connect 8000+ apps, trigger workflows, manage Zaps",
+        category: "automation",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://actions.zapier.com/mcp/",
+            importHints: {
+                matchNames: ["Zapier", "zapier"]
+            }
+        }
+    },
+    {
+        key: "webflow",
+        name: "Webflow",
+        description: "Web design and CMS — sites, collections, items, forms, and design data",
+        category: "marketing",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.webflow.com",
+            importHints: {
+                matchNames: ["Webflow", "webflow"]
+            }
+        }
+    },
+    {
+        key: "sentry",
+        name: "Sentry",
+        description: "Error monitoring — issues, events, releases, and performance data",
+        category: "developer",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.sentry.dev/sse",
+            importHints: {
+                matchNames: ["Sentry", "sentry"]
+            }
+        }
+    },
+    {
+        key: "vercel",
+        name: "Vercel",
+        description: "Deployment platform — projects, deployments, domains, and team management",
+        category: "developer",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://vercel.com/api/mcp",
+            importHints: {
+                matchNames: ["Vercel", "vercel"]
+            }
+        }
+    },
+    {
+        key: "supabase",
+        name: "Supabase",
+        description: "Managed Postgres — databases, queries, migrations, and project management",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.supabase.com",
+            requiredFields: ["SUPABASE_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                SUPABASE_ACCESS_TOKEN: {
+                    label: "Supabase access token",
+                    description: "From Supabase Dashboard > Account Settings > Access Tokens",
+                    placeholder: "sbp_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Supabase", "supabase"]
+            }
+        }
+    },
+    {
+        key: "cloudflare",
+        name: "Cloudflare",
+        description: "Edge platform — DNS, Workers, KV, R2 storage, and security settings",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CLOUDFLARE_API_TOKEN"],
+            fieldDefinitions: {
+                CLOUDFLARE_API_TOKEN: {
+                    label: "Cloudflare API token",
+                    description: "From Cloudflare Dashboard > API Tokens",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Cloudflare", "cloudflare"]
+            }
+        }
+    },
+    {
+        key: "neon",
+        name: "Neon",
+        description: "Serverless Postgres — databases, branches, queries, and compute management",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.neon.tech",
+            requiredFields: ["NEON_API_KEY"],
+            fieldDefinitions: {
+                NEON_API_KEY: {
+                    label: "Neon API key",
+                    description: "From Neon Console > Account > API Keys",
+                    placeholder: "neon_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Neon", "neon"]
+            }
+        }
+    },
+    {
+        key: "netlify",
+        name: "Netlify",
+        description: "Web deployment — sites, deploys, forms, functions, and DNS management",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["NETLIFY_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                NETLIFY_ACCESS_TOKEN: {
+                    label: "Netlify personal access token",
+                    description: "From Netlify User Settings > Applications",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Netlify", "netlify"]
+            }
+        }
+    },
+    {
+        key: "buildkite",
+        name: "Buildkite",
+        description: "CI/CD platform — pipelines, builds, agents, and artifact management",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["BUILDKITE_API_TOKEN"],
+            fieldDefinitions: {
+                BUILDKITE_API_TOKEN: {
+                    label: "Buildkite API token",
+                    description: "From Buildkite Settings > API Access Tokens",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Buildkite", "buildkite"]
+            }
+        }
+    },
+    {
+        key: "paypal",
+        name: "PayPal",
+        description: "Payments — transactions, invoices, disputes, and payout management",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["PAYPAL_CLIENT_ID", "PAYPAL_CLIENT_SECRET"],
+            fieldDefinitions: {
+                PAYPAL_CLIENT_ID: {
+                    label: "PayPal client ID",
+                    description: "From PayPal Developer Dashboard",
+                    placeholder: ""
+                },
+                PAYPAL_CLIENT_SECRET: {
+                    label: "PayPal client secret",
+                    description: "From PayPal Developer Dashboard",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["PayPal", "paypal"]
+            }
+        }
+    },
+    {
+        key: "square",
+        name: "Square",
+        description: "Commerce platform — payments, orders, items, customers, and inventory",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["SQUARE_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                SQUARE_ACCESS_TOKEN: {
+                    label: "Square access token",
+                    description: "From Square Developer Dashboard",
+                    placeholder: "EAA...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Square", "square"]
+            }
+        }
+    },
+    {
+        key: "plaid",
+        name: "Plaid",
+        description: "Financial data — bank accounts, transactions, balances, and identity",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["PLAID_CLIENT_ID", "PLAID_SECRET"],
+            fieldDefinitions: {
+                PLAID_CLIENT_ID: {
+                    label: "Plaid client ID",
+                    description: "From Plaid Dashboard > Team Settings",
+                    placeholder: ""
+                },
+                PLAID_SECRET: {
+                    label: "Plaid secret",
+                    description: "From Plaid Dashboard > Team Settings",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Plaid", "plaid"]
+            }
+        }
+    },
+    {
+        key: "ramp",
+        name: "Ramp",
+        description: "Corporate spend — cards, expenses, reimbursements, and accounting sync",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["RAMP_API_KEY"],
+            fieldDefinitions: {
+                RAMP_API_KEY: {
+                    label: "Ramp API key",
+                    description: "From Ramp Developer Settings",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Ramp", "ramp"]
+            }
+        }
+    },
+    {
+        key: "close-crm",
+        name: "Close CRM",
+        description: "Sales CRM — leads, contacts, opportunities, activities, and pipeline",
+        category: "crm",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CLOSE_API_KEY"],
+            fieldDefinitions: {
+                CLOSE_API_KEY: {
+                    label: "Close API key",
+                    description: "From Close Settings > API Keys",
+                    placeholder: "api_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Close", "close", "Close CRM"]
+            }
+        }
+    },
+    {
+        key: "fireflies",
+        name: "Fireflies.ai",
+        description: "Meeting intelligence — transcripts, summaries, action items, and search",
+        category: "communication",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["FIREFLIES_API_KEY"],
+            fieldDefinitions: {
+                FIREFLIES_API_KEY: {
+                    label: "Fireflies API key",
+                    description: "From Fireflies.ai Settings > API & Integrations",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Fireflies", "fireflies"]
+            }
+        }
+    },
+    {
+        key: "canva",
+        name: "Canva",
+        description: "Design platform — templates, designs, brand assets, and team content",
+        category: "design",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Canva", "canva"]
+            }
+        }
+    },
+    {
+        key: "cloudinary",
+        name: "Cloudinary",
+        description: "Media management — images, videos, transformations, and CDN delivery",
+        category: "design",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CLOUDINARY_URL"],
+            fieldDefinitions: {
+                CLOUDINARY_URL: {
+                    label: "Cloudinary URL",
+                    description: "From Cloudinary Console > Dashboard (cloudinary://...)",
+                    placeholder: "cloudinary://...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Cloudinary", "cloudinary"]
+            }
+        }
+    },
+    {
+        key: "ahrefs",
+        name: "Ahrefs",
+        description: "SEO platform — backlinks, keywords, rank tracking, site audits",
+        category: "marketing",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.ahrefs.com/mcp",
+            requiredFields: ["AHREFS_API_KEY"],
+            fieldDefinitions: {
+                AHREFS_API_KEY: {
+                    label: "Ahrefs API key",
+                    description: "From Ahrefs Account > API",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Ahrefs", "ahrefs"]
+            }
+        }
+    },
+    {
+        key: "semrush",
+        name: "Semrush",
+        description: "Digital marketing — keyword research, competitive analysis, SEO audits",
+        category: "marketing",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["SEMRUSH_API_KEY"],
+            fieldDefinitions: {
+                SEMRUSH_API_KEY: {
+                    label: "Semrush API key",
+                    description: "From Semrush > Subscription Info",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Semrush", "semrush"]
+            }
+        }
+    },
+    {
+        key: "wix",
+        name: "Wix",
+        description: "Website builder — sites, CMS collections, forms, and member management",
+        category: "marketing",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["WIX_API_KEY"],
+            fieldDefinitions: {
+                WIX_API_KEY: {
+                    label: "Wix API key",
+                    description: "From Wix Developers > API Keys",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Wix", "wix"]
+            }
+        }
+    },
+    {
+        key: "google-bigquery",
+        name: "Google BigQuery",
+        description: "Data warehouse — SQL queries, datasets, tables, and analytics",
+        category: "data",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.googleapis.com/v1/bigquery",
+            importHints: {
+                matchNames: ["BigQuery", "bigquery"]
+            }
+        }
+    },
+    {
+        key: "google-maps",
+        name: "Google Maps",
+        description: "Location services — geocoding, places, directions, and distance calculations",
+        category: "data",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["GOOGLE_MAPS_API_KEY"],
+            fieldDefinitions: {
+                GOOGLE_MAPS_API_KEY: {
+                    label: "Google Maps API key",
+                    description: "From Google Cloud Console > APIs & Services",
+                    placeholder: "AIza...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Google Maps", "google-maps"]
+            }
+        }
+    },
+    {
+        key: "apify",
+        name: "Apify",
+        description: "Web scraping platform — actors, crawlers, datasets, and data extraction",
+        category: "data",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://actors-mcp-server.apify.actor/mcp",
+            requiredFields: ["APIFY_TOKEN"],
+            fieldDefinitions: {
+                APIFY_TOKEN: {
+                    label: "Apify API token",
+                    description: "From Apify Console > Settings > Integrations",
+                    placeholder: "apify_api_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Apify", "apify"]
+            }
+        }
+    },
+    {
+        key: "box",
+        name: "Box",
+        description: "Enterprise content — files, folders, sharing, workflows, and collaboration",
+        category: "data",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["Box", "box"]
+            }
+        }
+    },
+    {
+        key: "atlassian",
+        name: "Atlassian (Rovo)",
+        description:
+            "Unified Atlassian access — cross-product search, Jira, Confluence via Rovo MCP",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://mcp.atlassian.com/v1/mcp",
+            importHints: {
+                matchNames: ["Atlassian", "atlassian", "Rovo"]
+            }
+        }
+    },
+    {
+        key: "clickup",
+        name: "ClickUp",
+        description: "Project management — tasks, docs, goals, dashboards, and time tracking",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CLICKUP_API_TOKEN"],
+            fieldDefinitions: {
+                CLICKUP_API_TOKEN: {
+                    label: "ClickUp personal API token",
+                    description: "From ClickUp Settings > Apps > API Token",
+                    placeholder: "pk_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["ClickUp", "clickup"]
+            }
+        }
+    },
+    {
+        key: "pipedrive",
+        name: "Pipedrive",
+        description: "Sales CRM — deals, contacts, organizations, activities, and pipeline",
+        category: "crm",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["PIPEDRIVE_API_TOKEN"],
+            fieldDefinitions: {
+                PIPEDRIVE_API_TOKEN: {
+                    label: "Pipedrive API token",
+                    description: "From Pipedrive Settings > Personal preferences > API",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Pipedrive", "pipedrive"]
+            }
+        }
+    },
+    {
+        key: "zendesk",
+        name: "Zendesk",
+        description: "Customer support — tickets, users, organizations, help center articles",
+        category: "support",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["ZENDESK_URL", "ZENDESK_EMAIL", "ZENDESK_API_TOKEN"],
+            fieldDefinitions: {
+                ZENDESK_URL: {
+                    label: "Zendesk subdomain URL",
+                    description: "Your Zendesk URL (e.g. https://company.zendesk.com)",
+                    placeholder: "https://company.zendesk.com",
+                    type: "url"
+                },
+                ZENDESK_EMAIL: {
+                    label: "Agent email",
+                    description: "Email of the Zendesk agent for API access",
+                    placeholder: "agent@company.com"
+                },
+                ZENDESK_API_TOKEN: {
+                    label: "API token",
+                    description: "From Zendesk Admin > Channels > API",
+                    placeholder: "",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Zendesk", "zendesk"]
+            }
+        }
+    },
+    {
+        key: "calendly",
+        name: "Calendly",
+        description: "Scheduling — events, event types, invitees, availability, and routing",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CALENDLY_API_KEY"],
+            fieldDefinitions: {
+                CALENDLY_API_KEY: {
+                    label: "Calendly personal access token",
+                    description: "From Calendly Integrations > API & Webhooks",
+                    placeholder: "eyJ...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Calendly", "calendly"]
+            }
+        }
+    },
+    {
+        key: "docusign",
+        name: "DocuSign",
+        description: "E-signatures — envelopes, templates, recipients, and signing workflows",
+        category: "productivity",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["DocuSign", "docusign"]
+            }
+        }
+    },
+    {
+        key: "make",
+        name: "Make",
+        description:
+            "Visual workflow automation — scenarios, modules, connections, and data stores",
+        category: "automation",
+        authType: "oauth",
+        providerType: "mcp",
+        configJson: {
+            hostedMcpUrl: "https://us.make.com/mcp/sse",
+            importHints: {
+                matchNames: ["Make", "make", "Integromat"]
+            }
+        }
+    },
+
     {
         key: "webhook",
         name: "Incoming Webhook",
@@ -1301,6 +2189,78 @@ function buildCustomServerDefinition(
     return { command, args, env };
 }
 
+/**
+ * Build authentication headers for a remote MCP server based on provider authType.
+ *
+ * - "oauth" providers: look for accessToken / access_token in credentials
+ * - "api_key" providers: look for common API key field names
+ * - "none" / other: no auth header
+ */
+function buildRemoteMcpAuthHeaders(
+    provider: IntegrationProvider,
+    credentials: Record<string, unknown>,
+    allowEnvFallback: boolean
+): Record<string, string> {
+    const authType = provider.authType;
+    const providerKey = provider.key;
+    const envKeyUpper = providerKey.toUpperCase().replace(/-/g, "_");
+
+    if (authType === "oauth") {
+        // For OAuth providers, extract access token from stored credentials
+        const accessToken = getCredentialValue(credentials, [
+            "accessToken",
+            "access_token",
+            "token",
+            "apiToken",
+            "api_token"
+        ]);
+        if (accessToken) {
+            return { Authorization: `Bearer ${accessToken}` };
+        }
+        // Fallback to env var
+        if (allowEnvFallback) {
+            const envToken =
+                process.env[`${envKeyUpper}_ACCESS_TOKEN`] ||
+                process.env[`${envKeyUpper}_TOKEN`] ||
+                process.env[`${envKeyUpper}_API_KEY`];
+            if (envToken) {
+                return { Authorization: `Bearer ${envToken}` };
+            }
+        }
+        return {};
+    }
+
+    if (authType === "api_key") {
+        // For API key providers, look for common key field names
+        const apiKey = getCredentialValue(credentials, [
+            "apiKey",
+            "api_key",
+            "API_KEY",
+            `${envKeyUpper}_API_KEY`,
+            "token",
+            "accessToken",
+            "access_token"
+        ]);
+        if (apiKey) {
+            return { Authorization: `Bearer ${apiKey}` };
+        }
+        // Fallback to env var
+        if (allowEnvFallback) {
+            const envKey =
+                process.env[`${envKeyUpper}_API_KEY`] ||
+                process.env[`${envKeyUpper}_ACCESS_TOKEN`] ||
+                process.env[`${envKeyUpper}_TOKEN`];
+            if (envKey) {
+                return { Authorization: `Bearer ${envKey}` };
+            }
+        }
+        return {};
+    }
+
+    // No auth needed (e.g., "none" or open endpoints)
+    return {};
+}
+
 function buildServerDefinitionForProvider(options: {
     provider: IntegrationProvider;
     connection?: ConnectionWithProvider | null;
@@ -1482,8 +2442,26 @@ function buildServerDefinitionForProvider(options: {
                 env: { GITHUB_PERSONAL_ACCESS_TOKEN: githubToken }
             };
         }
-        default:
-            return null;
+        default: {
+            // Generic handler: any provider with hostedMcpUrl in configJson
+            const configJson =
+                provider.configJson && typeof provider.configJson === "object"
+                    ? (provider.configJson as Record<string, unknown>)
+                    : undefined;
+            const hostedMcpUrl = configJson?.hostedMcpUrl as string | undefined;
+
+            if (!hostedMcpUrl) return null;
+
+            // Build auth header from credentials based on authType
+            const authHeaders = buildRemoteMcpAuthHeaders(provider, credentials, allowEnvFallback);
+
+            return {
+                url: new URL(hostedMcpUrl),
+                ...(Object.keys(authHeaders).length > 0
+                    ? { requestInit: { headers: authHeaders } }
+                    : {})
+            };
+        }
     }
 }
 

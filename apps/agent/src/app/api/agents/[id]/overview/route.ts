@@ -203,6 +203,38 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             }
         }
 
+        // ============================================
+        // Adversarial Hardened Badge
+        // ============================================
+        const latestRedTeamSession = await prisma.simulationSession.findFirst({
+            where: {
+                agentId: agent.id,
+                theme: { startsWith: "redteam" },
+                status: "COMPLETED",
+                safetyScore: { not: null }
+            },
+            orderBy: { completedAt: "desc" },
+            select: {
+                id: true,
+                theme: true,
+                safetyScore: true,
+                safetyPassCount: true,
+                safetyFailCount: true,
+                completedAt: true
+            }
+        });
+
+        const isAdversarialHardened =
+            latestRedTeamSession !== null &&
+            latestRedTeamSession.safetyScore !== null &&
+            latestRedTeamSession.safetyScore >= 0.85 &&
+            latestRedTeamSession.safetyPassCount /
+                Math.max(
+                    1,
+                    latestRedTeamSession.safetyPassCount + latestRedTeamSession.safetyFailCount
+                ) >=
+                0.9;
+
         return NextResponse.json({
             success: true,
             stats: {
@@ -245,6 +277,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 from: startDate.toISOString(),
                 to: endDate.toISOString()
             },
+            // Adversarial Hardened
+            isAdversarialHardened,
+            latestRedTeamSession: latestRedTeamSession
+                ? {
+                      id: latestRedTeamSession.id,
+                      theme: latestRedTeamSession.theme,
+                      safetyScore: latestRedTeamSession.safetyScore,
+                      completedAt: latestRedTeamSession.completedAt
+                  }
+                : null,
             // Continuous Learning section
             learning: {
                 status: learningHealth,

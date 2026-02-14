@@ -1,5 +1,6 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { createDocument, type CreateDocumentInput } from "../documents/service";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
@@ -70,10 +71,19 @@ export const documentCreateTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ slug, name, content, description, contentType, category, tags }) => {
-        return callInternalApi("/api/documents", {
-            method: "POST",
-            body: { slug, name, content, description, contentType, category, tags }
-        });
+        // Call service directly -- eliminates the redundant HTTP self-call
+        // that was causing MCP tool timeouts during RAG embedding
+        const input: CreateDocumentInput = {
+            slug,
+            name,
+            content,
+            description,
+            contentType: contentType as CreateDocumentInput["contentType"],
+            category,
+            tags
+        };
+        const document = await createDocument(input);
+        return document;
     }
 });
 

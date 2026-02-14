@@ -967,27 +967,33 @@ async function seedSkills() {
     console.log(`\n--- Seeding ${allSkills.length} skills ---\n`);
 
     for (const skillDef of allSkills) {
-        // Upsert the skill
-        const skill = await prisma.skill.upsert({
-            where: { slug: skillDef.slug },
-            update: {
-                name: skillDef.name,
-                description: skillDef.description,
-                instructions: skillDef.instructions,
-                category: skillDef.category,
-                tags: skillDef.tags,
-                type: skillDef.type
-            },
-            create: {
-                slug: skillDef.slug,
-                name: skillDef.name,
-                description: skillDef.description,
-                instructions: skillDef.instructions,
-                category: skillDef.category,
-                tags: skillDef.tags,
-                type: skillDef.type
-            }
+        // Find-or-create pattern (slug is no longer globally unique, compound with workspaceId)
+        const existing = await prisma.skill.findFirst({
+            where: { slug: skillDef.slug, workspaceId: null }
         });
+        const skill = existing
+            ? await prisma.skill.update({
+                  where: { id: existing.id },
+                  data: {
+                      name: skillDef.name,
+                      description: skillDef.description,
+                      instructions: skillDef.instructions,
+                      category: skillDef.category,
+                      tags: skillDef.tags,
+                      type: skillDef.type
+                  }
+              })
+            : await prisma.skill.create({
+                  data: {
+                      slug: skillDef.slug,
+                      name: skillDef.name,
+                      description: skillDef.description,
+                      instructions: skillDef.instructions,
+                      category: skillDef.category,
+                      tags: skillDef.tags,
+                      type: skillDef.type
+                  }
+              });
 
         // Attach tools (only for non-MCP skills that have static tool IDs)
         if (skillDef.tools.length > 0) {

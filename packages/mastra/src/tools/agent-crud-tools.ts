@@ -233,7 +233,7 @@ export const agentCreateTool = createTool({
     }),
     execute: async (input) => {
         const slug = input.slug || generateSlug(input.name);
-        const existing = await prisma.agent.findUnique({ where: { slug } });
+        const existing = await prisma.agent.findFirst({ where: { slug } });
         if (existing) {
             throw new Error(`Agent with slug '${slug}' already exists`);
         }

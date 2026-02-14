@@ -4,41 +4,41 @@ import { useState } from "react";
 
 const features = [
     {
-        title: "Deploy specialized agents",
+        title: "Deploy specialized agents in minutes",
         description:
-            "Create database-driven agents with full version control and rollback. Choose from multiple LLM providers — OpenAI, Anthropic, or bring your own. Each agent gets persistent memory, semantic recall, and structured output validation.",
+            "Create production-ready agents with natural language instructions. Choose from multiple LLM providers, attach your company knowledge base via RAG, and deploy with full version control and rollback \u2014 all from a single dashboard.",
         highlights: [
             "Multi-provider LLM support (GPT-4o, Claude, and more)",
-            "Version control with instant rollback",
-            "Persistent memory and semantic recall",
-            "Structured outputs with Zod schema validation",
-            "Agent evaluation and quality scoring"
+            "Version control with instant rollback and audit trail",
+            "RAG-powered knowledge base for company-specific answers",
+            "Full observability: traces, cost tracking, quality scoring",
+            "Continuous learning with A/B experiments"
         ],
         visual: "agents"
     },
     {
-        title: "Orchestrate with workflows and networks",
+        title: "Orchestrate complex business processes",
         description:
-            "Go beyond single-agent chat. Build visual workflows with branching, loops, and human-in-the-loop approval. Create multi-agent networks where an LLM router delegates tasks to specialized agents in real time.",
+            "Go beyond single-agent chat. Build visual workflows for approval chains, multi-step operations, and cross-department processes. Create multi-agent networks where specialized agents collaborate in real time.",
         highlights: [
-            "Visual drag-and-drop workflow builder",
+            "Visual workflow builder with branching and loops",
             "Multi-agent networks with LLM-based routing",
-            "Human-in-the-loop approval steps",
-            "Parallel execution and conditional branching",
-            "Workflow suspension and resumption"
+            "Human-in-the-loop approval for high-stakes decisions",
+            "Parallel execution for throughput at scale",
+            "Schedule agents on cron or trigger via webhooks"
         ],
         visual: "workflows"
     },
     {
-        title: "Connect to everything",
+        title: "Connect to your entire business stack",
         description:
-            "Agents access 10+ integrations out of the box via MCP: CRM, project management, email, files, meetings, and more. Deploy agents to Slack, WhatsApp, Telegram, voice calls, or embed via API.",
+            "Agents access 10+ enterprise integrations out of the box: CRM, project management, email, files, meetings, and more. Deploy agents to Slack, email, voice, or embed directly in your product via API.",
         highlights: [
             "10+ MCP integrations: HubSpot, Jira, Slack, GitHub, and more",
-            "Native OAuth: Gmail, Outlook, Dropbox",
-            "Multi-channel: Slack, WhatsApp, Telegram, Voice, Email",
-            "Webhook triggers and cron-based scheduling",
-            "Encrypted credential storage (AES-256-GCM)"
+            "Native OAuth: Gmail, Outlook, Google Calendar, Dropbox",
+            "Multi-channel: Slack, email, voice, webhooks, and API",
+            "Encrypted credential storage (AES-256-GCM)",
+            "Multi-tenant with workspace isolation and role-based access"
         ],
         visual: "integrations"
     }
@@ -56,11 +56,11 @@ export function FeatureAccordion() {
                     </span>
                 </div>
                 <h2 className="text-foreground mb-4 text-center text-3xl font-bold tracking-tight md:text-4xl">
-                    Everything you need to build AI agents
+                    Everything your business needs to deploy AI agents
                 </h2>
                 <p className="text-muted-foreground mx-auto mb-16 max-w-2xl text-center text-lg">
-                    From single agents to orchestrated teams, AgentC2 gives you the building blocks
-                    for production-grade AI systems.
+                    From a single sales agent to an orchestrated team across your entire
+                    organization. Enterprise-grade infrastructure, ready in minutes.
                 </p>
 
                 <div className="grid gap-8 lg:grid-cols-[1fr_1.2fr] lg:gap-12">

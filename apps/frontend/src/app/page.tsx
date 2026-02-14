@@ -13,7 +13,7 @@ export default async function HomePage() {
     }
 
     // Fetch the welcome agent's public token for the embed
-    const welcomeAgent = await prisma.agent.findUnique({
+    const welcomeAgent = await prisma.agent.findFirst({
         where: { slug: "welcome" },
         select: { publicToken: true, isPublic: true }
     });

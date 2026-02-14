@@ -21,13 +21,17 @@ function generateSlug(name: string): string {
 }
 
 /**
- * Generate a unique agent slug, appending a numeric suffix if the base slug already exists.
+ * Generate a unique agent slug within a workspace, appending a numeric suffix if the base slug already exists.
  * e.g. "general-assistant" -> "general-assistant-2" -> "general-assistant-3"
  */
-async function generateUniqueAgentSlug(base: string): Promise<string> {
+async function generateUniqueAgentSlug(base: string, workspaceId?: string | null): Promise<string> {
     let slug = base;
     let suffix = 2;
-    while (await prisma.agent.findUnique({ where: { slug } })) {
+    while (
+        await prisma.agent.findFirst({
+            where: { slug, ...(workspaceId ? { workspaceId } : {}) }
+        })
+    ) {
         slug = `${base}-${suffix}`;
         suffix++;
     }
@@ -77,6 +81,7 @@ export async function GET(request: NextRequest) {
                     scorers: agent.scorers,
                     toolCount: agent.tools.length,
                     isActive: agent.isActive,
+                    routingConfig: agent.routingConfig,
                     createdAt: agent.createdAt,
                     updatedAt: agent.updatedAt
                 })),
@@ -141,7 +146,7 @@ export async function POST(request: NextRequest) {
         if (USE_DB_AGENTS) {
             // Use new Agent model
             const baseSlug = body.slug || generateSlug(name);
-            const slug = await generateUniqueAgentSlug(baseSlug);
+            const slug = await generateUniqueAgentSlug(baseSlug, workspaceId);
 
             // Build modelConfig from extended thinking settings
             const modelConfigBase = (body.modelConfig as Record<string, unknown> | null) || {};

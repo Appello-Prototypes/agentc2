@@ -495,6 +495,7 @@ export default function UnifiedChatPage() {
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
     const [currentRunId, setCurrentRunId] = useState<string | null>(null);
     const [agentDefaultModel, setAgentDefaultModel] = useState<string | undefined>(undefined);
+    const [agentRoutingMode, setAgentRoutingMode] = useState<"locked" | "auto" | null>(null);
     const [agentName, setAgentName] = useState<string>("");
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>(
@@ -615,6 +616,7 @@ export default function UnifiedChatPage() {
     const handleAgentChange = useCallback(
         (newSlug: string, agent: AgentInfo) => {
             setAgentDefaultModel(agent.modelName);
+            setAgentRoutingMode(agent.routingConfig?.mode || null);
             setAgentName(agent.name);
             if (newSlug !== selectedAgentSlug) {
                 setSelectedAgentSlug(newSlug);
@@ -894,6 +896,14 @@ export default function UnifiedChatPage() {
                         onChange={setModelOverride}
                         disabled={isStreaming}
                     />
+                    {agentRoutingMode === "auto" && !modelOverride && (
+                        <span
+                            className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
+                            title="Model routing is enabled — the model will be selected automatically based on input complexity"
+                        >
+                            Auto
+                        </span>
+                    )}
                     <ThinkingToggle
                         enabled={thinkingEnabled}
                         onChange={setThinkingEnabled}

@@ -12,15 +12,15 @@ export function CtaBanner() {
 
                     <div className="relative">
                         <h2 className="text-foreground mb-4 text-3xl font-bold tracking-tight md:text-4xl">
-                            Ready to build your AI workforce?
+                            2026 is the year of the agent. Is your company ready?
                         </h2>
                         <p className="text-muted-foreground mx-auto mb-8 max-w-xl text-lg">
-                            Start building intelligent agents that connect to your tools, learn from
-                            experience, and work across every channel.
+                            Deploy AI agents that connect to your business systems, automate real
+                            workflows, and scale with enterprise-grade security and observability.
                         </p>
                         <div className="flex flex-col items-center justify-center gap-4 sm:flex-row">
                             <Link href="/signup" className={cn(buttonVariants({ size: "lg" }))}>
-                                Get Started Free
+                                Start Free Trial
                             </Link>
                             <Link
                                 href="mailto:sales@agentc2.com"
@@ -31,7 +31,7 @@ export function CtaBanner() {
                                     })
                                 )}
                             >
-                                Talk to Sales
+                                Book a Demo
                             </Link>
                         </div>
                     </div>

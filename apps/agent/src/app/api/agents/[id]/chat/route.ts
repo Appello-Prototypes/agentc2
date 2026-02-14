@@ -6,7 +6,13 @@ import {
     generateId,
     type UIMessageStreamWriter
 } from "ai";
-import { agentResolver, getScorersByNames } from "@repo/mastra";
+import {
+    agentResolver,
+    getScorersByNames,
+    resolveRoutingDecision,
+    type RoutingConfig,
+    type RoutingDecision
+} from "@repo/mastra";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -200,6 +206,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
         );
 
+        // ── Model Routing ───────────────────────────────────────────────────
+        // If agent has routingConfig.mode === "auto" and no manual model override,
+        // classify input complexity and select the appropriate model tier.
+        let routingDecision: RoutingDecision | null = null;
+
         // Apply model override if provided (user selected a different model in the UI)
         if (modelOverride && modelOverride.provider && modelOverride.name) {
             const { Agent: AgentClass } = await import("@mastra/core/agent");
@@ -224,6 +235,51 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             console.log(
                 `[Agent Chat] Model override: ${overriddenModel}${thinkingOverride ? " (thinking)" : ""}`
             );
+        } else if (record) {
+            // No manual model override — check for auto-routing
+            const routingConfig = record.routingConfig as RoutingConfig | null;
+            if (routingConfig?.mode === "auto") {
+                // Extract the last user message text for complexity classification
+                const lastMsg = messages
+                    ?.filter((m: { role: string }) => m.role === "user")
+                    .pop() as
+                    | { content?: string; parts?: Array<{ type: string; text?: string }> }
+                    | undefined;
+                let inputForRouting = "";
+                if (lastMsg?.parts && Array.isArray(lastMsg.parts)) {
+                    for (const part of lastMsg.parts) {
+                        if (part.type === "text" && part.text) inputForRouting = part.text;
+                    }
+                } else if (lastMsg?.content) {
+                    inputForRouting = lastMsg.content;
+                }
+
+                if (inputForRouting) {
+                    routingDecision = resolveRoutingDecision(
+                        routingConfig,
+                        { provider: record.modelProvider, name: record.modelName },
+                        inputForRouting
+                    );
+
+                    if (routingDecision && routingDecision.tier !== "PRIMARY") {
+                        const { Agent: AgentClass } = await import("@mastra/core/agent");
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const baseConfig = (agent as any).__config || {};
+                        const routedModel = `${routingDecision.model.provider}/${routingDecision.model.name}`;
+                        agent = new AgentClass({
+                            ...baseConfig,
+                            model: routedModel
+                        });
+                        console.log(
+                            `[Agent Chat] Model routing: ${routingDecision.tier} -> ${routedModel} (${routingDecision.reason})`
+                        );
+                    } else if (routingDecision) {
+                        console.log(
+                            `[Agent Chat] Model routing: PRIMARY (${routingDecision.reason})`
+                        );
+                    }
+                }
+            }
         }
 
         // ── Interaction Mode Handling ──────────────────────────────────────
@@ -797,14 +853,28 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
                     // Complete the run with the full output, cost, and execution steps
                     if (run) {
+                        // Use routed model info when routing decision was made
+                        const actualModelProvider = routingDecision
+                            ? routingDecision.model.provider
+                            : modelOverride?.provider || record?.modelProvider || "unknown";
+                        const actualModelName = routingDecision
+                            ? routingDecision.model.name
+                            : modelOverride?.name || record?.modelName || "unknown";
+
                         await run.complete({
                             output: fullOutput,
-                            modelProvider: record?.modelProvider || "unknown",
-                            modelName: record?.modelName || "unknown",
+                            modelProvider: actualModelProvider,
+                            modelName: actualModelName,
                             promptTokens,
                             completionTokens,
                             costUsd,
-                            steps: executionSteps
+                            steps: executionSteps,
+                            ...(routingDecision
+                                ? {
+                                      routingTier: routingDecision.tier,
+                                      routingReason: routingDecision.reason
+                                  }
+                                : {})
                         });
 
                         console.log(`[Agent Chat] Completed run ${run.runId}`);

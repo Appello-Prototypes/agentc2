@@ -60,6 +60,58 @@ export async function GET(request: NextRequest) {
             connectionsByProvider.set(connection.providerId, list);
         }
 
+        // Look up provisioned resources for connected providers
+        const workspace = await prisma.workspace.findFirst({
+            where: { organizationId, isDefault: true },
+            select: { id: true }
+        });
+
+        // Find all auto-provisioned skills and agents for this workspace
+        const [provisionedSkills, provisionedAgents] = workspace
+            ? await Promise.all([
+                  prisma.skill.findMany({
+                      where: {
+                          workspaceId: workspace.id,
+                          metadata: { path: ["provisionedBy"], equals: "auto-provisioner" }
+                      },
+                      select: {
+                          id: true,
+                          slug: true,
+                          name: true,
+                          metadata: true,
+                          tools: { select: { toolId: true } }
+                      }
+                  }),
+                  prisma.agent.findMany({
+                      where: {
+                          workspaceId: workspace.id,
+                          metadata: { path: ["provisionedBy"], equals: "auto-provisioner" }
+                      },
+                      select: {
+                          id: true,
+                          slug: true,
+                          name: true,
+                          isActive: true,
+                          metadata: true
+                      }
+                  })
+              ])
+            : [[], []];
+
+        // Index by provider key from metadata
+        const skillsByProvider = new Map<string, (typeof provisionedSkills)[0]>();
+        for (const s of provisionedSkills) {
+            const meta = s.metadata as Record<string, unknown> | null;
+            const pk = meta?.providerKey as string | undefined;
+            if (pk) skillsByProvider.set(pk, s);
+        }
+        const agentsByProvider = new Map<string, (typeof provisionedAgents)[0]>();
+        for (const a of provisionedAgents) {
+            const meta = a.metadata as Record<string, unknown> | null;
+            const pk = meta?.providerKey as string | undefined;
+            if (pk) agentsByProvider.set(pk, a);
+        }
+
         const response = providers.map((provider) => {
             const providerConnections = connectionsByProvider.get(provider.id) ?? [];
             const connectionDetails = providerConnections.map((connection) => {
@@ -91,6 +143,41 @@ export async function GET(request: NextRequest) {
                 hasMissing
             });
 
+            // Look up provisioned resources for this provider
+            const provSkill = skillsByProvider.get(provider.key);
+            const provAgent = agentsByProvider.get(provider.key);
+            const provisionedMeta =
+                provSkill || provAgent
+                    ? {
+                          skill: provSkill
+                              ? {
+                                    id: provSkill.id,
+                                    slug: provSkill.slug,
+                                    name: provSkill.name,
+                                    toolCount: provSkill.tools.length,
+                                    deactivated: Boolean(
+                                        (provSkill.metadata as Record<string, unknown>)?.deactivated
+                                    )
+                                }
+                              : null,
+                          agent: provAgent
+                              ? {
+                                    id: provAgent.id,
+                                    slug: provAgent.slug,
+                                    name: provAgent.name,
+                                    isActive: provAgent.isActive
+                                }
+                              : null
+                      }
+                    : null;
+
+            // Extract health status from connection metadata
+            const healthStatus =
+                providerConnections.length > 0
+                    ? ((providerConnections[0].metadata as Record<string, unknown>)
+                          ?.healthStatus as string | undefined)
+                    : undefined;
+
             return {
                 id: provider.id,
                 key: provider.key,
@@ -107,7 +194,9 @@ export async function GET(request: NextRequest) {
                         : 0,
                 actions: provider.actionsJson,
                 triggers: provider.triggersJson,
-                config: provider.configJson
+                config: provider.configJson,
+                provisioned: provisionedMeta,
+                healthStatus: healthStatus || null
             };
         });
 

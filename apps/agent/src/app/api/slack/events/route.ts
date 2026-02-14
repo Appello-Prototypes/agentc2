@@ -175,6 +175,76 @@ async function processSlackFeedback(params: {
 }
 
 /**
+ * Process a Slack emoji reaction (thumbsup/thumbsdown) as feedback on an agent run.
+ * Creates or updates an AgentFeedback record and emits a feedback/submitted Inngest event.
+ */
+async function processSlackReactionFeedback(params: {
+    runId: string;
+    agentId: string;
+    thumbs: boolean;
+    reaction: string;
+    userId: string;
+    channelId: string;
+    messageTs: string;
+}): Promise<void> {
+    try {
+        // Check for existing feedback to avoid duplicates
+        const existing = await prisma.agentFeedback.findFirst({
+            where: {
+                runId: params.runId,
+                source: "slack"
+            }
+        });
+
+        if (existing) {
+            // Update existing feedback (user changed their reaction)
+            await prisma.agentFeedback.update({
+                where: { id: existing.id },
+                data: { thumbs: params.thumbs }
+            });
+            console.log(
+                `[Slack Feedback] Updated ${params.thumbs ? "👍" : "👎"} for run ${params.runId} from user ${params.userId}`
+            );
+        } else {
+            // Create new feedback
+            const feedback = await prisma.agentFeedback.create({
+                data: {
+                    runId: params.runId,
+                    agentId: params.agentId,
+                    thumbs: params.thumbs,
+                    source: "slack",
+                    comment: `Slack reaction: :${params.reaction}: by user ${params.userId}`
+                }
+            });
+
+            // Emit feedback event for calibration pipeline
+            try {
+                await inngest.send({
+                    name: "feedback/submitted",
+                    data: {
+                        feedbackId: feedback.id,
+                        runId: params.runId,
+                        agentId: params.agentId,
+                        thumbs: params.thumbs,
+                        rating: null,
+                        source: "slack",
+                        comment: null
+                    }
+                });
+            } catch (error) {
+                console.error("[Slack Feedback] Failed to emit inngest event:", error);
+            }
+
+            console.log(
+                `[Slack Feedback] ${params.thumbs ? "👍" : "👎"} for run ${params.runId} from user ${params.userId}`
+            );
+        }
+    } catch (error) {
+        console.error("[Slack Feedback] Failed to process reaction feedback:", error);
+    }
+}
+
+/**
  * Check rate limits for a Slack user within an org's Slack connection.
  * Returns an error message string if rate limited, or null if allowed.
  *
@@ -524,12 +594,12 @@ async function sendSlackMessageToChannel(
     threadTs?: string,
     identity?: { username?: string; icon_emoji?: string; icon_url?: string },
     botToken?: string
-): Promise<boolean> {
+): Promise<{ ok: boolean; ts?: string }> {
     const token = botToken || process.env.SLACK_BOT_TOKEN;
 
     if (!token) {
         console.error("[Slack] No bot token available (neither passed nor in env)");
-        return false;
+        return { ok: false };
     }
 
     try {
@@ -553,14 +623,14 @@ async function sendSlackMessageToChannel(
 
         if (!result.ok) {
             console.error("[Slack] API error:", result.error);
-            return false;
+            return { ok: false };
         }
 
         console.log("[Slack] Message sent successfully to", channelId);
-        return true;
+        return { ok: true, ts: result.ts as string | undefined };
     } catch (error) {
         console.error("[Slack] Failed to send message:", error);
-        return false;
+        return { ok: false };
     }
 }
 
@@ -576,7 +646,7 @@ async function sendSlackMessageSafe(
     threadTs?: string,
     identity?: { username?: string; icon_emoji?: string; icon_url?: string },
     botToken?: string
-): Promise<boolean> {
+): Promise<{ ok: boolean; ts?: string }> {
     if (text.length <= SLACK_MAX_TEXT_LENGTH) {
         return sendSlackMessageToChannel(channelId, text, threadTs, identity, botToken);
     }
@@ -598,11 +668,19 @@ async function sendSlackMessageSafe(
     if (remaining) chunks.push(remaining);
 
     let success = true;
+    let firstTs: string | undefined;
     for (const chunk of chunks) {
-        const ok = await sendSlackMessageToChannel(channelId, chunk, threadTs, identity, botToken);
-        if (!ok) success = false;
+        const result = await sendSlackMessageToChannel(
+            channelId,
+            chunk,
+            threadTs,
+            identity,
+            botToken
+        );
+        if (!result.ok) success = false;
+        if (!firstTs && result.ts) firstTs = result.ts;
     }
-    return success;
+    return { ok: success, ts: firstTs };
 }
 
 /**
@@ -825,6 +903,8 @@ const appendChatReaction = async (options: {
 interface ProcessMessageResult {
     text: string;
     identity: { username?: string; icon_emoji?: string; icon_url?: string };
+    runId?: string;
+    agentId?: string;
 }
 
 /**
@@ -1070,7 +1150,9 @@ async function processMessage(
 
         return {
             text: markdownToSlack(response.text || "I'm sorry, I couldn't generate a response."),
-            identity
+            identity,
+            runId: run.runId,
+            agentId
         };
     } catch (error) {
         // Record the failure
@@ -1079,7 +1161,9 @@ async function processMessage(
         console.error("[Slack] Error processing message:", error);
         return {
             text: "I encountered an error processing your message. Please try again.",
-            identity
+            identity,
+            runId: run.runId,
+            agentId
         };
     }
 }
@@ -1212,13 +1296,36 @@ export async function POST(request: NextRequest) {
                         directive.slug || undefined
                     );
 
-                    await sendSlackMessageSafe(
+                    const slackResponse = await sendSlackMessageSafe(
                         mentionEvent.channel,
                         result.text,
                         threadTs,
                         result.identity,
                         token
                     );
+
+                    // Store bot response as ChatMessage for reaction-based feedback tracking
+                    if (slackResponse.ts && result.runId && installation.organizationId) {
+                        try {
+                            await upsertChatMessage({
+                                organizationId: installation.organizationId,
+                                workspaceId: null,
+                                integrationConnectionId: installation.connectionId,
+                                channelId: mentionEvent.channel,
+                                messageTs: slackResponse.ts,
+                                userId: botUserId || null,
+                                text: result.text,
+                                metadata: {
+                                    runId: result.runId,
+                                    agentId: result.agentId,
+                                    isBot: true,
+                                    threadTs
+                                }
+                            });
+                        } catch (e) {
+                            console.error("[Slack] Failed to store bot response ChatMessage:", e);
+                        }
+                    }
                 } finally {
                     // Always remove thinking reaction, even on error
                     await removeReaction(mentionEvent.channel, mentionEvent.ts, "eyes", token);
@@ -1250,6 +1357,86 @@ export async function POST(request: NextRequest) {
                         reaction: reactionEvent.reaction,
                         userId: reactionEvent.user
                     });
+                }
+
+                // Process thumbsup/thumbsdown reactions as agent feedback
+                const { reaction, item, user: reactingUser } = reactionEvent;
+                if (
+                    (reaction === "+1" ||
+                        reaction === "-1" ||
+                        reaction === "thumbsup" ||
+                        reaction === "thumbsdown") &&
+                    item.type === "message"
+                ) {
+                    const isPositive = reaction === "+1" || reaction === "thumbsup";
+
+                    // Look up the bot response ChatMessage to find the linked runId
+                    let runId: string | undefined;
+                    let agentId: string | undefined;
+
+                    if (installation.connectionId) {
+                        try {
+                            const chatMsg = await prisma.chatMessage.findUnique({
+                                where: {
+                                    integrationConnectionId_messageTs: {
+                                        integrationConnectionId: installation.connectionId,
+                                        messageTs: item.ts
+                                    }
+                                },
+                                select: { metadata: true }
+                            });
+                            const meta =
+                                chatMsg?.metadata && typeof chatMsg.metadata === "object"
+                                    ? (chatMsg.metadata as Record<string, unknown>)
+                                    : null;
+                            if (meta?.runId && typeof meta.runId === "string") {
+                                runId = meta.runId;
+                            }
+                            if (meta?.agentId && typeof meta.agentId === "string") {
+                                agentId = meta.agentId;
+                            }
+                        } catch (e) {
+                            console.warn("[Slack Feedback] ChatMessage lookup failed:", e);
+                        }
+                    }
+
+                    // Fallback: find the run by matching completion time to message ts
+                    if (!runId) {
+                        try {
+                            const messageDate = new Date(parseFloat(item.ts) * 1000);
+                            const windowStart = new Date(messageDate.getTime() - 10_000);
+                            const windowEnd = new Date(messageDate.getTime() + 5_000);
+                            const nearbyRun = await prisma.agentRun.findFirst({
+                                where: {
+                                    source: "slack",
+                                    sessionId: item.channel,
+                                    completedAt: { gte: windowStart, lte: windowEnd }
+                                },
+                                orderBy: { completedAt: "desc" },
+                                select: { id: true, agentId: true }
+                            });
+                            if (nearbyRun) {
+                                runId = nearbyRun.id;
+                                agentId = nearbyRun.agentId;
+                            }
+                        } catch (e) {
+                            console.warn("[Slack Feedback] Fallback run lookup failed:", e);
+                        }
+                    }
+
+                    if (runId && agentId) {
+                        await processSlackReactionFeedback({
+                            runId,
+                            agentId,
+                            thumbs: isPositive,
+                            reaction,
+                            userId: reactingUser,
+                            channelId: item.channel,
+                            messageTs: item.ts
+                        });
+                    } else {
+                        console.log("[Slack Feedback] No run found for message ts:", item.ts);
+                    }
                 }
 
                 await handleSlackApprovalReaction({
@@ -1402,13 +1589,39 @@ export async function POST(request: NextRequest) {
                             directive.slug || undefined
                         );
 
-                        await sendSlackMessageSafe(
+                        const slackResponse = await sendSlackMessageSafe(
                             messageEvent.channel,
                             result.text,
                             threadTs,
                             result.identity,
                             token
                         );
+
+                        // Store bot response as ChatMessage for reaction-based feedback tracking
+                        if (slackResponse.ts && result.runId && installation.organizationId) {
+                            try {
+                                await upsertChatMessage({
+                                    organizationId: installation.organizationId,
+                                    workspaceId: null,
+                                    integrationConnectionId: installation.connectionId,
+                                    channelId: messageEvent.channel,
+                                    messageTs: slackResponse.ts,
+                                    userId: botUserId || null,
+                                    text: result.text,
+                                    metadata: {
+                                        runId: result.runId,
+                                        agentId: result.agentId,
+                                        isBot: true,
+                                        threadTs
+                                    }
+                                });
+                            } catch (e) {
+                                console.error(
+                                    "[Slack] Failed to store bot response ChatMessage:",
+                                    e
+                                );
+                            }
+                        }
                     } finally {
                         // Always remove thinking reaction, even on error
                         await removeReaction(messageEvent.channel, messageEvent.ts, "eyes", token);
@@ -1445,13 +1658,14 @@ export async function GET() {
         setup: {
             step1: "Create a Slack App at https://api.slack.com/apps",
             step2: "Enable Event Subscriptions and set Request URL to this endpoint",
-            step3: "Subscribe to bot events: app_mention, message.im, message.channels",
+            step3: "Subscribe to bot events: app_mention, message.im, message.channels, reaction_added",
             step4: "Install app to workspace and copy Bot Token",
             step5: "Add SLACK_SIGNING_SECRET and SLACK_BOT_TOKEN to .env",
             requiredScopes: [
                 "app_mentions:read",
                 "chat:write",
                 "chat:write.customize",
+                "reactions:read",
                 "reactions:write",
                 "im:history",
                 "im:read",
@@ -1464,7 +1678,8 @@ export async function GET() {
                 "Thinking indicator: :eyes: reaction while processing",
                 "Multi-agent routing: prefix with agent:<slug> to pick an agent",
                 "Per-agent identity: each agent has its own display name and icon",
-                "Conversation memory: context persists within each Slack thread"
+                "Conversation memory: context persists within each Slack thread",
+                "Reaction feedback: thumbsup/thumbsdown reactions on bot messages create feedback records"
             ]
         }
     });

@@ -24,10 +24,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
         const cursor = searchParams.get("cursor");
         const source = searchParams.get("source"); // "production", "simulation", "all"
+        const trendRange = searchParams.get("trendRange"); // "7d", "30d", "90d"
 
         // Default to last 30 days if no date range provided
         const startDate = from ? new Date(from) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         const endDate = to ? new Date(to) : new Date();
+
+        // Compute trend date range from trendRange parameter
+        const trendDays = trendRange === "7d" ? 7 : trendRange === "90d" ? 90 : 30;
+        const trendStartDate = new Date(Date.now() - trendDays * 24 * 60 * 60 * 1000);
 
         // Find agent by slug or id
         const agent = await prisma.agent.findFirst({
@@ -69,48 +74,84 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         }
 
         // Run all queries in parallel for efficiency
-        const [evaluations, themes, insights, qualityMetrics] = await Promise.all([
-            // Get evaluations
-            prisma.agentEvaluation.findMany({
-                where,
-                orderBy: { createdAt: "desc" },
-                take: limit + 1,
-                include: {
-                    run: {
-                        select: {
-                            id: true,
-                            status: true,
-                            inputText: true,
-                            outputText: true,
-                            durationMs: true
+        const [evaluations, themes, insights, qualityMetrics, learningSessions, agentVersions] =
+            await Promise.all([
+                // Get evaluations
+                prisma.agentEvaluation.findMany({
+                    where,
+                    orderBy: { createdAt: "desc" },
+                    take: limit + 1,
+                    include: {
+                        run: {
+                            select: {
+                                id: true,
+                                status: true,
+                                inputText: true,
+                                outputText: true,
+                                durationMs: true
+                            }
                         }
                     }
-                }
-            }),
-            // Get feedback themes for this agent
-            prisma.evaluationTheme.findMany({
-                where: { agentId: agent.id },
-                orderBy: { count: "desc" },
-                take: 10
-            }),
-            // Get AI insights for this agent
-            prisma.insight.findMany({
-                where: { agentId: agent.id },
-                orderBy: { createdAt: "desc" },
-                take: 10
-            }),
-            // Get quality metrics for trends (last 14 days)
-            prisma.agentQualityMetricDaily.findMany({
-                where: {
-                    agentId: agent.id,
-                    date: {
-                        gte: new Date(Date.now() - 14 * 24 * 60 * 60 * 1000),
-                        lte: endDate
+                }),
+                // Get feedback themes for this agent
+                prisma.evaluationTheme.findMany({
+                    where: { agentId: agent.id },
+                    orderBy: { count: "desc" },
+                    take: 10
+                }),
+                // Get AI insights for this agent
+                prisma.insight.findMany({
+                    where: { agentId: agent.id },
+                    orderBy: { createdAt: "desc" },
+                    take: 10
+                }),
+                // Get quality metrics for trends (using trendRange)
+                prisma.agentQualityMetricDaily.findMany({
+                    where: {
+                        agentId: agent.id,
+                        date: {
+                            gte: trendStartDate,
+                            lte: endDate
+                        }
+                    },
+                    orderBy: { date: "asc" }
+                }),
+                // Get learning sessions for trend annotations
+                prisma.learningSession.findMany({
+                    where: {
+                        agentId: agent.id,
+                        status: { in: ["PROMOTED", "APPROVED", "REJECTED"] },
+                        createdAt: {
+                            gte: trendStartDate,
+                            lte: endDate
+                        }
+                    },
+                    orderBy: { createdAt: "asc" },
+                    select: {
+                        id: true,
+                        status: true,
+                        createdAt: true,
+                        completedAt: true
                     }
-                },
-                orderBy: { date: "asc" }
-            })
-        ]);
+                }),
+                // Get agent version changes for trend annotations
+                prisma.agentVersion.findMany({
+                    where: {
+                        agentId: agent.id,
+                        createdAt: {
+                            gte: trendStartDate,
+                            lte: endDate
+                        }
+                    },
+                    orderBy: { createdAt: "asc" },
+                    select: {
+                        id: true,
+                        version: true,
+                        description: true,
+                        createdAt: true
+                    }
+                })
+            ]);
 
         // Check if there are more results
         const hasMore = evaluations.length > limit;
@@ -157,6 +198,42 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             scorer,
             data
         }));
+
+        // Build trend annotations from learning sessions and version changes
+        const trendAnnotations: Array<{
+            date: string;
+            type: "learning" | "version";
+            label: string;
+            linkUrl?: string;
+        }> = [];
+
+        for (const session of learningSessions) {
+            const eventDate = session.completedAt || session.createdAt;
+            const statusLabel =
+                session.status === "PROMOTED"
+                    ? "promoted"
+                    : session.status === "APPROVED"
+                      ? "approved"
+                      : "rejected";
+            trendAnnotations.push({
+                date: eventDate.toISOString(),
+                type: "learning",
+                label: `Learning session ${statusLabel}`,
+                linkUrl: `/agents/${id}/learning/${session.id}`
+            });
+        }
+
+        for (const ver of agentVersions) {
+            trendAnnotations.push({
+                date: ver.createdAt.toISOString(),
+                type: "version",
+                label: `Version ${ver.version}${ver.description ? `: ${ver.description.slice(0, 40)}` : ""}`,
+                linkUrl: `/agents/${id}/versions`
+            });
+        }
+
+        // Sort annotations by date
+        trendAnnotations.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
         // Compute summary with scorecard-aware weighted scores
         const tier2Count = evaluations.filter((e) => e.evaluationTier === "tier2_auditor").length;
@@ -223,6 +300,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             })),
             // Score trends over time
             trends,
+            // Trend annotations (learning sessions, version changes)
+            trendAnnotations,
             dateRange: {
                 from: startDate.toISOString(),
                 to: endDate.toISOString()

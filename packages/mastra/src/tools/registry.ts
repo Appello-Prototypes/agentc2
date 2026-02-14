@@ -65,7 +65,8 @@ import {
     agentGuardrailsUpdateTool,
     agentGuardrailsEventsTool,
     agentTestCasesListTool,
-    agentTestCasesCreateTool
+    agentTestCasesCreateTool,
+    agentScorersListTool
 } from "./agent-quality-tools";
 import { agentRunCancelTool, agentRunRerunTool, agentRunTraceTool } from "./run-management-tools";
 import {
@@ -76,7 +77,8 @@ import {
     agentLearningProposalRejectTool,
     agentLearningExperimentsTool,
     agentLearningMetricsTool,
-    agentLearningPolicyTool
+    agentLearningPolicyTool,
+    agentLearningPolicyUpdateTool
 } from "./agent-learning-tools";
 import {
     ragQueryTool,
@@ -108,7 +110,9 @@ import {
     triggerUnifiedUpdateTool,
     triggerUnifiedDeleteTool,
     triggerUnifiedEnableTool,
-    triggerUnifiedDisableTool
+    triggerUnifiedDisableTool,
+    triggerTestTool,
+    triggerExecuteTool
 } from "./trigger-tools";
 import {
     networkCreateTool,
@@ -159,7 +163,9 @@ import {
     integrationConnectionTestTool,
     integrationProvidersListTool,
     integrationConnectionsListTool,
-    integrationConnectionCreateTool
+    integrationConnectionCreateTool,
+    integrationConnectionUpdateTool,
+    integrationConnectionDeleteTool
 } from "./integration-import-tools";
 import {
     orgListTool,
@@ -176,6 +182,13 @@ import {
     goalUpdateTool,
     goalDeleteTool
 } from "./goal-tools";
+import {
+    campaignCreateTool,
+    campaignListTool,
+    campaignGetTool,
+    campaignUpdateTool,
+    campaignDeleteTool
+} from "./campaign-tools";
 import {
     documentCreateTool,
     documentReadTool,
@@ -211,6 +224,31 @@ import {
 } from "./canvas-tools";
 import { askQuestionsTool } from "./ask-questions";
 import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./skill-discovery-tools";
+import {
+    agentRunsListTool,
+    agentRunsGetTool,
+    triggerEventsListTool,
+    triggerEventsGetTool,
+    agentEvaluationsListTool,
+    agentEvaluationsRunTool,
+    agentVersionsListTool
+} from "./agent-ops-extra-tools";
+import {
+    scheduleCreateTool,
+    scheduleListTool,
+    scheduleUpdateTool,
+    scheduleDeleteTool
+} from "./schedule-tools";
+import {
+    workflowGenerateTool,
+    workflowValidateTool,
+    workflowDesignerChatTool
+} from "./workflow-config-tools";
+import {
+    networkGenerateTool,
+    networkValidateTool,
+    networkDesignerChatTool
+} from "./network-config-tools";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -249,9 +287,15 @@ export const toolCategoryMap: Record<string, string> = {
     "agent-guardrails-events": "Agent Quality & Runs",
     "agent-test-cases-list": "Agent Quality & Runs",
     "agent-test-cases-create": "Agent Quality & Runs",
+    "agent-scorers-list": "Agent Quality & Runs",
     "agent-run-cancel": "Agent Quality & Runs",
     "agent-run-rerun": "Agent Quality & Runs",
     "agent-run-trace": "Agent Quality & Runs",
+    "agent-runs-list": "Agent Quality & Runs",
+    "agent-runs-get": "Agent Quality & Runs",
+    "agent-evaluations-list": "Agent Quality & Runs",
+    "agent-evaluations-run": "Agent Quality & Runs",
+    "agent-versions-list": "Agent Quality & Runs",
 
     // Learning & Simulations
     "agent-learning-sessions": "Learning & Simulations",
@@ -262,6 +306,7 @@ export const toolCategoryMap: Record<string, string> = {
     "agent-learning-experiments": "Learning & Simulations",
     "agent-learning-metrics": "Learning & Simulations",
     "agent-learning-policy": "Learning & Simulations",
+    "agent-learning-policy-update": "Learning & Simulations",
     "agent-simulations-list": "Learning & Simulations",
     "agent-simulations-start": "Learning & Simulations",
     "agent-simulations-get": "Learning & Simulations",
@@ -278,6 +323,9 @@ export const toolCategoryMap: Record<string, string> = {
     "workflow-metrics": "Workflows",
     "workflow-versions": "Workflows",
     "workflow-stats": "Workflows",
+    "workflow-generate": "Workflows",
+    "workflow-validate": "Workflows",
+    "workflow-designer-chat": "Workflows",
 
     // Networks
     "network-create": "Networks",
@@ -290,6 +338,9 @@ export const toolCategoryMap: Record<string, string> = {
     "network-metrics": "Networks",
     "network-versions": "Networks",
     "network-stats": "Networks",
+    "network-generate": "Networks",
+    "network-validate": "Networks",
+    "network-designer-chat": "Networks",
 
     // Triggers
     "trigger-unified-list": "Triggers",
@@ -299,6 +350,14 @@ export const toolCategoryMap: Record<string, string> = {
     "trigger-unified-delete": "Triggers",
     "trigger-unified-enable": "Triggers",
     "trigger-unified-disable": "Triggers",
+    "trigger-test": "Triggers",
+    "trigger-execute": "Triggers",
+    "trigger-events-list": "Triggers",
+    "trigger-events-get": "Triggers",
+    "schedule-create": "Triggers",
+    "schedule-list": "Triggers",
+    "schedule-update": "Triggers",
+    "schedule-delete": "Triggers",
 
     // RAG & Knowledge
     "rag-query": "RAG & Knowledge",
@@ -349,6 +408,8 @@ export const toolCategoryMap: Record<string, string> = {
     "integration-providers-list": "Integrations",
     "integration-connections-list": "Integrations",
     "integration-connection-create": "Integrations",
+    "integration-connection-update": "Integrations",
+    "integration-connection-delete": "Integrations",
     "webhook-list-agents": "Integrations",
     "webhook-create": "Integrations",
 
@@ -364,6 +425,11 @@ export const toolCategoryMap: Record<string, string> = {
     "goal-get": "Organization",
     "goal-update": "Organization",
     "goal-delete": "Organization",
+    "campaign-create": "Campaigns",
+    "campaign-list": "Campaigns",
+    "campaign-get": "Campaigns",
+    "campaign-update": "Campaigns",
+    "campaign-delete": "Campaigns",
     "workspace-intent-recommendation": "Organization",
 
     // Email & Calendar
@@ -482,12 +548,18 @@ export const toolRegistry: Record<string, any> = {
     "workflow-metrics": workflowMetricsTool,
     "workflow-versions": workflowVersionsTool,
     "workflow-stats": workflowStatsTool,
+    "workflow-generate": workflowGenerateTool,
+    "workflow-validate": workflowValidateTool,
+    "workflow-designer-chat": workflowDesignerChatTool,
     "network-execute": networkExecuteTool,
     "network-list-runs": networkListRunsTool,
     "network-get-run": networkGetRunTool,
     "network-metrics": networkMetricsTool,
     "network-versions": networkVersionsTool,
     "network-stats": networkStatsTool,
+    "network-generate": networkGenerateTool,
+    "network-validate": networkValidateTool,
+    "network-designer-chat": networkDesignerChatTool,
 
     // Trigger tools
     "trigger-unified-list": triggerUnifiedListTool,
@@ -497,6 +569,16 @@ export const toolRegistry: Record<string, any> = {
     "trigger-unified-delete": triggerUnifiedDeleteTool,
     "trigger-unified-enable": triggerUnifiedEnableTool,
     "trigger-unified-disable": triggerUnifiedDisableTool,
+    "trigger-test": triggerTestTool,
+    "trigger-execute": triggerExecuteTool,
+    "trigger-events-list": triggerEventsListTool,
+    "trigger-events-get": triggerEventsGetTool,
+
+    // Schedule tools
+    "schedule-create": scheduleCreateTool,
+    "schedule-list": scheduleListTool,
+    "schedule-update": scheduleUpdateTool,
+    "schedule-delete": scheduleDeleteTool,
 
     // Agent operations
     "agent-list": agentListTool,
@@ -514,11 +596,19 @@ export const toolRegistry: Record<string, any> = {
     "agent-guardrails-events": agentGuardrailsEventsTool,
     "agent-test-cases-list": agentTestCasesListTool,
     "agent-test-cases-create": agentTestCasesCreateTool,
+    "agent-scorers-list": agentScorersListTool,
 
     // Run management
     "agent-run-cancel": agentRunCancelTool,
     "agent-run-rerun": agentRunRerunTool,
     "agent-run-trace": agentRunTraceTool,
+
+    // Agent runs, evaluations, and versions
+    "agent-runs-list": agentRunsListTool,
+    "agent-runs-get": agentRunsGetTool,
+    "agent-evaluations-list": agentEvaluationsListTool,
+    "agent-evaluations-run": agentEvaluationsRunTool,
+    "agent-versions-list": agentVersionsListTool,
 
     // Learning system
     "agent-learning-sessions": agentLearningSessionsTool,
@@ -529,6 +619,7 @@ export const toolRegistry: Record<string, any> = {
     "agent-learning-experiments": agentLearningExperimentsTool,
     "agent-learning-metrics": agentLearningMetricsTool,
     "agent-learning-policy": agentLearningPolicyTool,
+    "agent-learning-policy-update": agentLearningPolicyUpdateTool,
 
     // RAG pipeline
     "rag-query": ragQueryTool,
@@ -573,6 +664,8 @@ export const toolRegistry: Record<string, any> = {
     "integration-providers-list": integrationProvidersListTool,
     "integration-connections-list": integrationConnectionsListTool,
     "integration-connection-create": integrationConnectionCreateTool,
+    "integration-connection-update": integrationConnectionUpdateTool,
+    "integration-connection-delete": integrationConnectionDeleteTool,
 
     // Organization tools
     "org-list": orgListTool,
@@ -586,6 +679,13 @@ export const toolRegistry: Record<string, any> = {
     "goal-get": goalGetTool,
     "goal-update": goalUpdateTool,
     "goal-delete": goalDeleteTool,
+
+    // Campaign tools
+    "campaign-create": campaignCreateTool,
+    "campaign-list": campaignListTool,
+    "campaign-get": campaignGetTool,
+    "campaign-update": campaignUpdateTool,
+    "campaign-delete": campaignDeleteTool,
 
     // Document tools
     "document-create": documentCreateTool,

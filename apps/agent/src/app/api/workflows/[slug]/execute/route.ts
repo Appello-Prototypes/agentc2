@@ -117,6 +117,22 @@ export async function POST(
             });
         }
 
+        // Extract token/cost estimates from agent step outputs
+        let totalTokens: number | undefined;
+        let totalCostUsd: number | undefined;
+        for (const step of result.steps) {
+            const output = step.output as Record<string, unknown> | undefined;
+            if (output && typeof output === "object") {
+                // Agent steps include _agentSlug for attribution
+                // Cost estimation: ~0.01 per 1k tokens for GPT-4o
+                if (output._agentSlug && typeof output.text === "string") {
+                    const estimatedTokens = Math.ceil((output.text as string).length / 4);
+                    totalTokens = (totalTokens || 0) + estimatedTokens;
+                    totalCostUsd = (totalCostUsd || 0) + estimatedTokens * 0.00001;
+                }
+            }
+        }
+
         const finalStatus = result.status === "failed" ? "FAILED" : "COMPLETED";
         await prisma.workflowRun.update({
             where: { id: run.id },
@@ -124,7 +140,12 @@ export async function POST(
                 status: finalStatus,
                 outputJson: result.output as Prisma.InputJsonValue,
                 completedAt: new Date(),
-                durationMs
+                durationMs,
+                totalTokens,
+                totalCostUsd:
+                    totalCostUsd !== undefined
+                        ? Math.round(totalCostUsd * 1000000) / 1000000
+                        : undefined
             }
         });
         await refreshWorkflowMetrics(workflow.id, new Date());

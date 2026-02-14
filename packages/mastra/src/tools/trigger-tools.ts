@@ -725,3 +725,92 @@ export const triggerUnifiedDisableTool = createTool({
         );
     }
 });
+
+const getInternalBaseUrl = () =>
+    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+
+const buildHeaders = () => {
+    const headers: Record<string, string> = {
+        "Content-Type": "application/json"
+    };
+    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
+    if (apiKey) {
+        headers["X-API-Key"] = apiKey;
+    }
+    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    if (orgSlug) {
+        headers["X-Organization-Slug"] = orgSlug;
+    }
+    return headers;
+};
+
+const callInternalApi = async (
+    path: string,
+    options?: {
+        method?: string;
+        query?: Record<string, unknown>;
+        body?: Record<string, unknown>;
+    }
+) => {
+    const url = new URL(path, getInternalBaseUrl());
+    if (options?.query) {
+        Object.entries(options.query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null) {
+                url.searchParams.set(key, String(value));
+            }
+        });
+    }
+
+    const response = await fetch(url.toString(), {
+        method: options?.method ?? "GET",
+        headers: buildHeaders(),
+        body: options?.body ? JSON.stringify(options.body) : undefined
+    });
+    const data = await response.json();
+    if (!response.ok || data?.success === false) {
+        throw new Error(data?.error || `Request failed (${response.status})`);
+    }
+    return data;
+};
+
+export const triggerTestTool = createTool({
+    id: "trigger-test",
+    description: "Dry-run a unified trigger.",
+    inputSchema: z.object({
+        agentId: z.string().describe("Agent slug or ID"),
+        triggerId: z.string().describe("Unified trigger ID"),
+        input: z.string().optional(),
+        context: z.record(z.any()).optional(),
+        maxSteps: z.number().optional(),
+        environment: z.string().optional(),
+        payload: z.record(z.any()).optional()
+    }),
+    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    execute: async ({ agentId, triggerId, input, context, maxSteps, environment, payload }) => {
+        return callInternalApi(`/api/agents/${agentId}/execution-triggers/${triggerId}/test`, {
+            method: "POST",
+            body: { input, context, maxSteps, environment, payload }
+        });
+    }
+});
+
+export const triggerExecuteTool = createTool({
+    id: "trigger-execute",
+    description: "Execute a unified trigger.",
+    inputSchema: z.object({
+        agentId: z.string().describe("Agent slug or ID"),
+        triggerId: z.string().describe("Unified trigger ID"),
+        input: z.string().optional(),
+        context: z.record(z.any()).optional(),
+        maxSteps: z.number().optional(),
+        environment: z.string().optional(),
+        payload: z.record(z.any()).optional()
+    }),
+    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    execute: async ({ agentId, triggerId, input, context, maxSteps, environment, payload }) => {
+        return callInternalApi(`/api/agents/${agentId}/execution-triggers/${triggerId}/execute`, {
+            method: "POST",
+            body: { input, context, maxSteps, environment, payload }
+        });
+    }
+});

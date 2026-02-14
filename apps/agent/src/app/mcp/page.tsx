@@ -7,7 +7,8 @@ import { getApiBase } from "@/lib/utils";
 import WebhookChat from "@/components/webhooks/WebhookChat";
 import WebhookDetail from "@/components/webhooks/WebhookDetail";
 import type { WebhookTrigger } from "@/components/webhooks/types";
-import { ChannelsTab } from "@/components/channels/ChannelsTab";
+import { ConnectToolsTab } from "@/components/integrations/ConnectToolsTab";
+import { PlatformsTab } from "@/components/integrations/PlatformsTab";
 import {
     Badge,
     Button,
@@ -33,7 +34,7 @@ import {
 } from "@repo/ui";
 
 /* ================================================================== */
-/*  Types                                                             */
+/*  Types                                                              */
 /* ================================================================== */
 
 type ProviderStatus = "connected" | "disconnected" | "missing_auth";
@@ -93,7 +94,7 @@ type DebugLogEntry = {
 };
 
 /* ================================================================== */
-/*  Shared components                                                 */
+/*  Shared components                                                  */
 /* ================================================================== */
 
 const StatusBadge = ({ status }: { status: ProviderStatus }) => {
@@ -129,7 +130,12 @@ const CategoryBadge = ({ category }: { category: string }) => {
         crm: "bg-orange-500/10 text-orange-600",
         productivity: "bg-green-500/10 text-green-600",
         communication: "bg-pink-500/10 text-pink-600",
-        automation: "bg-cyan-500/10 text-cyan-600"
+        automation: "bg-cyan-500/10 text-cyan-600",
+        payments: "bg-teal-500/10 text-teal-600",
+        ecommerce: "bg-lime-500/10 text-lime-600",
+        support: "bg-rose-500/10 text-rose-600",
+        design: "bg-violet-500/10 text-violet-600",
+        data: "bg-amber-500/10 text-amber-600"
     };
     return (
         <span
@@ -150,7 +156,7 @@ const getServerId = (providerKey: string, connection: ConnectionSummary) =>
     connection.isDefault ? providerKey : `${providerKey}__${connection.id.slice(0, 8)}`;
 
 /* ================================================================== */
-/*  Provider table                                                    */
+/*  Provider table (AI Providers + MCP Servers)                        */
 /* ================================================================== */
 
 function ProviderTable({
@@ -185,7 +191,6 @@ function ProviderTable({
                     <TableHead>Status</TableHead>
                     <TableHead>Connections</TableHead>
                     <TableHead>Auth</TableHead>
-                    <TableHead>Actions / Triggers</TableHead>
                     {showManage && <TableHead className="text-right">Manage</TableHead>}
                 </TableRow>
             </TableHeader>
@@ -287,20 +292,6 @@ function ProviderTable({
                             )}
                         </TableCell>
                         <TableCell className="text-xs uppercase">{provider.authType}</TableCell>
-                        <TableCell className="text-muted-foreground text-xs">
-                            {provider.toolCount ??
-                                (Array.isArray(provider.actions?.["actions"])
-                                    ? (provider.actions?.["actions"] as unknown[]).length
-                                    : provider.actions
-                                      ? Object.keys(provider.actions).length
-                                      : 0)}
-                            {" / "}
-                            {Array.isArray(provider.triggers?.["triggers"])
-                                ? (provider.triggers?.["triggers"] as unknown[]).length
-                                : provider.triggers
-                                  ? Object.keys(provider.triggers).length
-                                  : 0}
-                        </TableCell>
                         {showManage && (
                             <TableCell className="text-right">
                                 <Link
@@ -319,11 +310,7 @@ function ProviderTable({
 }
 
 /* ================================================================== */
-/*  Webhook detail panel                                              */
-/* ================================================================== */
-
-/* ================================================================== */
-/*  Webhooks tab (chat 1/3 + table 2/3)                               */
+/*  Webhooks tab (chat 1/3 + table 2/3)                                */
 /* ================================================================== */
 
 function WebhooksTab({
@@ -378,7 +365,6 @@ function WebhooksTab({
             {/* Right 2/3: Detail or table */}
             <div className="flex min-h-0 w-full flex-col gap-4 overflow-auto md:w-2/3">
                 {selectedWebhook ? (
-                    /* Detail panel (when a webhook is selected) */
                     <WebhookDetail
                         webhook={selectedWebhook}
                         origin={origin}
@@ -387,7 +373,6 @@ function WebhooksTab({
                         onDelete={handleDelete}
                     />
                 ) : (
-                    /* Table (when no webhook is selected) */
                     <Card className="flex-1">
                         <CardHeader className="pb-2">
                             <div className="flex items-center justify-between">
@@ -464,7 +449,7 @@ function WebhooksTab({
 }
 
 /* ================================================================== */
-/*  Main page                                                         */
+/*  Main page                                                          */
 /* ================================================================== */
 
 export default function IntegrationsHubPage() {
@@ -580,8 +565,11 @@ export default function IntegrationsHubPage() {
         [providers]
     );
 
-    const oauthProviders = useMemo(
-        () => sortProviders(providers.filter((p) => p.providerType === "oauth")),
+    // Count platform providers (non-AI, non-webhook) for the badge
+    const platformProviderCount = useMemo(
+        () =>
+            providers.filter((p) => p.providerType !== "ai-model" && p.providerType !== "webhook")
+                .length,
         [providers]
     );
 
@@ -611,13 +599,9 @@ export default function IntegrationsHubPage() {
                     <div>
                         <h1 className="text-3xl font-bold">Integrations Hub</h1>
                         <p className="text-muted-foreground">
-                            Manage MCP servers, webhooks, and OAuth integrations in one place.
+                            Connect AI tools, manage platforms, and configure MCP servers in one
+                            place.
                         </p>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                        <Link href="/mcp/setup" className={buttonVariants({ variant: "outline" })}>
-                            Setup &amp; Debug
-                        </Link>
                     </div>
                 </div>
 
@@ -632,8 +616,9 @@ export default function IntegrationsHubPage() {
                 )}
 
                 {!loading && !error && (
-                    <Tabs defaultValue="ai-providers" className="w-full">
+                    <Tabs defaultValue="connect" className="w-full">
                         <TabsList className="flex w-full overflow-x-auto sm:grid sm:grid-cols-5">
+                            <TabsTrigger value="connect">Connect Your Tools</TabsTrigger>
                             <TabsTrigger value="ai-providers">
                                 AI Providers
                                 {aiProviders.length > 0 && (
@@ -650,11 +635,11 @@ export default function IntegrationsHubPage() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
-                            <TabsTrigger value="oauth">
-                                OAuth Platforms
-                                {oauthProviders.length > 0 && (
+                            <TabsTrigger value="platforms">
+                                Platforms
+                                {platformProviderCount > 0 && (
                                     <Badge variant="secondary" className="ml-2">
-                                        {oauthProviders.length}
+                                        {platformProviderCount}
                                     </Badge>
                                 )}
                             </TabsTrigger>
@@ -666,9 +651,14 @@ export default function IntegrationsHubPage() {
                                     </Badge>
                                 )}
                             </TabsTrigger>
-                            <TabsTrigger value="channels">Channels</TabsTrigger>
                         </TabsList>
 
+                        {/* ── Connect Your Tools (NEW default) ──────────── */}
+                        <TabsContent value="connect" className="mt-4">
+                            <ConnectToolsTab />
+                        </TabsContent>
+
+                        {/* ── AI Providers (unchanged) ──────────────────── */}
                         <TabsContent value="ai-providers" className="mt-4">
                             <Card>
                                 <CardHeader>
@@ -685,14 +675,7 @@ export default function IntegrationsHubPage() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="webhooks" className="mt-4">
-                            <WebhooksTab
-                                webhooks={webhooks}
-                                origin={origin}
-                                onRefresh={loadWebhooks}
-                            />
-                        </TabsContent>
-
+                        {/* ── MCP Servers (unchanged) ───────────────────── */}
                         <TabsContent value="mcp" className="mt-4">
                             <Card>
                                 <CardHeader className="flex flex-row items-start justify-between gap-4">
@@ -730,23 +713,18 @@ export default function IntegrationsHubPage() {
                             </Card>
                         </TabsContent>
 
-                        <TabsContent value="oauth" className="mt-4">
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle>OAuth Platforms</CardTitle>
-                                    <CardDescription>
-                                        One-click OAuth integrations that connect directly to
-                                        platforms.
-                                    </CardDescription>
-                                </CardHeader>
-                                <CardContent>
-                                    <ProviderTable providers={oauthProviders} />
-                                </CardContent>
-                            </Card>
+                        {/* ── Platforms (NEW - replaces OAuth + Channels) ── */}
+                        <TabsContent value="platforms" className="mt-4">
+                            <PlatformsTab providers={providers} />
                         </TabsContent>
 
-                        <TabsContent value="channels" className="mt-4">
-                            <ChannelsTab />
+                        {/* ── Webhooks (unchanged) ──────────────────────── */}
+                        <TabsContent value="webhooks" className="mt-4">
+                            <WebhooksTab
+                                webhooks={webhooks}
+                                origin={origin}
+                                onRefresh={loadWebhooks}
+                            />
                         </TabsContent>
                     </Tabs>
                 )}

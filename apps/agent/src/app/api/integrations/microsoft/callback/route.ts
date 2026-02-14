@@ -148,6 +148,29 @@ export async function GET(request: NextRequest) {
             // Profile fetch is best-effort; tokens are already saved
         }
 
+        // Auto-provision Skill + Agent if blueprint exists
+        try {
+            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            if (hasBlueprint("microsoft")) {
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true },
+                    select: { id: true }
+                });
+                if (workspace) {
+                    const result = await provisionIntegration(connectionId, {
+                        workspaceId: workspace.id,
+                        userId
+                    });
+                    console.log(
+                        `[Microsoft OAuth] Auto-provisioned: skill=${result.skillId || "none"}, ` +
+                            `agent=${result.agentId || "none"}`
+                    );
+                }
+            }
+        } catch (provisionError) {
+            console.error("[Microsoft OAuth] Auto-provisioning failed:", provisionError);
+        }
+
         setupUrl.searchParams.set("success", "true");
         return NextResponse.redirect(setupUrl);
     } catch (error) {

@@ -93,6 +93,8 @@ export interface WorkflowExecutionContext {
     input: unknown;
     steps: Record<string, unknown>;
     variables: Record<string, unknown>;
+    env?: Record<string, string>;
+    helpers?: Record<string, (...args: unknown[]) => unknown>;
 }
 
 export interface WorkflowResumeInput {

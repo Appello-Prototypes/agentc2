@@ -142,6 +142,9 @@ export default function AnalyticsPage() {
     const [data, setData] = useState<AnalyticsData | null>(null);
     const [timeRange, setTimeRange] = useState("7d");
     const [activeTab, setActiveTab] = useState("overview");
+    const [routingDistribution, setRoutingDistribution] = useState<
+        Array<{ tier: string; count: number; avgLatencyMs: number; avgCostUsd: number }>
+    >([]);
 
     const fetchAnalytics = useCallback(async () => {
         setLoading(true);
@@ -164,6 +167,62 @@ export default function AnalyticsPage() {
             }
 
             setData(result);
+
+            // Fetch routing distribution from recent runs
+            try {
+                const runsRes = await fetch(
+                    `${getApiBase()}/api/agents/${agentSlug}/runs?limit=100&source=all`
+                );
+                const runsResult = await runsRes.json();
+                if (runsResult.success && runsResult.runs) {
+                    // Fetch traces for runs that have them, aggregate routing tiers
+                    const tierMap: Record<
+                        string,
+                        { count: number; totalLatency: number; totalCost: number }
+                    > = {};
+                    const tracePromises = runsResult.runs
+                        .filter(
+                            (r: { status: string }) =>
+                                r.status.toUpperCase() === "COMPLETED" ||
+                                r.status.toUpperCase() === "FAILED"
+                        )
+                        .slice(0, 50)
+                        .map(async (run: { id: string; durationMs?: number; costUsd?: number }) => {
+                            try {
+                                const traceRes = await fetch(
+                                    `${getApiBase()}/api/agents/${agentSlug}/runs/${run.id}/trace`
+                                );
+                                const traceResult = await traceRes.json();
+                                if (traceResult.success && traceResult.trace?.modelJson) {
+                                    const tier =
+                                        traceResult.trace.modelJson.routingTier || "UNROUTED";
+                                    if (!tierMap[tier]) {
+                                        tierMap[tier] = { count: 0, totalLatency: 0, totalCost: 0 };
+                                    }
+                                    tierMap[tier].count++;
+                                    tierMap[tier].totalLatency += run.durationMs || 0;
+                                    tierMap[tier].totalCost += run.costUsd || 0;
+                                }
+                            } catch {
+                                // Ignore individual trace fetch failures
+                            }
+                        });
+                    await Promise.all(tracePromises);
+
+                    const distribution = Object.entries(tierMap)
+                        .map(([tier, stats]) => ({
+                            tier,
+                            count: stats.count,
+                            avgLatencyMs: stats.count > 0 ? stats.totalLatency / stats.count : 0,
+                            avgCostUsd: stats.count > 0 ? stats.totalCost / stats.count : 0
+                        }))
+                        .sort((a, b) => b.count - a.count);
+
+                    setRoutingDistribution(distribution);
+                }
+            } catch {
+                // Non-critical: routing distribution is supplementary
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to fetch analytics");
         } finally {
@@ -821,6 +880,83 @@ export default function AnalyticsPage() {
                             ) : (
                                 <div className="text-muted-foreground flex h-[200px] items-center justify-center">
                                     No model data for this period
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Routing Distribution */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Routing Distribution</CardTitle>
+                            <CardDescription>
+                                How requests are distributed across model tiers when auto-routing is
+                                enabled
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {routingDistribution.length > 0 &&
+                            routingDistribution.some((r) => r.tier !== "UNROUTED") ? (
+                                <div className="space-y-4">
+                                    {routingDistribution.map((row) => {
+                                        const total = routingDistribution.reduce(
+                                            (s, r) => s + r.count,
+                                            0
+                                        );
+                                        const pct =
+                                            total > 0
+                                                ? ((row.count / total) * 100).toFixed(1)
+                                                : "0";
+                                        const tierColors: Record<string, string> = {
+                                            FAST: "bg-green-500",
+                                            PRIMARY: "bg-blue-500",
+                                            ESCALATION: "bg-orange-500",
+                                            UNROUTED: "bg-gray-500"
+                                        };
+                                        const tierLabels: Record<string, string> = {
+                                            FAST: "Fast",
+                                            PRIMARY: "Primary",
+                                            ESCALATION: "Escalation",
+                                            UNROUTED: "Unrouted"
+                                        };
+                                        const color = tierColors[row.tier] || "bg-gray-400";
+                                        const label = tierLabels[row.tier] || row.tier;
+                                        return (
+                                            <div
+                                                key={row.tier}
+                                                className="flex items-center gap-4 rounded-lg border p-3"
+                                            >
+                                                <Badge
+                                                    variant="outline"
+                                                    className={`${color.replace("bg-", "text-").replace("-500", "-400")} border-current`}
+                                                >
+                                                    {label}
+                                                </Badge>
+                                                <div className="flex-1">
+                                                    <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                                        <div
+                                                            className={`h-full ${color}`}
+                                                            style={{ width: `${pct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="text-muted-foreground flex items-center gap-3 text-sm">
+                                                    <span>
+                                                        {row.count} runs ({pct}%)
+                                                    </span>
+                                                    <span>
+                                                        avg {(row.avgLatencyMs / 1000).toFixed(1)}s
+                                                    </span>
+                                                    <span>${row.avgCostUsd.toFixed(4)}</span>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            ) : (
+                                <div className="text-muted-foreground flex h-[120px] items-center justify-center text-sm">
+                                    No routing data — enable auto-routing on this agent to see
+                                    distribution
                                 </div>
                             )}
                         </CardContent>

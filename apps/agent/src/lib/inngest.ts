@@ -285,6 +285,45 @@ export const inngest = new Inngest({
                 docType: string;
             };
         };
+        // Campaign / Mission Orchestration Events
+        "campaign/analyze": {
+            data: {
+                campaignId: string;
+            };
+        };
+        "campaign/plan": {
+            data: {
+                campaignId: string;
+            };
+        };
+        "campaign/execute": {
+            data: {
+                campaignId: string;
+            };
+        };
+        "campaign/aar": {
+            data: {
+                campaignId: string;
+            };
+        };
+        "mission/execute": {
+            data: {
+                campaignId: string;
+                missionId: string;
+            };
+        };
+        "mission/aar": {
+            data: {
+                campaignId: string;
+                missionId: string;
+            };
+        };
+        "mission/complete": {
+            data: {
+                campaignId: string;
+                missionId: string;
+            };
+        };
         // Gmail Processing Events
         "gmail/message.process": {
             data: {

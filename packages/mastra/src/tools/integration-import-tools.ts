@@ -1034,3 +1034,36 @@ export const integrationConnectionCreateTool = createTool({
         });
     }
 });
+
+export const integrationConnectionUpdateTool = createTool({
+    id: "integration-connection-update",
+    description: "Update an existing integration connection.",
+    inputSchema: z.object({
+        connectionId: z.string().describe("Connection ID to update"),
+        name: z.string().optional(),
+        credentials: z.record(z.any()).optional(),
+        metadata: z.record(z.any()).optional(),
+        isDefault: z.boolean().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ connectionId, name, credentials, metadata, isDefault }) => {
+        return callInternalApi(`/api/integrations/connections/${connectionId}`, {
+            method: "PATCH",
+            body: { name, credentials, metadata, isDefault }
+        });
+    }
+});
+
+export const integrationConnectionDeleteTool = createTool({
+    id: "integration-connection-delete",
+    description: "Delete an integration connection.",
+    inputSchema: z.object({
+        connectionId: z.string().describe("Connection ID to delete")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ connectionId }) => {
+        return callInternalApi(`/api/integrations/connections/${connectionId}`, {
+            method: "DELETE"
+        });
+    }
+});

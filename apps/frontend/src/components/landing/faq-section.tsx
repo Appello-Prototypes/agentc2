@@ -5,23 +5,27 @@ import { useState } from "react";
 const faqs = [
     {
         question: "What is AgentC2?",
-        answer: "AgentC2 is a production-grade AI agent platform that lets you build, deploy, and orchestrate intelligent agents. Unlike simple chat interfaces, AgentC2 agents connect to your existing tools (CRM, project management, email, etc.), maintain persistent memory, and work across multiple channels including Slack, WhatsApp, voice, and email."
+        answer: "AgentC2 is an enterprise AI agent platform that lets businesses build, deploy, and orchestrate intelligent agents at scale. Unlike consumer chatbots, AgentC2 agents connect to your business systems (CRM, project management, email, knowledge bases), run autonomously on schedules and triggers, and come with full observability, traceability, and governance controls."
     },
     {
         question: "How is AgentC2 different from ChatGPT or Claude?",
-        answer: "ChatGPT and Claude are single-model chat products. AgentC2 is an orchestration platform. You can create multiple specialized agents, each with different LLM backends (OpenAI, Anthropic, or others), connect them to 10+ integrations via MCP, build visual workflows with human-in-the-loop approval, deploy multi-agent networks, and let your agents improve automatically through continuous learning with A/B testing."
+        answer: "ChatGPT and Claude are consumer chat products. AgentC2 is enterprise agent infrastructure \u2014 a different category entirely. You deploy multiple specialized agents across your organization, each connected to your real business tools via MCP. Agents run in the background on schedules, execute multi-step workflows with human approval gates, and improve automatically through continuous learning. Plus you get full cost tracking, audit logs, version control, and role-based access \u2014 everything a business needs to deploy AI responsibly."
     },
     {
-        question: "What integrations are supported?",
-        answer: "AgentC2 supports 10+ MCP integrations out of the box: HubSpot CRM, Jira, Slack, GitHub, Google Drive, Playwright, Firecrawl, JustCall, Fathom, and n8n. We also offer native OAuth integrations for Gmail, Microsoft Outlook (mail + calendar), and Dropbox. All credentials are encrypted with AES-256-GCM at rest."
+        question: "What business tools does AgentC2 connect to?",
+        answer: "AgentC2 supports 10+ enterprise integrations out of the box: HubSpot CRM, Jira, Slack, GitHub, Google Drive, Playwright, Firecrawl, JustCall, Fathom, and n8n. We also offer native OAuth for Gmail, Microsoft Outlook (mail + calendar), and Dropbox. All credentials are encrypted with AES-256-GCM at rest, and you can add custom MCP integrations for proprietary systems on Enterprise plans."
     },
     {
-        question: "Can I use my own LLM provider?",
-        answer: "Yes. AgentC2 supports multiple LLM providers including OpenAI (GPT-4o), Anthropic (Claude Sonnet 4), and Google models. Each agent can use a different provider and model. You can switch providers at any time without changing your agent's instructions or tools."
+        question: "How quickly can we deploy our first agent?",
+        answer: "Most teams have their first agent running in under 30 minutes. Describe what your agent should do in plain English, connect your tools with one-click OAuth, and deploy. No ML expertise, no code, no infrastructure setup. The platform handles model selection, memory management, and scaling automatically."
     },
     {
-        question: "How does continuous learning work?",
-        answer: "AgentC2 monitors agent performance and automatically detects signals from failed runs, low quality scores, and tool failures. When enough signals accumulate, a learning session generates improvement proposals. These proposals are tested via A/B experiments with shadow traffic. Winning variants can be auto-promoted for low-risk changes, or require human approval for high-risk changes. The entire process is observable through the learning dashboard."
+        question: "Is AgentC2 secure enough for enterprise use?",
+        answer: "Yes. AgentC2 was built enterprise-first with multi-tenant architecture, workspace isolation, AES-256-GCM credential encryption, guardrail policies for content filtering and PII detection, per-agent budget controls, comprehensive audit logs, and role-based access control. Enterprise and Enterprise+ plans include SSO/SAML, dedicated infrastructure, on-premise deployment options, and custom compliance (SOC 2, HIPAA)."
+    },
+    {
+        question: "How does observability and traceability work?",
+        answer: "Every agent run generates a complete execution trace \u2014 every tool call, model generation, token count, and cost is recorded. You can inspect exactly what an agent did, why it made each decision, and how much it cost. Version history tracks every configuration change with instant rollback. Audit logs provide a compliance-ready record of all platform activity. Continuous learning uses these signals to automatically improve agent performance over time."
     }
 ];
 

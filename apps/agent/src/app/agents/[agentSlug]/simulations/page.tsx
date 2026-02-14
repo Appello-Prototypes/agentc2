@@ -11,9 +11,39 @@ import {
     Badge,
     Button,
     Label,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Skeleton
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+
+const SIMULATION_THEMES = [
+    { value: "custom", label: "Custom (freeform)", category: "general" },
+    { value: "customer-support", label: "Customer Support Queries", category: "general" },
+    { value: "sales-inquiries", label: "Sales Inquiries", category: "general" },
+    { value: "technical-questions", label: "Technical Questions", category: "general" },
+    // Red team themes
+    {
+        value: "redteam-prompt-injection",
+        label: "Red Team: Prompt Injection",
+        category: "redteam"
+    },
+    {
+        value: "redteam-social-engineering",
+        label: "Red Team: Social Engineering",
+        category: "redteam"
+    },
+    { value: "redteam-pii-extraction", label: "Red Team: PII Extraction", category: "redteam" },
+    {
+        value: "redteam-boundary-probing",
+        label: "Red Team: Boundary Probing",
+        category: "redteam"
+    },
+    { value: "redteam-full-suite", label: "Red Team: Full Suite", category: "redteam" }
+];
 
 interface SimulationSession {
     id: string;
@@ -27,6 +57,9 @@ interface SimulationSession {
     avgDurationMs: number | null;
     successRate: number | null;
     totalCostUsd: number | null;
+    safetyScore: number | null;
+    safetyPassCount: number | null;
+    safetyFailCount: number | null;
     startedAt: string | null;
     completedAt: string | null;
     createdAt: string;
@@ -40,8 +73,12 @@ export default function SimulationsPage() {
     const [starting, setStarting] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const [sessions, setSessions] = useState<SimulationSession[]>([]);
+    const [selectedPreset, setSelectedPreset] = useState("custom");
     const [theme, setTheme] = useState("");
     const [count, setCount] = useState(100);
+
+    // Derive the effective theme: use preset value or custom text
+    const effectiveTheme = selectedPreset === "custom" ? theme.trim() : selectedPreset;
 
     const fetchSessions = useCallback(async () => {
         try {
@@ -76,7 +113,7 @@ export default function SimulationsPage() {
     }, [sessions, fetchSessions]);
 
     const handleStartSimulation = async () => {
-        if (!theme.trim()) {
+        if (!effectiveTheme) {
             setError("Please enter a theme for the simulation");
             return;
         }
@@ -88,11 +125,12 @@ export default function SimulationsPage() {
             const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/simulations`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ theme: theme.trim(), count })
+                body: JSON.stringify({ theme: effectiveTheme, count })
             });
             const data = await res.json();
             if (data.success) {
                 setTheme("");
+                setSelectedPreset("custom");
                 fetchSessions();
             } else {
                 setError(data.error || "Failed to start simulation");
@@ -210,13 +248,59 @@ export default function SimulationsPage() {
                 <CardContent className="space-y-4">
                     <div className="space-y-2">
                         <Label htmlFor="theme">Theme</Label>
-                        <textarea
-                            id="theme"
-                            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-[100px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
-                            placeholder="e.g., Customer service questions about timesheets, Technical support for Jira integration, Sales inquiries about pricing..."
-                            value={theme}
-                            onChange={(e) => setTheme(e.target.value)}
-                        />
+                        <Select
+                            value={selectedPreset}
+                            onValueChange={(val) => {
+                                if (val !== null) setSelectedPreset(val);
+                            }}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select a theme..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="custom">Custom (freeform)</SelectItem>
+                                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+                                    General
+                                </div>
+                                {SIMULATION_THEMES.filter(
+                                    (t) => t.category === "general" && t.value !== "custom"
+                                ).map((t) => (
+                                    <SelectItem key={t.value} value={t.value}>
+                                        {t.label}
+                                    </SelectItem>
+                                ))}
+                                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+                                    Adversarial (Red Team)
+                                </div>
+                                {SIMULATION_THEMES.filter((t) => t.category === "redteam").map(
+                                    (t) => (
+                                        <SelectItem key={t.value} value={t.value}>
+                                            {t.label}
+                                        </SelectItem>
+                                    )
+                                )}
+                            </SelectContent>
+                        </Select>
+                        {selectedPreset === "custom" && (
+                            <textarea
+                                id="theme"
+                                className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring min-h-[100px] w-full rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:outline-none"
+                                placeholder="e.g., Customer service questions about timesheets, Technical support for Jira integration, Sales inquiries about pricing..."
+                                value={theme}
+                                onChange={(e) => setTheme(e.target.value)}
+                            />
+                        )}
+                        {selectedPreset.startsWith("redteam") && (
+                            <p className="text-muted-foreground text-xs">
+                                Adversarial simulation will test your agent against{" "}
+                                {selectedPreset === "redteam-full-suite"
+                                    ? "all attack categories"
+                                    : SIMULATION_THEMES.find(
+                                          (t) => t.value === selectedPreset
+                                      )?.label?.replace("Red Team: ", "") || "attacks"}
+                                . Safety metrics will be tracked.
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-2">
@@ -238,7 +322,7 @@ export default function SimulationsPage() {
 
                     <Button
                         onClick={handleStartSimulation}
-                        disabled={starting || !theme.trim()}
+                        disabled={starting || !effectiveTheme}
                         className="w-full"
                     >
                         {starting ? "Starting..." : "Start Simulation"}
@@ -312,6 +396,39 @@ export default function SimulationsPage() {
                                                 </span>
                                             )}
                                         </div>
+                                        {/* Safety metrics for red-team simulations */}
+                                        {session.theme.startsWith("redteam") &&
+                                            session.safetyScore !== null && (
+                                                <div className="flex flex-wrap gap-3 text-xs">
+                                                    <span
+                                                        className={
+                                                            session.safetyScore >= 0.85
+                                                                ? "font-medium text-green-600"
+                                                                : session.safetyScore >= 0.6
+                                                                  ? "font-medium text-yellow-600"
+                                                                  : "font-medium text-red-600"
+                                                        }
+                                                    >
+                                                        Safety:{" "}
+                                                        {(session.safetyScore * 100).toFixed(0)}%
+                                                    </span>
+                                                    <span className="text-green-600">
+                                                        Passed: {session.safetyPassCount || 0}
+                                                    </span>
+                                                    <span className="text-red-600">
+                                                        Failed: {session.safetyFailCount || 0}
+                                                    </span>
+                                                    {session.safetyScore >= 0.85 &&
+                                                        session.status === "COMPLETED" && (
+                                                            <Badge
+                                                                variant="outline"
+                                                                className="border-green-500 text-green-600"
+                                                            >
+                                                                Hardened
+                                                            </Badge>
+                                                        )}
+                                                </div>
+                                            )}
                                     </div>
                                     <div className="ml-4 flex gap-2">
                                         {(session.status === "PENDING" ||

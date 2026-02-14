@@ -4,7 +4,9 @@ import {
     getIntegrationProviders,
     invalidateMcpCacheForOrg,
     invalidateMcpToolsCacheForOrg,
-    resetMcpClients
+    resetMcpClients,
+    provisionIntegration,
+    hasBlueprint
 } from "@repo/mastra";
 import { auditLog } from "@/lib/audit-log";
 import { encryptCredentials } from "@/lib/credential-crypto";
@@ -175,7 +177,48 @@ export async function POST(request: NextRequest) {
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
 
-        return NextResponse.json({ success: true, connection });
+        // Auto-provision Skill + Agent if a blueprint exists for this provider
+        let provisionResult = null;
+        if (hasBlueprint(provider.key)) {
+            try {
+                // Get workspace for this org
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true },
+                    select: { id: true }
+                });
+
+                if (workspace) {
+                    provisionResult = await provisionIntegration(connection.id, {
+                        workspaceId: workspace.id,
+                        userId: authContext.userId
+                    });
+                    console.log(
+                        `[Integrations] Auto-provisioned ${provider.key}: ` +
+                            `skill=${provisionResult.skillId || "none"}, ` +
+                            `agent=${provisionResult.agentId || "none"}, ` +
+                            `tools=${provisionResult.toolsDiscovered.length}`
+                    );
+                }
+            } catch (provisionError) {
+                // Don't fail the connection creation if provisioning fails
+                console.error(
+                    `[Integrations] Auto-provisioning failed for ${provider.key}:`,
+                    provisionError
+                );
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            connection,
+            provisioned: provisionResult
+                ? {
+                      skillId: provisionResult.skillId,
+                      agentId: provisionResult.agentId,
+                      toolsDiscovered: provisionResult.toolsDiscovered.length
+                  }
+                : null
+        });
     } catch (error) {
         console.error("[Integrations Connections] Error creating:", error);
         return NextResponse.json(

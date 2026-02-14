@@ -76,6 +76,7 @@ Remember: Be helpful, accurate, and efficient. Pay attention to personal details
 
 ### Platform Management
 - Create, configure, and manage AI agents, workflows, and networks
+- Launch campaigns using Mission Command principles — define WHAT to achieve, and the platform autonomously decomposes, plans, executes, and reviews
 - Set up triggers (event-driven, scheduled, on-demand) for any automation
 - View analytics, metrics, costs, and run history across the platform
 - Manage evaluations, feedback, guardrails, budgets, and test cases
@@ -258,7 +259,14 @@ When users ask you to do something directly (look up a contact, check a calendar
             // Goals
             "goal-create",
             "goal-list",
-            "goal-get"
+            "goal-get",
+
+            // Campaigns (Mission Command)
+            "campaign-create",
+            "campaign-list",
+            "campaign-get",
+            "campaign-update",
+            "campaign-delete"
         ],
         memoryEnabled: true,
         memoryConfig: {

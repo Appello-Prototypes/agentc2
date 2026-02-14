@@ -3,7 +3,7 @@ const steps = [
         number: "01",
         title: "Build",
         description:
-            "Create agents with natural language instructions. Connect tools from 10+ integrations, configure memory, and set up structured outputs — all from a single dashboard.",
+            "Describe what your agent should do in plain English. Connect your business tools \u2014 CRM, email, project management, knowledge base \u2014 and configure guardrails. No code required.",
         icon: (
             <svg
                 width="32"
@@ -26,7 +26,7 @@ const steps = [
         number: "02",
         title: "Deploy",
         description:
-            "Publish agents to Slack, WhatsApp, email, voice, or embed in your product via API. Set up cron schedules, webhook triggers, and automated workflows.",
+            "Push agents to Slack, email, voice, or embed in your product via API. Set up schedules, webhook triggers, and multi-step workflows. Scale from one agent to hundreds across your organization.",
         icon: (
             <svg
                 width="32"
@@ -47,9 +47,9 @@ const steps = [
     },
     {
         number: "03",
-        title: "Learn",
+        title: "Monitor & Improve",
         description:
-            "Agents improve automatically through continuous learning. Performance signals trigger A/B experiments, and winning variants are promoted — with human approval for high-risk changes.",
+            "Full observability from day one. Track every run, tool call, and dollar spent. Agents improve automatically through continuous learning with A/B experiments \u2014 and human approval for high-stakes changes.",
         icon: (
             <svg
                 width="32"
@@ -80,10 +80,11 @@ export function HowItWorks() {
                     </span>
                 </div>
                 <h2 className="text-foreground mb-4 text-center text-3xl font-bold tracking-tight md:text-4xl">
-                    Three steps to production
+                    From zero to deployed in three steps
                 </h2>
                 <p className="text-muted-foreground mx-auto mb-16 max-w-2xl text-center text-lg">
-                    Go from idea to deployed agent in minutes, not months.
+                    No ML team required. Go from business requirement to production agent in
+                    minutes, not months.
                 </p>
 
                 <div className="grid gap-8 md:grid-cols-3 md:gap-6">

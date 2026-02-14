@@ -124,12 +124,16 @@ export async function POST(request: NextRequest) {
             skillSlugsToAttach.push("mcp-communication-slack");
         }
 
-        // Generate a unique slug
+        // Generate a unique slug (scoped to workspace)
         const userName = session.user.name?.split(" ")[0]?.toLowerCase() || "my";
         const baseSlug = `${userName}-assistant`;
         let slug = baseSlug;
         let counter = 1;
-        while (await prisma.agent.findUnique({ where: { slug } })) {
+        while (
+            await prisma.agent.findFirst({
+                where: { slug, ...(workspace?.id ? { workspaceId: workspace.id } : {}) }
+            })
+        ) {
             counter++;
             slug = `${baseSlug}-${counter}`;
         }

@@ -30,6 +30,8 @@ interface ExecuteWorkflowOptions {
 
 const MAX_NESTING_DEPTH = 5;
 
+/* ---------- Path resolution helpers ---------- */
+
 function normalizePath(path: string): string[] {
     return path
         .replace(/\[(["']?)([^\]"']+)\1\]/g, ".$2")
@@ -49,23 +51,157 @@ function getValueAtPath(source: unknown, path: string): unknown {
     return current;
 }
 
-function resolveTemplate(value: string, context: WorkflowExecutionContext): unknown {
-    const exactMatch = value.match(/^\{\{\s*([^}]+)\s*\}\}$/);
-    if (exactMatch) {
-        return getValueAtPath(context, exactMatch[1]);
+/* ---------- Template helpers & env ---------- */
+
+/** Returns a curated set of safe environment variables for templates. */
+function getEnvContext(): Record<string, string> {
+    const curated: Record<string, string> = {};
+    const safeKeys = [
+        "SLACK_DEFAULT_CHANNEL",
+        "SLACK_ALERTS_CHANNEL",
+        "SLACK_DEFAULT_AGENT_SLUG",
+        "NGROK_DOMAIN",
+        "NEXT_PUBLIC_APP_URL"
+    ];
+    for (const key of safeKeys) {
+        if (process.env[key]) {
+            curated[key] = process.env[key]!;
+        }
+    }
+    // Include any WORKFLOW_ prefixed variables
+    for (const [key, val] of Object.entries(process.env)) {
+        if (key.startsWith("WORKFLOW_") && val) {
+            curated[key] = val;
+        }
+    }
+    return curated;
+}
+
+/** Returns date/time helper functions available inside templates. */
+function getHelpers() {
+    const now = new Date();
+    const todayStr = now.toISOString().split("T")[0];
+    return {
+        today: () => todayStr,
+        now: () => now.toISOString(),
+        yesterday: () => {
+            const d = new Date(now);
+            d.setDate(d.getDate() - 1);
+            return d.toISOString().split("T")[0];
+        },
+        todayStart: () => `${todayStr}T00:00:00.000Z`,
+        todayEnd: () => `${todayStr}T23:59:59.999Z`,
+        json: (val: unknown) => JSON.stringify(val)
+    };
+}
+
+/** Detect if an expression is complex (contains operators, parens, or quotes). */
+function isComplexExpression(expr: string): boolean {
+    return /[|&?:()'"!+\-*/=<>~%]/.test(expr) || /\bnew\b/.test(expr);
+}
+
+/**
+ * Evaluate a JS expression with the workflow context in scope.
+ * Falls back to path resolution for simple dot-paths.
+ */
+function evaluateExpression(expr: string, context: WorkflowExecutionContext): unknown {
+    const trimmed = expr.trim();
+
+    // Fast path: simple dot-path (no operators) -> direct lookup
+    if (!isComplexExpression(trimmed)) {
+        return getValueAtPath(context, trimmed);
     }
 
+    // Complex expression: use new Function() (same pattern as evaluateCondition)
+    try {
+        const env = getEnvContext();
+        const helpers = getHelpers();
+        const fn = new Function(
+            "input",
+            "steps",
+            "variables",
+            "env",
+            "helpers",
+            "today",
+            "now",
+            "yesterday",
+            "todayStart",
+            "todayEnd",
+            "json",
+            `return (${trimmed});`
+        );
+        return fn(
+            context.input,
+            context.steps,
+            context.variables,
+            env,
+            helpers,
+            helpers.today,
+            helpers.now,
+            helpers.yesterday,
+            helpers.todayStart,
+            helpers.todayEnd,
+            helpers.json
+        );
+    } catch {
+        // If expression evaluation fails, try plain path lookup as last resort
+        return getValueAtPath(context, trimmed);
+    }
+}
+
+/* ---------- Template resolution ---------- */
+
+function resolveTemplate(value: string, context: WorkflowExecutionContext): unknown {
+    // Exact match: entire string is a single {{ expression }}
+    const exactMatch = value.match(/^\{\{\s*([^}]+)\s*\}\}$/);
+    if (exactMatch) {
+        return evaluateExpression(exactMatch[1], context);
+    }
+
+    // No templates at all
     if (!value.includes("{{")) {
         return value;
     }
 
-    return value.replace(/\{\{\s*([^}]+)\s*\}\}/g, (match, path) => {
-        const resolved = getValueAtPath(context, path);
+    // Inline interpolation: replace each {{ expr }} within a larger string
+    return value.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_match, expr) => {
+        const resolved = evaluateExpression(expr, context);
         if (resolved === undefined || resolved === null) {
-            return match;
+            // Bug 5 fix: return empty string for unresolved inline templates
+            return "";
         }
         return typeof resolved === "string" ? resolved : JSON.stringify(resolved);
     });
+}
+
+/* ---------- MCP result unwrapping ---------- */
+
+/**
+ * Detect and unwrap MCP protocol-format results.
+ * MCP tools return: { content: [{ type: "text", text: "{JSON}" }] }
+ * Native tools return parsed data directly.
+ */
+function unwrapToolResult(result: unknown): unknown {
+    if (
+        result &&
+        typeof result === "object" &&
+        "content" in result &&
+        Array.isArray((result as { content: unknown }).content)
+    ) {
+        const content = (result as { content: Array<{ type?: string; text?: string }> }).content;
+        const textEntry = content.find(
+            (entry) => entry.type === "text" && typeof entry.text === "string"
+        );
+        if (textEntry?.text) {
+            try {
+                return JSON.parse(textEntry.text);
+            } catch {
+                // Not valid JSON, return the text string itself
+                return textEntry.text;
+            }
+        }
+    }
+    return result;
 }
 
 function resolveValue(value: unknown, context: WorkflowExecutionContext): unknown {
@@ -95,8 +231,17 @@ function resolveInputMapping(
 
 function evaluateCondition(expression: string, context: WorkflowExecutionContext): boolean {
     try {
-        const evaluator = new Function("input", "steps", "variables", `return (${expression});`);
-        return Boolean(evaluator(context.input, context.steps, context.variables));
+        const env = getEnvContext();
+        const helpers = getHelpers();
+        const evaluator = new Function(
+            "input",
+            "steps",
+            "variables",
+            "env",
+            "helpers",
+            `return (${expression});`
+        );
+        return Boolean(evaluator(context.input, context.steps, context.variables, env, helpers));
     } catch (error) {
         console.warn("[WorkflowRuntime] Condition evaluation failed:", error);
         return false;
@@ -137,9 +282,12 @@ async function executeAgentStep(
         return { raw: text };
     }
 
+    // Bug 4 fix: include .result as alias for .text so both template paths work
     return {
         text: response.text,
-        toolCalls: response.toolCalls || []
+        result: response.text,
+        toolCalls: response.toolCalls || [],
+        _agentSlug: agentSlug // metadata for cost attribution
     };
 }
 
@@ -172,7 +320,9 @@ async function executeToolStep(
         throw new Error(`Tool "${config.toolId}" does not expose an executable handler`);
     }
 
-    return handler(input);
+    const rawResult = await handler(input);
+    // Bug 3 fix: unwrap MCP protocol-format results
+    return unwrapToolResult(rawResult);
 }
 
 async function executeWorkflowStep(
@@ -503,7 +653,9 @@ export async function executeWorkflowDefinition(
     const context: WorkflowExecutionContext = {
         input: options.input,
         steps: options.existingSteps ? { ...options.existingSteps } : {},
-        variables: {}
+        variables: {},
+        env: getEnvContext(),
+        helpers: getHelpers()
     };
 
     return executeSteps(options.definition.steps || [], context, options);

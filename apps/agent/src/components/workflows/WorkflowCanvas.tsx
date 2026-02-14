@@ -101,6 +101,41 @@ function WorkflowCanvasInner({
         [edges, selectedEdgeSet]
     );
 
+    // Empty state: no nodes to render
+    if (displayNodes.length === 0) {
+        return (
+            <div
+                className={cn(
+                    "bg-background flex h-[300px] w-full items-center justify-center rounded-lg border md:h-[400px]",
+                    className
+                )}
+            >
+                <div className="text-muted-foreground flex flex-col items-center gap-2 text-center">
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="48"
+                        height="48"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className="opacity-40"
+                    >
+                        <rect width="18" height="18" x="3" y="3" rx="2" />
+                        <path d="M3 9h18" />
+                        <path d="M9 21V9" />
+                    </svg>
+                    <p className="text-sm font-medium">No topology to display</p>
+                    <p className="max-w-[240px] text-xs opacity-70">
+                        Add steps or primitives, then the graph will render automatically.
+                    </p>
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div
             className={cn(

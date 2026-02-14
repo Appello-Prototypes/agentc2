@@ -22,6 +22,8 @@ import {
     SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { MultiLineTrendChart, getScorerColor } from "@/components/charts/MultiLineTrendChart";
+import type { TrendAnnotation } from "@/components/charts/MultiLineTrendChart";
 
 interface AarOutput {
     what_should_have_happened: string;
@@ -342,6 +344,9 @@ export default function EvaluationsPage() {
     const [themes, setThemes] = useState<FeedbackTheme[]>([]);
     const [insights, setInsights] = useState<Insight[]>([]);
     const [trends, setTrends] = useState<TrendData[]>([]);
+    const [trendAnnotations, setTrendAnnotations] = useState<TrendAnnotation[]>([]);
+    const [trendTimeRange, setTrendTimeRange] = useState<"7d" | "30d" | "90d">("30d");
+    const [visibleScorers, setVisibleScorers] = useState<Set<string>>(new Set());
     const [activeTab, setActiveTab] = useState("scorers");
     const [runningEvals, setRunningEvals] = useState(false);
     const [exporting, setExporting] = useState(false);
@@ -357,7 +362,7 @@ export default function EvaluationsPage() {
             setError(null);
 
             const response = await fetch(
-                `${getApiBase()}/api/agents/${agentSlug}/evaluations?source=${sourceFilter}`
+                `${getApiBase()}/api/agents/${agentSlug}/evaluations?source=${sourceFilter}&trendRange=${trendTimeRange}`
             );
             const result = await response.json();
 
@@ -393,12 +398,22 @@ export default function EvaluationsPage() {
             setThemes(result.themes || []);
             setInsights(result.insights || []);
             setTrends(result.trends || []);
+            setTrendAnnotations(result.trendAnnotations || []);
+            // Initialize visible scorers to all on first load
+            if (result.trends?.length > 0) {
+                setVisibleScorers((prev) => {
+                    if (prev.size === 0) {
+                        return new Set(result.trends.map((t: TrendData) => t.scorer));
+                    }
+                    return prev;
+                });
+            }
         } catch (err) {
             setError(err instanceof Error ? err.message : "Failed to load evaluations");
         } finally {
             setLoading(false);
         }
-    }, [agentSlug, sourceFilter]);
+    }, [agentSlug, sourceFilter, trendTimeRange]);
 
     useEffect(() => {
         fetchEvaluations();
@@ -691,41 +706,73 @@ export default function EvaluationsPage() {
                         {/* Trends */}
                         <Card>
                             <CardHeader>
-                                <CardTitle>Score Trends</CardTitle>
-                                <CardDescription>Performance over time</CardDescription>
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <CardTitle>Score Trends</CardTitle>
+                                        <CardDescription>Performance over time</CardDescription>
+                                    </div>
+                                    <Select
+                                        value={trendTimeRange}
+                                        onValueChange={(v) =>
+                                            setTrendTimeRange(v as "7d" | "30d" | "90d")
+                                        }
+                                    >
+                                        <SelectTrigger className="w-24">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="7d">7 days</SelectItem>
+                                            <SelectItem value="30d">30 days</SelectItem>
+                                            <SelectItem value="90d">90 days</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
                             </CardHeader>
                             <CardContent>
-                                {trends.length > 0 ? (
-                                    <>
-                                        {trends.map((trend) => (
-                                            <div key={trend.scorer} className="mb-4">
-                                                <p className="text-muted-foreground mb-2 text-sm capitalize">
-                                                    {trend.scorer}
-                                                </p>
-                                                <div className="flex h-[120px] items-end gap-1">
-                                                    {trend.data.map((d, i) => (
-                                                        <div
-                                                            key={i}
-                                                            className="bg-primary flex-1 rounded-t opacity-80"
-                                                            style={{
-                                                                height: `${(d.score * 100).toFixed(0)}%`
-                                                            }}
-                                                            title={`${d.date}: ${(d.score * 100).toFixed(0)}%`}
-                                                        />
-                                                    ))}
-                                                </div>
-                                            </div>
+                                <MultiLineTrendChart
+                                    series={trends.map((t, idx) => ({
+                                        key: t.scorer,
+                                        label: t.scorer,
+                                        data: t.data,
+                                        color: getScorerColor(t.scorer, idx),
+                                        visible: visibleScorers.has(t.scorer)
+                                    }))}
+                                    annotations={trendAnnotations}
+                                    onAnnotationClick={(ann) => {
+                                        if (ann.linkUrl) router.push(ann.linkUrl);
+                                    }}
+                                />
+                                {/* Scorer toggle checkboxes */}
+                                {trends.length > 0 && (
+                                    <div className="mt-4 flex flex-wrap gap-3">
+                                        {trends.map((t, idx) => (
+                                            <label
+                                                key={t.scorer}
+                                                className="flex cursor-pointer items-center gap-1.5 text-sm"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={visibleScorers.has(t.scorer)}
+                                                    onChange={() => {
+                                                        const next = new Set(visibleScorers);
+                                                        if (next.has(t.scorer)) {
+                                                            next.delete(t.scorer);
+                                                        } else {
+                                                            next.add(t.scorer);
+                                                        }
+                                                        setVisibleScorers(next);
+                                                    }}
+                                                />
+                                                <span
+                                                    style={{
+                                                        color: getScorerColor(t.scorer, idx)
+                                                    }}
+                                                >
+                                                    ●
+                                                </span>
+                                                <span className="capitalize">{t.scorer}</span>
+                                            </label>
                                         ))}
-                                        <div className="text-muted-foreground mt-2 flex justify-between text-xs">
-                                            <span>14 days ago</span>
-                                            <span>Today</span>
-                                        </div>
-                                    </>
-                                ) : (
-                                    <div className="flex h-[200px] items-center justify-center">
-                                        <p className="text-muted-foreground text-sm">
-                                            No trend data available yet
-                                        </p>
                                     </div>
                                 )}
                             </CardContent>

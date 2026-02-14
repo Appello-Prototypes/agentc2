@@ -106,6 +106,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
+        // If setting a budget amount, default hardLimit to true unless explicitly set to false
+        const existingPolicy = await prisma.budgetPolicy.findUnique({
+            where: { agentId: agent.id }
+        });
+        const resolvedHardLimit =
+            hardLimit !== undefined ? hardLimit : monthlyLimitUsd !== undefined ? true : undefined;
+
         // Upsert budget policy
         const budgetPolicy = await prisma.budgetPolicy.upsert({
             where: { agentId: agent.id },
@@ -113,7 +120,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 enabled: enabled ?? undefined,
                 monthlyLimitUsd: monthlyLimitUsd ?? undefined,
                 alertAtPct: alertAtPct ?? undefined,
-                hardLimit: hardLimit ?? undefined
+                hardLimit: resolvedHardLimit ?? undefined
             },
             create: {
                 agentId: agent.id,
@@ -121,7 +128,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 enabled: enabled ?? false,
                 monthlyLimitUsd: monthlyLimitUsd ?? null,
                 alertAtPct: alertAtPct ?? 80,
-                hardLimit: hardLimit ?? false
+                hardLimit: resolvedHardLimit ?? existingPolicy?.hardLimit ?? true
             }
         });
 

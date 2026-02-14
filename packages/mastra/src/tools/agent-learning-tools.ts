@@ -174,3 +174,24 @@ export const agentLearningPolicyTool = createTool({
         return callInternalApi(`/api/agents/${agentId}/learning/policy`);
     }
 });
+
+export const agentLearningPolicyUpdateTool = createTool({
+    id: "agent-learning-policy-update",
+    description: "Update the learning policy for an agent.",
+    inputSchema: z.object({
+        agentId: z.string(),
+        autoLearn: z.boolean().optional(),
+        minRunsBeforeLearn: z.number().optional(),
+        learningInterval: z.string().optional(),
+        requireApproval: z.boolean().optional(),
+        experimentDuration: z.number().optional(),
+        trafficSplitPct: z.number().optional()
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ agentId, ...policyData }) => {
+        return callInternalApi(`/api/agents/${agentId}/learning/policy`, {
+            method: "POST",
+            body: policyData
+        });
+    }
+});

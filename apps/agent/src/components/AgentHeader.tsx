@@ -9,6 +9,7 @@ import { ConnectionPowerBar } from "@/components/ConnectionPowerBar";
 
 const navItems = [
     { label: "Workspace", href: "/workspace" },
+    { label: "Campaigns", href: "/campaigns" },
     { label: "Canvas", href: "/canvas" },
     { label: "Agents", href: "/agents" },
     { label: "Workflows", href: "/workflows" },

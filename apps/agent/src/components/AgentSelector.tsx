@@ -35,6 +35,7 @@ export interface AgentInfo {
     description?: string;
     modelProvider: string;
     modelName: string;
+    routingConfig?: { mode: "locked" | "auto"; [key: string]: unknown } | null;
 }
 
 interface AgentSelectorProps {

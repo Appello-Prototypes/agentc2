@@ -108,6 +108,10 @@ export interface CompleteRunOptions {
     steps?: ExecutionStep[];
     /** Scores from evaluations */
     scores?: Record<string, number>;
+    /** Model routing tier (FAST | PRIMARY | ESCALATION) */
+    routingTier?: string;
+    /** Reason for routing decision */
+    routingReason?: string;
 }
 
 /**
@@ -359,7 +363,13 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                         stepsJson: (steps || []) as unknown as Prisma.JsonArray,
                         modelJson: {
                             provider: completeOptions.modelProvider,
-                            name: completeOptions.modelName
+                            name: completeOptions.modelName,
+                            ...(completeOptions.routingTier
+                                ? {
+                                      routingTier: completeOptions.routingTier,
+                                      routingReason: completeOptions.routingReason
+                                  }
+                                : {})
                         },
                         tokensJson: {
                             prompt: completeOptions.promptTokens || 0,

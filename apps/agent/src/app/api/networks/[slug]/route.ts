@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@repo/database";
+import { prisma, type Prisma } from "@repo/database";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra";
 
 async function findNetwork(slug: string) {
@@ -32,10 +32,23 @@ export async function GET(
             );
         }
 
+        // Auto-generate topology if empty but primitives exist
+        let topologyJson = network.topologyJson;
+        if (isNetworkTopologyEmpty(topologyJson) && network.primitives.length > 0) {
+            const generated = buildNetworkTopologyFromPrimitives(network.primitives);
+            topologyJson = generated as unknown as Prisma.JsonValue;
+            // Persist the auto-generated topology so future GETs don't re-compute
+            await prisma.network.update({
+                where: { id: network.id },
+                data: { topologyJson: topologyJson as Prisma.InputJsonValue }
+            });
+        }
+
         return NextResponse.json({
             success: true,
             network: {
                 ...network,
+                topologyJson,
                 runCount: network._count?.runs ?? 0,
                 primitiveCount: network._count?.primitives ?? 0
             }

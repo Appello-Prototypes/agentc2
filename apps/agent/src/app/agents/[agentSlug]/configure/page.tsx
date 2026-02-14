@@ -42,6 +42,14 @@ interface ModelConfig {
     toolChoice?: "auto" | "required" | "none" | { type: "tool"; toolName: string };
 }
 
+interface RoutingConfig {
+    mode: "locked" | "auto";
+    fastModel?: { provider: string; name: string };
+    escalationModel?: { provider: string; name: string };
+    confidenceThreshold?: number;
+    budgetAware?: boolean;
+}
+
 interface Agent {
     id: string;
     slug: string;
@@ -64,6 +72,7 @@ interface Agent {
         workingMemory: { enabled: boolean };
     } | null;
     modelConfig?: ModelConfig | null;
+    routingConfig?: RoutingConfig | null;
     scorers: string[];
     isActive: boolean;
     isPublic: boolean;
@@ -153,6 +162,15 @@ export default function ConfigurePage() {
     const [reasoningEffort, setReasoningEffort] = useState<string>("");
     const [cacheControlEnabled, setCacheControlEnabled] = useState(false);
     const [toolChoice, setToolChoice] = useState<string>("auto");
+
+    // Model routing state
+    const [routingMode, setRoutingMode] = useState<"locked" | "auto">("locked");
+    const [fastModelProvider, setFastModelProvider] = useState<string>("openai");
+    const [fastModelName, setFastModelName] = useState<string>("gpt-4o-mini");
+    const [escalationModelProvider, setEscalationModelProvider] = useState<string>("anthropic");
+    const [escalationModelName, setEscalationModelName] = useState<string>("");
+    const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.7);
+    const [budgetAwareRouting, setBudgetAwareRouting] = useState(false);
 
     const [availableAgents, setAvailableAgents] = useState<
         Array<{ id: string; slug: string; name: string }>
@@ -510,6 +528,7 @@ export default function ConfigurePage() {
                 memoryEnabled: agentData.memoryEnabled ?? false,
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
+                routingConfig: agentData.routingConfig ?? null,
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 isPublic: agentData.isPublic ?? false,
@@ -536,6 +555,16 @@ export default function ConfigurePage() {
             setToolChoice(
                 typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
             );
+
+            // Extract routing config
+            const rc = agentData.routingConfig as RoutingConfig | null;
+            setRoutingMode(rc?.mode || "locked");
+            setFastModelProvider(rc?.fastModel?.provider || "openai");
+            setFastModelName(rc?.fastModel?.name || "gpt-4o-mini");
+            setEscalationModelProvider(rc?.escalationModel?.provider || "anthropic");
+            setEscalationModelName(rc?.escalationModel?.name || "");
+            setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
+            setBudgetAwareRouting(rc?.budgetAware ?? false);
 
             setAgent(transformedAgent);
             setFormData(transformedAgent);
@@ -683,6 +712,20 @@ export default function ConfigurePage() {
             setSaving(true);
             setError(null);
 
+            // Build routing config from state
+            const routingConfigPayload: RoutingConfig | null =
+                routingMode === "auto"
+                    ? {
+                          mode: "auto",
+                          fastModel: { provider: fastModelProvider, name: fastModelName },
+                          escalationModel: escalationModelName
+                              ? { provider: escalationModelProvider, name: escalationModelName }
+                              : undefined,
+                          confidenceThreshold,
+                          budgetAware: budgetAwareRouting
+                      }
+                    : { mode: "locked" };
+
             // Include extended thinking settings in the request
             const requestBody = {
                 ...formData,
@@ -691,7 +734,8 @@ export default function ConfigurePage() {
                 parallelToolCalls,
                 reasoningEffort: reasoningEffort || null,
                 cacheControl: cacheControlEnabled,
-                toolChoice: toolChoice || null
+                toolChoice: toolChoice || null,
+                routingConfig: routingConfigPayload
             };
 
             const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}`, {
@@ -726,6 +770,7 @@ export default function ConfigurePage() {
                 memoryEnabled: agentData.memoryEnabled ?? false,
                 memoryConfig: agentData.memoryConfig,
                 modelConfig: agentData.modelConfig,
+                routingConfig: agentData.routingConfig ?? null,
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
                 isPublic: agentData.isPublic ?? false,
@@ -850,6 +895,17 @@ export default function ConfigurePage() {
                                 const budget = modelConfig?.thinking?.budget_tokens ?? 10000;
                                 setExtendedThinking(hasExtendedThinking);
                                 setThinkingBudget(budget);
+                                // Reset routing config state
+                                const rc = agent.routingConfig as RoutingConfig | null;
+                                setRoutingMode(rc?.mode || "locked");
+                                setFastModelProvider(rc?.fastModel?.provider || "openai");
+                                setFastModelName(rc?.fastModel?.name || "gpt-4o-mini");
+                                setEscalationModelProvider(
+                                    rc?.escalationModel?.provider || "anthropic"
+                                );
+                                setEscalationModelName(rc?.escalationModel?.name || "");
+                                setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
+                                setBudgetAwareRouting(rc?.budgetAware ?? false);
                                 setHasChanges(false);
                                 setError(null);
                             }
@@ -1555,6 +1611,257 @@ export default function ConfigurePage() {
                                         💡 Google Gemini models support multimodal inputs and
                                         function calling.
                                     </p>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
+                    {/* Model Routing Card */}
+                    <Card className="mt-6">
+                        <CardHeader>
+                            <CardTitle>Model Routing</CardTitle>
+                            <CardDescription>
+                                Route requests to different models based on complexity
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <div className="space-y-3">
+                                <Label>Routing Mode</Label>
+                                <div className="flex gap-4">
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="routingMode"
+                                            value="locked"
+                                            checked={routingMode === "locked"}
+                                            onChange={() => {
+                                                setRoutingMode("locked");
+                                                setHasChanges(true);
+                                            }}
+                                            className="accent-primary"
+                                        />
+                                        <span className="text-sm font-medium">Locked</span>
+                                        <span className="text-muted-foreground text-xs">
+                                            (always use primary model)
+                                        </span>
+                                    </label>
+                                    <label className="flex cursor-pointer items-center gap-2">
+                                        <input
+                                            type="radio"
+                                            name="routingMode"
+                                            value="auto"
+                                            checked={routingMode === "auto"}
+                                            onChange={() => {
+                                                setRoutingMode("auto");
+                                                setHasChanges(true);
+                                            }}
+                                            className="accent-primary"
+                                        />
+                                        <span className="text-sm font-medium">Auto</span>
+                                        <span className="text-muted-foreground text-xs">
+                                            (route by complexity)
+                                        </span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            {routingMode === "auto" && (
+                                <div className="space-y-6 rounded-lg border p-4">
+                                    <div className="space-y-4">
+                                        <Label className="text-base font-medium">Fast Model</Label>
+                                        <p className="text-muted-foreground -mt-3 text-xs">
+                                            Used for simple, low-complexity requests
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Provider</Label>
+                                                <Select
+                                                    value={fastModelProvider}
+                                                    onValueChange={(v) => {
+                                                        if (!v) return;
+                                                        setFastModelProvider(v);
+                                                        const providerModels =
+                                                            availableModels.filter(
+                                                                (m) => m.provider === v
+                                                            );
+                                                        if (providerModels.length > 0) {
+                                                            setFastModelName(
+                                                                providerModels[0].name
+                                                            );
+                                                        }
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="anthropic">
+                                                            Anthropic
+                                                        </SelectItem>
+                                                        <SelectItem value="openai">
+                                                            OpenAI
+                                                        </SelectItem>
+                                                        <SelectItem value="google">
+                                                            Google
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Model</Label>
+                                                <Select
+                                                    value={fastModelName}
+                                                    onValueChange={(v) => {
+                                                        if (!v) return;
+                                                        setFastModelName(v);
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {availableModels
+                                                            .filter(
+                                                                (m) =>
+                                                                    m.provider === fastModelProvider
+                                                            )
+                                                            .map((m) => (
+                                                                <SelectItem
+                                                                    key={m.name}
+                                                                    value={m.name}
+                                                                >
+                                                                    {m.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <Label className="text-base font-medium">
+                                            Escalation Model
+                                        </Label>
+                                        <p className="text-muted-foreground -mt-3 text-xs">
+                                            Used for complex, multi-step, or low-confidence requests
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Provider</Label>
+                                                <Select
+                                                    value={escalationModelProvider}
+                                                    onValueChange={(v) => {
+                                                        if (!v) return;
+                                                        setEscalationModelProvider(v);
+                                                        const providerModels =
+                                                            availableModels.filter(
+                                                                (m) => m.provider === v
+                                                            );
+                                                        if (providerModels.length > 0) {
+                                                            setEscalationModelName(
+                                                                providerModels[0].name
+                                                            );
+                                                        }
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="anthropic">
+                                                            Anthropic
+                                                        </SelectItem>
+                                                        <SelectItem value="openai">
+                                                            OpenAI
+                                                        </SelectItem>
+                                                        <SelectItem value="google">
+                                                            Google
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Model</Label>
+                                                <Select
+                                                    value={escalationModelName || "none"}
+                                                    onValueChange={(v) => {
+                                                        setEscalationModelName(
+                                                            !v || v === "none" ? "" : v
+                                                        );
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">
+                                                            None (use primary)
+                                                        </SelectItem>
+                                                        {availableModels
+                                                            .filter(
+                                                                (m) =>
+                                                                    m.provider ===
+                                                                    escalationModelProvider
+                                                            )
+                                                            .map((m) => (
+                                                                <SelectItem
+                                                                    key={m.name}
+                                                                    value={m.name}
+                                                                >
+                                                                    {m.name}
+                                                                </SelectItem>
+                                                            ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label>
+                                            Confidence Threshold: {confidenceThreshold.toFixed(2)}
+                                        </Label>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="1"
+                                            step="0.05"
+                                            value={confidenceThreshold}
+                                            onChange={(e) => {
+                                                setConfidenceThreshold(parseFloat(e.target.value));
+                                                setHasChanges(true);
+                                            }}
+                                            className="w-full"
+                                        />
+                                        <p className="text-muted-foreground text-xs">
+                                            Below this confidence, requests escalate to a more
+                                            capable model (0-1)
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-base font-medium">
+                                                Budget-Aware Routing
+                                            </Label>
+                                            <p className="text-muted-foreground text-xs">
+                                                Bias toward fast model when monthly budget exceeds
+                                                alert threshold
+                                            </p>
+                                        </div>
+                                        <Switch
+                                            checked={budgetAwareRouting}
+                                            onCheckedChange={(checked) => {
+                                                setBudgetAwareRouting(checked);
+                                                setHasChanges(true);
+                                            }}
+                                        />
+                                    </div>
                                 </div>
                             )}
                         </CardContent>

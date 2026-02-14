@@ -626,7 +626,7 @@ enum GuardrailEventType {
 // Agents - Database-backed agent configurations (Mastra-aligned)
 model Agent {
     id          String  @id @default(cuid())
-    slug        String  @unique // URL-safe identifier
+    slug        String // URL-safe identifier (unique per workspace, not globally)
     name        String
     description String?
 
@@ -640,6 +640,7 @@ model Agent {
     temperature   Float? @default(0.7)
     maxTokens     Int?
     modelConfig   Json? // Provider-specific: {reasoning: {type: "enabled"}, toolChoice: "auto"}
+    routingConfig Json? // {mode: "locked"|"auto", fastModel: {provider, name}, escalationModel: {provider, name}, confidenceThreshold: 0.7, budgetAware: true}
 
     // Tool configuration (junction table)
     tools AgentTool[]
@@ -724,6 +725,7 @@ model Agent {
     calibrationChecks      CalibrationCheck[]
     recommendations        AgentRecommendation[]
 
+    @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
     @@index([workspaceId])
     @@index([ownerId])
@@ -1175,6 +1177,7 @@ model AgentRun {
     conversation    AgentConversation?
     testRun         AgentTestRun?
     TriggerEvent    TriggerEvent?
+    missionTask     MissionTask?
 
     @@index([agentId, createdAt])
     @@index([status])
@@ -1453,18 +1456,24 @@ model AgentConversation {
 
 // Budget Policy - Per-agent budget settings
 model BudgetPolicy {
-    id              String   @id @default(cuid())
-    agentId         String   @unique
-    agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    id              String    @id @default(cuid())
+    agentId         String?   @unique
+    agent           Agent?    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    workflowId      String?   @unique
+    workflow        Workflow? @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    networkId       String?   @unique
+    network         Network?  @relation(fields: [networkId], references: [id], onDelete: Cascade)
     tenantId        String?
-    enabled         Boolean  @default(false)
+    enabled         Boolean   @default(false)
     monthlyLimitUsd Float?
-    alertAtPct      Float?   @default(80) // Alert when usage reaches this percentage
-    hardLimit       Boolean  @default(false) // Block runs when limit exceeded
-    createdAt       DateTime @default(now())
-    updatedAt       DateTime @updatedAt
+    alertAtPct      Float?    @default(80) // Alert when usage reaches this percentage
+    hardLimit       Boolean   @default(true) // Block runs when limit exceeded
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
 
     @@index([agentId])
+    @@index([workflowId])
+    @@index([networkId])
     @@index([tenantId])
     @@map("budget_policy")
 }
@@ -2047,6 +2056,11 @@ model SimulationSession {
     successRate     Float?
     totalCostUsd    Float?
 
+    // Safety metrics (red-team simulations)
+    safetyScore     Float?
+    safetyPassCount Int    @default(0)
+    safetyFailCount Int    @default(0)
+
     // Timing
     startedAt   DateTime?
     completedAt DateTime?
@@ -2107,6 +2121,8 @@ model Workflow {
     networkPrimitives NetworkPrimitive[]
     metrics           WorkflowMetricDaily[]
     triggerEvents     TriggerEvent[]
+    budgetPolicy      BudgetPolicy?
+    testCases         WorkflowTestCase[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -2155,6 +2171,10 @@ model WorkflowRun {
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
 
+    // Cost tracking
+    totalTokens  Int?
+    totalCostUsd Float?
+
     // Version tracking
     versionId String?
 
@@ -2170,12 +2190,37 @@ model WorkflowRun {
     steps           WorkflowRunStep[]
     ApprovalRequest ApprovalRequest[]
     TriggerEvent    TriggerEvent?
+    evaluation      WorkflowRunEvaluation?
+    feedback        WorkflowRunFeedback[]
 
     @@index([workflowId, createdAt])
     @@index([workflowId, environment])
     @@index([workflowId, triggerType])
     @@index([status])
     @@map("workflow_run")
+}
+
+// Workflow Run Evaluation
+model WorkflowRunEvaluation {
+    id            String      @id @default(cuid())
+    workflowRunId String      @unique
+    workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+    workflowId    String
+
+    // Scores
+    stepSuccessRate Float? // Fraction of steps that completed (0.0 - 1.0)
+    outputQuality   Float? // LLM-assessed quality of final output (0.0 - 1.0)
+    durationScore   Float? // Normalized duration score (0.0 - 1.0)
+    overallScore    Float? // Weighted composite score
+
+    // Details
+    stepScores Json? // {stepId: {status, durationMs, score}}
+    narrative  String? @db.Text // LLM narrative of evaluation
+
+    createdAt DateTime @default(now())
+
+    @@index([workflowId])
+    @@map("workflow_run_evaluation")
 }
 
 // Workflow Step Execution
@@ -2254,6 +2299,8 @@ model Network {
     runs          NetworkRun[]
     metrics       NetworkMetricDaily[]
     triggerEvents TriggerEvent[]
+    budgetPolicy  BudgetPolicy?
+    testCases     NetworkTestCase[]
 
     @@index([slug])
     @@index([workspaceId])
@@ -2349,6 +2396,7 @@ model NetworkRun {
     workflowRuns WorkflowRun[]
     TriggerEvent TriggerEvent?
     evaluation   NetworkRunEvaluation?
+    feedback     NetworkRunFeedback[]
 
     @@index([networkId, createdAt])
     @@index([networkId, environment])
@@ -2724,7 +2772,7 @@ model DocumentVersion {
 
 model Skill {
     id           String  @id @default(cuid())
-    slug         String  @unique
+    slug         String // Per-workspace slug uniqueness
     name         String
     description  String? @db.Text
     instructions String  @db.Text
@@ -2749,6 +2797,8 @@ model Skill {
     updatedAt DateTime @updatedAt
     createdBy String?
 
+    @@unique([workspaceId, slug]) // Per-workspace slug uniqueness
+    @@index([slug])
     @@index([workspaceId])
     @@index([category])
     @@map("skill")
@@ -3075,6 +3125,74 @@ model NetworkRunEvaluation {
     @@map("network_run_evaluation")
 }
 
+// Workflow Test Case
+model WorkflowTestCase {
+    id             String   @id @default(cuid())
+    workflowId     String
+    workflow       Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+    name           String
+    inputJson      Json
+    expectedOutput Json?
+    tags           String[] @default([])
+    createdBy      String?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    @@index([workflowId])
+    @@map("workflow_test_case")
+}
+
+// Network Test Case
+model NetworkTestCase {
+    id             String   @id @default(cuid())
+    networkId      String
+    network        Network  @relation(fields: [networkId], references: [id], onDelete: Cascade)
+    name           String
+    inputText      String   @db.Text
+    expectedOutput String?  @db.Text
+    tags           String[] @default([])
+    createdBy      String?
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
+
+    @@index([networkId])
+    @@map("network_test_case")
+}
+
+// Workflow Run Feedback
+model WorkflowRunFeedback {
+    id            String      @id @default(cuid())
+    workflowRunId String
+    workflowRun   WorkflowRun @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+    workflowId    String
+    thumbs        Boolean? // true = up, false = down
+    rating        Int? // 1-5 scale
+    comment       String?     @db.Text
+    source        String? // "ui" | "api"
+    createdAt     DateTime    @default(now())
+
+    @@index([workflowRunId])
+    @@index([workflowId])
+    @@map("workflow_run_feedback")
+}
+
+// Network Run Feedback
+model NetworkRunFeedback {
+    id           String     @id @default(cuid())
+    networkRunId String
+    networkRun   NetworkRun @relation(fields: [networkRunId], references: [id], onDelete: Cascade)
+    networkId    String
+    thumbs       Boolean? // true = up, false = down
+    rating       Int? // 1-5 scale
+    comment      String?    @db.Text
+    source       String? // "ui" | "api"
+    createdAt    DateTime   @default(now())
+
+    @@index([networkRunId])
+    @@index([networkId])
+    @@map("network_run_feedback")
+}
+
 // ==============================
 // Admin Portal Models
 // ==============================
@@ -3232,4 +3350,189 @@ model ImpersonationSession {
     @@index([adminUserId, startedAt])
     @@index([targetUserId])
     @@map("impersonation_session")
+}
+
+// ==============================
+// Campaign / Mission / Task Models
+// ==============================
+
+enum CampaignStatus {
+    PLANNING
+    ANALYZING
+    READY
+    EXECUTING
+    REVIEWING
+    COMPLETE
+    FAILED
+    PAUSED
+}
+
+enum MissionStatus {
+    PENDING
+    ANALYZING
+    READY
+    EXECUTING
+    REVIEWING
+    COMPLETE
+    FAILED
+    SKIPPED
+}
+
+enum MissionTaskStatus {
+    PENDING
+    RUNNING
+    COMPLETE
+    FAILED
+    SKIPPED
+}
+
+enum MissionTaskType {
+    ASSIGNED
+    IMPLIED
+    ESSENTIAL
+}
+
+// Campaign - Top-level objective container (Mission Command)
+model Campaign {
+    id        String         @id @default(cuid())
+    slug      String         @unique
+    name      String
+    status    CampaignStatus @default(PLANNING)
+    tenantId  String?
+    createdBy String? // userId
+    ownerId   String? // agentId of the "commander" agent, if any
+
+    // Mission Command fields
+    intent      String   @db.Text // Commander's intent: the WHY
+    endState    String   @db.Text // Desired end state
+    description String?  @db.Text // Optional additional context
+    constraints String[] // Must-do requirements
+    restraints  String[] // Must-not-do requirements
+
+    // Planning outputs
+    analysisOutput Json? // Task decomposition: assigned/implied/essential tasks
+    executionPlan  Json? // Phases, resource allocation, agent assignments, dependencies
+
+    // Review
+    aarJson Json? // Campaign-level AAR: plan vs actual, aggregated scores, lessons
+
+    // Configuration
+    requireApproval Boolean @default(false) // Pause for human review before execution
+    maxCostUsd      Float? // Budget ceiling
+    timeoutMinutes  Int? // Max execution time
+
+    // Metrics (updated during execution)
+    totalCostUsd Float     @default(0)
+    totalTokens  Int       @default(0)
+    progress     Float     @default(0) // 0-100
+    startedAt    DateTime?
+    completedAt  DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    missions Mission[]
+    logs     CampaignLog[]
+
+    @@index([tenantId])
+    @@index([status])
+    @@index([createdBy])
+    @@map("campaign")
+}
+
+// Mission - A group of related tasks within a campaign
+model Mission {
+    id         String        @id @default(cuid())
+    campaignId String
+    campaign   Campaign      @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+    name       String
+    status     MissionStatus @default(PENDING)
+    priority   Int           @default(0) // Higher = more important
+    sequence   Int           @default(0) // Execution order (0 = parallel OK)
+
+    // Mission statement: "verb + in order to purpose"
+    missionStatement String @db.Text
+
+    // Planning
+    assignedAgentId String? // Which agent or network handles this mission
+    executionPlan   Json? // Mission-level plan
+    actionsOn       Json? // Contingency handlers: { apiFailure, budgetExhausted, default }
+
+    // Review
+    aarJson Json? // Mission-level AAR aggregating task results
+
+    // Metrics
+    totalCostUsd Float     @default(0)
+    totalTokens  Int       @default(0)
+    startedAt    DateTime?
+    completedAt  DateTime?
+
+    // Nested missions (optional)
+    parentMissionId String?
+    parentMission   Mission?  @relation("MissionHierarchy", fields: [parentMissionId], references: [id], onDelete: SetNull)
+    childMissions   Mission[] @relation("MissionHierarchy")
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    tasks MissionTask[]
+
+    @@index([campaignId, sequence])
+    @@index([status])
+    @@index([parentMissionId])
+    @@map("mission")
+}
+
+// MissionTask - Individual work item assigned to an agent
+model MissionTask {
+    id        String            @id @default(cuid())
+    missionId String
+    mission   Mission           @relation(fields: [missionId], references: [id], onDelete: Cascade)
+    name      String
+    status    MissionTaskStatus @default(PENDING)
+    taskType  MissionTaskType   @default(ASSIGNED)
+    taskVerb  String // The specific action verb
+
+    // Assignment
+    assignedAgentId String? // Which agent handles this task
+    sequence        Int     @default(0) // Execution order within mission
+
+    // Execution link -- bridges to existing evaluation pipeline
+    agentRunId String?   @unique
+    agentRun   AgentRun? @relation(fields: [agentRunId], references: [id], onDelete: SetNull)
+
+    // Task details
+    coordinatingInstructions Json? // Dependencies, timings, context to pass to agent
+    result                   Json? // Execution result summary
+    error                    String? @db.Text
+
+    // Metrics
+    costUsd     Float?
+    tokens      Int?
+    startedAt   DateTime?
+    completedAt DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([missionId, sequence])
+    @@index([status])
+    @@index([assignedAgentId])
+    @@map("mission_task")
+}
+
+// CampaignLog - Audit trail for campaign events
+model CampaignLog {
+    id         String   @id @default(cuid())
+    campaignId String
+    campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+    event      String // "created", "analyzing", "planned", "executing", "task_complete", "mission_aar", "campaign_aar", "failed", "escalated"
+    message    String   @db.Text
+    metadata   Json? // Additional event data
+    createdAt  DateTime @default(now())
+
+    @@index([campaignId, createdAt])
+    @@map("campaign_log")
 }

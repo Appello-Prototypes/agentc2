@@ -71,6 +71,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 avgDurationMs: session.avgDurationMs,
                 successRate: session.successRate,
                 totalCostUsd: session.totalCostUsd,
+                safetyScore: session.safetyScore,
+                safetyPassCount: session.safetyPassCount,
+                safetyFailCount: session.safetyFailCount,
                 startedAt: session.startedAt,
                 completedAt: session.completedAt,
                 createdAt: session.createdAt

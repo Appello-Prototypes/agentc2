@@ -53,6 +53,8 @@ interface Trace {
         provider: string;
         name: string;
         temperature: number;
+        routingTier?: string;
+        routingReason?: string;
     };
     steps: ExecutionStep[];
     toolCalls: ToolCall[];
@@ -112,6 +114,31 @@ function getEvalScoreLabel(scores: Record<string, number>) {
         return `${Math.round(average * 100)}%`;
     }
     return average.toFixed(1);
+}
+
+const ROUTING_TIER_STYLES: Record<string, { label: string; className: string }> = {
+    FAST: { label: "Fast", className: "bg-green-500/20 text-green-400 border-green-500/30" },
+    PRIMARY: {
+        label: "Primary",
+        className: "bg-blue-500/20 text-blue-400 border-blue-500/30"
+    },
+    ESCALATION: {
+        label: "Escalation",
+        className: "bg-orange-500/20 text-orange-400 border-orange-500/30"
+    }
+};
+
+function RoutingTierBadge({ tier, reason }: { tier?: string; reason?: string }) {
+    if (!tier) return null;
+    const style = ROUTING_TIER_STYLES[tier] || {
+        label: tier,
+        className: "bg-muted text-muted-foreground"
+    };
+    return (
+        <Badge variant="outline" className={`text-[10px] ${style.className}`} title={reason}>
+            {style.label}
+        </Badge>
+    );
 }
 
 function getVersionLabel(trace: Trace) {
@@ -254,7 +281,9 @@ export default function TracesPage() {
                               provider: traceData.modelJson.provider || baseTrace.model.provider,
                               name: traceData.modelJson.name || baseTrace.model.name,
                               temperature:
-                                  traceData.modelJson.temperature ?? baseTrace.model.temperature
+                                  traceData.modelJson.temperature ?? baseTrace.model.temperature,
+                              routingTier: traceData.modelJson.routingTier,
+                              routingReason: traceData.modelJson.routingReason
                           }
                         : baseTrace.model;
 
@@ -597,9 +626,16 @@ export default function TracesPage() {
                                                     {hasTokens ? trace.tokens.total : "-"}
                                                 </td>
                                                 <td className="px-3 py-2 align-top text-xs">
-                                                    <span className="font-mono">
-                                                        {trace.model.provider}/{trace.model.name}
-                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <span className="font-mono">
+                                                            {trace.model.provider}/
+                                                            {trace.model.name}
+                                                        </span>
+                                                        <RoutingTierBadge
+                                                            tier={trace.model.routingTier}
+                                                            reason={trace.model.routingReason}
+                                                        />
+                                                    </div>
                                                 </td>
                                                 <td className="px-3 py-2 text-right align-top font-mono text-xs">
                                                     {costLabel}
@@ -722,14 +758,25 @@ export default function TracesPage() {
                                     {/* Model */}
                                     <div className="bg-muted rounded-lg p-3">
                                         <p className="text-muted-foreground mb-1 text-xs">Model</p>
-                                        <p className="font-mono text-sm">
-                                            {selectedTrace.model.provider}/
-                                            {selectedTrace.model.name}
-                                            <span className="text-muted-foreground">
-                                                {" "}
-                                                (temp: {selectedTrace.model.temperature})
-                                            </span>
-                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-mono text-sm">
+                                                {selectedTrace.model.provider}/
+                                                {selectedTrace.model.name}
+                                                <span className="text-muted-foreground">
+                                                    {" "}
+                                                    (temp: {selectedTrace.model.temperature})
+                                                </span>
+                                            </p>
+                                            <RoutingTierBadge
+                                                tier={selectedTrace.model.routingTier}
+                                                reason={selectedTrace.model.routingReason}
+                                            />
+                                        </div>
+                                        {selectedTrace.model.routingReason && (
+                                            <p className="text-muted-foreground mt-1 text-xs">
+                                                Routing: {selectedTrace.model.routingReason}
+                                            </p>
+                                        )}
                                     </div>
 
                                     {/* Input */}

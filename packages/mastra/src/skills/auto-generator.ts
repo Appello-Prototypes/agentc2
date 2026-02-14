@@ -126,26 +126,18 @@ export async function generateSkillForMcpServer(
         return t.name.startsWith(`${serverKey}_`) ? t.name : `${serverKey}_${t.name}`;
     });
 
-    // Upsert the skill
-    const skill = await prisma.skill.upsert({
-        where: { slug },
-        update: {
-            name,
-            description,
-            instructions,
-            category,
-            tags
-        },
-        create: {
-            slug,
-            name,
-            description,
-            instructions,
-            category,
-            tags,
-            type: "SYSTEM"
-        }
+    // Upsert the skill (slug is compound-unique with workspaceId, so use findFirst)
+    const existing = await prisma.skill.findFirst({
+        where: { slug, workspaceId: null }
     });
+    const skill = existing
+        ? await prisma.skill.update({
+              where: { id: existing.id },
+              data: { name, description, instructions, category, tags }
+          })
+        : await prisma.skill.create({
+              data: { slug, name, description, instructions, category, tags, type: "SYSTEM" }
+          });
 
     // Update tool attachments
     await prisma.skillTool.deleteMany({ where: { skillId: skill.id } });

@@ -2,7 +2,7 @@ const capabilities = [
     {
         title: "Voice Agents",
         description:
-            "Real-time voice conversations powered by ElevenLabs and OpenAI. Deploy to phone systems via Twilio or embed in your product.",
+            "Deploy voice-enabled agents to your phone systems, IVR, or product. Real-time conversations powered by ElevenLabs and OpenAI for customer support, sales calls, and internal operations.",
         icon: (
             <svg
                 width="24"
@@ -24,7 +24,7 @@ const capabilities = [
     {
         title: "Canvas Dashboards",
         description:
-            "Agents build data-connected dashboards from natural language. Charts, tables, KPIs, and forms — all powered by live data.",
+            "Agents build executive dashboards from natural language. Charts, tables, KPIs, and forms \u2014 all powered by live data from your CRM, project tools, and business systems.",
         icon: (
             <svg
                 width="24"
@@ -46,7 +46,7 @@ const capabilities = [
     {
         title: "Knowledge Base (RAG)",
         description:
-            "Ingest documents, search semantically, and ground every response in your data. Supports markdown, text, HTML, and JSON.",
+            "Ingest company policies, product docs, SOPs, and training materials. Agents search semantically and ground every response in your proprietary data \u2014 not the open internet.",
         icon: (
             <svg
                 width="24"
@@ -68,7 +68,7 @@ const capabilities = [
     {
         title: "Skills System",
         description:
-            "Composable competency bundles that agents discover and activate on demand. Attach documents, tools, and examples to reusable skills.",
+            "Reusable competency bundles your team builds once and deploys across agents. Attach SOPs, tools, and examples to standardize how agents handle business processes.",
         icon: (
             <svg
                 width="24"
@@ -85,9 +85,9 @@ const capabilities = [
         )
     },
     {
-        title: "Observability",
+        title: "Observability & Traceability",
         description:
-            "Full execution traces for every agent run, tool call, and model generation. Cost tracking, quality scoring, and comprehensive audit logs.",
+            "Full execution traces for every agent run, tool call, and model generation. Cost tracking per department, quality scoring, version history, and audit-ready logs for compliance.",
         icon: (
             <svg
                 width="24"
@@ -106,9 +106,9 @@ const capabilities = [
         )
     },
     {
-        title: "Enterprise Ready",
+        title: "Enterprise Security & Governance",
         description:
-            "Multi-tenant architecture with organization and workspace isolation. Encrypted credentials, budget controls, guardrail policies, and role-based access.",
+            "Multi-tenant architecture with organization and workspace isolation. AES-256-GCM credential encryption, per-agent budget controls, guardrail policies, SSO, and role-based access.",
         icon: (
             <svg
                 width="24"
@@ -138,10 +138,11 @@ export function CapabilityGrid() {
                     </span>
                 </div>
                 <h2 className="text-foreground mb-4 text-center text-3xl font-bold tracking-tight md:text-4xl">
-                    Built for the real world
+                    Built for enterprise, ready for scale
                 </h2>
                 <p className="text-muted-foreground mx-auto mb-16 max-w-2xl text-center text-lg">
-                    Every feature you need to take AI agents from prototype to production.
+                    Every capability your business needs to deploy AI agents with confidence \u2014
+                    from compliance to observability.
                 </p>
 
                 <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">

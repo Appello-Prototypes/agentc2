@@ -129,6 +129,8 @@ export async function GET(request: NextRequest) {
             }
         });
 
+        let slackConnectionId: string;
+
         if (existing) {
             // Update existing connection (re-install)
             await prisma.integrationConnection.update({
@@ -141,9 +143,10 @@ export async function GET(request: NextRequest) {
                     name: `Slack (${metadata.teamName || metadata.teamId})`
                 }
             });
+            slackConnectionId = existing.id;
         } else {
             // Create new connection
-            await prisma.integrationConnection.create({
+            const newConn = await prisma.integrationConnection.create({
                 data: {
                     providerId: provider.id,
                     organizationId,
@@ -155,6 +158,29 @@ export async function GET(request: NextRequest) {
                     metadata
                 }
             });
+            slackConnectionId = newConn.id;
+        }
+
+        // Auto-provision Skill + Agent if blueprint exists
+        try {
+            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            if (hasBlueprint("slack")) {
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true },
+                    select: { id: true }
+                });
+                if (workspace) {
+                    const result = await provisionIntegration(slackConnectionId, {
+                        workspaceId: workspace.id
+                    });
+                    console.log(
+                        `[Slack OAuth] Auto-provisioned: skill=${result.skillId || "none"}, ` +
+                            `agent=${result.agentId || "none"}`
+                    );
+                }
+            }
+        } catch (provisionError) {
+            console.error("[Slack OAuth] Auto-provisioning failed:", provisionError);
         }
 
         // Check if this was a popup-mode OAuth (inline onboarding flow)

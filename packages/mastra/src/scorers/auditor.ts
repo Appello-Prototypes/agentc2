@@ -42,7 +42,7 @@ const AuditorOutputSchema = z.object({
                 note: z.string()
             })
         )
-        .optional(),
+        .nullable(),
     turn_evaluations: z
         .array(
             z.object({
@@ -51,7 +51,7 @@ const AuditorOutputSchema = z.object({
                 feedback: z.string()
             })
         )
-        .optional()
+        .nullable()
         .describe("Only for multi-turn conversations if evaluateTurns is enabled"),
     aar: z
         .object({

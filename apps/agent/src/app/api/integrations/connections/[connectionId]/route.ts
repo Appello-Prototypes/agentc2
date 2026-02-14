@@ -226,6 +226,26 @@ export async function DELETE(
             );
         }
 
+        // Deactivate provisioned Skill + Agent before deleting the connection
+        let deprovisioned = null;
+        try {
+            const { deprovisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            if (hasBlueprint(connection.provider.key)) {
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true },
+                    select: { id: true }
+                });
+                if (workspace) {
+                    deprovisioned = await deprovisionIntegration(
+                        connection.provider.key,
+                        workspace.id
+                    );
+                }
+            }
+        } catch (deprovisionError) {
+            console.error("[Integrations] Deprovisioning failed:", deprovisionError);
+        }
+
         await prisma.integrationConnection.delete({
             where: { id: connection.id }
         });
@@ -237,7 +257,8 @@ export async function DELETE(
         }
 
         await auditLog.integrationDelete(connection.id, session.user.id, organizationId, {
-            providerId: connection.providerId
+            providerId: connection.providerId,
+            deprovisioned
         });
 
         resetMcpClients();
