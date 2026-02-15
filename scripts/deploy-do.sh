@@ -127,8 +127,8 @@ ssh $SSH_OPTS "$SSH_USER@$DROPLET_IP" << 'ENDSSH'
     [ -d apps/frontend/.next ] && cp -r apps/frontend/.next apps/frontend/.next.bak
 
     echo ""
-    echo "6. Building applications..."
-    NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+    echo "6. Building applications (24GB heap)..."
+    NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 
     echo ""
     echo "7. Updating Caddy configuration..."

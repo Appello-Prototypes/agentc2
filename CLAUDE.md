@@ -420,7 +420,7 @@ cd /var/www/mastra
 git pull origin main
 bun install
 bun run db:generate
-NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 pm2 restart ecosystem.config.js --update-env
 pm2 status
 ```

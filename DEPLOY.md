@@ -54,7 +54,7 @@ git pull origin main
 bun install
 bun run db:generate
 bun run db:push
-NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 sudo cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
 sudo systemctl reload caddy
 pm2 restart ecosystem.config.js --update-env
@@ -99,7 +99,7 @@ pm2 status
     bun install
     bun run db:generate
     bun run db:push
-    NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+    NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
     pm2 start ecosystem.config.js
     pm2 save
     ```
