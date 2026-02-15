@@ -152,6 +152,7 @@ type IntegrationProviderSeed = {
     category: IntegrationProvider["category"];
     authType: IntegrationProvider["authType"];
     providerType: IntegrationProvider["providerType"];
+    maturityLevel?: "internal";
     configJson?: Prisma.InputJsonValue;
     actionsJson?: Prisma.InputJsonValue;
     triggersJson?: Prisma.InputJsonValue;
@@ -1560,7 +1561,8 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         description: "Webhook connections that trigger agents via the unified trigger system",
         category: "automation",
         authType: "webhook",
-        providerType: "webhook"
+        providerType: "webhook",
+        maturityLevel: "internal"
     },
 
     // ── AI Model Providers ─────────────────────────────────────────────
@@ -1571,6 +1573,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["OPENAI_API_KEY"],
             fieldDefinitions: {
@@ -1590,6 +1593,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["ANTHROPIC_API_KEY"],
             fieldDefinitions: {
@@ -1609,6 +1613,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["GOOGLE_GENERATIVE_AI_API_KEY"],
             fieldDefinitions: {
@@ -1630,6 +1635,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "communication",
         authType: "apiKey",
         providerType: "custom",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_PHONE_NUMBER"],
             fieldDefinitions: {
@@ -1669,6 +1675,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "communication",
         authType: "apiKey",
         providerType: "custom",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["ELEVENLABS_API_KEY"],
             fieldDefinitions: {
@@ -1704,6 +1711,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "communication",
         authType: "apiKey",
         providerType: "custom",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: ["TELEGRAM_BOT_TOKEN"],
             fieldDefinitions: {
@@ -1734,6 +1742,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         category: "communication",
         authType: "none",
         providerType: "custom",
+        maturityLevel: "internal",
         configJson: {
             requiredFields: [],
             fieldDefinitions: {
@@ -2014,6 +2023,7 @@ async function ensureIntegrationProviders() {
                     category: seed.category,
                     authType: seed.authType,
                     providerType: seed.providerType,
+                    maturityLevel: seed.maturityLevel ?? "visible",
                     configJson: seed.configJson ?? undefined,
                     actionsJson: seed.actionsJson ?? undefined,
                     triggersJson: seed.triggersJson ?? undefined,
@@ -2026,6 +2036,7 @@ async function ensureIntegrationProviders() {
                     category: seed.category,
                     authType: seed.authType,
                     providerType: seed.providerType,
+                    maturityLevel: seed.maturityLevel ?? "visible",
                     configJson: seed.configJson ?? undefined,
                     actionsJson: seed.actionsJson ?? undefined,
                     triggersJson: seed.triggersJson ?? undefined,

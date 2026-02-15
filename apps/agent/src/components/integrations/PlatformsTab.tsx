@@ -61,6 +61,7 @@ type IntegrationProvider = {
     category: string;
     authType: string;
     providerType: string;
+    maturityLevel?: string;
     status: ProviderStatus;
     connections: ConnectionSummary[];
     toolCount?: number;
@@ -394,10 +395,12 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
     }, [fetchDiagnostics]);
 
     // Split providers into connected vs available
-    // "Platform" providers = oauth + mcp (non-ai-model, non-webhook)
-    // Also include channel providers that exist
+    // Filter out AI models, webhooks, and anything marked "internal"
     const platformProviders = providers.filter(
-        (p) => p.providerType !== "ai-model" && p.providerType !== "webhook"
+        (p) =>
+            p.providerType !== "ai-model" &&
+            p.providerType !== "webhook" &&
+            p.maturityLevel !== "internal"
     );
 
     const connectedProviders = platformProviders.filter(

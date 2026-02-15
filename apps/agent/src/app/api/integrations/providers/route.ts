@@ -186,6 +186,7 @@ export async function GET(request: NextRequest) {
                 category: provider.category,
                 authType: provider.authType,
                 providerType: provider.providerType,
+                maturityLevel: provider.maturityLevel,
                 status,
                 connections: connectionDetails,
                 toolCount:

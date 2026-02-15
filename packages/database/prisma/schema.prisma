@@ -249,19 +249,20 @@ model ToolCredential {
 
 // Integration Provider - Catalog of available integrations (built-in + custom)
 model IntegrationProvider {
-    id           String   @id @default(cuid())
-    key          String   @unique // Provider key (e.g., "hubspot", "gmail")
-    name         String
-    description  String?
-    category     String // "crm", "communication", "web", "knowledge", "automation", "productivity"
-    authType     String // "apiKey", "oauth", "none", "webhook", "custom"
-    providerType String // "mcp", "oauth", "webhook", "custom"
-    isActive     Boolean  @default(true)
-    configJson   Json? // Custom server config, required fields, etc.
-    actionsJson  Json? // Cached action metadata
-    triggersJson Json? // Cached trigger metadata
-    createdAt    DateTime @default(now())
-    updatedAt    DateTime @updatedAt
+    id             String   @id @default(cuid())
+    key            String   @unique // Provider key (e.g., "hubspot", "gmail")
+    name           String
+    description    String?
+    category       String // "crm", "communication", "web", "knowledge", "automation", "productivity"
+    authType       String // "apiKey", "oauth", "none", "webhook", "custom"
+    providerType   String // "mcp", "oauth", "webhook", "custom"
+    maturityLevel  String   @default("visible") // "visible" (default) or "internal" (AI models, channels - hidden from main integrations page)
+    isActive       Boolean  @default(true)
+    configJson     Json? // Custom server config, required fields, etc.
+    actionsJson    Json? // Cached action metadata
+    triggersJson   Json? // Cached trigger metadata
+    createdAt      DateTime @default(now())
+    updatedAt      DateTime @updatedAt
 
     // Relations
     connections IntegrationConnection[]
@@ -304,12 +305,30 @@ model IntegrationConnection {
     webhookSubscriptions    WebhookSubscription[]
     calendarEvents          CalendarEvent[]
     slackChannelPreferences SlackChannelPreference[]
+    integrationEvents       IntegrationEvent[]
 
     @@index([organizationId])
     @@index([providerId])
     @@index([userId])
     @@index([agentTriggerId])
     @@map("integration_connection")
+}
+
+// Integration Event - Lifecycle event log for integration connections
+model IntegrationEvent {
+    id           String              @id @default(cuid())
+    connectionId String
+    connection   IntegrationConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+    eventType    String // created, tested, failed, reconnected, token_refreshed, token_expired, disconnected, health_check.passed, health_check.failed
+    success      Boolean             @default(true)
+    message      String?             @db.Text
+    metadata     Json? // tool count, latency, error details, etc.
+    durationMs   Int? // duration of the operation in milliseconds
+    createdAt    DateTime            @default(now())
+
+    @@index([connectionId, createdAt])
+    @@index([eventType])
+    @@map("integration_event")
 }
 
 // Email Thread - Normalized email threads for Gmail/Outlook
