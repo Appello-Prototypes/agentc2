@@ -23,13 +23,15 @@ https://catalyst.localhost {
         reverse_proxy localhost:3002
     }
 
-    # Public landing page — redirect root to welcome embed
+    # Public landing page — route to agent app (server-side token lookup + redirect)
     @landing_page {
         expression `{http.request.uri.path} == "/"`
     }
 
     handle @landing_page {
-        redir * /embed-v2/welcome-v2 temporary
+        reverse_proxy localhost:3001 {
+            flush_interval -1
+        }
     }
 
     # Frontend static assets (namespaced via assetPrefix: '/_home')

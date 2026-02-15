@@ -20,6 +20,11 @@ function isStandaloneDeployment(): boolean {
  * Note: Next.js 16 renamed middleware to proxy
  */
 async function proxy(request: NextRequest) {
+    // Allow unauthenticated access to root page (public landing)
+    if (request.nextUrl.pathname === "/") {
+        return NextResponse.next();
+    }
+
     // In standalone mode, allow public access to demos
     if (isStandaloneDeployment()) {
         return NextResponse.next();
