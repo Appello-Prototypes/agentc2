@@ -29,7 +29,7 @@ https://catalyst.localhost {
     }
 
     handle @landing_page {
-        redir /embed-v2/welcome-v2 temporary
+        redir * /embed-v2/welcome-v2 temporary
     }
 
     # Frontend static assets (namespaced via assetPrefix: '/_home')

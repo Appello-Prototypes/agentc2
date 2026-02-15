@@ -35,7 +35,7 @@ agentc2.ai {
     }
 
     handle @landing_page {
-        redir /embed-v2/welcome-v2 temporary
+        redir * /embed-v2/welcome-v2 temporary
     }
 
     # Public legal pages — route to frontend app (no auth required)
