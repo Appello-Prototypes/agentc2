@@ -88,7 +88,7 @@ jobs:
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script_stop: true
-          command_timeout: 15m
+          command_timeout: 25m
           script: |
             set -euo pipefail
             export PATH="$HOME/.bun/bin:$PATH"
