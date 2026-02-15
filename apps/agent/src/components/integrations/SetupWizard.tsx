@@ -4,15 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { linkSocial } from "@repo/auth/client";
 import { getApiBase } from "@/lib/utils";
-import {
-    Badge,
-    Button,
-    Card,
-    CardContent,
-    Input,
-    Label,
-    buttonVariants
-} from "@repo/ui";
+import { Badge, Button, Card, CardContent, Input, Label, buttonVariants } from "@repo/ui";
 import {
     ArrowLeftIcon,
     ArrowRightIcon,
@@ -187,7 +179,11 @@ function translateError(error: string, providerName: string): { message: string;
             action: `Allow popups for this site and try again.`
         };
     }
-    if (lower.includes("denied") || lower.includes("cancelled") || lower.includes("access_denied")) {
+    if (
+        lower.includes("denied") ||
+        lower.includes("cancelled") ||
+        lower.includes("access_denied")
+    ) {
         return {
             message: `Authorization was denied or cancelled.`,
             action: `Click Connect again and make sure to click "Allow" when prompted.`
@@ -218,20 +214,14 @@ function StepIndicator({ currentStep, steps }: { currentStep: number; steps: str
                                   : "bg-muted text-muted-foreground"
                         }`}
                     >
-                        {i < currentStep ? (
-                            <CheckCircle2Icon className="h-4 w-4" />
-                        ) : (
-                            i + 1
-                        )}
+                        {i < currentStep ? <CheckCircle2Icon className="h-4 w-4" /> : i + 1}
                     </div>
                     <span
                         className={`text-xs ${i === currentStep ? "font-medium" : "text-muted-foreground"}`}
                     >
                         {label}
                     </span>
-                    {i < steps.length - 1 && (
-                        <div className="bg-border mx-1 h-px w-6" />
-                    )}
+                    {i < steps.length - 1 && <div className="bg-border mx-1 h-px w-6" />}
                 </div>
             ))}
         </div>
@@ -242,13 +232,7 @@ function StepIndicator({ currentStep, steps }: { currentStep: number; steps: str
 /*  Overview Step                                                              */
 /* -------------------------------------------------------------------------- */
 
-function OverviewStep({
-    provider,
-    onNext
-}: {
-    provider: IntegrationProvider;
-    onNext: () => void;
-}) {
+function OverviewStep({ provider, onNext }: { provider: IntegrationProvider; onNext: () => void }) {
     const capabilities = getCapabilities(provider);
     const oauthConfig = getOAuthConfig(provider);
     const scopes = oauthConfig?.scopes || [];
@@ -270,7 +254,7 @@ function OverviewStep({
 
             {/* Capabilities list */}
             <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider">Capabilities</Label>
+                <Label className="text-xs tracking-wider uppercase">Capabilities</Label>
                 <div className="grid gap-2 sm:grid-cols-2">
                     {capabilities.map((cap) => (
                         <div
@@ -287,7 +271,7 @@ function OverviewStep({
             {/* Permission scopes (for OAuth) */}
             {allScopes.length > 0 && (
                 <div className="space-y-2">
-                    <Label className="text-xs uppercase tracking-wider">
+                    <Label className="text-xs tracking-wider uppercase">
                         <ShieldCheckIcon className="mr-1 inline h-3.5 w-3.5" />
                         Permissions Required
                     </Label>
@@ -295,9 +279,7 @@ function OverviewStep({
                         {allScopes.map((scope) => (
                             <div key={scope} className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground">•</span>
-                                <span>
-                                    {SCOPE_DESCRIPTIONS[scope] || scope}
-                                </span>
+                                <span>{SCOPE_DESCRIPTIONS[scope] || scope}</span>
                             </div>
                         ))}
                     </div>
@@ -375,8 +357,8 @@ function CredentialsStep({
             <div>
                 <h2 className="text-xl font-semibold">Enter Your Credentials</h2>
                 <p className="text-muted-foreground mt-1 text-sm">
-                    Provide the information below to connect {provider.name}.
-                    Your credentials are encrypted and stored securely.
+                    Provide the information below to connect {provider.name}. Your credentials are
+                    encrypted and stored securely.
                 </p>
             </div>
 
@@ -399,11 +381,7 @@ function CredentialsStep({
                     const description = def.description || "";
                     const placeholder = def.placeholder || "";
                     const inputType =
-                        def.type === "password"
-                            ? "password"
-                            : def.type === "url"
-                              ? "url"
-                              : "text";
+                        def.type === "password" ? "password" : def.type === "url" ? "url" : "text";
 
                     return (
                         <div key={field} className="space-y-1.5">
@@ -423,21 +401,14 @@ function CredentialsStep({
                                 className="font-mono text-sm"
                             />
                             {description && (
-                                <p className="text-muted-foreground text-xs">
-                                    {description}
-                                </p>
+                                <p className="text-muted-foreground text-xs">{description}</p>
                             )}
                         </div>
                     );
                 })}
             </div>
 
-            <Button
-                type="submit"
-                className="w-full"
-                size="lg"
-                disabled={!allFilled || connecting}
-            >
+            <Button type="submit" className="w-full" size="lg" disabled={!allFilled || connecting}>
                 {connecting ? (
                     <>
                         <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -505,12 +476,7 @@ function OAuthConnectStep({
                     Connect {provider.name}
                 </Link>
             ) : (
-                <Button
-                    onClick={onStartOAuth}
-                    className="w-full"
-                    size="lg"
-                    disabled={connecting}
-                >
+                <Button onClick={onStartOAuth} className="w-full" size="lg" disabled={connecting}>
                     {connecting ? (
                         <>
                             <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -566,12 +532,7 @@ function NoAuthConnectStep({
                 </div>
             )}
 
-            <Button
-                onClick={onConnect}
-                className="w-full"
-                size="lg"
-                disabled={connecting}
-            >
+            <Button onClick={onConnect} className="w-full" size="lg" disabled={connecting}>
                 {connecting ? (
                     <>
                         <Loader2Icon className="mr-2 h-4 w-4 animate-spin" />
@@ -617,12 +578,9 @@ function SuccessStep({
 
             {capabilities.length > 0 && (
                 <div className="mx-auto max-w-sm space-y-2 text-left">
-                    <Label className="text-xs uppercase tracking-wider">Now Available</Label>
+                    <Label className="text-xs tracking-wider uppercase">Now Available</Label>
                     {capabilities.slice(0, 5).map((cap) => (
-                        <div
-                            key={cap}
-                            className="flex items-center gap-2 text-sm"
-                        >
+                        <div key={cap} className="flex items-center gap-2 text-sm">
                             <CheckCircle2Icon className="h-3.5 w-3.5 text-green-500" />
                             <span className="capitalize">{cap}</span>
                         </div>
@@ -631,10 +589,7 @@ function SuccessStep({
             )}
 
             <div className="flex flex-col gap-3 pt-2">
-                <Link
-                    href="/mcp"
-                    className={buttonVariants({ size: "lg", className: "w-full" })}
-                >
+                <Link href="/mcp" className={buttonVariants({ size: "lg", className: "w-full" })}>
                     Back to Integrations
                 </Link>
                 <Link
@@ -687,7 +642,7 @@ function AlreadyConnectedView({
 
             {/* Active connections */}
             <div className="space-y-2">
-                <Label className="text-xs uppercase tracking-wider">Active Connections</Label>
+                <Label className="text-xs tracking-wider uppercase">Active Connections</Label>
                 {activeConns.map((conn) => (
                     <div
                         key={conn.id}
@@ -998,10 +953,9 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         if (!conn) return;
         setDisconnecting(true);
         try {
-            const response = await fetch(
-                `${apiBase}/api/integrations/connections/${conn.id}`,
-                { method: "DELETE" }
-            );
+            const response = await fetch(`${apiBase}/api/integrations/connections/${conn.id}`, {
+                method: "DELETE"
+            });
             const data = await response.json();
             if (data.success) {
                 window.location.reload();
@@ -1031,7 +985,16 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
         } else {
             setStep("credentials");
         }
-    }, [isApiKey, isNativeOAuth, isMcpOAuth, hasSetupUrl, isNoAuth, handleNativeOAuth, handleMcpOAuth, handleNoAuthConnect]);
+    }, [
+        isApiKey,
+        isNativeOAuth,
+        isMcpOAuth,
+        hasSetupUrl,
+        isNoAuth,
+        handleNativeOAuth,
+        handleMcpOAuth,
+        handleNoAuthConnect
+    ]);
 
     /* ---------------------------------------------------------------------- */
     /*  Render                                                                  */
@@ -1066,10 +1029,7 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
             <div className="container mx-auto max-w-2xl space-y-6 py-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
-                    <Link
-                        href="/mcp"
-                        className={buttonVariants({ variant: "ghost", size: "sm" })}
-                    >
+                    <Link href="/mcp" className={buttonVariants({ variant: "ghost", size: "sm" })}>
                         <ArrowLeftIcon className="mr-2 h-4 w-4" />
                         Integrations
                     </Link>
@@ -1192,10 +1152,7 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
                                 )}
 
                                 {step === "success" && (
-                                    <SuccessStep
-                                        provider={provider}
-                                        toolCount={toolCount}
-                                    />
+                                    <SuccessStep provider={provider} toolCount={toolCount} />
                                 )}
                             </CardContent>
                         </Card>

@@ -16,10 +16,12 @@
 Deployments happen automatically via GitHub Actions on push to `main`.
 
 The workflow (`.github/workflows/deploy-do.yml`) does:
+
 1. **Test job** (in CI): type-check + lint
 2. **Deploy job** (on server via SSH): pull, install, build, restart
 
 Features:
+
 - Rollback safety — backs up `.next` dirs before building, restores on failure
 - Crash-loop detection — verifies PM2 processes are stable after restart
 - Slack notifications — posts success/failure to Slack (if `SLACK_WEBHOOK_URL` secret is configured)
@@ -27,16 +29,17 @@ Features:
 
 ### Required GitHub Secrets
 
-| Secret | Value |
-|---|---|
-| `DO_HOST` | `138.197.150.253` |
-| `DO_USERNAME` | `root` |
-| `DO_SSH_KEY` | SSH private key (`~/.ssh/appello_digitalocean`) |
-| `SLACK_WEBHOOK_URL` | *(optional)* Slack Incoming Webhook URL |
+| Secret              | Value                                           |
+| ------------------- | ----------------------------------------------- |
+| `DO_HOST`           | `138.197.150.253`                               |
+| `DO_USERNAME`       | `root`                                          |
+| `DO_SSH_KEY`        | SSH private key (`~/.ssh/appello_digitalocean`) |
+| `SLACK_WEBHOOK_URL` | _(optional)_ Slack Incoming Webhook URL         |
 
 ### Skip Tests
 
 To deploy faster (e.g., hotfix), trigger the workflow manually with "Skip tests" checked:
+
 - Go to Actions > "Deploy to Digital Ocean" > Run workflow > check "Skip tests"
 
 ## Manual Deploy (Fallback)
@@ -63,6 +66,7 @@ pm2 status
 ```
 
 Or use the deploy script:
+
 ```bash
 ./scripts/deploy-do.sh 138.197.150.253 root
 ```
