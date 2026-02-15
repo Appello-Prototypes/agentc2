@@ -26,13 +26,15 @@ env:
   NODE_ENV: production
   DEPLOY_PATH: /var/www/mastra
   NEXT_PUBLIC_APP_URL: "https://agentc2.ai"
+  # Allow up to 6GB heap per Node process (GH runners have 7GB RAM)
+  NODE_OPTIONS: "--max-old-space-size=6144"
 
 jobs:
   # Run quality gates before build
   test:
     if: ${{ github.event.inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - name: Checkout code
@@ -61,10 +63,10 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
       - name: Type check
-        run: bun run type-check
+        run: bunx turbo type-check --concurrency=1
 
       - name: Lint
-        run: bun run lint
+        run: bunx turbo lint --concurrency=1
 
   # Build in CI, then deploy pre-built artifacts to Digital Ocean
   build-deploy:
@@ -100,7 +102,7 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
 
       - name: Build all applications
-        run: bun run build
+        run: bunx turbo build --concurrency=1
 
       - name: Package build artifacts
         run: |
