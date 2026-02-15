@@ -62,16 +62,7 @@ function buildCredentials(): CredentialSeed[] {
                     ? { SLACK_BOT_TOKEN: env.SLACK_BOT_TOKEN, SLACK_TEAM_ID: env.SLACK_TEAM_ID }
                     : null
         },
-        {
-            toolId: "gdrive",
-            name: "Google Drive",
-            credentials: env.GDRIVE_CREDENTIALS_PATH
-                ? {
-                      GDRIVE_CREDENTIALS_PATH: env.GDRIVE_CREDENTIALS_PATH,
-                      ...(env.GDRIVE_OAUTH_PATH ? { GDRIVE_OAUTH_PATH: env.GDRIVE_OAUTH_PATH } : {})
-                  }
-                : null
-        },
+        // gdrive legacy MCP server removed — replaced by OAuth "google-drive" provider
         {
             toolId: "github",
             name: "GitHub",

@@ -3,7 +3,7 @@ import type { IntegrationBlueprint } from "./types";
 export const emailBlueprints: IntegrationBlueprint[] = [
     {
         providerKey: "gmail",
-        version: 1,
+        version: 2,
         skill: {
             slug: "gmail-expert",
             name: "Gmail Expert",
@@ -26,12 +26,11 @@ Best practices:
             tags: ["email", "gmail", "google", "communication"],
             toolDiscovery: "static",
             staticTools: [
-                "gmail-search",
-                "gmail-read",
-                "gmail-send",
-                "gmail-draft",
-                "gmail-archive",
-                "gmail-label"
+                "gmail-search-emails",
+                "gmail-read-email",
+                "gmail-send-email",
+                "gmail-draft-email",
+                "gmail-archive-email"
             ]
         },
         agent: {
@@ -51,7 +50,7 @@ Best practices:
     },
     {
         providerKey: "microsoft",
-        version: 1,
+        version: 2,
         skill: {
             slug: "microsoft-expert",
             name: "Microsoft 365 Expert",
@@ -73,14 +72,14 @@ Best practices:
             tags: ["email", "microsoft", "outlook", "calendar"],
             toolDiscovery: "static",
             staticTools: [
-                "microsoft-mail-list",
-                "microsoft-mail-read",
-                "microsoft-mail-send",
-                "microsoft-mail-archive",
-                "microsoft-calendar-list",
-                "microsoft-calendar-create",
-                "microsoft-calendar-update",
-                "microsoft-calendar-delete"
+                "outlook-mail-list-emails",
+                "outlook-mail-get-email",
+                "outlook-mail-send-email",
+                "outlook-mail-archive-email",
+                "outlook-calendar-list-events",
+                "outlook-calendar-get-event",
+                "outlook-calendar-create-event",
+                "outlook-calendar-update-event"
             ]
         },
         agent: {
@@ -100,7 +99,7 @@ Best practices:
     },
     {
         providerKey: "google-calendar",
-        version: 1,
+        version: 2,
         skill: {
             slug: "google-calendar-expert",
             name: "Google Calendar Expert",
@@ -121,11 +120,12 @@ Best practices:
             tags: ["calendar", "google", "scheduling", "events"],
             toolDiscovery: "static",
             staticTools: [
-                "google-calendar-list",
-                "google-calendar-create",
-                "google-calendar-update",
-                "google-calendar-delete",
-                "google-calendar-freebusy"
+                "google-calendar-search-events",
+                "google-calendar-list-events",
+                "google-calendar-get-event",
+                "google-calendar-create-event",
+                "google-calendar-update-event",
+                "google-calendar-delete-event"
             ]
         },
         agent: {
@@ -145,7 +145,7 @@ Best practices:
     },
     {
         providerKey: "google-drive",
-        version: 1,
+        version: 2,
         skill: {
             slug: "google-drive-expert",
             name: "Google Drive Expert",
@@ -155,8 +155,7 @@ Best practices:
             tags: ["storage", "google-drive", "files", "documents"],
             toolDiscovery: "static",
             staticTools: [
-                "google-drive-search",
-                "google-drive-list",
+                "google-drive-search-files",
                 "google-drive-read-file",
                 "google-drive-create-doc"
             ]
@@ -178,7 +177,7 @@ Best practices:
     },
     {
         providerKey: "dropbox",
-        version: 1,
+        version: 2,
         skill: {
             slug: "dropbox-expert",
             name: "Dropbox Expert",
@@ -188,11 +187,11 @@ Best practices:
             tags: ["storage", "dropbox", "files", "cloud"],
             toolDiscovery: "static",
             staticTools: [
-                "dropbox-list",
-                "dropbox-read",
-                "dropbox-upload",
-                "dropbox-search",
-                "dropbox-sharing-link"
+                "dropbox-list-files",
+                "dropbox-get-file",
+                "dropbox-upload-file",
+                "dropbox-search-files",
+                "dropbox-get-sharing-links"
             ]
         },
         agent: {

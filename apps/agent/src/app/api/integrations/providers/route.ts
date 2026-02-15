@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra";
+import { getIntegrationProviders, getBlueprint } from "@repo/mastra";
 import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -192,7 +192,7 @@ export async function GET(request: NextRequest) {
                 toolCount:
                     provider.providerType === "mcp" || provider.providerType === "custom"
                         ? null
-                        : 0,
+                        : (getBlueprint(provider.key)?.skill.staticTools?.length ?? 0),
                 actions: provider.actionsJson,
                 triggers: provider.triggersJson,
                 config: provider.configJson,
