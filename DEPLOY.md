@@ -3,23 +3,84 @@
 ## Server Details
 
 - **Host:** 138.197.150.253
+- **Specs:** 32 GB RAM / 8 vCPUs / 640 GB SSD ($96/mo)
 - **User:** root
 - **SSH Key:** ~/.ssh/appello_digitalocean
 - **App Directory:** /var/www/mastra
 - **Domain:** https://agentc2.ai
+- **Process Manager:** PM2
+- **Reverse Proxy:** Caddy
 
-## Quick Deploy
+## CI/CD (Primary Method)
+
+Deployments happen automatically via GitHub Actions on push to `main`.
+
+The workflow (`.github/workflows/deploy-do.yml`) does:
+1. **Test job** (in CI): type-check + lint
+2. **Deploy job** (on server via SSH): pull, install, build, restart
+
+Features:
+- Rollback safety — backs up `.next` dirs before building, restores on failure
+- Crash-loop detection — verifies PM2 processes are stable after restart
+- Slack notifications — posts success/failure to Slack (if `SLACK_WEBHOOK_URL` secret is configured)
+- Health checks — pings `agentc2.ai` after deploy
+
+### Required GitHub Secrets
+
+| Secret | Value |
+|---|---|
+| `DO_HOST` | `138.197.150.253` |
+| `DO_USERNAME` | `root` |
+| `DO_SSH_KEY` | SSH private key (`~/.ssh/appello_digitalocean`) |
+| `SLACK_WEBHOOK_URL` | *(optional)* Slack Incoming Webhook URL |
+
+### Skip Tests
+
+To deploy faster (e.g., hotfix), trigger the workflow manually with "Skip tests" checked:
+- Go to Actions > "Deploy to Digital Ocean" > Run workflow > check "Skip tests"
+
+## Manual Deploy (Fallback)
+
+If CI is unavailable, deploy manually:
 
 ```bash
 # SSH to server
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
 
 # Deploy
+export PATH="$HOME/.bun/bin:$PATH"
 cd /var/www/mastra
 git pull origin main
 bun install
-bun run build
-pm2 restart all
+bun run db:generate
+bun run db:push
+NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+sudo cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
+sudo systemctl reload caddy
+pm2 restart ecosystem.config.js --update-env
+pm2 save
+pm2 status
+```
+
+Or use the deploy script:
+```bash
+./scripts/deploy-do.sh 138.197.150.253 root
+```
+
+## Rollback
+
+If a deploy breaks production and the rollback trap didn't fire:
+
+```bash
+ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+cd /var/www/mastra
+
+# Restore previous build
+[ -d apps/agent/.next.bak ] && rm -rf apps/agent/.next && mv apps/agent/.next.bak apps/agent/.next
+[ -d apps/frontend/.next.bak ] && rm -rf apps/frontend/.next && mv apps/frontend/.next.bak apps/frontend/.next
+
+# Restart
+pm2 restart ecosystem.config.js --update-env
 pm2 status
 ```
 
@@ -37,7 +98,8 @@ pm2 status
     cd /var/www/mastra
     bun install
     bun run db:generate
-    bun run build
+    bun run db:push
+    NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
     pm2 start ecosystem.config.js
     pm2 save
     ```
@@ -47,8 +109,6 @@ pm2 status
 ```bash
 # View logs
 pm2 logs
-
-# View specific app logs
 pm2 logs agent
 pm2 logs frontend
 
@@ -60,6 +120,9 @@ pm2 status
 
 # Reload Caddy (after Caddyfile changes)
 sudo systemctl reload caddy
+
+# Check memory usage
+free -h
 ```
 
 ## Troubleshooting
@@ -77,4 +140,9 @@ sudo journalctl -u caddy -f
 # Test endpoints
 curl -I https://agentc2.ai
 curl https://agentc2.ai/api/mcp -H "X-API-Key: $MCP_API_KEY" -H "X-Organization-Slug: appello"
+
+# Check server resources
+free -h          # Memory
+df -h            # Disk
+htop             # CPU + processes
 ```

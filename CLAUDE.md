@@ -412,19 +412,23 @@ git push origin main
 
 ### Quick Deploy
 
+Deployments are automatic via GitHub Actions on push to `main`. For manual deploy:
+
 ```bash
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
 cd /var/www/mastra
 git pull origin main
 bun install
-bun run build
-pm2 restart all
+bun run db:generate
+NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+pm2 restart ecosystem.config.js --update-env
 pm2 status
 ```
 
 ### Server Details
 
 - **Host:** 138.197.150.253
+- **Specs:** 32 GB RAM / 8 vCPUs / 640 GB SSD ($96/mo)
 - **Domain:** https://agentc2.ai
 - **SSH Key:** ~/.ssh/appello_digitalocean
 - **Process Manager:** PM2
@@ -440,7 +444,7 @@ pm2 logs
 pm2 status
 
 # Restart apps
-pm2 restart all
+pm2 restart ecosystem.config.js --update-env
 
 # Reload Caddy
 sudo systemctl reload caddy

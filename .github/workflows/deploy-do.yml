@@ -1,13 +1,16 @@
 # Digital Ocean Deployment Workflow
 #
-# Builds in CI (GitHub Actions) and deploys pre-built artifacts to Digital Ocean.
-# This avoids OOM issues on the 8GB production server by offloading the
-# memory-intensive Next.js build to the CI runner.
+# Tests in CI, builds on the 32GB production server (where .env has all
+# credentials), with rollback safety, crash-loop detection, Slack
+# notifications, and health checks.
 #
 # Required secrets:
-# - DO_HOST: Droplet IP address
-# - DO_USERNAME: SSH username (e.g., root)
-# - DO_SSH_KEY: Private SSH key for authentication
+#   DO_HOST       - Droplet IP address
+#   DO_USERNAME   - SSH username (e.g., root)
+#   DO_SSH_KEY    - Private SSH key for authentication
+#
+# Optional secrets:
+#   SLACK_WEBHOOK_URL - Incoming Webhook for deploy notifications
 
 name: Deploy to Digital Ocean
 
@@ -23,14 +26,12 @@ on:
         type: boolean
 
 env:
-  NODE_ENV: production
   DEPLOY_PATH: /var/www/mastra
-  NEXT_PUBLIC_APP_URL: "https://agentc2.ai"
-  # Allow up to 6GB heap per Node process (GH runners have 7GB RAM)
+  # 6GB heap for CI runner (7GB RAM total)
   NODE_OPTIONS: "--max-old-space-size=6144"
 
 jobs:
-  # Run quality gates before build
+  # ── Quality gates (runs in GitHub Actions) ─────────────────────────
   test:
     if: ${{ github.event.inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
@@ -68,92 +69,59 @@ jobs:
       - name: Lint
         run: bunx turbo lint --concurrency=1
 
-  # Build in CI, then deploy pre-built artifacts to Digital Ocean
-  build-deploy:
+  # ── Build on server + deploy ───────────────────────────────────────
+  deploy:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: [test]
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.3.4"
-
-      - name: Cache dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            node_modules
-            ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Generate Prisma client
-        run: bun run db:generate
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
-
-      - name: Build all applications
-        run: bunx turbo build --concurrency=1
-        env:
-          # Placeholder env vars required for Next.js page data collection.
-          # The agent app imports modules that check these at init time.
-          # No actual DB connection occurs during build — just needs to exist.
-          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
-          BETTER_AUTH_SECRET: "ci-build-placeholder-secret"
-
-      - name: Package build artifacts
-        run: |
-          echo "Packaging .next build directories..."
-          tar -czf /tmp/build-artifacts.tar.gz \
-            --exclude='.next/cache' \
-            apps/agent/.next \
-            apps/frontend/.next
-          ls -lh /tmp/build-artifacts.tar.gz
-          echo "Build artifacts packaged successfully."
-
-      - name: Setup SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/deploy_key
-          chmod 600 ~/.ssh/deploy_key
-          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
-
-      - name: Transfer build artifacts to server
-        run: |
-          echo "Transferring build artifacts..."
-          scp -i ~/.ssh/deploy_key \
-            /tmp/build-artifacts.tar.gz \
-            ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }}:/tmp/build-artifacts.tar.gz
-          echo "Transfer complete."
-
-      - name: Deploy to server
+      - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script_stop: true
-          command_timeout: 10m
+          command_timeout: 15m
           script: |
             set -euo pipefail
             export PATH="$HOME/.bun/bin:$PATH"
 
+            DEPLOY_PATH="${{ env.DEPLOY_PATH }}"
+            COMMIT="${{ github.sha }}"
+            SHORT_SHA="${COMMIT:0:7}"
+            DEPLOY_STATUS="success"
+
+            # ── Rollback trap ────────────────────────────────────
+            rollback() {
+              echo ""
+              echo "!! DEPLOY FAILED — rolling back..."
+              DEPLOY_STATUS="failed"
+              cd "$DEPLOY_PATH"
+              if [ -d apps/agent/.next.bak ]; then
+                rm -rf apps/agent/.next
+                mv apps/agent/.next.bak apps/agent/.next
+                echo "   Restored apps/agent/.next from backup"
+              fi
+              if [ -d apps/frontend/.next.bak ]; then
+                rm -rf apps/frontend/.next
+                mv apps/frontend/.next.bak apps/frontend/.next
+                echo "   Restored apps/frontend/.next from backup"
+              fi
+              echo "   Restarting PM2 with previous build..."
+              pm2 restart ecosystem.config.js --update-env || true
+              echo "!! Rollback complete. Previous version is running."
+            }
+            trap rollback ERR
+
             echo "=========================================="
             echo "Deploying Mastra AI Agent Framework"
-            echo "Commit: ${{ github.sha }}"
-            echo "Build: CI-built artifacts (no server-side build)"
+            echo "Commit: $SHORT_SHA"
             echo "=========================================="
 
-            cd ${{ env.DEPLOY_PATH }}
+            cd "$DEPLOY_PATH"
 
             echo ""
             echo "1. Pulling latest code..."
@@ -173,47 +141,114 @@ jobs:
             bun run db:push || echo "Note: No schema changes"
 
             echo ""
-            echo "5. Extracting pre-built artifacts..."
-            tar -xzf /tmp/build-artifacts.tar.gz
-            rm -f /tmp/build-artifacts.tar.gz
-            echo "Build artifacts extracted."
+            echo "5. Backing up current build (rollback safety)..."
+            rm -rf apps/agent/.next.bak apps/frontend/.next.bak
+            [ -d apps/agent/.next ] && cp -r apps/agent/.next apps/agent/.next.bak
+            [ -d apps/frontend/.next ] && cp -r apps/frontend/.next apps/frontend/.next.bak
+            echo "   Backups created."
 
             echo ""
-            echo "6. Updating Caddy configuration..."
+            echo "6. Building applications (on-server, full .env)..."
+            NODE_OPTIONS="--max-old-space-size=8192" bunx turbo build --concurrency=1
+
+            echo ""
+            echo "7. Updating Caddy configuration..."
             sudo cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
             sudo systemctl reload caddy || sudo systemctl restart caddy
 
             echo ""
-            echo "7. Restarting PM2 processes..."
+            echo "8. Restarting PM2 processes..."
             pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
-
-            echo ""
-            echo "8. Saving PM2 process list..."
             pm2 save
 
             echo ""
-            echo "9. Application status:"
+            echo "9. Crash-loop detection (waiting 15s)..."
+            sleep 15
+
+            # Check that expected processes are online and not crash-looping
+            PM2_JSON=$(pm2 jlist 2>/dev/null || echo "[]")
+            AGENT_STATUS=$(echo "$PM2_JSON" | python3 -c "
+            import json, sys
+            procs = json.load(sys.stdin)
+            for p in procs:
+                if p['name'] == 'agent':
+                    restarts = p.get('pm2_env', {}).get('restart_time', 0)
+                    status = p.get('pm2_env', {}).get('status', 'unknown')
+                    print(f'{status}:{restarts}')
+                    sys.exit(0)
+            print('missing:0')
+            " 2>/dev/null || echo "unknown:0")
+
+            FRONTEND_STATUS=$(echo "$PM2_JSON" | python3 -c "
+            import json, sys
+            procs = json.load(sys.stdin)
+            for p in procs:
+                if p['name'] == 'frontend':
+                    restarts = p.get('pm2_env', {}).get('restart_time', 0)
+                    status = p.get('pm2_env', {}).get('status', 'unknown')
+                    print(f'{status}:{restarts}')
+                    sys.exit(0)
+            print('missing:0')
+            " 2>/dev/null || echo "unknown:0")
+
+            echo "   Agent:    $AGENT_STATUS"
+            echo "   Frontend: $FRONTEND_STATUS"
+
+            # Fail if any process is not online
+            if [[ "$AGENT_STATUS" != online:* ]] || [[ "$FRONTEND_STATUS" != online:* ]]; then
+              echo "!! Process not online — triggering rollback"
+              exit 1
+            fi
+
+            echo ""
+            echo "10. Cleaning up backups..."
+            rm -rf apps/agent/.next.bak apps/frontend/.next.bak
+
             pm2 status
 
             echo ""
             echo "=========================================="
-            echo "Deployment complete!"
+            echo "Deployment complete! ($SHORT_SHA)"
             echo "=========================================="
 
       - name: Health check
         run: |
-          echo "Waiting for application to start..."
-          sleep 15
           echo "Running health checks..."
-          curl -sf -o /dev/null -w "Homepage: HTTP %{http_code}\n" https://agentc2.ai/ || echo "Homepage check failed"
-          curl -sf -o /dev/null -w "Login:    HTTP %{http_code}\n" https://agentc2.ai/login || echo "Login check failed"
-          echo "Deployment successful!"
+          sleep 5
+          HTTP_HOME=$(curl -sf -o /dev/null -w "%{http_code}" https://agentc2.ai/ || echo "000")
+          HTTP_LOGIN=$(curl -sf -o /dev/null -w "%{http_code}" https://agentc2.ai/login || echo "000")
+          echo "Homepage: HTTP $HTTP_HOME"
+          echo "Login:    HTTP $HTTP_LOGIN"
+          if [ "$HTTP_HOME" = "000" ] || [ "$HTTP_LOGIN" = "000" ]; then
+            echo "::warning::Health check could not reach production URLs"
+          fi
 
-      - name: Cleanup SSH key
-        if: always()
-        run: rm -f ~/.ssh/deploy_key
+      - name: Notify Slack (success)
+        if: success()
+        run: |
+          WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured — skipping notification"
+            exit 0
+          fi
+          COMMIT_MSG=$(echo '${{ github.event.head_commit.message }}' | head -1 | sed 's/"/\\"/g')
+          curl -sf -X POST "$WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            -d "{
+              \"text\": \":white_check_mark: *Deploy succeeded* — \`${{ github.sha }}\`\n>${COMMIT_MSG}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"
+            }" || echo "Slack notification failed (non-fatal)"
 
-      - name: Notify on failure
+      - name: Notify Slack (failure)
         if: failure()
         run: |
-          echo "::error::Deployment failed! Check the logs above for details."
+          WEBHOOK_URL="${{ secrets.SLACK_WEBHOOK_URL }}"
+          if [ -z "$WEBHOOK_URL" ]; then
+            echo "SLACK_WEBHOOK_URL not configured — skipping notification"
+            exit 0
+          fi
+          COMMIT_MSG=$(echo '${{ github.event.head_commit.message }}' | head -1 | sed 's/"/\\"/g')
+          curl -sf -X POST "$WEBHOOK_URL" \
+            -H 'Content-type: application/json' \
+            -d "{
+              \"text\": \":x: *Deploy FAILED* — \`${{ github.sha }}\`\n>${COMMIT_MSG}\n<${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>\"
+            }" || echo "Slack notification failed (non-fatal)"

@@ -32,8 +32,8 @@ module.exports = {
             error_file: "/var/log/pm2/frontend-error.log",
             out_file: "/var/log/pm2/frontend-out.log",
             merge_logs: true,
-            // Memory management
-            max_memory_restart: "1G"
+            // Memory management (32GB server)
+            max_memory_restart: "2G"
         },
         {
             name: "agent",
@@ -59,8 +59,8 @@ module.exports = {
             error_file: "/var/log/pm2/agent-error.log",
             out_file: "/var/log/pm2/agent-out.log",
             merge_logs: true,
-            // Memory management - agent needs more for MCP processes
-            max_memory_restart: "2G"
+            // Memory management - agent needs more for MCP processes (32GB server)
+            max_memory_restart: "4G"
         },
         {
             name: "admin",
