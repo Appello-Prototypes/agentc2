@@ -151,7 +151,23 @@ const CampaignAarSchema = z.object({
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const campaignAnalyzeFunction = inngest.createFunction(
-    { id: "campaign-analyze", retries: 2 },
+    {
+        id: "campaign-analyze",
+        retries: 2,
+        onFailure: async ({ event, error }) => {
+            const { campaignId } = event.data.event.data;
+            console.error(`[Campaign] Analysis failed for ${campaignId}:`, error.message);
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: { status: CampaignStatus.FAILED }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "failed",
+                `Campaign analysis failed after all retries: ${error.message}`
+            );
+        }
+    },
     { event: "campaign/analyze" },
     async ({ event, step }) => {
         const { campaignId } = event.data;
@@ -272,7 +288,23 @@ Be thorough but practical. Don't over-decompose -- each task should map to a sin
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const campaignPlanFunction = inngest.createFunction(
-    { id: "campaign-plan", retries: 2 },
+    {
+        id: "campaign-plan",
+        retries: 2,
+        onFailure: async ({ event, error }) => {
+            const { campaignId } = event.data.event.data;
+            console.error(`[Campaign] Planning failed for ${campaignId}:`, error.message);
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: { status: CampaignStatus.FAILED }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "failed",
+                `Campaign planning failed after all retries: ${error.message}`
+            );
+        }
+    },
     { event: "campaign/plan" },
     async ({ event, step }) => {
         const { campaignId } = event.data;
@@ -427,7 +459,23 @@ Provide token and cost estimates per task.`
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const campaignExecuteFunction = inngest.createFunction(
-    { id: "campaign-execute", retries: 1 },
+    {
+        id: "campaign-execute",
+        retries: 1,
+        onFailure: async ({ event, error }) => {
+            const { campaignId } = event.data.event.data;
+            console.error(`[Campaign] Execution failed for ${campaignId}:`, error.message);
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: { status: CampaignStatus.FAILED }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "failed",
+                `Campaign execution failed after all retries: ${error.message}`
+            );
+        }
+    },
     { event: "campaign/execute" },
     async ({ event, step }) => {
         const { campaignId } = event.data;
@@ -501,7 +549,27 @@ export const campaignExecuteFunction = inngest.createFunction(
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const missionExecuteFunction = inngest.createFunction(
-    { id: "mission-execute", retries: 1 },
+    {
+        id: "mission-execute",
+        retries: 1,
+        onFailure: async ({ event, error }) => {
+            const { campaignId, missionId } = event.data.event.data;
+            console.error(
+                `[Mission] Execution failed for mission ${missionId} in campaign ${campaignId}:`,
+                error.message
+            );
+            await prisma.mission.update({
+                where: { id: missionId },
+                data: { status: MissionStatus.FAILED }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "mission_failed",
+                `Mission ${missionId} failed after all retries: ${error.message}`,
+                { missionId }
+            );
+        }
+    },
     { event: "mission/execute" },
     async ({ event, step }) => {
         const { campaignId, missionId } = event.data;

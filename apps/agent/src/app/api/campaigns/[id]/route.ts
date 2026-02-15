@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma, CampaignStatus, MissionStatus } from "@repo/database";
+import { prisma, Prisma, CampaignStatus, MissionStatus } from "@repo/database";
 import { inngest } from "@/lib/inngest";
 import { getDemoSession } from "@/lib/standalone-auth";
 
@@ -210,6 +210,56 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
                     return NextResponse.json({
                         message: "Campaign resumed"
+                    });
+                }
+
+                case "retry": {
+                    // Retry a stuck PLANNING or FAILED campaign
+                    if (
+                        campaign.status !== CampaignStatus.PLANNING &&
+                        campaign.status !== CampaignStatus.FAILED
+                    ) {
+                        return NextResponse.json(
+                            {
+                                error: "Can only retry campaigns in PLANNING or FAILED status"
+                            },
+                            { status: 400 }
+                        );
+                    }
+
+                    // Reset status to PLANNING and re-trigger analysis
+                    await prisma.campaign.update({
+                        where: { id },
+                        data: {
+                            status: CampaignStatus.PLANNING,
+                            analysisOutput: Prisma.DbNull,
+                            executionPlan: Prisma.DbNull,
+                            aarJson: Prisma.DbNull,
+                            progress: 0,
+                            completedAt: null
+                        }
+                    });
+
+                    // Clean up any existing missions/tasks from a failed run
+                    await prisma.mission.deleteMany({
+                        where: { campaignId: id }
+                    });
+
+                    await inngest.send({
+                        name: "campaign/analyze",
+                        data: { campaignId: id }
+                    });
+
+                    await prisma.campaignLog.create({
+                        data: {
+                            campaignId: id,
+                            event: "retried",
+                            message: "Campaign analysis re-triggered by user"
+                        }
+                    });
+
+                    return NextResponse.json({
+                        message: "Campaign retry started"
                     });
                 }
 

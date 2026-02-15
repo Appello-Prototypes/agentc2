@@ -73,11 +73,30 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        // Trigger analysis via Inngest
-        await inngest.send({
-            name: "campaign/analyze",
-            data: { campaignId: campaign.id }
-        });
+        // Trigger analysis via Inngest (non-blocking -- campaign is already saved)
+        try {
+            await inngest.send({
+                name: "campaign/analyze",
+                data: { campaignId: campaign.id }
+            });
+        } catch (inngestError) {
+            console.error(
+                `[Campaigns API] Failed to send Inngest event for campaign ${campaign.id}:`,
+                inngestError
+            );
+            // Update campaign to FAILED so it doesn't appear stuck
+            await prisma.campaign.update({
+                where: { id: campaign.id },
+                data: { status: CampaignStatus.FAILED }
+            });
+            await prisma.campaignLog.create({
+                data: {
+                    campaignId: campaign.id,
+                    event: "failed",
+                    message: "Failed to trigger campaign analysis (Inngest send failed)"
+                }
+            });
+        }
 
         console.log(`[Campaigns API] Created campaign: ${campaign.id} (${campaign.slug})`);
 
