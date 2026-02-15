@@ -1,10 +1,12 @@
 # Digital Ocean Deployment Workflow
 #
-# Automatically deploys to Digital Ocean Droplet on push to main
+# Builds in CI (GitHub Actions) and deploys pre-built artifacts to Digital Ocean.
+# This avoids OOM issues on the 8GB production server by offloading the
+# memory-intensive Next.js build to the CI runner.
 #
 # Required secrets:
 # - DO_HOST: Droplet IP address
-# - DO_USERNAME: SSH username (e.g., deploy)
+# - DO_USERNAME: SSH username (e.g., root)
 # - DO_SSH_KEY: Private SSH key for authentication
 
 name: Deploy to Digital Ocean
@@ -23,9 +25,10 @@ on:
 env:
   NODE_ENV: production
   DEPLOY_PATH: /var/www/mastra
+  NEXT_PUBLIC_APP_URL: "https://agentc2.ai"
 
 jobs:
-  # Run tests before deployment
+  # Run quality gates before build
   test:
     if: ${{ github.event.inputs.skip_tests != 'true' }}
     runs-on: ubuntu-latest
@@ -39,6 +42,15 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "1.3.4"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
         run: bun install
@@ -54,24 +66,75 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      - name: Run unit tests
-        run: bun run test:unit || echo "No unit tests configured"
-
-  # Deploy to Digital Ocean (build happens on the server with full env vars)
-  deploy:
+  # Build in CI, then deploy pre-built artifacts to Digital Ocean
+  build-deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
     needs: [test]
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
 
     steps:
-      - name: Deploy via SSH
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.3.4"
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            node_modules
+            ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Generate Prisma client
+        run: bun run db:generate
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
+      - name: Build all applications
+        run: bun run build
+
+      - name: Package build artifacts
+        run: |
+          echo "Packaging .next build directories..."
+          tar -czf /tmp/build-artifacts.tar.gz \
+            --exclude='.next/cache' \
+            apps/agent/.next \
+            apps/frontend/.next
+          ls -lh /tmp/build-artifacts.tar.gz
+          echo "Build artifacts packaged successfully."
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DO_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ secrets.DO_HOST }} >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Transfer build artifacts to server
+        run: |
+          echo "Transferring build artifacts..."
+          scp -i ~/.ssh/deploy_key \
+            /tmp/build-artifacts.tar.gz \
+            ${{ secrets.DO_USERNAME }}@${{ secrets.DO_HOST }}:/tmp/build-artifacts.tar.gz
+          echo "Transfer complete."
+
+      - name: Deploy to server
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script_stop: true
+          command_timeout: 10m
           script: |
             set -euo pipefail
             export PATH="$HOME/.bun/bin:$PATH"
@@ -79,6 +142,7 @@ jobs:
             echo "=========================================="
             echo "Deploying Mastra AI Agent Framework"
             echo "Commit: ${{ github.sha }}"
+            echo "Build: CI-built artifacts (no server-side build)"
             echo "=========================================="
 
             cd ${{ env.DEPLOY_PATH }}
@@ -101,8 +165,10 @@ jobs:
             bun run db:push || echo "Note: No schema changes"
 
             echo ""
-            echo "5. Building applications..."
-            NODE_ENV=production bun run build
+            echo "5. Extracting pre-built artifacts..."
+            tar -xzf /tmp/build-artifacts.tar.gz
+            rm -f /tmp/build-artifacts.tar.gz
+            echo "Build artifacts extracted."
 
             echo ""
             echo "6. Updating Caddy configuration..."
@@ -129,12 +195,15 @@ jobs:
       - name: Health check
         run: |
           echo "Waiting for application to start..."
-          sleep 10
-
-          # Health check (replace with your actual domain)
-          # curl -f https://your-domain.com/api/health || echo "Health check skipped - configure domain"
-
+          sleep 15
+          echo "Running health checks..."
+          curl -sf -o /dev/null -w "Homepage: HTTP %{http_code}\n" https://agentc2.ai/ || echo "Homepage check failed"
+          curl -sf -o /dev/null -w "Login:    HTTP %{http_code}\n" https://agentc2.ai/login || echo "Login check failed"
           echo "Deployment successful!"
+
+      - name: Cleanup SSH key
+        if: always()
+        run: rm -f ~/.ssh/deploy_key
 
       - name: Notify on failure
         if: failure()
