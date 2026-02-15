@@ -165,40 +165,12 @@ jobs:
             echo "9. Crash-loop detection (waiting 15s)..."
             sleep 15
 
-            # Check that expected processes are online and not crash-looping
-            PM2_JSON=$(pm2 jlist 2>/dev/null || echo "[]")
-            AGENT_STATUS=$(echo "$PM2_JSON" | python3 -c "
-            import json, sys
-            procs = json.load(sys.stdin)
-            for p in procs:
-                if p['name'] == 'agent':
-                    restarts = p.get('pm2_env', {}).get('restart_time', 0)
-                    status = p.get('pm2_env', {}).get('status', 'unknown')
-                    print(f'{status}:{restarts}')
-                    sys.exit(0)
-            print('missing:0')
-            " 2>/dev/null || echo "unknown:0")
-
-            FRONTEND_STATUS=$(echo "$PM2_JSON" | python3 -c "
-            import json, sys
-            procs = json.load(sys.stdin)
-            for p in procs:
-                if p['name'] == 'frontend':
-                    restarts = p.get('pm2_env', {}).get('restart_time', 0)
-                    status = p.get('pm2_env', {}).get('status', 'unknown')
-                    print(f'{status}:{restarts}')
-                    sys.exit(0)
-            print('missing:0')
-            " 2>/dev/null || echo "unknown:0")
-
+            # Check that expected processes are online (simple grep, no multiline python)
+            AGENT_STATUS=$(pm2 show agent 2>/dev/null | grep -oP 'status\s+│\s+\K\S+' || echo "missing")
+            FRONTEND_STATUS=$(pm2 show frontend 2>/dev/null | grep -oP 'status\s+│\s+\K\S+' || echo "missing")
             echo "   Agent:    $AGENT_STATUS"
             echo "   Frontend: $FRONTEND_STATUS"
-
-            # Fail if any process is not online
-            if [[ "$AGENT_STATUS" != online:* ]] || [[ "$FRONTEND_STATUS" != online:* ]]; then
-              echo "!! Process not online — triggering rollback"
-              exit 1
-            fi
+            if [ "$AGENT_STATUS" != "online" ] || [ "$FRONTEND_STATUS" != "online" ]; then echo "!! Process not online — triggering rollback"; exit 1; fi
 
             echo ""
             echo "10. Cleaning up backups..."
