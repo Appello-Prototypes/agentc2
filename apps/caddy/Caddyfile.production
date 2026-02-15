@@ -29,7 +29,7 @@ agentc2.ai {
         -Server
     }
 
-    # Public landing page — route to agent app (server-side token lookup + redirect)
+    # Public landing page — route to agent app (server-rendered welcome page)
     @landing_page {
         expression `{http.request.uri.path} == "/"`
     }
