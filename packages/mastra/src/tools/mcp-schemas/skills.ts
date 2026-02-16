@@ -136,7 +136,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
     {
         name: "agent-attach-skill",
         description:
-            "Attach a skill to an agent. Set pinned=true to inject skill tools directly, or false (default) for discoverable via meta-tools.",
+            "Attach a skill to an agent. Skills are pinned by default (tools injected directly). Set pinned=false for discoverable via meta-tools.",
         inputSchema: {
             type: "object",
             properties: {
@@ -145,7 +145,7 @@ export const skillToolDefinitions: McpToolDefinition[] = [
                 pinned: {
                     type: "boolean",
                     description:
-                        "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: false."
+                        "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: true."
                 }
             },
             required: ["agentId", "skillId"]

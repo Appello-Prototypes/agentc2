@@ -239,7 +239,7 @@ export const skillDetachToolTool = createTool({
 export const agentAttachSkillTool = createTool({
     id: "agent-attach-skill",
     description:
-        "Attach a skill to an agent. Set pinned=true to inject skill tools directly, or false (default) for discoverable via meta-tools.",
+        "Attach a skill to an agent. Skills are pinned by default (tools injected directly). Set pinned=false for discoverable via meta-tools.",
     inputSchema: z.object({
         agentId: z.string(),
         skillId: z.string(),
@@ -247,7 +247,7 @@ export const agentAttachSkillTool = createTool({
             .boolean()
             .optional()
             .describe(
-                "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: false."
+                "Pin the skill (tools injected directly) vs discoverable (via meta-tools). Default: true."
             )
     }),
     outputSchema: baseOutputSchema,

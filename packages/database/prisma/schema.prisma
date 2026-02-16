@@ -2866,7 +2866,7 @@ model AgentSkill {
     agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
     skillId String
     skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
-    pinned  Boolean @default(false) // true = always loaded at resolution, false = discoverable via meta-tools
+    pinned  Boolean @default(true) // true = always loaded at resolution (default), false = discoverable via meta-tools
 
     @@unique([agentId, skillId])
     @@map("agent_skill")

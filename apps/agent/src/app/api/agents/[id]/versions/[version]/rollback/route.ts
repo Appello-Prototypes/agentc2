@@ -112,7 +112,7 @@ export async function POST(
                 data: skills.map((s) => ({
                     agentId: agent.id,
                     skillId: s.skillId,
-                    pinned: s.pinned ?? false
+                    pinned: s.pinned ?? true
                 }))
             });
         }

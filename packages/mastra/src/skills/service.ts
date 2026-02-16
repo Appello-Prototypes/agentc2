@@ -430,7 +430,7 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
 
 /**
  * Attach a skill to an agent (creates agent version)
- * @param pinned - If true, skill tools are injected directly. If false (default), skill is discoverable via meta-tools.
+ * @param pinned - If true (default), skill tools are injected directly. If false, skill is discoverable via meta-tools.
  */
 export async function attachToAgent(
     agentIdOrSlug: string,
@@ -447,7 +447,7 @@ export async function attachToAgent(
     });
 
     const junction = await prisma.agentSkill.create({
-        data: { agentId, skillId, pinned: pinned ?? false }
+        data: { agentId, skillId, pinned: pinned ?? true }
     });
 
     // Create agent version after the skill is attached
