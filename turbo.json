@@ -1,19 +1,23 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "globalEnv": [
-    "DATABASE_URL",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "BETTER_AUTH_SECRET",
-    "OTEL_EXPORTER_OTLP_ENDPOINT",
-    "OTEL_EXPORTER_OTLP_HEADERS",
-    "NGROK_DOMAIN",
-    "NGROK_AUTHTOKEN"
+    "NEXT_PUBLIC_APP_URL"
   ],
   "ui": "tui",
   "tasks": {
     "build": {
       "dependsOn": ["^build", "^db:generate"],
+      "inputs": [
+        "src/**",
+        "app/**",
+        "*.ts",
+        "*.tsx",
+        "*.mjs",
+        "*.json",
+        "!**/*.test.*",
+        "!**/*.spec.*",
+        "!**/__tests__/**"
+      ],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"]
     },
     "dev": {
@@ -22,16 +26,19 @@
       "persistent": true
     },
     "lint": {
-      "dependsOn": ["^build", "^db:generate"]
+      "dependsOn": ["^build", "^db:generate"],
+      "inputs": ["src/**", "app/**", "*.ts", "*.tsx", "*.mjs", "*.json", "eslint.config.*"]
     },
     "type-check": {
-      "dependsOn": ["^build", "^db:generate"]
+      "dependsOn": ["^build", "^db:generate"],
+      "inputs": ["src/**", "app/**", "*.ts", "*.tsx", "*.mjs", "*.json", "tsconfig.json"]
     },
     "clean": {
       "cache": false
     },
     "db:generate": {
-      "cache": false
+      "inputs": ["prisma/schema.prisma", "prisma/migrations/**"],
+      "outputs": []
     },
     "db:push": {
       "cache": false
