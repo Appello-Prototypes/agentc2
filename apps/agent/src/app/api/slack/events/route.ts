@@ -33,10 +33,11 @@ async function isThreadActive(
     threadTs: string
 ): Promise<boolean> {
     try {
-        // Check new format first
+        // Check new format first (no source filter -- threads can be started by
+        // agents with any source, e.g. "event" for email triage, "api" for scheduled tasks)
         const newFormatId = `slack-${teamId}-${channelId}-${threadTs}`;
         const priorRun = await prisma.agentRun.findFirst({
-            where: { threadId: newFormatId, source: "slack" },
+            where: { threadId: newFormatId },
             select: { id: true }
         });
         if (priorRun) return true;
@@ -44,7 +45,7 @@ async function isThreadActive(
         // Fallback: check legacy format for backward compatibility
         const legacyFormatId = `slack-${channelId}-${threadTs}`;
         const legacyRun = await prisma.agentRun.findFirst({
-            where: { threadId: legacyFormatId, source: "slack" },
+            where: { threadId: legacyFormatId },
             select: { id: true }
         });
         if (legacyRun) return true;
@@ -102,6 +103,55 @@ async function detectFeedbackReply(threadTs: string): Promise<{
         console.warn("[Slack] Feedback detection query failed:", error);
     }
     return { isFeedback: false };
+}
+
+/**
+ * Resolve which agent originally created a Slack thread by posting its root message.
+ * First checks ChatMessage metadata (fast path), then falls back to AgentToolCall query.
+ * Returns the agent slug if found, or null if the thread wasn't started by an agent.
+ */
+async function resolveThreadOriginAgent(threadTs: string): Promise<string | null> {
+    try {
+        // Fast path: ChatMessage metadata stores agentSlug when bot posts a message
+        const chatMsg = await prisma.chatMessage.findFirst({
+            where: { messageTs: threadTs },
+            select: { metadata: true }
+        });
+        if (chatMsg?.metadata) {
+            const meta =
+                typeof chatMsg.metadata === "object" ? (chatMsg.metadata as Record<string, unknown>) : null;
+            if (meta?.agentSlug && typeof meta.agentSlug === "string") {
+                return meta.agentSlug;
+            }
+            // Some older records store agentId but not slug -- look up slug from agentId
+            if (meta?.agentId && typeof meta.agentId === "string") {
+                const agent = await prisma.agent.findUnique({
+                    where: { id: meta.agentId },
+                    select: { slug: true }
+                });
+                if (agent?.slug) return agent.slug;
+            }
+        }
+
+        // Fallback: query AgentToolCall for the slack_post_message that created this thread
+        const result: Array<{ agentSlug: string }> = await prisma.$queryRaw`
+            SELECT a.slug as "agentSlug"
+            FROM agent_tool_call atc
+            JOIN agent_run ar ON ar.id = atc."runId"
+            JOIN agent a ON a.id = ar."agentId"
+            WHERE atc."toolKey" = 'slack_slack_post_message'
+              AND atc.success = true
+              AND atc."outputJson"->>'ts' = ${threadTs}
+            ORDER BY atc."createdAt" DESC
+            LIMIT 1
+        `;
+        if (result.length > 0) {
+            return result[0].agentSlug;
+        }
+    } catch (error) {
+        console.warn("[Slack] Thread-origin agent lookup failed:", error);
+    }
+    return null;
 }
 
 /**
@@ -905,6 +955,7 @@ interface ProcessMessageResult {
     identity: { username?: string; icon_emoji?: string; icon_url?: string };
     runId?: string;
     agentId?: string;
+    agentSlug?: string;
 }
 
 /**
@@ -1152,7 +1203,8 @@ async function processMessage(
             text: markdownToSlack(response.text || "I'm sorry, I couldn't generate a response."),
             identity,
             runId: run.runId,
-            agentId
+            agentId,
+            agentSlug: slug
         };
     } catch (error) {
         // Record the failure
@@ -1163,7 +1215,8 @@ async function processMessage(
             text: "I encountered an error processing your message. Please try again.",
             identity,
             runId: run.runId,
-            agentId
+            agentId,
+            agentSlug: slug
         };
     }
 }
@@ -1282,6 +1335,17 @@ export async function POST(request: NextRequest) {
                     return;
                 }
 
+                // If no explicit agent directive and this is a thread reply,
+                // route to the agent that originally created the thread
+                let resolvedSlug = directive.slug || undefined;
+                if (!resolvedSlug && mentionEvent.thread_ts) {
+                    const originSlug = await resolveThreadOriginAgent(mentionEvent.thread_ts);
+                    if (originSlug) {
+                        console.log(`[Slack] Thread-origin routing: ${originSlug}`);
+                        resolvedSlug = originSlug;
+                    }
+                }
+
                 // Show "thinking" reaction while processing
                 await addReaction(mentionEvent.channel, mentionEvent.ts, "eyes", token);
 
@@ -1293,7 +1357,7 @@ export async function POST(request: NextRequest) {
                         threadTs,
                         mentionEvent.ts,
                         installation,
-                        directive.slug || undefined
+                        resolvedSlug
                     );
 
                     const slackResponse = await sendSlackMessageSafe(
@@ -1318,6 +1382,7 @@ export async function POST(request: NextRequest) {
                                 metadata: {
                                     runId: result.runId,
                                     agentId: result.agentId,
+                                    agentSlug: result.agentSlug,
                                     isBot: true,
                                     threadTs
                                 }
@@ -1523,8 +1588,10 @@ export async function POST(request: NextRequest) {
                     messageEvent.thread_ts
                 ));
 
-            // Feedback detection: check if this thread reply is feedback on an agent-posted message
-            if (messageEvent.thread_ts) {
+            // Feedback detection: check if this thread reply is feedback on an agent-posted message.
+            // Skip feedback detection for DMs -- in DMs, thread replies are conversations,
+            // not feedback. Feedback in DMs is collected via emoji reactions instead.
+            if (messageEvent.thread_ts && !isDM) {
                 const feedbackCheck = await detectFeedbackReply(messageEvent.thread_ts);
                 if (feedbackCheck.isFeedback && feedbackCheck.runId && feedbackCheck.agentId) {
                     // Check for opt-out: if the reply starts with @bot or agent:, treat as conversation
@@ -1552,7 +1619,15 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            if (isDM || isActiveThreadReply) {
+            // For DMs with a thread_ts that aren't already active via AgentRun,
+            // check if the thread was started by an agent tool call (e.g. email triage DM)
+            const isAgentOriginThread =
+                isDM &&
+                messageEvent.thread_ts &&
+                !isActiveThreadReply &&
+                (await resolveThreadOriginAgent(messageEvent.thread_ts)) !== null;
+
+            if (isDM || isActiveThreadReply || isAgentOriginThread) {
                 const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);
 
                 setImmediate(async () => {
@@ -1575,6 +1650,17 @@ export async function POST(request: NextRequest) {
                         return;
                     }
 
+                    // If no explicit agent directive and this is a thread reply,
+                    // route to the agent that originally created the thread
+                    let resolvedSlug = directive.slug || undefined;
+                    if (!resolvedSlug && messageEvent.thread_ts) {
+                        const originSlug = await resolveThreadOriginAgent(messageEvent.thread_ts);
+                        if (originSlug) {
+                            console.log(`[Slack] Thread-origin routing: ${originSlug}`);
+                            resolvedSlug = originSlug;
+                        }
+                    }
+
                     // Show "thinking" reaction while processing
                     await addReaction(messageEvent.channel, messageEvent.ts, "eyes", token);
 
@@ -1586,7 +1672,7 @@ export async function POST(request: NextRequest) {
                             threadTs,
                             messageEvent.ts,
                             installation,
-                            directive.slug || undefined
+                            resolvedSlug
                         );
 
                         const slackResponse = await sendSlackMessageSafe(
@@ -1611,6 +1697,7 @@ export async function POST(request: NextRequest) {
                                     metadata: {
                                         runId: result.runId,
                                         agentId: result.agentId,
+                                        agentSlug: result.agentSlug,
                                         isBot: true,
                                         threadTs
                                     }
