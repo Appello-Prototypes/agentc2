@@ -161,11 +161,9 @@ jobs:
 
             echo ""
             echo "6. Cleaning stale builds and caches..."
-            pgrep -f "node.*next build" | xargs kill 2>/dev/null || true
-            sleep 2
             rm -rf apps/agent/.next/cache apps/frontend/.next/cache apps/admin/.next/cache 2>/dev/null || true
             rm -f apps/agent/.next/lock apps/frontend/.next/lock apps/admin/.next/lock 2>/dev/null || true
-            echo "   Killed orphans, removed stale caches and locks."
+            echo "   Removed stale caches and locks."
 
             echo ""
             echo "7. Building applications (on-server, full .env, 24GB heap, remote cache)..."
