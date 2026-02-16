@@ -20,8 +20,20 @@ function isStandaloneDeployment(): boolean {
  * Note: Next.js 16 renamed middleware to proxy
  */
 async function proxy(request: NextRequest) {
-    // Allow unauthenticated access to root page (public landing)
+    // Root page: redirect authenticated users to /workspace, otherwise show public landing
     if (request.nextUrl.pathname === "/") {
+        try {
+            const session = await auth.api.getSession({
+                headers: await headers()
+            });
+            if (session) {
+                const url = request.nextUrl.clone();
+                url.pathname = "/workspace";
+                return NextResponse.redirect(url);
+            }
+        } catch {
+            // Auth check failed — fall through to public landing
+        }
         return NextResponse.next();
     }
 

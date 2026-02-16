@@ -41,27 +41,39 @@ const nextConfig: NextConfig = {
     // This dramatically reduces build time by preventing webpack from parsing large dependency trees.
     serverExternalPackages: [
         // WhatsApp + image processing
-        "@whiskeysockets/baileys", "jimp", "sharp", "pdf-parse", "pdfjs-dist",
+        "@whiskeysockets/baileys",
+        "jimp",
+        "sharp",
+        "pdf-parse",
+        "pdfjs-dist",
         // BIM (web-ifc is ~2MB+ native parser)
         "web-ifc",
         // Google (very large API client surface)
-        "googleapis", "google-auth-library",
+        "googleapis",
+        "google-auth-library",
         // MCP protocol
         "@modelcontextprotocol/sdk",
         // Channel SDKs
-        "grammy", "twilio",
+        "grammy",
+        "twilio",
         // Background jobs
         "inngest",
         // Mastra framework packages (server-only, no need to bundle)
-        "@mastra/core", "@mastra/mcp", "@mastra/rag", "@mastra/memory",
-        "@mastra/pg", "@mastra/voice-elevenlabs", "@mastra/voice-openai",
-        "@mastra/evals", "@mastra/observability",
+        "@mastra/core",
+        "@mastra/mcp",
+        "@mastra/rag",
+        "@mastra/memory",
+        "@mastra/pg",
+        "@mastra/voice-elevenlabs",
+        "@mastra/voice-openai",
+        "@mastra/evals",
+        "@mastra/observability",
         // Database
         "@prisma/client",
         // Crypto
         "bcryptjs",
         // AWS (pulled in by BIM storage)
-        "@aws-sdk/client-s3",
+        "@aws-sdk/client-s3"
     ],
     webpack: (config, { isServer }) => {
         if (isServer) {

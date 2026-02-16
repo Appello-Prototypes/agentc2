@@ -12,6 +12,10 @@ const nextConfig: NextConfig = {
     // Namespace static assets so they don't clash with the agent app behind Caddy.
     // Caddy routes /_home/* to the frontend (port 3000).
     assetPrefix: "/_home",
+    // Skip TypeScript checking in build -- verified by CI/local type-check
+    typescript: {
+        ignoreBuildErrors: true
+    },
     env: sharedEnv,
     devIndicators,
     async headers() {

@@ -572,9 +572,6 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
     // Force dark mode on embed pages (no ThemeProvider in this layout)
     useEffect(() => {
         document.documentElement.classList.add("dark");
-        return () => {
-            document.documentElement.classList.remove("dark");
-        };
     }, []);
 
     // Resolve params (Next.js 16 async params)

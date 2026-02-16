@@ -638,7 +638,7 @@ function AgentManagePageContent() {
                                 .filter((m) => m.provider === formData.modelProvider)
                                 .map((m) => (
                                     <SelectItem key={m.name} value={m.name}>
-                                        {m.name}
+                                        {m.displayName}
                                     </SelectItem>
                                 ))}
                         </SelectContent>

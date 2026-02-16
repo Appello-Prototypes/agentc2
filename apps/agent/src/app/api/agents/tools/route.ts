@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAvailableModels } from "@repo/mastra/agents";
+import { getAvailableModelsAsync } from "@repo/mastra/agents";
 import { listMcpToolDefinitions } from "@repo/mastra/mcp";
 import { listAvailableTools, toolCategoryOrder } from "@repo/mastra/tools";
 import { listAvailableScorers } from "@repo/mastra/scorers/registry";
@@ -72,7 +72,7 @@ export async function GET(request: NextRequest) {
         // Combine all tools, marking source for UI differentiation
         const allTools = [...staticTools.map((t) => ({ ...t, source: "registry" })), ...mcpTools];
 
-        const models = getAvailableModels();
+        const models = await getAvailableModelsAsync(authContext?.organizationId ?? null);
         const scorers = listAvailableScorers();
 
         return NextResponse.json({

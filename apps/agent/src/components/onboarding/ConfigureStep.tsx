@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
     Button,
     Card,
@@ -18,6 +18,7 @@ import {
     CollapsibleTrigger
 } from "@repo/ui";
 import { ArrowLeftIcon, ChevronDownIcon, ChevronRightIcon } from "lucide-react";
+import { getApiBase } from "@/lib/utils";
 import type { OnboardingData } from "@/app/onboarding/page";
 
 interface ConfigureStepProps {
@@ -27,7 +28,15 @@ interface ConfigureStepProps {
     onBack: () => void;
 }
 
-const MODELS = [
+interface ModelOption {
+    provider: string;
+    name: string;
+    label: string;
+    description: string;
+}
+
+// Static fallback used while the dynamic list loads
+const FALLBACK_MODELS: ModelOption[] = [
     { provider: "openai", name: "gpt-4o", label: "GPT-4o", description: "Fast and capable" },
     {
         provider: "openai",
@@ -43,8 +52,8 @@ const MODELS = [
     },
     {
         provider: "anthropic",
-        name: "claude-haiku-3-5-20241022",
-        label: "Claude Haiku 3.5",
+        name: "claude-3-5-haiku-20241022",
+        label: "Claude 3.5 Haiku",
         description: "Fast and efficient"
     }
 ];
@@ -60,13 +69,57 @@ export function ConfigureStep({ data, updateData, onContinue, onBack }: Configur
     const isBlankTemplate = data.selectedTemplate?.id === "blank";
     const isValid = data.agentName.trim().length > 0;
     const [showAdvanced, setShowAdvanced] = useState(false);
+    const [models, setModels] = useState<ModelOption[]>(FALLBACK_MODELS);
+
+    // Fetch models dynamically from the API
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await fetch(`${getApiBase()}/api/models`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && Array.isArray(data.models)) {
+                        // Filter to flagship and fast models for onboarding simplicity
+                        const filtered = data.models
+                            .filter(
+                                (m: { category: string; deprecated: boolean }) =>
+                                    !m.deprecated &&
+                                    (m.category === "flagship" || m.category === "fast")
+                            )
+                            .map(
+                                (m: {
+                                    id: string;
+                                    provider: string;
+                                    displayName: string;
+                                    category: string;
+                                }) => ({
+                                    provider: m.provider,
+                                    name: m.id,
+                                    label: m.displayName,
+                                    description:
+                                        m.category === "fast"
+                                            ? "Fast and efficient"
+                                            : "Powerful and capable"
+                                })
+                            );
+                        if (filtered.length > 0) {
+                            setModels(filtered);
+                        }
+                    }
+                }
+            } catch {
+                // Keep fallback models
+            }
+        };
+        fetchModels();
+    }, []);
 
     const slug = slugify(data.agentName);
     const currentModelKey = `${data.modelProvider}:${data.modelName}`;
 
     const handleModelChange = (key: string | null) => {
         if (!key) return;
-        const model = MODELS.find((m) => `${m.provider}:${m.name}` === key);
+        const model = models.find((m) => `${m.provider}:${m.name}` === key);
         if (model) {
             updateData({ modelProvider: model.provider, modelName: model.name });
         }
@@ -131,7 +184,7 @@ export function ConfigureStep({ data, updateData, onContinue, onBack }: Configur
                                 <SelectValue placeholder="Select a model" />
                             </SelectTrigger>
                             <SelectContent>
-                                {MODELS.map((model) => (
+                                {models.map((model) => (
                                     <SelectItem
                                         key={`${model.provider}:${model.name}`}
                                         value={`${model.provider}:${model.name}`}

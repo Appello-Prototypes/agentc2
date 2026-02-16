@@ -1342,7 +1342,7 @@ export default function ConfigurePage() {
                                                 )
                                                 .map((m) => (
                                                     <SelectItem key={m.name} value={m.name}>
-                                                        {m.name}
+                                                        {m.displayName}
                                                     </SelectItem>
                                                 ))}
                                         </SelectContent>
@@ -1732,7 +1732,7 @@ export default function ConfigurePage() {
                                                                     key={m.name}
                                                                     value={m.name}
                                                                 >
-                                                                    {m.name}
+                                                                    {m.displayName}
                                                                 </SelectItem>
                                                             ))}
                                                     </SelectContent>
@@ -1813,7 +1813,7 @@ export default function ConfigurePage() {
                                                                     key={m.name}
                                                                     value={m.name}
                                                                 >
-                                                                    {m.name}
+                                                                    {m.displayName}
                                                                 </SelectItem>
                                                             ))}
                                                     </SelectContent>

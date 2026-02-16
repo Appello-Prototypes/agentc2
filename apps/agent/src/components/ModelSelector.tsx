@@ -1,22 +1,15 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Badge, Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface ModelOption {
     provider: string;
     name: string;
     displayName: string;
+    category?: string;
 }
-
-const AVAILABLE_MODELS: ModelOption[] = [
-    { provider: "openai", name: "gpt-4o", displayName: "GPT-4o" },
-    { provider: "openai", name: "gpt-4o-mini", displayName: "GPT-4o Mini" },
-    { provider: "openai", name: "o3-mini", displayName: "o3-mini" },
-    { provider: "anthropic", name: "claude-opus-4-6", displayName: "Claude Opus 4.6" },
-    { provider: "anthropic", name: "claude-sonnet-4-20250514", displayName: "Claude Sonnet 4" },
-    { provider: "anthropic", name: "claude-sonnet-4-5-20250514", displayName: "Claude Sonnet 4.5" },
-    { provider: "anthropic", name: "claude-haiku-3-5-20241022", displayName: "Claude Haiku 3.5" }
-];
 
 export interface ModelOverride {
     provider: string;
@@ -33,13 +26,56 @@ interface ModelSelectorProps {
 /**
  * Look up a display name for any model string. Falls back to the raw name.
  */
-function getModelDisplayName(modelName: string): string {
-    return AVAILABLE_MODELS.find((m) => m.name === modelName)?.displayName || modelName;
+function getModelDisplayName(modelName: string, models: ModelOption[]): string {
+    return models.find((m) => m.name === modelName)?.displayName || modelName;
+}
+
+/**
+ * Check if a model name belongs to an Anthropic model.
+ */
+export function isAnthropicModel(modelName: string | null): boolean {
+    if (!modelName) return false;
+    return modelName.includes("claude") || modelName.startsWith("anthropic/");
 }
 
 export function ModelSelector({ value, agentDefault, onChange, disabled }: ModelSelectorProps) {
+    const [models, setModels] = useState<ModelOption[]>([]);
+    const [loaded, setLoaded] = useState(false);
     const isOverriding = value !== null;
     const displayValue = value || agentDefault || "";
+
+    useEffect(() => {
+        const fetchModels = async () => {
+            try {
+                const res = await fetch(`${getApiBase()}/api/models`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && Array.isArray(data.models)) {
+                        setModels(
+                            data.models.map(
+                                (m: {
+                                    id: string;
+                                    provider: string;
+                                    displayName: string;
+                                    category?: string;
+                                }) => ({
+                                    provider: m.provider,
+                                    name: m.id,
+                                    displayName: m.displayName,
+                                    category: m.category
+                                })
+                            )
+                        );
+                    }
+                }
+            } catch {
+                // Silently fall back to empty — the selector will still work with raw model names
+            } finally {
+                setLoaded(true);
+            }
+        };
+        fetchModels();
+    }, []);
 
     const handleChange = (modelKey: string | null) => {
         if (!modelKey) return;
@@ -47,19 +83,33 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
             onChange(null);
             return;
         }
-        const model = AVAILABLE_MODELS.find((m) => m.name === modelKey);
+        const model = models.find((m) => m.name === modelKey);
         if (model) {
             onChange({ provider: model.provider, name: model.name });
         }
     };
 
+    // Group models by provider, maintaining sort order from the API
+    const providers = ["openai", "anthropic", "google"];
+    const providerLabels: Record<string, string> = {
+        openai: "OpenAI",
+        anthropic: "Anthropic",
+        google: "Google"
+    };
+
     return (
         <div className="flex items-center gap-1">
-            <Select value={displayValue} onValueChange={handleChange} disabled={disabled}>
+            <Select
+                value={displayValue}
+                onValueChange={handleChange}
+                disabled={disabled || !loaded}
+            >
                 <SelectTrigger className="w-full sm:w-[160px]">
                     <SelectValue placeholder="Model">
                         <div className="flex items-center gap-1">
-                            <span className="text-sm">{getModelDisplayName(displayValue)}</span>
+                            <span className="text-sm">
+                                {getModelDisplayName(displayValue, models)}
+                            </span>
                         </div>
                     </SelectValue>
                 </SelectTrigger>
@@ -67,26 +117,26 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
                     {agentDefault && (
                         <SelectItem value="__default__">
                             <span className="text-muted-foreground">
-                                Agent default ({getModelDisplayName(agentDefault)})
+                                Agent default ({getModelDisplayName(agentDefault, models)})
                             </span>
                         </SelectItem>
                     )}
-                    <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-                        OpenAI
-                    </div>
-                    {AVAILABLE_MODELS.filter((m) => m.provider === "openai").map((m) => (
-                        <SelectItem key={m.name} value={m.name}>
-                            {m.displayName}
-                        </SelectItem>
-                    ))}
-                    <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
-                        Anthropic
-                    </div>
-                    {AVAILABLE_MODELS.filter((m) => m.provider === "anthropic").map((m) => (
-                        <SelectItem key={m.name} value={m.name}>
-                            {m.displayName}
-                        </SelectItem>
-                    ))}
+                    {providers.map((provider) => {
+                        const providerModels = models.filter((m) => m.provider === provider);
+                        if (providerModels.length === 0) return null;
+                        return (
+                            <div key={provider}>
+                                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">
+                                    {providerLabels[provider] || provider}
+                                </div>
+                                {providerModels.map((m) => (
+                                    <SelectItem key={m.name} value={m.name}>
+                                        {m.displayName}
+                                    </SelectItem>
+                                ))}
+                            </div>
+                        );
+                    })}
                 </SelectContent>
             </Select>
             {isOverriding && (
@@ -96,12 +146,4 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
             )}
         </div>
     );
-}
-
-/**
- * Check if a given model name is an Anthropic model
- */
-export function isAnthropicModel(modelName: string | null): boolean {
-    if (!modelName) return false;
-    return AVAILABLE_MODELS.some((m) => m.name === modelName && m.provider === "anthropic");
 }

@@ -32,6 +32,7 @@ import {
     Logout03Icon,
     MailSend01Icon,
     Menu02Icon,
+    PaintBoardIcon,
     MessageMultiple01Icon,
     MoreHorizontalIcon,
     PlayCircleIcon,
@@ -97,5 +98,6 @@ export const iconMap: Record<IconName, IconComponent> = {
     "user-group": UserGroupIcon,
     "mail-send": MailSend01Icon,
     add: Add01Icon,
-    menu: Menu02Icon
+    menu: Menu02Icon,
+    "paint-board": PaintBoardIcon
 };

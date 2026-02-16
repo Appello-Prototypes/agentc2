@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./core": "./src/core.ts",
     "./agents": "./src/agents/index.ts",
+    "./agents/model-registry": "./src/agents/model-registry.ts",
     "./tools": "./src/tools/index.ts",
     "./tools/outlook-mail": "./src/tools/outlook-mail.ts",
     "./tools/outlook-calendar": "./src/tools/outlook-calendar.ts",

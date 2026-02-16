@@ -24,6 +24,13 @@ const settingsNavItems: SettingsNavItem[] = [
         description: "Your personal account settings"
     },
     {
+        id: "appearance",
+        label: "Appearance",
+        href: "/settings/appearance",
+        icon: "paint-board",
+        description: "Theme and display preferences"
+    },
+    {
         id: "security",
         label: "Security",
         href: "/settings/security",

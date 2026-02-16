@@ -551,12 +551,11 @@ function WelcomeNavBar() {
 // ── Main export ──────────────────────────────────────────────────────────
 
 export default function WelcomeEmbed({ embedData, token }: WelcomeEmbedProps) {
-    // Force dark mode
+    // Force dark mode for the public landing page.
+    // Do NOT remove on unmount — let next-themes manage the class
+    // once the user navigates into the authenticated app.
     useEffect(() => {
         document.documentElement.classList.add("dark");
-        return () => {
-            document.documentElement.classList.remove("dark");
-        };
     }, []);
 
     return (

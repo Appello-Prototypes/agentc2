@@ -56,7 +56,7 @@ export function AppProviders({
     children,
     themeProps = {
         attribute: "class",
-        defaultTheme: "system",
+        defaultTheme: "dark",
         enableSystem: true,
         disableTransitionOnChange: true
     },

@@ -17,6 +17,7 @@ import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
 import { getScorersByNames } from "../scorers/registry";
 import { getThreadSkillState } from "../skills/thread-state";
 import { resolveModelForOrg } from "./model-provider";
+import { resolveModelAlias } from "./model-registry";
 
 // Use Prisma namespace for types
 type AgentRecord = Prisma.AgentGetPayload<{
@@ -89,24 +90,14 @@ function normalizeRequestContext(context?: RequestContext): RequestContext {
     };
 }
 
-const MODEL_ALIASES: Record<string, Record<string, string>> = {
-    anthropic: {
-        "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
-        "claude-sonnet-4-5-20250514": "claude-sonnet-4-5-20250929",
-        "claude-opus-4-5": "claude-opus-4-5-20251101",
-        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101"
-    }
-};
-
 function resolveModelName(provider: string, modelName: string) {
-    const alias = MODEL_ALIASES[provider]?.[modelName];
-    if (alias) {
+    const resolved = resolveModelAlias(provider, modelName);
+    if (resolved !== modelName) {
         console.warn(
-            `[AgentResolver] Remapping model ${provider}/${modelName} -> ${provider}/${alias}`
+            `[AgentResolver] Remapping model ${provider}/${modelName} -> ${provider}/${resolved}`
         );
-        return alias;
     }
-    return modelName;
+    return resolved;
 }
 
 /**

@@ -23,6 +23,7 @@ export {
     createAgentFromConfigAsync,
     availableModels,
     getAvailableModels,
+    getAvailableModelsAsync,
     // Agent resolver for database-driven agents
     AgentResolver,
     agentResolver,

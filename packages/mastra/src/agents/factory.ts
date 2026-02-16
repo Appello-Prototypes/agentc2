@@ -12,6 +12,11 @@ import { storage } from "../storage";
 import { getToolsByNames, getToolsByNamesAsync } from "../tools/registry";
 import { getScorersByNames } from "../scorers/registry";
 import { resolveModelForOrg } from "./model-provider";
+import {
+    resolveModelAlias,
+    FALLBACK_AVAILABLE_MODELS,
+    getAvailableModelsAsync as registryGetAvailableModelsAsync
+} from "./model-registry";
 import type { RequestContext } from "./resolver";
 
 /**
@@ -187,24 +192,14 @@ function buildDefaultOptions(config: StoredAgentConfig): object | undefined {
     return Object.keys(options).length > 0 ? options : undefined;
 }
 
-const MODEL_ALIASES: Record<string, Record<string, string>> = {
-    anthropic: {
-        "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",
-        "claude-sonnet-4-5-20250514": "claude-sonnet-4-5-20250929",
-        "claude-opus-4-5": "claude-opus-4-5-20251101",
-        "claude-opus-4-5-20250514": "claude-opus-4-5-20251101"
-    }
-};
-
 function resolveModelName(provider: string, modelName: string) {
-    const alias = MODEL_ALIASES[provider]?.[modelName];
-    if (alias) {
+    const resolved = resolveModelAlias(provider, modelName);
+    if (resolved !== modelName) {
         console.warn(
-            `[Agent Factory] Remapping model ${provider}/${modelName} -> ${provider}/${alias}`
+            `[Agent Factory] Remapping model ${provider}/${modelName} -> ${provider}/${resolved}`
         );
-        return alias;
     }
-    return modelName;
+    return resolved;
 }
 
 /**
@@ -354,30 +349,14 @@ export async function createAgentFromConfigAsync(
 }
 
 /**
- * Available model providers and their models
+ * Available model providers and their models (sync fallback).
+ * Prefer getAvailableModelsAsync() for dynamic, API-driven model lists.
  */
-export const availableModels = {
-    openai: ["gpt-4o", "gpt-4o-mini", "gpt-4-turbo", "gpt-3.5-turbo"],
-    anthropic: [
-        // Claude 4.5 models
-        "claude-opus-4-5-20251101",
-        "claude-sonnet-4-5-20250929",
-        // Claude 4 models
-        "claude-opus-4-20250514",
-        "claude-sonnet-4-20250514",
-        // Claude 3.5 models
-        "claude-3-5-sonnet-20241022",
-        "claude-3-5-haiku-20241022",
-        // Claude 3 models
-        "claude-3-opus-20240229",
-        "claude-3-sonnet-20240229",
-        "claude-3-haiku-20240307"
-    ],
-    google: ["gemini-2.0-flash", "gemini-1.5-pro"]
-};
+export const availableModels = FALLBACK_AVAILABLE_MODELS;
 
 /**
- * Get flat list of all available models for UI
+ * Get flat list of all available models for UI (sync fallback).
+ * Prefer getAvailableModelsAsync() for dynamic, API-driven model lists.
  */
 export function getAvailableModels(): { provider: string; name: string; displayName: string }[] {
     const models: { provider: string; name: string; displayName: string }[] = [];
@@ -394,3 +373,9 @@ export function getAvailableModels(): { provider: string; name: string; displayN
 
     return models;
 }
+
+/**
+ * Get flat list of all available models, dynamically fetched from provider APIs.
+ * Falls back to hardcoded list if APIs are unreachable.
+ */
+export { registryGetAvailableModelsAsync as getAvailableModelsAsync };

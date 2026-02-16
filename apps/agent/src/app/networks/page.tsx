@@ -361,6 +361,9 @@ export default function NetworksPage() {
     const [modelProvider, setModelProvider] = useState("anthropic");
     const [modelName, setModelName] = useState("claude-sonnet-4-20250514");
     const [creating, setCreating] = useState(false);
+    const [availableModels, setAvailableModels] = useState<
+        { provider: string; name: string; displayName: string }[]
+    >([]);
 
     const [selectedNetwork, setSelectedNetwork] = useState<string | null>(null);
     const [runs, setRuns] = useState<NetworkRun[]>([]);
@@ -386,6 +389,29 @@ export default function NetworksPage() {
 
     useEffect(() => {
         fetchStats();
+        // Fetch available models for the create dialog
+        const fetchModels = async () => {
+            try {
+                const res = await fetch(`${getApiBase()}/api/models`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && Array.isArray(data.models)) {
+                        setAvailableModels(
+                            data.models.map(
+                                (m: { id: string; provider: string; displayName: string }) => ({
+                                    provider: m.provider,
+                                    name: m.id,
+                                    displayName: m.displayName
+                                })
+                            )
+                        );
+                    }
+                }
+            } catch {
+                // Silently fail — the free-text fallback still works
+            }
+        };
+        fetchModels();
     }, []);
 
     useEffect(() => {
@@ -505,9 +531,16 @@ export default function NetworksPage() {
                                 <div className="space-y-2">
                                     <Select
                                         value={modelProvider}
-                                        onValueChange={(value) =>
-                                            setModelProvider(value ?? "anthropic")
-                                        }
+                                        onValueChange={(value) => {
+                                            const v = value ?? "anthropic";
+                                            setModelProvider(v);
+                                            const providerModels = availableModels.filter(
+                                                (m) => m.provider === v
+                                            );
+                                            if (providerModels.length > 0) {
+                                                setModelName(providerModels[0].name);
+                                            }
+                                        }}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Model provider" />
@@ -520,11 +553,33 @@ export default function NetworksPage() {
                                     </Select>
                                 </div>
                                 <div className="space-y-2">
-                                    <Input
-                                        placeholder="Model name"
-                                        value={modelName}
-                                        onChange={(e) => setModelName(e.target.value)}
-                                    />
+                                    {availableModels.length > 0 ? (
+                                        <Select
+                                            value={modelName}
+                                            onValueChange={(v) => {
+                                                if (v) setModelName(v);
+                                            }}
+                                        >
+                                            <SelectTrigger>
+                                                <SelectValue placeholder="Select model" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {availableModels
+                                                    .filter((m) => m.provider === modelProvider)
+                                                    .map((m) => (
+                                                        <SelectItem key={m.name} value={m.name}>
+                                                            {m.displayName}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input
+                                            placeholder="Model name"
+                                            value={modelName}
+                                            onChange={(e) => setModelName(e.target.value)}
+                                        />
+                                    )}
                                 </div>
                                 <div className="space-y-2 md:col-span-2">
                                     <Textarea

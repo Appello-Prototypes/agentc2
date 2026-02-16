@@ -10,11 +10,7 @@ import {
 } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import { mastra } from "@repo/mastra/core";
-import {
-    getBimObjectBuffer,
-    ingestBimElementsForVersion,
-    parseIfcBuffer
-} from "@repo/mastra/bim";
+import { getBimObjectBuffer, ingestBimElementsForVersion, parseIfcBuffer } from "@repo/mastra/bim";
 import crypto from "crypto";
 import {
     SIGNAL_THRESHOLDS,

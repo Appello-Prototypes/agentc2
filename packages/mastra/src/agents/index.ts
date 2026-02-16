@@ -17,9 +17,29 @@ export {
     createAgentFromConfig,
     createAgentFromConfigAsync,
     availableModels,
-    getAvailableModels
+    getAvailableModels,
+    getAvailableModelsAsync
 } from "./factory";
 export type { StoredAgentConfig } from "./factory";
+
+// Model registry — centralized, API-driven model information
+export {
+    getModelsForApi,
+    getAllModels,
+    getModelsByProvider,
+    getModelPricingFromRegistry,
+    clearModelCache,
+    resolveModelAlias,
+    MODEL_ALIASES,
+    FALLBACK_AVAILABLE_MODELS
+} from "./model-registry";
+export type {
+    ModelDefinition,
+    ModelProvider,
+    ModelCategory,
+    ModelCapabilities,
+    ModelPricing
+} from "./model-registry";
 
 // Agent resolver for database-driven agents
 export {

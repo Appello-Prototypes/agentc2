@@ -18,13 +18,6 @@ interface Message {
     content: string;
 }
 
-const MODEL_DISPLAY: Record<string, string> = {
-    "gpt-4o": "GPT-4o",
-    "gpt-4o-mini": "GPT-4o Mini",
-    "claude-sonnet-4-20250514": "Claude Sonnet 4",
-    "claude-haiku-3-5-20241022": "Claude Haiku 3.5"
-};
-
 const SUGGESTED_MESSAGES: Record<string, string[]> = {
     "general-assistant": [
         "What can you help me with?",
@@ -63,13 +56,33 @@ export function TestStep({
     const [messages, setMessages] = useState<Message[]>([]);
     const [input, setInput] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [displayModel, setDisplayModel] = useState(modelName);
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     const suggestions = useMemo(() => {
         return SUGGESTED_MESSAGES[templateId || "default"] || SUGGESTED_MESSAGES["default"]!;
     }, [templateId]);
 
-    const displayModel = MODEL_DISPLAY[modelName] || modelName;
+    // Fetch display name for the model from the registry API
+    useEffect(() => {
+        const fetchDisplayName = async () => {
+            try {
+                const res = await fetch(`${getApiBase()}/api/models`);
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.success && Array.isArray(data.models)) {
+                        const match = data.models.find((m: { id: string }) => m.id === modelName);
+                        if (match?.displayName) {
+                            setDisplayModel(match.displayName);
+                        }
+                    }
+                }
+            } catch {
+                // Keep raw model name as fallback
+            }
+        };
+        fetchDisplayName();
+    }, [modelName]);
 
     const scrollToBottom = () => {
         messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
