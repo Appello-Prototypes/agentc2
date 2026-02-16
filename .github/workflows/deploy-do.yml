@@ -115,9 +115,19 @@ jobs:
               for app in agent frontend; do
                 bak="apps/$app/.next.bak"
                 if [ -d "$bak" ] && [ -f "$bak/BUILD_ID" ]; then
+                  cache_dir="apps/$app/.next/cache"
+                  cache_tmp=""
+                  if [ -d "$cache_dir" ]; then
+                    cache_tmp=$(mktemp -d)
+                    mv "$cache_dir" "$cache_tmp/cache"
+                  fi
                   rm -rf "apps/$app/.next"
                   mv "$bak" "apps/$app/.next"
-                  echo "   Restored apps/$app/.next from backup"
+                  if [ -n "$cache_tmp" ] && [ -d "$cache_tmp/cache" ]; then
+                    mv "$cache_tmp/cache" "apps/$app/.next/cache"
+                    rm -rf "$cache_tmp"
+                  fi
+                  echo "   Restored apps/$app/.next from backup (cache preserved)"
                 else
                   echo "   Skipping $app backup (missing or invalid — no BUILD_ID)"
                 fi
@@ -155,15 +165,30 @@ jobs:
             echo ""
             echo "5. Backing up current build (rollback safety)..."
             rm -rf apps/agent/.next.bak apps/frontend/.next.bak
-            [ -d apps/agent/.next ] && cp -r apps/agent/.next apps/agent/.next.bak
-            [ -d apps/frontend/.next ] && cp -r apps/frontend/.next apps/frontend/.next.bak
-            echo "   Backups created."
+            for app in agent frontend; do
+              if [ -d "apps/$app/.next" ]; then
+                mkdir -p "apps/$app/.next.bak"
+                rsync -a --exclude='cache' "apps/$app/.next/" "apps/$app/.next.bak/"
+              fi
+            done
+            echo "   Backups created (excluding cache)."
 
             echo ""
-            echo "6. Cleaning stale builds and caches..."
-            rm -rf apps/agent/.next/cache apps/frontend/.next/cache apps/admin/.next/cache 2>/dev/null || true
+            echo "6. Validating build caches..."
+            for app in agent frontend admin; do
+              cache_dir="apps/$app/.next/cache/webpack"
+              if [ -d "$cache_dir" ]; then
+                bad_files=$(find "$cache_dir" -name "*.pack" -size 0 2>/dev/null | wc -l)
+                if [ "$bad_files" -gt 0 ]; then
+                  echo "   $app: corrupt cache detected ($bad_files empty .pack files) — cleaning"
+                  rm -rf "apps/$app/.next/cache"
+                else
+                  echo "   $app: cache OK — preserving for faster build"
+                fi
+              fi
+            done
             rm -f apps/agent/.next/lock apps/frontend/.next/lock apps/admin/.next/lock 2>/dev/null || true
-            echo "   Removed stale caches and locks."
+            echo "   Lock files cleaned."
 
             echo ""
             echo "7. Building applications (on-server, full .env, 24GB heap, remote cache)..."
