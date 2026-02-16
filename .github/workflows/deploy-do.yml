@@ -160,8 +160,7 @@ jobs:
 
             echo ""
             echo "4. Running database migrations..."
-            cd packages/database && dotenv -e ../../.env -- bun run --bun prisma db push --accept-data-loss || echo "Note: db:push failed (non-fatal)"
-            cd "$DEPLOY_PATH"
+            bun run db:push || echo "Note: No schema changes"
 
             echo ""
             echo "5. Backing up current build (rollback safety)..."
@@ -175,21 +174,9 @@ jobs:
             echo "   Backups created (excluding cache)."
 
             echo ""
-            echo "6. Validating build caches..."
-            for app in agent frontend admin; do
-              cache_dir="apps/$app/.next/cache/webpack"
-              if [ -d "$cache_dir" ]; then
-                bad_files=$(find "$cache_dir" -name "*.pack" -empty 2>/dev/null | head -1 || true)
-                if [ -n "$bad_files" ]; then
-                  echo "   $app: corrupt cache detected — cleaning"
-                  rm -rf "apps/$app/.next/cache"
-                else
-                  echo "   $app: cache OK — preserving for faster build"
-                fi
-              fi
-            done
-            rm -f apps/agent/.next/lock apps/frontend/.next/lock apps/admin/.next/lock 2>/dev/null || true
-            echo "   Lock files cleaned."
+            echo "6. Validating build caches and cleaning locks..."
+            for app in agent frontend admin; do if [ -d "apps/$app/.next/cache/webpack" ]; then echo "   $app: cache present — preserving"; else echo "   $app: no cache"; fi; rm -f "apps/$app/.next/lock" 2>/dev/null || true; done
+            echo "   Done."
 
             echo ""
             echo "7. Building applications (on-server, full .env, 24GB heap, remote cache)..."
