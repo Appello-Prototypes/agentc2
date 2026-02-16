@@ -160,7 +160,8 @@ jobs:
 
             echo ""
             echo "4. Running database migrations..."
-            bun run db:push || echo "Note: No schema changes"
+            cd packages/database && dotenv -e ../../.env -- bun run --bun prisma db push --accept-data-loss || echo "Note: db:push failed (non-fatal)"
+            cd "$DEPLOY_PATH"
 
             echo ""
             echo "5. Backing up current build (rollback safety)..."
@@ -178,9 +179,9 @@ jobs:
             for app in agent frontend admin; do
               cache_dir="apps/$app/.next/cache/webpack"
               if [ -d "$cache_dir" ]; then
-                bad_files=$(find "$cache_dir" -name "*.pack" -size 0 2>/dev/null | wc -l)
-                if [ "$bad_files" -gt 0 ]; then
-                  echo "   $app: corrupt cache detected ($bad_files empty .pack files) — cleaning"
+                bad_files=$(find "$cache_dir" -name "*.pack" -empty 2>/dev/null | head -1 || true)
+                if [ -n "$bad_files" ]; then
+                  echo "   $app: corrupt cache detected — cleaning"
                   rm -rf "apps/$app/.next/cache"
                 else
                   echo "   $app: cache OK — preserving for faster build"
