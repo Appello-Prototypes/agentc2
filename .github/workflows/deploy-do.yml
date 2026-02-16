@@ -112,16 +112,16 @@ jobs:
               echo "!! DEPLOY FAILED — rolling back..."
               DEPLOY_STATUS="failed"
               cd "$DEPLOY_PATH"
-              if [ -d apps/agent/.next.bak ]; then
-                rm -rf apps/agent/.next
-                mv apps/agent/.next.bak apps/agent/.next
-                echo "   Restored apps/agent/.next from backup"
-              fi
-              if [ -d apps/frontend/.next.bak ]; then
-                rm -rf apps/frontend/.next
-                mv apps/frontend/.next.bak apps/frontend/.next
-                echo "   Restored apps/frontend/.next from backup"
-              fi
+              for app in agent frontend; do
+                bak="apps/$app/.next.bak"
+                if [ -d "$bak" ] && [ -f "$bak/BUILD_ID" ]; then
+                  rm -rf "apps/$app/.next"
+                  mv "$bak" "apps/$app/.next"
+                  echo "   Restored apps/$app/.next from backup"
+                else
+                  echo "   Skipping $app backup (missing or invalid — no BUILD_ID)"
+                fi
+              done
               echo "   Restarting PM2 with previous build..."
               pm2 restart ecosystem.config.js --update-env || true
               echo "!! Rollback complete. Previous version is running."
@@ -160,24 +160,31 @@ jobs:
             echo "   Backups created."
 
             echo ""
-            echo "6. Building applications (on-server, full .env, 24GB heap, remote cache)..."
-            rm -f apps/agent/.next/lock apps/frontend/.next/lock 2>/dev/null || true
+            echo "6. Cleaning stale builds and caches..."
+            pkill -f "next build" 2>/dev/null || true
+            sleep 2
+            rm -rf apps/agent/.next/cache apps/frontend/.next/cache apps/admin/.next/cache 2>/dev/null || true
+            rm -f apps/agent/.next/lock apps/frontend/.next/lock apps/admin/.next/lock 2>/dev/null || true
+            echo "   Killed orphans, removed stale caches and locks."
+
+            echo ""
+            echo "7. Building applications (on-server, full .env, 24GB heap, remote cache)..."
             export TURBO_TOKEN="${{ secrets.TURBO_TOKEN }}"
             export TURBO_TEAM="${{ secrets.TURBO_TEAM }}"
             NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 
             echo ""
-            echo "7. Updating Caddy configuration..."
+            echo "8. Updating Caddy configuration..."
             sudo cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
             sudo systemctl reload caddy || sudo systemctl restart caddy
 
             echo ""
-            echo "8. Restarting PM2 processes..."
+            echo "9. Restarting PM2 processes..."
             pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
             pm2 save
 
             echo ""
-            echo "9. Crash-loop detection (waiting 15s)..."
+            echo "10. Crash-loop detection (waiting 15s)..."
             sleep 15
 
             # Check that expected processes are online (simple grep, no multiline python)
@@ -188,7 +195,7 @@ jobs:
             if [ "$AGENT_STATUS" != "online" ] || [ "$FRONTEND_STATUS" != "online" ]; then echo "!! Process not online — triggering rollback"; exit 1; fi
 
             echo ""
-            echo "10. Cleaning up backups..."
+            echo "11. Cleaning up backups..."
             rm -rf apps/agent/.next.bak apps/frontend/.next.bak
 
             pm2 status
