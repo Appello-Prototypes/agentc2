@@ -11,6 +11,8 @@
 #
 # Optional secrets:
 #   SLACK_WEBHOOK_URL - Incoming Webhook for deploy notifications
+#   TURBO_TOKEN       - Vercel Remote Cache token (free tier)
+#   TURBO_TEAM        - Vercel team slug for remote cache
 
 name: Deploy to Digital Ocean
 
@@ -69,9 +71,15 @@ jobs:
 
       - name: Type check
         run: bunx turbo type-check --concurrency=1
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Lint
         run: bunx turbo lint --concurrency=1
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
   # ── Build on server + deploy ───────────────────────────────────────
   deploy:
@@ -152,8 +160,10 @@ jobs:
             echo "   Backups created."
 
             echo ""
-            echo "6. Building applications (on-server, full .env, 24GB heap)..."
+            echo "6. Building applications (on-server, full .env, 24GB heap, remote cache)..."
             rm -f apps/agent/.next/lock apps/frontend/.next/lock 2>/dev/null || true
+            export TURBO_TOKEN="${{ secrets.TURBO_TOKEN }}"
+            export TURBO_TEAM="${{ secrets.TURBO_TEAM }}"
             NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 
             echo ""
