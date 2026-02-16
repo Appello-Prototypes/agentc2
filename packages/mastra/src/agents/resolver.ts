@@ -446,6 +446,48 @@ export class AgentResolver {
             }
         }
 
+        // Context-aware tool budgeting: when an agent has many tools and a maxToolsLoaded
+        // threshold is configured in metadata, only load essential tools to reduce token overhead.
+        // Remaining tools stay accessible via skill activation meta-tools.
+        const maxToolsLoaded = (metadata?.maxToolsLoaded as number) || 0;
+        if (maxToolsLoaded > 0 && !loadAllSkills) {
+            const totalTools = Object.keys(tools).length;
+            if (totalTools > maxToolsLoaded) {
+                // Essential tools that are always kept: meta-tools, memory, utilities
+                const essentialPrefixes = [
+                    "date-time",
+                    "calculator",
+                    "updateWorkingMemory",
+                    "memory-recall",
+                    "search-skills",
+                    "activate-skill",
+                    "list-active-skills",
+                    "rag-query",
+                    "document-search"
+                ];
+                // Also keep tools explicitly listed in metadata.alwaysLoadedTools
+                const alwaysLoaded = (metadata?.alwaysLoadedTools as string[]) || [];
+                const beforeCount = Object.keys(tools).length;
+                for (const toolKey of Object.keys(tools)) {
+                    const isEssential = essentialPrefixes.some(
+                        (p) => toolKey === p || toolKey.startsWith(p + "-")
+                    );
+                    const isAlwaysLoaded = alwaysLoaded.some(
+                        (t) => toolKey.toLowerCase().includes(t.toLowerCase())
+                    );
+                    if (!isEssential && !isAlwaysLoaded) {
+                        delete tools[toolKey];
+                    }
+                }
+                const afterCount = Object.keys(tools).length;
+                console.log(
+                    `[AgentResolver] Tool budget applied for "${record.slug}": ` +
+                        `${beforeCount} -> ${afterCount} tools (maxToolsLoaded: ${maxToolsLoaded}). ` +
+                        `Remaining tools accessible via skill activation.`
+                );
+            }
+        }
+
         // Append skill instructions to agent instructions
         let finalInstructions = instructions;
         if (skillInstructions) {

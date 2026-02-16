@@ -549,6 +549,14 @@ export default function NetworksPage() {
                                             <SelectItem value="anthropic">Anthropic</SelectItem>
                                             <SelectItem value="openai">OpenAI</SelectItem>
                                             <SelectItem value="google">Google</SelectItem>
+                                            <SelectItem value="groq">Groq</SelectItem>
+                                            <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                            <SelectItem value="mistral">Mistral</SelectItem>
+                                            <SelectItem value="xai">xAI (Grok)</SelectItem>
+                                            <SelectItem value="togetherai">Together AI</SelectItem>
+                                            <SelectItem value="fireworks">Fireworks AI</SelectItem>
+                                            <SelectItem value="openrouter">OpenRouter</SelectItem>
+                                            <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

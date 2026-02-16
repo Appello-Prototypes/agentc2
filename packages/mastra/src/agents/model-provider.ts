@@ -16,6 +16,14 @@ import type { LanguageModel } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
+import { createGroq } from "@ai-sdk/groq";
+import { createMistral } from "@ai-sdk/mistral";
+import { createXai } from "@ai-sdk/xai";
+import { createDeepSeek } from "@ai-sdk/deepseek";
+import { createTogetherAI } from "@ai-sdk/togetherai";
+import { createFireworks } from "@ai-sdk/fireworks";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import { createKimi } from "kimi-vercel-ai-sdk-provider";
 import { prisma } from "@repo/database";
 import { decryptCredentials } from "../crypto";
 
@@ -41,6 +49,46 @@ const PROVIDER_KEY_MAP: Record<
         integrationKey: "google",
         credentialField: "GOOGLE_GENERATIVE_AI_API_KEY",
         envVar: "GOOGLE_GENERATIVE_AI_API_KEY"
+    },
+    groq: {
+        integrationKey: "groq",
+        credentialField: "GROQ_API_KEY",
+        envVar: "GROQ_API_KEY"
+    },
+    mistral: {
+        integrationKey: "mistral",
+        credentialField: "MISTRAL_API_KEY",
+        envVar: "MISTRAL_API_KEY"
+    },
+    xai: {
+        integrationKey: "xai",
+        credentialField: "XAI_API_KEY",
+        envVar: "XAI_API_KEY"
+    },
+    deepseek: {
+        integrationKey: "deepseek",
+        credentialField: "DEEPSEEK_API_KEY",
+        envVar: "DEEPSEEK_API_KEY"
+    },
+    togetherai: {
+        integrationKey: "togetherai",
+        credentialField: "TOGETHER_AI_API_KEY",
+        envVar: "TOGETHER_AI_API_KEY"
+    },
+    fireworks: {
+        integrationKey: "fireworks",
+        credentialField: "FIREWORKS_API_KEY",
+        envVar: "FIREWORKS_API_KEY"
+    },
+    openrouter: {
+        integrationKey: "openrouter",
+        credentialField: "OPENROUTER_API_KEY",
+        envVar: "OPENROUTER_API_KEY"
+    },
+    kimi: {
+        integrationKey: "kimi",
+        credentialField: "MOONSHOT_API_KEY",
+        envVar: "MOONSHOT_API_KEY"
     }
 };
 
@@ -126,6 +174,38 @@ export async function resolveModelForOrg(
         case "google": {
             const google = createGoogleGenerativeAI({ apiKey });
             return google(modelName);
+        }
+        case "groq": {
+            const groq = createGroq({ apiKey });
+            return groq(modelName);
+        }
+        case "mistral": {
+            const mistral = createMistral({ apiKey });
+            return mistral(modelName);
+        }
+        case "xai": {
+            const xai = createXai({ apiKey });
+            return xai(modelName);
+        }
+        case "deepseek": {
+            const deepseek = createDeepSeek({ apiKey });
+            return deepseek(modelName);
+        }
+        case "togetherai": {
+            const together = createTogetherAI({ apiKey });
+            return together(modelName);
+        }
+        case "fireworks": {
+            const fireworks = createFireworks({ apiKey });
+            return fireworks(modelName);
+        }
+        case "openrouter": {
+            const openrouter = createOpenRouter({ apiKey });
+            return openrouter.chat(modelName);
+        }
+        case "kimi": {
+            const kimi = createKimi({ apiKey });
+            return kimi(modelName);
         }
         default:
             return null;

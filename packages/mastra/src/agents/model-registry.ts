@@ -13,8 +13,19 @@ import { getOrgApiKey } from "./model-provider";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-export type ModelProvider = "openai" | "anthropic" | "google";
-export type ModelCategory = "flagship" | "fast" | "reasoning" | "legacy";
+export type ModelProvider =
+    | "openai"
+    | "anthropic"
+    | "google"
+    | "groq"
+    | "mistral"
+    | "xai"
+    | "deepseek"
+    | "togetherai"
+    | "fireworks"
+    | "openrouter"
+    | "kimi";
+export type ModelCategory = "flagship" | "fast" | "reasoning" | "legacy" | "open-source";
 
 export interface ModelCapabilities {
     chat: boolean;
@@ -280,6 +291,44 @@ const ANTHROPIC_MODEL_METADATA: Record<string, Partial<ModelMetadata>> = {
 
 const GOOGLE_FALLBACK_MODELS: ModelDefinition[] = [
     {
+        id: "gemini-2.5-pro",
+        provider: "google",
+        displayName: "Gemini 2.5 Pro",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 1048576,
+        pricing: { inputPer1M: 1.25, outputPer1M: 10.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 5
+    },
+    {
+        id: "gemini-2.5-flash",
+        provider: "google",
+        displayName: "Gemini 2.5 Flash",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 1048576,
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.60 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 6
+    },
+    {
         id: "gemini-2.0-flash",
         provider: "google",
         displayName: "Gemini 2.0 Flash",
@@ -316,6 +365,910 @@ const GOOGLE_FALLBACK_MODELS: ModelDefinition[] = [
         deprecated: false,
         aliases: [],
         sortOrder: 20
+    },
+    {
+        id: "gemini-1.5-flash",
+        provider: "google",
+        displayName: "Gemini 1.5 Flash",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 1048576,
+        pricing: { inputPer1M: 0.075, outputPer1M: 0.30 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 21
+    }
+];
+
+// ── Groq Model Metadata ─────────────────────────────────────────────────────
+// Groq provides extremely fast inference for open-source models.
+// Free tier available — ideal for cost-sensitive workloads.
+
+const GROQ_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "llama-3.3-70b-versatile",
+        provider: "groq",
+        displayName: "Llama 3.3 70B Versatile",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.59, outputPer1M: 0.79 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 10
+    },
+    {
+        id: "llama-3.1-8b-instant",
+        provider: "groq",
+        displayName: "Llama 3.1 8B Instant",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.05, outputPer1M: 0.08 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 11
+    },
+    {
+        id: "llama-4-scout-17b-16e-instruct",
+        provider: "groq",
+        displayName: "Llama 4 Scout 17B",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.11, outputPer1M: 0.34 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 12
+    },
+    {
+        id: "llama-4-maverick-17b-128e-instruct",
+        provider: "groq",
+        displayName: "Llama 4 Maverick 17B",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.50, outputPer1M: 0.77 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 13
+    },
+    {
+        id: "gemma2-9b-it",
+        provider: "groq",
+        displayName: "Gemma 2 9B",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 8192,
+        pricing: { inputPer1M: 0.20, outputPer1M: 0.20 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 20
+    },
+    {
+        id: "mixtral-8x7b-32768",
+        provider: "groq",
+        displayName: "Mixtral 8x7B",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 32768,
+        pricing: { inputPer1M: 0.24, outputPer1M: 0.24 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 21
+    },
+    {
+        id: "qwen-qwq-32b",
+        provider: "groq",
+        displayName: "Qwen QwQ 32B",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.29, outputPer1M: 0.39 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 15
+    },
+    {
+        id: "deepseek-r1-distill-llama-70b",
+        provider: "groq",
+        displayName: "DeepSeek R1 Distill 70B (Groq)",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.75, outputPer1M: 0.99 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 16
+    }
+];
+
+// ── DeepSeek Model Metadata ─────────────────────────────────────────────────
+// DeepSeek provides extremely affordable models with strong coding abilities.
+
+const DEEPSEEK_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "deepseek-chat",
+        provider: "deepseek",
+        displayName: "DeepSeek V3",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0.27, outputPer1M: 1.10 },
+        deprecated: false,
+        aliases: ["deepseek-v3"],
+        sortOrder: 10
+    },
+    {
+        id: "deepseek-reasoner",
+        provider: "deepseek",
+        displayName: "DeepSeek R1",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0.55, outputPer1M: 2.19 },
+        deprecated: false,
+        aliases: ["deepseek-r1"],
+        sortOrder: 11
+    }
+];
+
+// ── Mistral Model Metadata ──────────────────────────────────────────────────
+// Mistral provides high-quality European-built models with competitive pricing.
+
+const MISTRAL_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "mistral-large-latest",
+        provider: "mistral",
+        displayName: "Mistral Large",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 2.0, outputPer1M: 6.0 },
+        deprecated: false,
+        aliases: ["mistral-large"],
+        sortOrder: 10
+    },
+    {
+        id: "mistral-small-latest",
+        provider: "mistral",
+        displayName: "Mistral Small",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.1, outputPer1M: 0.3 },
+        deprecated: false,
+        aliases: ["mistral-small"],
+        sortOrder: 11
+    },
+    {
+        id: "codestral-latest",
+        provider: "mistral",
+        displayName: "Codestral",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 256000,
+        pricing: { inputPer1M: 0.3, outputPer1M: 0.9 },
+        deprecated: false,
+        aliases: ["codestral"],
+        sortOrder: 12
+    },
+    {
+        id: "mistral-medium-latest",
+        provider: "mistral",
+        displayName: "Mistral Medium",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.4, outputPer1M: 2.0 },
+        deprecated: false,
+        aliases: ["mistral-medium"],
+        sortOrder: 13
+    },
+    {
+        id: "open-mistral-nemo",
+        provider: "mistral",
+        displayName: "Mistral Nemo (Open)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.15 },
+        deprecated: false,
+        aliases: ["mistral-nemo"],
+        sortOrder: 20
+    },
+    {
+        id: "pixtral-large-latest",
+        provider: "mistral",
+        displayName: "Pixtral Large",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 2.0, outputPer1M: 6.0 },
+        deprecated: false,
+        aliases: ["pixtral-large"],
+        sortOrder: 14
+    }
+];
+
+// ── xAI (Grok) Model Metadata ───────────────────────────────────────────────
+
+const XAI_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "grok-3",
+        provider: "xai",
+        displayName: "Grok 3",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 3.0, outputPer1M: 15.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 10
+    },
+    {
+        id: "grok-3-fast",
+        provider: "xai",
+        displayName: "Grok 3 Fast",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 5.0, outputPer1M: 25.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 11
+    },
+    {
+        id: "grok-3-mini",
+        provider: "xai",
+        displayName: "Grok 3 Mini",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.30, outputPer1M: 0.50 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 12
+    },
+    {
+        id: "grok-3-mini-fast",
+        provider: "xai",
+        displayName: "Grok 3 Mini Fast",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.60, outputPer1M: 4.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 13
+    },
+    {
+        id: "grok-2",
+        provider: "xai",
+        displayName: "Grok 2",
+        category: "legacy",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 2.0, outputPer1M: 10.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 20
+    }
+];
+
+// ── Together AI Model Metadata ──────────────────────────────────────────────
+// Together hosts 200+ open-source models. These are the most popular/useful.
+
+const TOGETHERAI_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "meta-llama/Llama-4-Maverick-17B-128E-Instruct-Turbo",
+        provider: "togetherai",
+        displayName: "Llama 4 Maverick 17B (Together)",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.27, outputPer1M: 0.85 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 10
+    },
+    {
+        id: "meta-llama/Llama-4-Scout-17B-16E-Instruct",
+        provider: "togetherai",
+        displayName: "Llama 4 Scout 17B (Together)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.40 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 11
+    },
+    {
+        id: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+        provider: "togetherai",
+        displayName: "Llama 3.3 70B Turbo (Together)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.88, outputPer1M: 0.88 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 12
+    },
+    {
+        id: "deepseek-ai/DeepSeek-R1",
+        provider: "togetherai",
+        displayName: "DeepSeek R1 (Together)",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 3.0, outputPer1M: 7.0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 15
+    },
+    {
+        id: "deepseek-ai/DeepSeek-V3",
+        provider: "togetherai",
+        displayName: "DeepSeek V3 (Together)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0.49, outputPer1M: 0.99 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 16
+    },
+    {
+        id: "Qwen/Qwen2.5-72B-Instruct-Turbo",
+        provider: "togetherai",
+        displayName: "Qwen 2.5 72B Turbo (Together)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 32768,
+        pricing: { inputPer1M: 0.60, outputPer1M: 0.60 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 17
+    },
+    {
+        id: "mistralai/Mixtral-8x22B-Instruct-v0.1",
+        provider: "togetherai",
+        displayName: "Mixtral 8x22B (Together)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 65536,
+        pricing: { inputPer1M: 0.60, outputPer1M: 0.60 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 18
+    }
+];
+
+// ── Fireworks AI Model Metadata ─────────────────────────────────────────────
+// Fireworks provides fast inference for open-source models at low cost.
+
+const FIREWORKS_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "accounts/fireworks/models/llama4-maverick-instruct-basic",
+        provider: "fireworks",
+        displayName: "Llama 4 Maverick (Fireworks)",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.22, outputPer1M: 0.88 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 10
+    },
+    {
+        id: "accounts/fireworks/models/llama4-scout-instruct-basic",
+        provider: "fireworks",
+        displayName: "Llama 4 Scout (Fireworks)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.60 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 11
+    },
+    {
+        id: "accounts/fireworks/models/llama-v3p3-70b-instruct",
+        provider: "fireworks",
+        displayName: "Llama 3.3 70B (Fireworks)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 12
+    },
+    {
+        id: "accounts/fireworks/models/deepseek-v3",
+        provider: "fireworks",
+        displayName: "DeepSeek V3 (Fireworks)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 15
+    },
+    {
+        id: "accounts/fireworks/models/qwen2p5-72b-instruct",
+        provider: "fireworks",
+        displayName: "Qwen 2.5 72B (Fireworks)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 32768,
+        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 16
+    }
+];
+
+// ── OpenRouter Model Metadata ───────────────────────────────────────────────
+// OpenRouter routes to 300+ models. These are curated free/cheap options.
+// Users can use any model by specifying the full OpenRouter model ID.
+
+const OPENROUTER_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "meta-llama/llama-4-maverick:free",
+        provider: "openrouter",
+        displayName: "Llama 4 Maverick (Free)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 1
+    },
+    {
+        id: "meta-llama/llama-4-scout:free",
+        provider: "openrouter",
+        displayName: "Llama 4 Scout (Free)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 2
+    },
+    {
+        id: "deepseek/deepseek-chat-v3-0324:free",
+        provider: "openrouter",
+        displayName: "DeepSeek V3 (Free)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 3
+    },
+    {
+        id: "deepseek/deepseek-r1:free",
+        provider: "openrouter",
+        displayName: "DeepSeek R1 (Free)",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 64000,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 4
+    },
+    {
+        id: "qwen/qwen3-235b-a22b:free",
+        provider: "openrouter",
+        displayName: "Qwen 3 235B (Free)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 40960,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 5
+    },
+    {
+        id: "google/gemini-2.5-flash-preview:free",
+        provider: "openrouter",
+        displayName: "Gemini 2.5 Flash (Free via OR)",
+        category: "fast",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 1048576,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 6
+    },
+    {
+        id: "mistralai/mistral-small-3.1-24b-instruct:free",
+        provider: "openrouter",
+        displayName: "Mistral Small 3.1 (Free)",
+        category: "open-source",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 128000,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 7
+    },
+    {
+        id: "microsoft/phi-4-reasoning-plus:free",
+        provider: "openrouter",
+        displayName: "Phi-4 Reasoning Plus (Free)",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: true,
+            parallelToolCalls: false,
+            functionCalling: false,
+            streaming: true
+        },
+        contextWindow: 32768,
+        pricing: { inputPer1M: 0, outputPer1M: 0 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 8
+    }
+];
+
+// ── Kimi (Moonshot AI) Model Metadata ────────────────────────────────────────
+// Kimi K2/K2.5 — large MoE models with strong agentic and coding capabilities.
+
+const KIMI_FALLBACK_MODELS: ModelDefinition[] = [
+    {
+        id: "kimi-k2.5",
+        provider: "kimi",
+        displayName: "Kimi K2.5",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 262144,
+        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 10
+    },
+    {
+        id: "kimi-k2.5-thinking",
+        provider: "kimi",
+        displayName: "Kimi K2.5 Thinking",
+        category: "reasoning",
+        capabilities: {
+            chat: true,
+            vision: true,
+            extendedThinking: true,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 262144,
+        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 11
+    },
+    {
+        id: "kimi-k2",
+        provider: "kimi",
+        displayName: "Kimi K2",
+        category: "flagship",
+        capabilities: {
+            chat: true,
+            vision: false,
+            extendedThinking: false,
+            parallelToolCalls: true,
+            functionCalling: true,
+            streaming: true
+        },
+        contextWindow: 131072,
+        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        deprecated: false,
+        aliases: [],
+        sortOrder: 12
     }
 ];
 
@@ -709,7 +1662,16 @@ export async function getModelsByProvider(
                 models = await fetchAnthropicModels(apiKey);
                 break;
             case "google":
-                models = GOOGLE_FALLBACK_MODELS;
+            case "groq":
+            case "mistral":
+            case "xai":
+            case "deepseek":
+            case "togetherai":
+            case "fireworks":
+            case "openrouter":
+            case "kimi":
+                // These providers use static fallback lists (API-based discovery not yet implemented)
+                models = getFallbackModels(provider);
                 break;
             default:
                 models = [];
@@ -736,7 +1698,19 @@ export async function getAllModels(
     organizationId?: string | null,
     forceRefresh?: boolean
 ): Promise<ModelDefinition[]> {
-    const providers: ModelProvider[] = ["openai", "anthropic", "google"];
+    const providers: ModelProvider[] = [
+        "openai",
+        "anthropic",
+        "google",
+        "groq",
+        "mistral",
+        "xai",
+        "deepseek",
+        "togetherai",
+        "fireworks",
+        "openrouter",
+        "kimi"
+    ];
     const results = await Promise.allSettled(
         providers.map((p) => getModelsByProvider(p, organizationId, forceRefresh))
     );
@@ -821,6 +1795,22 @@ function getFallbackModels(provider: ModelProvider): ModelDefinition[] {
             return ANTHROPIC_FALLBACK_MODELS;
         case "google":
             return GOOGLE_FALLBACK_MODELS;
+        case "groq":
+            return GROQ_FALLBACK_MODELS;
+        case "deepseek":
+            return DEEPSEEK_FALLBACK_MODELS;
+        case "mistral":
+            return MISTRAL_FALLBACK_MODELS;
+        case "xai":
+            return XAI_FALLBACK_MODELS;
+        case "togetherai":
+            return TOGETHERAI_FALLBACK_MODELS;
+        case "fireworks":
+            return FIREWORKS_FALLBACK_MODELS;
+        case "openrouter":
+            return OPENROUTER_FALLBACK_MODELS;
+        case "kimi":
+            return KIMI_FALLBACK_MODELS;
         default:
             return [];
     }
@@ -836,5 +1826,13 @@ function getFallbackModels(provider: ModelProvider): ModelDefinition[] {
 export const FALLBACK_AVAILABLE_MODELS = {
     openai: OPENAI_FALLBACK_MODELS.map((m) => m.id),
     anthropic: ANTHROPIC_FALLBACK_MODELS.map((m) => m.id),
-    google: GOOGLE_FALLBACK_MODELS.map((m) => m.id)
+    google: GOOGLE_FALLBACK_MODELS.map((m) => m.id),
+    groq: GROQ_FALLBACK_MODELS.map((m) => m.id),
+    deepseek: DEEPSEEK_FALLBACK_MODELS.map((m) => m.id),
+    mistral: MISTRAL_FALLBACK_MODELS.map((m) => m.id),
+    xai: XAI_FALLBACK_MODELS.map((m) => m.id),
+    togetherai: TOGETHERAI_FALLBACK_MODELS.map((m) => m.id),
+    fireworks: FIREWORKS_FALLBACK_MODELS.map((m) => m.id),
+    openrouter: OPENROUTER_FALLBACK_MODELS.map((m) => m.id),
+    kimi: KIMI_FALLBACK_MODELS.map((m) => m.id)
 };

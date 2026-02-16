@@ -83,6 +83,20 @@ interface Agent {
     version: number;
 }
 
+const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
+    openai: "OpenAI",
+    anthropic: "Anthropic",
+    google: "Google",
+    groq: "Groq",
+    deepseek: "DeepSeek",
+    mistral: "Mistral",
+    xai: "xAI (Grok)",
+    togetherai: "Together AI",
+    fireworks: "Fireworks AI",
+    openrouter: "OpenRouter",
+    kimi: "Kimi (Moonshot)"
+};
+
 interface AttachedSkill {
     id: string;
     skillId: string;
@@ -1311,6 +1325,14 @@ export default function ConfigurePage() {
                                             <SelectItem value="anthropic">Anthropic</SelectItem>
                                             <SelectItem value="openai">OpenAI</SelectItem>
                                             <SelectItem value="google">Google</SelectItem>
+                                            <SelectItem value="groq">Groq</SelectItem>
+                                            <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                            <SelectItem value="mistral">Mistral</SelectItem>
+                                            <SelectItem value="xai">xAI (Grok)</SelectItem>
+                                            <SelectItem value="togetherai">Together AI</SelectItem>
+                                            <SelectItem value="fireworks">Fireworks AI</SelectItem>
+                                            <SelectItem value="openrouter">OpenRouter</SelectItem>
+                                            <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1374,8 +1396,10 @@ export default function ConfigurePage() {
                                                 <div className="h-2 w-2 rounded-full bg-amber-500" />
                                                 <p className="text-sm text-amber-700 dark:text-amber-400">
                                                     No API key configured for{" "}
-                                                    <span className="font-medium capitalize">
-                                                        {formData.modelProvider}
+                                                    <span className="font-medium">
+                                                        {PROVIDER_DISPLAY_NAMES[
+                                                            formData.modelProvider!
+                                                        ] || formData.modelProvider}
                                                     </span>
                                                     . Agents using this provider will fail.
                                                 </p>
@@ -1613,6 +1637,64 @@ export default function ConfigurePage() {
                                     </p>
                                 </div>
                             )}
+
+                            {formData.modelProvider === "groq" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        ⚡ Groq provides ultra-fast inference for open-source
+                                        models (Llama, Mixtral, Gemma). Free tier available.
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "deepseek" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        💰 DeepSeek offers extremely affordable models with strong
+                                        coding and reasoning abilities. DeepSeek R1 supports
+                                        extended thinking.
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "mistral" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        🇪🇺 Mistral models include Codestral for coding tasks and
+                                        Mistral Nemo as a free open-source option.
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "xai" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        🚀 xAI Grok models support vision and function calling.
+                                        Grok 3 Mini supports extended thinking for reasoning.
+                                    </p>
+                                </div>
+                            )}
+
+                            {(formData.modelProvider === "togetherai" ||
+                                formData.modelProvider === "fireworks") && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        🌐 Open-source model hosting with competitive pricing.
+                                        Run Llama, DeepSeek, Qwen, and Mixtral models at low
+                                        cost.
+                                    </p>
+                                </div>
+                            )}
+
+                            {formData.modelProvider === "openrouter" && (
+                                <div className="bg-muted rounded-lg p-4">
+                                    <p className="text-muted-foreground text-sm">
+                                        🆓 OpenRouter provides access to 300+ models. Models
+                                        ending in &quot;:free&quot; have zero cost. Great for
+                                        budget-conscious workloads.
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 
@@ -1696,15 +1778,17 @@ export default function ConfigurePage() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="anthropic">
-                                                            Anthropic
-                                                        </SelectItem>
-                                                        <SelectItem value="openai">
-                                                            OpenAI
-                                                        </SelectItem>
-                                                        <SelectItem value="google">
-                                                            Google
-                                                        </SelectItem>
+                                                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                                                        <SelectItem value="openai">OpenAI</SelectItem>
+                                                        <SelectItem value="google">Google</SelectItem>
+                                                        <SelectItem value="groq">Groq</SelectItem>
+                                                        <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                                        <SelectItem value="mistral">Mistral</SelectItem>
+                                                        <SelectItem value="xai">xAI (Grok)</SelectItem>
+                                                        <SelectItem value="togetherai">Together AI</SelectItem>
+                                                        <SelectItem value="fireworks">Fireworks AI</SelectItem>
+                                                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                                                        <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -1772,15 +1856,17 @@ export default function ConfigurePage() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="anthropic">
-                                                            Anthropic
-                                                        </SelectItem>
-                                                        <SelectItem value="openai">
-                                                            OpenAI
-                                                        </SelectItem>
-                                                        <SelectItem value="google">
-                                                            Google
-                                                        </SelectItem>
+                                                        <SelectItem value="anthropic">Anthropic</SelectItem>
+                                                        <SelectItem value="openai">OpenAI</SelectItem>
+                                                        <SelectItem value="google">Google</SelectItem>
+                                                        <SelectItem value="groq">Groq</SelectItem>
+                                                        <SelectItem value="deepseek">DeepSeek</SelectItem>
+                                                        <SelectItem value="mistral">Mistral</SelectItem>
+                                                        <SelectItem value="xai">xAI (Grok)</SelectItem>
+                                                        <SelectItem value="togetherai">Together AI</SelectItem>
+                                                        <SelectItem value="fireworks">Fireworks AI</SelectItem>
+                                                        <SelectItem value="openrouter">OpenRouter</SelectItem>
+                                                        <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>

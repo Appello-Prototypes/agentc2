@@ -228,6 +228,12 @@ import {
 import { askQuestionsTool } from "./ask-questions";
 import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./skill-discovery-tools";
 import {
+    executeCodeTool,
+    writeWorkspaceFileTool,
+    readWorkspaceFileTool,
+    listWorkspaceFilesTool
+} from "./sandbox-tools";
+import {
     agentRunsListTool,
     agentRunsGetTool,
     triggerEventsListTool,
@@ -271,6 +277,10 @@ export const toolCategoryMap: Record<string, string> = {
     "memory-recall": "Utilities",
     "json-parser": "Utilities",
     "ask-questions": "Utilities",
+    "execute-code": "Code Execution",
+    "write-workspace-file": "Code Execution",
+    "read-workspace-file": "Code Execution",
+    "list-workspace-files": "Code Execution",
 
     // Agent Management
     "agent-create": "Agent Management",
@@ -498,6 +508,7 @@ export const toolCategoryMap: Record<string, string> = {
  */
 export const toolCategoryOrder: string[] = [
     "Utilities",
+    "Code Execution",
     "Agent Management",
     "Agent Quality & Runs",
     "Learning & Simulations",
@@ -580,6 +591,12 @@ export const toolRegistry: Record<string, any> = {
     "web-scrape": webScrapeTool,
     "memory-recall": memoryRecallTool,
     "json-parser": jsonParserTool,
+
+    // Code execution & workspace tools
+    "execute-code": executeCodeTool,
+    "write-workspace-file": writeWorkspaceFileTool,
+    "read-workspace-file": readWorkspaceFileTool,
+    "list-workspace-files": listWorkspaceFilesTool,
 
     // CRUD tools
     "agent-create": agentCreateTool,

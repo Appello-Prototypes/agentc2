@@ -1569,7 +1569,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "openai",
         name: "OpenAI",
-        description: "GPT-4o, GPT-4o-mini, GPT-4 Turbo, and text embeddings",
+        description: "GPT-4.1, GPT-4o, o3/o4-mini reasoning, and text embeddings",
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
@@ -1609,7 +1609,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "google",
         name: "Google (Gemini)",
-        description: "Gemini 2.0 Flash, Gemini 1.5 Pro, and other Google AI models",
+        description: "Gemini 2.5 Pro/Flash, Gemini 2.0 Flash, and other Google AI models",
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
@@ -1621,6 +1621,174 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     label: "Google AI API Key",
                     description: "Create at https://aistudio.google.com/apikey",
                     placeholder: "AIza...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "groq",
+        name: "Groq",
+        description:
+            "Ultra-fast inference for open-source models — Llama, Mixtral, Gemma. Free tier available.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["GROQ_API_KEY"],
+            fieldDefinitions: {
+                GROQ_API_KEY: {
+                    label: "Groq API Key",
+                    description: "Create free at https://console.groq.com/keys",
+                    placeholder: "gsk_...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "deepseek",
+        name: "DeepSeek",
+        description:
+            "Extremely affordable models with strong coding and reasoning — DeepSeek V3 and R1.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["DEEPSEEK_API_KEY"],
+            fieldDefinitions: {
+                DEEPSEEK_API_KEY: {
+                    label: "DeepSeek API Key",
+                    description: "Create at https://platform.deepseek.com/api_keys",
+                    placeholder: "sk-...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "mistral",
+        name: "Mistral",
+        description:
+            "European AI models — Mistral Large, Codestral, Mistral Small, and open Nemo.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["MISTRAL_API_KEY"],
+            fieldDefinitions: {
+                MISTRAL_API_KEY: {
+                    label: "Mistral API Key",
+                    description: "Create at https://console.mistral.ai/api-keys",
+                    placeholder: "",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "xai",
+        name: "xAI (Grok)",
+        description: "Grok 3, Grok 3 Mini, and Grok 2 — with vision and function calling.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["XAI_API_KEY"],
+            fieldDefinitions: {
+                XAI_API_KEY: {
+                    label: "xAI API Key",
+                    description: "Create at https://console.x.ai",
+                    placeholder: "xai-...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "togetherai",
+        name: "Together AI",
+        description:
+            "200+ open-source models — Llama, DeepSeek, Qwen, Mixtral at competitive pricing.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["TOGETHER_AI_API_KEY"],
+            fieldDefinitions: {
+                TOGETHER_AI_API_KEY: {
+                    label: "Together AI API Key",
+                    description: "Create at https://api.together.ai/settings/api-keys",
+                    placeholder: "",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "fireworks",
+        name: "Fireworks AI",
+        description:
+            "Fast open-source model inference — Llama, DeepSeek, Qwen at low cost.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["FIREWORKS_API_KEY"],
+            fieldDefinitions: {
+                FIREWORKS_API_KEY: {
+                    label: "Fireworks API Key",
+                    description: "Create at https://fireworks.ai/account/api-keys",
+                    placeholder: "",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "openrouter",
+        name: "OpenRouter",
+        description:
+            "Access 300+ models through one API. Many FREE models available ($0/token).",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["OPENROUTER_API_KEY"],
+            fieldDefinitions: {
+                OPENROUTER_API_KEY: {
+                    label: "OpenRouter API Key",
+                    description:
+                        "Create free at https://openrouter.ai/keys — free models available",
+                    placeholder: "sk-or-...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "kimi",
+        name: "Kimi (Moonshot)",
+        description:
+            "Kimi K2.5 and K2 — large MoE models with strong agentic and coding capabilities.",
+        category: "ai",
+        authType: "apiKey",
+        providerType: "ai-model",
+        maturityLevel: "internal",
+        configJson: {
+            requiredFields: ["MOONSHOT_API_KEY"],
+            fieldDefinitions: {
+                MOONSHOT_API_KEY: {
+                    label: "Moonshot API Key",
+                    description: "Create at https://platform.moonshot.cn/console/api-keys",
+                    placeholder: "sk-...",
                     type: "password"
                 }
             }
@@ -2012,39 +2180,45 @@ const buildCredentialsForProvider = (
     return credentials;
 };
 
+let _ensureProvidersPromise: Promise<void> | null = null;
+
 async function ensureIntegrationProviders() {
-    await Promise.all(
-        INTEGRATION_PROVIDER_SEEDS.map((seed) =>
-            prisma.integrationProvider.upsert({
-                where: { key: seed.key },
-                update: {
-                    // Do not overwrite name/description so imported config or server-provided
-                    // metadata (e.g. from MCP initialize serverInfo) can persist.
-                    category: seed.category,
-                    authType: seed.authType,
-                    providerType: seed.providerType,
-                    maturityLevel: seed.maturityLevel ?? "visible",
-                    configJson: seed.configJson ?? undefined,
-                    actionsJson: seed.actionsJson ?? undefined,
-                    triggersJson: seed.triggersJson ?? undefined,
-                    isActive: true
-                },
-                create: {
-                    key: seed.key,
-                    name: seed.name,
-                    description: seed.description,
-                    category: seed.category,
-                    authType: seed.authType,
-                    providerType: seed.providerType,
-                    maturityLevel: seed.maturityLevel ?? "visible",
-                    configJson: seed.configJson ?? undefined,
-                    actionsJson: seed.actionsJson ?? undefined,
-                    triggersJson: seed.triggersJson ?? undefined,
-                    isActive: true
-                }
-            })
-        )
-    );
+    if (_ensureProvidersPromise) return _ensureProvidersPromise;
+    _ensureProvidersPromise = _doEnsureIntegrationProviders();
+    return _ensureProvidersPromise;
+}
+
+async function _doEnsureIntegrationProviders() {
+    for (const seed of INTEGRATION_PROVIDER_SEEDS) {
+        await prisma.integrationProvider.upsert({
+            where: { key: seed.key },
+            update: {
+                // Do not overwrite name/description so imported config or server-provided
+                // metadata (e.g. from MCP initialize serverInfo) can persist.
+                category: seed.category,
+                authType: seed.authType,
+                providerType: seed.providerType,
+                maturityLevel: seed.maturityLevel ?? "visible",
+                configJson: seed.configJson ?? undefined,
+                actionsJson: seed.actionsJson ?? undefined,
+                triggersJson: seed.triggersJson ?? undefined,
+                isActive: true
+            },
+            create: {
+                key: seed.key,
+                name: seed.name,
+                description: seed.description,
+                category: seed.category,
+                authType: seed.authType,
+                providerType: seed.providerType,
+                maturityLevel: seed.maturityLevel ?? "visible",
+                configJson: seed.configJson ?? undefined,
+                actionsJson: seed.actionsJson ?? undefined,
+                triggersJson: seed.triggersJson ?? undefined,
+                isActive: true
+            }
+        });
+    }
 }
 
 export async function getIntegrationProviders() {

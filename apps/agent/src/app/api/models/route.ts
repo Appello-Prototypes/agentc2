@@ -10,7 +10,7 @@ import { authenticateRequest } from "@/lib/api-auth";
  * OpenAI and Anthropic APIs with in-memory caching (1hr TTL).
  *
  * Query parameters:
- *   - provider: Filter to a single provider ("openai" | "anthropic" | "google")
+ *   - provider: Filter to a single provider (e.g., "openai", "anthropic", "groq", "deepseek", etc.)
  *   - refresh:  When "true", bust the cache and re-fetch from APIs
  *
  * Uses org-scoped API keys when the request is authenticated.
@@ -28,7 +28,19 @@ export async function GET(request: NextRequest) {
             clearModelCache();
         }
 
-        const validProviders: ModelProvider[] = ["openai", "anthropic", "google"];
+        const validProviders: ModelProvider[] = [
+            "openai",
+            "anthropic",
+            "google",
+            "groq",
+            "mistral",
+            "xai",
+            "deepseek",
+            "togetherai",
+            "fireworks",
+            "openrouter",
+            "kimi"
+        ];
         const provider =
             providerParam && validProviders.includes(providerParam) ? providerParam : null;
 

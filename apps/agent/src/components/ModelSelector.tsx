@@ -90,11 +90,31 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
     };
 
     // Group models by provider, maintaining sort order from the API
-    const providers = ["openai", "anthropic", "google"];
+    const providers = [
+        "openai",
+        "anthropic",
+        "google",
+        "groq",
+        "deepseek",
+        "mistral",
+        "xai",
+        "togetherai",
+        "fireworks",
+        "openrouter",
+        "kimi"
+    ];
     const providerLabels: Record<string, string> = {
         openai: "OpenAI",
         anthropic: "Anthropic",
-        google: "Google"
+        google: "Google",
+        groq: "Groq",
+        deepseek: "DeepSeek",
+        mistral: "Mistral",
+        xai: "xAI (Grok)",
+        togetherai: "Together AI",
+        fireworks: "Fireworks AI",
+        openrouter: "OpenRouter (Free)",
+        kimi: "Kimi (Moonshot)"
     };
 
     return (
