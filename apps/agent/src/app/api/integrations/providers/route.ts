@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
-import { getIntegrationProviders, getBlueprint } from "@repo/mastra";
+import { getIntegrationProviders } from "@repo/mastra/mcp";
+import { getBlueprint } from "@repo/mastra/integrations";
 import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
 

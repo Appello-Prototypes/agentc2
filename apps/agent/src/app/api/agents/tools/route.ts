@@ -1,11 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    listAvailableTools,
-    getAvailableModels,
-    listAvailableScorers,
-    listMcpToolDefinitions,
-    toolCategoryOrder
-} from "@repo/mastra";
+import { getAvailableModels } from "@repo/mastra/agents";
+import { listMcpToolDefinitions } from "@repo/mastra/mcp";
+import { listAvailableTools, toolCategoryOrder } from "@repo/mastra/tools";
+import { listAvailableScorers } from "@repo/mastra/scorers/registry";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**

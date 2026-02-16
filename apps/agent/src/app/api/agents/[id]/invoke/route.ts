@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, TriggerEventStatus } from "@repo/database";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { startRun, extractTokenUsage, extractToolCalls, type RunSource } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { inngest } from "@/lib/inngest";

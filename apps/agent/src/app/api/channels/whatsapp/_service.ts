@@ -7,7 +7,7 @@
  */
 
 import { WhatsAppClient, type WhatsAppConfig, type MessageHandler } from "@repo/mastra/channels";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";

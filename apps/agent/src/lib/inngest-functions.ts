@@ -9,12 +9,12 @@ import {
     CampaignStatus
 } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
+import { mastra } from "@repo/mastra/core";
 import {
     getBimObjectBuffer,
     ingestBimElementsForVersion,
-    mastra,
     parseIfcBuffer
-} from "@repo/mastra";
+} from "@repo/mastra/bim";
 import crypto from "crypto";
 import {
     SIGNAL_THRESHOLDS,

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getMcpTools } from "@repo/mastra";
+import { getMcpTools } from "@repo/mastra/mcp";
 import { getUserOrganizationId } from "@/lib/organization";
 import { resolveConnectionServerId } from "@/lib/integrations";
 

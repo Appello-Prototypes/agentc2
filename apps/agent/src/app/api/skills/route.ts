@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { createSkill, listSkills, type CreateSkillInput } from "@repo/mastra";
+import { createSkill, listSkills, type CreateSkillInput } from "@repo/mastra/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 

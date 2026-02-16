@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver, listMcpToolDefinitions, MCP_SERVER_CONFIGS } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
+import { listMcpToolDefinitions, MCP_SERVER_CONFIGS } from "@repo/mastra/mcp";
 
 /** Default agent slug for ElevenLabs requests */
 const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-agent";

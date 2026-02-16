@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ingestDocument, type ChunkOptions } from "@repo/mastra";
+import { ingestDocument, type ChunkOptions } from "@repo/mastra/rag";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

@@ -226,3 +226,7 @@ export const evaluators = {
     helpfulness: evaluateHelpfulness,
     codeQuality: evaluateCodeQuality
 };
+
+// NOTE: Scorer registry is available via @repo/mastra/scorers/registry
+// It cannot be re-exported here due to circular dependency
+// (registry imports scorers from this file).

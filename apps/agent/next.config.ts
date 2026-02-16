@@ -37,9 +37,32 @@ const nextConfig: NextConfig = {
     typescript: {
         ignoreBuildErrors: true
     },
-    // Externalize server-only packages that have Node.js-specific dependencies
-    // @whiskeysockets/baileys has optional deps (jimp, sharp) that shouldn't be bundled
-    serverExternalPackages: ["@whiskeysockets/baileys", "jimp", "sharp", "pdf-parse", "pdfjs-dist"],
+    // Externalize heavy server-only packages so webpack skips them (loaded via require() at runtime).
+    // This dramatically reduces build time by preventing webpack from parsing large dependency trees.
+    serverExternalPackages: [
+        // WhatsApp + image processing
+        "@whiskeysockets/baileys", "jimp", "sharp", "pdf-parse", "pdfjs-dist",
+        // BIM (web-ifc is ~2MB+ native parser)
+        "web-ifc",
+        // Google (very large API client surface)
+        "googleapis", "google-auth-library",
+        // MCP protocol
+        "@modelcontextprotocol/sdk",
+        // Channel SDKs
+        "grammy", "twilio",
+        // Background jobs
+        "inngest",
+        // Mastra framework packages (server-only, no need to bundle)
+        "@mastra/core", "@mastra/mcp", "@mastra/rag", "@mastra/memory",
+        "@mastra/pg", "@mastra/voice-elevenlabs", "@mastra/voice-openai",
+        "@mastra/evals", "@mastra/observability",
+        // Database
+        "@prisma/client",
+        // Crypto
+        "bcryptjs",
+        // AWS (pulled in by BIM storage)
+        "@aws-sdk/client-s3",
+    ],
     webpack: (config, { isServer }) => {
         if (isServer) {
             config.resolve.alias = {

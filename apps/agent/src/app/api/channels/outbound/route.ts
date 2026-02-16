@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { ChannelType, SendResult } from "@repo/mastra/channels";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { prisma } from "@repo/database";
 
 /**

@@ -8,11 +8,11 @@ import {
 } from "ai";
 import {
     agentResolver,
-    getScorersByNames,
     resolveRoutingDecision,
     type RoutingConfig,
     type RoutingDecision
-} from "@repo/mastra";
+} from "@repo/mastra/agents";
+import { getScorersByNames } from "@repo/mastra/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queryRag, ragGenerateStream, mastra } from "@repo/mastra";
+import { queryRag, ragGenerateStream } from "@repo/mastra/rag";
+import { mastra } from "@repo/mastra/core";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

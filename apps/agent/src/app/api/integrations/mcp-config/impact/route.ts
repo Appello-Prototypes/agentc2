@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { analyzeMcpConfigImpact } from "@repo/mastra";
+import { analyzeMcpConfigImpact } from "@repo/mastra/mcp";
 import { getUserOrganizationId } from "@/lib/organization";
 export async function POST(request: NextRequest) {
     try {

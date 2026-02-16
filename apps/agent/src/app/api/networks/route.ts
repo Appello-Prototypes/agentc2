@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra/networks";
 
 function generateSlug(name: string): string {
     return name

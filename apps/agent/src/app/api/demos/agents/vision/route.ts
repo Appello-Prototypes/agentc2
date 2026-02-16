@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mastra, visionAnalysisSchema } from "@repo/mastra";
+import { mastra } from "@repo/mastra/core";
+import { visionAnalysisSchema } from "@repo/mastra/agents";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

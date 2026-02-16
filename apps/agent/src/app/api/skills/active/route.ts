@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { getThreadSkillState } from "@repo/mastra";
+import { getThreadSkillState } from "@repo/mastra/skills";
 
 export async function GET(request: NextRequest) {
     try {

@@ -29,7 +29,7 @@
 
 import { inngest } from "./inngest";
 import { prisma, Prisma, CampaignStatus, MissionStatus, MissionTaskStatus } from "@repo/database";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import {
     startRun,
     extractToolCalls,

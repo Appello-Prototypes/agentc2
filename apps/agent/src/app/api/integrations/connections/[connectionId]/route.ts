@@ -2,11 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import {
-    invalidateMcpCacheForOrg,
-    invalidateMcpToolsCacheForOrg,
-    resetMcpClients
-} from "@repo/mastra";
+import { invalidateMcpCacheForOrg, resetMcpClients } from "@repo/mastra/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";

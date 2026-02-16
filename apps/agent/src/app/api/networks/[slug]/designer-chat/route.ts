@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 
 function extractJson(text: string) {
     const match = text.match(/\{[\s\S]*\}/);

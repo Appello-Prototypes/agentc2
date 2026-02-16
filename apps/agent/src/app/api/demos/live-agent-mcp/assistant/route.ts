@@ -1,10 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import {
-    agentResolver,
-    relevancyScorer,
-    evaluateHelpfulness,
-    listMcpToolDefinitions
-} from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
+import { listMcpToolDefinitions } from "@repo/mastra/mcp";
+import { relevancyScorer, evaluateHelpfulness } from "@repo/mastra/scorers";
 import {
     startRun,
     extractTokenUsage,

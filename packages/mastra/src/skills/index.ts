@@ -12,6 +12,13 @@ export {
     detachFromAgent,
     getSkillVersions,
     forkSkill,
+    // Aliased re-exports for backward compatibility with barrel consumers
+    attachDocument as skillAttachDocument,
+    detachDocument as skillDetachDocument,
+    attachTool as skillAttachTool,
+    detachTool as skillDetachTool,
+    attachToAgent as skillAttachToAgent,
+    detachFromAgent as skillDetachFromAgent,
     type CreateSkillInput,
     type UpdateSkillInput,
     type ListSkillsInput

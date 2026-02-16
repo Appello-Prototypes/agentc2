@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
-import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra/networks";
 
 async function findNetwork(slug: string) {
     return prisma.network.findFirst({

@@ -5,7 +5,8 @@ import {
     generateId,
     type UIMessageStreamWriter
 } from "ai";
-import { agentResolver, getScorersByNames } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
+import { getScorersByNames } from "@repo/mastra/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {

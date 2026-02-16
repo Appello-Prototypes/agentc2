@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra";
+import { getIntegrationProviders } from "@repo/mastra/mcp";
 import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import {

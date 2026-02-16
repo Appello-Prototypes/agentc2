@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { getDocumentRecord, ragIndexExists } from "@repo/mastra";
+import { getDocumentRecord } from "@repo/mastra/documents";
+import { ragIndexExists } from "@repo/mastra/rag";
 import { authenticateRequest } from "@/lib/api-auth";
 import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";

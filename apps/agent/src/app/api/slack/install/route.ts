@@ -52,7 +52,7 @@ export async function GET(request: NextRequest) {
 
     // Determine the redirect URI
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-    const redirectUri = `${appUrl}/agent/api/slack/callback`;
+    const redirectUri = `${appUrl}/api/slack/callback`;
 
     const authorizeUrl = new URL("https://slack.com/oauth/v2/authorize");
     authorizeUrl.searchParams.set("client_id", clientId);

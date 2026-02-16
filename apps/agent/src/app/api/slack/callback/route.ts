@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra";
+import { getIntegrationProviders } from "@repo/mastra/mcp";
 import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
         }
 
         const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-        const redirectUri = `${appUrl}/agent/api/slack/callback`;
+        const redirectUri = `${appUrl}/api/slack/callback`;
 
         const tokenResponse = await fetch("https://slack.com/api/oauth.v2.access", {
             method: "POST",

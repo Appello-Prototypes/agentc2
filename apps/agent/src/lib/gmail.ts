@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra";
+import { getIntegrationProviders } from "@repo/mastra/mcp";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
 
 // Import from the single source of truth and re-export under the legacy name

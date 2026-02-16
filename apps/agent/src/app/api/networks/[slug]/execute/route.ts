@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, RunStatus } from "@repo/database";
-import { buildNetworkAgent } from "@repo/mastra";
+import { buildNetworkAgent } from "@repo/mastra/networks";
 import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";

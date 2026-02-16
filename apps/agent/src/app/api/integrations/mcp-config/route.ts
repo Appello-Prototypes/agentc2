@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { exportMcpConfig, importMcpConfig } from "@repo/mastra";
+import { exportMcpConfig, importMcpConfig } from "@repo/mastra/mcp";
 import { getUserOrganizationId } from "@/lib/organization";
 
 /**

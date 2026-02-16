@@ -11,11 +11,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
-import {
-    resetMcpClients,
-    invalidateMcpCacheForOrg,
-    invalidateMcpToolsCacheForOrg
-} from "@repo/mastra";
+import { resetMcpClients, invalidateMcpCacheForOrg } from "@repo/mastra/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
 import { exchangeMcpCodeForTokens } from "@repo/mastra/integrations/mcp-oauth";
 import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { memory } from "@repo/mastra";
+import { memory } from "@repo/mastra/core";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function GET() {

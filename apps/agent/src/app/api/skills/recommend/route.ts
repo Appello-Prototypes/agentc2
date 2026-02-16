@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { recommendSkills } from "@repo/mastra";
+import { recommendSkills } from "@repo/mastra/skills";
 
 export async function GET(request: NextRequest) {
     try {

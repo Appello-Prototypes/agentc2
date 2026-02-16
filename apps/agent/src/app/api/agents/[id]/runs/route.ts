@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { TRAFFIC_SPLIT } from "@/lib/learning-config";
 import { extractToolCalls } from "@/lib/run-recorder";
 

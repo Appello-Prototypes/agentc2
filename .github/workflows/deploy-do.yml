@@ -84,7 +84,7 @@ jobs:
   # ── Build on server + deploy ───────────────────────────────────────
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     needs: [test]
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
 
@@ -96,7 +96,7 @@ jobs:
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script_stop: true
-          command_timeout: 25m
+          command_timeout: 35m
           script: |
             set -euo pipefail
             export PATH="$HOME/.bun/bin:$PATH"

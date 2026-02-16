@@ -6,7 +6,7 @@
  */
 
 import { TwilioVoiceClient, type VoiceConfig, type MessageHandler } from "@repo/mastra/channels";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveChannelCredentials } from "@/lib/channel-credentials";

@@ -3,11 +3,10 @@ import { prisma } from "@repo/database";
 import {
     getIntegrationProviders,
     invalidateMcpCacheForOrg,
-    invalidateMcpToolsCacheForOrg,
-    resetMcpClients,
-    provisionIntegration,
-    hasBlueprint
-} from "@repo/mastra";
+    resetMcpClients
+} from "@repo/mastra/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
+import { provisionIntegration, hasBlueprint } from "@repo/mastra/integrations";
 import { auditLog } from "@/lib/audit-log";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";

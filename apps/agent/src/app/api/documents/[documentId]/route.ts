@@ -6,7 +6,7 @@ import {
     updateDocumentRecord,
     deleteDocumentRecord,
     type UpdateDocumentInput
-} from "@repo/mastra";
+} from "@repo/mastra/documents";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ documentId: string }> };

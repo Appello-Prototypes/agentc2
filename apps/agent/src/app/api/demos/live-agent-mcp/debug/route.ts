@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/mastra/agents";
 import { getRecentCalls } from "./_webhook-log";
 
 /** Default agent slug for ElevenLabs requests */

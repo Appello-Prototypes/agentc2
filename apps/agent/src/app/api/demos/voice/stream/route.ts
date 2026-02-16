@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { mastra } from "@repo/mastra";
+import { mastra } from "@repo/mastra/core";
 import { Readable } from "stream";
 
 /**

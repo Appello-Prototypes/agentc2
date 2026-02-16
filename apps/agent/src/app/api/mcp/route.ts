@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@repo/database";
-import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/mastra";
+import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/mastra/tools";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 

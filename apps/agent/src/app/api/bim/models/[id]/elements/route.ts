@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { queryBimElements } from "@repo/mastra";
+import { queryBimElements } from "@repo/mastra/bim";
 
 function parseListParam(value: string | null) {
     if (!value) {
