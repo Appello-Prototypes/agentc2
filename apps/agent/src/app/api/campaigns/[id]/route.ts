@@ -19,44 +19,60 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     try {
         const { id } = await params;
+        const url = new URL(request.url);
 
-        const campaign = await prisma.campaign.findUnique({
-            where: { id },
-            include: {
-                missions: {
-                    include: {
-                        tasks: {
-                            include: {
-                                agentRun: {
-                                    select: {
-                                        id: true,
-                                        status: true,
-                                        outputText: true,
-                                        durationMs: true,
-                                        costUsd: true,
-                                        totalTokens: true,
-                                        evaluation: {
-                                            select: {
-                                                id: true,
-                                                overallGrade: true,
-                                                scoresJson: true,
-                                                aarJson: true
+        // Log pagination & filtering
+        const logLimit = Math.min(parseInt(url.searchParams.get("logLimit") || "50"), 200);
+        const logOffset = parseInt(url.searchParams.get("logOffset") || "0");
+        const logFilter = url.searchParams.get("logFilter") || undefined;
+
+        const logWhere: { campaignId: string; event?: string } = { campaignId: id };
+        if (logFilter) logWhere.event = logFilter;
+
+        const [campaign, logCount] = await Promise.all([
+            prisma.campaign.findUnique({
+                where: { id },
+                include: {
+                    missions: {
+                        include: {
+                            tasks: {
+                                include: {
+                                    agentRun: {
+                                        select: {
+                                            id: true,
+                                            status: true,
+                                            outputText: true,
+                                            durationMs: true,
+                                            costUsd: true,
+                                            totalTokens: true,
+                                            promptTokens: true,
+                                            completionTokens: true,
+                                            evaluation: {
+                                                select: {
+                                                    id: true,
+                                                    overallGrade: true,
+                                                    scoresJson: true,
+                                                    aarJson: true
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            },
-                            orderBy: { sequence: "asc" }
-                        }
+                                },
+                                orderBy: { sequence: "asc" }
+                            }
+                        },
+                        orderBy: { sequence: "asc" }
                     },
-                    orderBy: { sequence: "asc" }
-                },
-                logs: {
-                    orderBy: { createdAt: "desc" },
-                    take: 50
+                    logs: {
+                        where: logFilter ? { event: logFilter } : undefined,
+                        orderBy: { createdAt: "desc" },
+                        take: logLimit,
+                        skip: logOffset
+                    }
                 }
-            }
-        });
+            }),
+            prisma.campaignLog.count({ where: logWhere })
+        ]);
 
         if (!campaign) {
             return NextResponse.json({ error: "Campaign not found" }, { status: 404 });
@@ -66,7 +82,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
-        return NextResponse.json(campaign);
+        return NextResponse.json({ ...campaign, logCount });
     } catch (error) {
         console.error("[Campaigns API] Failed to get campaign:", error);
         return NextResponse.json(
@@ -260,6 +276,52 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
                     return NextResponse.json({
                         message: "Campaign retry started"
+                    });
+                }
+
+                case "approve-mission": {
+                    // Approve a mission that is AWAITING_APPROVAL
+                    const { missionId, sequence: approvalSeq, notes } = body;
+
+                    if (!missionId && approvalSeq === undefined) {
+                        return NextResponse.json(
+                            { error: "missionId or sequence required" },
+                            { status: 400 }
+                        );
+                    }
+
+                    // Send approval event
+                    await inngest.send({
+                        name: "mission/approved",
+                        data: {
+                            campaignId: id,
+                            missionId: missionId || undefined,
+                            sequence: approvalSeq !== undefined ? String(approvalSeq) : undefined
+                        }
+                    });
+
+                    if (notes && missionId) {
+                        await prisma.mission.update({
+                            where: { id: missionId },
+                            data: { approvalNotes: notes }
+                        });
+                    }
+
+                    await prisma.campaignLog.create({
+                        data: {
+                            campaignId: id,
+                            event: "mission_approved",
+                            message: `Mission ${missionId || `sequence ${approvalSeq}`} approved by user`,
+                            metadata: {
+                                missionId,
+                                sequence: approvalSeq,
+                                notes
+                            } as Prisma.InputJsonValue
+                        }
+                    });
+
+                    return NextResponse.json({
+                        message: "Mission approved"
                     });
                 }
 

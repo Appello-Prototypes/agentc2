@@ -49,6 +49,9 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
     "o1-mini": { inputPer1M: 3.0, outputPer1M: 12.0 },
     o1: { inputPer1M: 15.0, outputPer1M: 60.0 },
 
+    // Anthropic Claude 4 models
+    "claude-opus-4-6": { inputPer1M: 15.0, outputPer1M: 75.0 },
+
     // Anthropic Claude 3.5 models
     "claude-sonnet-4-20250514": { inputPer1M: 3.0, outputPer1M: 15.0 },
     "claude-3-5-sonnet-20241022": { inputPer1M: 3.0, outputPer1M: 15.0 },

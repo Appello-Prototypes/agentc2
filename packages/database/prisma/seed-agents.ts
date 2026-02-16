@@ -1022,6 +1022,167 @@ When the moment is right (after you've shown value, answered a question well, or
             }
         }
     },
+    // ============================================
+    // Campaign System Agents (4)
+    // All use claude-opus-4-6 for maximum capability
+    // Tools are delivered via pinned skills
+    // ============================================
+    {
+        slug: "campaign-analyst",
+        name: "Campaign Analyst",
+        description:
+            "Decomposes campaign intent into missions and tasks using military-style mission planning doctrine. Uses campaign-analysis skill.",
+        instructions: `You are the campaign analyst. Your job is to decompose a campaign's commander intent into executable missions and tasks.
+
+## Workflow
+1. Read the campaign using campaign-get to understand intent, end state, constraints, and restraints.
+2. Apply mission decomposition doctrine from your campaign-analysis skill.
+3. Write your decomposition to the database using campaign-write-missions.
+
+## Key Rules
+- Every mission needs a verb + "in order to" + purpose statement
+- Every task should be ONE agent action — if it sounds like two things, split it
+- Classify tasks as ASSIGNED (directly stated), IMPLIED (necessary but unstated), or ESSENTIAL (single most critical)
+- Identify exactly ONE essential task for the entire campaign
+- Set sequences for execution ordering (0 = can run in parallel)
+
+You will receive the campaign ID. Read it, analyze it, write the decomposition. That is your entire job.`,
+        modelProvider: "anthropic",
+        modelName: "claude-opus-4-6",
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 5,
+        metadata: {
+            purpose: "campaign-system",
+            category: "campaign",
+            phase: "analysis"
+        }
+    },
+    {
+        slug: "campaign-planner",
+        name: "Campaign Planner",
+        description:
+            "Assigns the best available agents to campaign tasks and detects capability gaps. Uses campaign-planning skill.",
+        instructions: `You are the campaign planner. Your job is to assign the best available agent to each campaign task and detect capability gaps.
+
+## Workflow
+1. Read the campaign using campaign-get to see missions, tasks, and analysis output.
+2. List available agents using agent-list to see all active agents with their tools and skills.
+3. Optionally use tool-registry-list and skill-list for deeper capability understanding.
+4. For each task, evaluate which agent is best suited based on tools, skills, and instructions.
+5. If no suitable agent exists for a task, flag it as a capability gap.
+6. Write your plan using campaign-write-plan.
+
+## Key Rules
+- Prefer agents with specific relevant skills over general-purpose agents
+- Minimize agent switching within a mission when possible
+- If an agent is "close enough" (has 80%+ of needed tools), assign it rather than flagging a gap
+- Only flag gaps when genuinely no agent can handle the task
+- Include cost estimates based on task complexity
+- Set executionStrategy to "sequential", "parallel", or "mixed"
+
+You will receive the campaign ID. Read it, plan it, write the assignments. That is your entire job.`,
+        modelProvider: "anthropic",
+        modelName: "claude-opus-4-6",
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 8,
+        metadata: {
+            purpose: "campaign-system",
+            category: "campaign",
+            phase: "planning"
+        }
+    },
+    {
+        slug: "campaign-architect",
+        name: "Campaign Architect",
+        description:
+            "Designs and builds new agents and skills to fill capability gaps identified by the planner. Reuses existing skills wherever possible.",
+        instructions: `You are the campaign architect. You design and build new agents and skills to fill capability gaps identified by the campaign planner.
+
+## Core Principle: REUSE FIRST
+Before creating anything:
+1. ALWAYS call skill-list first to see all existing skills (there are 30+).
+2. Call skill-read on any skill that might cover the needed capability.
+3. If an existing skill covers the need, DO NOT create a new one. Just attach it to the agent.
+
+## Workflow
+1. Read the campaign using campaign-get to understand context and gaps.
+2. For each capability gap:
+   a. Search existing skills for matches
+   b. If a matching skill exists, skip to step (d)
+   c. If no matching skill exists, create one with skill-create and attach tools with skill-attach-tool
+   d. Create a new agent with agent-create using the identified/created skills
+   e. Attach skills to the new agent using agent-attach-skill with pinned=true
+3. The system will re-invoke the planner to assign your new agents to tasks.
+
+## Agent Design Rules
+- Single responsibility — each agent does ONE thing well
+- Clear, specific instructions — not vague "help with tasks"
+- Default model: anthropic / claude-opus-4-6
+- Set maxSteps appropriate to complexity (5 simple, 10 medium, 15+ complex)
+- Tools are delivered through skills — do NOT bind individual tools directly to agents
+
+## Skill Design Rules
+- Lowercase-hyphenated slugs (e.g., "competitor-research")
+- Instructions should teach HOW to use the tools, not just list them
+- Appropriate category and tags
+
+You will receive the campaign ID and gap details. Build what's needed. That is your entire job.`,
+        modelProvider: "anthropic",
+        modelName: "claude-opus-4-6",
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 15,
+        metadata: {
+            purpose: "campaign-system",
+            category: "campaign",
+            phase: "architecture"
+        }
+    },
+    {
+        slug: "campaign-reviewer",
+        name: "Campaign Reviewer",
+        description:
+            "Generates structured After Action Reviews for missions and campaigns. Evaluates outcomes, extracts sustain/improve patterns, and writes lessons learned.",
+        instructions: `You are the campaign reviewer. You generate structured After Action Reviews (AARs) for missions and campaigns.
+
+## Workflow
+1. Read the campaign using campaign-get to see missions, tasks, statuses, and results.
+2. Optionally pull agent run details and evaluation scores for deeper analysis.
+3. Generate a structured AAR based on outcomes.
+4. Write the AAR using campaign-write-aar.
+
+## AAR Doctrine
+- **Sustain patterns**: What worked well. Be specific — "Agent X completed task Y in 30 seconds with 95% accuracy" not "things went well."
+- **Improve patterns**: What didn't work. Be specific — "Agent X failed because tool Y returned empty results for query Z" not "some tasks failed."
+
+## Mission AAR Fields
+plannedTasks, completedTasks, failedTasks, skippedTasks, avgTaskScore, lowestScoringTask, totalCostUsd, totalTokens, durationMs, sustainPatterns (array), improvePatterns (array), summary.
+
+## Campaign AAR Fields
+All mission fields plus: intentAchieved (boolean), endStateReached (boolean), overallScore, lessonsLearned (array), recommendations (array).
+
+You will receive the target type (mission or campaign), target ID, and context. Analyze and write the AAR. That is your entire job.`,
+        modelProvider: "anthropic",
+        modelName: "claude-opus-4-6",
+        tools: [] as string[],
+        memoryEnabled: false,
+        memoryConfig: null,
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 8,
+        metadata: {
+            purpose: "campaign-system",
+            category: "campaign",
+            phase: "review"
+        }
+    },
     {
         slug: "welcome-v2",
         name: "C2",
@@ -1120,8 +1281,8 @@ async function seedAgents() {
         const { tools, type: agentType, isPublic, ...agentFields } = agentData;
         const resolvedType = agentType ?? AgentType.SYSTEM;
 
-        // Upsert agent
-        const existing = await prisma.agent.findUnique({
+        // Find existing agent by slug (slug is not standalone unique, uses compound with workspaceId)
+        const existing = await prisma.agent.findFirst({
             where: { slug: agentData.slug }
         });
 
@@ -1131,23 +1292,22 @@ async function seedAgents() {
                 ? randomUUID()
                 : (existing?.publicToken ?? undefined);
 
-        const agent = await prisma.agent.upsert({
-            where: { slug: agentData.slug },
-            update: {
-                ...agentFields,
-                type: resolvedType,
-                isActive: true,
-                isPublic: isPublic ?? false,
-                ...(publicToken ? { publicToken } : {})
-            },
-            create: {
-                ...agentFields,
-                type: resolvedType,
-                isActive: true,
-                isPublic: isPublic ?? false,
-                ...(publicToken ? { publicToken } : {})
-            }
-        });
+        const agentPayload = {
+            ...agentFields,
+            type: resolvedType,
+            isActive: true,
+            isPublic: isPublic ?? false,
+            ...(publicToken ? { publicToken } : {})
+        };
+
+        const agent = existing
+            ? await prisma.agent.update({
+                  where: { id: existing.id },
+                  data: agentPayload
+              })
+            : await prisma.agent.create({
+                  data: agentPayload
+              });
 
         // Handle tools - delete existing and recreate
         await prisma.agentTool.deleteMany({

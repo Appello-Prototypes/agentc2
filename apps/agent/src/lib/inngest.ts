@@ -296,6 +296,11 @@ export const inngest = new Inngest({
                 campaignId: string;
             };
         };
+        "campaign/build-capabilities": {
+            data: {
+                campaignId: string;
+            };
+        };
         "campaign/execute": {
             data: {
                 campaignId: string;
@@ -322,6 +327,26 @@ export const inngest = new Inngest({
             data: {
                 campaignId: string;
                 missionId: string;
+            };
+        };
+        "mission/reviewed": {
+            data: {
+                campaignId: string;
+                missionId: string;
+                decision: "complete" | "rework";
+            };
+        };
+        "mission/approved": {
+            data: {
+                campaignId: string;
+                missionId?: string;
+                sequence?: string;
+            };
+        };
+        "campaign/sub-complete": {
+            data: {
+                parentCampaignId: string;
+                childCampaignId: string;
             };
         };
         // Gmail Processing Events

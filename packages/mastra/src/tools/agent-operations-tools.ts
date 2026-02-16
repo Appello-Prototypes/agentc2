@@ -52,15 +52,22 @@ const callInternalApi = async (
 
 export const agentListTool = createTool({
     id: "agent-list",
-    description: "List all agents with optional filters.",
+    description:
+        "List all agents with optional filters. Use detail='capabilities' to see pinned vs discoverable skills and runtimeToolCount (what the agent actually has available).",
     inputSchema: z.object({
         active: z.boolean().optional().describe("Filter to active agents only"),
-        system: z.boolean().optional().describe("Only include system agents")
+        system: z.boolean().optional().describe("Only include system agents"),
+        detail: z
+            .enum(["capabilities"])
+            .optional()
+            .describe(
+                "Set to 'capabilities' to include pinnedSkills, discoverableSkills, pinnedToolCount, discoverableToolCount, and runtimeToolCount per agent"
+            )
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ active, system }) => {
+    execute: async ({ active, system, detail }) => {
         return callInternalApi("/api/agents", {
-            query: { active, system }
+            query: { active, system, detail }
         });
     }
 });

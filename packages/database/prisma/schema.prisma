@@ -3392,6 +3392,8 @@ enum MissionStatus {
     READY
     EXECUTING
     REVIEWING
+    REWORK
+    AWAITING_APPROVAL
     COMPLETE
     FAILED
     SKIPPED
@@ -3435,10 +3437,25 @@ model Campaign {
     // Review
     aarJson Json? // Campaign-level AAR: plan vs actual, aggregated scores, lessons
 
+    // Dynamic Resources (agents/skills created by campaign-architect)
+    generatedResources Json? // { agents: [{slug, name, id}], skills: [{slug, name, id}], documents: [...] }
+
     // Configuration
     requireApproval Boolean @default(false) // Pause for human review before execution
     maxCostUsd      Float? // Budget ceiling
     timeoutMinutes  Int? // Max execution time
+
+    // Template support
+    templateId      String?
+    template        CampaignTemplate? @relation(fields: [templateId], references: [id])
+    runNumber       Int? // Sequential run number for recurring campaigns
+    parameterValues Json? // Actual parameter values used for this run
+
+    // Sub-campaign hierarchy
+    parentCampaignId String?
+    parentCampaign   Campaign?  @relation("CampaignHierarchy", fields: [parentCampaignId], references: [id], onDelete: SetNull)
+    childCampaigns   Campaign[] @relation("CampaignHierarchy")
+    depth            Int        @default(0) // 0 = root, max = MAX_CAMPAIGN_DEPTH
 
     // Metrics (updated during execution)
     totalCostUsd Float     @default(0)
@@ -3457,7 +3474,84 @@ model Campaign {
     @@index([tenantId])
     @@index([status])
     @@index([createdBy])
+    @@index([templateId])
+    @@index([parentCampaignId])
     @@map("campaign")
+}
+
+// CampaignTemplate - Reusable campaign definitions with optional scheduling
+model CampaignTemplate {
+    id               String   @id @default(cuid())
+    slug             String   @unique
+    name             String
+    description      String?  @db.Text
+    category         String? // "sales", "operations", "safety", etc.
+    intentTemplate   String   @db.Text // Supports {{paramName}} interpolation
+    endStateTemplate String   @db.Text
+    constraints      String[]
+    restraints       String[]
+    parameters       Json? // { "customerName": { type: "string", required: true } }
+    requireApproval  Boolean  @default(false)
+    maxCostUsd       Float?
+    timeoutMinutes   Int?
+    isSystem         Boolean  @default(false)
+    isActive         Boolean  @default(true)
+    createdBy        String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    campaigns Campaign[]
+    schedules CampaignSchedule[]
+    triggers  CampaignTrigger[]
+
+    @@map("campaign_template")
+}
+
+// CampaignSchedule - Cron-based recurring campaign execution
+model CampaignSchedule {
+    id         String           @id @default(cuid())
+    templateId String
+    template   CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    name       String
+    cronExpr   String
+    timezone   String           @default("UTC")
+    inputJson  Json? // Parameter values for template interpolation
+    isActive   Boolean          @default(true)
+    lastRunAt  DateTime?
+    nextRunAt  DateTime?
+    runCount   Int              @default(0)
+    createdBy  String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([isActive, nextRunAt])
+    @@map("campaign_schedule")
+}
+
+// CampaignTrigger - Event/webhook-driven campaign instantiation
+model CampaignTrigger {
+    id              String           @id @default(cuid())
+    templateId      String
+    template        CampaignTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+    name            String
+    triggerType     String // "webhook", "event"
+    eventName       String?
+    webhookPath     String?          @unique
+    webhookSecret   String?
+    inputMapping    Json? // Maps payload fields to template parameters
+    filterJson      Json? // Conditions to match before triggering
+    isActive        Boolean          @default(true)
+    lastTriggeredAt DateTime?
+    triggerCount    Int              @default(0)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([eventName])
+    @@index([triggerType, isActive])
+    @@map("campaign_trigger")
 }
 
 // Mission - A group of related tasks within a campaign
@@ -3480,6 +3574,17 @@ model Mission {
 
     // Review
     aarJson Json? // Mission-level AAR aggregating task results
+
+    // Review-Rework Loop
+    maxIterations    Int     @default(1) // Max times this mission can execute (1 = no rework)
+    currentIteration Int     @default(1) // Current iteration number
+    reworkReason     String? @db.Text // Feedback from reviewer triggering rework
+
+    // Approval Gates
+    requiresApproval Boolean   @default(false) // Pause after this mission for human approval
+    approvedBy       String?
+    approvedAt       DateTime?
+    approvalNotes    String?   @db.Text
 
     // Metrics
     totalCostUsd Float     @default(0)

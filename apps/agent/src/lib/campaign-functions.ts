@@ -4,36 +4,162 @@
  * Implements the Campaign-Mission architecture for autonomous multi-agent orchestration.
  * Uses the "Mission Command" principle: tell the platform WHAT to achieve, not HOW.
  *
+ * Architecture: Agent-First
+ * Every phase is driven by a system agent with skills. Inngest functions are thin wiring.
+ * - campaign-analyst: Decomposes intent into missions/tasks
+ * - campaign-planner: Assigns agents to tasks, detects capability gaps
+ * - campaign-architect: Builds new agents/skills for capability gaps
+ * - campaign-reviewer: Generates After Action Reviews
+ *
  * Event Chain:
  *   campaign/created
- *     -> campaign/analyze  (task decomposition via generateObject)
- *       -> campaign/plan   (agent assignment, dependency ordering)
+ *     -> campaign/analyze  (campaign-analyst agent)
+ *       -> campaign/plan   (campaign-planner agent)
+ *         -> campaign/build-capabilities (campaign-architect, if gaps)
+ *           -> campaign/plan (re-plan with new agents)
  *         -> mission/execute (per mission, sequential or parallel)
  *           -> mission/task.execute (per task, creates AgentRun)
  *             -> [existing] run/completed -> run/evaluate (existing AAR pipeline)
  *           -> mission/tasks.complete (all tasks done)
- *             -> mission/aar (aggregate task evaluations)
+ *             -> mission/aar (campaign-reviewer agent)
  *         -> campaign/missions.complete (all missions done)
- *           -> campaign/aar (aggregate mission AARs)
+ *           -> campaign/aar (campaign-reviewer agent)
  *             -> campaign/complete
  */
 
 import { inngest } from "./inngest";
-import {
-    prisma,
-    Prisma,
-    CampaignStatus,
-    MissionStatus,
-    MissionTaskStatus,
-    MissionTaskType
-} from "@repo/database";
-import { openai } from "@ai-sdk/openai";
-import { generateObject } from "ai";
-import { z } from "zod";
+import { prisma, Prisma, CampaignStatus, MissionStatus, MissionTaskStatus } from "@repo/database";
 import { agentResolver } from "@repo/mastra";
-import { startRun } from "./run-recorder";
+import {
+    startRun,
+    extractToolCalls,
+    extractTokenUsage,
+    type RunRecorderHandle
+} from "./run-recorder";
+import { calculateCost } from "./cost-calculator";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const TASK_MAX_RETRIES = 2;
+
+/**
+ * Classify whether an error is retryable (transient) or permanent.
+ * Retryable: network errors, rate limits, timeouts.
+ * NOT retryable: tool-not-found, auth errors, validation errors.
+ */
+function isRetryableError(error: Error): boolean {
+    const msg = error.message.toLowerCase();
+    // Network / transient errors
+    if (msg.includes("econnrefused") || msg.includes("econnreset")) return true;
+    if (msg.includes("timeout") || msg.includes("timed out")) return true;
+    if (msg.includes("rate limit") || msg.includes("429")) return true;
+    if (msg.includes("503") || msg.includes("service unavailable")) return true;
+    if (msg.includes("502") || msg.includes("bad gateway")) return true;
+    // NOT retryable — permanent errors
+    if (msg.includes("tool") && msg.includes("not found")) return false;
+    if (msg.includes("unauthorized") || msg.includes("forbidden")) return false;
+    if (msg.includes("budget exceeded")) return false;
+    if (msg.includes("campaign budget exceeded")) return false;
+    if (msg.includes("context limit") || msg.includes("context_length_exceeded")) return false;
+    if (msg.includes("exceed context limit")) return false;
+    return false;
+}
+
+/**
+ * Extract and record tool calls from an agent.generate() response.
+ * This ensures Inngest-triggered runs have the same trace/tool data as API-invoked runs.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recordToolCallsFromResponse(response: any, runHandle: RunRecorderHandle) {
+    const toolCalls = extractToolCalls(response);
+    for (const tc of toolCalls) {
+        await runHandle.addToolCall(tc);
+    }
+}
+
+/**
+ * Invoke a system agent for a campaign phase and record the run.
+ *
+ * Centralises the repeated resolve → startRun → generate → extractToolCalls →
+ * extractTokenUsage → complete / fail pattern used by every campaign phase.
+ */
+async function invokeCampaignAgent(opts: {
+    agentSlug: string;
+    prompt: string;
+    campaignId: string;
+    phase: string;
+    metadata?: Record<string, unknown>;
+}): Promise<{ runId: string; output: string }> {
+    const { agent, record } = await agentResolver.resolve({
+        slug: opts.agentSlug,
+        loadAllSkills: true // Campaign agents need full capability
+    });
+    if (!record) throw new Error(`${opts.agentSlug} agent not found in database`);
+
+    const runHandle = await startRun({
+        agentId: record.id,
+        agentSlug: record.slug,
+        input: opts.prompt,
+        source: "event",
+        metadata: { campaignId: opts.campaignId, phase: opts.phase, ...opts.metadata }
+    });
+
+    try {
+        const response = await agent.generate(opts.prompt, {
+            maxSteps: record.maxSteps || 8,
+            ...(record.maxTokens ? { maxTokens: record.maxTokens } : { maxTokens: 16384 })
+        });
+
+        // Record tool calls for trace visibility
+        await recordToolCallsFromResponse(response, runHandle);
+
+        const output = response.text || "";
+
+        // Use the robust token-extraction utility (handles totalUsage, step aggregation, etc.)
+        const tokenUsage = extractTokenUsage(response) || {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0
+        };
+        // Model-specific cost calculation using the pricing table
+        const costUsd = calculateCost(
+            record.modelName,
+            record.modelProvider,
+            tokenUsage.promptTokens,
+            tokenUsage.completionTokens
+        );
+
+        await runHandle.complete({
+            output,
+            modelProvider: record.modelProvider,
+            modelName: record.modelName,
+            promptTokens: tokenUsage.promptTokens,
+            completionTokens: tokenUsage.completionTokens,
+            costUsd
+        });
+
+        // Include system agent costs in campaign total
+        await prisma.campaign.update({
+            where: { id: opts.campaignId },
+            data: {
+                totalCostUsd: { increment: costUsd },
+                totalTokens: { increment: tokenUsage.totalTokens }
+            }
+        });
+
+        await logCampaignEvent(
+            opts.campaignId,
+            opts.phase,
+            `${opts.agentSlug} complete. Agent run: ${runHandle.runId}`,
+            { runId: runHandle.runId, agentSlug: record.slug }
+        );
+
+        return { runId: runHandle.runId, output };
+    } catch (err) {
+        await runHandle.fail(err instanceof Error ? err.message : String(err));
+        throw err;
+    }
+}
 
 async function logCampaignEvent(
     campaignId: string,
@@ -51,103 +177,14 @@ async function logCampaignEvent(
     });
 }
 
-// ─── Schemas for generateObject ──────────────────────────────────────────────
-
-const TaskDecompositionSchema = z.object({
-    missions: z.array(
-        z.object({
-            name: z.string().describe("Short mission name"),
-            missionStatement: z.string().describe("Verb + in order to purpose format"),
-            priority: z.number().int().min(0).max(10).describe("0=low, 10=critical"),
-            sequence: z.number().int().min(0).describe("Execution order, 0 = can run in parallel"),
-            tasks: z.array(
-                z.object({
-                    name: z.string().describe("Short task name"),
-                    taskType: z.enum(["ASSIGNED", "IMPLIED", "ESSENTIAL"]),
-                    taskVerb: z.string().describe("The specific action verb"),
-                    sequence: z.number().int().min(0),
-                    coordinatingInstructions: z
-                        .string()
-                        .nullable()
-                        .describe("Dependencies, context, or instructions to pass to the agent")
-                })
-            )
-        })
-    ),
-    essentialTask: z.string().describe("The single task that defines overall campaign success")
-});
-
-const PlanAssignmentSchema = z.object({
-    assignments: z.array(
-        z.object({
-            missionName: z.string(),
-            tasks: z.array(
-                z.object({
-                    taskName: z.string(),
-                    agentSlug: z.string().describe("Slug of the agent best suited for this task"),
-                    reasoning: z.string().describe("Why this agent was chosen"),
-                    estimatedTokens: z.number().nullable(),
-                    estimatedCostUsd: z.number().nullable()
-                })
-            )
-        })
-    ),
-    executionStrategy: z
-        .string()
-        .describe("Overall execution approach: sequential, parallel, or mixed"),
-    estimatedTotalCostUsd: z.number(),
-    estimatedDurationMinutes: z.number()
-});
-
-const MissionAarSchema = z.object({
-    plannedTasks: z.number(),
-    completedTasks: z.number(),
-    failedTasks: z.number(),
-    skippedTasks: z.number(),
-    avgTaskScore: z.number(),
-    lowestScoringTask: z
-        .object({
-            name: z.string(),
-            score: z.number(),
-            reason: z.string()
-        })
-        .nullable(),
-    totalCostUsd: z.number(),
-    totalTokens: z.number(),
-    durationMs: z.number(),
-    sustainPatterns: z.array(z.string()),
-    improvePatterns: z.array(z.string()),
-    summary: z.string().describe("1-2 sentence mission outcome summary")
-});
-
-const CampaignAarSchema = z.object({
-    plannedMissions: z.number(),
-    completedMissions: z.number(),
-    failedMissions: z.number(),
-    plannedTasks: z.number(),
-    completedTasks: z.number(),
-    avgTaskScore: z.number(),
-    lowestScoringTask: z
-        .object({
-            name: z.string(),
-            score: z.number(),
-            reason: z.string()
-        })
-        .nullable(),
-    plannedDurationMs: z.number(),
-    actualDurationMs: z.number(),
-    totalCostUsd: z.number(),
-    totalTokens: z.number(),
-    sustainPatterns: z.array(z.string()),
-    improvePatterns: z.array(z.string()),
-    intentAchieved: z.boolean(),
-    endStateReached: z.boolean(),
-    lessonsLearned: z.array(z.string()),
-    summary: z.string().describe("Executive summary of campaign outcome")
-});
+// ─── Note: Schemas previously used by generateObject have been removed. ──────
+// All structured output is now handled by system agents (campaign-analyst,
+// campaign-planner, campaign-architect, campaign-reviewer) using their
+// respective tools (campaign-write-missions, campaign-write-plan, campaign-write-aar).
+// The tools themselves enforce the data shape via their Zod input schemas.
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 1. campaign/analyze — Task decomposition via generateObject
+// 1. campaign/analyze — Task decomposition via campaign-analyst agent
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const campaignAnalyzeFunction = inngest.createFunction(
@@ -174,103 +211,78 @@ export const campaignAnalyzeFunction = inngest.createFunction(
 
         console.log(`[Campaign] Analyzing campaign: ${campaignId}`);
 
-        // Step 1: Load campaign
-        const campaign = await step.run("load-campaign", async () => {
-            const c = await prisma.campaign.findUniqueOrThrow({
-                where: { id: campaignId }
-            });
+        // Step 1: Set status and log
+        await step.run("set-status", async () => {
             await prisma.campaign.update({
                 where: { id: campaignId },
                 data: { status: CampaignStatus.ANALYZING }
             });
-            await logCampaignEvent(campaignId, "analyzing", "Campaign analysis started");
-            return c;
-        });
-
-        // Step 2: Decompose intent into missions and tasks
-        const decomposition = await step.run("decompose-intent", async () => {
-            const result = await generateObject({
-                model: openai("gpt-4o"),
-                schema: TaskDecompositionSchema,
-                prompt: `You are a mission planner for an AI agent platform. Analyze the following campaign and decompose it into missions and tasks.
-
-CAMPAIGN NAME: ${campaign.name}
-INTENT (the WHY): ${campaign.intent}
-END STATE (desired outcome): ${campaign.endState}
-DESCRIPTION: ${campaign.description || "None"}
-CONSTRAINTS (must-do): ${campaign.constraints.length > 0 ? campaign.constraints.join(", ") : "None"}
-RESTRAINTS (must-not-do): ${campaign.restraints.length > 0 ? campaign.restraints.join(", ") : "None"}
-
-Decompose this into missions (groups of related work) and tasks within each mission.
-
-For each task, classify it as:
-- ASSIGNED: Directly stated or implied by the intent
-- IMPLIED: Not stated but necessary to accomplish the mission
-- ESSENTIAL: The single most critical task that defines success
-
-Use military-style mission statements: "verb + in order to purpose"
-
-Order missions by dependency (sequence 0 = can run in parallel with others at sequence 0).
-Order tasks within missions by dependency too.
-
-Be thorough but practical. Don't over-decompose -- each task should map to a single agent action.`
-            });
-            return result.object;
-        });
-
-        // Step 3: Create Mission and MissionTask records
-        await step.run("create-records", async () => {
-            for (const mission of decomposition.missions) {
-                const missionRecord = await prisma.mission.create({
-                    data: {
-                        campaignId,
-                        name: mission.name,
-                        missionStatement: mission.missionStatement,
-                        priority: mission.priority,
-                        sequence: mission.sequence,
-                        status: MissionStatus.PENDING
-                    }
-                });
-
-                for (const task of mission.tasks) {
-                    await prisma.missionTask.create({
-                        data: {
-                            missionId: missionRecord.id,
-                            name: task.name,
-                            taskType:
-                                task.taskType === "ASSIGNED"
-                                    ? MissionTaskType.ASSIGNED
-                                    : task.taskType === "IMPLIED"
-                                      ? MissionTaskType.IMPLIED
-                                      : MissionTaskType.ESSENTIAL,
-                            taskVerb: task.taskVerb,
-                            sequence: task.sequence,
-                            coordinatingInstructions: task.coordinatingInstructions
-                                ? { instructions: task.coordinatingInstructions }
-                                : undefined,
-                            status: MissionTaskStatus.PENDING
-                        }
-                    });
-                }
-            }
-
-            // Store analysis output on campaign
-            await prisma.campaign.update({
-                where: { id: campaignId },
-                data: {
-                    analysisOutput: decomposition as unknown as Prisma.InputJsonValue
-                }
-            });
-
             await logCampaignEvent(
                 campaignId,
-                "analyzed",
-                `Decomposed into ${decomposition.missions.length} missions with ${decomposition.missions.reduce((sum, m) => sum + m.tasks.length, 0)} tasks`,
-                {
-                    missionCount: decomposition.missions.length,
-                    essentialTask: decomposition.essentialTask
-                }
+                "analyzing",
+                "Campaign analysis started — invoking campaign-analyst agent"
             );
+        });
+
+        // Step 2: Resolve campaign-analyst agent and let it decompose
+        const result = await step.run("invoke-analyst", async () => {
+            // Load campaign data directly (avoids HTTP auth issues in Inngest context)
+            const campaignData = await prisma.campaign.findUniqueOrThrow({
+                where: { id: campaignId },
+                select: {
+                    id: true,
+                    name: true,
+                    intent: true,
+                    endState: true,
+                    description: true,
+                    constraints: true,
+                    restraints: true
+                }
+            });
+
+            const contextPrompt = `Analyze this campaign and decompose it into missions and tasks using the campaign-write-missions tool.
+
+Campaign ID: ${campaignId}
+Name: ${campaignData.name}
+Intent: ${campaignData.intent}
+End State: ${campaignData.endState}
+${campaignData.description ? `Description: ${campaignData.description}` : ""}
+${campaignData.constraints && (campaignData.constraints as string[]).length > 0 ? `Constraints: ${JSON.stringify(campaignData.constraints)}` : ""}
+${campaignData.restraints && (campaignData.restraints as string[]).length > 0 ? `Restraints: ${JSON.stringify(campaignData.restraints)}` : ""}
+
+Decompose this into missions (high-level objectives) and tasks (concrete work items). Use the campaign-write-missions tool to persist your analysis.`;
+
+            return invokeCampaignAgent({
+                agentSlug: "campaign-analyst",
+                prompt: contextPrompt,
+                campaignId,
+                phase: "analysis"
+            });
+        });
+
+        // Step 3: Validate that the analyst actually created missions
+        const validation = await step.run("validate-analysis", async () => {
+            const missionCount = await prisma.mission.count({ where: { campaignId } });
+            if (missionCount === 0) {
+                // Log the failure but don't throw — the agent may have generated text without calling the tool
+                await logCampaignEvent(
+                    campaignId,
+                    "analysis_validation_failed",
+                    `Analyst agent did not create any missions. The campaign-write-missions tool may not have been called. Retrying...`
+                );
+                throw new Error(
+                    "Analysis validation failed: no missions created. The campaign-analyst agent did not call the campaign-write-missions tool."
+                );
+            }
+            const taskCount = await prisma.missionTask.count({
+                where: { mission: { campaignId } }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "analysis_validated",
+                `Analysis produced ${missionCount} missions with ${taskCount} tasks`
+            );
+            return { missionCount, taskCount };
         });
 
         // Step 4: Trigger planning
@@ -279,12 +291,17 @@ Be thorough but practical. Don't over-decompose -- each task should map to a sin
             data: { campaignId }
         });
 
-        return { campaignId, missions: decomposition.missions.length };
+        return {
+            campaignId,
+            analystRunId: result.runId,
+            missions: validation.missionCount,
+            tasks: validation.taskCount
+        };
     }
 );
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// 2. campaign/plan — Agent assignment and dependency ordering
+// 2. campaign/plan — Execution plan via campaign-planner agent
 // ═══════════════════════════════════════════════════════════════════════════════
 
 export const campaignPlanFunction = inngest.createFunction(
@@ -311,146 +328,177 @@ export const campaignPlanFunction = inngest.createFunction(
 
         console.log(`[Campaign] Planning campaign: ${campaignId}`);
 
-        // Step 1: Load campaign + missions + available agents
-        const context = await step.run("load-context", async () => {
-            const campaign = await prisma.campaign.findUniqueOrThrow({
+        // Step 1: Invoke campaign-planner agent
+        const result = await step.run("invoke-planner", async () => {
+            // Load campaign data with missions/tasks directly (avoids HTTP auth issues in Inngest context)
+            const campaignData = await prisma.campaign.findUniqueOrThrow({
                 where: { id: campaignId },
                 include: {
                     missions: {
-                        include: { tasks: true },
-                        orderBy: { sequence: "asc" }
+                        include: { tasks: true }
                     }
                 }
             });
 
-            // Get available agents with their tools
-            const agents = await prisma.agent.findMany({
-                where: { isActive: true },
-                select: {
-                    id: true,
-                    slug: true,
-                    name: true,
-                    instructions: true,
-                    tools: { select: { toolId: true } }
-                }
-            });
+            const contextPrompt = `Plan this campaign by assigning agents to tasks. Use agent-list to see available agents, then use campaign-write-plan to persist assignments. If no suitable agent exists for a task, include it in gapsDetected.
 
-            return { campaign, agents };
+Campaign ID: ${campaignId}
+Name: ${campaignData.name}
+Intent: ${campaignData.intent}
+End State: ${campaignData.endState}
+${campaignData.description ? `Description: ${campaignData.description}` : ""}
+
+Missions and Tasks:
+${JSON.stringify(
+    campaignData.missions.map((m) => ({
+        name: m.name,
+        missionStatement: m.missionStatement,
+        priority: m.priority,
+        tasks: m.tasks.map((t) => ({
+            name: t.name,
+            taskVerb: t.taskVerb,
+            taskType: t.taskType,
+            sequence: t.sequence
+        }))
+    })),
+    null,
+    2
+)}
+
+For each task, evaluate which active agent is best suited. Use campaign-write-plan to write your assignments.`;
+
+            return invokeCampaignAgent({
+                agentSlug: "campaign-planner",
+                prompt: contextPrompt,
+                campaignId,
+                phase: "planning"
+            });
         });
 
-        // Step 2: Use LLM to assign agents to tasks
-        const plan = await step.run("generate-plan", async () => {
-            const agentSummaries = context.agents.map((a) => ({
-                slug: a.slug,
-                name: a.name,
-                description: a.instructions?.substring(0, 200) || "No description",
-                tools: a.tools.map((t) => t.toolId).slice(0, 20)
-            }));
-
-            const missionSummaries = context.campaign.missions.map((m) => ({
-                name: m.name,
-                statement: m.missionStatement,
-                sequence: m.sequence,
-                tasks: m.tasks.map((t) => ({
-                    name: t.name,
-                    type: t.taskType,
-                    verb: t.taskVerb,
-                    sequence: t.sequence
-                }))
-            }));
-
-            const result = await generateObject({
-                model: openai("gpt-4o"),
-                schema: PlanAssignmentSchema,
-                prompt: `You are a mission planner assigning AI agents to tasks.
-
-CAMPAIGN: ${context.campaign.name}
-INTENT: ${context.campaign.intent}
-CONSTRAINTS: ${context.campaign.constraints.join(", ") || "None"}
-RESTRAINTS: ${context.campaign.restraints.join(", ") || "None"}
-${context.campaign.maxCostUsd ? `BUDGET: $${context.campaign.maxCostUsd}` : ""}
-
-AVAILABLE AGENTS:
-${JSON.stringify(agentSummaries, null, 2)}
-
-MISSIONS AND TASKS:
-${JSON.stringify(missionSummaries, null, 2)}
-
-For each task, assign the best-suited agent based on:
-1. Agent's tools (does it have the right integrations?)
-2. Agent's instructions (is it designed for this kind of work?)
-3. Efficiency (minimize agent switching within a mission)
-
-If no agent seems suitable, assign the agent with the closest capabilities.
-Provide token and cost estimates per task.`
-            });
-
-            return result.object;
-        });
-
-        // Step 3: Update database with assignments
-        await step.run("apply-assignments", async () => {
-            for (const missionAssignment of plan.assignments) {
-                const mission = context.campaign.missions.find(
-                    (m) => m.name === missionAssignment.missionName
-                );
-                if (!mission) continue;
-
-                for (const taskAssignment of missionAssignment.tasks) {
-                    const task = mission.tasks.find((t) => t.name === taskAssignment.taskName);
-                    if (!task) continue;
-
-                    // Look up agent ID from slug
-                    const agent = context.agents.find((a) => a.slug === taskAssignment.agentSlug);
-
-                    const existingInstructions =
-                        (task.coordinatingInstructions as Record<string, unknown>) || {};
-                    await prisma.missionTask.update({
-                        where: { id: task.id },
-                        data: {
-                            assignedAgentId: agent?.id || null,
-                            coordinatingInstructions: {
-                                ...existingInstructions,
-                                agentSlug: taskAssignment.agentSlug,
-                                reasoning: taskAssignment.reasoning,
-                                estimatedTokens: taskAssignment.estimatedTokens,
-                                estimatedCostUsd: taskAssignment.estimatedCostUsd
-                            } as Prisma.InputJsonValue
-                        }
-                    });
-                }
-            }
-
-            // Store execution plan
-            await prisma.campaign.update({
+        // Step 2: Validate planning output and check for capability gaps
+        const campaign = await step.run("validate-and-check-gaps", async () => {
+            const c = await prisma.campaign.findUniqueOrThrow({
                 where: { id: campaignId },
-                data: {
-                    executionPlan: plan as unknown as Prisma.InputJsonValue,
-                    status: CampaignStatus.READY
+                select: {
+                    executionPlan: true,
+                    requireApproval: true,
+                    status: true
                 }
             });
+
+            // Validate that the planner actually wrote a plan
+            if (!c.executionPlan) {
+                await logCampaignEvent(
+                    campaignId,
+                    "planning_validation_failed",
+                    `Planner agent did not write an execution plan. The campaign-write-plan tool may not have been called. Retrying...`
+                );
+                throw new Error(
+                    "Planning validation failed: no execution plan created. The campaign-planner agent did not call the campaign-write-plan tool."
+                );
+            }
 
             await logCampaignEvent(
                 campaignId,
-                "planned",
-                `Execution plan created. Strategy: ${plan.executionStrategy}. Est. cost: $${plan.estimatedTotalCostUsd.toFixed(2)}`,
-                {
-                    strategy: plan.executionStrategy,
-                    estimatedCostUsd: plan.estimatedTotalCostUsd,
-                    estimatedDurationMinutes: plan.estimatedDurationMinutes
-                }
+                "planning_validated",
+                `Execution plan written successfully`
             );
+
+            return c;
         });
 
-        // Step 4: If no approval required, start execution immediately
-        if (!context.campaign.requireApproval) {
+        const plan = campaign.executionPlan as Record<string, unknown> | null;
+        const gaps = (plan?.gapsDetected as unknown[]) || [];
+
+        if (gaps.length > 0) {
+            // Capability gaps found — invoke the architect
+            await step.sendEvent("trigger-build-capabilities", {
+                name: "campaign/build-capabilities",
+                data: { campaignId }
+            });
+            return { campaignId, plannerRunId: result.runId, gapsFound: gaps.length };
+        }
+
+        // Step 3: No gaps — if no approval required, start execution
+        if (!campaign.requireApproval) {
             await step.sendEvent("trigger-execute", {
                 name: "campaign/execute",
                 data: { campaignId }
             });
         }
 
-        return { campaignId, plan: plan.executionStrategy };
+        return { campaignId, plannerRunId: result.runId, gapsFound: 0 };
+    }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 2b. campaign/build-capabilities — Build new agents/skills for capability gaps
+// ═══════════════════════════════════════════════════════════════════════════════
+
+export const campaignBuildCapabilitiesFunction = inngest.createFunction(
+    {
+        id: "campaign-build-capabilities",
+        retries: 1,
+        onFailure: async ({ event, error }) => {
+            const { campaignId } = event.data.event.data;
+            console.error(`[Campaign] Capability build failed for ${campaignId}:`, error.message);
+            // Don't fail the campaign — fall back to planning without new agents
+            await logCampaignEvent(
+                campaignId,
+                "capability_build_failed",
+                `Architect failed to build capabilities: ${error.message}. Proceeding with available agents.`
+            );
+            // Re-trigger plan — the planner will assign best-available agents
+            await inngest.send({
+                name: "campaign/plan",
+                data: { campaignId }
+            });
+        }
+    },
+    { event: "campaign/build-capabilities" },
+    async ({ event, step }) => {
+        const { campaignId } = event.data;
+
+        console.log(`[Campaign] Building capabilities for campaign: ${campaignId}`);
+
+        // Step 1: Invoke campaign-architect agent
+        const result = await step.run("invoke-architect", async () => {
+            // Load campaign data with gap details directly (avoids HTTP auth issues in Inngest context)
+            const campaignData = await prisma.campaign.findUniqueOrThrow({
+                where: { id: campaignId },
+                select: { name: true, intent: true, endState: true, executionPlan: true }
+            });
+            const plan = campaignData.executionPlan as Record<string, unknown> | null;
+            const gaps = plan?.gapsDetected || [];
+
+            const contextPrompt = `Build capabilities for this campaign. The campaign planner identified capability gaps that need new agents or skills.
+
+Campaign ID: ${campaignId}
+Name: ${campaignData.name}
+Intent: ${campaignData.intent}
+End State: ${campaignData.endState}
+
+Capability Gaps Detected:
+${JSON.stringify(gaps, null, 2)}
+
+Use skill-list to check existing skills before creating anything new. Build the agents and skills needed to fill these gaps. Follow the reuse-first strategy: only create new resources when no existing agent or skill can handle the requirement.`;
+
+            return invokeCampaignAgent({
+                agentSlug: "campaign-architect",
+                prompt: contextPrompt,
+                campaignId,
+                phase: "architecture",
+                metadata: { gapCount: (gaps as unknown[]).length }
+            });
+        });
+
+        // Step 2: Re-trigger planning — the planner now sees the new agents
+        await step.sendEvent("re-plan", {
+            name: "campaign/plan",
+            data: { campaignId }
+        });
+
+        return { campaignId, architectRunId: result.runId };
     }
 );
 
@@ -513,24 +561,237 @@ export const campaignExecuteFunction = inngest.createFunction(
         // Step 3: Execute missions in sequence groups (parallel within each group)
         const sortedSequences = Array.from(missionsBySequence.keys()).sort((a, b) => a - b);
 
+        let allUpstreamFailed = false;
+        // Collect prior mission outputs for inter-mission data transfer
+        let priorMissionContext = "";
+
         for (const seq of sortedSequences) {
             const missions = missionsBySequence.get(seq)!;
+
+            // Fix 2F: Skip doomed missions when all upstream missions failed
+            if (allUpstreamFailed) {
+                await step.run(`skip-doomed-seq-${seq}`, async () => {
+                    for (const m of missions) {
+                        await prisma.mission.update({
+                            where: { id: m.id },
+                            data: {
+                                status: MissionStatus.FAILED,
+                                completedAt: new Date()
+                            }
+                        });
+                        // Skip all tasks in this mission
+                        await prisma.missionTask.updateMany({
+                            where: { missionId: m.id },
+                            data: {
+                                status: MissionTaskStatus.SKIPPED,
+                                error: "Skipped: all upstream missions failed",
+                                completedAt: new Date()
+                            }
+                        });
+                    }
+                    await logCampaignEvent(
+                        campaignId,
+                        "missions_skipped",
+                        `Skipped ${missions.length} mission(s) at sequence ${seq}: all upstream missions failed`,
+                        {
+                            skippedMissionIds: missions.map((m) => m.id),
+                            sequence: seq
+                        }
+                    );
+                });
+                continue;
+            }
 
             // Fan out all missions at this sequence level in parallel
             const events = missions.map((m) => ({
                 name: "mission/execute" as const,
-                data: { campaignId, missionId: m.id }
+                data: {
+                    campaignId,
+                    missionId: m.id,
+                    priorMissionContext: priorMissionContext || undefined
+                }
             }));
 
             await step.sendEvent(`execute-seq-${seq}`, events);
 
-            // Wait for all missions at this sequence to complete
+            // Wait for all missions at this sequence to be reviewed (supports rework loop)
+            // Each mission may go through multiple iterations if the reviewer requests rework
             for (const mission of missions) {
-                await step.waitForEvent(`wait-mission-${mission.id}`, {
-                    event: "mission/complete",
-                    if: `async.data.missionId == '${mission.id}'`,
-                    timeout: campaign.timeoutMinutes ? `${campaign.timeoutMinutes}m` : "24h"
+                let missionDone = false;
+                let iteration = 0;
+                while (!missionDone) {
+                    const reviewResult = await step.waitForEvent(
+                        `wait-mission-${mission.id}-iter-${iteration}`,
+                        {
+                            event: "mission/reviewed",
+                            if: `async.data.missionId == '${mission.id}'`,
+                            timeout: campaign.timeoutMinutes ? `${campaign.timeoutMinutes}m` : "24h"
+                        }
+                    );
+                    if (reviewResult?.data?.decision === "rework") {
+                        iteration++;
+                        // Re-trigger mission execution with rework flag
+                        await step.sendEvent(`rework-mission-${mission.id}-iter-${iteration}`, {
+                            name: "mission/execute",
+                            data: {
+                                campaignId,
+                                missionId: mission.id,
+                                isRework: true,
+                                priorMissionContext: priorMissionContext || undefined
+                            }
+                        });
+                    } else {
+                        missionDone = true;
+                    }
+                }
+            }
+
+            // Check if ALL missions at this sequence failed (to decide whether downstream is doomed)
+            const missionStatuses = await step.run(`check-seq-${seq}-status`, async () => {
+                const statuses = await prisma.mission.findMany({
+                    where: { id: { in: missions.map((m) => m.id) } },
+                    select: { id: true, status: true }
                 });
+                return statuses;
+            });
+
+            const allFailed = missionStatuses.every((s) => s.status === MissionStatus.FAILED);
+
+            // Mission-level approval gate: if any mission in this sequence requires
+            // approval, pause and wait for human approval before proceeding
+            const needsApproval = missions.some((m) => m.requiresApproval);
+            if (needsApproval && !allFailed) {
+                // Set missions to AWAITING_APPROVAL
+                await step.run(`set-awaiting-approval-seq-${seq}`, async () => {
+                    for (const m of missions) {
+                        if (m.requiresApproval) {
+                            await prisma.mission.update({
+                                where: { id: m.id },
+                                data: { status: MissionStatus.AWAITING_APPROVAL }
+                            });
+                        }
+                    }
+                    await logCampaignEvent(
+                        campaignId,
+                        "awaiting_approval",
+                        `Mission sequence ${seq} completed — awaiting human approval before proceeding`,
+                        {
+                            sequence: seq,
+                            missionIds: missions.filter((m) => m.requiresApproval).map((m) => m.id)
+                        }
+                    );
+                });
+
+                // Wait for approval event
+                await step.waitForEvent(`wait-approval-seq-${seq}`, {
+                    event: "mission/approved",
+                    if: `async.data.campaignId == '${campaignId}' && async.data.sequence == '${seq}'`,
+                    timeout: "24h"
+                });
+
+                // Update approved missions
+                await step.run(`mark-approved-seq-${seq}`, async () => {
+                    for (const m of missions) {
+                        if (m.requiresApproval) {
+                            await prisma.mission.update({
+                                where: { id: m.id },
+                                data: {
+                                    status: MissionStatus.COMPLETE,
+                                    approvedAt: new Date()
+                                }
+                            });
+                        }
+                    }
+                    await logCampaignEvent(
+                        campaignId,
+                        "approved",
+                        `Mission sequence ${seq} approved — proceeding to next sequence`,
+                        { sequence: seq }
+                    );
+                });
+            }
+
+            if (allFailed && missions.length > 0) {
+                allUpstreamFailed = true;
+                await logCampaignEvent(
+                    campaignId,
+                    "upstream_failed",
+                    `All ${missions.length} mission(s) at sequence ${seq} failed. Downstream missions may be skipped.`,
+                    { sequence: seq }
+                );
+            }
+
+            // Collect completed mission outputs for inter-mission data transfer
+            const seqOutputs = await step.run(`collect-seq-${seq}-outputs`, async () => {
+                const completedTasks = await prisma.missionTask.findMany({
+                    where: {
+                        mission: {
+                            id: { in: missions.map((m) => m.id) }
+                        },
+                        status: MissionTaskStatus.COMPLETE
+                    },
+                    select: {
+                        name: true,
+                        result: true,
+                        mission: { select: { name: true } }
+                    }
+                });
+                return completedTasks.map((t) => {
+                    const result =
+                        typeof t.result === "object" && t.result !== null
+                            ? ((t.result as Record<string, unknown>).output as string) || ""
+                            : "";
+                    return {
+                        missionName: t.mission.name,
+                        taskName: t.name,
+                        // Truncate to 3000 chars per task to manage context
+                        output: result.substring(0, 3000)
+                    };
+                });
+            });
+
+            if (seqOutputs.length > 0) {
+                const newContext = seqOutputs
+                    .map(
+                        (o) =>
+                            `=== Mission: ${o.missionName} / Task: "${o.taskName}" ===\n${o.output}`
+                    )
+                    .join("\n\n");
+                priorMissionContext = priorMissionContext
+                    ? priorMissionContext + "\n\n" + newContext
+                    : newContext;
+            }
+
+            // Context size management: summarize when accumulated context exceeds 15K chars
+            if (priorMissionContext.length > 15000) {
+                const originalLength = priorMissionContext.length;
+                try {
+                    const summaryResult = await step.run(
+                        `summarize-context-seq-${seq}`,
+                        async () => {
+                            return await invokeCampaignAgent({
+                                agentSlug: "campaign-analyst",
+                                prompt: `Summarize the following mission results into the key facts, data points, specific numbers, and conclusions that downstream missions will need. Preserve all specific data (prices, metrics, names, URLs). Keep under 5000 characters.\n\n${priorMissionContext}`,
+                                campaignId,
+                                phase: "context-summarization"
+                            });
+                        }
+                    );
+                    priorMissionContext = `[SUMMARIZED FROM ${originalLength} CHARS OF PRIOR MISSION RESULTS]\n${summaryResult.output.substring(0, 5000)}`;
+                    console.log(
+                        `[Campaign] Context summarized: ${originalLength} -> ${priorMissionContext.length} chars`
+                    );
+                } catch (summarizeErr) {
+                    console.warn(
+                        `[Campaign] Context summarization failed, truncating instead:`,
+                        summarizeErr
+                    );
+                    priorMissionContext =
+                        priorMissionContext.substring(0, 15000) +
+                        "\n[... truncated from " +
+                        originalLength +
+                        " chars]";
+                }
             }
         }
 
@@ -572,9 +833,42 @@ export const missionExecuteFunction = inngest.createFunction(
     },
     { event: "mission/execute" },
     async ({ event, step }) => {
-        const { campaignId, missionId } = event.data;
+        const { campaignId, missionId, priorMissionContext, isRework } = event.data as {
+            campaignId: string;
+            missionId: string;
+            priorMissionContext?: string;
+            isRework?: boolean;
+        };
 
-        console.log(`[Mission] Executing mission: ${missionId}`);
+        console.log(`[Mission] ${isRework ? "REWORKING" : "Executing"} mission: ${missionId}`);
+
+        // If this is a rework iteration, reset all tasks to PENDING
+        if (isRework) {
+            await step.run("reset-tasks-for-rework", async () => {
+                await prisma.missionTask.updateMany({
+                    where: {
+                        missionId,
+                        status: { in: ["COMPLETE", "FAILED", "SKIPPED"] }
+                    },
+                    data: {
+                        status: MissionTaskStatus.PENDING,
+                        error: null,
+                        result: Prisma.DbNull,
+                        agentRunId: null,
+                        costUsd: null,
+                        tokens: null,
+                        startedAt: null,
+                        completedAt: null
+                    }
+                });
+                await logCampaignEvent(
+                    campaignId,
+                    "mission_rework",
+                    `Mission "${missionId}" tasks reset for rework iteration`,
+                    { missionId, isRework: true }
+                );
+            });
+        }
 
         // Step 1: Load mission + tasks, mark as executing
         const mission = await step.run("start-mission", async () => {
@@ -592,7 +886,7 @@ export const missionExecuteFunction = inngest.createFunction(
             await logCampaignEvent(
                 campaignId,
                 "mission_started",
-                `Mission "${m.name}" started with ${m.tasks.length} tasks`,
+                `Mission "${m.name}" ${isRework ? `(rework iteration ${m.currentIteration})` : ""} started with ${m.tasks.length} tasks`,
                 { missionId }
             );
             return m;
@@ -610,32 +904,79 @@ export const missionExecuteFunction = inngest.createFunction(
 
         const sortedSequences = Array.from(tasksBySequence.keys()).sort((a, b) => a - b);
 
-        let missionFailed = false;
+        let failedCount = 0;
+        let completedCount = 0;
+        let essentialFailed = false;
+        // Collect completed task results to pass as context to downstream tasks
+        const completedTaskOutputs: Array<{ name: string; output: string }> = [];
 
         // Step 3: Execute tasks in sequence groups
         for (const seq of sortedSequences) {
-            if (missionFailed) break;
+            // Stop early only if: essential task failed OR campaign paused
+            if (essentialFailed) break;
 
             const tasks = tasksBySequence.get(seq)!;
 
-            // Execute all tasks at this sequence level
+            // Build prior results context for downstream tasks (sequence > 0)
+            const priorResultsSummary =
+                completedTaskOutputs.length > 0
+                    ? completedTaskOutputs
+                          .map(
+                              (r) =>
+                                  `--- "${r.name}" ---\n${r.output.substring(0, 2000)}${r.output.length > 2000 ? "\n[... truncated]" : ""}`
+                          )
+                          .join("\n\n")
+                    : undefined;
+
+            // Filter out tasks that are already completed/failed (e.g. from Inngest retry)
+            const pendingTasks = tasks.filter(
+                (t) =>
+                    t.status === MissionTaskStatus.PENDING || t.status === MissionTaskStatus.RUNNING
+            );
+
+            // If this is a rework iteration, prepend rework feedback to context
+            let effectiveContext = priorMissionContext;
+            if (isRework && mission.reworkReason) {
+                const reworkPrefix = `\n\nREWORK FEEDBACK FROM REVIEWER (address these issues):\n${mission.reworkReason}\n`;
+                effectiveContext = reworkPrefix + (effectiveContext || "");
+            }
+
+            // Execute all pending tasks at this sequence level
             const taskResults = await Promise.allSettled(
-                tasks.map((task) =>
+                pendingTasks.map((task) =>
                     step.run(`task-${task.id}`, async () => {
-                        return await executeTask(task, mission, campaignId);
+                        return await executeTask(
+                            task,
+                            mission,
+                            campaignId,
+                            priorResultsSummary,
+                            effectiveContext
+                        );
                     })
                 )
             );
 
-            // Check results and handle actions-on
+            // Check results — collect failures but continue executing
             for (let i = 0; i < taskResults.length; i++) {
                 const result = taskResults[i];
-                const task = tasks[i];
+                const task = pendingTasks[i];
 
-                if (result.status === "rejected") {
+                if (result.status === "fulfilled") {
+                    completedCount++;
+                    completedTaskOutputs.push({
+                        name: task.name,
+                        output: result.value.output
+                    });
+                } else if (result.status === "rejected") {
+                    failedCount++;
                     const actionsOn = mission.actionsOn as Record<string, string> | null;
 
                     console.error(`[Mission] Task "${task.name}" failed:`, result.reason);
+
+                    // Check if this was the ESSENTIAL task
+                    if (task.taskType === "ESSENTIAL") {
+                        essentialFailed = true;
+                    }
 
                     if (actionsOn?.default === "skip") {
                         await prisma.missionTask.update({
@@ -664,10 +1005,9 @@ export const missionExecuteFunction = inngest.createFunction(
                             `Campaign paused: task "${task.name}" failed`,
                             { missionId, taskId: task.id }
                         );
-                        missionFailed = true;
+                        essentialFailed = true; // Stop further execution
                     } else {
-                        // Default: fail the mission
-                        missionFailed = true;
+                        // Default: log the failure but continue executing other tasks
                         await prisma.missionTask.update({
                             where: { id: task.id },
                             data: {
@@ -687,7 +1027,27 @@ export const missionExecuteFunction = inngest.createFunction(
             }
         }
 
-        // Step 4: Update mission status
+        // Mark any remaining PENDING tasks as SKIPPED if we stopped early
+        if (essentialFailed) {
+            await step.run("skip-remaining-tasks", async () => {
+                await prisma.missionTask.updateMany({
+                    where: {
+                        missionId,
+                        status: MissionTaskStatus.PENDING
+                    },
+                    data: {
+                        status: MissionTaskStatus.SKIPPED,
+                        error: "Skipped: essential task failed or campaign paused",
+                        completedAt: new Date()
+                    }
+                });
+            });
+        }
+
+        // Step 4: Determine mission outcome
+        // Mission fails only if ALL tasks failed OR the essential task failed
+        const missionFailed = essentialFailed || (failedCount > 0 && completedCount === 0);
+
         await step.run("finalize-mission", async () => {
             const finalStatus = missionFailed ? MissionStatus.FAILED : MissionStatus.REVIEWING;
 
@@ -698,6 +1058,15 @@ export const missionExecuteFunction = inngest.createFunction(
                     completedAt: new Date()
                 }
             });
+
+            if (failedCount > 0 && !missionFailed) {
+                await logCampaignEvent(
+                    campaignId,
+                    "mission_partial",
+                    `Mission "${mission.name}" completed with partial results: ${completedCount} completed, ${failedCount} failed`,
+                    { missionId, completedCount, failedCount }
+                );
+            }
         });
 
         // Step 5: Trigger mission AAR
@@ -720,6 +1089,8 @@ async function executeTask(
         id: string;
         name: string;
         taskVerb: string;
+        taskType?: string;
+        status?: string;
         assignedAgentId: string | null;
         coordinatingInstructions: unknown;
     },
@@ -729,27 +1100,68 @@ async function executeTask(
         missionStatement: string;
         campaign: { id: string; intent: string; name: string };
     },
-    campaignId: string
+    campaignId: string,
+    priorResults?: string,
+    priorMissionContext?: string
 ): Promise<{ runId: string; output: string }> {
+    // Pre-flight: check campaign budget before executing
+    const currentCampaign = await prisma.campaign.findUnique({
+        where: { id: campaignId },
+        select: { totalCostUsd: true, maxCostUsd: true }
+    });
+    if (currentCampaign?.maxCostUsd && currentCampaign.totalCostUsd >= currentCampaign.maxCostUsd) {
+        throw new Error(
+            `Campaign budget exceeded: $${currentCampaign.totalCostUsd.toFixed(2)} / $${currentCampaign.maxCostUsd} limit`
+        );
+    }
+
     // Mark task as running
     await prisma.missionTask.update({
         where: { id: task.id },
         data: { status: MissionTaskStatus.RUNNING, startedAt: new Date() }
     });
 
-    // Determine agent slug from coordinating instructions
+    // Determine agent slug and context from coordinating instructions
     const instructions = task.coordinatingInstructions as Record<string, unknown> | null;
     const agentSlug = (instructions?.agentSlug as string) || "assistant";
     const taskContext = instructions?.instructions as string | undefined;
+    const plannerInstructions = instructions?.plannerInstructions as string | undefined;
+    const plannerReasoning = instructions?.reasoning as string | undefined;
 
-    // Resolve the agent
-    const { agent, record } = await agentResolver.resolve({ slug: agentSlug });
+    // Extract tool hints from coordinating instructions for filtering
+    const toolHints = instructions?.toolHints as string[] | undefined;
+
+    // Resolve the agent with all skills loaded for campaign execution
+    const { agent, record, activeSkills } = await agentResolver.resolve({
+        slug: agentSlug,
+        loadAllSkills: true, // Campaign tasks need full capability
+        // If the planner specified tool hints, use them to reduce token overhead
+        ...(toolHints?.length ? { toolFilter: toolHints } : {})
+    });
 
     if (!record) {
         throw new Error(`Agent "${agentSlug}" not found in database`);
     }
 
-    // Build the prompt for the agent
+    // Pre-flight: log active skills for observability
+    const skillSummary = activeSkills.map((s) => s.skillSlug).join(", ") || "none";
+    console.log(
+        `[Campaign] Agent "${agentSlug}" resolved with ${record.tools.length} direct tools, ` +
+            `${activeSkills.length} active skills (${skillSummary})`
+    );
+
+    // Determine if this task involves Firecrawl web scraping
+    const skillNames = activeSkills.map((s) => s.skillSlug).join(" ");
+    const hasFirecrawlTools =
+        skillNames.includes("firecrawl") ||
+        (taskContext && taskContext.toLowerCase().includes("firecrawl")) ||
+        task.taskVerb.toLowerCase().includes("scrape");
+
+    const firecrawlHint = hasFirecrawlTools
+        ? "\n\nIMPORTANT: When using firecrawl_scrape, ALWAYS set onlyMainContent: true to reduce token usage. Prefer firecrawl_extract with a targeted schema over full page scrapes when possible. Limit scraping to the most relevant 3-5 pages, not the entire site."
+        : "";
+
+    // Build the prompt for the agent with full context from analyst + planner
     const prompt = `You are executing a task as part of a campaign.
 
 CAMPAIGN: ${mission.campaign.name}
@@ -757,11 +1169,14 @@ CAMPAIGN INTENT: ${mission.campaign.intent}
 MISSION: ${mission.name} — ${mission.missionStatement}
 TASK: ${task.name}
 ACTION: ${task.taskVerb}
-${taskContext ? `ADDITIONAL CONTEXT: ${taskContext}` : ""}
+${taskContext ? `\nCONTEXT: ${taskContext}` : ""}
+${plannerInstructions ? `\nEXECUTION GUIDANCE: ${plannerInstructions}` : ""}
+${plannerReasoning ? `\nAGENT SELECTION REASONING: ${plannerReasoning}` : ""}
+${priorResults ? `\nCOMPLETED PRIOR TASKS IN THIS MISSION:\n${priorResults}` : ""}${priorMissionContext ? `\nRESULTS FROM PRIOR MISSIONS:\n${priorMissionContext}` : ""}${firecrawlHint}
 
 Execute this task thoroughly. Use your available tools as needed.
 Focus on completing the specific action described above.
-Report your results clearly.`;
+Report your results clearly and completely.`;
 
     // Create an AgentRun via startRun (this bridges into the existing evaluation pipeline)
     const runHandle = await startRun({
@@ -778,18 +1193,55 @@ Report your results clearly.`;
     });
 
     try {
-        // Generate response
-        const response = await agent.generate(prompt);
+        // Generate response with retry for transient errors
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        let response: any;
+        let lastRetryError: Error | null = null;
+
+        for (let attempt = 0; attempt <= TASK_MAX_RETRIES; attempt++) {
+            try {
+                response = await agent.generate(prompt, {
+                    maxSteps: record.maxSteps || 10,
+                    ...(record.maxTokens ? { maxTokens: record.maxTokens } : { maxTokens: 16384 })
+                });
+                lastRetryError = null;
+                break;
+            } catch (retryErr) {
+                lastRetryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+                if (attempt < TASK_MAX_RETRIES && isRetryableError(lastRetryError)) {
+                    const delay = Math.pow(2, attempt) * 1000; // 1s, 2s
+                    console.warn(
+                        `[Campaign] Task "${task.name}" attempt ${attempt + 1} failed (retryable): ${lastRetryError.message}. Retrying in ${delay}ms...`
+                    );
+                    await new Promise((r) => setTimeout(r, delay));
+                    continue;
+                }
+                throw lastRetryError;
+            }
+        }
+
+        if (lastRetryError) throw lastRetryError;
+
+        // Record tool calls for trace visibility
+        await recordToolCallsFromResponse(response, runHandle);
 
         const output = response.text || "";
 
-        // Extract usage safely (AI SDK v6 uses inputTokens/outputTokens)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const usage = (response as any).usage || {};
-        const promptTokens: number = usage?.inputTokens || usage?.promptTokens || 0;
-        const completionTokens: number = usage?.outputTokens || usage?.completionTokens || 0;
-        const totalTokens = promptTokens + completionTokens;
-        const costUsd = promptTokens * 0.0000025 + completionTokens * 0.00001;
+        // Use the robust token-extraction utility (handles totalUsage, step aggregation, etc.)
+        const tokenUsage = extractTokenUsage(response) || {
+            promptTokens: 0,
+            completionTokens: 0,
+            totalTokens: 0
+        };
+        const promptTokens = tokenUsage.promptTokens;
+        const completionTokens = tokenUsage.completionTokens;
+        const totalTokens = tokenUsage.totalTokens;
+        const costUsd = calculateCost(
+            record.modelName,
+            record.modelProvider,
+            promptTokens,
+            completionTokens
+        );
 
         // Complete the run — this emits run/completed which triggers evaluation pipeline
         await runHandle.complete({
@@ -801,14 +1253,68 @@ Report your results clearly.`;
             costUsd
         });
 
-        // Update task with results
+        // Check if the agent reported inability to complete the objective
+        const outputLower = output.toLowerCase();
+        const hasToolNotFound = outputLower.includes("tool") && outputLower.includes("not found");
+        const hasExplicitFailure =
+            (outputLower.includes("i don't have access") && outputLower.includes("tool")) ||
+            (outputLower.includes("i cannot") && outputLower.includes("tool"));
+
+        if (hasToolNotFound || hasExplicitFailure) {
+            // Agent ran but could not achieve the objective
+            await prisma.missionTask.update({
+                where: { id: task.id },
+                data: {
+                    status: MissionTaskStatus.FAILED,
+                    agentRunId: runHandle.runId,
+                    error: `Agent completed but objective not met: ${output.substring(0, 200)}`,
+                    result: {
+                        output,
+                        tokens: totalTokens
+                    } as Prisma.InputJsonValue,
+                    costUsd,
+                    tokens: totalTokens,
+                    completedAt: new Date()
+                }
+            });
+            await logCampaignEvent(
+                campaignId,
+                "task_failed",
+                `Task "${task.name}" failed: agent could not achieve objective`,
+                {
+                    missionId: mission.id,
+                    taskId: task.id,
+                    agentSlug: record.slug,
+                    runId: runHandle.runId,
+                    costUsd
+                }
+            );
+            // Still count costs against mission and campaign
+            await prisma.mission.update({
+                where: { id: mission.id },
+                data: {
+                    totalCostUsd: { increment: costUsd },
+                    totalTokens: { increment: totalTokens }
+                }
+            });
+            await prisma.campaign.update({
+                where: { id: campaignId },
+                data: {
+                    totalCostUsd: { increment: costUsd },
+                    totalTokens: { increment: totalTokens }
+                }
+            });
+            throw new Error(`Agent completed but objective not met: ${output.substring(0, 200)}`);
+        }
+
+        // Update task with results — objective achieved
         await prisma.missionTask.update({
             where: { id: task.id },
             data: {
                 status: MissionTaskStatus.COMPLETE,
                 agentRunId: runHandle.runId,
                 result: {
-                    output: output.substring(0, 2000),
+                    output,
                     tokens: totalTokens
                 } as Prisma.InputJsonValue,
                 costUsd,
@@ -848,6 +1354,85 @@ Report your results clearly.`;
             }
         });
 
+        // Track generated resources (documents, Google Docs, agents, skills)
+        try {
+            const resourceToolKeys = [
+                "document-create",
+                "google-drive-create-doc",
+                "agent-create",
+                "skill-create"
+            ];
+            const resourceCalls = await prisma.agentToolCall.findMany({
+                where: {
+                    runId: runHandle.runId,
+                    toolKey: { in: resourceToolKeys },
+                    success: true
+                },
+                select: { toolKey: true, outputJson: true }
+            });
+
+            if (resourceCalls.length > 0) {
+                const existingCampaign = await prisma.campaign.findUnique({
+                    where: { id: campaignId },
+                    select: { generatedResources: true }
+                });
+                const existing =
+                    (existingCampaign?.generatedResources as Record<string, unknown[]>) || {};
+                const resources = { ...existing };
+
+                for (const tc of resourceCalls) {
+                    const output = tc.outputJson as Record<string, unknown> | null;
+                    if (!output) continue;
+
+                    if (tc.toolKey === "document-create") {
+                        if (!resources.documents) resources.documents = [];
+                        (resources.documents as unknown[]).push({
+                            type: "platform-document",
+                            id: output.id || output.documentId,
+                            name: output.name || output.title,
+                            taskName: task.name
+                        });
+                    } else if (tc.toolKey === "google-drive-create-doc") {
+                        if (!resources.documents) resources.documents = [];
+                        (resources.documents as unknown[]).push({
+                            type: "google-doc",
+                            url: output.url || output.webViewLink,
+                            name: output.name || output.title,
+                            taskName: task.name
+                        });
+                    } else if (tc.toolKey === "agent-create") {
+                        if (!resources.agents) resources.agents = [];
+                        (resources.agents as unknown[]).push({
+                            id: output.id,
+                            slug: output.slug,
+                            name: output.name,
+                            taskName: task.name
+                        });
+                    } else if (tc.toolKey === "skill-create") {
+                        if (!resources.skills) resources.skills = [];
+                        (resources.skills as unknown[]).push({
+                            id: output.id,
+                            slug: output.slug,
+                            name: output.name,
+                            taskName: task.name
+                        });
+                    }
+                }
+
+                await prisma.campaign.update({
+                    where: { id: campaignId },
+                    data: {
+                        generatedResources: resources as unknown as Prisma.InputJsonValue
+                    }
+                });
+            }
+        } catch (resourceErr) {
+            console.warn(
+                `[Campaign] Failed to track generated resources for task "${task.name}":`,
+                resourceErr
+            );
+        }
+
         return { runId: runHandle.runId, output };
     } catch (error) {
         // Fail the run
@@ -879,97 +1464,75 @@ export const missionAarFunction = inngest.createFunction(
 
         console.log(`[Mission AAR] Generating AAR for mission: ${missionId}`);
 
-        // Step 1: Load mission tasks with their linked AgentRun evaluations
-        const missionData = await step.run("load-mission-data", async () => {
-            const mission = await prisma.mission.findUniqueOrThrow({
+        // Step 1: Invoke campaign-reviewer agent for mission AAR
+        const result = await step.run("invoke-reviewer", async () => {
+            // Load mission data with tasks and results directly (avoids HTTP auth issues in Inngest context)
+            const missionData = await prisma.mission.findUniqueOrThrow({
                 where: { id: missionId },
                 include: {
                     tasks: {
                         include: {
                             agentRun: {
-                                include: { evaluation: true }
+                                select: { id: true, status: true, outputText: true, agentId: true }
                             }
                         }
                     },
-                    campaign: true
-                }
-            });
-            return mission;
-        });
-
-        // Step 2: Aggregate task-level AARs
-        const aar = await step.run("generate-mission-aar", async () => {
-            const taskSummaries = missionData.tasks.map((task) => {
-                const eval_ = task.agentRun?.evaluation;
-                const aarData = eval_?.aarJson as Record<string, unknown> | null;
-                const scores = eval_?.scoresJson as Record<string, number> | null;
-                const avgScore = scores
-                    ? Object.values(scores).reduce((a, b) => a + b, 0) /
-                      Object.values(scores).length
-                    : 0;
-
-                return {
-                    name: task.name,
-                    status: task.status,
-                    taskType: task.taskType,
-                    score: avgScore,
-                    costUsd: task.costUsd || 0,
-                    tokens: task.tokens || 0,
-                    durationMs:
-                        task.completedAt && task.startedAt
-                            ? new Date(String(task.completedAt)).getTime() -
-                              new Date(String(task.startedAt)).getTime()
-                            : 0,
-                    sustain: (aarData?.sustain as string[]) || [],
-                    improve: (aarData?.improve as string[]) || [],
-                    error: task.error
-                };
-            });
-
-            const result = await generateObject({
-                model: openai("gpt-4o"),
-                schema: MissionAarSchema,
-                prompt: `Generate a mission-level After Action Review (AAR) by aggregating these task results.
-
-MISSION: ${missionData.name}
-STATEMENT: ${missionData.missionStatement}
-
-TASK RESULTS:
-${JSON.stringify(taskSummaries, null, 2)}
-
-Synthesize the individual task sustain/improve patterns into mission-level patterns.
-Identify the lowest-scoring task and explain why.
-Provide a concise summary of the mission outcome.`
-            });
-
-            return result.object;
-        });
-
-        // Step 3: Store AAR and update mission status
-        await step.run("store-aar", async () => {
-            await prisma.mission.update({
-                where: { id: missionId },
-                data: {
-                    aarJson: aar as unknown as Prisma.InputJsonValue,
-                    status: MissionStatus.COMPLETE
+                    campaign: { select: { name: true, intent: true, endState: true } }
                 }
             });
 
-            await logCampaignEvent(
+            const contextPrompt = `Generate an After Action Review for this mission. Use campaign-write-aar with targetType "mission" and targetId "${missionId}".
+
+Campaign: ${missionData.campaign.name}
+Campaign Intent: ${missionData.campaign.intent}
+Campaign End State: ${missionData.campaign.endState}
+
+Mission: ${missionData.name}
+Mission Statement: ${missionData.missionStatement}
+Status: ${missionData.status}
+
+Tasks:
+${JSON.stringify(
+    missionData.tasks.map((t) => ({
+        name: t.name,
+        taskVerb: t.taskVerb,
+        status: t.status,
+        agentId: t.agentRun?.agentId || "unassigned",
+        output: t.agentRun?.outputText ? String(t.agentRun.outputText).substring(0, 500) : null,
+        error: t.error,
+        costUsd: t.costUsd,
+        tokens: t.tokens
+    })),
+    null,
+    2
+)}
+
+Campaign ID: ${campaignId}
+
+Evaluate the mission results against the intent. Write the AAR using campaign-write-aar.`;
+
+            return invokeCampaignAgent({
+                agentSlug: "campaign-reviewer",
+                prompt: contextPrompt,
                 campaignId,
-                "mission_aar",
-                `Mission "${missionData.name}" AAR complete. Score: ${aar.avgTaskScore.toFixed(2)}. ${aar.completedTasks}/${aar.plannedTasks} tasks completed.`,
-                { missionId, aar }
-            );
+                phase: "mission-aar",
+                metadata: { missionId }
+            });
         });
 
-        // Step 4: Update campaign progress
+        // Step 2: Update campaign progress
+        // Count missions that are past execution (REVIEWING, COMPLETE, FAILED) to avoid
+        // timing issues where campaign-write-aar hasn't yet transitioned the status.
         await step.run("update-progress", async () => {
             const allMissions = await prisma.mission.findMany({
-                where: { campaignId }
+                where: { campaignId },
+                select: { status: true }
             });
             const completedCount = allMissions.filter(
-                (m) => m.status === MissionStatus.COMPLETE || m.status === MissionStatus.FAILED
+                (m) =>
+                    m.status === MissionStatus.REVIEWING ||
+                    m.status === MissionStatus.COMPLETE ||
+                    m.status === MissionStatus.FAILED
             ).length;
             const progress =
                 allMissions.length > 0 ? (completedCount / allMissions.length) * 100 : 0;
@@ -980,13 +1543,25 @@ Provide a concise summary of the mission outcome.`
             });
         });
 
-        // Step 5: Signal mission complete (for waitForEvent in campaign/execute)
-        await step.sendEvent("signal-mission-complete", {
-            name: "mission/complete",
-            data: { campaignId, missionId }
+        // Step 3: Read mission status to determine if rework was requested
+        const missionAfterReview = await step.run("check-review-decision", async () => {
+            const m = await prisma.mission.findUnique({
+                where: { id: missionId },
+                select: { status: true }
+            });
+            return m;
         });
 
-        return { missionId, aar };
+        const decision =
+            missionAfterReview?.status === MissionStatus.REWORK ? "rework" : "complete";
+
+        // Step 4: Signal mission reviewed (for waitForEvent in campaign/execute)
+        await step.sendEvent("signal-mission-reviewed", {
+            name: "mission/reviewed",
+            data: { campaignId, missionId, decision }
+        });
+
+        return { missionId, reviewerRunId: result.runId, decision };
     }
 );
 
@@ -1002,9 +1577,10 @@ export const campaignAarFunction = inngest.createFunction(
 
         console.log(`[Campaign AAR] Generating AAR for campaign: ${campaignId}`);
 
-        // Step 1: Load everything
-        const campaignData = await step.run("load-campaign-data", async () => {
-            const campaign = await prisma.campaign.findUniqueOrThrow({
+        // Step 1: Invoke campaign-reviewer agent for campaign AAR
+        const result = await step.run("invoke-reviewer", async () => {
+            // Load full campaign data with missions, tasks, and AARs directly (avoids HTTP auth issues in Inngest context)
+            const campaignData = await prisma.campaign.findUniqueOrThrow({
                 where: { id: campaignId },
                 include: {
                     missions: {
@@ -1012,7 +1588,12 @@ export const campaignAarFunction = inngest.createFunction(
                             tasks: {
                                 include: {
                                     agentRun: {
-                                        include: { evaluation: true }
+                                        select: {
+                                            id: true,
+                                            status: true,
+                                            outputText: true,
+                                            agentId: true
+                                        }
                                     }
                                 }
                             }
@@ -1020,93 +1601,148 @@ export const campaignAarFunction = inngest.createFunction(
                     }
                 }
             });
-            return campaign;
-        });
 
-        // Step 2: Generate campaign-level AAR
-        const aar = await step.run("generate-campaign-aar", async () => {
-            const missionSummaries = campaignData.missions.map((m) => {
-                const missionAar = m.aarJson as Record<string, unknown> | null;
-                return {
-                    name: m.name,
-                    status: m.status,
-                    statement: m.missionStatement,
-                    taskCount: m.tasks.length,
-                    completedTasks: m.tasks.filter((t) => t.status === MissionTaskStatus.COMPLETE)
-                        .length,
-                    failedTasks: m.tasks.filter((t) => t.status === MissionTaskStatus.FAILED)
-                        .length,
-                    costUsd: m.totalCostUsd,
-                    tokens: m.totalTokens,
-                    aar: missionAar
-                };
-            });
+            const contextPrompt = `Generate a comprehensive After Action Review for this campaign. Use campaign-write-aar with targetType "campaign" and targetId "${campaignId}".
 
-            const startTime = campaignData.startedAt
-                ? new Date(String(campaignData.startedAt)).getTime()
-                : Date.now();
-            const endTime = Date.now();
+Campaign: ${campaignData.name}
+Intent: ${campaignData.intent}
+End State: ${campaignData.endState}
+Status: ${campaignData.status}
+Progress: ${campaignData.progress}%
+Total Cost: $${campaignData.totalCostUsd.toFixed(4)}
+Total Tokens: ${campaignData.totalTokens}
 
-            const result = await generateObject({
-                model: openai("gpt-4o"),
-                schema: CampaignAarSchema,
-                prompt: `Generate a campaign-level After Action Review (AAR) by aggregating these mission AARs.
+Missions:
+${JSON.stringify(
+    campaignData.missions.map((m) => ({
+        name: m.name,
+        missionStatement: m.missionStatement,
+        status: m.status,
+        costUsd: m.totalCostUsd,
+        tokens: m.totalTokens,
+        aarJson: m.aarJson,
+        tasks: m.tasks.map((t) => ({
+            name: t.name,
+            taskVerb: t.taskVerb,
+            status: t.status,
+            agentId: t.agentRun?.agentId || "unassigned",
+            output: t.agentRun?.outputText ? String(t.agentRun.outputText).substring(0, 300) : null,
+            error: t.error
+        }))
+    })),
+    null,
+    2
+)}
 
-CAMPAIGN: ${campaignData.name}
-INTENT: ${campaignData.intent}
-END STATE: ${campaignData.endState}
-CONSTRAINTS: ${campaignData.constraints.join(", ") || "None"}
-RESTRAINTS: ${campaignData.restraints.join(", ") || "None"}
-${campaignData.maxCostUsd ? `BUDGET: $${campaignData.maxCostUsd}` : ""}
+Evaluate the overall campaign results against the stated intent and end state. Provide a comprehensive AAR with scoring, lessons learned, and recommendations. Use campaign-write-aar to persist.`;
 
-PLANNED DURATION: Campaign started ${new Date(startTime).toISOString()}, ended ${new Date(endTime).toISOString()}
-ACTUAL COST: $${campaignData.totalCostUsd.toFixed(2)}
-
-MISSION RESULTS:
-${JSON.stringify(missionSummaries, null, 2)}
-
-Evaluate:
-1. Was the commander's intent achieved?
-2. Was the desired end state reached?
-3. Roll up sustain/improve patterns from missions
-4. Identify campaign-level lessons learned
-5. Provide an executive summary`
-            });
-
-            return result.object;
-        });
-
-        // Step 3: Store AAR and complete campaign
-        await step.run("complete-campaign", async () => {
-            const allMissionsFailed = campaignData.missions.every(
-                (m) => m.status === MissionStatus.FAILED
-            );
-
-            await prisma.campaign.update({
-                where: { id: campaignId },
-                data: {
-                    aarJson: aar as unknown as Prisma.InputJsonValue,
-                    status: allMissionsFailed ? CampaignStatus.FAILED : CampaignStatus.COMPLETE,
-                    progress: 100,
-                    completedAt: new Date()
-                }
-            });
-
-            await logCampaignEvent(
+            return invokeCampaignAgent({
+                agentSlug: "campaign-reviewer",
+                prompt: contextPrompt,
                 campaignId,
-                "campaign_aar",
-                `Campaign AAR complete. Intent achieved: ${aar.intentAchieved}. End state: ${aar.endStateReached}. Score: ${aar.avgTaskScore.toFixed(2)}.`,
-                { aar }
-            );
+                phase: "campaign-aar"
+            });
+        });
+
+        // Step 2: Log completion (campaign-write-aar tool already updates status)
+        await step.run("log-completion", async () => {
+            const campaign = await prisma.campaign.findUniqueOrThrow({
+                where: { id: campaignId },
+                select: { name: true, status: true, totalCostUsd: true }
+            });
 
             await logCampaignEvent(
                 campaignId,
                 "complete",
-                `Campaign "${campaignData.name}" ${allMissionsFailed ? "FAILED" : "COMPLETE"}. Cost: $${aar.totalCostUsd.toFixed(2)}. Missions: ${aar.completedMissions}/${aar.plannedMissions}.`
+                `Campaign "${campaign.name}" ${campaign.status}. Cost: $${campaign.totalCostUsd.toFixed(2)}.`
             );
         });
 
-        return { campaignId, aar };
+        // Step 4: Notify parent campaign if this is a sub-campaign
+        await step.run("notify-parent-campaign", async () => {
+            const campaign = await prisma.campaign.findUnique({
+                where: { id: campaignId },
+                select: { parentCampaignId: true }
+            });
+            if (campaign?.parentCampaignId) {
+                await inngest.send({
+                    name: "campaign/sub-complete",
+                    data: {
+                        parentCampaignId: campaign.parentCampaignId,
+                        childCampaignId: campaignId
+                    }
+                });
+                console.log(
+                    `[Campaign] Sub-campaign ${campaignId} notified parent ${campaign.parentCampaignId} of completion`
+                );
+            }
+        });
+
+        // Step 5: Ingest campaign results into RAG for cross-campaign memory
+        await step.run("ingest-campaign-memory", async () => {
+            try {
+                const { ingestDocument } = await import("@repo/mastra");
+
+                const campaignForMemory = await prisma.campaign.findUniqueOrThrow({
+                    where: { id: campaignId },
+                    select: {
+                        id: true,
+                        slug: true,
+                        name: true,
+                        templateId: true,
+                        runNumber: true,
+                        intent: true,
+                        endState: true,
+                        aarJson: true,
+                        totalCostUsd: true,
+                        totalTokens: true,
+                        status: true,
+                        completedAt: true
+                    }
+                });
+
+                const aar = campaignForMemory.aarJson as Record<string, unknown> | null;
+                if (!aar) return;
+
+                const memoryContent = [
+                    `# Campaign: ${campaignForMemory.name}`,
+                    `**Status**: ${campaignForMemory.status}`,
+                    `**Cost**: $${campaignForMemory.totalCostUsd.toFixed(2)}`,
+                    `**Tokens**: ${campaignForMemory.totalTokens}`,
+                    `**Intent**: ${campaignForMemory.intent}`,
+                    "",
+                    `## Summary`,
+                    String(aar.summary || ""),
+                    "",
+                    `## Intent Achieved: ${aar.intentAchieved ? "Yes" : "No"}`,
+                    "",
+                    ...(Array.isArray(aar.lessonsLearned)
+                        ? ["## Lessons Learned", ...aar.lessonsLearned.map((l: string) => `- ${l}`)]
+                        : []),
+                    "",
+                    ...(Array.isArray(aar.recommendations)
+                        ? [
+                              "## Recommendations",
+                              ...aar.recommendations.map((r: string) => `- ${r}`)
+                          ]
+                        : [])
+                ].join("\n");
+
+                await ingestDocument(memoryContent, {
+                    type: "markdown",
+                    sourceId: `campaign-${campaignId}`,
+                    sourceName: `Campaign Results: ${campaignForMemory.name}`
+                });
+
+                console.log(
+                    `[Campaign] Ingested campaign ${campaignId} results into RAG for cross-campaign memory`
+                );
+            } catch (ragErr) {
+                console.warn(`[Campaign] Failed to ingest campaign results into RAG:`, ragErr);
+            }
+        });
+
+        return { campaignId, reviewerRunId: result.runId };
     }
 );
 
@@ -1117,6 +1753,7 @@ Evaluate:
 export const campaignFunctions = [
     campaignAnalyzeFunction,
     campaignPlanFunction,
+    campaignBuildCapabilitiesFunction,
     campaignExecuteFunction,
     missionExecuteFunction,
     missionAarFunction,

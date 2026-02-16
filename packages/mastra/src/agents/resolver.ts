@@ -119,6 +119,14 @@ export interface ResolveOptions {
     fallbackToSystem?: boolean;
     /** Thread ID for loading thread-activated skills (progressive disclosure) */
     threadId?: string;
+    /** When true, load ALL skills (pinned + discoverable) with their tools.
+     *  Use for autonomous execution (campaigns, workflows, triggers) where
+     *  there is no conversation thread for progressive disclosure. */
+    loadAllSkills?: boolean;
+    /** When provided, only load tools whose names include at least one of
+     *  these substrings. System tools (campaign-write-*, agent-*, etc.) are
+     *  always included. Use for campaign tasks to reduce token overhead. */
+    toolFilter?: string[];
 }
 
 /**
@@ -188,6 +196,9 @@ interface ModelConfig {
  * Provides database-first agent resolution with fallback to code-defined agents.
  */
 export class AgentResolver {
+    /** Temporary storage for current resolve options (used by hydrate) */
+    private currentResolveOptions?: ResolveOptions;
+
     /**
      * Resolve an agent by slug or id
      *
@@ -196,7 +207,15 @@ export class AgentResolver {
      * @throws Error if agent not found
      */
     async resolve(options: ResolveOptions): Promise<HydratedAgent> {
-        const { slug, id, requestContext, fallbackToSystem = true, threadId } = options;
+        this.currentResolveOptions = options;
+        const {
+            slug,
+            id,
+            requestContext,
+            fallbackToSystem = true,
+            threadId,
+            loadAllSkills
+        } = options;
 
         if (!slug && !id) {
             throw new Error("Either slug or id must be provided");
@@ -230,7 +249,7 @@ export class AgentResolver {
             // Enforce hard budget limit before running the agent
             await this.checkBudgetLimit(record.id);
 
-            const result = await this.hydrate(record, requestContext, threadId);
+            const result = await this.hydrate(record, requestContext, threadId, loadAllSkills);
             return { ...result, record, source: "database" };
         }
 
@@ -266,7 +285,8 @@ export class AgentResolver {
     private async hydrate(
         record: AgentRecordWithTools,
         context?: RequestContext,
-        threadId?: string
+        threadId?: string,
+        loadAllSkills?: boolean
     ): Promise<{
         agent: Agent;
         activeSkills: ActiveSkillInfo[];
@@ -313,7 +333,7 @@ export class AgentResolver {
         // Parallelize independent async work: tools, skills, sub-agents, and MCP tools
         const [registryTools, skillResult, subAgents, mcpTools] = await Promise.all([
             getToolsByNamesAsync(toolNames, organizationId),
-            this.loadSkills(record.id, organizationId, threadActivatedSlugs),
+            this.loadSkills(record.id, organizationId, threadActivatedSlugs, loadAllSkills),
             this.loadSubAgents(record.subAgents, context),
             // Only load ALL MCP tools for legacy agents without skills
             hasSkills === 0 && metadata?.mcpEnabled
@@ -400,6 +420,39 @@ export class AgentResolver {
             console.log(
                 `[AgentResolver] Legacy MCP-enabled agent "${record.slug}": loaded ${Object.keys(mcpTools).length} MCP tools`
             );
+        }
+
+        // Apply tool filter if provided (campaign task optimization)
+        if (loadAllSkills && this.currentResolveOptions?.toolFilter?.length) {
+            const filter = this.currentResolveOptions.toolFilter;
+            // System tools that are always kept regardless of filter
+            const systemPrefixes = [
+                "campaign-",
+                "agent-",
+                "date-time",
+                "updateWorkingMemory",
+                "document-",
+                "search-skills",
+                "activate-skill",
+                "list-active-skills"
+            ];
+            const beforeCount = Object.keys(tools).length;
+            for (const toolKey of Object.keys(tools)) {
+                const isSystem = systemPrefixes.some((p) => toolKey.startsWith(p));
+                const matchesFilter = filter.some((f) =>
+                    toolKey.toLowerCase().includes(f.toLowerCase())
+                );
+                if (!isSystem && !matchesFilter) {
+                    delete tools[toolKey];
+                }
+            }
+            const afterCount = Object.keys(tools).length;
+            if (beforeCount !== afterCount) {
+                console.log(
+                    `[AgentResolver] Tool filter applied for "${record.slug}": ${beforeCount} -> ${afterCount} tools ` +
+                        `(filter: ${filter.join(", ")})`
+                );
+            }
         }
 
         // Append skill instructions to agent instructions
@@ -578,7 +631,8 @@ export class AgentResolver {
     private async loadSkills(
         agentId: string,
         organizationId?: string | null,
-        threadActivatedSlugs?: string[]
+        threadActivatedSlugs?: string[],
+        loadAllSkills?: boolean
     ): Promise<{
         skillInstructions: string;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -641,8 +695,8 @@ export class AgentResolver {
             const isPinned = agentSkill.pinned;
             const isThreadActivated = activatedSet.has(skill.slug);
 
-            // Skill is "active" if it's pinned OR thread-activated
-            const shouldLoadFull = isPinned || isThreadActivated;
+            // Skill is "active" if loadAllSkills is set, it's pinned, OR thread-activated
+            const shouldLoadFull = loadAllSkills || isPinned || isThreadActivated;
 
             if (shouldLoadFull) {
                 // Full load: include tools, instructions, documents
@@ -689,7 +743,8 @@ export class AgentResolver {
             skillDocumentIds,
             activeSkills,
             skillToolMapping,
-            hasDiscoverableSkills: discoverableSkillManifests.length > 0,
+            // When loadAllSkills is true, all skills are loaded — nothing left to discover
+            hasDiscoverableSkills: !loadAllSkills && discoverableSkillManifests.length > 0,
             discoverableSkillManifests
         };
     }

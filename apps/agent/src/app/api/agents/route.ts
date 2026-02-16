@@ -66,25 +66,82 @@ export async function GET(request: NextRequest) {
                 ? await agentResolver.listSystem()
                 : await agentResolver.listForUser(userId);
 
+            // When ?detail=capabilities, include pinned/discoverable skill breakdown
+            const detailMode = searchParams.get("detail");
+            let skillBreakdowns: Map<
+                string,
+                {
+                    pinnedSkills: string[];
+                    pinnedToolCount: number;
+                    discoverableSkills: string[];
+                    discoverableToolCount: number;
+                }
+            > | null = null;
+
+            if (detailMode === "capabilities") {
+                const agentIds = agents.map((a) => a.id);
+                const agentSkills = await prisma.agentSkill.findMany({
+                    where: { agentId: { in: agentIds } },
+                    include: {
+                        skill: {
+                            select: { slug: true, name: true, _count: { select: { tools: true } } }
+                        }
+                    }
+                });
+
+                skillBreakdowns = new Map();
+                for (const as of agentSkills) {
+                    const existing = skillBreakdowns.get(as.agentId) || {
+                        pinnedSkills: [],
+                        pinnedToolCount: 0,
+                        discoverableSkills: [],
+                        discoverableToolCount: 0
+                    };
+                    if (as.pinned) {
+                        existing.pinnedSkills.push(as.skill.slug);
+                        existing.pinnedToolCount += as.skill._count.tools;
+                    } else {
+                        existing.discoverableSkills.push(as.skill.slug);
+                        existing.discoverableToolCount += as.skill._count.tools;
+                    }
+                    skillBreakdowns.set(as.agentId, existing);
+                }
+            }
+
             return NextResponse.json({
                 success: true,
                 count: agents.length,
-                agents: agents.map((agent) => ({
-                    id: agent.id,
-                    slug: agent.slug,
-                    name: agent.name,
-                    description: agent.description,
-                    type: agent.type,
-                    modelProvider: agent.modelProvider,
-                    modelName: agent.modelName,
-                    memoryEnabled: agent.memoryEnabled,
-                    scorers: agent.scorers,
-                    toolCount: agent.tools.length,
-                    isActive: agent.isActive,
-                    routingConfig: agent.routingConfig,
-                    createdAt: agent.createdAt,
-                    updatedAt: agent.updatedAt
-                })),
+                agents: agents.map((agent) => {
+                    const base = {
+                        id: agent.id,
+                        slug: agent.slug,
+                        name: agent.name,
+                        description: agent.description,
+                        type: agent.type,
+                        modelProvider: agent.modelProvider,
+                        modelName: agent.modelName,
+                        memoryEnabled: agent.memoryEnabled,
+                        scorers: agent.scorers,
+                        toolCount: agent.tools.length,
+                        isActive: agent.isActive,
+                        routingConfig: agent.routingConfig,
+                        createdAt: agent.createdAt,
+                        updatedAt: agent.updatedAt
+                    };
+
+                    if (skillBreakdowns) {
+                        const breakdown = skillBreakdowns.get(agent.id);
+                        return {
+                            ...base,
+                            pinnedSkills: breakdown?.pinnedSkills || [],
+                            pinnedToolCount: (breakdown?.pinnedToolCount || 0) + agent.tools.length,
+                            discoverableSkills: breakdown?.discoverableSkills || [],
+                            discoverableToolCount: breakdown?.discoverableToolCount || 0,
+                            runtimeToolCount: (breakdown?.pinnedToolCount || 0) + agent.tools.length
+                        };
+                    }
+                    return base;
+                }),
                 source: "database"
             });
         }

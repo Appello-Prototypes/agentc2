@@ -187,7 +187,10 @@ import {
     campaignListTool,
     campaignGetTool,
     campaignUpdateTool,
-    campaignDeleteTool
+    campaignDeleteTool,
+    campaignWriteMissionsTool,
+    campaignWritePlanTool,
+    campaignWriteAarTool
 } from "./campaign-tools";
 import {
     documentCreateTool,
@@ -249,6 +252,8 @@ import {
     networkValidateTool,
     networkDesignerChatTool
 } from "./network-config-tools";
+import { createTool } from "@mastra/core/tools";
+import { z } from "zod";
 import { getMcpTools } from "../mcp/client";
 
 /**
@@ -430,6 +435,10 @@ export const toolCategoryMap: Record<string, string> = {
     "campaign-get": "Campaigns",
     "campaign-update": "Campaigns",
     "campaign-delete": "Campaigns",
+    "campaign-write-missions": "Campaigns",
+    "campaign-write-plan": "Campaigns",
+    "campaign-write-aar": "Campaigns",
+    "tool-registry-list": "Utilities",
     "workspace-intent-recommendation": "Organization",
 
     // Email & Calendar
@@ -506,6 +515,52 @@ export const toolCategoryOrder: string[] = [
     "BIM",
     "Canvas"
 ];
+
+/**
+ * Tool Registry List tool — lets agents discover available tools and capabilities.
+ * Used by campaign-architect to understand what tools exist before designing agents/skills.
+ * Defined before toolRegistry so it can be referenced in the registry object.
+ */
+export const toolRegistryListTool = createTool({
+    id: "tool-registry-list",
+    description:
+        "List all available tools in the platform registry with their IDs, descriptions, and categories. Use this to discover what capabilities exist before creating agents or skills.",
+    inputSchema: z.object({
+        category: z
+            .string()
+            .optional()
+            .describe("Filter by category (e.g., 'Email & Calendar', 'Skills', 'Campaigns')"),
+        search: z.string().optional().describe("Search term to filter tools by ID or description")
+    }),
+    outputSchema: z.object({
+        tools: z.array(
+            z.object({
+                id: z.string(),
+                name: z.string(),
+                description: z.string(),
+                category: z.string()
+            })
+        ),
+        totalCount: z.number()
+    }),
+    execute: async ({ category, search }) => {
+        let tools = listAvailableTools();
+
+        if (category) {
+            tools = tools.filter((t) => t.category.toLowerCase() === category.toLowerCase());
+        }
+
+        if (search) {
+            const term = search.toLowerCase();
+            tools = tools.filter(
+                (t) =>
+                    t.id.toLowerCase().includes(term) || t.description.toLowerCase().includes(term)
+            );
+        }
+
+        return { tools, totalCount: tools.length };
+    }
+});
 
 /**
  * Tool registry mapping names to tool instances.
@@ -643,6 +698,9 @@ export const toolRegistry: Record<string, any> = {
     "live-stats": liveStatsTool,
     "audit-logs-list": auditLogsListTool,
 
+    // Tool introspection
+    "tool-registry-list": toolRegistryListTool,
+
     // Workspace intent tools
     "workspace-intent-recommendation": workspaceIntentRecommendationTool,
 
@@ -686,6 +744,9 @@ export const toolRegistry: Record<string, any> = {
     "campaign-get": campaignGetTool,
     "campaign-update": campaignUpdateTool,
     "campaign-delete": campaignDeleteTool,
+    "campaign-write-missions": campaignWriteMissionsTool,
+    "campaign-write-plan": campaignWritePlanTool,
+    "campaign-write-aar": campaignWriteAarTool,
 
     // Document tools
     "document-create": documentCreateTool,
@@ -883,6 +944,12 @@ export async function getToolsByNamesAsync(
         }
     }
 
+    // Warn about tools that were requested but not found in any source
+    const missing = names.filter((n) => !result[n]);
+    if (missing.length > 0) {
+        console.warn(`[ToolRegistry] ${missing.length} tool(s) not found: ${missing.join(", ")}`);
+    }
+
     return result;
 }
 
@@ -913,3 +980,5 @@ export function getToolByName(name: string): any | undefined {
 export async function getAllMcpTools(organizationId?: string | null): Promise<Record<string, any>> {
     return getMcpToolsCached(organizationId);
 }
+
+// toolRegistryListTool is defined above the toolRegistry object (before line 525)

@@ -49,9 +49,12 @@ function statusColor(status: string): string {
         case "FAILED":
             return "bg-red-500/10 text-red-600 border-red-200";
         case "PAUSED":
+        case "REWORK":
             return "bg-orange-500/10 text-orange-600 border-orange-200";
         case "REVIEWING":
             return "bg-purple-500/10 text-purple-600 border-purple-200";
+        case "AWAITING_APPROVAL":
+            return "bg-yellow-500/10 text-yellow-600 border-yellow-200";
         default:
             return "bg-muted text-muted-foreground";
     }
@@ -101,7 +104,9 @@ export default function CampaignsPage() {
             c.status === "PLANNING" ||
             c.status === "READY" ||
             c.status === "PAUSED" ||
-            c.status === "REVIEWING"
+            c.status === "REVIEWING" ||
+            c.status === "REWORK" ||
+            c.status === "AWAITING_APPROVAL"
     );
     const completedCampaigns = campaigns.filter(
         (c) => c.status === "COMPLETE" || c.status === "FAILED"

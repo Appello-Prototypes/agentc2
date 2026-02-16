@@ -1,6 +1,13 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
-import { prisma, Prisma, RunStatus, RunTriggerType, TriggerEventStatus } from "@repo/database";
+import {
+    prisma,
+    Prisma,
+    RunStatus,
+    RunTriggerType,
+    TriggerEventStatus,
+    CampaignStatus
+} from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
 import {
     getBimObjectBuffer,
@@ -4947,7 +4954,122 @@ export const scheduleTriggerFunction = inngest.createFunction(
             });
         }
 
-        return { processed, total: dueSchedules.length };
+        // Step 3: Check for due CAMPAIGN schedules
+        const dueCampaignSchedules = await step.run("find-due-campaign-schedules", async () => {
+            const now = new Date();
+            return prisma.campaignSchedule.findMany({
+                where: {
+                    isActive: true,
+                    nextRunAt: { lte: now }
+                },
+                include: {
+                    template: {
+                        select: {
+                            id: true,
+                            slug: true,
+                            name: true,
+                            intentTemplate: true,
+                            endStateTemplate: true,
+                            description: true,
+                            constraints: true,
+                            restraints: true,
+                            requireApproval: true,
+                            maxCostUsd: true,
+                            timeoutMinutes: true,
+                            isActive: true
+                        }
+                    }
+                },
+                take: 10 // Process up to 10 campaign schedules per minute
+            });
+        });
+
+        let campaignProcessed = 0;
+        for (const cs of dueCampaignSchedules) {
+            if (!cs.template.isActive) continue;
+
+            await step.run(`process-campaign-schedule-${cs.id}`, async () => {
+                const now = new Date();
+                let nextRunAt: Date;
+
+                try {
+                    nextRunAt = getNextRunAt(cs.cronExpr, cs.timezone || "UTC", now);
+                } catch (error) {
+                    console.error(
+                        `[Inngest] Failed to calculate next run for campaign schedule ${cs.id}:`,
+                        error
+                    );
+                    return;
+                }
+
+                // Atomic update to prevent double-firing
+                const updateResult = await prisma.campaignSchedule.updateMany({
+                    where: { id: cs.id, nextRunAt: cs.nextRunAt ?? null },
+                    data: {
+                        lastRunAt: now,
+                        nextRunAt,
+                        runCount: { increment: 1 }
+                    }
+                });
+
+                if (updateResult.count === 0) return;
+
+                // Interpolate template fields with schedule parameters
+                const params = (cs.inputJson as Record<string, string>) || {};
+                const interpolate = (text: string) =>
+                    text.replace(/\{\{(\w+)\}\}/g, (_, key) => params[key] || `{{${key}}}`);
+
+                // Compute run number
+                const lastRun = await prisma.campaign.findFirst({
+                    where: { templateId: cs.template.id },
+                    orderBy: { runNumber: "desc" },
+                    select: { runNumber: true }
+                });
+                const runNumber = (lastRun?.runNumber || 0) + 1;
+
+                // Create campaign from template
+                const slug = cs.template.slug + "-run-" + runNumber + "-" + Date.now().toString(36);
+
+                const campaign = await prisma.campaign.create({
+                    data: {
+                        slug,
+                        name: interpolate(cs.template.name) + ` (Run #${runNumber})`,
+                        intent: interpolate(cs.template.intentTemplate),
+                        endState: interpolate(cs.template.endStateTemplate),
+                        description: cs.template.description
+                            ? interpolate(cs.template.description)
+                            : null,
+                        constraints: cs.template.constraints,
+                        restraints: cs.template.restraints,
+                        requireApproval: cs.template.requireApproval,
+                        maxCostUsd: cs.template.maxCostUsd,
+                        timeoutMinutes: cs.template.timeoutMinutes,
+                        templateId: cs.template.id,
+                        runNumber,
+                        parameterValues: cs.inputJson as Prisma.InputJsonValue | undefined,
+                        status: CampaignStatus.PLANNING
+                    }
+                });
+
+                // Trigger analysis
+                await inngest.send({
+                    name: "campaign/analyze",
+                    data: { campaignId: campaign.id }
+                });
+
+                console.log(
+                    `[Inngest] Campaign schedule ${cs.id} triggered campaign ${campaign.id} (run #${runNumber})`
+                );
+                campaignProcessed++;
+            });
+        }
+
+        return {
+            processed,
+            total: dueSchedules.length,
+            campaignProcessed,
+            campaignTotal: dueCampaignSchedules.length
+        };
     }
 );
 

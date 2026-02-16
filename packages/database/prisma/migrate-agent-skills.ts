@@ -92,6 +92,28 @@ const agentSkillConfigs: AgentSkillConfig[] = [
         agentSlug: "mcp-setup-agent",
         pinnedSlugs: ["platform-integrations"],
         discoverableSlugs: []
+    },
+
+    // Campaign System Agents — each gets its single purpose-built skill pinned
+    {
+        agentSlug: "campaign-analyst",
+        pinnedSlugs: ["campaign-analysis"],
+        discoverableSlugs: []
+    },
+    {
+        agentSlug: "campaign-planner",
+        pinnedSlugs: ["campaign-planning"],
+        discoverableSlugs: []
+    },
+    {
+        agentSlug: "campaign-architect",
+        pinnedSlugs: ["campaign-architecture"],
+        discoverableSlugs: []
+    },
+    {
+        agentSlug: "campaign-reviewer",
+        pinnedSlugs: ["campaign-review"],
+        discoverableSlugs: []
     }
 ];
 
@@ -99,7 +121,7 @@ async function migrateAgentSkills() {
     console.log("\n--- Migrating Agent Skills ---\n");
 
     for (const config of agentSkillConfigs) {
-        const agent = await prisma.agent.findUnique({
+        const agent = await prisma.agent.findFirst({
             where: { slug: config.agentSlug },
             select: { id: true, slug: true, name: true }
         });
@@ -116,7 +138,7 @@ async function migrateAgentSkills() {
 
         // Attach pinned skills
         for (const skillSlug of config.pinnedSlugs) {
-            const skill = await prisma.skill.findUnique({
+            const skill = await prisma.skill.findFirst({
                 where: { slug: skillSlug },
                 select: { id: true }
             });
@@ -136,7 +158,7 @@ async function migrateAgentSkills() {
 
         // Attach discoverable skills
         for (const skillSlug of config.discoverableSlugs) {
-            const skill = await prisma.skill.findUnique({
+            const skill = await prisma.skill.findFirst({
                 where: { slug: skillSlug },
                 select: { id: true }
             });
@@ -180,7 +202,7 @@ async function migrateAgentSkills() {
         const skillSlug = mapMcpServerToSkillSlug(mcpServerId);
         if (!skillSlug) continue;
 
-        const skill = await prisma.skill.findUnique({
+        const skill = await prisma.skill.findFirst({
             where: { slug: skillSlug },
             select: { id: true }
         });
@@ -195,7 +217,7 @@ async function migrateAgentSkills() {
         });
 
         // Also attach core-utilities as pinned
-        const coreSkill = await prisma.skill.findUnique({
+        const coreSkill = await prisma.skill.findFirst({
             where: { slug: "core-utilities" },
             select: { id: true }
         });

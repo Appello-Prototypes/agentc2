@@ -953,6 +953,189 @@ Access n8n automation workflows through the ATLAS MCP server.
 ];
 
 // ==============================
+// Campaign Skills (4)
+// ==============================
+
+const campaignSkills: SkillDefinition[] = [
+    {
+        slug: "campaign-analysis",
+        name: "Campaign Analysis",
+        description:
+            "Mission decomposition doctrine — analyze commander's intent and break down into missions with verb-purpose statements and classified tasks.",
+        instructions: `## Campaign Analysis — Mission Decomposition
+
+You are equipped to analyze campaign intent and decompose it into executable missions and tasks.
+
+### Doctrine
+
+1. **Read the campaign** using campaign-get to understand intent, end state, constraints, and restraints.
+2. **Decompose into missions** — each mission should have:
+   - A **verb + "in order to" + purpose** mission statement (e.g., "Scrape competitor websites in order to understand market positioning")
+   - A **priority** (0=low, 10=critical)
+   - A **sequence** (execution order; 0 means can run in parallel with other sequence-0 missions)
+3. **Classify tasks** within each mission:
+   - **ASSIGNED** — directly stated or obvious from the intent
+   - **IMPLIED** — not stated but necessary to accomplish the mission
+   - **ESSENTIAL** — the single most critical task for campaign success
+4. **Task granularity** — one task = one agent action. A task like "research and write report" should be split into "research topic X" and "write report from research findings."
+5. **Sequencing** — tasks with sequence 0 can run in parallel. Tasks with sequence 1, 2, 3... run after all lower-sequence tasks complete.
+6. **Coordinating instructions** — include any dependencies, context, or special instructions the executing agent needs.
+
+### After Analysis
+
+Call campaign-write-missions to persist your decomposition. Include the essential task name.`,
+        category: "campaign",
+        tags: ["campaign", "analysis", "planning", "missions"],
+        tools: ["campaign-get", "campaign-write-missions"],
+        type: "SYSTEM"
+    },
+    {
+        slug: "campaign-planning",
+        name: "Campaign Planning",
+        description:
+            "Agent assignment methodology — evaluate agent fitness, assign best agents to tasks, detect capability gaps, and estimate costs.",
+        instructions: `## Campaign Planning — Agent Assignment
+
+You are equipped to assign the best available agents to campaign tasks and detect capability gaps.
+
+### Methodology
+
+1. **Read the campaign** using campaign-get to see missions, tasks, and analysis output.
+2. **List available agents** using agent-list to see all active agents with their tools, skills, and capabilities.
+3. **Optionally list tools** using tool-registry-list to understand what capabilities exist in the platform.
+4. **Optionally list skills** using skill-list to see reusable skill bundles.
+5. **For each task, evaluate agent fitness:**
+   - Does the agent have the right tools/skills for the task verb?
+   - Are the agent's instructions aligned with the task purpose?
+   - Prefer agents with specific relevant skills over general-purpose agents.
+6. **Detect gaps:** If no existing agent is suitable for a task, flag it as a capability gap with:
+   - Reason why no agent fits
+   - Required capabilities (what the agent would need)
+   - Suggested tools that would be needed
+7. **Execution strategy:** Determine whether missions should run sequentially, in parallel, or mixed.
+8. **Cost estimation:** Estimate tokens and cost per task based on complexity.
+
+### After Planning
+
+Call campaign-write-plan to persist assignments. Include any gaps in gapsDetected.
+If gaps exist, the system will invoke the campaign architect to build needed capabilities, then re-plan.`,
+        category: "campaign",
+        tags: ["campaign", "planning", "assignment", "gaps"],
+        tools: [
+            "campaign-get",
+            "agent-list",
+            "tool-registry-list",
+            "skill-list",
+            "campaign-write-plan"
+        ],
+        type: "SYSTEM"
+    },
+    {
+        slug: "campaign-architecture",
+        name: "Campaign Architecture",
+        description:
+            "Agent and skill design — build new agents and skills to fill capability gaps, reusing existing skills wherever possible.",
+        instructions: `## Campaign Architecture — Building Capabilities
+
+You design and build new agents and skills to fill capability gaps identified by the campaign planner.
+
+### Core Principle: REUSE FIRST
+
+Before creating anything new:
+1. **Always call skill-list first** to see all existing skills.
+2. **Call skill-read** on any skill that might cover the needed capability.
+3. If an existing skill covers the need (even partially), use it. There are 30+ skills already covering CRM, email, web scraping, project management, etc.
+
+### When Creating Skills
+
+Only create a new skill when no existing skill covers the capability combination:
+- Use **skill-create** with clear, specific instructions
+- Use **skill-attach-tool** to bind the relevant tools
+- Follow naming convention: lowercase-hyphenated slug (e.g., "competitor-research")
+- Category should be descriptive (e.g., "web", "research", "content")
+- Instructions should tell the agent HOW to use the tools, not just list them
+
+### When Creating Agents
+
+- Use **agent-create** with:
+  - Clear, specific instructions focused on ONE job
+  - modelProvider: "anthropic", modelName: "claude-opus-4-6" (default for capability assessment)
+  - maxSteps: appropriate for complexity (5 for simple, 10 for medium, 15+ for complex multi-tool)
+- Use **agent-attach-skill** to attach skills (pinned=true since these are purpose-built agents)
+- Prefer attaching existing skills over creating new tool bindings
+- Example: For a "scrape competitor websites" agent, attach the existing mcp-web-firecrawl and mcp-web-playwright skills
+
+### Agent Design Principles
+
+- **Single responsibility** — each agent does one thing well
+- **Clear instructions** — write specific instructions, not vague ones like "help with tasks"
+- **Skill-based tool access** — agents get tools through skills, not direct bindings
+- **Model selection** — use claude-opus-4-6 for complex reasoning, gpt-4o for simpler tasks
+
+### After Building
+
+The system will re-invoke the planner to assign the newly created agents to the gap tasks.`,
+        category: "campaign",
+        tags: ["campaign", "architecture", "agent-builder", "skills"],
+        tools: [
+            "tool-registry-list",
+            "skill-list",
+            "skill-read",
+            "skill-create",
+            "skill-attach-tool",
+            "agent-create",
+            "agent-attach-skill",
+            "campaign-get"
+        ],
+        type: "SYSTEM"
+    },
+    {
+        slug: "campaign-review",
+        name: "Campaign Review",
+        description:
+            "After Action Review doctrine — evaluate mission/campaign outcomes, extract sustain/improve patterns, score results, and write actionable lessons learned.",
+        instructions: `## Campaign Review — After Action Review (AAR)
+
+You generate structured After Action Reviews for missions and campaigns.
+
+### AAR Doctrine
+
+1. **Read the campaign** using campaign-get to see missions, tasks, their statuses, and results.
+2. **For mission AARs**, analyze:
+   - Planned vs actual task completion
+   - Which tasks succeeded, failed, or were skipped
+   - Agent performance per task (use agent-evaluations-list if available)
+   - Total cost and token usage
+   - Duration analysis
+3. **For campaign AARs**, additionally analyze:
+   - Whether the commander's intent was achieved
+   - Whether the end state was reached
+   - Cross-mission patterns and lessons learned
+   - Overall score aggregation
+
+### Patterns to Extract
+
+- **Sustain patterns** — what worked well and should be repeated
+- **Improve patterns** — what didn't work and how to fix it
+- Be SPECIFIC. "Agent X failed because tool Y returned empty results for query Z" not "some tasks failed."
+
+### AAR Fields
+
+For missions: plannedTasks, completedTasks, failedTasks, skippedTasks, avgTaskScore, lowestScoringTask, totalCostUsd, totalTokens, durationMs, sustainPatterns (array of strings), improvePatterns (array of strings), summary.
+
+For campaigns: all mission fields plus intentAchieved (boolean), endStateReached (boolean), overallScore, lessonsLearned (array of strings), recommendations (array of strings).
+
+### After Review
+
+Call campaign-write-aar with targetType ("mission" or "campaign"), targetId, and the structured AAR data.`,
+        category: "campaign",
+        tags: ["campaign", "review", "aar", "evaluation"],
+        tools: ["campaign-get", "agent-runs-get", "agent-evaluations-list", "campaign-write-aar"],
+        type: "SYSTEM"
+    }
+];
+
+// ==============================
 // Seed function
 // ==============================
 
@@ -960,7 +1143,8 @@ const allSkills: SkillDefinition[] = [
     ...platformSkills,
     ...utilitySkills,
     ...domainSkills,
-    ...mcpSkills
+    ...mcpSkills,
+    ...campaignSkills
 ];
 
 async function seedSkills() {
