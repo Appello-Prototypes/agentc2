@@ -161,7 +161,7 @@ jobs:
 
             echo ""
             echo "6. Cleaning stale builds and caches..."
-            pkill -f "next build" 2>/dev/null || true
+            pgrep -f "node.*next build" | xargs kill 2>/dev/null || true
             sleep 2
             rm -rf apps/agent/.next/cache apps/frontend/.next/cache apps/admin/.next/cache 2>/dev/null || true
             rm -f apps/agent/.next/lock apps/frontend/.next/lock apps/admin/.next/lock 2>/dev/null || true
