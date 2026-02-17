@@ -41,6 +41,8 @@ if (!global.__mcpSchemaPatched) {
 }
 
 const ORG_MCP_CACHE_TTL = 60000;
+/** Stale cache is used as fallback when fresh loading fails — 10 minutes */
+const ORG_MCP_STALE_TTL = 600000;
 const orgMcpClients = new Map<string, { client: MCPClient; loadedAt: number }>();
 
 /** Cache for per-server tool-loading results (keyed by orgId or "__default__") */
@@ -50,6 +52,20 @@ const perServerToolsCache = new Map<
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tools: Record<string, any>;
         serverErrors: Record<string, string>;
+        loadedAt: number;
+    }
+>();
+
+/**
+ * Last-known-good cache: stores successful tool loads per server so we can
+ * fall back to stale tools when a server fails on reload.
+ * Keyed by `${cacheKey}::${serverId}`.
+ */
+const lastKnownGoodTools = new Map<
+    string,
+    {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tools: Record<string, any>;
         loadedAt: number;
     }
 >();
@@ -66,6 +82,7 @@ export function invalidateMcpCacheForOrg(organizationId: string) {
 export function resetMcpClients() {
     orgMcpClients.clear();
     perServerToolsCache.clear();
+    lastKnownGoodTools.clear();
     global.mcpClient = undefined;
 }
 
@@ -3267,7 +3284,29 @@ export async function getMcpTools(
     }
 
     const servers = await buildServerConfigsForOptions(options);
-    const result = await loadToolsPerServer(servers);
+    const result = await loadToolsPerServer(servers, cacheKey);
+
+    // If some servers failed, backfill from last-known-good cache (stale fallback)
+    const failedServerIds = Object.keys(result.serverErrors);
+    if (failedServerIds.length > 0) {
+        let backfilledCount = 0;
+        for (const serverId of failedServerIds) {
+            const lkg = lastKnownGoodTools.get(`${cacheKey}::${serverId}`);
+            if (lkg && now - lkg.loadedAt < ORG_MCP_STALE_TTL) {
+                Object.assign(result.tools, lkg.tools);
+                result.serverErrors[serverId] =
+                    `${result.serverErrors[serverId]} (using ${Object.keys(lkg.tools).length} stale tools)`;
+                backfilledCount += Object.keys(lkg.tools).length;
+            }
+        }
+        if (backfilledCount > 0) {
+            console.log(
+                `[MCP] Backfilled ${backfilledCount} stale tool(s) from last-known-good cache ` +
+                    `for ${failedServerIds.length} failed server(s)`
+            );
+        }
+    }
+
     perServerToolsCache.set(cacheKey, { ...result, loadedAt: now });
     return result;
 }
@@ -3292,10 +3331,51 @@ async function buildServerConfigsForOptions(options: {
 }
 
 /**
+ * Load tools from a single MCP server with 1 retry on failure.
+ * Returns the tools on success, or throws on failure after retry.
+ */
+async function loadToolsFromServer(
+    serverId: string,
+    serverDef: MastraMCPServerDefinition,
+    maxRetries = 1
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+): Promise<{ serverId: string; tools: Record<string, any> }> {
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+        if (attempt > 0) {
+            // Wait 2 seconds before retry
+            await new Promise((r) => setTimeout(r, 2000));
+            console.log(
+                `[MCP] Retrying server "${serverId}" (attempt ${attempt + 1}/${maxRetries + 1})`
+            );
+        }
+        const client = new MCPClient({
+            id: `mastra-mcp-iso-${serverId}`,
+            servers: { [serverId]: serverDef },
+            timeout: 60000
+        });
+        try {
+            const tools = await client.listTools();
+            return { serverId, tools: sanitizeMcpTools(tools) };
+        } catch (err) {
+            lastError = err;
+        } finally {
+            await client.disconnect().catch(() => {});
+        }
+    }
+    throw lastError;
+}
+
+/**
  * Load tools from each server independently using Promise.allSettled.
+ * Each server gets 1 retry on failure before being marked as errored.
+ * Successful loads are stored in a last-known-good cache for stale fallback.
  * Returns merged tools and a map of serverId -> error message for failures.
  */
-async function loadToolsPerServer(servers: Record<string, MastraMCPServerDefinition>): Promise<{
+async function loadToolsPerServer(
+    servers: Record<string, MastraMCPServerDefinition>,
+    cacheKey = "__default__"
+): Promise<{
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tools: Record<string, any>;
     serverErrors: Record<string, string>;
@@ -3310,31 +3390,25 @@ async function loadToolsPerServer(servers: Record<string, MastraMCPServerDefinit
     }
 
     const results = await Promise.allSettled(
-        serverEntries.map(async ([serverId, serverDef]) => {
-            const client = new MCPClient({
-                id: `mastra-mcp-iso-${serverId}`,
-                servers: { [serverId]: serverDef },
-                timeout: 60000 // 60s — npx servers need time to download/start
-            });
-            try {
-                const tools = await client.listTools();
-                return { serverId, tools: sanitizeMcpTools(tools) };
-            } finally {
-                await client.disconnect().catch(() => {});
-            }
-        })
+        serverEntries.map(([serverId, serverDef]) => loadToolsFromServer(serverId, serverDef))
     );
 
     for (const result of results) {
         if (result.status === "fulfilled") {
-            Object.assign(mergedTools, result.value.tools);
+            const { serverId, tools } = result.value;
+            Object.assign(mergedTools, tools);
+            // Update last-known-good cache for this server
+            lastKnownGoodTools.set(`${cacheKey}::${serverId}`, {
+                tools,
+                loadedAt: Date.now()
+            });
         } else {
             // Extract serverId from the error context
             const idx = results.indexOf(result);
             const serverId = serverEntries[idx]![0];
             const message = formatTestError(result.reason);
             serverErrors[serverId] = message;
-            console.warn(`[MCP] Server "${serverId}" failed to load tools: ${message}`);
+            console.warn(`[MCP] Server "${serverId}" failed to load tools after retry: ${message}`);
         }
     }
 

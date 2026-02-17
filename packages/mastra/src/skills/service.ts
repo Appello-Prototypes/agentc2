@@ -7,6 +7,7 @@
  */
 
 import { prisma, Prisma } from "@repo/database";
+import { toolRegistry } from "../tools/registry";
 
 export interface CreateSkillInput {
     slug: string;
@@ -310,8 +311,32 @@ export async function detachDocument(skillId: string, documentId: string) {
 /**
  * Attach a tool to a skill (creates skill version).
  * skillIdOrSlug accepts a CUID or slug.
+ *
+ * Validates that the toolId exists in the static registry or matches an MCP
+ * tool naming pattern (serverName_toolName). Non-existent static tools are
+ * rejected; MCP tools are accepted with a logged warning since they're dynamic.
  */
-export async function attachTool(skillIdOrSlug: string, toolId: string) {
+export async function attachTool(
+    skillIdOrSlug: string,
+    toolId: string
+): Promise<{ id: string; skillId: string; toolId: string; warning?: string }> {
+    // Validate tool existence
+    const existsInRegistry = toolId in toolRegistry;
+    const isMcpPattern = toolId.includes("_");
+    let warning: string | undefined;
+
+    if (!existsInRegistry && !isMcpPattern) {
+        throw new Error(
+            `Tool "${toolId}" not found in the tool registry. ` +
+                `Verify the tool ID is correct. Available tools can be listed with tool-registry-list.`
+        );
+    }
+
+    if (!existsInRegistry && isMcpPattern) {
+        warning = `Tool "${toolId}" is not in the static registry (assumed MCP tool). It will only be available when the MCP server is running.`;
+        console.warn(`[SkillService] ${warning}`);
+    }
+
     const skillId = await resolveSkillId(skillIdOrSlug);
     const junction = await prisma.skillTool.create({
         data: { skillId, toolId }
@@ -319,7 +344,7 @@ export async function attachTool(skillIdOrSlug: string, toolId: string) {
 
     await createSkillVersionForCompositionChange(skillId, `Attached tool: ${toolId}`);
 
-    return junction;
+    return { ...junction, warning };
 }
 
 /**

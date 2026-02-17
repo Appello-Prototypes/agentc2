@@ -53,7 +53,9 @@ export async function POST(request: NextRequest) {
                 );
             }
 
-            // Verify the org's domain matches the user's email domain
+            // Verify the user's email domain matches either:
+            // 1. An explicit OrganizationDomain record, OR
+            // 2. An existing member with the same email domain (soft match)
             const domain = session.user.email ? getEmailDomain(session.user.email) : null;
             if (!domain) {
                 return NextResponse.json(
@@ -62,12 +64,36 @@ export async function POST(request: NextRequest) {
                 );
             }
 
+            // 1. Check explicit OrganizationDomain table
             const orgDomain = await prisma.organizationDomain.findFirst({
                 where: { organizationId, domain },
                 include: { organization: true }
             });
 
-            if (!orgDomain) {
+            // 2. Fallback: check if an existing member of this org shares the same domain
+            let organization = orgDomain?.organization ?? null;
+            if (!organization) {
+                const coworkerMembership = await prisma.membership.findFirst({
+                    where: {
+                        organizationId,
+                        userId: {
+                            in: (
+                                await prisma.user.findMany({
+                                    where: {
+                                        email: { endsWith: `@${domain}` },
+                                        NOT: { id: session.user.id }
+                                    },
+                                    select: { id: true }
+                                })
+                            ).map((u) => u.id)
+                        }
+                    },
+                    include: { organization: true }
+                });
+                organization = coworkerMembership?.organization ?? null;
+            }
+
+            if (!organization) {
                 return NextResponse.json(
                     { success: false, error: "Organization domain does not match your email" },
                     { status: 400 }
@@ -85,9 +111,9 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({
                 success: true,
                 organization: {
-                    id: orgDomain.organization.id,
-                    name: orgDomain.organization.name,
-                    slug: orgDomain.organization.slug
+                    id: organization.id,
+                    name: organization.name,
+                    slug: organization.slug
                 },
                 membership
             });

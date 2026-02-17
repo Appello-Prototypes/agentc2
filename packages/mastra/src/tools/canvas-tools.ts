@@ -1,61 +1,12 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { prisma, Prisma } from "@repo/database";
 import { BLOCK_TYPES } from "../canvas/schema";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
-
 // ─────────────────────────────────────────────────────────────────────────────
-// Canvas CRUD Tools
+// Canvas CRUD Tools — Direct Prisma calls for reliability in agent runs
 // ─────────────────────────────────────────────────────────────────────────────
 
 export const canvasCreateTool = createTool({
@@ -90,12 +41,27 @@ export const canvasCreateTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ slug, title, description, schemaJson, tags, category }) => {
-        const result = await callInternalApi("/api/canvases", {
-            method: "POST",
-            body: { slug, title, description, schemaJson, tags, category }
+        const canvas = await prisma.canvas.create({
+            data: {
+                slug,
+                title,
+                description,
+                schemaJson: schemaJson as Prisma.InputJsonValue,
+                dataQueries: (schemaJson.dataQueries as Prisma.InputJsonValue) ?? Prisma.JsonNull,
+                tags: tags ?? [],
+                category,
+                version: 1,
+                versions: {
+                    create: {
+                        version: 1,
+                        schemaJson: schemaJson as Prisma.InputJsonValue,
+                        changelog: "Initial version"
+                    }
+                }
+            }
         });
         return {
-            ...result,
+            ...canvas,
             success: true,
             message: `Canvas "${title}" created successfully. View it at /canvas/${slug}`,
             url: `/canvas/${slug}`
@@ -111,7 +77,27 @@ export const canvasReadTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ slug }) => {
-        return callInternalApi(`/api/canvases/${slug}`);
+        const canvas = await prisma.canvas.findUnique({
+            where: { slug },
+            include: {
+                versions: {
+                    orderBy: { version: "desc" as const },
+                    take: 5,
+                    select: {
+                        id: true,
+                        version: true,
+                        changelog: true,
+                        versionLabel: true,
+                        createdAt: true,
+                        createdBy: true
+                    }
+                }
+            }
+        });
+        if (!canvas) {
+            throw new Error(`Canvas "${slug}" not found`);
+        }
+        return canvas;
     }
 });
 
@@ -119,7 +105,8 @@ export const canvasUpdateTool = createTool({
     id: "canvas-update",
     description:
         "Update an existing canvas. Can update title, description, schema, tags, or publish status. " +
-        "When updating the schema, a new version is automatically created.",
+        "When updating the schema (schemaJson), a new version is automatically created. " +
+        "To update only data queries without touching layout/components, use canvas-update-data instead.",
     inputSchema: z.object({
         slug: z.string().describe("Canvas slug to update"),
         title: z.string().optional().describe("New title"),
@@ -135,16 +122,140 @@ export const canvasUpdateTool = createTool({
             .optional()
             .describe("Updated canvas schema (creates a new version)"),
         changelog: z.string().optional().describe("Description of what changed"),
+        versionLabel: z
+            .string()
+            .optional()
+            .describe(
+                "Label for this version snapshot (e.g., 'Morning — Feb 17'). Only used when schemaJson is provided."
+            ),
         tags: z.array(z.string()).optional(),
         category: z.string().optional(),
         isPublished: z.boolean().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug, ...updates }) => {
-        return callInternalApi(`/api/canvases/${slug}`, {
-            method: "PATCH",
-            body: updates
+    execute: async ({ slug, schemaJson, changelog, versionLabel, ...rest }) => {
+        const existing = await prisma.canvas.findUnique({ where: { slug } });
+        if (!existing) {
+            throw new Error(`Canvas "${slug}" not found`);
+        }
+
+        const updateData: Prisma.CanvasUpdateInput = {};
+        if (rest.title !== undefined) updateData.title = rest.title;
+        if (rest.description !== undefined) updateData.description = rest.description;
+        if (rest.tags !== undefined) updateData.tags = rest.tags;
+        if (rest.category !== undefined) updateData.category = rest.category;
+        if (rest.isPublished !== undefined) updateData.isPublished = rest.isPublished;
+
+        if (schemaJson) {
+            const newVersion = existing.version + 1;
+            updateData.schemaJson = schemaJson as Prisma.InputJsonValue;
+            updateData.dataQueries =
+                (schemaJson.dataQueries as Prisma.InputJsonValue) ??
+                existing.dataQueries ??
+                Prisma.JsonNull;
+            updateData.version = newVersion;
+
+            await prisma.canvasVersion.create({
+                data: {
+                    canvasId: existing.id,
+                    version: newVersion,
+                    schemaJson: schemaJson as Prisma.InputJsonValue,
+                    changelog: changelog || `Updated to version ${newVersion}`,
+                    versionLabel: versionLabel || null
+                }
+            });
+        }
+
+        const canvas = await prisma.canvas.update({
+            where: { slug },
+            data: updateData
         });
+        return canvas;
+    }
+});
+
+export const canvasUpdateDataTool = createTool({
+    id: "canvas-update-data",
+    description:
+        "Update only the data queries on a canvas without touching layout or components. " +
+        "This is the safe, efficient way for agents to refresh dashboard data. " +
+        "Merges provided queries by ID — existing queries not in the payload are preserved. " +
+        "Does NOT create a new schema version (data refreshes are not schema changes).",
+    inputSchema: z.object({
+        slug: z.string().describe("Canvas slug to update"),
+        dataQueries: z
+            .array(
+                z.object({
+                    id: z.string().describe("Query ID to update (must match existing query ID)"),
+                    source: z.enum(["static", "mcp", "sql", "rag", "api"]).default("static"),
+                    data: z.unknown().optional().describe("Static data payload"),
+                    tool: z.string().optional().describe("MCP tool name"),
+                    params: z.record(z.unknown()).optional().describe("Query parameters"),
+                    query: z.string().optional().describe("SQL or RAG query string"),
+                    url: z.string().optional().describe("API URL"),
+                    method: z.string().optional().describe("HTTP method for API source"),
+                    headers: z
+                        .record(z.string())
+                        .optional()
+                        .describe("HTTP headers for API source"),
+                    body: z.unknown().optional().describe("Request body for API source"),
+                    refreshInterval: z
+                        .number()
+                        .optional()
+                        .describe("Auto-refresh interval in ms (0 = no refresh)"),
+                    transform: z.string().optional().describe("Expression to transform results")
+                })
+            )
+            .describe("Data queries to update or add (merged by ID)")
+    }),
+    outputSchema: baseOutputSchema,
+    execute: async ({ slug, dataQueries }) => {
+        const existing = await prisma.canvas.findUnique({ where: { slug } });
+        if (!existing) {
+            throw new Error(`Canvas "${slug}" not found`);
+        }
+
+        const existingSchema =
+            existing.schemaJson && typeof existing.schemaJson === "object"
+                ? (existing.schemaJson as Record<string, unknown>)
+                : {};
+        const existingQueries = Array.isArray(existingSchema.dataQueries)
+            ? (existingSchema.dataQueries as Array<Record<string, unknown>>)
+            : [];
+
+        const incomingById = new Map<string, Record<string, unknown>>();
+        for (const q of dataQueries) {
+            incomingById.set(q.id, q as Record<string, unknown>);
+        }
+
+        const mergedQueries = existingQueries.map((eq) => {
+            const replacement = incomingById.get(eq.id as string);
+            if (replacement) {
+                incomingById.delete(eq.id as string);
+                return { ...eq, ...replacement };
+            }
+            return eq;
+        });
+        for (const newQ of incomingById.values()) {
+            mergedQueries.push(newQ);
+        }
+
+        const patchedSchema = { ...existingSchema, dataQueries: mergedQueries };
+
+        const canvas = await prisma.canvas.update({
+            where: { slug },
+            data: {
+                schemaJson: patchedSchema as Prisma.InputJsonValue,
+                dataQueries: mergedQueries as Prisma.InputJsonValue
+            }
+        });
+
+        return {
+            ...canvas,
+            success: true,
+            queriesUpdated: dataQueries.length,
+            totalQueries: mergedQueries.length
+        };
     }
 });
 
@@ -156,7 +267,8 @@ export const canvasDeleteTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ slug }) => {
-        return callInternalApi(`/api/canvases/${slug}`, { method: "DELETE" });
+        await prisma.canvas.delete({ where: { slug } });
+        return { success: true };
     }
 });
 
@@ -171,14 +283,34 @@ export const canvasListTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ category, tags, skip, take }) => {
-        return callInternalApi("/api/canvases", {
-            query: {
-                category,
-                tags: tags?.join(","),
-                skip,
-                take
-            }
-        });
+        const where: Prisma.CanvasWhereInput = { isActive: true };
+        if (category) where.category = category;
+        if (tags && tags.length > 0) where.tags = { hasSome: tags };
+
+        const [canvases, total] = await Promise.all([
+            prisma.canvas.findMany({
+                where,
+                skip: skip ?? 0,
+                take: take ?? 20,
+                orderBy: { updatedAt: "desc" as const },
+                select: {
+                    id: true,
+                    slug: true,
+                    title: true,
+                    description: true,
+                    category: true,
+                    tags: true,
+                    version: true,
+                    isPublished: true,
+                    isPublic: true,
+                    createdAt: true,
+                    updatedAt: true
+                }
+            }),
+            prisma.canvas.count({ where })
+        ]);
+
+        return { canvases, total, success: true };
     }
 });
 
@@ -200,8 +332,6 @@ export const canvasQueryPreviewTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ source, tool, params, query }, context) => {
-        // Build a temporary query and execute it via the data endpoint
-        // For preview, we use a direct internal call
         const queryDef = {
             id: "preview",
             source,
@@ -211,14 +341,10 @@ export const canvasQueryPreviewTool = createTool({
             prompt: source === "rag" ? query : undefined
         };
 
-        // Extract organizationId from execution context if available.
-        // This allows MCP tool queries to resolve against the correct
-        // organization's configured MCP servers.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const reqCtx = context?.requestContext as Record<string, any> | undefined;
         const organizationId = reqCtx?.organizationId || reqCtx?.tenantId || null;
 
-        // Use executeSingleQuery directly
         const { executeSingleQuery } = await import("../canvas/query-executor");
         const result = await executeSingleQuery(queryDef, { organizationId });
 
@@ -227,7 +353,6 @@ export const canvasQueryPreviewTool = createTool({
             data: result.data,
             error: result.error,
             durationMs: result.durationMs,
-            // Add helpful metadata about the data shape
             dataType: Array.isArray(result.data) ? "array" : typeof result.data,
             rowCount: Array.isArray(result.data) ? result.data.length : undefined,
             sampleFields:
@@ -249,7 +374,22 @@ export const canvasExecuteQueriesTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ slug }) => {
-        return callInternalApi(`/api/canvases/${slug}/data`);
+        const canvas = await prisma.canvas.findUnique({
+            where: { slug },
+            select: { dataQueries: true }
+        });
+        if (!canvas) {
+            throw new Error(`Canvas "${slug}" not found`);
+        }
+        const queries = Array.isArray(canvas.dataQueries) ? canvas.dataQueries : [];
+        if (queries.length === 0) {
+            return { success: true, results: {} };
+        }
+
+        const { executeCanvasQueries } = await import("../canvas/query-executor");
+        type DataQuery = Parameters<typeof executeCanvasQueries>[0][number];
+        const results = await executeCanvasQueries(queries as unknown as DataQuery[], {});
+        return { success: true, results };
     }
 });
 

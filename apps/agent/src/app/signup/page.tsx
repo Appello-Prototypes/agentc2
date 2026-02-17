@@ -4,16 +4,20 @@ import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import Link from "next/link";
 import {
     BotIcon,
     GitBranchIcon,
     NetworkIcon,
     PlugIcon,
     ShieldCheckIcon,
-    CreditCardIcon
+    CreditCardIcon,
+    LockIcon
 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
+
+const isInviteOnly = process.env.FEATURE_INVITE_ONLY === "true";
 
 const PLATFORM_FEATURES = [
     {
@@ -38,7 +42,11 @@ const PLATFORM_FEATURES = [
     }
 ];
 
-export default async function SignUpPage() {
+export default async function SignUpPage({
+    searchParams
+}: {
+    searchParams: Promise<{ invite?: string }>;
+}) {
     const session = await auth.api.getSession({
         headers: await headers()
     });
@@ -54,6 +62,54 @@ export default async function SignUpPage() {
         }
 
         redirect("/onboarding");
+    }
+
+    const resolvedParams = await searchParams;
+    const hasInviteCode = Boolean(resolvedParams?.invite?.trim());
+
+    // When invite-only mode is on and no invite code provided, show the gate
+    if (isInviteOnly && !hasInviteCode) {
+        return (
+            <div className="flex min-h-screen items-center justify-center p-4">
+                <div className="mx-auto w-full max-w-[420px] text-center">
+                    <div className="mb-8 flex items-center justify-center">
+                        <AgentBrand />
+                    </div>
+
+                    <div className="mb-6 flex justify-center">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800">
+                            <LockIcon className="size-7 text-slate-500" />
+                        </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <h1 className="text-2xl font-bold tracking-tight">Invite code required</h1>
+                        <p className="text-muted-foreground text-sm">
+                            AgentC2 is currently in early access. You need an invite code to create
+                            an account.
+                        </p>
+                    </div>
+
+                    <div className="mt-8 space-y-3">
+                        <Link
+                            href="/waitlist"
+                            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex w-full items-center justify-center rounded-md px-4 py-2.5 text-sm font-medium transition-colors"
+                        >
+                            Join the Waitlist
+                        </Link>
+                        <p className="text-muted-foreground text-sm">
+                            Already have an account?{" "}
+                            <Link
+                                href="/login"
+                                className="text-primary font-medium hover:underline"
+                            >
+                                Log in
+                            </Link>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     return (
@@ -122,11 +178,11 @@ export default async function SignUpPage() {
                         <AgentBrand />
                     </div>
 
-                    {/* Free badge */}
+                    {/* Badge */}
                     <div className="mb-6 flex justify-center lg:justify-start">
                         <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700 dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-400">
                             <span className="inline-block size-1.5 rounded-full bg-emerald-500" />
-                            100% Free to start
+                            {isInviteOnly ? "Early access invite" : "100% Free to start"}
                         </span>
                     </div>
 
@@ -139,7 +195,7 @@ export default async function SignUpPage() {
                     </div>
 
                     {/* Sign up form */}
-                    <SignUpForm />
+                    <SignUpForm requireInviteCode={isInviteOnly} />
 
                     {/* Trust footer */}
                     <div className="mt-8 space-y-4">

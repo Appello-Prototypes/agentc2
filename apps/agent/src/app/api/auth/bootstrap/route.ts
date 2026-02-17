@@ -6,7 +6,11 @@ import { auth, bootstrapUserOrganization } from "@repo/auth";
  * POST /api/auth/bootstrap
  *
  * Ensures the signed-in user is assigned to an organization.
- * Supports invite code and domain-based matching. Falls back to creating a new org.
+ * Supports invite code and domain-based matching.
+ *
+ * When no invite code is provided, defers org creation to the onboarding page
+ * so the user can see the org selection step (join suggested org or create new).
+ * Invite codes still auto-join since that's explicit user intent.
  */
 export async function POST(request: NextRequest) {
     try {
@@ -25,7 +29,8 @@ export async function POST(request: NextRequest) {
             session.user.id,
             session.user.name,
             session.user.email,
-            inviteCode || undefined
+            inviteCode || undefined,
+            { deferOrgCreation: !inviteCode }
         );
 
         if (!result.success) {

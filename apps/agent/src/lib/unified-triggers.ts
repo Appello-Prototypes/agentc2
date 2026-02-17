@@ -222,3 +222,62 @@ export function resolveRunSource(triggerType: string): RunSource {
             return "api";
     }
 }
+
+/**
+ * Resolve template variables in schedule input strings.
+ *
+ * Supported variables (resolved at trigger time):
+ *   {{ date }}       — e.g. "February 17, 2026"
+ *   {{ isoDate }}    — e.g. "2026-02-17"
+ *   {{ dayOfWeek }}  — e.g. "Monday"
+ *   {{ isMonday }}   — "true" or "false"
+ *   {{ time }}       — e.g. "06:00"
+ *   {{ timezone }}   — e.g. "America/Toronto"
+ *   {{ weekNumber }} — ISO week number, e.g. "8"
+ */
+export function resolveScheduleTemplates(input: string, timezone: string): string {
+    if (!input.includes("{{")) return input;
+
+    const now = new Date();
+
+    const formatter = (opts: Intl.DateTimeFormatOptions) =>
+        new Intl.DateTimeFormat("en-US", { ...opts, timeZone: timezone }).format(now);
+
+    const dayOfWeek = formatter({ weekday: "long" });
+    const date = formatter({ year: "numeric", month: "long", day: "numeric" });
+    const time = formatter({ hour: "2-digit", minute: "2-digit", hour12: false });
+
+    // ISO date in the target timezone
+    const yearStr = formatter({ year: "numeric" });
+    const monthStr = new Intl.DateTimeFormat("en-US", {
+        month: "2-digit",
+        timeZone: timezone
+    }).format(now);
+    const dayStr = new Intl.DateTimeFormat("en-US", {
+        day: "2-digit",
+        timeZone: timezone
+    }).format(now);
+    const isoDate = `${yearStr}-${monthStr}-${dayStr}`;
+
+    // ISO week number
+    const localDate = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
+    const jan1 = new Date(localDate.getFullYear(), 0, 1);
+    const daysSinceJan1 = Math.floor((localDate.getTime() - jan1.getTime()) / 86400000);
+    const weekNumber = Math.ceil((daysSinceJan1 + jan1.getDay() + 1) / 7);
+
+    const isMonday = dayOfWeek === "Monday" ? "true" : "false";
+
+    const vars: Record<string, string> = {
+        date,
+        isoDate,
+        dayOfWeek,
+        isMonday,
+        time,
+        timezone,
+        weekNumber: String(weekNumber)
+    };
+
+    return input.replace(/\{\{\s*(\w+)\s*\}\}/g, (match, key: string) => {
+        return vars[key] ?? match;
+    });
+}

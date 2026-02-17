@@ -197,11 +197,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         // eslint-disable-next-line prefer-const
-        let { agent, record, source, activeSkills, toolOriginMap } = await agentResolver.resolve({
-            slug: id,
-            requestContext,
-            threadId: userThreadId
-        });
+        let { agent, record, source, activeSkills, toolOriginMap, toolHealth } =
+            await agentResolver.resolve({
+                slug: id,
+                requestContext,
+                threadId: userThreadId
+            });
 
         console.log(
             `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
@@ -432,7 +433,18 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         Object.keys(toolOriginMap).length > 0 ? toolOriginMap : undefined,
                     instructionsHash,
                     instructionsSnapshot: mergedInstructions || undefined,
-                    tenantId: record?.tenantId || undefined
+                    tenantId: record?.tenantId || undefined,
+                    metadata:
+                        toolHealth.missingTools.length > 0
+                            ? {
+                                  toolHealth: {
+                                      expectedCount: toolHealth.expectedCount,
+                                      loadedCount: toolHealth.loadedCount,
+                                      missingTools: toolHealth.missingTools,
+                                      filteredTools: toolHealth.filteredTools
+                                  }
+                              }
+                            : undefined
                 })
                     .then((handle) => {
                         turnHandle = handle;
@@ -822,9 +834,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             if (capturedRun) {
                                 const actualModelProvider = routingDecision
                                     ? routingDecision.model.provider
-                                    : modelOverride?.provider ||
-                                      record?.modelProvider ||
-                                      "unknown";
+                                    : modelOverride?.provider || record?.modelProvider || "unknown";
                                 const actualModelName = routingDecision
                                     ? routingDecision.model.name
                                     : modelOverride?.name || record?.modelName || "unknown";
@@ -869,20 +879,62 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     })();
                 } catch (streamError) {
-                    console.error("[Agent Chat] Stream error:", streamError);
+                    const errorMsg =
+                        streamError instanceof Error ? streamError.message : String(streamError);
+                    const isToolNotFound =
+                        /tool\s+\S+\s+not found/i.test(errorMsg) ||
+                        /tool.*not found/i.test(errorMsg);
 
-                    // Record the failure
-                    if (run) {
-                        await run.fail(
-                            streamError instanceof Error ? streamError : String(streamError)
-                        );
+                    if (isToolNotFound) {
+                        // Tool-not-found: write a helpful response instead of a hard failure.
+                        // The user should see an explanation, not an opaque error.
+                        console.warn(`[Agent Chat] Tool not found (recoverable): ${errorMsg}`);
+                        const toolMatch = errorMsg.match(/tool\s+(\S+)/i);
+                        const toolName = toolMatch?.[1] || "unknown";
+                        const recoveryText =
+                            `I attempted to use the tool "${toolName}" but it's currently unavailable ` +
+                            `(the underlying service may be temporarily down). ` +
+                            `Please try again in a moment, or let me know if there's an alternative ` +
+                            `way I can help you.`;
+
+                        writer.write({
+                            type: "text-delta",
+                            id: messageId,
+                            delta: recoveryText
+                        });
+                        writer.write({ type: "text-end", id: messageId });
+                        fullOutput = recoveryText;
+
+                        // Record as COMPLETED with a note, not FAILED — the user got a response
+                        if (run) {
+                            await run.complete({
+                                output: recoveryText,
+                                steps: [
+                                    ...executionSteps,
+                                    {
+                                        step: stepCounter + 1,
+                                        type: "tool_result" as const,
+                                        content: `[Recovery] Tool not found: ${errorMsg}. Returned graceful response.`,
+                                        timestamp: new Date().toISOString()
+                                    }
+                                ]
+                            });
+                        }
+                    } else {
+                        console.error("[Agent Chat] Stream error:", streamError);
+
+                        // Record the failure
+                        if (run) {
+                            await run.fail(
+                                streamError instanceof Error ? streamError : String(streamError)
+                            );
+                        }
+
+                        writer.write({
+                            type: "error",
+                            errorText: errorMsg
+                        });
                     }
-
-                    writer.write({
-                        type: "error",
-                        errorText:
-                            streamError instanceof Error ? streamError.message : "Stream failed"
-                    });
                 }
             },
             onError: (error: unknown) => {

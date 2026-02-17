@@ -493,8 +493,59 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         } catch (runError) {
             const durationMs = Date.now() - startTime;
             const errorMessage = runError instanceof Error ? runError.message : String(runError);
+            const isToolNotFound =
+                /tool\s+\S+\s+not found/i.test(errorMessage) ||
+                /tool.*not found/i.test(errorMessage);
 
-            // Update run with failure
+            if (isToolNotFound) {
+                // Tool-not-found: return a graceful response instead of a hard 500
+                const toolMatch = errorMessage.match(/tool\s+(\S+)/i);
+                const toolName = toolMatch?.[1] || "unknown";
+                const recoveryText =
+                    `The tool "${toolName}" is currently unavailable ` +
+                    `(the underlying service may be temporarily down). ` +
+                    `Please try again later.`;
+
+                await prisma.agentRun.update({
+                    where: { id: run.id },
+                    data: {
+                        status: "COMPLETED",
+                        outputText: recoveryText,
+                        durationMs,
+                        completedAt: new Date()
+                    }
+                });
+
+                await prisma.agentTrace.update({
+                    where: { runId: run.id },
+                    data: {
+                        status: "COMPLETED",
+                        outputText: recoveryText,
+                        durationMs,
+                        stepsJson: [
+                            {
+                                step: 1,
+                                type: "error_recovery",
+                                content: `Tool not found: ${errorMessage}. Returned graceful response.`,
+                                timestamp: new Date().toISOString()
+                            }
+                        ] as unknown as Prisma.JsonArray
+                    }
+                });
+
+                return NextResponse.json({
+                    success: true,
+                    data: {
+                        id: run.id,
+                        output: recoveryText,
+                        status: "COMPLETED",
+                        durationMs,
+                        toolNotFoundRecovery: true
+                    }
+                });
+            }
+
+            // Other errors: mark as FAILED
             await prisma.agentRun.update({
                 where: { id: run.id },
                 data: {

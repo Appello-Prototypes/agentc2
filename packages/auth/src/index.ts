@@ -11,7 +11,7 @@ export {
     createNewOrganizationForUser,
     getEmailDomain
 } from "./bootstrap";
-export type { BootstrapResult } from "./bootstrap";
+export type { BootstrapResult, BootstrapOptions } from "./bootstrap";
 
 // Environment utilities
 export { validateAuthEnv, getAppUrl } from "./env";

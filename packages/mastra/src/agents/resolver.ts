@@ -16,6 +16,7 @@ import { getToolsByNamesAsync, getAllMcpTools, toolRegistry } from "../tools/reg
 import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
 import { getScorersByNames } from "../scorers/registry";
 import { getThreadSkillState } from "../skills/thread-state";
+import { recordActivity } from "../activity/service";
 import { resolveModelForOrg } from "./model-provider";
 import { resolveModelAlias } from "./model-registry";
 
@@ -135,6 +136,21 @@ export interface ActiveSkillInfo {
 }
 
 /**
+ * Tool health snapshot captured at agent resolution time.
+ * Tracks expected vs loaded tools for observability and debugging.
+ */
+export interface ToolHealthSnapshot {
+    /** Number of tools the agent expected to have (AgentTool + SkillTool records) */
+    expectedCount: number;
+    /** Number of tools actually loaded and available */
+    loadedCount: number;
+    /** Tool IDs that were expected but could not be loaded */
+    missingTools: string[];
+    /** Tool IDs that were filtered out (OAuth, budget, etc.) */
+    filteredTools: string[];
+}
+
+/**
  * Result of agent resolution
  */
 export interface HydratedAgent {
@@ -147,6 +163,8 @@ export interface HydratedAgent {
     toolOriginMap: Record<string, string>;
     /** Document IDs from attached skills for RAG scoping */
     skillDocumentIds: string[];
+    /** Tool health snapshot — expected vs loaded tools */
+    toolHealth: ToolHealthSnapshot;
 }
 
 /**
@@ -300,7 +318,13 @@ export class AgentResolver {
                         source: "fallback",
                         activeSkills: [],
                         toolOriginMap: {},
-                        skillDocumentIds: []
+                        skillDocumentIds: [],
+                        toolHealth: {
+                            expectedCount: 0,
+                            loadedCount: 0,
+                            missingTools: [],
+                            filteredTools: []
+                        }
                     };
                 }
             } catch {
@@ -327,6 +351,7 @@ export class AgentResolver {
         activeSkills: ActiveSkillInfo[];
         toolOriginMap: Record<string, string>;
         skillDocumentIds: string[];
+        toolHealth: ToolHealthSnapshot;
     }> {
         // Enrich context with Slack channel preferences for template interpolation
         const enrichedContext = await this.enrichContextWithSlackChannels(record, context || {});
@@ -415,6 +440,13 @@ export class AgentResolver {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const tools: Record<string, any> = { ...mcpTools, ...skillTools, ...registryTools };
 
+        // Compute expected tool set (everything the agent was configured to have)
+        const expectedSkillToolIds = skillResult.skillToolMapping
+            ? Object.keys(skillResult.skillToolMapping)
+            : [];
+        const expectedToolNames = new Set([...toolNames, ...expectedSkillToolIds]);
+        const filteredTools: string[] = [];
+
         // Inject skill discovery meta-tools if agent has discoverable (non-pinned) skills
         if (hasDiscoverableSkills) {
             // Add the three meta-tools for progressive skill discovery
@@ -444,6 +476,7 @@ export class AgentResolver {
             if (tools[toolId] && !connectedProviders.has(providerKey)) {
                 delete tools[toolId];
                 toolOriginMap[toolId] = `filtered:no-connection:${providerKey}`;
+                filteredTools.push(toolId);
                 console.log(
                     `[AgentResolver] Filtered out "${toolId}" -- ` +
                         `requires "${providerKey}" OAuth connection (not connected)`
@@ -558,10 +591,58 @@ export class AgentResolver {
             }
         }
 
+        // --- Tool Health Check ---
+        // Compare loaded tools against what was expected from AgentTool + SkillTool records
+        const loadedToolNames = new Set(Object.keys(tools));
+        const missingTools = [...expectedToolNames].filter((t) => !loadedToolNames.has(t));
+        const toolHealth: ToolHealthSnapshot = {
+            expectedCount: expectedToolNames.size,
+            loadedCount: loadedToolNames.size,
+            missingTools,
+            filteredTools
+        };
+
+        if (missingTools.length > 0) {
+            console.warn(
+                `[AgentResolver] Tool health warning for "${record.slug}": ` +
+                    `${missingTools.length} expected tool(s) not loaded: ${missingTools.join(", ")}. ` +
+                    `(${loadedToolNames.size}/${expectedToolNames.size} loaded)`
+            );
+
+            // Record structured activity event for observability
+            recordActivity({
+                type: "ALERT_RAISED",
+                agentId: record.id,
+                agentSlug: record.slug,
+                summary: `${record.slug}: ${missingTools.length} tool(s) unavailable`,
+                detail: `Missing tools: ${missingTools.join(", ")}. Loaded: ${loadedToolNames.size}/${expectedToolNames.size}.`,
+                status: "warning",
+                source: "tool-health",
+                tenantId: record.tenantId || undefined,
+                metadata: {
+                    missingTools,
+                    expectedCount: expectedToolNames.size,
+                    loadedCount: loadedToolNames.size,
+                    filteredTools
+                }
+            });
+        }
+
         // Append skill instructions to agent instructions
         let finalInstructions = instructions;
         if (skillInstructions) {
             finalInstructions += `\n\n---\n# Skills & Domain Knowledge\n${skillInstructions}`;
+        }
+
+        // Inject unavailable tool notice so the LLM can gracefully handle missing tools
+        if (missingTools.length > 0) {
+            finalInstructions +=
+                `\n\n---\n# Tool Availability Notice\n` +
+                `The following tools are currently unavailable (MCP server may be down or tool not loaded): ` +
+                `${missingTools.join(", ")}. ` +
+                `If a user's request requires one of these tools, inform them the capability is temporarily ` +
+                `unavailable and suggest alternative approaches or ask them to try again later. ` +
+                `Do NOT attempt to call these tools.\n`;
         }
 
         // Append discoverable skill manifests as a guide for meta-tool usage
@@ -667,7 +748,8 @@ export class AgentResolver {
             agent: new Agent(agentConfig),
             activeSkills,
             toolOriginMap,
-            skillDocumentIds
+            skillDocumentIds,
+            toolHealth
         };
     }
 

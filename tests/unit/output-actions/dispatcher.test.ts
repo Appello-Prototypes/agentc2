@@ -1,5 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { executeOutputAction, type OutputActionRecord, type RunOutput } from "../../../apps/agent/src/lib/output-actions";
+import {
+    executeOutputAction,
+    type OutputActionRecord,
+    type RunOutput
+} from "../../../apps/agent/src/lib/output-actions";
 
 // Mock inngest
 vi.mock("../../../apps/agent/src/lib/inngest", () => ({
@@ -163,7 +167,11 @@ describe("Output Action Dispatcher", () => {
 
     // Test 7: Dispatcher returns failure for individual action errors
     it("Dispatcher returns error for failed webhook", async () => {
-        mockFetch.mockResolvedValue({ ok: false, status: 500, statusText: "Internal Server Error" });
+        mockFetch.mockResolvedValue({
+            ok: false,
+            status: 500,
+            statusText: "Internal Server Error"
+        });
 
         const action: OutputActionRecord = {
             id: "action-7",

@@ -6,36 +6,36 @@
  * communication via MCP tools during execution.
  */
 
-import { inngest } from "./inngest"
-import { createHmac } from "crypto"
+import { inngest } from "./inngest";
+import { createHmac } from "crypto";
 
 export interface OutputActionRecord {
-    id: string
-    type: string // "WEBHOOK" | "CHAIN_AGENT"
-    configJson: unknown
-    isActive: boolean
+    id: string;
+    type: string; // "WEBHOOK" | "CHAIN_AGENT"
+    configJson: unknown;
+    isActive: boolean;
 }
 
 export interface RunOutput {
-    outputText: string | null
-    inputText: string
-    source: string | null
+    outputText: string | null;
+    inputText: string;
+    source: string | null;
 }
 
 interface ActionContext {
-    agentId: string
-    runId: string
+    agentId: string;
+    runId: string;
 }
 
 interface WebhookConfig {
-    url: string
-    headers?: Record<string, string>
-    secret?: string
+    url: string;
+    headers?: Record<string, string>;
+    secret?: string;
 }
 
 interface ChainAgentConfig {
-    agentSlug: string
-    inputTemplate?: string
+    agentSlug: string;
+    inputTemplate?: string;
 }
 
 /**
@@ -48,19 +48,17 @@ export async function executeOutputAction(
     context: ActionContext
 ): Promise<{ success: boolean; error?: string }> {
     if (!run.outputText) {
-        return { success: false, error: "No output text" }
+        return { success: false, error: "No output text" };
     }
 
     switch (action.type) {
         case "WEBHOOK":
-            return executeWebhook(action, run, context)
+            return executeWebhook(action, run, context);
         case "CHAIN_AGENT":
-            return executeChainAgent(action, run, context)
+            return executeChainAgent(action, run, context);
         default:
-            console.error(
-                `[OutputAction] Unknown type "${action.type}" for action ${action.id}`
-            )
-            return { success: false, error: `Unknown action type: ${action.type}` }
+            console.error(`[OutputAction] Unknown type "${action.type}" for action ${action.id}`);
+            return { success: false, error: `Unknown action type: ${action.type}` };
     }
 }
 
@@ -69,10 +67,10 @@ async function executeWebhook(
     run: RunOutput,
     context: ActionContext
 ): Promise<{ success: boolean; error?: string }> {
-    const config = action.configJson as WebhookConfig
+    const config = action.configJson as WebhookConfig;
 
     if (!config?.url) {
-        return { success: false, error: "Webhook config missing url" }
+        return { success: false, error: "Webhook config missing url" };
     }
 
     const payload = JSON.stringify({
@@ -81,19 +79,17 @@ async function executeWebhook(
         output: run.outputText,
         input: run.inputText,
         source: run.source,
-        timestamp: new Date().toISOString(),
-    })
+        timestamp: new Date().toISOString()
+    });
 
     const headers: Record<string, string> = {
         "Content-Type": "application/json",
-        ...config.headers,
-    }
+        ...config.headers
+    };
 
     if (config.secret) {
-        const signature = createHmac("sha256", config.secret)
-            .update(payload)
-            .digest("hex")
-        headers["X-Signature-256"] = `sha256=${signature}`
+        const signature = createHmac("sha256", config.secret).update(payload).digest("hex");
+        headers["X-Signature-256"] = `sha256=${signature}`;
     }
 
     try {
@@ -101,23 +97,21 @@ async function executeWebhook(
             method: "POST",
             headers,
             body: payload,
-            signal: AbortSignal.timeout(30000),
-        })
+            signal: AbortSignal.timeout(30000)
+        });
 
         if (!response.ok) {
             return {
                 success: false,
-                error: `Webhook returned ${response.status}: ${response.statusText}`,
-            }
+                error: `Webhook returned ${response.status}: ${response.statusText}`
+            };
         }
 
-        console.log(
-            `[OutputAction] WEBHOOK delivered to ${config.url} (${response.status})`
-        )
-        return { success: true }
+        console.log(`[OutputAction] WEBHOOK delivered to ${config.url} (${response.status})`);
+        return { success: true };
     } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        return { success: false, error: `Webhook failed: ${message}` }
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Webhook failed: ${message}` };
     }
 }
 
@@ -126,15 +120,15 @@ async function executeChainAgent(
     run: RunOutput,
     context: ActionContext
 ): Promise<{ success: boolean; error?: string }> {
-    const config = action.configJson as ChainAgentConfig
+    const config = action.configJson as ChainAgentConfig;
 
     if (!config?.agentSlug) {
-        return { success: false, error: "Chain config missing agentSlug" }
+        return { success: false, error: "Chain config missing agentSlug" };
     }
 
     const input = config.inputTemplate
         ? config.inputTemplate.replace("{output}", run.outputText || "")
-        : run.outputText || ""
+        : run.outputText || "";
 
     try {
         await inngest.send({
@@ -143,16 +137,14 @@ async function executeChainAgent(
                 runId: `chain-${context.runId}`,
                 agentId: context.agentId,
                 agentSlug: config.agentSlug,
-                input,
-            },
-        })
+                input
+            }
+        });
 
-        console.log(
-            `[OutputAction] CHAIN_AGENT dispatched to "${config.agentSlug}"`
-        )
-        return { success: true }
+        console.log(`[OutputAction] CHAIN_AGENT dispatched to "${config.agentSlug}"`);
+        return { success: true };
     } catch (err) {
-        const message = err instanceof Error ? err.message : String(err)
-        return { success: false, error: `Chain failed: ${message}` }
+        const message = err instanceof Error ? err.message : String(err);
+        return { success: false, error: `Chain failed: ${message}` };
     }
 }

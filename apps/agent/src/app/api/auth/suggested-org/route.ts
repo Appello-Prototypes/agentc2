@@ -8,6 +8,10 @@ import { auth, getEmailDomain } from "@repo/auth";
  *
  * Returns the organization that matches the current user's email domain,
  * if one exists. Used during onboarding when the user has no membership yet.
+ *
+ * Checks two sources in priority order:
+ * 1. OrganizationDomain table (explicit admin-configured domain mapping)
+ * 2. Existing member emails (soft match — another user with same @domain is in an org)
  */
 export async function GET() {
     try {
@@ -25,23 +29,51 @@ export async function GET() {
             return NextResponse.json({ success: true, organization: null });
         }
 
+        // 1. Check explicit OrganizationDomain table
         const orgDomain = await prisma.organizationDomain.findUnique({
             where: { domain },
             include: { organization: true }
         });
 
-        if (!orgDomain) {
-            return NextResponse.json({ success: true, organization: null });
+        if (orgDomain) {
+            return NextResponse.json({
+                success: true,
+                organization: {
+                    id: orgDomain.organization.id,
+                    name: orgDomain.organization.name,
+                    slug: orgDomain.organization.slug
+                }
+            });
         }
 
-        return NextResponse.json({
-            success: true,
-            organization: {
-                id: orgDomain.organization.id,
-                name: orgDomain.organization.name,
-                slug: orgDomain.organization.slug
+        // 2. Fallback: check if any existing org member shares the same email domain
+        const coworker = await prisma.user.findFirst({
+            where: {
+                email: { endsWith: `@${domain}` },
+                NOT: { id: session.user.id }
             }
         });
+
+        if (coworker) {
+            const coworkerMembership = await prisma.membership.findFirst({
+                where: { userId: coworker.id },
+                include: { organization: true },
+                orderBy: { createdAt: "asc" }
+            });
+
+            if (coworkerMembership) {
+                return NextResponse.json({
+                    success: true,
+                    organization: {
+                        id: coworkerMembership.organization.id,
+                        name: coworkerMembership.organization.name,
+                        slug: coworkerMembership.organization.slug
+                    }
+                });
+            }
+        }
+
+        return NextResponse.json({ success: true, organization: null });
     } catch (error) {
         console.error("[Suggested Org] Error:", error);
         return NextResponse.json(

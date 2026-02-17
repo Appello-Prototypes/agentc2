@@ -1,58 +1,17 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { createDocument, type CreateDocumentInput } from "../documents/service";
+import {
+    createDocument,
+    getDocument,
+    updateDocument,
+    deleteDocument,
+    listDocuments,
+    searchDocuments,
+    type CreateDocumentInput,
+    type UpdateDocumentInput
+} from "../documents/service";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
-
-const getInternalBaseUrl = () =>
-    process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
-
-const buildHeaders = () => {
-    const headers: Record<string, string> = {
-        "Content-Type": "application/json"
-    };
-    const apiKey = process.env.MASTRA_API_KEY || process.env.MCP_API_KEY;
-    if (apiKey) {
-        headers["X-API-Key"] = apiKey;
-    }
-    const orgSlug = process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
-    if (orgSlug) {
-        headers["X-Organization-Slug"] = orgSlug;
-    }
-    return headers;
-};
-
-const callInternalApi = async (
-    path: string,
-    options?: {
-        method?: string;
-        query?: Record<string, unknown>;
-        body?: Record<string, unknown>;
-    }
-) => {
-    const url = new URL(path, getInternalBaseUrl());
-    if (options?.query) {
-        Object.entries(options.query).forEach(([key, value]) => {
-            if (value !== undefined && value !== null) {
-                url.searchParams.set(key, String(value));
-            }
-        });
-    }
-
-    const response = await fetch(url.toString(), {
-        method: options?.method ?? "GET",
-        headers: buildHeaders(),
-        body: options?.body ? JSON.stringify(options.body) : undefined
-    });
-    const data = await response.json();
-    if (!response.ok) {
-        const errorMessage =
-            (data && typeof data === "object" && "error" in data ? data.error : undefined) ||
-            `Request failed (${response.status})`;
-        throw new Error(String(errorMessage));
-    }
-    return data;
-};
 
 export const documentCreateTool = createTool({
     id: "document-create",
@@ -95,7 +54,8 @@ export const documentReadTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ documentId }) => {
-        return callInternalApi(`/api/documents/${encodeURIComponent(documentId)}`);
+        const document = await getDocument(documentId);
+        return document;
     }
 });
 
@@ -113,10 +73,16 @@ export const documentUpdateTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ documentId, ...body }) => {
-        return callInternalApi(`/api/documents/${encodeURIComponent(documentId)}`, {
-            method: "PUT",
-            body
-        });
+        const input: UpdateDocumentInput = {};
+        if (body.name !== undefined) input.name = body.name;
+        if (body.content !== undefined) input.content = body.content;
+        if (body.description !== undefined) input.description = body.description;
+        if (body.category !== undefined) input.category = body.category;
+        if (body.tags !== undefined) input.tags = body.tags;
+        if (body.changeSummary !== undefined) input.changeSummary = body.changeSummary;
+
+        const document = await updateDocument(documentId, input);
+        return document;
     }
 });
 
@@ -128,9 +94,8 @@ export const documentDeleteTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ documentId }) => {
-        return callInternalApi(`/api/documents/${encodeURIComponent(documentId)}`, {
-            method: "DELETE"
-        });
+        await deleteDocument(documentId);
+        return { success: true };
     }
 });
 
@@ -146,9 +111,15 @@ export const documentListTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ category, tags, type, skip, take }) => {
-        return callInternalApi("/api/documents", {
-            query: { category, tags, type, skip, take }
+        const tagArray = tags ? tags.split(",").map((t) => t.trim()) : undefined;
+        const documents = await listDocuments({
+            category: category ?? undefined,
+            tags: tagArray,
+            type: type ?? undefined,
+            skip: skip ?? undefined,
+            take: take ?? undefined
         });
+        return documents;
     }
 });
 
@@ -163,16 +134,12 @@ export const documentSearchTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ query, documentId, topK, minScore }) => {
-        if (documentId) {
-            return callInternalApi(`/api/documents/${encodeURIComponent(documentId)}/search`, {
-                method: "POST",
-                body: { query, topK, minScore }
-            });
-        }
-        // Global search across all documents uses the RAG query endpoint
-        return callInternalApi("/api/rag/query", {
-            method: "POST",
-            body: { query, topK, minScore, generateResponse: false }
+        const results = await searchDocuments({
+            query,
+            documentId: documentId ?? undefined,
+            topK: topK ?? undefined,
+            minScore: minScore ?? undefined
         });
+        return { success: true, results, resultCount: results.length };
     }
 });

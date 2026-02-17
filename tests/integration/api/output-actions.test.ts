@@ -40,9 +40,8 @@ describe("Output Actions API", () => {
 
     // Test 17: POST creates action
     it("POST creates action and returns it", async () => {
-        const { POST } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/route"
-        );
+        const { POST } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/route");
 
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
         prismaMock.outputAction.create.mockResolvedValue(mockOutputAction as never);
@@ -68,9 +67,8 @@ describe("Output Actions API", () => {
 
     // Test 18: POST rejects missing required fields
     it("POST rejects missing required fields", async () => {
-        const { POST } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/route"
-        );
+        const { POST } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/route");
 
         const request = createMockRequest("/api/agents/test-agent/output-actions", {
             method: "POST",
@@ -88,9 +86,8 @@ describe("Output Actions API", () => {
 
     // Test 19: POST rejects invalid type
     it("POST rejects invalid type enum", async () => {
-        const { POST } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/route"
-        );
+        const { POST } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/route");
 
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
 
@@ -114,9 +111,8 @@ describe("Output Actions API", () => {
 
     // Test 20: GET lists actions
     it("GET lists actions for agent", async () => {
-        const { GET } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/route"
-        );
+        const { GET } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/route");
 
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
         prismaMock.outputAction.findMany.mockResolvedValue([mockOutputAction] as never);
@@ -140,9 +136,8 @@ describe("Output Actions API", () => {
 
     // Test 21: PATCH updates isActive
     it("PATCH updates isActive", async () => {
-        const { PATCH } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/[actionId]/route"
-        );
+        const { PATCH } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/[actionId]/route");
 
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
         prismaMock.outputAction.findFirst.mockResolvedValue(mockOutputAction as never);
@@ -151,13 +146,10 @@ describe("Output Actions API", () => {
             isActive: false
         } as never);
 
-        const request = createMockRequest(
-            "/api/agents/test-agent/output-actions/action-1",
-            {
-                method: "PATCH",
-                body: { isActive: false }
-            }
-        );
+        const request = createMockRequest("/api/agents/test-agent/output-actions/action-1", {
+            method: "PATCH",
+            body: { isActive: false }
+        });
 
         const response = await PATCH(request, {
             params: createMockParams({ id: "test-agent", actionId: "action-1" })
@@ -170,18 +162,16 @@ describe("Output Actions API", () => {
 
     // Test 22: DELETE removes action
     it("DELETE removes action", async () => {
-        const { DELETE } = await import(
-            "../../../apps/agent/src/app/api/agents/[id]/output-actions/[actionId]/route"
-        );
+        const { DELETE } =
+            await import("../../../apps/agent/src/app/api/agents/[id]/output-actions/[actionId]/route");
 
         prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
         prismaMock.outputAction.findFirst.mockResolvedValue(mockOutputAction as never);
         prismaMock.outputAction.delete.mockResolvedValue(mockOutputAction as never);
 
-        const request = createMockRequest(
-            "/api/agents/test-agent/output-actions/action-1",
-            { method: "DELETE" }
-        );
+        const request = createMockRequest("/api/agents/test-agent/output-actions/action-1", {
+            method: "DELETE"
+        });
 
         const response = await DELETE(request, {
             params: createMockParams({ id: "test-agent", actionId: "action-1" })

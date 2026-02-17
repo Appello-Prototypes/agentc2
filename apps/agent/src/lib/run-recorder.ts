@@ -276,7 +276,9 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 status: "RUNNING",
                 inputText: options.input,
                 stepsJson: [],
-                modelJson: {},
+                modelJson: options.metadata
+                    ? ({ ...options.metadata } as Prisma.InputJsonValue)
+                    : {},
                 tokensJson: {},
                 instructionsHash: options.instructionsHash,
                 instructionsSnapshot: options.instructionsSnapshot
@@ -1147,7 +1149,9 @@ export async function startConversationRun(
                 status: "RUNNING",
                 inputText: options.input,
                 stepsJson: [],
-                modelJson: {},
+                modelJson: options.metadata
+                    ? ({ ...options.metadata } as Prisma.InputJsonValue)
+                    : {},
                 tokensJson: {},
                 instructionsHash: options.instructionsHash,
                 instructionsSnapshot: options.instructionsSnapshot

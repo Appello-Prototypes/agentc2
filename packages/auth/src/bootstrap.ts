@@ -52,15 +52,23 @@ export interface BootstrapResult {
     error?: string;
 }
 
+export interface BootstrapOptions {
+    /** When true, do not auto-create an org as fallback — let the onboarding page handle it. */
+    deferOrgCreation?: boolean;
+}
+
 /**
  * Ensures a user is assigned to an organization.
- * Supports invite code and domain-based matching. Falls back to creating a new org.
+ * Supports invite code and domain-based matching. Falls back to creating a new org
+ * unless `options.deferOrgCreation` is set (used by the social signup hook to let
+ * the onboarding page present the org selection step).
  */
 export async function bootstrapUserOrganization(
     userId: string,
     userName: string | null,
     userEmail: string | null,
-    inviteCode?: string
+    inviteCode?: string,
+    options?: BootstrapOptions
 ): Promise<BootstrapResult> {
     // Check for existing membership
     const existingMembership = await prisma.membership.findFirst({
@@ -123,6 +131,7 @@ export async function bootstrapUserOrganization(
     // Try domain matching — return suggested org instead of auto-joining
     const domain = userEmail ? getEmailDomain(userEmail) : null;
     if (domain) {
+        // 1. Check explicit OrganizationDomain table first
         const orgDomain = await prisma.organizationDomain.findUnique({
             where: { domain },
             include: { organization: true }
@@ -138,9 +147,39 @@ export async function bootstrapUserOrganization(
                 }
             };
         }
+
+        // 2. Fallback: check if any existing member shares the same email domain
+        const coworker = await prisma.user.findFirst({
+            where: {
+                email: { endsWith: `@${domain}` },
+                NOT: { id: userId }
+            }
+        });
+
+        if (coworker) {
+            const coworkerMembership = await prisma.membership.findFirst({
+                where: { userId: coworker.id },
+                include: { organization: true },
+                orderBy: { createdAt: "asc" }
+            });
+
+            if (coworkerMembership) {
+                return {
+                    success: true,
+                    suggestedOrg: {
+                        id: coworkerMembership.organization.id,
+                        name: coworkerMembership.organization.name,
+                        slug: coworkerMembership.organization.slug
+                    }
+                };
+            }
+        }
     }
 
-    // Fall back to creating a new org + workspace
+    // Fall back to creating a new org + workspace (only when not deferred)
+    if (options?.deferOrgCreation) {
+        return { success: true };
+    }
     return createNewOrganizationForUser(userId, userName);
 }
 

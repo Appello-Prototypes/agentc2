@@ -255,6 +255,48 @@ export default function OnboardingPage() {
                 setData(persisted.data);
             }
 
+            // Helper: run Gmail sync + session info fetch (new flow only).
+            // Must be called AFTER the user has an org membership.
+            const initNewFlowIntegrations = async () => {
+                if (!isNewOnboarding) return;
+
+                // Ensure Gmail sync
+                const gmailRes = await fetch(`${getApiBase()}/api/onboarding/ensure-gmail-sync`, {
+                    method: "POST",
+                    credentials: "include"
+                });
+                const gmailResult = await gmailRes.json();
+                if (gmailResult.success && gmailResult.gmailConnected) {
+                    setGmailConnected(true);
+                    setGmailAddress(gmailResult.gmailAddress);
+                    setOnboardingPath("google_oauth");
+                }
+                // Note: we intentionally do NOT surface gmailResult.missingScopes
+                // during onboarding. If the user signed up with Google but
+                // deselected some scopes on the consent screen, showing a
+                // "missing permissions" warning here creates a confusing
+                // half-connected state. The "Sign in with Google" card is
+                // sufficient — they can re-authorize from Settings later.
+
+                // Get session info for org/user IDs
+                const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
+                    credentials: "include"
+                });
+                const sessionResult = await sessionRes.json();
+                if (sessionResult?.user) {
+                    setUserId(sessionResult.user.id);
+                }
+
+                // Get org ID from membership
+                const membershipRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
+                    credentials: "include"
+                });
+                const membershipData = await membershipRes.json();
+                if (membershipData.organizationId) {
+                    setOrganizationId(membershipData.organizationId);
+                }
+            };
+
             try {
                 // Check onboarding + membership status
                 const statusRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
@@ -269,17 +311,23 @@ export default function OnboardingPage() {
                 }
 
                 if (statusResult.success && statusResult.needsBootstrap) {
-                    // No membership — check for suggested org by domain
+                    // No membership — always check for suggested org first.
+                    // This is the primary org selection gate: domain match
+                    // (OrganizationDomain table) or member-email fallback.
                     const suggestedRes = await fetch(`${getApiBase()}/api/auth/suggested-org`, {
                         credentials: "include"
                     });
                     const suggestedResult = await suggestedRes.json();
 
                     if (suggestedResult.success && suggestedResult.organization) {
+                        // Org found — present the org selection step.
+                        // User can join or create their own.
                         setSuggestedOrg(suggestedResult.organization);
                         setCurrentStep("join-org");
+                        // Don't run Gmail sync yet — user has no membership.
+                        // It will run after they choose an org (see handleJoinOrg / handleCreateOwnOrg).
                     } else {
-                        // No suggested org — auto-create
+                        // No suggested org — auto-create one for the user
                         const createRes = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
                             method: "POST",
                             headers: {
@@ -293,6 +341,9 @@ export default function OnboardingPage() {
                             setOrganizationId(createResult.organization.id);
                         }
 
+                        // Now that user has a membership, run integration setup
+                        await initNewFlowIntegrations();
+
                         if (isNewOnboarding) {
                             setCurrentStep("connect");
                         } else {
@@ -300,55 +351,17 @@ export default function OnboardingPage() {
                         }
                     }
                 } else {
-                    // User has membership
+                    // User already has a membership (from invite code or prior bootstrap)
+                    if (statusResult.organizationId) {
+                        setOrganizationId(statusResult.organizationId);
+                    }
+
+                    await initNewFlowIntegrations();
+
                     if (isNewOnboarding) {
                         setCurrentStep("connect");
                     } else {
                         setCurrentStep(persisted?.step ?? "welcome");
-                    }
-                }
-
-                // For new flow: ensure Gmail is synced and get user info
-                if (isNewOnboarding) {
-                    // Ensure Gmail sync
-                    const gmailRes = await fetch(
-                        `${getApiBase()}/api/onboarding/ensure-gmail-sync`,
-                        {
-                            method: "POST",
-                            credentials: "include"
-                        }
-                    );
-                    const gmailResult = await gmailRes.json();
-                    if (gmailResult.success && gmailResult.gmailConnected) {
-                        setGmailConnected(true);
-                        setGmailAddress(gmailResult.gmailAddress);
-                        setOnboardingPath("google_oauth");
-                    }
-                    // Note: we intentionally do NOT surface gmailResult.missingScopes
-                    // during onboarding. If the user signed up with Google but
-                    // deselected some scopes on the consent screen, showing a
-                    // "missing permissions" warning here creates a confusing
-                    // half-connected state. The "Sign in with Google" card is
-                    // sufficient — they can re-authorize from Settings later.
-
-                    // Get session info for org/user IDs
-                    const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
-                        credentials: "include"
-                    });
-                    const sessionResult = await sessionRes.json();
-                    if (sessionResult?.user) {
-                        setUserId(sessionResult.user.id);
-                    }
-
-                    // Get org ID from membership if not already set
-                    if (!organizationId) {
-                        const membershipRes = await fetch(`${getApiBase()}/api/onboarding/status`, {
-                            credentials: "include"
-                        });
-                        const membershipData = await membershipRes.json();
-                        if (membershipData.organizationId) {
-                            setOrganizationId(membershipData.organizationId);
-                        }
                     }
                 }
             } catch (error) {
@@ -364,7 +377,7 @@ export default function OnboardingPage() {
         };
 
         init();
-    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    }, []);
 
     // Persist state on changes
     useEffect(() => {
@@ -571,6 +584,34 @@ export default function OnboardingPage() {
         }
     };
 
+    // Helper: run Gmail sync + session info after user gets a membership
+    const syncIntegrationsAfterOrgChoice = useCallback(async () => {
+        if (!isNewOnboarding) return;
+
+        try {
+            const gmailRes = await fetch(`${getApiBase()}/api/onboarding/ensure-gmail-sync`, {
+                method: "POST",
+                credentials: "include"
+            });
+            const gmailResult = await gmailRes.json();
+            if (gmailResult.success && gmailResult.gmailConnected) {
+                setGmailConnected(true);
+                setGmailAddress(gmailResult.gmailAddress);
+                setOnboardingPath("google_oauth");
+            }
+
+            const sessionRes = await fetch(`${getApiBase()}/api/auth/session`, {
+                credentials: "include"
+            });
+            const sessionResult = await sessionRes.json();
+            if (sessionResult?.user) {
+                setUserId(sessionResult.user.id);
+            }
+        } catch (error) {
+            console.error("[Onboarding] Failed to sync integrations after org choice:", error);
+        }
+    }, []);
+
     const handleJoinOrg = useCallback(async () => {
         if (!suggestedOrg) return;
         const response = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
@@ -591,12 +632,15 @@ export default function OnboardingPage() {
         setOnboardingPath("domain_join");
         setSuggestedOrg(null);
 
+        // Now that user has a membership, sync integrations (Gmail, etc.)
+        await syncIntegrationsAfterOrgChoice();
+
         if (isNewOnboarding) {
             setCurrentStep("team-welcome");
         } else {
             setCurrentStep("welcome");
         }
-    }, [suggestedOrg]);
+    }, [suggestedOrg, syncIntegrationsAfterOrgChoice]);
 
     const handleCreateOwnOrg = useCallback(async () => {
         const response = await fetch(`${getApiBase()}/api/auth/confirm-org`, {
@@ -614,12 +658,15 @@ export default function OnboardingPage() {
         }
         setSuggestedOrg(null);
 
+        // Now that user has a membership, sync integrations (Gmail, etc.)
+        await syncIntegrationsAfterOrgChoice();
+
         if (isNewOnboarding) {
             setCurrentStep("connect");
         } else {
             setCurrentStep("welcome");
         }
-    }, []);
+    }, [syncIntegrationsAfterOrgChoice]);
 
     const handleSkipToDashboard = async () => {
         const success = await completeOnboarding({

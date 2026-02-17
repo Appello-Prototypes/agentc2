@@ -1,5 +1,5 @@
-import { NextRequest, NextResponse } from "next/server"
-import { prisma } from "@repo/database"
+import { NextRequest, NextResponse } from "next/server";
+import { prisma } from "@repo/database";
 
 /**
  * PATCH /api/agents/[id]/output-actions/[actionId]
@@ -11,35 +11,35 @@ export async function PATCH(
     { params }: { params: Promise<{ id: string; actionId: string }> }
 ) {
     try {
-        const { id, actionId } = await params
-        const body = await request.json()
+        const { id, actionId } = await params;
+        const body = await request.json();
 
         const agent = await prisma.agent.findFirst({
             where: { OR: [{ slug: id }, { id }] }
-        })
+        });
 
         if (!agent) {
             return NextResponse.json(
                 { success: false, error: `Agent '${id}' not found` },
                 { status: 404 }
-            )
+            );
         }
 
         const existing = await prisma.outputAction.findFirst({
             where: { id: actionId, agentId: agent.id }
-        })
+        });
 
         if (!existing) {
             return NextResponse.json(
                 { success: false, error: `Output action '${actionId}' not found` },
                 { status: 404 }
-            )
+            );
         }
 
-        const { name, type, configJson, isActive } = body
+        const { name, type, configJson, isActive } = body;
 
         if (type) {
-            const validTypes = ["WEBHOOK", "CHAIN_AGENT"]
+            const validTypes = ["WEBHOOK", "CHAIN_AGENT"];
             if (!validTypes.includes(type)) {
                 return NextResponse.json(
                     {
@@ -47,7 +47,7 @@ export async function PATCH(
                         error: `Invalid type '${type}'. Must be one of: ${validTypes.join(", ")}`
                     },
                     { status: 400 }
-                )
+                );
             }
         }
 
@@ -59,7 +59,7 @@ export async function PATCH(
                 ...(configJson !== undefined && { configJson }),
                 ...(isActive !== undefined && { isActive })
             }
-        })
+        });
 
         return NextResponse.json({
             success: true,
@@ -72,19 +72,16 @@ export async function PATCH(
                 createdAt: updated.createdAt,
                 updatedAt: updated.updatedAt
             }
-        })
+        });
     } catch (error) {
-        console.error("[OutputActions] Error updating:", error)
+        console.error("[OutputActions] Error updating:", error);
         return NextResponse.json(
             {
                 success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to update output action"
+                error: error instanceof Error ? error.message : "Failed to update output action"
             },
             { status: 500 }
-        )
+        );
     }
 }
 
@@ -98,44 +95,41 @@ export async function DELETE(
     { params }: { params: Promise<{ id: string; actionId: string }> }
 ) {
     try {
-        const { id, actionId } = await params
+        const { id, actionId } = await params;
 
         const agent = await prisma.agent.findFirst({
             where: { OR: [{ slug: id }, { id }] }
-        })
+        });
 
         if (!agent) {
             return NextResponse.json(
                 { success: false, error: `Agent '${id}' not found` },
                 { status: 404 }
-            )
+            );
         }
 
         const existing = await prisma.outputAction.findFirst({
             where: { id: actionId, agentId: agent.id }
-        })
+        });
 
         if (!existing) {
             return NextResponse.json(
                 { success: false, error: `Output action '${actionId}' not found` },
                 { status: 404 }
-            )
+            );
         }
 
-        await prisma.outputAction.delete({ where: { id: actionId } })
+        await prisma.outputAction.delete({ where: { id: actionId } });
 
-        return NextResponse.json({ success: true })
+        return NextResponse.json({ success: true });
     } catch (error) {
-        console.error("[OutputActions] Error deleting:", error)
+        console.error("[OutputActions] Error deleting:", error);
         return NextResponse.json(
             {
                 success: false,
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Failed to delete output action"
+                error: error instanceof Error ? error.message : "Failed to delete output action"
             },
             { status: 500 }
-        )
+        );
     }
 }

@@ -45,7 +45,8 @@ describe("Output Pipeline - Inngest Integration", () => {
     const mockRun = {
         id: "run-1",
         agentId: "agent-1",
-        outputText: "This is a substantial output from the agent that should be vectorized and delivered.",
+        outputText:
+            "This is a substantial output from the agent that should be vectorized and delivered.",
         inputText: "Analyze the company",
         source: "scheduled",
         triggerType: "SCHEDULED",
@@ -186,11 +187,18 @@ describe("Output Pipeline - Inngest Integration", () => {
     // Test 27: Failed output action does not block
     it("failed output action does not block evaluation or vectorization", async () => {
         // Action fails
-        mockExecuteOutputAction.mockResolvedValueOnce({ success: false, error: "Connection refused" });
+        mockExecuteOutputAction.mockResolvedValueOnce({
+            success: false,
+            error: "Connection refused"
+        });
 
         const result = await mockExecuteOutputAction(
             mockAction,
-            { outputText: mockRun.outputText, inputText: mockRun.inputText, source: mockRun.source },
+            {
+                outputText: mockRun.outputText,
+                inputText: mockRun.inputText,
+                source: mockRun.source
+            },
             { agentId: "agent-1", runId: "run-1" }
         );
 

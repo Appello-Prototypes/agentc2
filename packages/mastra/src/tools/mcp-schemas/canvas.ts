@@ -118,6 +118,11 @@ export const canvasToolDefinitions: McpToolDefinition[] = [
                     type: "string",
                     description: "Description of what changed (used in version history)"
                 },
+                versionLabel: {
+                    type: "string",
+                    description:
+                        "Label for this version snapshot (e.g., 'Morning — Feb 17'). Only used when schemaJson is provided."
+                },
                 tags: {
                     type: "array",
                     items: { type: "string" },
@@ -149,6 +154,61 @@ export const canvasToolDefinitions: McpToolDefinition[] = [
                 slug: { type: "string", description: "Canvas slug to delete" }
             },
             required: ["slug"]
+        },
+        invoke_url: "/api/mcp",
+        category: "canvas"
+    },
+    {
+        name: "canvas-update-data",
+        description:
+            "Update only the data queries on a canvas without touching layout or components. " +
+            "This is the safe, efficient way for agents to refresh dashboard data. " +
+            "Merges provided queries by ID — existing queries not in the payload are preserved. " +
+            "Does NOT create a new schema version (data refreshes are not schema changes).",
+        inputSchema: {
+            type: "object",
+            properties: {
+                slug: { type: "string", description: "Canvas slug to update" },
+                dataQueries: {
+                    type: "array",
+                    items: {
+                        type: "object",
+                        properties: {
+                            id: {
+                                type: "string",
+                                description: "Query ID to update (must match existing query ID)"
+                            },
+                            source: {
+                                type: "string",
+                                enum: ["static", "mcp", "sql", "rag", "api"],
+                                description: "Data source type (default: static)"
+                            },
+                            data: { description: "Static data payload" },
+                            tool: { type: "string", description: "MCP tool name" },
+                            params: { type: "object", description: "Query parameters" },
+                            query: { type: "string", description: "SQL or RAG query string" },
+                            url: { type: "string", description: "API URL" },
+                            method: { type: "string", description: "HTTP method for API source" },
+                            headers: {
+                                type: "object",
+                                description: "HTTP headers for API source"
+                            },
+                            body: { description: "Request body for API source" },
+                            refreshInterval: {
+                                type: "number",
+                                description: "Auto-refresh interval in ms (0 = no refresh)"
+                            },
+                            transform: {
+                                type: "string",
+                                description: "Expression to transform results"
+                            }
+                        },
+                        required: ["id"]
+                    },
+                    description: "Data queries to update or add (merged by ID)"
+                }
+            },
+            required: ["slug", "dataQueries"]
         },
         invoke_url: "/api/mcp",
         category: "canvas"
@@ -266,6 +326,7 @@ export const canvasToolRoutes: McpToolRoute[] = [
     { kind: "registry", name: "canvas-create" },
     { kind: "registry", name: "canvas-read" },
     { kind: "registry", name: "canvas-update" },
+    { kind: "registry", name: "canvas-update-data" },
     { kind: "registry", name: "canvas-delete" },
     { kind: "registry", name: "canvas-list" },
     { kind: "registry", name: "canvas-query-preview" },

@@ -22,7 +22,8 @@ describe("Auto-Vectorize Output", () => {
 
     const makeRun = (overrides: Record<string, unknown> = {}) => ({
         id: "run-1",
-        outputText: "A meaningful output that is longer than fifty characters for testing purposes.",
+        outputText:
+            "A meaningful output that is longer than fifty characters for testing purposes.",
         source: "scheduled",
         triggerType: "SCHEDULED",
         agentId: "agent-1",
@@ -116,7 +117,11 @@ describe("Auto-Vectorize Output", () => {
 
     // Test 12: Skips when outputText is too short
     it("skips when outputText is null or under 50 chars", async () => {
-        await simulateAutoVectorize(makeRun({ outputText: "short" }), makeAgent(), makeEvaluation());
+        await simulateAutoVectorize(
+            makeRun({ outputText: "short" }),
+            makeAgent(),
+            makeEvaluation()
+        );
         expect(mockIngestDocument).not.toHaveBeenCalled();
 
         await simulateAutoVectorize(makeRun({ outputText: null }), makeAgent(), makeEvaluation());
@@ -125,7 +130,11 @@ describe("Auto-Vectorize Output", () => {
 
     // Test 13: Skips when autoVectorize is false
     it("skips when agent.autoVectorize is false", async () => {
-        await simulateAutoVectorize(makeRun(), makeAgent({ autoVectorize: false }), makeEvaluation());
+        await simulateAutoVectorize(
+            makeRun(),
+            makeAgent({ autoVectorize: false }),
+            makeEvaluation()
+        );
         expect(mockIngestDocument).not.toHaveBeenCalled();
     });
 

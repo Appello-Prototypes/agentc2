@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Button, Card, CardContent, Badge } from "@repo/ui";
 import { CheckCircleIcon, Loader2Icon, AlertCircleIcon, ShieldCheckIcon } from "lucide-react";
 import { SiGmail, SiGooglecalendar, SiGoogledrive } from "@icons-pack/react-simple-icons";
+import { getApiBase } from "@/lib/utils";
 
 /** Official Slack octothorpe logo (4-color) */
 function SlackIcon({ size = 24 }: { size?: number }) {
@@ -64,6 +65,31 @@ export function ConnectStep({
     const [slackTeamName, setSlackTeamName] = useState<string | null>(null);
     const [slackConnecting, setSlackConnecting] = useState(false);
     const [slackError, setSlackError] = useState<string | null>(null);
+    const [slackIsOrgLevel, setSlackIsOrgLevel] = useState(false);
+
+    // Check if the org already has Slack connected (e.g. user joining existing org)
+    useEffect(() => {
+        if (!organizationId) return;
+
+        const checkExistingConnections = async () => {
+            try {
+                const base = getApiBase();
+                const res = await fetch(`${base}/api/onboarding/integration-status`, {
+                    credentials: "include"
+                });
+                const data = await res.json();
+                if (data.success && data.integrations?.slack?.connected) {
+                    setSlackConnected(true);
+                    setSlackTeamName(data.integrations.slack.teamName || null);
+                    setSlackIsOrgLevel(data.integrations.slack.isOrgLevel || false);
+                }
+            } catch (error) {
+                console.error("[ConnectStep] Failed to check existing integrations:", error);
+            }
+        };
+
+        checkExistingConnections();
+    }, [organizationId]);
 
     // Listen for Slack OAuth popup messages
     useEffect(() => {
@@ -95,7 +121,14 @@ export function ConnectStep({
     }, []);
 
     const handleConnectSlack = useCallback(() => {
+        // Guard: require organizationId and userId before starting OAuth
+        if (!organizationId || !userId) {
+            setSlackError("Your account is still loading. Please wait a moment and try again.");
+            return;
+        }
+
         setSlackConnecting(true);
+        setSlackError(null);
 
         // Open Slack OAuth in a popup window
         const width = 600;
@@ -103,7 +136,8 @@ export function ConnectStep({
         const left = window.screenX + (window.outerWidth - width) / 2;
         const top = window.screenY + (window.outerHeight - height) / 2;
 
-        const installUrl = `/agent/api/slack/install?organizationId=${encodeURIComponent(organizationId)}&userId=${encodeURIComponent(userId)}&mode=popup`;
+        const base = getApiBase();
+        const installUrl = `${base}/api/slack/install?organizationId=${encodeURIComponent(organizationId)}&userId=${encodeURIComponent(userId)}&mode=popup`;
 
         const popup = window.open(
             installUrl,
@@ -314,9 +348,11 @@ export function ConnectStep({
                                     )}
                                 </div>
                                 <p className="text-muted-foreground text-xs">
-                                    {slackConnected
-                                        ? `Connected to ${slackTeamName || "your workspace"}`
-                                        : "Notifications, messaging, and team collaboration"}
+                                    {slackConnected && slackIsOrgLevel
+                                        ? `Your team already connected ${slackTeamName || "Slack"}`
+                                        : slackConnected
+                                          ? `Connected to ${slackTeamName || "your workspace"}`
+                                          : "Notifications, messaging, and team collaboration"}
                                 </p>
                             </div>
                             {slackConnected ? (

@@ -30,7 +30,11 @@ function GoogleLogo({ className }: { className?: string }) {
     );
 }
 
-export function SignUpForm() {
+interface SignUpFormProps {
+    requireInviteCode?: boolean;
+}
+
+export function SignUpForm({ requireInviteCode = false }: SignUpFormProps) {
     const router = useRouter();
     const searchParams = useSearchParams();
 
@@ -51,10 +55,18 @@ export function SignUpForm() {
     }, [searchParams]);
 
     const handleGoogleSignUp = async () => {
+        if (requireInviteCode && !inviteCode.trim()) {
+            setError("An invite code is required to sign up.");
+            return;
+        }
         setError("");
         setSocialLoading(true);
 
         try {
+            // Store invite code in sessionStorage so the onboarding page can use it
+            if (inviteCode.trim()) {
+                sessionStorage.setItem("pendingInviteCode", inviteCode.trim());
+            }
             await signIn.social({
                 provider: "google",
                 requestSignUp: true,
@@ -70,6 +82,12 @@ export function SignUpForm() {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+
+        if (requireInviteCode && !inviteCode.trim()) {
+            setError("An invite code is required to sign up.");
+            return;
+        }
+
         setError("");
         setLoading(true);
 
@@ -111,6 +129,22 @@ export function SignUpForm() {
 
     return (
         <div className="space-y-4">
+            {/* Invite code field (above Google button when required) */}
+            {requireInviteCode && (
+                <Field>
+                    <FieldLabel htmlFor="inviteCodeTop">Invite code</FieldLabel>
+                    <Input
+                        id="inviteCodeTop"
+                        type="text"
+                        value={inviteCode}
+                        onChange={(e) => setInviteCode(e.target.value)}
+                        placeholder="Enter your invite code"
+                        autoComplete="off"
+                        required
+                    />
+                </Field>
+            )}
+
             {/* Google sign-up - primary CTA */}
             <Button
                 type="button"
@@ -190,7 +224,7 @@ export function SignUpForm() {
                         <FieldDescription>At least 8 characters</FieldDescription>
                     </Field>
 
-                    {inviteCode !== "" && (
+                    {!requireInviteCode && inviteCode !== "" && (
                         <Field>
                             <FieldLabel htmlFor="inviteCode">Invite code</FieldLabel>
                             <Input

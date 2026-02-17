@@ -80,7 +80,10 @@ export const auth = betterAuth({
             enabled: isProduction
         }
     },
-    // Auto-bootstrap organization for new social sign-up users
+    // Auto-bootstrap organization for new social sign-up users.
+    // Uses deferOrgCreation so the hook only handles invite codes and domain
+    // matching — if neither applies, org creation is deferred to the onboarding
+    // page where the user can choose to join a suggested org or create their own.
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
             if (ctx.path === "/callback/:id") {
@@ -95,10 +98,13 @@ export const auth = betterAuth({
                             const result = await bootstrapUserOrganization(
                                 newSession.user.id,
                                 newSession.user.name,
-                                newSession.user.email
+                                newSession.user.email,
+                                undefined,
+                                { deferOrgCreation: true }
                             );
 
-                            // Run post-bootstrap hooks (e.g., Gmail sync)
+                            // Run post-bootstrap hooks (e.g., Gmail sync) only
+                            // when an org was actually created/joined (invite code path)
                             if (result.success && result.organization) {
                                 for (const cb of postBootstrapCallbacks) {
                                     try {

@@ -31,7 +31,8 @@ import {
     extractTriggerConfig,
     extractTriggerInputMapping,
     resolveRunSource,
-    resolveRunTriggerType
+    resolveRunTriggerType,
+    resolveScheduleTemplates
 } from "./unified-triggers";
 import { getGmailClient, watchMailbox, listHistory, getMessagesWithConcurrency } from "./gmail";
 import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
@@ -5766,8 +5767,10 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
 
         const inputJson = schedule.inputJson as Record<string, unknown> | null;
         const inputValue = inputJson?.input ?? `Scheduled run: ${schedule.name}`;
-        const input =
+        const rawInput =
             typeof inputValue === "string" ? inputValue : JSON.stringify(inputValue ?? {});
+        const scheduleTimezone = schedule.timezone || "UTC";
+        const input = resolveScheduleTemplates(rawInput, scheduleTimezone);
         const environment =
             typeof inputJson?.environment === "string" ? inputJson.environment : undefined;
         const context =

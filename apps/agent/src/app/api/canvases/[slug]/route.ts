@@ -118,9 +118,45 @@ export async function PATCH(
                     version: newVersion,
                     schemaJson: body.schemaJson,
                     changelog: body.changelog || `Updated to version ${newVersion}`,
+                    versionLabel: body.versionLabel || null,
                     createdBy: userId
                 }
             });
+        } else if (body.dataQueries && Array.isArray(body.dataQueries)) {
+            // Data-only update: patch dataQueries without creating a new version.
+            // Merge provided queries into the existing schemaJson by ID.
+            const existingSchema =
+                existing.schemaJson && typeof existing.schemaJson === "object"
+                    ? (existing.schemaJson as Record<string, unknown>)
+                    : {};
+            const existingQueries = Array.isArray(existingSchema.dataQueries)
+                ? (existingSchema.dataQueries as Array<Record<string, unknown>>)
+                : [];
+
+            const incomingById = new Map<string, Record<string, unknown>>();
+            for (const q of body.dataQueries as Array<Record<string, unknown>>) {
+                if (typeof q.id === "string") {
+                    incomingById.set(q.id, q);
+                }
+            }
+
+            // Update existing queries in-place, append new ones
+            const mergedQueries = existingQueries.map((eq) => {
+                const replacement = incomingById.get(eq.id as string);
+                if (replacement) {
+                    incomingById.delete(eq.id as string);
+                    return { ...eq, ...replacement };
+                }
+                return eq;
+            });
+            // Append any queries that didn't match existing IDs
+            for (const newQ of incomingById.values()) {
+                mergedQueries.push(newQ);
+            }
+
+            const patchedSchema = { ...existingSchema, dataQueries: mergedQueries };
+            updateData.schemaJson = patchedSchema;
+            updateData.dataQueries = mergedQueries;
         }
 
         // Generate public token if making public for the first time

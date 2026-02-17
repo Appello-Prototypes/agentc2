@@ -2730,7 +2730,10 @@ export default function ConfigurePage() {
                             <div className="border-t pt-6">
                                 <div className="flex items-center gap-4">
                                     <Switch
-                                        checked={(formData as Record<string, unknown>).autoVectorize !== false}
+                                        checked={
+                                            (formData as Record<string, unknown>).autoVectorize !==
+                                            false
+                                        }
                                         onCheckedChange={(checked) =>
                                             handleChange("autoVectorize" as keyof Agent, checked)
                                         }

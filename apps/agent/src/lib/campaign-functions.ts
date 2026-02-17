@@ -30,6 +30,7 @@
 import { inngest } from "./inngest";
 import { prisma, Prisma, CampaignStatus, MissionStatus, MissionTaskStatus } from "@repo/database";
 import { agentResolver } from "@repo/mastra/agents";
+import { invalidateMcpCacheForOrg } from "@repo/mastra/mcp";
 import { recordActivity } from "@repo/mastra/activity/service";
 import {
     startRun,
@@ -45,8 +46,8 @@ const TASK_MAX_RETRIES = 2;
 
 /**
  * Classify whether an error is retryable (transient) or permanent.
- * Retryable: network errors, rate limits, timeouts.
- * NOT retryable: tool-not-found, auth errors, validation errors.
+ * Retryable: network errors, rate limits, timeouts, MCP tool-not-found (first attempt).
+ * NOT retryable: auth errors, validation errors, budget exceeded.
  */
 function isRetryableError(error: Error): boolean {
     const msg = error.message.toLowerCase();
@@ -56,14 +57,23 @@ function isRetryableError(error: Error): boolean {
     if (msg.includes("rate limit") || msg.includes("429")) return true;
     if (msg.includes("503") || msg.includes("service unavailable")) return true;
     if (msg.includes("502") || msg.includes("bad gateway")) return true;
+    // Tool not found: retryable ONCE (MCP server may have been down on first load)
+    if (msg.includes("tool") && msg.includes("not found")) return true;
     // NOT retryable — permanent errors
-    if (msg.includes("tool") && msg.includes("not found")) return false;
     if (msg.includes("unauthorized") || msg.includes("forbidden")) return false;
     if (msg.includes("budget exceeded")) return false;
     if (msg.includes("campaign budget exceeded")) return false;
     if (msg.includes("context limit") || msg.includes("context_length_exceeded")) return false;
     if (msg.includes("exceed context limit")) return false;
     return false;
+}
+
+/**
+ * Check if an error is a tool-not-found error that may benefit from MCP cache clearing.
+ */
+function isToolNotFoundError(error: Error): boolean {
+    const msg = error.message.toLowerCase();
+    return msg.includes("tool") && msg.includes("not found");
 }
 
 /**
@@ -1243,6 +1253,16 @@ Report your results clearly and completely.`;
                 lastRetryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
                 if (attempt < TASK_MAX_RETRIES && isRetryableError(lastRetryError)) {
                     const delay = Math.pow(2, attempt) * 1000; // 1s, 2s
+
+                    // If this is a tool-not-found error, clear MCP cache before retry
+                    // so the next attempt gets a fresh connection to MCP servers
+                    if (isToolNotFoundError(lastRetryError) && record.tenantId) {
+                        console.warn(
+                            `[Campaign] Tool not found — clearing MCP cache for org ${record.tenantId} before retry`
+                        );
+                        invalidateMcpCacheForOrg(record.tenantId);
+                    }
+
                     console.warn(
                         `[Campaign] Task "${task.name}" attempt ${attempt + 1} failed (retryable): ${lastRetryError.message}. Retrying in ${delay}ms...`
                     );

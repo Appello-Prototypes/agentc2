@@ -5,7 +5,7 @@
 **Fiscal Period:** 2025–2026  
 **Project Title:** Optimization of AI Agent Operational Cost and Token Efficiency Through Network-Delegated Multi-Agent Orchestration  
 **Report Date:** February 17, 2026  
-**Prepared By:** Engineering Team, AgentC2 Platform Division  
+**Prepared By:** Engineering Team, AgentC2 Platform Division
 
 ---
 
@@ -61,12 +61,12 @@ The investigation followed a controlled experimental methodology:
 
 #### 3.2.1 Independent Variables
 
-| Variable | Baseline (Control) | Experimental |
-|----------|-------------------|--------------|
-| Architecture | Monolithic (BigJim v28) | Network-delegated (BigJim2 v2) |
-| Tool count | 125 tools (direct MCP) | 46 tools (27 always-loaded + 19 meta) |
-| Execution model | Direct tool invocation | `network-execute` → specialist agent |
-| Context strategy | All tools in system prompt | Routing table in system prompt |
+| Variable         | Baseline (Control)         | Experimental                          |
+| ---------------- | -------------------------- | ------------------------------------- |
+| Architecture     | Monolithic (BigJim v28)    | Network-delegated (BigJim2 v2)        |
+| Tool count       | 125 tools (direct MCP)     | 46 tools (27 always-loaded + 19 meta) |
+| Execution model  | Direct tool invocation     | `network-execute` → specialist agent  |
+| Context strategy | All tools in system prompt | Routing table in system prompt        |
 
 #### 3.2.2 Dependent Variables (Measured)
 
@@ -79,6 +79,7 @@ The investigation followed a controlled experimental methodology:
 #### 3.2.3 Control Conditions
 
 Both agents operated on:
+
 - Identical LLM backend: Anthropic Claude Sonnet 4 (`claude-sonnet-4-20250514`)
 - Identical temperature: 0.4 (coordinator), 0.3 (specialists)
 - Identical MCP server infrastructure (HubSpot, Jira, Slack, Firecrawl, Fathom, GitHub, Google Calendar)
@@ -91,15 +92,15 @@ Both agents operated on:
 
 The monolithic agent's 125 tools were decomposed into 7 single-responsibility specialist agents:
 
-| Specialist | Tool Count | Domain | Model |
-|-----------|-----------|--------|-------|
-| CRM Specialist | 21 | HubSpot CRM operations | Claude Sonnet 4 |
-| Jira Specialist | 32 | Project management | Claude Sonnet 4 |
-| Slack Specialist | 8 | Messaging operations | Claude Sonnet 4 |
-| Web Scraper | 8 | Web data extraction (Firecrawl) | Claude Sonnet 4 |
-| GitHub Specialist | 26 | Repository management | Claude Sonnet 4 |
-| Meeting Analyst | 4 | Fathom transcripts/summaries | Claude Sonnet 4 |
-| Platform Ops | 19 | Agent health, costs, metrics | Claude Sonnet 4 |
+| Specialist        | Tool Count | Domain                          | Model           |
+| ----------------- | ---------- | ------------------------------- | --------------- |
+| CRM Specialist    | 21         | HubSpot CRM operations          | Claude Sonnet 4 |
+| Jira Specialist   | 32         | Project management              | Claude Sonnet 4 |
+| Slack Specialist  | 8          | Messaging operations            | Claude Sonnet 4 |
+| Web Scraper       | 8          | Web data extraction (Firecrawl) | Claude Sonnet 4 |
+| GitHub Specialist | 26         | Repository management           | Claude Sonnet 4 |
+| Meeting Analyst   | 4          | Fathom transcripts/summaries    | Claude Sonnet 4 |
+| Platform Ops      | 19         | Agent health, costs, metrics    | Claude Sonnet 4 |
 
 **Design principle:** Each specialist loads only its domain-specific MCP tools, resulting in a dramatically smaller system prompt and token footprint per inference.
 
@@ -107,13 +108,13 @@ The monolithic agent's 125 tools were decomposed into 7 single-responsibility sp
 
 Specialists were organized into 4 domain-aligned networks plus 1 pre-existing network:
 
-| Network | Slug | Specialists | Routing Domain |
-|---------|------|------------|---------------|
-| Business Operations | `biz-ops` | CRM, Jira, Meeting Analyst | Deals, contacts, tickets, meetings |
-| Communications | `comms` | Email Triage, Slack, Calendar | Email, messaging, scheduling |
-| Research & Intelligence | `research-intel` | Web Scraper, YouTube, Research, Assistant | Web scraping, research, general knowledge |
-| Platform Administration | `platform-admin` | Platform Ops, Canvas Builder, Skill Builder | Agent health, dashboards, skills |
-| Customer Operations | `customer-operations` | Email Triage, Calendar, CRM, Assistant | Legacy multi-function |
+| Network                 | Slug                  | Specialists                                 | Routing Domain                            |
+| ----------------------- | --------------------- | ------------------------------------------- | ----------------------------------------- |
+| Business Operations     | `biz-ops`             | CRM, Jira, Meeting Analyst                  | Deals, contacts, tickets, meetings        |
+| Communications          | `comms`               | Email Triage, Slack, Calendar               | Email, messaging, scheduling              |
+| Research & Intelligence | `research-intel`      | Web Scraper, YouTube, Research, Assistant   | Web scraping, research, general knowledge |
+| Platform Administration | `platform-admin`      | Platform Ops, Canvas Builder, Skill Builder | Agent health, dashboards, skills          |
+| Customer Operations     | `customer-operations` | Email Triage, Calendar, CRM, Assistant      | Legacy multi-function                     |
 
 Each network employs an LLM-based router (Anthropic Claude Sonnet 4) that selects the optimal specialist based on the incoming message content.
 
@@ -155,6 +156,7 @@ ActivityEvent (denormalized event store)
 #### 3.4.2 API Surface
 
 5 RESTful endpoints were developed:
+
 - `GET /api/backlogs/:agentSlug` — Backlog summary with `tasksByStatus` counts
 - `GET /api/backlogs/:agentSlug/tasks` — Filtered task list (status, sort, limit)
 - `POST /api/backlogs/:agentSlug/tasks` — Task creation with auto-backlog provisioning
@@ -162,11 +164,13 @@ ActivityEvent (denormalized event store)
 - `DELETE /api/backlogs/:agentSlug/tasks/:taskId` — Task removal
 
 5 agent-callable tools were developed:
+
 - `backlog-get`, `backlog-add-task`, `backlog-list-tasks`, `backlog-update-task`, `backlog-complete-task`
 
 #### 3.4.3 Observability UI
 
 A full Backlog management page was built within the agent detail interface:
+
 - Two-column layout: task list (left) + detail panel (right)
 - Status group filtering (Active / Completed tabs)
 - Priority-colored badges (red ≥8, amber ≥5, green <5)
@@ -183,35 +187,35 @@ A full Backlog management page was built within the agent detail interface:
 
 7 queries spanning all specialist domains were executed through the coordinator agent:
 
-| # | Query | Expected Route | Actual Route | Correct? |
-|---|-------|---------------|-------------|----------|
-| 1 | "How many open deals do we have?" | biz-ops → CRM | biz-ops → CRM | ✅ (MCP infra failure*) |
-| 2 | "What are the blocked Jira tickets?" | biz-ops → Jira | biz-ops → Jira | ✅ |
-| 3 | "Check my unread emails from today" | comms → Email | — (skipped, same pattern as #4) | — |
-| 4 | "What meetings do I have tomorrow?" | comms → Calendar | comms → Calendar | ✅ |
-| 5 | "Scrape the homepage of useappello.com" | research-intel → Web Scraper | research-intel → Web Scraper | ✅ |
-| 6 | "Show me all agent costs this week" | platform-admin → Platform Ops | Self (used own tools) | ✅** |
-| 7 | "Write a Python script to calculate compound interest" | Self (execute-code) | Self (execute-code) | ✅ |
+| #   | Query                                                  | Expected Route                | Actual Route                    | Correct?                 |
+| --- | ------------------------------------------------------ | ----------------------------- | ------------------------------- | ------------------------ |
+| 1   | "How many open deals do we have?"                      | biz-ops → CRM                 | biz-ops → CRM                   | ✅ (MCP infra failure\*) |
+| 2   | "What are the blocked Jira tickets?"                   | biz-ops → Jira                | biz-ops → Jira                  | ✅                       |
+| 3   | "Check my unread emails from today"                    | comms → Email                 | — (skipped, same pattern as #4) | —                        |
+| 4   | "What meetings do I have tomorrow?"                    | comms → Calendar              | comms → Calendar                | ✅                       |
+| 5   | "Scrape the homepage of useappello.com"                | research-intel → Web Scraper  | research-intel → Web Scraper    | ✅                       |
+| 6   | "Show me all agent costs this week"                    | platform-admin → Platform Ops | Self (used own tools)           | ✅\*\*                   |
+| 7   | "Write a Python script to calculate compound interest" | Self (execute-code)           | Self (execute-code)             | ✅                       |
 
 **Routing accuracy: 100%** (6/6 evaluated queries routed correctly)
 
 \* Query 1 routed correctly but failed at the MCP tool execution layer (HubSpot server process required restart — infrastructure issue, not a routing logic failure).
 
-\** Query 6: The coordinator chose to handle this directly using its own `agent-costs` tool rather than delegating. This is an acceptable optimization — the coordinator correctly identified it possessed the required capability without network overhead.
+\*\* Query 6: The coordinator chose to handle this directly using its own `agent-costs` tool rather than delegating. This is an acceptable optimization — the coordinator correctly identified it possessed the required capability without network overhead.
 
 ### 4.2 Head-to-Head Cost Comparison
 
 Identical query ("What are the high-priority open Jira tickets?") executed through both architectures:
 
-| Metric | BigJim (Monolithic) | BigJim2 (Network) | Improvement |
-|--------|-------------------|-------------------|-------------|
-| **Total Cost** | $0.476 | $0.100 | **4.76× cheaper** |
-| **Prompt Tokens** | 153,121 | 30,382 | **5.04× fewer** |
-| **Completion Tokens** | 1,087 | 612 | 1.78× fewer |
-| **Total Tokens** | 154,208 | 30,994 | **4.97× fewer** |
-| **Duration** | 33.8s | 67.9s | 2.01× slower |
-| **Tool Calls** | 1 (direct Jira MCP) | 1 (network-execute) | Equivalent |
-| **Results Quality** | 20 tickets, per-ticket detail | 50 tickets, pattern analysis | Both high quality |
+| Metric                | BigJim (Monolithic)           | BigJim2 (Network)            | Improvement       |
+| --------------------- | ----------------------------- | ---------------------------- | ----------------- |
+| **Total Cost**        | $0.476                        | $0.100                       | **4.76× cheaper** |
+| **Prompt Tokens**     | 153,121                       | 30,382                       | **5.04× fewer**   |
+| **Completion Tokens** | 1,087                         | 612                          | 1.78× fewer       |
+| **Total Tokens**      | 154,208                       | 30,994                       | **4.97× fewer**   |
+| **Duration**          | 33.8s                         | 67.9s                        | 2.01× slower      |
+| **Tool Calls**        | 1 (direct Jira MCP)           | 1 (network-execute)          | Equivalent        |
+| **Results Quality**   | 20 tickets, per-ticket detail | 50 tickets, pattern analysis | Both high quality |
 
 ### 4.3 Token Consumption Analysis
 
@@ -241,27 +245,28 @@ The **system prompt reduction from 120K to 15K tokens** (8× reduction) was the 
 
 The network-delegated architecture introduced a latency penalty:
 
-| Phase | Monolithic | Network-Delegated |
-|-------|-----------|-------------------|
-| Coordinator inference | 33.8s (single hop) | 15.2s (routing decision) |
-| Network router inference | — | 8.4s (specialist selection) |
-| Specialist inference | — | 44.3s (tool execution + response) |
-| **Total** | **33.8s** | **67.9s** |
+| Phase                    | Monolithic         | Network-Delegated                 |
+| ------------------------ | ------------------ | --------------------------------- |
+| Coordinator inference    | 33.8s (single hop) | 15.2s (routing decision)          |
+| Network router inference | —                  | 8.4s (specialist selection)       |
+| Specialist inference     | —                  | 44.3s (tool execution + response) |
+| **Total**                | **33.8s**          | **67.9s**                         |
 
 The 2× latency increase was within the pre-defined acceptable threshold. The additional latency is attributable to:
+
 1. Coordinator inference for routing decision (~15s)
 2. Network router inference for specialist selection (~8s)
 3. Specialist tool execution (comparable to monolithic)
 
 ### 4.5 Additional Optimization Results
 
-| Query Type | BigJim2 Duration | BigJim2 Cost | Notes |
-|-----------|-----------------|-------------|-------|
-| Code execution (self) | 46.5s | $0.184 | No delegation overhead |
-| Platform metrics (self) | 47.1s | $0.547 | Used own tools (12 tool calls) |
-| Calendar (comms network) | 54.5s | $0.096 | Fast specialist response |
-| Web scraping (research network) | 77.3s | $0.103 | Firecrawl scrape time dominant |
-| Jira query (biz-ops network) | 67.9s | $0.100 | Consistent with benchmark |
+| Query Type                      | BigJim2 Duration | BigJim2 Cost | Notes                          |
+| ------------------------------- | ---------------- | ------------ | ------------------------------ |
+| Code execution (self)           | 46.5s            | $0.184       | No delegation overhead         |
+| Platform metrics (self)         | 47.1s            | $0.547       | Used own tools (12 tool calls) |
+| Calendar (comms network)        | 54.5s            | $0.096       | Fast specialist response       |
+| Web scraping (research network) | 77.3s            | $0.103       | Firecrawl scrape time dominant |
+| Jira query (biz-ops network)    | 67.9s            | $0.100       | Consistent with benchmark      |
 
 ---
 
@@ -269,13 +274,13 @@ The 2× latency increase was within the pre-defined acceptable threshold. The ad
 
 ### 5.1 Quantified Improvements
 
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Cost per delegated interaction | $0.476 | $0.100 | **4.76× reduction** |
-| Token consumption per interaction | 154,208 | 30,994 | **4.97× reduction** |
-| System prompt tokens | ~120,000 | ~15,000 | **8× reduction** |
-| Tool definitions loaded | 125 | 27 (coordinator) + domain-specific | **78% reduction at coordinator** |
-| Projected monthly cost (500 queries/month) | $238 | $50 | **$188/month savings** |
+| Metric                                     | Before   | After                              | Improvement                      |
+| ------------------------------------------ | -------- | ---------------------------------- | -------------------------------- |
+| Cost per delegated interaction             | $0.476   | $0.100                             | **4.76× reduction**              |
+| Token consumption per interaction          | 154,208  | 30,994                             | **4.97× reduction**              |
+| System prompt tokens                       | ~120,000 | ~15,000                            | **8× reduction**                 |
+| Tool definitions loaded                    | 125      | 27 (coordinator) + domain-specific | **78% reduction at coordinator** |
+| Projected monthly cost (500 queries/month) | $238     | $50                                | **$188/month savings**           |
 
 ### 5.2 Architectural Advancements
 
@@ -307,6 +312,7 @@ The work addressed genuine technological uncertainty: it was not known whether n
 ### 6.2 Systematic Investigation (CRA Criterion 2)
 
 The work followed a rigorous experimental methodology:
+
 - Formulated a testable hypothesis (H₁) with quantified success criteria
 - Controlled independent variables (architecture, tool count, execution model)
 - Measured dependent variables (cost, tokens, latency, accuracy, quality)
@@ -320,6 +326,7 @@ The work achieved a technological advancement: a novel architecture for producti
 ### 6.4 Ontario Eligibility
 
 This work qualifies for:
+
 - **Federal SR&ED Investment Tax Credit** (ITC) under Income Tax Act §37 and §127
 - **Ontario Innovation Tax Credit** (OITC) — 3.5% refundable credit on qualifying Ontario SR&ED expenditures under the Ontario Taxation Act §30
 - **Ontario Research and Development Tax Credit** (ORDTC) — 3.5% non-refundable credit (applicable if CCPC status applies)
@@ -330,25 +337,25 @@ This work qualifies for:
 
 ### 7.1 Labour (SR&ED Proxy Method Eligible)
 
-| Activity | Hours | Role |
-|----------|-------|------|
-| Problem analysis and hypothesis formulation | 2 | Senior Engineer |
-| Specialist agent architecture design | 4 | Senior Engineer |
-| Network topology design and configuration | 3 | Senior Engineer |
-| Coordinator agent instruction engineering | 3 | Senior Engineer |
-| Backlog system design and implementation (schema, API, tools) | 6 | Senior Engineer |
-| Backlog UI development (5 components + integration) | 4 | Senior Engineer |
-| Experimental test execution and data collection | 3 | Senior Engineer |
-| Results analysis and report preparation | 3 | Senior Engineer |
-| **Total** | **28** | |
+| Activity                                                      | Hours  | Role            |
+| ------------------------------------------------------------- | ------ | --------------- |
+| Problem analysis and hypothesis formulation                   | 2      | Senior Engineer |
+| Specialist agent architecture design                          | 4      | Senior Engineer |
+| Network topology design and configuration                     | 3      | Senior Engineer |
+| Coordinator agent instruction engineering                     | 3      | Senior Engineer |
+| Backlog system design and implementation (schema, API, tools) | 6      | Senior Engineer |
+| Backlog UI development (5 components + integration)           | 4      | Senior Engineer |
+| Experimental test execution and data collection               | 3      | Senior Engineer |
+| Results analysis and report preparation                       | 3      | Senior Engineer |
+| **Total**                                                     | **28** |                 |
 
 ### 7.2 Cloud Computing (Overhead)
 
-| Resource | Monthly Cost | SR&ED Portion |
-|----------|-------------|---------------|
-| DigitalOcean droplet (32GB/8vCPU) | $96/mo | Proportional to R&D usage |
-| Supabase PostgreSQL | ~$25/mo | Proportional to R&D usage |
-| Anthropic Claude API (experiment runs) | ~$15 (experiment period) | 100% SR&ED |
+| Resource                               | Monthly Cost             | SR&ED Portion             |
+| -------------------------------------- | ------------------------ | ------------------------- |
+| DigitalOcean droplet (32GB/8vCPU)      | $96/mo                   | Proportional to R&D usage |
+| Supabase PostgreSQL                    | ~$25/mo                  | Proportional to R&D usage |
+| Anthropic Claude API (experiment runs) | ~$15 (experiment period) | 100% SR&ED                |
 
 ---
 
@@ -356,16 +363,16 @@ This work qualifies for:
 
 ### 8.1 Source Code References
 
-| Component | Repository Path |
-|-----------|----------------|
-| Coordinator agent config | `packages/database/prisma/seed-agents.ts` (bigjim2 definition) |
-| Specialist agent configs | `packages/database/prisma/seed-agents.ts` (7 specialist definitions) |
-| Network definitions | Platform database (biz-ops, comms, research-intel, platform-admin) |
-| Backlog schema | `packages/database/prisma/schema.prisma` (Backlog, BacklogTask, ActivityEvent models) |
-| Backlog API routes | `apps/agent/src/app/api/backlogs/` (3 route files) |
-| Backlog tools | `packages/mastra/src/tools/backlog-tools.ts` (5 tools) |
-| Backlog UI | `apps/agent/src/app/agents/[agentSlug]/backlog/` (5 component files) |
-| Activity recording | `packages/mastra/src/activity/service.ts` (15 integration points) |
+| Component                | Repository Path                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------- |
+| Coordinator agent config | `packages/database/prisma/seed-agents.ts` (bigjim2 definition)                        |
+| Specialist agent configs | `packages/database/prisma/seed-agents.ts` (7 specialist definitions)                  |
+| Network definitions      | Platform database (biz-ops, comms, research-intel, platform-admin)                    |
+| Backlog schema           | `packages/database/prisma/schema.prisma` (Backlog, BacklogTask, ActivityEvent models) |
+| Backlog API routes       | `apps/agent/src/app/api/backlogs/` (3 route files)                                    |
+| Backlog tools            | `packages/mastra/src/tools/backlog-tools.ts` (5 tools)                                |
+| Backlog UI               | `apps/agent/src/app/agents/[agentSlug]/backlog/` (5 component files)                  |
+| Activity recording       | `packages/mastra/src/activity/service.ts` (15 integration points)                     |
 
 ### 8.2 Production Telemetry
 
@@ -392,4 +399,4 @@ This work represents a genuine technological advancement in production AI agent 
 
 ---
 
-*This report was prepared in accordance with CRA Information Circular IC86-4R3 and the CRA T661 guide for SR&ED claims. All experimental data is derived from production telemetry and is available for audit upon request.*
+_This report was prepared in accordance with CRA Information Circular IC86-4R3 and the CRA T661 guide for SR&ED claims. All experimental data is derived from production telemetry and is available for audit upon request._

@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useParams } from "next/navigation"
-import { useCallback, useEffect, useState } from "react"
+import { useParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 import {
     Badge,
     Button,
@@ -24,178 +24,176 @@ import {
     SelectTrigger,
     SelectValue,
     Switch
-} from "@repo/ui"
-import { getApiBase } from "@/lib/utils"
+} from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 type OutputAction = {
-    id: string
-    name: string
-    type: "WEBHOOK" | "CHAIN_AGENT"
-    configJson: Record<string, unknown>
-    isActive: boolean
-    createdAt: string
-    updatedAt: string
-}
+    id: string;
+    name: string;
+    type: "WEBHOOK" | "CHAIN_AGENT";
+    configJson: Record<string, unknown>;
+    isActive: boolean;
+    createdAt: string;
+    updatedAt: string;
+};
 
 const ACTION_TYPE_LABELS: Record<string, string> = {
     WEBHOOK: "Webhook",
     CHAIN_AGENT: "Chain Agent"
-}
+};
 
 const ACTION_TYPE_DESCRIPTIONS: Record<string, string> = {
     WEBHOOK: "POST run output to an external URL",
     CHAIN_AGENT: "Forward output as input to another agent"
-}
+};
 
 export default function OutputActionsPage() {
-    const params = useParams()
-    const agentSlug = params.agentSlug as string
+    const params = useParams();
+    const agentSlug = params.agentSlug as string;
 
-    const [loading, setLoading] = useState(true)
-    const [actions, setActions] = useState<OutputAction[]>([])
-    const [error, setError] = useState<string | null>(null)
-    const [dialogOpen, setDialogOpen] = useState(false)
-    const [editingAction, setEditingAction] = useState<OutputAction | null>(null)
+    const [loading, setLoading] = useState(true);
+    const [actions, setActions] = useState<OutputAction[]>([]);
+    const [error, setError] = useState<string | null>(null);
+    const [dialogOpen, setDialogOpen] = useState(false);
+    const [editingAction, setEditingAction] = useState<OutputAction | null>(null);
     const [testResult, setTestResult] = useState<{
-        actionId: string
-        success: boolean
-        message: string
-    } | null>(null)
+        actionId: string;
+        success: boolean;
+        message: string;
+    } | null>(null);
 
     // Form state
-    const [formName, setFormName] = useState("")
-    const [formType, setFormType] = useState<string>("WEBHOOK")
-    const [formActive, setFormActive] = useState(true)
+    const [formName, setFormName] = useState("");
+    const [formType, setFormType] = useState<string>("WEBHOOK");
+    const [formActive, setFormActive] = useState(true);
     // Webhook config
-    const [formUrl, setFormUrl] = useState("")
-    const [formSecret, setFormSecret] = useState("")
+    const [formUrl, setFormUrl] = useState("");
+    const [formSecret, setFormSecret] = useState("");
     // Chain config
-    const [formAgentSlug, setFormAgentSlug] = useState("")
-    const [formInputTemplate, setFormInputTemplate] = useState("")
+    const [formAgentSlug, setFormAgentSlug] = useState("");
+    const [formInputTemplate, setFormInputTemplate] = useState("");
 
     const fetchActions = useCallback(async () => {
         try {
-            setLoading(true)
-            setError(null)
-            const res = await fetch(
-                `${getApiBase()}/api/agents/${agentSlug}/output-actions`
-            )
-            const data = await res.json()
+            setLoading(true);
+            setError(null);
+            const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/output-actions`);
+            const data = await res.json();
             if (!data.success) {
-                setError(data.error || "Failed to load output actions")
-                return
+                setError(data.error || "Failed to load output actions");
+                return;
             }
-            setActions(data.outputActions || [])
+            setActions(data.outputActions || []);
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to load")
+            setError(err instanceof Error ? err.message : "Failed to load");
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }, [agentSlug])
+    }, [agentSlug]);
 
     useEffect(() => {
-        fetchActions()
-    }, [fetchActions])
+        fetchActions();
+    }, [fetchActions]);
 
     const resetForm = () => {
-        setFormName("")
-        setFormType("WEBHOOK")
-        setFormActive(true)
-        setFormUrl("")
-        setFormSecret("")
-        setFormAgentSlug("")
-        setFormInputTemplate("")
-        setEditingAction(null)
-    }
+        setFormName("");
+        setFormType("WEBHOOK");
+        setFormActive(true);
+        setFormUrl("");
+        setFormSecret("");
+        setFormAgentSlug("");
+        setFormInputTemplate("");
+        setEditingAction(null);
+    };
 
     const openCreate = () => {
-        resetForm()
-        setDialogOpen(true)
-    }
+        resetForm();
+        setDialogOpen(true);
+    };
 
     const openEdit = (action: OutputAction) => {
-        setEditingAction(action)
-        setFormName(action.name)
-        setFormType(action.type)
-        setFormActive(action.isActive)
+        setEditingAction(action);
+        setFormName(action.name);
+        setFormType(action.type);
+        setFormActive(action.isActive);
         if (action.type === "WEBHOOK") {
-            const config = action.configJson as { url?: string; secret?: string }
-            setFormUrl(config.url || "")
-            setFormSecret(config.secret || "")
+            const config = action.configJson as { url?: string; secret?: string };
+            setFormUrl(config.url || "");
+            setFormSecret(config.secret || "");
         } else if (action.type === "CHAIN_AGENT") {
             const config = action.configJson as {
-                agentSlug?: string
-                inputTemplate?: string
-            }
-            setFormAgentSlug(config.agentSlug || "")
-            setFormInputTemplate(config.inputTemplate || "")
+                agentSlug?: string;
+                inputTemplate?: string;
+            };
+            setFormAgentSlug(config.agentSlug || "");
+            setFormInputTemplate(config.inputTemplate || "");
         }
-        setDialogOpen(true)
-    }
+        setDialogOpen(true);
+    };
 
     const buildConfigJson = () => {
         if (formType === "WEBHOOK") {
-            const config: Record<string, unknown> = { url: formUrl }
-            if (formSecret) config.secret = formSecret
-            return config
+            const config: Record<string, unknown> = { url: formUrl };
+            if (formSecret) config.secret = formSecret;
+            return config;
         }
         if (formType === "CHAIN_AGENT") {
-            const config: Record<string, unknown> = { agentSlug: formAgentSlug }
-            if (formInputTemplate) config.inputTemplate = formInputTemplate
-            return config
+            const config: Record<string, unknown> = { agentSlug: formAgentSlug };
+            if (formInputTemplate) config.inputTemplate = formInputTemplate;
+            return config;
         }
-        return {}
-    }
+        return {};
+    };
 
     const handleSave = async () => {
-        const configJson = buildConfigJson()
+        const configJson = buildConfigJson();
         const payload = {
             name: formName,
             type: formType,
             configJson,
             isActive: formActive
-        }
+        };
 
         try {
             const url = editingAction
                 ? `${getApiBase()}/api/agents/${agentSlug}/output-actions/${editingAction.id}`
-                : `${getApiBase()}/api/agents/${agentSlug}/output-actions`
-            const method = editingAction ? "PATCH" : "POST"
+                : `${getApiBase()}/api/agents/${agentSlug}/output-actions`;
+            const method = editingAction ? "PATCH" : "POST";
 
             const res = await fetch(url, {
                 method,
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(payload)
-            })
-            const data = await res.json()
+            });
+            const data = await res.json();
             if (!data.success) {
-                setError(data.error || "Failed to save")
-                return
+                setError(data.error || "Failed to save");
+                return;
             }
-            setDialogOpen(false)
-            resetForm()
-            fetchActions()
+            setDialogOpen(false);
+            resetForm();
+            fetchActions();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to save")
+            setError(err instanceof Error ? err.message : "Failed to save");
         }
-    }
+    };
 
     const handleDelete = async (actionId: string) => {
         try {
             const res = await fetch(
                 `${getApiBase()}/api/agents/${agentSlug}/output-actions/${actionId}`,
                 { method: "DELETE" }
-            )
-            const data = await res.json()
+            );
+            const data = await res.json();
             if (!data.success) {
-                setError(data.error || "Failed to delete")
-                return
+                setError(data.error || "Failed to delete");
+                return;
             }
-            fetchActions()
+            fetchActions();
         } catch (err) {
-            setError(err instanceof Error ? err.message : "Failed to delete")
+            setError(err instanceof Error ? err.message : "Failed to delete");
         }
-    }
+    };
 
     const handleToggleActive = async (action: OutputAction) => {
         try {
@@ -206,60 +204,55 @@ export default function OutputActionsPage() {
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ isActive: !action.isActive })
                 }
-            )
-            const data = await res.json()
-            if (data.success) fetchActions()
+            );
+            const data = await res.json();
+            if (data.success) fetchActions();
         } catch {
             // Silently fail toggle
         }
-    }
+    };
 
     const handleTest = async (actionId: string) => {
-        setTestResult(null)
+        setTestResult(null);
         try {
             const res = await fetch(
                 `${getApiBase()}/api/agents/${agentSlug}/output-actions/${actionId}/test`,
                 { method: "POST" }
-            )
-            const data = await res.json()
+            );
+            const data = await res.json();
             setTestResult({
                 actionId,
                 success: data.success,
-                message: data.success
-                    ? "Delivered successfully"
-                    : data.error || "Test failed"
-            })
+                message: data.success ? "Delivered successfully" : data.error || "Test failed"
+            });
         } catch (err) {
             setTestResult({
                 actionId,
                 success: false,
                 message: err instanceof Error ? err.message : "Test failed"
-            })
+            });
         }
-    }
+    };
 
     const getConfigSummary = (action: OutputAction) => {
-        const config = action.configJson as Record<string, unknown>
+        const config = action.configJson as Record<string, unknown>;
         if (action.type === "WEBHOOK") {
-            return (config.url as string) || "No URL configured"
+            return (config.url as string) || "No URL configured";
         }
         if (action.type === "CHAIN_AGENT") {
-            return `→ ${(config.agentSlug as string) || "unknown"}`
+            return `→ ${(config.agentSlug as string) || "unknown"}`;
         }
-        return ""
-    }
+        return "";
+    };
 
     return (
         <div className="flex flex-col gap-6 p-6">
             {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">
-                        Output Actions
-                    </h2>
+                    <h2 className="text-2xl font-bold tracking-tight">Output Actions</h2>
                     <p className="text-muted-foreground text-sm">
-                        Configure where this agent&apos;s outputs are routed
-                        after execution.
+                        Configure where this agent&apos;s outputs are routed after execution.
                     </p>
                 </div>
                 <Button onClick={openCreate}>Create Output Action</Button>
@@ -269,11 +262,10 @@ export default function OutputActionsPage() {
             <Card className="border-blue-200 bg-blue-50 dark:border-blue-900 dark:bg-blue-950/30">
                 <CardContent className="pt-4 pb-4">
                     <p className="text-sm text-blue-800 dark:text-blue-200">
-                        Agents handle their own communication (Slack, email,
-                        Jira, etc.) via MCP tools during execution. Output
-                        actions handle plumbing: webhooks for external systems
-                        and chaining to other agents. All outputs are
-                        automatically vectorized into the shared knowledge base.
+                        Agents handle their own communication (Slack, email, Jira, etc.) via MCP
+                        tools during execution. Output actions handle plumbing: webhooks for
+                        external systems and chaining to other agents. All outputs are automatically
+                        vectorized into the shared knowledge base.
                     </p>
                 </CardContent>
             </Card>
@@ -299,9 +291,8 @@ export default function OutputActionsPage() {
                 <Card>
                     <CardContent className="flex flex-col items-center justify-center py-12">
                         <p className="text-muted-foreground mb-4 text-sm">
-                            No output actions configured. Outputs are stored in
-                            the database and auto-vectorized into the knowledge
-                            base by default.
+                            No output actions configured. Outputs are stored in the database and
+                            auto-vectorized into the knowledge base by default.
                         </p>
                         <Button variant="outline" onClick={openCreate}>
                             Create First Output Action
@@ -317,29 +308,16 @@ export default function OutputActionsPage() {
                         <CardHeader className="pb-3">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-3">
-                                    <CardTitle className="text-base">
-                                        {action.name}
-                                    </CardTitle>
+                                    <CardTitle className="text-base">{action.name}</CardTitle>
                                     <Badge
                                         variant={
-                                            action.type === "WEBHOOK"
-                                                ? "default"
-                                                : "secondary"
+                                            action.type === "WEBHOOK" ? "default" : "secondary"
                                         }
                                     >
-                                        {ACTION_TYPE_LABELS[action.type] ||
-                                            action.type}
+                                        {ACTION_TYPE_LABELS[action.type] || action.type}
                                     </Badge>
-                                    <Badge
-                                        variant={
-                                            action.isActive
-                                                ? "default"
-                                                : "outline"
-                                        }
-                                    >
-                                        {action.isActive
-                                            ? "Active"
-                                            : "Inactive"}
+                                    <Badge variant={action.isActive ? "default" : "outline"}>
+                                        {action.isActive ? "Active" : "Inactive"}
                                     </Badge>
                                 </div>
                                 <div className="flex items-center gap-2">
@@ -360,21 +338,15 @@ export default function OutputActionsPage() {
                                     <Button
                                         variant="ghost"
                                         size="sm"
-                                        onClick={() =>
-                                            handleToggleActive(action)
-                                        }
+                                        onClick={() => handleToggleActive(action)}
                                     >
-                                        {action.isActive
-                                            ? "Disable"
-                                            : "Enable"}
+                                        {action.isActive ? "Disable" : "Enable"}
                                     </Button>
                                     <Button
                                         variant="ghost"
                                         size="sm"
                                         className="text-destructive"
-                                        onClick={() =>
-                                            handleDelete(action.id)
-                                        }
+                                        onClick={() => handleDelete(action.id)}
                                     >
                                         Delete
                                     </Button>
@@ -397,8 +369,7 @@ export default function OutputActionsPage() {
                                             : "bg-red-50 text-red-800 dark:bg-red-950/30 dark:text-red-200"
                                     }`}
                                 >
-                                    {testResult.success ? "OK" : "FAIL"}:{" "}
-                                    {testResult.message}
+                                    {testResult.success ? "OK" : "FAIL"}: {testResult.message}
                                 </div>
                             </CardContent>
                         )}
@@ -410,13 +381,10 @@ export default function OutputActionsPage() {
                 <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle>
-                            {editingAction
-                                ? "Edit Output Action"
-                                : "Create Output Action"}
+                            {editingAction ? "Edit Output Action" : "Create Output Action"}
                         </DialogTitle>
                         <DialogDescription>
-                            Configure where this agent&apos;s output is routed
-                            after each run.
+                            Configure where this agent&apos;s output is routed after each run.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -435,18 +403,16 @@ export default function OutputActionsPage() {
                             <Label>Type</Label>
                             <Select
                                 value={formType}
-                                onValueChange={(val) => { if (val) setFormType(val) }}
+                                onValueChange={(val) => {
+                                    if (val) setFormType(val);
+                                }}
                             >
                                 <SelectTrigger>
                                     <SelectValue />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="WEBHOOK">
-                                        Webhook
-                                    </SelectItem>
-                                    <SelectItem value="CHAIN_AGENT">
-                                        Chain Agent
-                                    </SelectItem>
+                                    <SelectItem value="WEBHOOK">Webhook</SelectItem>
+                                    <SelectItem value="CHAIN_AGENT">Chain Agent</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -459,22 +425,16 @@ export default function OutputActionsPage() {
                                     <Input
                                         id="url"
                                         value={formUrl}
-                                        onChange={(e) =>
-                                            setFormUrl(e.target.value)
-                                        }
+                                        onChange={(e) => setFormUrl(e.target.value)}
                                         placeholder="https://example.com/webhook"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <Label htmlFor="secret">
-                                        HMAC Secret (optional)
-                                    </Label>
+                                    <Label htmlFor="secret">HMAC Secret (optional)</Label>
                                     <Input
                                         id="secret"
                                         value={formSecret}
-                                        onChange={(e) =>
-                                            setFormSecret(e.target.value)
-                                        }
+                                        onChange={(e) => setFormSecret(e.target.value)}
                                         placeholder="Optional signing secret"
                                         type="password"
                                     />
@@ -486,53 +446,38 @@ export default function OutputActionsPage() {
                         {formType === "CHAIN_AGENT" && (
                             <>
                                 <div className="flex flex-col gap-2">
-                                    <Label htmlFor="agentSlug">
-                                        Target Agent Slug
-                                    </Label>
+                                    <Label htmlFor="agentSlug">Target Agent Slug</Label>
                                     <Input
                                         id="agentSlug"
                                         value={formAgentSlug}
-                                        onChange={(e) =>
-                                            setFormAgentSlug(e.target.value)
-                                        }
+                                        onChange={(e) => setFormAgentSlug(e.target.value)}
                                         placeholder="e.g., ceo"
                                     />
                                 </div>
                                 <div className="flex flex-col gap-2">
-                                    <Label htmlFor="inputTemplate">
-                                        Input Template (optional)
-                                    </Label>
+                                    <Label htmlFor="inputTemplate">Input Template (optional)</Label>
                                     <Input
                                         id="inputTemplate"
                                         value={formInputTemplate}
-                                        onChange={(e) =>
-                                            setFormInputTemplate(e.target.value)
-                                        }
+                                        onChange={(e) => setFormInputTemplate(e.target.value)}
                                         placeholder="Review this report: {output}"
                                     />
                                     <p className="text-muted-foreground text-xs">
-                                        Use {"{output}"} as a placeholder for
-                                        the agent&apos;s output. Leave blank to
-                                        pass the full output directly.
+                                        Use {"{output}"} as a placeholder for the agent&apos;s
+                                        output. Leave blank to pass the full output directly.
                                     </p>
                                 </div>
                             </>
                         )}
 
                         <div className="flex items-center gap-3">
-                            <Switch
-                                checked={formActive}
-                                onCheckedChange={setFormActive}
-                            />
+                            <Switch checked={formActive} onCheckedChange={setFormActive} />
                             <Label>Active</Label>
                         </div>
                     </div>
 
                     <DialogFooter>
-                        <Button
-                            variant="outline"
-                            onClick={() => setDialogOpen(false)}
-                        >
+                        <Button variant="outline" onClick={() => setDialogOpen(false)}>
                             Cancel
                         </Button>
                         <Button onClick={handleSave} disabled={!formName}>
@@ -542,5 +487,5 @@ export default function OutputActionsPage() {
                 </DialogContent>
             </Dialog>
         </div>
-    )
+    );
 }

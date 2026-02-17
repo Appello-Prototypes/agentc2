@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 id: true,
                 version: true,
                 changelog: true,
+                versionLabel: true,
                 createdAt: true,
                 createdBy: true
             }

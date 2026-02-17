@@ -225,6 +225,7 @@ import {
     canvasCreateTool,
     canvasReadTool,
     canvasUpdateTool,
+    canvasUpdateDataTool,
     canvasDeleteTool,
     canvasListTool,
     canvasQueryPreviewTool,
@@ -519,6 +520,7 @@ export const toolCategoryMap: Record<string, string> = {
     "canvas-create": "Canvas",
     "canvas-read": "Canvas",
     "canvas-update": "Canvas",
+    "canvas-update-data": "Canvas",
     "canvas-delete": "Canvas",
     "canvas-list": "Canvas",
     "canvas-query-preview": "Canvas",
@@ -869,6 +871,7 @@ export const toolRegistry: Record<string, any> = {
     "canvas-create": canvasCreateTool,
     "canvas-read": canvasReadTool,
     "canvas-update": canvasUpdateTool,
+    "canvas-update-data": canvasUpdateDataTool,
     "canvas-delete": canvasDeleteTool,
     "canvas-list": canvasListTool,
     "canvas-query-preview": canvasQueryPreviewTool,
@@ -1002,7 +1005,11 @@ export async function getToolsByNamesAsync(
     // Warn about tools that were requested but not found in any source
     const missing = names.filter((n) => !result[n]);
     if (missing.length > 0) {
-        console.warn(`[ToolRegistry] ${missing.length} tool(s) not found: ${missing.join(", ")}`);
+        console.warn(
+            `[ToolRegistry] ${missing.length} tool(s) not found: ${missing.join(", ")} ` +
+                `(checked: registry=${Object.keys(toolRegistry).length}, ` +
+                `resolved=${Object.keys(result).length}/${names.length})`
+        );
     }
 
     return result;

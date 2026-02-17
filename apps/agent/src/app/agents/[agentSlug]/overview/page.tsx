@@ -147,6 +147,26 @@ function StatusBadge({ status }: { status: string }) {
     return <Badge variant={variants[status] || "secondary"}>{status.toLowerCase()}</Badge>;
 }
 
+interface ToolHealthData {
+    health: "healthy" | "warning" | "critical";
+    summary: {
+        total: number;
+        available: number;
+        missing: number;
+        registryTools: number;
+        mcpTools: number;
+        mcpServerErrors: number;
+    };
+    tools: Array<{
+        toolId: string;
+        status: string;
+        source: string;
+        reason?: string;
+    }>;
+    mcpServerErrors: Record<string, string>;
+    unattachedAlwaysLoaded: string[];
+}
+
 export default function OverviewPage() {
     const params = useParams();
     const router = useRouter();
@@ -154,6 +174,7 @@ export default function OverviewPage() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [data, setData] = useState<OverviewData | null>(null);
+    const [toolHealth, setToolHealth] = useState<ToolHealthData | null>(null);
 
     const fetchOverview = useCallback(async () => {
         try {
@@ -183,9 +204,22 @@ export default function OverviewPage() {
         }
     }, [agentSlug]);
 
+    const fetchToolHealth = useCallback(async () => {
+        try {
+            const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/tool-health`);
+            const result = await response.json();
+            if (result.success) {
+                setToolHealth(result.data);
+            }
+        } catch {
+            // Non-critical: tool health is informational
+        }
+    }, [agentSlug]);
+
     useEffect(() => {
         fetchOverview();
-    }, [fetchOverview]);
+        fetchToolHealth();
+    }, [fetchOverview, fetchToolHealth]);
 
     if (loading) {
         return (
@@ -341,6 +375,89 @@ export default function OverviewPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Tool Health */}
+            {toolHealth && toolHealth.summary.missing > 0 && (
+                <Card
+                    className={
+                        toolHealth.health === "critical"
+                            ? "border-red-500/50"
+                            : toolHealth.health === "warning"
+                              ? "border-yellow-500/50"
+                              : ""
+                    }
+                >
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-base">Tool Health</CardTitle>
+                                <CardDescription>
+                                    {toolHealth.summary.available}/{toolHealth.summary.total} tools
+                                    available
+                                </CardDescription>
+                            </div>
+                            <Badge
+                                variant={
+                                    toolHealth.health === "healthy"
+                                        ? "default"
+                                        : toolHealth.health === "warning"
+                                          ? "secondary"
+                                          : "destructive"
+                                }
+                            >
+                                {toolHealth.summary.missing} unavailable
+                            </Badge>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="space-y-2">
+                            {toolHealth.tools.slice(0, 10).map((tool) => (
+                                <div
+                                    key={tool.toolId}
+                                    className="flex items-center justify-between text-sm"
+                                >
+                                    <code className="text-muted-foreground text-xs">
+                                        {tool.toolId}
+                                    </code>
+                                    <span className="text-muted-foreground text-xs">
+                                        {tool.reason || tool.source}
+                                    </span>
+                                </div>
+                            ))}
+                            {toolHealth.tools.length > 10 && (
+                                <p className="text-muted-foreground text-xs">
+                                    +{toolHealth.tools.length - 10} more
+                                </p>
+                            )}
+                            {Object.keys(toolHealth.mcpServerErrors).length > 0 && (
+                                <div className="mt-3 border-t pt-2">
+                                    <p className="text-xs font-medium">MCP Server Errors:</p>
+                                    {Object.entries(toolHealth.mcpServerErrors).map(
+                                        ([server, err]) => (
+                                            <p
+                                                key={server}
+                                                className="text-muted-foreground text-xs"
+                                            >
+                                                {server}: {err}
+                                            </p>
+                                        )
+                                    )}
+                                </div>
+                            )}
+                            {toolHealth.unattachedAlwaysLoaded.length > 0 && (
+                                <div className="mt-3 border-t pt-2">
+                                    <p className="text-xs font-medium">
+                                        Unattached alwaysLoadedTools:
+                                    </p>
+                                    <p className="text-muted-foreground text-xs">
+                                        {toolHealth.unattachedAlwaysLoaded.join(", ")}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Health Score Components */}
             {data?.healthScore && (
