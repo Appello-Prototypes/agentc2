@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { recordActivity } from "@repo/mastra/activity/service";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -512,6 +513,18 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             const updatedAgent = await prisma.agent.findUnique({
                 where: { id: existing.id },
                 include: { tools: true }
+            });
+
+            // Record to Activity Feed
+            recordActivity({
+                type: "AGENT_UPDATED",
+                agentId: existing.id,
+                agentSlug: existing.slug,
+                agentName: body.name || existing.name,
+                summary: `Agent "${existing.name}" updated`,
+                status: "info",
+                source: "api",
+                workspaceId: existing.workspaceId || undefined
             });
 
             return NextResponse.json({

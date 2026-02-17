@@ -172,8 +172,8 @@ async function runEvaluationsAsync(
  * NOW RECORDS ALL RUNS TO THE DATABASE via RunRecorder for full observability.
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+    const { id } = await params;
     try {
-        const { id } = await params;
         const body = await request.json();
         const {
             threadId,
@@ -925,9 +925,56 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch (error) {
         // Budget exceeded: return a valid stream with an inline upgrade prompt
         // instead of a 500 error. This is a key SaaS revenue touchpoint.
-        if (error instanceof BudgetExceededError) {
+        // Use both instanceof AND property check (.code) as fallback since
+        // instanceof can fail across Next.js chunk boundaries.
+        const isBudgetError =
+            error instanceof BudgetExceededError ||
+            (error instanceof Error &&
+                typeof (error as { code?: string }).code === "string" &&
+                (error as { code?: string }).code === "BUDGET_EXCEEDED") ||
+            (error instanceof Error && error.message.startsWith("Agent budget exceeded:"));
+
+        if (isBudgetError) {
+            // Extract budget data — try structured properties first, then parse from message
+            let budgetData: {
+                code: string;
+                agentId: string;
+                currentSpendUsd: number;
+                monthlyLimitUsd: number;
+                periodStart: string;
+                periodEnd: string;
+            };
+
+            const typed = error as Partial<BudgetExceededError>;
+            if (typeof typed.toJSON === "function") {
+                budgetData = typed.toJSON();
+            } else if (typed.agentId && typed.currentSpendUsd != null) {
+                budgetData = {
+                    code: "BUDGET_EXCEEDED",
+                    agentId: typed.agentId,
+                    currentSpendUsd: typed.currentSpendUsd,
+                    monthlyLimitUsd: typed.monthlyLimitUsd ?? 0,
+                    periodStart: typed.periodStart ?? new Date().toISOString(),
+                    periodEnd: typed.periodEnd ?? new Date().toISOString()
+                };
+            } else {
+                // Last resort: parse from error message "Agent budget exceeded: $109.94 / $100 monthly limit"
+                const msg = (error as Error).message || "";
+                const match = msg.match(
+                    /Agent budget exceeded: \$([0-9.]+) \/ \$([0-9.]+) monthly limit/
+                );
+                budgetData = {
+                    code: "BUDGET_EXCEEDED",
+                    agentId: id,
+                    currentSpendUsd: match ? parseFloat(match[1]) : 0,
+                    monthlyLimitUsd: match ? parseFloat(match[2]) : 0,
+                    periodStart: new Date().toISOString(),
+                    periodEnd: new Date().toISOString()
+                };
+            }
+
             console.log(
-                `[Agent Chat] Budget exceeded for agent ${error.agentId}: $${error.currentSpendUsd} / $${error.monthlyLimitUsd}`
+                `[Agent Chat] Budget exceeded for agent ${budgetData.agentId}: $${budgetData.currentSpendUsd} / $${budgetData.monthlyLimitUsd}`
             );
             const budgetStream = createUIMessageStream({
                 execute: async ({ writer }: { writer: UIMessageStreamWriter }) => {
@@ -935,7 +982,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     writer.write({ type: "text-start", id: messageId });
                     writer.write({
                         type: "data-budget-exceeded",
-                        data: error.toJSON()
+                        data: budgetData
                     });
                     writer.write({ type: "text-end", id: messageId });
                 }

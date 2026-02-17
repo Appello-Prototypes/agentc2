@@ -3849,7 +3849,7 @@ model BacklogTask {
     // Context and result
     contextJson Json?
     tags        String[]
-    result      String? @db.Text
+    result      String?   @db.Text
     completedAt DateTime?
 
     createdAt DateTime @default(now())

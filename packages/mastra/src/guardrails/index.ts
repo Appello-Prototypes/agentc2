@@ -13,6 +13,7 @@
  */
 
 import { prisma } from "@repo/database";
+import { recordActivity } from "../activity/service";
 
 export interface GuardrailConfig {
     input?: {
@@ -115,6 +116,18 @@ async function recordGuardrailEvent(
                 inputSnippet: details.inputPreview ? String(details.inputPreview) : undefined,
                 outputSnippet: details.outputPreview ? String(details.outputPreview) : undefined
             }
+        });
+
+        // Record to Activity Feed
+        recordActivity({
+            type: "GUARDRAIL_TRIGGERED",
+            agentId,
+            summary: `Guardrail ${guardrailKey} ${eventType.toLowerCase()}: ${details.message || ""}`,
+            status: eventType === "BLOCKED" ? "warning" : "info",
+            source: "guardrail",
+            runId,
+            tenantId,
+            metadata: { guardrailKey, eventType }
         });
     } catch (error) {
         console.warn("[Guardrails] Failed to record event:", error);

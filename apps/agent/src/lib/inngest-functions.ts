@@ -1,5 +1,6 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
+import { recordActivity } from "@repo/mastra/activity/service";
 import {
     prisma,
     Prisma,
@@ -6166,6 +6167,22 @@ export const gmailMessageProcessFunction = inngest.createFunction(
                     ? ` [${result.skippedDuplicates} duplicates skipped]`
                     : "")
         );
+
+        // Record to Activity Feed
+        if (result.processed > 0) {
+            recordActivity({
+                type: "EMAIL_PROCESSED",
+                summary: `Processed ${result.processed} email(s) from ${gmailAddress}`,
+                status: "info",
+                source: "gmail",
+                metadata: {
+                    gmailAddress,
+                    total: result.total,
+                    processed: result.processed,
+                    skippedDuplicates: result.skippedDuplicates
+                }
+            });
+        }
 
         return {
             total: result.total,

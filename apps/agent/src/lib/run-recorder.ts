@@ -290,6 +290,18 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
         `[RunRecorder] Started run ${run.id} for agent ${options.agentSlug} from ${options.source}`
     );
 
+    // Record to Activity Feed
+    recordActivity({
+        type: "RUN_STARTED",
+        agentId: options.agentId,
+        agentSlug: options.agentSlug,
+        summary: `${options.agentSlug} started: ${inputPreview(options.input)}`,
+        status: "info",
+        source: options.source || "api",
+        runId: run.id,
+        tenantId: options.tenantId
+    });
+
     // Track tool calls in memory for step synthesis
     const recordedToolCalls: ToolCallData[] = [];
 
@@ -450,7 +462,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 costUsd: completeOptions.costUsd,
                 durationMs,
                 tokenCount: totalTokens,
-                tenantId: options.tenantId,
+                tenantId: options.tenantId
             });
         },
 
@@ -495,7 +507,7 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 source: options.source,
                 runId: run.id,
                 durationMs,
-                tenantId: options.tenantId,
+                tenantId: options.tenantId
             });
         },
 
@@ -1052,6 +1064,18 @@ export async function startConversationRun(
         `[RunRecorder] Started conversation run ${run.id} (turn 0: ${turn.id}) for agent ${options.agentSlug} from ${options.source}`
     );
 
+    // Record to Activity Feed
+    recordActivity({
+        type: "RUN_STARTED",
+        agentId: options.agentId,
+        agentSlug: options.agentSlug,
+        summary: `${options.agentSlug} conversation started: ${inputPreview(options.input)}`,
+        status: "info",
+        source: options.source || "chat",
+        runId: run.id,
+        tenantId: options.tenantId
+    });
+
     const turnMethods = buildTurnMethods(
         run.id,
         turn.id,
@@ -1375,6 +1399,16 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
     } catch (inngestError) {
         console.warn(`[RunRecorder] Failed to emit run/completed for finalize: ${inngestError}`);
     }
+
+    // Record to Activity Feed
+    recordActivity({
+        type: "RUN_COMPLETED",
+        agentId: run.agentId,
+        summary: `Conversation run finalized (${run.turnCount || 0} turns)`,
+        status: "success",
+        source: "chat",
+        runId
+    });
 
     console.log(`[RunRecorder] Finalized conversation run ${runId}`);
     return true;

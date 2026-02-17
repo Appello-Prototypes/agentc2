@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { agentResolver } from "@repo/mastra/agents";
+import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
 import { prisma, type Prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
@@ -1200,6 +1201,19 @@ async function processMessage(
 
         console.log(`[Slack] Response preview: ${response.text?.substring(0, 200)}...`);
         console.log(`${"=".repeat(60)}\n`);
+
+        // Record to Activity Feed
+        recordActivity({
+            type: "SLACK_MESSAGE_HANDLED",
+            agentId,
+            agentSlug: slug,
+            agentName: record?.name,
+            summary: `Handled Slack message from ${userId}: ${inputPreview(text)}`,
+            status: "success",
+            source: "slack",
+            runId: run.runId,
+            metadata: { channelId, threadTs }
+        });
 
         return {
             text: markdownToSlack(response.text || "I'm sorry, I couldn't generate a response."),

@@ -1,1 +1,1 @@
-export { recordActivity, inputPreview, type RecordActivityInput } from "./service"
+export { recordActivity, inputPreview, type RecordActivityInput } from "./service";

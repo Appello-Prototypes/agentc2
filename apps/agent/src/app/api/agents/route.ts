@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma, Prisma } from "@repo/database";
 import { agentResolver } from "@repo/mastra/agents";
+import { recordActivity } from "@repo/mastra/activity/service";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { authenticateRequest } from "@/lib/api-auth";
@@ -108,10 +109,27 @@ export async function GET(request: NextRequest) {
                 }
             }
 
+            // Batch-load latest health scores for all agents
+            const agentIds = agents.map((a) => a.id);
+            const latestHealthScores = await prisma.agentHealthScore.findMany({
+                where: { agentId: { in: agentIds } },
+                orderBy: { date: "desc" },
+                distinct: ["agentId"],
+                select: {
+                    agentId: true,
+                    healthScore: true,
+                    healthStatus: true,
+                    confidence: true,
+                    date: true
+                }
+            });
+            const healthScoreMap = new Map(latestHealthScores.map((hs) => [hs.agentId, hs]));
+
             return NextResponse.json({
                 success: true,
                 count: agents.length,
                 agents: agents.map((agent) => {
+                    const hs = healthScoreMap.get(agent.id);
                     const base = {
                         id: agent.id,
                         slug: agent.slug,
@@ -126,7 +144,14 @@ export async function GET(request: NextRequest) {
                         isActive: agent.isActive,
                         routingConfig: agent.routingConfig,
                         createdAt: agent.createdAt,
-                        updatedAt: agent.updatedAt
+                        updatedAt: agent.updatedAt,
+                        healthScore: hs
+                            ? {
+                                  score: hs.healthScore,
+                                  status: hs.healthStatus,
+                                  confidence: hs.confidence
+                              }
+                            : null
                     };
 
                     if (skillBreakdowns) {
@@ -276,6 +301,18 @@ export async function POST(request: NextRequest) {
             const agentWithTools = await prisma.agent.findUnique({
                 where: { id: agent.id },
                 include: { tools: true }
+            });
+
+            // Record to Activity Feed
+            recordActivity({
+                type: "AGENT_CREATED",
+                agentId: agent.id,
+                agentSlug: agent.slug,
+                agentName: agent.name,
+                summary: `Agent "${agent.name}" created`,
+                status: "info",
+                source: "api",
+                workspaceId: workspaceId || undefined
             });
 
             return NextResponse.json({

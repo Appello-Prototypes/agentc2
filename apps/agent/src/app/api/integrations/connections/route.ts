@@ -6,6 +6,7 @@ import {
     resetMcpClients
 } from "@repo/mastra/mcp";
 import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
+import { clearModelCache } from "@repo/mastra/agents/model-registry";
 import { provisionIntegration, hasBlueprint } from "@repo/mastra/integrations";
 import { auditLog } from "@/lib/audit-log";
 import { encryptCredentials } from "@/lib/credential-crypto";
@@ -175,6 +176,7 @@ export async function POST(request: NextRequest) {
         resetMcpClients();
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
+        clearModelCache();
 
         // Auto-provision Skill + Agent if a blueprint exists for this provider
         let provisionResult = null;

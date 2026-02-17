@@ -1,4 +1,5 @@
 import { prisma, Prisma, TriggerEventStatus } from "@repo/database";
+import { recordActivity } from "@repo/mastra/activity/service";
 
 const MAX_PAYLOAD_CHARS = 10000;
 const PREVIEW_CHARS = 2000;
@@ -83,7 +84,7 @@ export async function createTriggerEventRecord(options: {
         options.payload
     );
 
-    return prisma.triggerEvent.create({
+    const result = await prisma.triggerEvent.create({
         data: {
             triggerId: options.triggerId ?? null,
             agentId: options.agentId ?? null,
@@ -117,6 +118,25 @@ export async function createTriggerEventRecord(options: {
             payloadTruncated: true
         }
     });
+
+    // Record to Activity Feed
+    recordActivity({
+        type: options.sourceType === "schedule" ? "SCHEDULE_EXECUTED" : "TRIGGER_FIRED",
+        agentId: options.agentId || undefined,
+        summary: `Trigger fired: ${options.eventName || options.sourceType}`,
+        status: "info",
+        source: options.sourceType,
+        runId: options.runId || undefined,
+        networkRunId: options.networkRunId || undefined,
+        metadata: {
+            triggerId: options.triggerId,
+            sourceType: options.sourceType,
+            entityType: options.entityType
+        },
+        workspaceId: options.workspaceId || undefined
+    });
+
+    return result;
 }
 
 export async function updateTriggerEventRecord(

@@ -1,13 +1,13 @@
-import { createTool } from "@mastra/core/tools"
-import { z } from "zod"
-import { ingestDocument } from "../rag/pipeline"
+import { createTool } from "@mastra/core/tools";
+import { z } from "zod";
+import { ingestDocument } from "../rag/pipeline";
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const INLINE_THRESHOLD = 20_000 // chars – roughly ~15 min of speech
-const SUPADATA_BASE = "https://api.supadata.ai/v1/transcript"
+const INLINE_THRESHOLD = 20_000; // chars – roughly ~15 min of speech
+const SUPADATA_BASE = "https://api.supadata.ai/v1/transcript";
 
 // ---------------------------------------------------------------------------
 // URL Helpers
@@ -18,27 +18,27 @@ const SUPADATA_BASE = "https://api.supadata.ai/v1/transcript"
  * `https://www.youtube.com/watch?v=VIDEO_ID` form.
  */
 export function normalizeYouTubeUrl(input: string): string {
-    const trimmed = input.trim()
+    const trimmed = input.trim();
 
-    const shortMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
-    if (shortMatch) return `https://www.youtube.com/watch?v=${shortMatch[1]}`
+    const shortMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
+    if (shortMatch) return `https://www.youtube.com/watch?v=${shortMatch[1]}`;
 
-    const shortsMatch = trimmed.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)
-    if (shortsMatch) return `https://www.youtube.com/watch?v=${shortsMatch[1]}`
+    const shortsMatch = trimmed.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
+    if (shortsMatch) return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
 
-    const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/)
-    if (watchMatch) return `https://www.youtube.com/watch?v=${watchMatch[1]}`
+    const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
+    if (watchMatch) return `https://www.youtube.com/watch?v=${watchMatch[1]}`;
 
     if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
-        return `https://www.youtube.com/watch?v=${trimmed}`
+        return `https://www.youtube.com/watch?v=${trimmed}`;
     }
 
-    return trimmed
+    return trimmed;
 }
 
 function extractVideoId(url: string): string | null {
-    const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/)
-    return m ? m[1] : null
+    const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
+    return m ? m[1] : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,35 +58,35 @@ function extractVideoId(url: string): string | null {
 async function fetchTranscript(
     videoUrl: string
 ): Promise<{ content: string; lang: string } | null> {
-    const apiKey = process.env.SUPADATA_API_KEY
+    const apiKey = process.env.SUPADATA_API_KEY;
     if (!apiKey) {
         throw new Error(
             "SUPADATA_API_KEY is not configured. Add the Supadata integration in Settings > Integrations, or set the SUPADATA_API_KEY environment variable. Sign up free at https://supadata.ai"
-        )
+        );
     }
 
-    const encodedUrl = encodeURIComponent(videoUrl)
+    const encodedUrl = encodeURIComponent(videoUrl);
     const response = await fetch(`${SUPADATA_BASE}?url=${encodedUrl}&text=true&mode=auto`, {
         headers: { "x-api-key": apiKey }
-    })
+    });
 
     // Async job for long videos (>20 min) — poll for result
     if (response.status === 202) {
-        const { jobId } = await response.json()
-        return await pollTranscriptJob(apiKey, jobId)
+        const { jobId } = await response.json();
+        return await pollTranscriptJob(apiKey, jobId);
     }
 
     if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        const msg = (errData as Record<string, string>).message || `HTTP ${response.status}`
-        throw new Error(`Supadata transcript fetch failed: ${msg}`)
+        const errData = await response.json().catch(() => ({}));
+        const msg = (errData as Record<string, string>).message || `HTTP ${response.status}`;
+        throw new Error(`Supadata transcript fetch failed: ${msg}`);
     }
 
-    const data = await response.json()
+    const data = await response.json();
     return {
         content: (data.content as string) || "",
         lang: (data.lang as string) || "en"
-    }
+    };
 }
 
 /**
@@ -99,23 +99,23 @@ async function pollTranscriptJob(
     maxAttempts = 90
 ): Promise<{ content: string; lang: string } | null> {
     for (let i = 0; i < maxAttempts; i++) {
-        await new Promise((r) => setTimeout(r, 2000))
+        await new Promise((r) => setTimeout(r, 2000));
 
         const res = await fetch(`${SUPADATA_BASE}/${jobId}`, {
             headers: { "x-api-key": apiKey }
-        })
-        if (!res.ok) continue
+        });
+        if (!res.ok) continue;
 
-        const data = await res.json()
+        const data = await res.json();
         if (data.status === "completed") {
             return {
                 content: (data.content as string) || "",
                 lang: (data.lang as string) || "en"
-            }
+            };
         }
-        if (data.status === "failed") return null
+        if (data.status === "failed") return null;
     }
-    return null
+    return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,22 +123,22 @@ async function pollTranscriptJob(
 // ---------------------------------------------------------------------------
 
 interface YouTubeVideoMetadata {
-    title: string
-    channel: string
+    title: string;
+    channel: string;
 }
 
 async function fetchVideoMetadata(url: string): Promise<YouTubeVideoMetadata> {
     try {
-        const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
-        const response = await fetch(oembedUrl)
-        if (!response.ok) return { title: "", channel: "" }
-        const data = await response.json()
+        const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`;
+        const response = await fetch(oembedUrl);
+        if (!response.ok) return { title: "", channel: "" };
+        const data = await response.json();
         return {
             title: (data.title as string) || "",
             channel: (data.author_name as string) || ""
-        }
+        };
     } catch {
-        return { title: "", channel: "" }
+        return { title: "", channel: "" };
     }
 }
 
@@ -164,8 +164,8 @@ export const youtubeGetTranscriptTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ url }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url)
-        const videoId = extractVideoId(normalizedUrl) || url
+        const normalizedUrl = normalizeYouTubeUrl(url);
+        const videoId = extractVideoId(normalizedUrl) || url;
 
         const [metadata, transcriptResult] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
@@ -174,11 +174,11 @@ export const youtubeGetTranscriptTool = createTool({
                 lang: "en",
                 _error: e.message
             }))
-        ])
+        ]);
 
-        const base = { title: metadata.title, channel: metadata.channel, url: normalizedUrl }
-        const errorMsg = (transcriptResult as Record<string, string>)?._error || undefined
-        const transcriptText = transcriptResult?.content || ""
+        const base = { title: metadata.title, channel: metadata.channel, url: normalizedUrl };
+        const errorMsg = (transcriptResult as Record<string, string>)?._error || undefined;
+        const transcriptText = transcriptResult?.content || "";
 
         if (!transcriptText || transcriptText.length < 20) {
             return {
@@ -188,12 +188,12 @@ export const youtubeGetTranscriptTool = createTool({
                 error:
                     errorMsg ||
                     "No transcript available for this video. The video may not have captions enabled."
-            }
+            };
         }
 
         // Short transcript — return inline
         if (transcriptText.length < INLINE_THRESHOLD) {
-            return { ...base, mode: "inline" as const, transcript: transcriptText }
+            return { ...base, mode: "inline" as const, transcript: transcriptText };
         }
 
         // Long transcript — auto-ingest into RAG for efficient retrieval
@@ -202,22 +202,22 @@ export const youtubeGetTranscriptTool = createTool({
             metadata.channel,
             normalizedUrl,
             transcriptText
-        )
+        );
         const ragResult = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        })
+        });
 
         return {
             ...base,
             mode: "rag" as const,
             ragDocumentId: ragResult.documentId,
             ragChunkCount: ragResult.chunksIngested
-        }
+        };
     }
-})
+});
 
 // ---------------------------------------------------------------------------
 // Tool 2: youtube-search-videos
@@ -237,14 +237,12 @@ export const youtubeSearchVideosTool = createTool({
             .describe("Maximum number of results (default 5, max 10)")
     }),
     outputSchema: z.object({
-        results: z.array(
-            z.object({ title: z.string(), url: z.string(), description: z.string() })
-        ),
+        results: z.array(z.object({ title: z.string(), url: z.string(), description: z.string() })),
         resultCount: z.number()
     }),
     execute: async ({ query, maxResults }) => {
-        const apiKey = process.env.FIRECRAWL_API_KEY
-        if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not configured")
+        const apiKey = process.env.FIRECRAWL_API_KEY;
+        if (!apiKey) throw new Error("FIRECRAWL_API_KEY is not configured");
 
         const response = await fetch("https://api.firecrawl.dev/v1/search", {
             method: "POST",
@@ -253,24 +251,24 @@ export const youtubeSearchVideosTool = createTool({
                 Authorization: `Bearer ${apiKey}`
             },
             body: JSON.stringify({ query: `${query} site:youtube.com`, limit: maxResults ?? 5 })
-        })
+        });
 
         if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(`Search failed (${response.status}): ${errorText}`)
+            const errorText = await response.text();
+            throw new Error(`Search failed (${response.status}): ${errorText}`);
         }
 
-        const data = await response.json()
-        const rawResults = Array.isArray(data.data) ? data.data : data.data?.web || []
+        const data = await response.json();
+        const rawResults = Array.isArray(data.data) ? data.data : data.data?.web || [];
         const results = rawResults.map((r: Record<string, unknown>) => ({
             title: (r.title as string) || "Untitled",
             url: (r.url as string) || "",
             description: (r.description as string) || (r.snippet as string) || ""
-        }))
+        }));
 
-        return { results, resultCount: results.length }
+        return { results, resultCount: results.length };
     }
-})
+});
 
 // ---------------------------------------------------------------------------
 // Tool 3: youtube-analyze-video
@@ -298,16 +296,16 @@ export const youtubeAnalyzeVideoTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ url, analysisType }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url)
-        const videoId = extractVideoId(normalizedUrl) || url
-        const type = analysisType || "full"
+        const normalizedUrl = normalizeYouTubeUrl(url);
+        const videoId = extractVideoId(normalizedUrl) || url;
+        const type = analysisType || "full";
 
         const [metadata, transcriptResult] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
             fetchTranscript(normalizedUrl).catch(() => null)
-        ])
+        ]);
 
-        const base = { title: metadata.title, channel: metadata.channel, analysisType: type }
+        const base = { title: metadata.title, channel: metadata.channel, analysisType: type };
 
         if (!transcriptResult?.content || transcriptResult.content.length < 20) {
             return {
@@ -315,13 +313,13 @@ export const youtubeAnalyzeVideoTool = createTool({
                 mode: "inline" as const,
                 formattedContent: "",
                 error: "No transcript available for this video."
-            }
+            };
         }
 
-        const formatted = `# ${metadata.title}\n**Channel:** ${metadata.channel}\n**URL:** ${normalizedUrl}\n**Requested analysis:** ${type}\n\n### Transcript\n${transcriptResult.content}\n`
+        const formatted = `# ${metadata.title}\n**Channel:** ${metadata.channel}\n**URL:** ${normalizedUrl}\n**Requested analysis:** ${type}\n\n### Transcript\n${transcriptResult.content}\n`;
 
         if (formatted.length < INLINE_THRESHOLD) {
-            return { ...base, mode: "inline" as const, formattedContent: formatted }
+            return { ...base, mode: "inline" as const, formattedContent: formatted };
         }
 
         const ragContent = formatForRagIngestion(
@@ -329,22 +327,22 @@ export const youtubeAnalyzeVideoTool = createTool({
             metadata.channel,
             normalizedUrl,
             transcriptResult.content
-        )
+        );
         const ragResult = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        })
+        });
 
         return {
             ...base,
             mode: "rag" as const,
             ragDocumentId: ragResult.documentId,
             ragChunkCount: ragResult.chunksIngested
-        }
+        };
     }
-})
+});
 
 // ---------------------------------------------------------------------------
 // Tool 4: youtube-ingest-to-knowledge
@@ -367,13 +365,13 @@ export const youtubeIngestToKnowledgeTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ url, tags }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url)
-        const videoId = extractVideoId(normalizedUrl) || url
+        const normalizedUrl = normalizeYouTubeUrl(url);
+        const videoId = extractVideoId(normalizedUrl) || url;
 
         const [metadata, transcriptResult] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
             fetchTranscript(normalizedUrl).catch(() => null)
-        ])
+        ]);
 
         if (!transcriptResult?.content || transcriptResult.content.length < 20) {
             return {
@@ -383,7 +381,7 @@ export const youtubeIngestToKnowledgeTool = createTool({
                 chunkCount: 0,
                 message: "",
                 error: "No transcript available for this video. Cannot ingest."
-            }
+            };
         }
 
         const ragContent = formatForRagIngestion(
@@ -392,14 +390,14 @@ export const youtubeIngestToKnowledgeTool = createTool({
             normalizedUrl,
             transcriptResult.content,
             tags
-        )
+        );
 
         const result = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        })
+        });
 
         return {
             documentId: result.documentId,
@@ -407,9 +405,9 @@ export const youtubeIngestToKnowledgeTool = createTool({
             channel: metadata.channel,
             chunkCount: result.chunksIngested,
             message: `Successfully ingested "${metadata.title}" by ${metadata.channel} (${result.chunksIngested} chunks). Use rag-query with documentId "${result.documentId}" to search this content.`
-        }
+        };
     }
-})
+});
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
@@ -422,7 +420,7 @@ function formatForRagIngestion(
     transcriptText: string,
     tags?: string[]
 ): string {
-    const tagLine = tags && tags.length > 0 ? `- Tags: ${tags.join(", ")}\n` : ""
+    const tagLine = tags && tags.length > 0 ? `- Tags: ${tags.join(", ")}\n` : "";
 
     return `# Video: ${title}
 - Channel: ${channel}
@@ -430,5 +428,5 @@ function formatForRagIngestion(
 ${tagLine}
 ## Transcript
 ${transcriptText}
-`
+`;
 }

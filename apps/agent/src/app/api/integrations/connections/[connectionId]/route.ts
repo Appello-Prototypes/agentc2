@@ -4,6 +4,7 @@ import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { invalidateMcpCacheForOrg, resetMcpClients } from "@repo/mastra/mcp";
 import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
+import { clearModelCache } from "@repo/mastra/agents/model-registry";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
@@ -167,6 +168,7 @@ export async function PATCH(
         resetMcpClients();
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
+        clearModelCache();
 
         return NextResponse.json({ success: true, connection: updated });
     } catch (error) {
@@ -261,6 +263,7 @@ export async function DELETE(
         resetMcpClients();
         invalidateMcpCacheForOrg(organizationId);
         invalidateMcpToolsCacheForOrg(organizationId);
+        clearModelCache();
 
         return NextResponse.json({ success: true });
     } catch (error) {

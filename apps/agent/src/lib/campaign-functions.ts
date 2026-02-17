@@ -30,6 +30,7 @@
 import { inngest } from "./inngest";
 import { prisma, Prisma, CampaignStatus, MissionStatus, MissionTaskStatus } from "@repo/database";
 import { agentResolver } from "@repo/mastra/agents";
+import { recordActivity } from "@repo/mastra/activity/service";
 import {
     startRun,
     extractToolCalls,
@@ -203,6 +204,13 @@ export const campaignAnalyzeFunction = inngest.createFunction(
                 "failed",
                 `Campaign analysis failed after all retries: ${error.message}`
             );
+            recordActivity({
+                type: "CAMPAIGN_FAILED",
+                summary: `Campaign analysis failed: ${error.message}`,
+                status: "failure",
+                source: "campaign",
+                campaignId
+            });
         }
     },
     { event: "campaign/analyze" },
@@ -320,6 +328,13 @@ export const campaignPlanFunction = inngest.createFunction(
                 "failed",
                 `Campaign planning failed after all retries: ${error.message}`
             );
+            recordActivity({
+                type: "CAMPAIGN_FAILED",
+                summary: `Campaign planning failed: ${error.message}`,
+                status: "failure",
+                source: "campaign",
+                campaignId
+            });
         }
     },
     { event: "campaign/plan" },
@@ -522,6 +537,13 @@ export const campaignExecuteFunction = inngest.createFunction(
                 "failed",
                 `Campaign execution failed after all retries: ${error.message}`
             );
+            recordActivity({
+                type: "CAMPAIGN_FAILED",
+                summary: `Campaign execution failed: ${error.message}`,
+                status: "failure",
+                source: "campaign",
+                campaignId
+            });
         }
     },
     { event: "campaign/execute" },
@@ -545,6 +567,17 @@ export const campaignExecuteFunction = inngest.createFunction(
                 }
             });
             await logCampaignEvent(campaignId, "executing", "Campaign execution started");
+
+            // Record to Activity Feed
+            recordActivity({
+                type: "CAMPAIGN_STARTED",
+                summary: `Campaign "${c.name}" execution started (${c.missions.length} missions)`,
+                status: "info",
+                source: "campaign",
+                campaignId,
+                metadata: { missionCount: c.missions.length }
+            });
+
             return c;
         });
 
@@ -1561,6 +1594,16 @@ Evaluate the mission results against the intent. Write the AAR using campaign-wr
             data: { campaignId, missionId, decision }
         });
 
+        // Record to Activity Feed
+        recordActivity({
+            type: "MISSION_COMPLETED",
+            summary: `Mission "${missionId}" reviewed (${decision})`,
+            status: decision === "rework" ? "warning" : "success",
+            source: "campaign",
+            campaignId,
+            metadata: { missionId, decision }
+        });
+
         return { missionId, reviewerRunId: result.runId, decision };
     }
 );
@@ -1656,6 +1699,17 @@ Evaluate the overall campaign results against the stated intent and end state. P
                 "complete",
                 `Campaign "${campaign.name}" ${campaign.status}. Cost: $${campaign.totalCostUsd.toFixed(2)}.`
             );
+
+            // Record to Activity Feed
+            const isFailed = campaign.status === CampaignStatus.FAILED;
+            recordActivity({
+                type: isFailed ? "CAMPAIGN_FAILED" : "CAMPAIGN_COMPLETED",
+                summary: `Campaign "${campaign.name}" ${campaign.status}. Cost: $${campaign.totalCostUsd.toFixed(2)}.`,
+                status: isFailed ? "failure" : "success",
+                source: "campaign",
+                campaignId,
+                costUsd: Number(campaign.totalCostUsd) || undefined
+            });
         });
 
         // Step 4: Notify parent campaign if this is a sub-campaign

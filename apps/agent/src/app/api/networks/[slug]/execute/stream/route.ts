@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma, Prisma, RunStatus } from "@repo/database";
 import { buildNetworkAgent } from "@repo/mastra/networks";
+import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
 import { refreshNetworkMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
@@ -113,6 +114,16 @@ export async function POST(
                 } catch (e) {
                     console.warn("[Network Stream] Failed to record trigger event:", e);
                 }
+
+                // Record to Activity Feed
+                recordActivity({
+                    type: "NETWORK_ROUTED",
+                    summary: `Network "${network.name}" received: ${inputPreview(message)}`,
+                    status: "info",
+                    source: body.source || "api",
+                    networkRunId: run.id,
+                    metadata: { networkSlug: network.slug, networkName: network.name }
+                });
 
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const result = await (agent as any).network(message, {
@@ -237,6 +248,18 @@ export async function POST(
                     }
                 });
                 await refreshNetworkMetrics(network.id, new Date());
+
+                // Record to Activity Feed
+                const completedDurationMs = new Date().getTime() - run.createdAt.getTime();
+                recordActivity({
+                    type: "NETWORK_COMPLETED",
+                    summary: `Network "${network.name}" completed (${steps.length} steps)`,
+                    status: "success",
+                    source: body.source || "api",
+                    networkRunId: run.id,
+                    durationMs: completedDurationMs,
+                    metadata: { networkSlug: network.slug, stepsExecuted: steps.length }
+                });
 
                 sendEvent("complete", {
                     runId: run.id,

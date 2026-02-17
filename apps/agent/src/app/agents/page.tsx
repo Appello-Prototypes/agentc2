@@ -104,6 +104,11 @@ interface Agent {
     updatedAt: string;
     stats: AgentStats;
     trends?: AgentTrendPoint[];
+    healthScore?: {
+        score: number;
+        status: string;
+        confidence: number;
+    } | null;
 }
 
 interface WorkspaceSummary {
@@ -293,6 +298,30 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                             <Badge variant="outline" className="text-xs">
                                 SYSTEM
                             </Badge>
+                        )}
+                        {agent.healthScore && (
+                            <div
+                                className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
+                                    agent.healthScore.status === "excellent" ||
+                                    agent.healthScore.status === "good"
+                                        ? "bg-green-500/10 text-green-600"
+                                        : agent.healthScore.status === "fair"
+                                          ? "bg-yellow-500/10 text-yellow-600"
+                                          : "bg-red-500/10 text-red-600"
+                                }`}
+                            >
+                                <div
+                                    className={`h-1.5 w-1.5 rounded-full ${
+                                        agent.healthScore.status === "excellent" ||
+                                        agent.healthScore.status === "good"
+                                            ? "bg-green-500"
+                                            : agent.healthScore.status === "fair"
+                                              ? "bg-yellow-500"
+                                              : "bg-red-500"
+                                    }`}
+                                />
+                                {Math.round(agent.healthScore.score * 100)}%
+                            </div>
                         )}
                     </div>
                 </div>

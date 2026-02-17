@@ -12,12 +12,12 @@
  * Each state change records an ActivityEvent for the feed.
  */
 
-import { createTool } from "@mastra/core/tools"
-import { z } from "zod"
-import { prisma, type Prisma } from "@repo/database"
-import { recordActivity } from "../activity/service"
+import { createTool } from "@mastra/core/tools";
+import { z } from "zod";
+import { prisma, type Prisma } from "@repo/database";
+import { recordActivity } from "../activity/service";
 
-const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough()
+const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
 /**
  * Resolve agent ID and slug from a slug input.
@@ -26,29 +26,33 @@ const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrou
 async function resolveAgent(agentSlug: string) {
     const agent = await prisma.agent.findFirst({
         where: { slug: agentSlug },
-        select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true },
-    })
+        select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true }
+    });
     if (!agent) {
-        throw new Error(`Agent not found: ${agentSlug}`)
+        throw new Error(`Agent not found: ${agentSlug}`);
     }
-    return agent
+    return agent;
 }
 
 /**
  * Get or create a backlog for an agent. Upsert pattern.
  */
-async function getOrCreateBacklog(agentId: string, tenantId?: string | null, workspaceId?: string | null) {
-    let backlog = await prisma.backlog.findUnique({ where: { agentId } })
+async function getOrCreateBacklog(
+    agentId: string,
+    tenantId?: string | null,
+    workspaceId?: string | null
+) {
+    let backlog = await prisma.backlog.findUnique({ where: { agentId } });
     if (!backlog) {
         backlog = await prisma.backlog.create({
             data: {
                 agentId,
                 tenantId: tenantId ?? undefined,
-                workspaceId: workspaceId ?? undefined,
-            },
-        })
+                workspaceId: workspaceId ?? undefined
+            }
+        });
     }
-    return backlog
+    return backlog;
 }
 
 // ─── backlog-get ─────────────────────────────────────────────────────────────
@@ -59,24 +63,24 @@ export const backlogGetTool = createTool({
         "Get an agent's backlog with task counts by status. " +
         "Auto-creates the backlog if it doesn't exist yet.",
     inputSchema: z.object({
-        agentSlug: z.string().describe("Agent slug to get backlog for"),
+        agentSlug: z.string().describe("Agent slug to get backlog for")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ agentSlug }) => {
-        const agent = await resolveAgent(agentSlug)
-        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId)
+        const agent = await resolveAgent(agentSlug);
+        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId);
 
         const counts = await prisma.backlogTask.groupBy({
             by: ["status"],
             where: { backlogId: backlog.id },
-            _count: { status: true },
-        })
+            _count: { status: true }
+        });
 
-        const tasksByStatus: Record<string, number> = {}
-        let total = 0
+        const tasksByStatus: Record<string, number> = {};
+        let total = 0;
         for (const c of counts) {
-            tasksByStatus[c.status] = c._count.status
-            total += c._count.status
+            tasksByStatus[c.status] = c._count.status;
+            total += c._count.status;
         }
 
         return {
@@ -89,11 +93,11 @@ export const backlogGetTool = createTool({
                 description: backlog.description,
                 totalTasks: total,
                 tasksByStatus,
-                createdAt: backlog.createdAt,
-            },
-        }
-    },
-})
+                createdAt: backlog.createdAt
+            }
+        };
+    }
+});
 
 // ─── backlog-add-task ────────────────────────────────────────────────────────
 
@@ -118,14 +122,8 @@ export const backlogAddTaskTool = createTool({
             .string()
             .optional()
             .describe("Source: human, agent, heartbeat, campaign, trigger, slack"),
-        createdById: z
-            .string()
-            .optional()
-            .describe("User ID or agent slug that created this task"),
-        contextJson: z
-            .record(z.unknown())
-            .optional()
-            .describe("Additional context as JSON"),
+        createdById: z.string().optional().describe("User ID or agent slug that created this task"),
+        contextJson: z.record(z.unknown()).optional().describe("Additional context as JSON")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({
@@ -137,10 +135,10 @@ export const backlogAddTaskTool = createTool({
         tags,
         source,
         createdById,
-        contextJson,
+        contextJson
     }) => {
-        const agent = await resolveAgent(agentSlug)
-        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId)
+        const agent = await resolveAgent(agentSlug);
+        const backlog = await getOrCreateBacklog(agent.id, agent.tenantId, agent.workspaceId);
 
         const task = await prisma.backlogTask.create({
             data: {
@@ -152,9 +150,9 @@ export const backlogAddTaskTool = createTool({
                 tags: tags ?? [],
                 source,
                 createdById,
-                contextJson: (contextJson as Prisma.InputJsonValue) ?? undefined,
-            },
-        })
+                contextJson: (contextJson as Prisma.InputJsonValue) ?? undefined
+            }
+        });
 
         // Record activity event
         recordActivity({
@@ -169,8 +167,8 @@ export const backlogAddTaskTool = createTool({
             taskId: task.id,
             tags: tags ?? [],
             tenantId: agent.tenantId ?? undefined,
-            workspaceId: agent.workspaceId ?? undefined,
-        })
+            workspaceId: agent.workspaceId ?? undefined
+        });
 
         return {
             success: true,
@@ -180,11 +178,11 @@ export const backlogAddTaskTool = createTool({
                 priority: task.priority,
                 status: task.status,
                 dueDate: task.dueDate,
-                createdAt: task.createdAt,
-            },
-        }
-    },
-})
+                createdAt: task.createdAt
+            }
+        };
+    }
+});
 
 // ─── backlog-list-tasks ──────────────────────────────────────────────────────
 
@@ -205,38 +203,42 @@ export const backlogListTasksTool = createTool({
         sortBy: z
             .enum(["priority", "dueDate", "createdAt"])
             .optional()
-            .describe("Sort field (default: priority)"),
+            .describe("Sort field (default: priority)")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ agentSlug, status, limit, sortBy }) => {
-        const agent = await resolveAgent(agentSlug)
+        const agent = await resolveAgent(agentSlug);
         const backlog = await prisma.backlog.findUnique({
-            where: { agentId: agent.id },
-        })
+            where: { agentId: agent.id }
+        });
 
         if (!backlog) {
-            return { success: true, tasks: [], total: 0 }
+            return { success: true, tasks: [], total: 0 };
         }
 
         const statusFilter = status
-            ? { in: status.split(",").map((s) => s.trim()) as Array<"PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "DEFERRED"> }
-            : { in: ["PENDING" as const, "IN_PROGRESS" as const] }
+            ? {
+                  in: status.split(",").map((s) => s.trim()) as Array<
+                      "PENDING" | "IN_PROGRESS" | "COMPLETED" | "FAILED" | "DEFERRED"
+                  >
+              }
+            : { in: ["PENDING" as const, "IN_PROGRESS" as const] };
 
         const orderBy: Prisma.BacklogTaskOrderByWithRelationInput =
             sortBy === "dueDate"
                 ? { dueDate: "asc" }
                 : sortBy === "createdAt"
                   ? { createdAt: "desc" }
-                  : { priority: "desc" }
+                  : { priority: "desc" };
 
         const tasks = await prisma.backlogTask.findMany({
             where: {
                 backlogId: backlog.id,
-                status: statusFilter,
+                status: statusFilter
             },
             orderBy,
-            take: limit ?? 20,
-        })
+            take: limit ?? 20
+        });
 
         return {
             success: true,
@@ -252,12 +254,12 @@ export const backlogListTasksTool = createTool({
                 lastAttemptNote: t.lastAttemptNote,
                 result: t.result,
                 tags: t.tags,
-                createdAt: t.createdAt,
+                createdAt: t.createdAt
             })),
-            total: tasks.length,
-        }
-    },
-})
+            total: tasks.length
+        };
+    }
+});
 
 // ─── backlog-update-task ─────────────────────────────────────────────────────
 
@@ -273,51 +275,62 @@ export const backlogUpdateTaskTool = createTool({
             .optional()
             .describe("New status"),
         priority: z.number().min(0).max(10).optional().describe("New priority"),
-        lastAttemptNote: z
-            .string()
-            .optional()
-            .describe("Note about what was attempted"),
+        lastAttemptNote: z.string().optional().describe("Note about what was attempted"),
         result: z.string().optional().describe("Task result (for completion)"),
-        dueDate: z.string().optional().describe("New due date (ISO 8601)"),
+        dueDate: z.string().optional().describe("New due date (ISO 8601)")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ taskId, status, priority, lastAttemptNote, result, dueDate }) => {
         const task = await prisma.backlogTask.findUnique({
             where: { id: taskId },
-            include: { backlog: { include: { agent: { select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true } } } } },
-        })
+            include: {
+                backlog: {
+                    include: {
+                        agent: {
+                            select: {
+                                id: true,
+                                slug: true,
+                                name: true,
+                                tenantId: true,
+                                workspaceId: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         if (!task) {
-            throw new Error(`Task not found: ${taskId}`)
+            throw new Error(`Task not found: ${taskId}`);
         }
 
-        const data: Prisma.BacklogTaskUpdateInput = {}
-        if (status) data.status = status
-        if (priority !== undefined) data.priority = priority
+        const data: Prisma.BacklogTaskUpdateInput = {};
+        if (status) data.status = status;
+        if (priority !== undefined) data.priority = priority;
         if (lastAttemptNote) {
-            data.lastAttemptNote = lastAttemptNote
-            data.lastAttemptAt = new Date()
+            data.lastAttemptNote = lastAttemptNote;
+            data.lastAttemptAt = new Date();
         }
-        if (result) data.result = result
-        if (dueDate) data.dueDate = new Date(dueDate)
-        if (status === "COMPLETED") data.completedAt = new Date()
+        if (result) data.result = result;
+        if (dueDate) data.dueDate = new Date(dueDate);
+        if (status === "COMPLETED") data.completedAt = new Date();
 
         const updated = await prisma.backlogTask.update({
             where: { id: taskId },
-            data,
-        })
+            data
+        });
 
         // Record activity event on status change
         if (status && status !== task.status) {
-            const agent = task.backlog.agent
+            const agent = task.backlog.agent;
             const eventType =
                 status === "COMPLETED"
-                    ? "TASK_COMPLETED" as const
+                    ? ("TASK_COMPLETED" as const)
                     : status === "FAILED"
-                      ? "TASK_FAILED" as const
+                      ? ("TASK_FAILED" as const)
                       : status === "DEFERRED"
-                        ? "TASK_DEFERRED" as const
-                        : "SYSTEM_EVENT" as const
+                        ? ("TASK_DEFERRED" as const)
+                        : ("SYSTEM_EVENT" as const);
 
             recordActivity({
                 type: eventType,
@@ -332,11 +345,12 @@ export const backlogUpdateTaskTool = createTool({
                           : status === "DEFERRED"
                             ? `Task "${task.title}" deferred${lastAttemptNote ? `: ${lastAttemptNote.slice(0, 100)}` : ""}`
                             : `Task "${task.title}" status changed to ${status}`,
-                status: status === "COMPLETED" ? "success" : status === "FAILED" ? "failure" : "info",
+                status:
+                    status === "COMPLETED" ? "success" : status === "FAILED" ? "failure" : "info",
                 taskId: task.id,
                 tenantId: agent.tenantId ?? undefined,
-                workspaceId: agent.workspaceId ?? undefined,
-            })
+                workspaceId: agent.workspaceId ?? undefined
+            });
         }
 
         return {
@@ -348,11 +362,11 @@ export const backlogUpdateTaskTool = createTool({
                 priority: updated.priority,
                 lastAttemptNote: updated.lastAttemptNote,
                 result: updated.result,
-                completedAt: updated.completedAt,
-            },
-        }
-    },
-})
+                completedAt: updated.completedAt
+            }
+        };
+    }
+});
 
 // ─── backlog-complete-task ───────────────────────────────────────────────────
 
@@ -363,17 +377,31 @@ export const backlogCompleteTaskTool = createTool({
         "Shorthand for backlog-update-task with status=COMPLETED.",
     inputSchema: z.object({
         taskId: z.string().describe("Task ID to complete"),
-        result: z.string().describe("What was accomplished"),
+        result: z.string().describe("What was accomplished")
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ taskId, result }) => {
         const task = await prisma.backlogTask.findUnique({
             where: { id: taskId },
-            include: { backlog: { include: { agent: { select: { id: true, slug: true, name: true, tenantId: true, workspaceId: true } } } } },
-        })
+            include: {
+                backlog: {
+                    include: {
+                        agent: {
+                            select: {
+                                id: true,
+                                slug: true,
+                                name: true,
+                                tenantId: true,
+                                workspaceId: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
 
         if (!task) {
-            throw new Error(`Task not found: ${taskId}`)
+            throw new Error(`Task not found: ${taskId}`);
         }
 
         const updated = await prisma.backlogTask.update({
@@ -381,11 +409,11 @@ export const backlogCompleteTaskTool = createTool({
             data: {
                 status: "COMPLETED",
                 result,
-                completedAt: new Date(),
-            },
-        })
+                completedAt: new Date()
+            }
+        });
 
-        const agent = task.backlog.agent
+        const agent = task.backlog.agent;
         recordActivity({
             type: "TASK_COMPLETED",
             agentId: agent.id,
@@ -396,8 +424,8 @@ export const backlogCompleteTaskTool = createTool({
             status: "success",
             taskId: task.id,
             tenantId: agent.tenantId ?? undefined,
-            workspaceId: agent.workspaceId ?? undefined,
-        })
+            workspaceId: agent.workspaceId ?? undefined
+        });
 
         return {
             success: true,
@@ -406,8 +434,8 @@ export const backlogCompleteTaskTool = createTool({
                 title: updated.title,
                 status: updated.status,
                 result: updated.result,
-                completedAt: updated.completedAt,
-            },
-        }
-    },
-})
+                completedAt: updated.completedAt
+            }
+        };
+    }
+});
