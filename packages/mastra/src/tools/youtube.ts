@@ -1,12 +1,13 @@
-import { createTool } from "@mastra/core/tools";
-import { z } from "zod";
-import { ingestDocument } from "../rag/pipeline";
+import { createTool } from "@mastra/core/tools"
+import { z } from "zod"
+import { YoutubeTranscript } from "youtube-transcript"
+import { ingestDocument } from "../rag/pipeline"
 
 // ---------------------------------------------------------------------------
 // Constants
 // ---------------------------------------------------------------------------
 
-const INLINE_THRESHOLD = 20_000; // chars – roughly ~15 min of speech
+const INLINE_THRESHOLD = 20_000 // chars – roughly ~15 min of speech
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -17,160 +18,116 @@ const INLINE_THRESHOLD = 20_000; // chars – roughly ~15 min of speech
  * `https://www.youtube.com/watch?v=VIDEO_ID` form.
  */
 export function normalizeYouTubeUrl(input: string): string {
-    const trimmed = input.trim();
+    const trimmed = input.trim()
 
     // youtu.be/VIDEO_ID
-    const shortMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/);
-    if (shortMatch) return `https://www.youtube.com/watch?v=${shortMatch[1]}`;
+    const shortMatch = trimmed.match(/youtu\.be\/([a-zA-Z0-9_-]{11})/)
+    if (shortMatch) return `https://www.youtube.com/watch?v=${shortMatch[1]}`
 
     // youtube.com/shorts/VIDEO_ID
-    const shortsMatch = trimmed.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/);
-    if (shortsMatch) return `https://www.youtube.com/watch?v=${shortsMatch[1]}`;
+    const shortsMatch = trimmed.match(/youtube\.com\/shorts\/([a-zA-Z0-9_-]{11})/)
+    if (shortsMatch) return `https://www.youtube.com/watch?v=${shortsMatch[1]}`
 
     // youtube.com/watch?v=VIDEO_ID (already canonical – normalise host)
-    const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/);
-    if (watchMatch) return `https://www.youtube.com/watch?v=${watchMatch[1]}`;
+    const watchMatch = trimmed.match(/youtube\.com\/watch\?v=([a-zA-Z0-9_-]{11})/)
+    if (watchMatch) return `https://www.youtube.com/watch?v=${watchMatch[1]}`
 
     // Bare video ID (11 chars, alphanumeric + _ + -)
     if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) {
-        return `https://www.youtube.com/watch?v=${trimmed}`;
+        return `https://www.youtube.com/watch?v=${trimmed}`
     }
 
-    // Fallback: return as-is and let Firecrawl handle it
-    return trimmed;
+    // Fallback: return as-is
+    return trimmed
 }
 
 /**
  * Extract the video ID from a normalised YouTube URL.
  */
 function extractVideoId(url: string): string | null {
-    const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/);
-    return m ? m[1] : null;
+    const m = url.match(/[?&]v=([a-zA-Z0-9_-]{11})/)
+    return m ? m[1] : null
 }
 
-export interface ParsedYouTubeVideo {
-    title: string;
-    channel: string;
-    duration: string;
-    views: string;
-    likes: string;
-    category: string;
-    uploadDate: string;
-    description: string;
-    chapters: { timestamp: string; title: string }[];
-    transcript: string;
+// ---------------------------------------------------------------------------
+// YouTube Data Fetchers (no web scraping required)
+// ---------------------------------------------------------------------------
+
+interface YouTubeVideoMetadata {
+    title: string
+    channel: string
+    thumbnailUrl: string
 }
 
 /**
- * Parse the markdown returned by Firecrawl's YouTube post-processor into
- * structured fields. The format was validated against a real scrape.
+ * Fetch video metadata via YouTube's public oEmbed endpoint.
+ * No API key required.
  */
-export function parseYouTubeMarkdown(markdown: string): ParsedYouTubeVideo {
-    const result: ParsedYouTubeVideo = {
-        title: "",
-        channel: "",
-        duration: "",
-        views: "",
-        likes: "",
-        category: "",
-        uploadDate: "",
-        description: "",
-        chapters: [],
-        transcript: ""
-    };
-
-    // Title – first markdown heading  "# [Title](url)"  or  "# Title"
-    const titleMatch = markdown.match(/^#\s+\[([^\]]+)\]/m) || markdown.match(/^#\s+(.+)$/m);
-    if (titleMatch) result.title = titleMatch[1].trim();
-
-    // Channel – "**Uploaded by**: [Name](url)" or just text
-    const channelMatch = markdown.match(/\*\*Uploaded by\*\*:\s*\[([^\]]+)\]/);
-    if (channelMatch) result.channel = channelMatch[1].trim();
-
-    // Duration / Length
-    const durationMatch = markdown.match(/\*\*Length\*\*:\s*(.+)/);
-    if (durationMatch) result.duration = durationMatch[1].trim();
-
-    // Views
-    const viewsMatch = markdown.match(/\*\*Views\*\*:\s*(.+)/);
-    if (viewsMatch) result.views = viewsMatch[1].trim();
-
-    // Likes
-    const likesMatch = markdown.match(/\*\*Likes\*\*:\s*(.+)/);
-    if (likesMatch) result.likes = likesMatch[1].trim();
-
-    // Category
-    const categoryMatch = markdown.match(/\*\*Category\*\*:\s*(.+)/);
-    if (categoryMatch) result.category = categoryMatch[1].trim();
-
-    // Upload date
-    const dateMatch = markdown.match(/\*\*(?:Uploaded|Published) at\*\*:\s*(.+)/);
-    if (dateMatch) result.uploadDate = dateMatch[1].trim();
-
-    // Description – inside a code fence after "## Description" heading,
-    // or between "## Description" and the next heading / "## Transcript".
-    const descBlock = markdown.match(/## Description\s*\n```[\s\S]*?\n([\s\S]*?)\n```/);
-    if (descBlock) {
-        result.description = descBlock[1].trim();
-    } else {
-        // Firecrawl sometimes puts it in a plain code fence after metadata
-        const altDesc = markdown.match(/```\n([\s\S]*?)\n```/);
-        if (altDesc) result.description = altDesc[1].trim();
+async function fetchVideoMetadata(url: string): Promise<YouTubeVideoMetadata> {
+    try {
+        const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
+        const response = await fetch(oembedUrl)
+        if (!response.ok) {
+            return { title: "", channel: "", thumbnailUrl: "" }
+        }
+        const data = await response.json()
+        return {
+            title: (data.title as string) || "",
+            channel: (data.author_name as string) || "",
+            thumbnailUrl: (data.thumbnail_url as string) || ""
+        }
+    } catch {
+        return { title: "", channel: "", thumbnailUrl: "" }
     }
-
-    // Chapters – lines like "00:00 Title" or "00:00:00 Title"
-    const chapterMatches = result.description.matchAll(/(\d{1,2}:\d{2}(?::\d{2})?)\s+(.+)/g);
-    for (const m of chapterMatches) {
-        result.chapters.push({ timestamp: m[1], title: m[2].trim() });
-    }
-
-    // Transcript – everything after "## Transcript"
-    const transcriptIdx = markdown.indexOf("## Transcript");
-    if (transcriptIdx !== -1) {
-        result.transcript = markdown
-            .slice(transcriptIdx + "## Transcript".length)
-            .trim()
-            // Strip any trailing markdown noise
-            .replace(/\n+$/, "");
-    }
-
-    return result;
 }
 
-// ---------------------------------------------------------------------------
-// Shared Firecrawl helpers
-// ---------------------------------------------------------------------------
+interface TranscriptSegment {
+    text: string
+    offset: number
+    duration: number
+}
 
-async function firecrawlScrapeYouTube(
-    url: string
-): Promise<{ markdown: string; metadata: Record<string, unknown> }> {
-    const apiKey = process.env.FIRECRAWL_API_KEY;
-    if (!apiKey) {
-        throw new Error("FIRECRAWL_API_KEY is not configured");
+/**
+ * Fetch transcript via the youtube-transcript package.
+ * Uses YouTube's internal captions API — no scraping, no API key needed.
+ */
+async function fetchTranscript(videoIdOrUrl: string): Promise<TranscriptSegment[]> {
+    const segments = await YoutubeTranscript.fetchTranscript(videoIdOrUrl)
+    return segments.map((s) => ({
+        text: s.text,
+        offset: s.offset,
+        duration: s.duration
+    }))
+}
+
+/**
+ * Convert transcript segments into plain text.
+ */
+function segmentsToText(segments: TranscriptSegment[]): string {
+    return segments.map((s) => s.text).join(" ")
+}
+
+/**
+ * Convert millisecond offset to HH:MM:SS or MM:SS timestamp.
+ */
+function msToTimestamp(ms: number): string {
+    const totalSeconds = Math.floor(ms / 1000)
+    const hours = Math.floor(totalSeconds / 3600)
+    const minutes = Math.floor((totalSeconds % 3600) / 60)
+    const seconds = totalSeconds % 60
+    if (hours > 0) {
+        return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
     }
+    return `${minutes}:${String(seconds).padStart(2, "0")}`
+}
 
-    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
-        method: "POST",
-        headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`
-        },
-        body: JSON.stringify({
-            url,
-            formats: ["markdown"]
-        })
-    });
-
-    if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firecrawl scrape failed (${response.status}): ${errorText}`);
-    }
-
-    const data = await response.json();
-    return {
-        markdown: (data.data?.markdown as string) || "",
-        metadata: (data.data?.metadata as Record<string, unknown>) || {}
-    };
+/**
+ * Estimate video duration from the last transcript segment.
+ */
+function estimateDuration(segments: TranscriptSegment[]): string {
+    if (segments.length === 0) return ""
+    const last = segments[segments.length - 1]
+    return msToTimestamp(last.offset + last.duration)
 }
 
 // ---------------------------------------------------------------------------
@@ -192,73 +149,74 @@ export const youtubeGetTranscriptTool = createTool({
         title: z.string(),
         channel: z.string(),
         duration: z.string(),
-        views: z.string(),
-        likes: z.string(),
-        chapters: z.array(z.object({ timestamp: z.string(), title: z.string() })),
-        description: z.string(),
         url: z.string(),
         mode: z.enum(["inline", "rag"]),
         transcript: z.string().optional(),
         ragDocumentId: z.string().optional(),
         ragChunkCount: z.number().optional(),
-        error: z.string().optional(),
-        debug: z.string().optional()
+        error: z.string().optional()
     }),
     execute: async ({ url }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url);
-        const videoId = extractVideoId(normalizedUrl) || url;
+        const normalizedUrl = normalizeYouTubeUrl(url)
+        const videoId = extractVideoId(normalizedUrl) || url
 
-        const { markdown } = await firecrawlScrapeYouTube(normalizedUrl);
-        const parsed = parseYouTubeMarkdown(markdown);
+        // Fetch metadata and transcript in parallel
+        const [metadata, segments] = await Promise.all([
+            fetchVideoMetadata(normalizedUrl),
+            fetchTranscript(videoId).catch(() => [] as TranscriptSegment[])
+        ])
 
         const base = {
-            title: parsed.title,
-            channel: parsed.channel,
-            duration: parsed.duration,
-            views: parsed.views,
-            likes: parsed.likes,
-            chapters: parsed.chapters,
-            description: parsed.description,
+            title: metadata.title,
+            channel: metadata.channel,
+            duration: estimateDuration(segments),
             url: normalizedUrl
-        };
+        }
 
         // No transcript available
-        if (!parsed.transcript || parsed.transcript.length < 20) {
+        if (segments.length === 0) {
             return {
                 ...base,
                 mode: "inline" as const,
                 transcript: "",
-                error: "No transcript available for this video. The video may not have captions enabled.",
-                debug: `markdown_length=${markdown.length}; first_300=${markdown.substring(0, 300).replace(/\n/g, "\\n")}; has_transcript_heading=${markdown.includes("## Transcript")}; has_views=${markdown.includes("**Views**")}; has_uploaded_by=${markdown.includes("**Uploaded by**")}`
-            };
+                error: "No transcript available for this video. The video may not have captions enabled."
+            }
         }
 
+        const transcriptText = segmentsToText(segments)
+
         // Short transcript – return inline
-        if (parsed.transcript.length < INLINE_THRESHOLD) {
+        if (transcriptText.length < INLINE_THRESHOLD) {
             return {
                 ...base,
                 mode: "inline" as const,
-                transcript: parsed.transcript
-            };
+                transcript: transcriptText
+            }
         }
 
         // Long transcript – auto-ingest into RAG
-        const ragContent = formatForRagIngestion(parsed, normalizedUrl);
+        const ragContent = formatForRagIngestion(
+            metadata.title,
+            metadata.channel,
+            estimateDuration(segments),
+            normalizedUrl,
+            transcriptText
+        )
         const ragResult = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
-            sourceName: `${parsed.channel} - ${parsed.title}`,
+            sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        });
+        })
 
         return {
             ...base,
             mode: "rag" as const,
             ragDocumentId: ragResult.documentId,
             ragChunkCount: ragResult.chunksIngested
-        };
+        }
     }
-});
+})
 
 // ---------------------------------------------------------------------------
 // Tool 2: youtube-search-videos
@@ -269,7 +227,9 @@ export const youtubeSearchVideosTool = createTool({
     description:
         "Search YouTube for videos on any topic. Returns a list of matching videos with titles, URLs, and descriptions.",
     inputSchema: z.object({
-        query: z.string().describe("Search query (e.g. 'AI agent orchestration 2026')"),
+        query: z
+            .string()
+            .describe("Search query (e.g. 'AI agent orchestration 2026')"),
         maxResults: z
             .number()
             .min(1)
@@ -288,12 +248,12 @@ export const youtubeSearchVideosTool = createTool({
         resultCount: z.number()
     }),
     execute: async ({ query, maxResults }) => {
-        const apiKey = process.env.FIRECRAWL_API_KEY;
+        const apiKey = process.env.FIRECRAWL_API_KEY
         if (!apiKey) {
-            throw new Error("FIRECRAWL_API_KEY is not configured");
+            throw new Error("FIRECRAWL_API_KEY is not configured")
         }
 
-        const limit = maxResults ?? 5;
+        const limit = maxResults ?? 5
 
         const response = await fetch("https://api.firecrawl.dev/v1/search", {
             method: "POST",
@@ -305,28 +265,28 @@ export const youtubeSearchVideosTool = createTool({
                 query: `${query} site:youtube.com`,
                 limit
             })
-        });
+        })
 
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Firecrawl search failed (${response.status}): ${errorText}`);
+            const errorText = await response.text()
+            throw new Error(`Firecrawl search failed (${response.status}): ${errorText}`)
         }
 
-        const data = await response.json();
-        const rawResults = Array.isArray(data.data) ? data.data : data.data?.web || [];
+        const data = await response.json()
+        const rawResults = Array.isArray(data.data) ? data.data : data.data?.web || []
 
         const results = rawResults.map((r: Record<string, unknown>) => ({
             title: (r.title as string) || "Untitled",
             url: (r.url as string) || "",
             description: (r.description as string) || (r.snippet as string) || ""
-        }));
+        }))
 
         return {
             results,
             resultCount: results.length
-        };
+        }
     }
-});
+})
 
 // ---------------------------------------------------------------------------
 // Tool 3: youtube-analyze-video
@@ -335,9 +295,11 @@ export const youtubeSearchVideosTool = createTool({
 export const youtubeAnalyzeVideoTool = createTool({
     id: "youtube-analyze-video",
     description:
-        "Scrape a YouTube video and return its transcript with metadata formatted for analysis. For short videos the formatted content is returned inline. For long videos the content is auto-ingested into the knowledge base. The LLM then performs the actual analysis (summarisation, key points, etc.) using the returned data.",
+        "Extract a YouTube video transcript with timestamps and metadata, formatted for analysis. For short videos the formatted content is returned inline. For long videos the content is auto-ingested into the knowledge base. The LLM then performs the actual analysis (summarisation, key points, etc.) using the returned data.",
     inputSchema: z.object({
-        url: z.string().describe("YouTube video URL or video ID"),
+        url: z
+            .string()
+            .describe("YouTube video URL or video ID"),
         analysisType: z
             .enum(["summary", "key-points", "action-items", "full"])
             .optional()
@@ -349,7 +311,6 @@ export const youtubeAnalyzeVideoTool = createTool({
         title: z.string(),
         channel: z.string(),
         duration: z.string(),
-        chapters: z.array(z.object({ timestamp: z.string(), title: z.string() })),
         mode: z.enum(["inline", "rag"]),
         formattedContent: z.string().optional(),
         ragDocumentId: z.string().optional(),
@@ -358,58 +319,66 @@ export const youtubeAnalyzeVideoTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ url, analysisType }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url);
-        const videoId = extractVideoId(normalizedUrl) || url;
-        const type = analysisType || "full";
+        const normalizedUrl = normalizeYouTubeUrl(url)
+        const videoId = extractVideoId(normalizedUrl) || url
+        const type = analysisType || "full"
 
-        const { markdown } = await firecrawlScrapeYouTube(normalizedUrl);
-        const parsed = parseYouTubeMarkdown(markdown);
+        const [metadata, segments] = await Promise.all([
+            fetchVideoMetadata(normalizedUrl),
+            fetchTranscript(videoId).catch(() => [] as TranscriptSegment[])
+        ])
 
         const base = {
-            title: parsed.title,
-            channel: parsed.channel,
-            duration: parsed.duration,
-            chapters: parsed.chapters,
+            title: metadata.title,
+            channel: metadata.channel,
+            duration: estimateDuration(segments),
             analysisType: type
-        };
+        }
 
-        if (!parsed.transcript || parsed.transcript.length < 20) {
+        if (segments.length === 0) {
             return {
                 ...base,
                 mode: "inline" as const,
                 formattedContent: "",
                 error: "No transcript available for this video."
-            };
+            }
         }
 
-        // Build a structured markdown document for the LLM
-        const formatted = buildFormattedContent(parsed, normalizedUrl, type);
+        // Build timestamped transcript for analysis
+        const timestampedTranscript = buildTimestampedTranscript(segments)
+        const formatted = `# ${metadata.title}\n**Channel:** ${metadata.channel} | **Duration:** ${estimateDuration(segments)}\n**URL:** ${normalizedUrl}\n**Requested analysis:** ${type}\n\n### Transcript\n${timestampedTranscript}\n`
 
         if (formatted.length < INLINE_THRESHOLD) {
             return {
                 ...base,
                 mode: "inline" as const,
                 formattedContent: formatted
-            };
+            }
         }
 
         // Long content – ingest to RAG
-        const ragContent = formatForRagIngestion(parsed, normalizedUrl);
+        const ragContent = formatForRagIngestion(
+            metadata.title,
+            metadata.channel,
+            estimateDuration(segments),
+            normalizedUrl,
+            segmentsToText(segments)
+        )
         const ragResult = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
-            sourceName: `${parsed.channel} - ${parsed.title}`,
+            sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        });
+        })
 
         return {
             ...base,
             mode: "rag" as const,
             ragDocumentId: ragResult.documentId,
             ragChunkCount: ragResult.chunksIngested
-        };
+        }
     }
-});
+})
 
 // ---------------------------------------------------------------------------
 // Tool 4: youtube-ingest-to-knowledge
@@ -418,9 +387,11 @@ export const youtubeAnalyzeVideoTool = createTool({
 export const youtubeIngestToKnowledgeTool = createTool({
     id: "youtube-ingest-to-knowledge",
     description:
-        "Scrape a YouTube video transcript and ingest the full content into the RAG knowledge base for later semantic search. Always ingests the complete transcript regardless of length. Use this to build a searchable library of expert knowledge from YouTube videos.",
+        "Extract a YouTube video transcript and ingest the full content into the RAG knowledge base for later semantic search. Always ingests the complete transcript regardless of length. Use this to build a searchable library of expert knowledge from YouTube videos.",
     inputSchema: z.object({
-        url: z.string().describe("YouTube video URL or video ID"),
+        url: z
+            .string()
+            .describe("YouTube video URL or video ID"),
         tags: z
             .array(z.string())
             .optional()
@@ -435,86 +406,100 @@ export const youtubeIngestToKnowledgeTool = createTool({
         error: z.string().optional()
     }),
     execute: async ({ url, tags }) => {
-        const normalizedUrl = normalizeYouTubeUrl(url);
-        const videoId = extractVideoId(normalizedUrl) || url;
+        const normalizedUrl = normalizeYouTubeUrl(url)
+        const videoId = extractVideoId(normalizedUrl) || url
 
-        const { markdown } = await firecrawlScrapeYouTube(normalizedUrl);
-        const parsed = parseYouTubeMarkdown(markdown);
+        const [metadata, segments] = await Promise.all([
+            fetchVideoMetadata(normalizedUrl),
+            fetchTranscript(videoId).catch(() => [] as TranscriptSegment[])
+        ])
 
-        if (!parsed.transcript || parsed.transcript.length < 20) {
+        if (segments.length === 0) {
             return {
                 documentId: "",
-                title: parsed.title || "Unknown",
-                channel: parsed.channel || "Unknown",
+                title: metadata.title || "Unknown",
+                channel: metadata.channel || "Unknown",
                 chunkCount: 0,
                 message: "",
                 error: "No transcript available for this video. Cannot ingest."
-            };
+            }
         }
 
-        const ragContent = formatForRagIngestion(parsed, normalizedUrl, tags);
+        const transcriptText = segmentsToText(segments)
+        const ragContent = formatForRagIngestion(
+            metadata.title,
+            metadata.channel,
+            estimateDuration(segments),
+            normalizedUrl,
+            transcriptText,
+            tags
+        )
 
         const result = await ingestDocument(ragContent, {
             type: "markdown",
             sourceId: `youtube:${videoId}`,
-            sourceName: `${parsed.channel} - ${parsed.title}`,
+            sourceName: `${metadata.channel} - ${metadata.title}`,
             chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
-        });
+        })
 
         return {
             documentId: result.documentId,
-            title: parsed.title,
-            channel: parsed.channel,
+            title: metadata.title,
+            channel: metadata.channel,
             chunkCount: result.chunksIngested,
-            message: `Successfully ingested "${parsed.title}" by ${parsed.channel} (${result.chunksIngested} chunks). Use rag-query with documentId "${result.documentId}" to search this content.`
-        };
+            message: `Successfully ingested "${metadata.title}" by ${metadata.channel} (${result.chunksIngested} chunks). Use rag-query with documentId "${result.documentId}" to search this content.`
+        }
     }
-});
+})
 
 // ---------------------------------------------------------------------------
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
-function formatForRagIngestion(parsed: ParsedYouTubeVideo, url: string, tags?: string[]): string {
-    const tagLine = tags && tags.length > 0 ? `- Tags: ${tags.join(", ")}\n` : "";
+function formatForRagIngestion(
+    title: string,
+    channel: string,
+    duration: string,
+    url: string,
+    transcriptText: string,
+    tags?: string[]
+): string {
+    const tagLine = tags && tags.length > 0 ? `- Tags: ${tags.join(", ")}\n` : ""
 
-    const chaptersSection =
-        parsed.chapters.length > 0
-            ? `\n## Chapters\n${parsed.chapters.map((c) => `- ${c.timestamp} ${c.title}`).join("\n")}\n`
-            : "";
-
-    return `# Video: ${parsed.title}
-- Channel: ${parsed.channel}
-- Duration: ${parsed.duration}
+    return `# Video: ${title}
+- Channel: ${channel}
+- Duration: ${duration}
 - URL: ${url}
-- Upload Date: ${parsed.uploadDate}
-- Views: ${parsed.views}
-- Likes: ${parsed.likes}
 ${tagLine}
-## Description
-${parsed.description}
-${chaptersSection}
 ## Transcript
-${parsed.transcript}
-`;
+${transcriptText}
+`
 }
 
-function buildFormattedContent(
-    parsed: ParsedYouTubeVideo,
-    url: string,
-    analysisType: string
-): string {
-    const chaptersBlock =
-        parsed.chapters.length > 0
-            ? `\n### Chapters\n${parsed.chapters.map((c) => `- **${c.timestamp}** ${c.title}`).join("\n")}\n`
-            : "";
+function buildTimestampedTranscript(segments: TranscriptSegment[]): string {
+    // Group segments into ~30-second blocks for readability
+    const blocks: string[] = []
+    let currentBlock = ""
+    let blockStartMs = 0
 
-    return `# ${parsed.title}
-**Channel:** ${parsed.channel} | **Duration:** ${parsed.duration} | **Views:** ${parsed.views}
-**URL:** ${url}
-**Requested analysis:** ${analysisType}
-${chaptersBlock}
-### Transcript
-${parsed.transcript}
-`;
+    for (const segment of segments) {
+        if (currentBlock === "") {
+            blockStartMs = segment.offset
+        }
+
+        currentBlock += segment.text + " "
+
+        // Emit block every ~30 seconds
+        if (segment.offset - blockStartMs > 30_000) {
+            blocks.push(`[${msToTimestamp(blockStartMs)}] ${currentBlock.trim()}`)
+            currentBlock = ""
+        }
+    }
+
+    // Emit final block
+    if (currentBlock.trim()) {
+        blocks.push(`[${msToTimestamp(blockStartMs)}] ${currentBlock.trim()}`)
+    }
+
+    return blocks.join("\n\n")
 }
