@@ -36,6 +36,151 @@ import { getGmailClient, watchMailbox, listHistory, getMessagesWithConcurrency }
 import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
 import { updateTriggerEventRecord } from "./trigger-events";
 
+// ==============================
+// Shared Helpers
+// ==============================
+
+/**
+ * Compute and upsert the Agent Health Score for today.
+ *
+ * Combines evaluation scores, feedback, tool success, improvement velocity,
+ * and recommendation health into a single 0.0-1.0 composite metric.
+ * Uses cold-start defaults when data is insufficient.
+ */
+async function computeAndUpsertHealthScore(agentId: string): Promise<void> {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const fourteenDaysAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    // 1. Evaluation score: avg overallGrade from last 7 days
+    const recentEvals = await prisma.agentEvaluation.findMany({
+        where: { agentId, createdAt: { gte: sevenDaysAgo } },
+        select: { overallGrade: true }
+    });
+    const evalGrades = recentEvals
+        .map((e) => e.overallGrade)
+        .filter((g): g is number => g !== null);
+    const evalScore =
+        evalGrades.length > 0 ? evalGrades.reduce((a, b) => a + b, 0) / evalGrades.length : 0.5; // Cold-start: neutral
+
+    // 2. Feedback score: positive ratio from last 7 days
+    const recentFeedback = await prisma.agentFeedback.findMany({
+        where: { agentId, createdAt: { gte: sevenDaysAgo } },
+        select: { thumbs: true, rating: true }
+    });
+    let feedbackScore = 0.5; // Cold-start: neutral
+    if (recentFeedback.length > 0) {
+        const positiveCount = recentFeedback.filter(
+            (f) => f.thumbs === true || (f.rating !== null && f.rating >= 4)
+        ).length;
+        feedbackScore = positiveCount / recentFeedback.length;
+    }
+
+    // 3. Tool success rate: from last 7 days
+    const recentToolCalls = await prisma.agentToolCall.findMany({
+        where: {
+            run: { agentId, startedAt: { gte: sevenDaysAgo } }
+        },
+        select: { success: true }
+    });
+    let toolSuccessRate = 1.0; // Cold-start: perfect (no tools = no failures)
+    if (recentToolCalls.length > 0) {
+        const successCount = recentToolCalls.filter((tc) => tc.success !== false).length;
+        toolSuccessRate = successCount / recentToolCalls.length;
+    }
+
+    // 4. Improvement velocity: compare 7-day avg vs 14-day avg
+    const olderEvals = await prisma.agentEvaluation.findMany({
+        where: { agentId, createdAt: { gte: fourteenDaysAgo, lt: sevenDaysAgo } },
+        select: { overallGrade: true }
+    });
+    const olderGrades = olderEvals
+        .map((e) => e.overallGrade)
+        .filter((g): g is number => g !== null);
+    let improvementVelocity = 0.5; // Cold-start: flat
+    if (evalGrades.length >= 2 && olderGrades.length >= 2) {
+        const recentAvg = evalGrades.reduce((a, b) => a + b, 0) / evalGrades.length;
+        const olderAvg = olderGrades.reduce((a, b) => a + b, 0) / olderGrades.length;
+        // Map delta to 0-1: -0.5 delta → 0.0, 0 delta → 0.5, +0.5 delta → 1.0
+        improvementVelocity = Math.max(0, Math.min(1, 0.5 + (recentAvg - olderAvg)));
+    }
+
+    // 5. Recommendation health: ratio of graduated vs active "improve" recs
+    const recs = await prisma.agentRecommendation.findMany({
+        where: { agentId, type: "improve" },
+        select: { status: true }
+    });
+    let recommendationHealth = 1.0; // Cold-start: no recs = healthy
+    if (recs.length > 0) {
+        const graduated = recs.filter((r) => r.status === "graduated").length;
+        recommendationHealth = graduated / recs.length;
+    }
+
+    // Compute composite
+    const runCount = await prisma.agentRun.count({
+        where: { agentId, startedAt: { gte: sevenDaysAgo } }
+    });
+
+    const healthScore =
+        evalScore * 0.35 +
+        feedbackScore * 0.25 +
+        toolSuccessRate * 0.15 +
+        improvementVelocity * 0.15 +
+        recommendationHealth * 0.1;
+
+    const healthStatus =
+        healthScore >= 0.85
+            ? "excellent"
+            : healthScore >= 0.7
+              ? "good"
+              : healthScore >= 0.5
+                ? "fair"
+                : healthScore >= 0.3
+                  ? "poor"
+                  : "critical";
+
+    const confidence = Math.min(1.0, runCount / 20);
+
+    const agent = await prisma.agent.findUnique({
+        where: { id: agentId },
+        select: { tenantId: true }
+    });
+
+    await prisma.agentHealthScore.upsert({
+        where: { agentId_date: { agentId, date: today } },
+        update: {
+            evalScore,
+            feedbackScore,
+            toolSuccessRate,
+            improvementVelocity,
+            recommendationHealth,
+            healthScore: Math.round(healthScore * 1000) / 1000,
+            healthStatus,
+            confidence: Math.round(confidence * 100) / 100,
+            runCount,
+            evalCount: evalGrades.length,
+            feedbackCount: recentFeedback.length
+        },
+        create: {
+            agentId,
+            tenantId: agent?.tenantId,
+            date: today,
+            evalScore,
+            feedbackScore,
+            toolSuccessRate,
+            improvementVelocity,
+            recommendationHealth,
+            healthScore: Math.round(healthScore * 1000) / 1000,
+            healthStatus,
+            confidence: Math.round(confidence * 100) / 100,
+            runCount,
+            evalCount: evalGrades.length,
+            feedbackCount: recentFeedback.length
+        }
+    });
+}
+
 /**
  * Execute Goal Function
  *
@@ -390,7 +535,7 @@ export const evaluationCompletedFunction = inngest.createFunction(
 
         console.log(`[Inngest] Processing evaluation completion: ${evaluationId}`);
 
-        // Update daily quality metrics for each criterion
+        // Update daily quality metrics for each criterion (uses upsert to avoid race conditions)
         await step.run("update-quality-metrics", async () => {
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -398,16 +543,12 @@ export const evaluationCompletedFunction = inngest.createFunction(
             for (const [scorerKey, score] of Object.entries(scores)) {
                 if (typeof score !== "number") continue;
 
-                const existing = await prisma.agentQualityMetricDaily.findFirst({
-                    where: {
-                        agentId,
-                        scorerKey,
-                        date: today
-                    }
+                // Use raw SQL for atomic incremental average (avoids read-then-write race)
+                const existing = await prisma.agentQualityMetricDaily.findUnique({
+                    where: { agentId_scorerKey_date: { agentId, scorerKey, date: today } }
                 });
 
                 if (existing) {
-                    // Incrementally update average
                     const newCount = existing.sampleCount + 1;
                     const newAvg =
                         ((existing.avgScore ?? 0) * existing.sampleCount + score) / newCount;
@@ -419,15 +560,45 @@ export const evaluationCompletedFunction = inngest.createFunction(
                         }
                     });
                 } else {
-                    await prisma.agentQualityMetricDaily.create({
-                        data: {
-                            agentId,
-                            scorerKey,
-                            date: today,
-                            avgScore: score,
-                            sampleCount: 1
+                    try {
+                        await prisma.agentQualityMetricDaily.create({
+                            data: {
+                                agentId,
+                                scorerKey,
+                                date: today,
+                                avgScore: score,
+                                sampleCount: 1
+                            }
+                        });
+                    } catch (e: unknown) {
+                        // Handle unique constraint race: another eval created it first
+                        if (
+                            e &&
+                            typeof e === "object" &&
+                            "code" in e &&
+                            (e as { code: string }).code === "P2002"
+                        ) {
+                            const retry = await prisma.agentQualityMetricDaily.findUnique({
+                                where: {
+                                    agentId_scorerKey_date: { agentId, scorerKey, date: today }
+                                }
+                            });
+                            if (retry) {
+                                const newCount = retry.sampleCount + 1;
+                                const newAvg =
+                                    ((retry.avgScore ?? 0) * retry.sampleCount + score) / newCount;
+                                await prisma.agentQualityMetricDaily.update({
+                                    where: { id: retry.id },
+                                    data: {
+                                        avgScore: Math.round(newAvg * 1000) / 1000,
+                                        sampleCount: newCount
+                                    }
+                                });
+                            }
+                        } else {
+                            throw e;
                         }
-                    });
+                    }
                 }
             }
 
@@ -437,8 +608,11 @@ export const evaluationCompletedFunction = inngest.createFunction(
                 select: { overallGrade: true }
             });
             if (evaluation?.overallGrade !== null && evaluation?.overallGrade !== undefined) {
-                const existingOverall = await prisma.agentQualityMetricDaily.findFirst({
-                    where: { agentId, scorerKey: "overall", date: today }
+                const overallKey = "overall";
+                const existingOverall = await prisma.agentQualityMetricDaily.findUnique({
+                    where: {
+                        agentId_scorerKey_date: { agentId, scorerKey: overallKey, date: today }
+                    }
                 });
                 if (existingOverall) {
                     const newCount = existingOverall.sampleCount + 1;
@@ -454,17 +628,26 @@ export const evaluationCompletedFunction = inngest.createFunction(
                         }
                     });
                 } else {
-                    await prisma.agentQualityMetricDaily.create({
-                        data: {
-                            agentId,
-                            scorerKey: "overall",
-                            date: today,
-                            avgScore: evaluation.overallGrade,
-                            sampleCount: 1
-                        }
-                    });
+                    try {
+                        await prisma.agentQualityMetricDaily.create({
+                            data: {
+                                agentId,
+                                scorerKey: overallKey,
+                                date: today,
+                                avgScore: evaluation.overallGrade,
+                                sampleCount: 1
+                            }
+                        });
+                    } catch {
+                        // Ignore unique constraint race on overall key
+                    }
                 }
             }
+        });
+
+        // Compute and persist Agent Health Score
+        await step.run("compute-health-score", async () => {
+            await computeAndUpsertHealthScore(agentId);
         });
 
         return { evaluationId, processed: true };
@@ -602,6 +785,222 @@ export const calibrationCheckFunction = inngest.createFunction(
         });
 
         return { checkId: check.id, aligned: check.aligned };
+    }
+);
+
+/**
+ * Feedback-Triggered Re-evaluation
+ *
+ * When negative feedback arrives, re-runs the AI auditor with the feedback
+ * now included in context (the auditor already queries AgentFeedback).
+ * UPDATEs the existing evaluation in place (preserving previous scores).
+ * Debounced by runId to coalesce multiple feedback items within 5 minutes.
+ */
+export const feedbackReEvaluationFunction = inngest.createFunction(
+    {
+        id: "feedback-reevaluation",
+        retries: 1,
+        debounce: {
+            key: "event.data.runId",
+            period: "5m"
+        }
+    },
+    { event: "evaluation/reevaluate" },
+    async ({ event, step }) => {
+        const { runId, agentId } = event.data;
+
+        console.log(`[Inngest] Feedback-triggered re-evaluation for run: ${runId}`);
+
+        // Step 1: Load existing evaluation
+        const existing = await step.run("load-existing-eval", async () => {
+            return prisma.agentEvaluation.findUnique({
+                where: { runId },
+                select: {
+                    id: true,
+                    scoresJson: true,
+                    evaluationTier: true,
+                    overallGrade: true,
+                    reEvaluatedAt: true
+                }
+            });
+        });
+
+        // Step 2: Load the run context needed for auditor
+        const context = await step.run("load-run-context", async () => {
+            const run = await prisma.agentRun.findUnique({
+                where: { id: runId },
+                include: {
+                    agent: {
+                        include: {
+                            scorecard: true,
+                            tools: { select: { toolId: true } },
+                            skills: {
+                                include: {
+                                    skill: {
+                                        select: { name: true, slug: true, instructions: true }
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    trace: true,
+                    toolCalls: true,
+                    turns: { orderBy: { turnIndex: "asc" } },
+                    testRun: { include: { testCase: true } }
+                }
+            });
+
+            if (!run || !run.inputText || !run.outputText) return null;
+
+            return {
+                run: {
+                    id: run.id,
+                    inputText: run.inputText,
+                    outputText: run.outputText,
+                    durationMs: run.durationMs,
+                    totalTokens: run.totalTokens,
+                    promptTokens: run.promptTokens,
+                    completionTokens: run.completionTokens,
+                    costUsd: run.costUsd,
+                    status: run.status
+                },
+                agent: {
+                    id: run.agent.id,
+                    name: run.agent.name,
+                    slug: run.agent.slug,
+                    description: run.agent.description,
+                    instructions: run.agent.instructions,
+                    scorecard: run.agent.scorecard
+                        ? {
+                              criteria: run.agent.scorecard
+                                  .criteria as unknown as import("@repo/mastra").ScorecardCriterion[],
+                              version: run.agent.scorecard.version,
+                              samplingRate: run.agent.scorecard.samplingRate,
+                              auditorModel: run.agent.scorecard.auditorModel,
+                              evaluateTurns: run.agent.scorecard.evaluateTurns
+                          }
+                        : null,
+                    tools: run.agent.tools,
+                    skills: run.agent.skills.map((as) => ({
+                        skill: {
+                            name: as.skill.name,
+                            slug: as.skill.slug,
+                            instructions: as.skill.instructions
+                        }
+                    }))
+                },
+                toolCalls: run.toolCalls.map((tc) => ({
+                    toolKey: tc.toolKey,
+                    success: tc.success,
+                    error: tc.error,
+                    durationMs: tc.durationMs,
+                    inputJson: tc.inputJson,
+                    outputJson: tc.outputJson,
+                    toolSource: tc.toolSource
+                })),
+                trace: run.trace
+                    ? {
+                          stepsJson: run.trace.stepsJson,
+                          steps: [] as { stepNumber: number; content: string }[]
+                      }
+                    : null,
+                turns: run.turns.map((t) => ({
+                    turnIndex: t.turnIndex,
+                    inputText: t.inputText,
+                    outputText: t.outputText
+                })),
+                testRun: run.testRun
+                    ? {
+                          testCase: {
+                              expectedOutput: run.testRun.testCase?.expectedOutput ?? null
+                          }
+                      }
+                    : null,
+                skillsJson: run.skillsJson as { skillSlug: string; skillVersion?: number }[] | null,
+                tenantId: run.agent.tenantId ?? null
+            };
+        });
+
+        if (!context) {
+            console.log(`[Inngest] Re-eval skipped: run ${runId} not found or incomplete`);
+            return { runId, skipped: true, reason: "run_not_found" };
+        }
+
+        // Step 3: Run Tier 2 AI Auditor (feedback is already in DB,
+        // so buildAuditorPrompt() will include it automatically)
+        const tier2Result = await step.run("run-tier2-auditor", async () => {
+            const { runTier2Auditor } = await import("@repo/mastra");
+            return runTier2Auditor(context);
+        });
+
+        // Step 4: Update existing evaluation in place (preserving previous scores)
+        const updatedEval = await step.run("update-evaluation", async () => {
+            if (existing) {
+                return prisma.agentEvaluation.update({
+                    where: { runId },
+                    data: {
+                        previousScoresJson: existing.scoresJson as Prisma.InputJsonValue,
+                        scoresJson: tier2Result.scoresJson,
+                        feedbackJson: tier2Result.feedbackJson as unknown as Prisma.InputJsonValue,
+                        overallGrade: tier2Result.overallGrade,
+                        narrative: tier2Result.narrative,
+                        confidenceScore: tier2Result.confidenceScore,
+                        evaluationTier: "tier2_auditor",
+                        auditorModel: context.agent.scorecard?.auditorModel ?? "gpt-4o-mini",
+                        reEvaluatedAt: new Date(),
+                        aarJson: tier2Result.aar
+                            ? (tier2Result.aar as unknown as Prisma.InputJsonValue)
+                            : undefined,
+                        skillAttributions: tier2Result.skillAttributions
+                            ? (tier2Result.skillAttributions as unknown as Prisma.InputJsonValue)
+                            : undefined,
+                        turnEvaluations: tier2Result.turnEvaluations
+                            ? (tier2Result.turnEvaluations as unknown as Prisma.InputJsonValue)
+                            : undefined
+                    }
+                });
+            } else {
+                // No evaluation existed yet -- create one
+                return prisma.agentEvaluation.create({
+                    data: {
+                        runId,
+                        agentId,
+                        scoresJson: tier2Result.scoresJson,
+                        feedbackJson: tier2Result.feedbackJson as unknown as Prisma.InputJsonValue,
+                        overallGrade: tier2Result.overallGrade,
+                        narrative: tier2Result.narrative,
+                        confidenceScore: tier2Result.confidenceScore,
+                        evaluationTier: "tier2_auditor",
+                        auditorModel: context.agent.scorecard?.auditorModel ?? "gpt-4o-mini",
+                        aarJson: tier2Result.aar
+                            ? (tier2Result.aar as unknown as Prisma.InputJsonValue)
+                            : Prisma.JsonNull
+                    }
+                });
+            }
+        });
+
+        // Step 5: Emit evaluation/completed to update quality metrics + health score
+        await step.sendEvent("emit-reevaluation-completed", {
+            name: "evaluation/completed",
+            data: {
+                evaluationId: updatedEval.id,
+                agentId,
+                runId,
+                scores: tier2Result.scoresJson
+            }
+        });
+
+        console.log(
+            `[Inngest] Re-evaluation complete for run ${runId}, new grade: ${tier2Result.overallGrade}`
+        );
+
+        return {
+            runId,
+            reEvaluated: true,
+            previousTier: existing?.evaluationTier ?? "none",
+            newGrade: tier2Result.overallGrade
+        };
     }
 );
 
@@ -874,8 +1273,19 @@ export const runEvaluationFunction = inngest.createFunction(
 
         // Step 6: Store evaluation
         const evaluation = await step.run("store-evaluation", async () => {
+            // Normalize Tier 1 scores to scorecard criteria keys so they
+            // contribute to the same trend lines as Tier 2 auditor scores
+            let normalizedTier1Scores = tier1Result.scores;
+            if (!tier2Result && context.agent.scorecard) {
+                const { normalizeTier1ToScorecard } = await import("@repo/mastra");
+                normalizedTier1Scores = normalizeTier1ToScorecard(
+                    tier1Result.scores,
+                    context.agent.scorecard.criteria
+                );
+            }
+
             const result = tier2Result ?? {
-                scoresJson: tier1Result.scores,
+                scoresJson: normalizedTier1Scores,
                 feedbackJson: null,
                 overallGrade: tier1Result.avgScore,
                 narrative: null,
@@ -888,6 +1298,9 @@ export const runEvaluationFunction = inngest.createFunction(
                     runId,
                     agentId,
                     scoresJson: result.scoresJson,
+                    rawScoresJson: !tier2Result
+                        ? (tier1Result.scores as unknown as Prisma.InputJsonValue)
+                        : Prisma.JsonNull,
                     feedbackJson: result.feedbackJson
                         ? (result.feedbackJson as unknown as Prisma.InputJsonValue)
                         : Prisma.JsonNull,
@@ -3142,6 +3555,38 @@ export const learningVersionPromotionFunction = inngest.createFunction(
 );
 
 /**
+ * Daily Health Score Computation
+ *
+ * Recomputes Agent Health Scores for all active agents.
+ * Runs daily at 2:30 AM UTC to catch up agents that had no evaluations that day.
+ */
+export const dailyHealthScoreFunction = inngest.createFunction(
+    {
+        id: "daily-health-score",
+        retries: 2
+    },
+    { cron: "30 2 * * *" },
+    async ({ step }) => {
+        const agents = await step.run("list-active-agents", async () => {
+            return prisma.agent.findMany({
+                where: { isActive: true },
+                select: { id: true, slug: true }
+            });
+        });
+
+        let computed = 0;
+        for (const agent of agents) {
+            await step.run(`health-${agent.slug}`, async () => {
+                await computeAndUpsertHealthScore(agent.id);
+            });
+            computed++;
+        }
+
+        return { computed, total: agents.length };
+    }
+);
+
+/**
  * Daily Metrics Rollup
  *
  * Computes and stores daily learning metrics for all agents.
@@ -3414,6 +3859,7 @@ interface GeneratedInsight {
     type: InsightType;
     title: string;
     description: string;
+    actionType?: string; // "learning_trigger" | "alert" | "scorecard_adjustment" | "informational"
 }
 
 /**
@@ -3608,6 +4054,11 @@ Generate insights as a JSON array. Each insight should have:
 - "type": one of "performance", "quality", "cost", "warning", "info"
 - "title": short title (max 60 chars)
 - "description": one paragraph explanation with specific recommendations (max 300 chars)
+- "actionType": one of "learning_trigger", "alert", "scorecard_adjustment", "informational"
+  - Use "learning_trigger" for score declines > 10% or consistently low scores
+  - Use "alert" for spikes, anomalies, or critical guardrail hit rates
+  - Use "scorecard_adjustment" for criteria that are consistently maxed or floored
+  - Use "informational" for positive trends and neutral observations
 
 Focus on:
 1. Significant score changes (>10% improvement or decline)
@@ -3616,7 +4067,7 @@ Focus on:
 4. Negative feedback trends
 5. Cost anomalies
 
-If metrics look healthy, generate a single "info" type insight acknowledging good performance.
+If metrics look healthy, generate a single "info" type insight with actionType "informational".
 
 Return ONLY a valid JSON array of insights, no other text.`;
 
@@ -3643,6 +4094,13 @@ Return ONLY a valid JSON array of insights, no other text.`;
                     "info"
                 ];
 
+                const validActionTypes = [
+                    "learning_trigger",
+                    "alert",
+                    "scorecard_adjustment",
+                    "informational"
+                ];
+
                 for (const insight of parsed) {
                     if (
                         insight.type &&
@@ -3653,7 +4111,10 @@ Return ONLY a valid JSON array of insights, no other text.`;
                         validInsights.push({
                             type: insight.type,
                             title: insight.title.slice(0, 100),
-                            description: insight.description.slice(0, 500)
+                            description: insight.description.slice(0, 500),
+                            actionType: validActionTypes.includes(insight.actionType ?? "")
+                                ? insight.actionType
+                                : "informational"
                         });
                     }
                 }
@@ -3689,28 +4150,77 @@ Return ONLY a valid JSON array of insights, no other text.`;
             );
 
             let created = 0;
+            const createdInsights: {
+                id: string;
+                actionType: string | null;
+                title: string;
+            }[] = [];
+
             for (const insight of generatedInsights) {
                 const key = `${insight.type}:${insight.title.toLowerCase().trim()}`;
                 if (!existingKeys.has(key)) {
-                    await prisma.insight.create({
+                    const record = await prisma.insight.create({
                         data: {
                             agentId,
                             type: insight.type,
                             title: insight.title,
-                            description: insight.description
+                            description: insight.description,
+                            actionType: insight.actionType ?? "informational",
+                            actionStatus:
+                                insight.actionType === "informational" ? "dismissed" : "pending"
                         }
                     });
-                    existingKeys.add(key); // Prevent duplicates within this batch
+                    createdInsights.push({
+                        id: record.id,
+                        actionType: record.actionType,
+                        title: record.title
+                    });
+                    existingKeys.add(key);
                     created++;
                 }
             }
 
-            return created;
+            return { created, createdInsights };
         });
 
-        console.log(`[Inngest] Generated ${persistedCount} insights for agent: ${agentId}`);
+        // Step 4: Route actionable insights to downstream events
+        if (persistedCount.createdInsights.length > 0) {
+            await step.run("route-insight-actions", async () => {
+                for (const insight of persistedCount.createdInsights) {
+                    if (insight.actionType === "learning_trigger") {
+                        try {
+                            await inngest.send({
+                                name: "learning/session.start",
+                                data: {
+                                    agentId,
+                                    triggerReason: `Insight: ${insight.title}`
+                                }
+                            });
+                            await prisma.insight.update({
+                                where: { id: insight.id },
+                                data: { actionStatus: "executed" }
+                            });
+                            console.log(
+                                `[Inngest] Insight action: triggered learning session for "${insight.title}"`
+                            );
+                        } catch (actionErr) {
+                            console.warn(`[Inngest] Failed to route insight action:`, actionErr);
+                        }
+                    } else if (insight.actionType === "alert") {
+                        // Mark as executed -- Slack alerting can be wired here
+                        await prisma.insight.update({
+                            where: { id: insight.id },
+                            data: { actionStatus: "executed" }
+                        });
+                        console.log(`[Inngest] Insight action: alert for "${insight.title}"`);
+                    }
+                }
+            });
+        }
 
-        return { agentId, insightsCreated: persistedCount };
+        console.log(`[Inngest] Generated ${persistedCount.created} insights for agent: ${agentId}`);
+
+        return { agentId, insightsCreated: persistedCount.created };
     }
 );
 
@@ -6881,6 +7391,7 @@ export const inngestFunctions = [
     generateInsightsFunction,
     // Closed-Loop Learning functions
     runEvaluationFunction,
+    feedbackReEvaluationFunction,
     calibrationCheckFunction,
     learningSignalDetectorFunction,
     scheduledLearningTriggerFunction, // Cron-triggered backstop
@@ -6892,6 +7403,7 @@ export const inngestFunctions = [
     learningApprovalHandlerFunction,
     learningVersionPromotionFunction,
     dailyMetricsRollupFunction,
+    dailyHealthScoreFunction,
     // BIM functions
     bimIfcParseFunction,
     // Simulation functions

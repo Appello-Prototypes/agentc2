@@ -1641,8 +1641,8 @@ export default function ConfigurePage() {
                             {formData.modelProvider === "groq" && (
                                 <div className="bg-muted rounded-lg p-4">
                                     <p className="text-muted-foreground text-sm">
-                                        ⚡ Groq provides ultra-fast inference for open-source
-                                        models (Llama, Mixtral, Gemma). Free tier available.
+                                        ⚡ Groq provides ultra-fast inference for open-source models
+                                        (Llama, Mixtral, Gemma). Free tier available.
                                     </p>
                                 </div>
                             )}
@@ -1669,8 +1669,8 @@ export default function ConfigurePage() {
                             {formData.modelProvider === "xai" && (
                                 <div className="bg-muted rounded-lg p-4">
                                     <p className="text-muted-foreground text-sm">
-                                        🚀 xAI Grok models support vision and function calling.
-                                        Grok 3 Mini supports extended thinking for reasoning.
+                                        🚀 xAI Grok models support vision and function calling. Grok
+                                        3 Mini supports extended thinking for reasoning.
                                     </p>
                                 </div>
                             )}
@@ -1679,9 +1679,8 @@ export default function ConfigurePage() {
                                 formData.modelProvider === "fireworks") && (
                                 <div className="bg-muted rounded-lg p-4">
                                     <p className="text-muted-foreground text-sm">
-                                        🌐 Open-source model hosting with competitive pricing.
-                                        Run Llama, DeepSeek, Qwen, and Mixtral models at low
-                                        cost.
+                                        🌐 Open-source model hosting with competitive pricing. Run
+                                        Llama, DeepSeek, Qwen, and Mixtral models at low cost.
                                     </p>
                                 </div>
                             )}
@@ -1689,8 +1688,8 @@ export default function ConfigurePage() {
                             {formData.modelProvider === "openrouter" && (
                                 <div className="bg-muted rounded-lg p-4">
                                     <p className="text-muted-foreground text-sm">
-                                        🆓 OpenRouter provides access to 300+ models. Models
-                                        ending in &quot;:free&quot; have zero cost. Great for
+                                        🆓 OpenRouter provides access to 300+ models. Models ending
+                                        in &quot;:free&quot; have zero cost. Great for
                                         budget-conscious workloads.
                                     </p>
                                 </div>
@@ -1778,17 +1777,37 @@ export default function ConfigurePage() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="anthropic">Anthropic</SelectItem>
-                                                        <SelectItem value="openai">OpenAI</SelectItem>
-                                                        <SelectItem value="google">Google</SelectItem>
+                                                        <SelectItem value="anthropic">
+                                                            Anthropic
+                                                        </SelectItem>
+                                                        <SelectItem value="openai">
+                                                            OpenAI
+                                                        </SelectItem>
+                                                        <SelectItem value="google">
+                                                            Google
+                                                        </SelectItem>
                                                         <SelectItem value="groq">Groq</SelectItem>
-                                                        <SelectItem value="deepseek">DeepSeek</SelectItem>
-                                                        <SelectItem value="mistral">Mistral</SelectItem>
-                                                        <SelectItem value="xai">xAI (Grok)</SelectItem>
-                                                        <SelectItem value="togetherai">Together AI</SelectItem>
-                                                        <SelectItem value="fireworks">Fireworks AI</SelectItem>
-                                                        <SelectItem value="openrouter">OpenRouter</SelectItem>
-                                                        <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
+                                                        <SelectItem value="deepseek">
+                                                            DeepSeek
+                                                        </SelectItem>
+                                                        <SelectItem value="mistral">
+                                                            Mistral
+                                                        </SelectItem>
+                                                        <SelectItem value="xai">
+                                                            xAI (Grok)
+                                                        </SelectItem>
+                                                        <SelectItem value="togetherai">
+                                                            Together AI
+                                                        </SelectItem>
+                                                        <SelectItem value="fireworks">
+                                                            Fireworks AI
+                                                        </SelectItem>
+                                                        <SelectItem value="openrouter">
+                                                            OpenRouter
+                                                        </SelectItem>
+                                                        <SelectItem value="kimi">
+                                                            Kimi (Moonshot)
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -1856,17 +1875,37 @@ export default function ConfigurePage() {
                                                         <SelectValue />
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        <SelectItem value="anthropic">Anthropic</SelectItem>
-                                                        <SelectItem value="openai">OpenAI</SelectItem>
-                                                        <SelectItem value="google">Google</SelectItem>
+                                                        <SelectItem value="anthropic">
+                                                            Anthropic
+                                                        </SelectItem>
+                                                        <SelectItem value="openai">
+                                                            OpenAI
+                                                        </SelectItem>
+                                                        <SelectItem value="google">
+                                                            Google
+                                                        </SelectItem>
                                                         <SelectItem value="groq">Groq</SelectItem>
-                                                        <SelectItem value="deepseek">DeepSeek</SelectItem>
-                                                        <SelectItem value="mistral">Mistral</SelectItem>
-                                                        <SelectItem value="xai">xAI (Grok)</SelectItem>
-                                                        <SelectItem value="togetherai">Together AI</SelectItem>
-                                                        <SelectItem value="fireworks">Fireworks AI</SelectItem>
-                                                        <SelectItem value="openrouter">OpenRouter</SelectItem>
-                                                        <SelectItem value="kimi">Kimi (Moonshot)</SelectItem>
+                                                        <SelectItem value="deepseek">
+                                                            DeepSeek
+                                                        </SelectItem>
+                                                        <SelectItem value="mistral">
+                                                            Mistral
+                                                        </SelectItem>
+                                                        <SelectItem value="xai">
+                                                            xAI (Grok)
+                                                        </SelectItem>
+                                                        <SelectItem value="togetherai">
+                                                            Together AI
+                                                        </SelectItem>
+                                                        <SelectItem value="fireworks">
+                                                            Fireworks AI
+                                                        </SelectItem>
+                                                        <SelectItem value="openrouter">
+                                                            OpenRouter
+                                                        </SelectItem>
+                                                        <SelectItem value="kimi">
+                                                            Kimi (Moonshot)
+                                                        </SelectItem>
                                                     </SelectContent>
                                                 </Select>
                                             </div>

@@ -45,6 +45,7 @@ export type {
 export {
     AgentResolver,
     agentResolver,
+    BudgetExceededError,
     classifyComplexity,
     resolveRoutingDecision
 } from "./resolver";

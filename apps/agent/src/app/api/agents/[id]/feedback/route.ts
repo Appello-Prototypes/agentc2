@@ -195,6 +195,21 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     comment: feedback.comment
                 }
             });
+
+            // Trigger re-evaluation on negative feedback so the AI auditor
+            // can incorporate the human signal (debounced by runId in Inngest)
+            const isNegative =
+                feedback.thumbs === false || (feedback.rating !== null && feedback.rating < 3);
+            if (isNegative) {
+                await inngest.send({
+                    name: "evaluation/reevaluate",
+                    data: {
+                        runId,
+                        agentId: agent.id,
+                        feedbackId: feedback.id
+                    }
+                });
+            }
         } catch (inngestError) {
             // Non-blocking: don't fail the feedback submission if Inngest fails
             console.error("[Agent Feedback] Inngest emit error:", inngestError);

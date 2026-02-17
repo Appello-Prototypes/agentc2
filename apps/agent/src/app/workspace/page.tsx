@@ -82,7 +82,9 @@ import {
     MessageCircleIcon,
     ZapIcon,
     ClipboardListIcon,
-    CheckIcon
+    CheckIcon,
+    AlertTriangleIcon,
+    ArrowUpCircleIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
 import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/components/ModelSelector";
@@ -143,6 +145,123 @@ function CollapsibleThinking({ text }: { text: string }) {
                     {text}
                 </div>
             )}
+        </div>
+    );
+}
+
+function BudgetExceededCard({
+    data,
+    agentSlug
+}: {
+    data: {
+        agentId: string;
+        currentSpendUsd: number;
+        monthlyLimitUsd: number;
+    };
+    agentSlug: string;
+}) {
+    const [increasing, setIncreasing] = useState(false);
+    const [increased, setIncreased] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const handleIncreaseBudget = async (addAmount: number) => {
+        setIncreasing(true);
+        setError(null);
+        try {
+            const newLimit = data.monthlyLimitUsd + addAmount;
+            const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/budget`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ monthlyLimitUsd: newLimit, enabled: true, hardLimit: true })
+            });
+            if (!res.ok) throw new Error("Failed to update budget");
+            setIncreased(true);
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to increase budget");
+        } finally {
+            setIncreasing(false);
+        }
+    };
+
+    if (increased) {
+        return (
+            <div className="border-border/50 my-3 rounded-xl border bg-emerald-500/5 p-5">
+                <div className="flex items-center gap-2.5">
+                    <div className="flex size-9 items-center justify-center rounded-full bg-emerald-500/10">
+                        <CheckIcon className="size-4.5 text-emerald-500" />
+                    </div>
+                    <div>
+                        <p className="text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                            Budget increased successfully
+                        </p>
+                        <p className="text-muted-foreground text-xs">
+                            Send your message again to continue.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
+
+    const percentUsed = Math.round((data.currentSpendUsd / data.monthlyLimitUsd) * 100);
+
+    return (
+        <div className="border-border/50 bg-card my-3 rounded-xl border p-5 shadow-sm">
+            {/* Header */}
+            <div className="flex items-start gap-3">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                    <AlertTriangleIcon className="size-5 text-amber-500" />
+                </div>
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-semibold">Monthly Budget Reached</h3>
+                    <p className="text-muted-foreground mt-0.5 text-xs">
+                        This agent has used its full monthly allocation. Increase the budget to
+                        continue.
+                    </p>
+                </div>
+            </div>
+
+            {/* Usage bar */}
+            <div className="mt-4 space-y-1.5">
+                <div className="flex items-baseline justify-between text-xs">
+                    <span className="text-muted-foreground">
+                        ${data.currentSpendUsd.toFixed(2)} spent
+                    </span>
+                    <span className="font-medium">${data.monthlyLimitUsd} limit</span>
+                </div>
+                <div className="bg-muted h-2 overflow-hidden rounded-full">
+                    <div
+                        className="h-full rounded-full bg-amber-500 transition-all"
+                        style={{ width: `${Math.min(percentUsed, 100)}%` }}
+                    />
+                </div>
+            </div>
+
+            {/* Quick increase buttons */}
+            <div className="mt-4 flex flex-wrap gap-2">
+                {[50, 100, 200].map((amount) => (
+                    <button
+                        key={amount}
+                        onClick={() => handleIncreaseBudget(amount)}
+                        disabled={increasing}
+                        className="border-border hover:bg-accent inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50"
+                    >
+                        <ArrowUpCircleIcon className="size-3.5" />
+                        Add ${amount}
+                    </button>
+                ))}
+            </div>
+
+            {error && <p className="mt-2 text-xs text-red-500">{error}</p>}
+
+            {/* Link to full settings */}
+            <p className="text-muted-foreground mt-3 text-[11px]">
+                Or{" "}
+                <a href={`/agents/${agentSlug}/costs`} className="text-primary hover:underline">
+                    manage budget settings
+                </a>{" "}
+                for full control.
+            </p>
         </div>
     );
 }
@@ -1076,6 +1195,17 @@ export default function UnifiedChatPage() {
                         )
                     )}
                 </Queue>
+            );
+        }
+
+        // Budget exceeded — inline upgrade card
+        if (part.type === "data-budget-exceeded" && part.data) {
+            return (
+                <BudgetExceededCard
+                    key={index}
+                    data={part.data}
+                    agentSlug={selectedAgentSlug || "workspace-concierge"}
+                />
             );
         }
 

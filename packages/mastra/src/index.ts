@@ -94,6 +94,7 @@ export {
     buildAuditorPrompt,
     runTier1Prescreen,
     shouldRunTier2,
+    normalizeTier1ToScorecard,
     generateScorecard,
     SCORECARD_TEMPLATES
 } from "./scorers";

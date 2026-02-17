@@ -240,6 +240,13 @@ import {
     listWorkspaceFilesTool
 } from "./sandbox-tools";
 import {
+    backlogGetTool,
+    backlogAddTaskTool,
+    backlogListTasksTool,
+    backlogUpdateTaskTool,
+    backlogCompleteTaskTool
+} from "./backlog-tools";
+import {
     agentRunsListTool,
     agentRunsGetTool,
     triggerEventsListTool,
@@ -293,6 +300,11 @@ export const toolCategoryMap: Record<string, string> = {
     "write-workspace-file": "Code Execution",
     "read-workspace-file": "Code Execution",
     "list-workspace-files": "Code Execution",
+    "backlog-get": "Backlog",
+    "backlog-add-task": "Backlog",
+    "backlog-list-tasks": "Backlog",
+    "backlog-update-task": "Backlog",
+    "backlog-complete-task": "Backlog",
 
     // Agent Management
     "agent-create": "Agent Management",
@@ -521,6 +533,7 @@ export const toolCategoryMap: Record<string, string> = {
 export const toolCategoryOrder: string[] = [
     "Utilities",
     "Code Execution",
+    "Backlog",
     "Agent Management",
     "Agent Quality & Runs",
     "Learning & Simulations",
@@ -615,6 +628,13 @@ export const toolRegistry: Record<string, any> = {
     "write-workspace-file": writeWorkspaceFileTool,
     "read-workspace-file": readWorkspaceFileTool,
     "list-workspace-files": listWorkspaceFilesTool,
+
+    // Backlog tools
+    "backlog-get": backlogGetTool,
+    "backlog-add-task": backlogAddTaskTool,
+    "backlog-list-tasks": backlogListTasksTool,
+    "backlog-update-task": backlogUpdateTaskTool,
+    "backlog-complete-task": backlogCompleteTaskTool,
 
     // CRUD tools
     "agent-create": agentCreateTool,

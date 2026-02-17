@@ -1742,6 +1742,110 @@ Evaluate the overall campaign results against the stated intent and end state. P
             }
         });
 
+        // Step 6: Bridge mission AARs to per-agent recommendations
+        await step.run("bridge-aar-to-agents", async () => {
+            try {
+                const campaignForBridge = await prisma.campaign.findUnique({
+                    where: { id: campaignId },
+                    select: {
+                        id: true,
+                        name: true,
+                        missions: {
+                            select: {
+                                id: true,
+                                name: true,
+                                aarJson: true,
+                                tasks: {
+                                    select: {
+                                        agentRun: { select: { agentId: true } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                if (!campaignForBridge) return;
+
+                for (const mission of campaignForBridge.missions) {
+                    const missionAar = mission.aarJson as Record<string, unknown> | null;
+                    if (!missionAar) continue;
+
+                    // improvePatterns is string[] in campaign AAR tool output
+                    const improvePatterns = (missionAar.improvePatterns ?? []) as string[];
+                    if (improvePatterns.length === 0) continue;
+
+                    // Collect agents that participated in THIS mission
+                    const missionAgentIds = new Set<string>();
+                    for (const task of mission.tasks) {
+                        if (task.agentRun?.agentId) missionAgentIds.add(task.agentRun.agentId);
+                    }
+
+                    for (const agentId of missionAgentIds) {
+                        for (const patternText of improvePatterns) {
+                            // Dedup: check for existing active recommendation with similar title
+                            const existingRec = await prisma.agentRecommendation.findFirst({
+                                where: {
+                                    agentId,
+                                    status: "active",
+                                    type: "improve",
+                                    title: {
+                                        contains: patternText.substring(0, 50)
+                                    }
+                                }
+                            });
+
+                            if (existingRec) {
+                                await prisma.agentRecommendation.update({
+                                    where: { id: existingRec.id },
+                                    data: {
+                                        frequency: { increment: 1 },
+                                        updatedAt: new Date(),
+                                        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                    }
+                                });
+                            } else {
+                                await prisma.agentRecommendation.create({
+                                    data: {
+                                        agentId,
+                                        type: "improve",
+                                        category: "quality",
+                                        title: `[Campaign: ${campaignForBridge.name}] ${patternText.substring(0, 100)}`,
+                                        description: patternText,
+                                        evidence: {
+                                            source: "campaign_aar",
+                                            campaignId: campaignForBridge.id,
+                                            missionId: mission.id
+                                        } as unknown as Prisma.InputJsonValue,
+                                        priority: "medium",
+                                        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000)
+                                    }
+                                });
+                            }
+                        }
+
+                        // Emit learning signal for the agent
+                        await inngest.send({
+                            name: "learning/signal.detected",
+                            data: {
+                                agentId,
+                                signalType: "CAMPAIGN_AAR",
+                                pattern: `Campaign "${campaignForBridge.name}" mission "${mission.name}" identified ${improvePatterns.length} improvement(s)`
+                            }
+                        });
+                    }
+                }
+
+                console.log(
+                    `[Campaign] Bridged AAR patterns to agent recommendations for campaign ${campaignId}`
+                );
+            } catch (bridgeErr) {
+                console.warn(
+                    `[Campaign] Failed to bridge AAR to agent recommendations:`,
+                    bridgeErr
+                );
+            }
+        });
+
         return { campaignId, reviewerRunId: result.runId };
     }
 );

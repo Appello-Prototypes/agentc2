@@ -88,7 +88,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             take: 5
         });
 
-        // Calculate health status
+        // Calculate simple health status (legacy -- used as fallback)
         let health: "healthy" | "warning" | "critical" = "healthy";
         if (failedRuns > 0 && failedRuns / totalRuns > 0.2) {
             health = "critical";
@@ -97,6 +97,35 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         } else if (alerts.some((a) => a.severity === "WARNING") || failedRuns > 0) {
             health = "warning";
         }
+
+        // Get persisted Agent Health Score (composite metric)
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const latestHealthScore = await prisma.agentHealthScore.findFirst({
+            where: { agentId: agent.id },
+            orderBy: { date: "desc" }
+        });
+
+        const healthTrend = await prisma.agentHealthScore.findMany({
+            where: {
+                agentId: agent.id,
+                date: { gte: sevenDaysAgo }
+            },
+            orderBy: { date: "asc" },
+            select: {
+                date: true,
+                healthScore: true,
+                healthStatus: true,
+                confidence: true,
+                evalScore: true,
+                feedbackScore: true,
+                toolSuccessRate: true,
+                improvementVelocity: true,
+                recommendationHealth: true,
+                runCount: true,
+                evalCount: true,
+                feedbackCount: true
+            }
+        });
 
         // Get evaluations summary
         const evaluations = await prisma.agentEvaluation.findMany({
@@ -266,6 +295,27 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 createdAt: alert.createdAt
             })),
             health,
+            healthScore: latestHealthScore
+                ? {
+                      score: latestHealthScore.healthScore,
+                      status: latestHealthScore.healthStatus,
+                      confidence: latestHealthScore.confidence,
+                      date: latestHealthScore.date,
+                      components: {
+                          evalScore: latestHealthScore.evalScore,
+                          feedbackScore: latestHealthScore.feedbackScore,
+                          toolSuccessRate: latestHealthScore.toolSuccessRate,
+                          improvementVelocity: latestHealthScore.improvementVelocity,
+                          recommendationHealth: latestHealthScore.recommendationHealth
+                      },
+                      context: {
+                          runCount: latestHealthScore.runCount,
+                          evalCount: latestHealthScore.evalCount,
+                          feedbackCount: latestHealthScore.feedbackCount
+                      }
+                  }
+                : null,
+            healthTrend,
             agent: {
                 id: agent.id,
                 slug: agent.slug,

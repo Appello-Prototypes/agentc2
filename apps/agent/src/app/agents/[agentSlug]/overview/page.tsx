@@ -90,6 +90,30 @@ interface OverviewData {
         safetyScore: number | null;
         completedAt: string | null;
     } | null;
+    healthScore?: {
+        score: number;
+        status: string;
+        confidence: number;
+        date: string;
+        components: {
+            evalScore: number;
+            feedbackScore: number;
+            toolSuccessRate: number;
+            improvementVelocity: number;
+            recommendationHealth: number;
+        };
+        context: {
+            runCount: number;
+            evalCount: number;
+            feedbackCount: number;
+        };
+    } | null;
+    healthTrend?: {
+        date: string;
+        healthScore: number;
+        healthStatus: string;
+        confidence: number;
+    }[];
 }
 
 function HealthIndicator({ health }: { health: "healthy" | "warning" | "critical" }) {
@@ -201,7 +225,35 @@ export default function OverviewPage() {
                     </p>
                 </div>
                 <div className="flex items-center gap-4">
-                    <HealthIndicator health={data?.health || "healthy"} />
+                    {data?.healthScore ? (
+                        <div className="flex items-center gap-2">
+                            <div
+                                className={`h-3 w-3 animate-pulse rounded-full ${
+                                    data.healthScore.status === "excellent" ||
+                                    data.healthScore.status === "good"
+                                        ? "bg-green-500"
+                                        : data.healthScore.status === "fair"
+                                          ? "bg-yellow-500"
+                                          : data.healthScore.status === "poor"
+                                            ? "bg-orange-500"
+                                            : "bg-red-500"
+                                }`}
+                            />
+                            <span className="text-lg font-bold">
+                                {Math.round(data.healthScore.score * 100)}%
+                            </span>
+                            <span className="text-muted-foreground text-sm capitalize">
+                                {data.healthScore.status}
+                            </span>
+                            {data.healthScore.confidence < 0.5 && (
+                                <Badge variant="outline" className="text-[10px]">
+                                    Low confidence
+                                </Badge>
+                            )}
+                        </div>
+                    ) : (
+                        <HealthIndicator health={data?.health || "healthy"} />
+                    )}
                     {data?.isAdversarialHardened && (
                         <Badge variant="outline" className="border-green-500 text-green-600">
                             Adversarial Hardened
@@ -289,6 +341,104 @@ export default function OverviewPage() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Health Score Components */}
+            {data?.healthScore && (
+                <Card>
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <CardTitle className="text-base">Health Score Breakdown</CardTitle>
+                                <CardDescription>
+                                    Composite score components (7-day window)
+                                </CardDescription>
+                            </div>
+                            <div className="text-right">
+                                <div className="text-2xl font-bold">
+                                    {Math.round(data.healthScore.score * 100)}%
+                                </div>
+                                <div className="text-muted-foreground text-xs capitalize">
+                                    {data.healthScore.status}
+                                </div>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="grid grid-cols-5 gap-4">
+                            {[
+                                {
+                                    label: "Eval Score",
+                                    value: data.healthScore.components.evalScore,
+                                    weight: "35%"
+                                },
+                                {
+                                    label: "Feedback",
+                                    value: data.healthScore.components.feedbackScore,
+                                    weight: "25%"
+                                },
+                                {
+                                    label: "Tool Success",
+                                    value: data.healthScore.components.toolSuccessRate,
+                                    weight: "15%"
+                                },
+                                {
+                                    label: "Improvement",
+                                    value: data.healthScore.components.improvementVelocity,
+                                    weight: "15%"
+                                },
+                                {
+                                    label: "Rec Health",
+                                    value: data.healthScore.components.recommendationHealth,
+                                    weight: "10%"
+                                }
+                            ].map((comp) => (
+                                <div key={comp.label} className="text-center">
+                                    <div className="text-muted-foreground mb-1 text-[10px]">
+                                        {comp.label} ({comp.weight})
+                                    </div>
+                                    <div className="mb-1 text-sm font-bold">
+                                        {Math.round(comp.value * 100)}%
+                                    </div>
+                                    <div className="bg-muted h-2 w-full rounded-full">
+                                        <div
+                                            className={`h-2 rounded-full ${
+                                                comp.value >= 0.7
+                                                    ? "bg-green-500"
+                                                    : comp.value >= 0.5
+                                                      ? "bg-yellow-500"
+                                                      : "bg-red-500"
+                                            }`}
+                                            style={{ width: `${comp.value * 100}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                        <div className="text-muted-foreground mt-3 flex justify-between text-[10px]">
+                            <span>
+                                {data.healthScore.context.runCount} runs |{" "}
+                                {data.healthScore.context.evalCount} evals |{" "}
+                                {data.healthScore.context.feedbackCount} feedback
+                            </span>
+                            {data.healthTrend && data.healthTrend.length > 1 && (
+                                <span>
+                                    7d trend:{" "}
+                                    {(() => {
+                                        const first = data.healthTrend[0].healthScore;
+                                        const last =
+                                            data.healthTrend[data.healthTrend.length - 1]
+                                                .healthScore;
+                                        const delta = last - first;
+                                        return delta > 0
+                                            ? `+${Math.round(delta * 100)}%`
+                                            : `${Math.round(delta * 100)}%`;
+                                    })()}
+                                </span>
+                            )}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             {/* Main Content Grid */}
             <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

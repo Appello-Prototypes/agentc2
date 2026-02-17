@@ -1,5 +1,10 @@
 import { createTool } from "@mastra/core/tools"
 import { z } from "zod"
+import { execFile } from "node:child_process"
+import { readFile, unlink } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import { randomBytes } from "node:crypto"
 import { ingestDocument } from "../rag/pipeline"
 
 // ---------------------------------------------------------------------------
@@ -7,10 +12,9 @@ import { ingestDocument } from "../rag/pipeline"
 // ---------------------------------------------------------------------------
 
 const INLINE_THRESHOLD = 20_000 // chars – roughly ~15 min of speech
-const SUPADATA_API_URL = "https://api.supadata.ai/v1/transcript"
 
 // ---------------------------------------------------------------------------
-// Helpers
+// URL Helpers
 // ---------------------------------------------------------------------------
 
 /**
@@ -42,7 +46,86 @@ function extractVideoId(url: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
-// YouTube Data Fetchers
+// yt-dlp Transcript Extraction
+// ---------------------------------------------------------------------------
+
+/**
+ * Run yt-dlp to download auto-generated or manual subtitles as VTT,
+ * then parse the VTT into clean plain text.
+ *
+ * Requires `yt-dlp` to be installed on the system (pip install yt-dlp).
+ * No API keys, no paid services, no rate limits.
+ */
+async function fetchTranscriptWithYtDlp(videoUrl: string): Promise<string> {
+    const tmpBase = join(tmpdir(), `yt-${randomBytes(6).toString("hex")}`)
+    const expectedFile = `${tmpBase}.en.vtt`
+
+    try {
+        await new Promise<void>((resolve, reject) => {
+            execFile(
+                "yt-dlp",
+                [
+                    "--write-auto-sub",
+                    "--sub-lang",
+                    "en",
+                    "--skip-download",
+                    "--sub-format",
+                    "vtt",
+                    "-o",
+                    tmpBase,
+                    videoUrl
+                ],
+                { timeout: 30_000 },
+                (error, _stdout, stderr) => {
+                    if (error) {
+                        reject(new Error(`yt-dlp failed: ${stderr || error.message}`))
+                    } else {
+                        resolve()
+                    }
+                }
+            )
+        })
+
+        const vtt = await readFile(expectedFile, "utf-8")
+        return parseVttToText(vtt)
+    } finally {
+        // Clean up temp file
+        await unlink(expectedFile).catch(() => {})
+    }
+}
+
+/**
+ * Parse WebVTT subtitle content into clean, deduplicated plain text.
+ * Strips timestamps, VTT tags, position metadata, and removes the
+ * duplicate lines that auto-generated captions produce.
+ */
+function parseVttToText(vtt: string): string {
+    const lines = vtt
+        // Strip VTT header (everything before the first double newline)
+        .replace(/WEBVTT[\s\S]*?\n\n/, "")
+        // Strip inline timestamp tags like <00:00:01.234>
+        .replace(/<[^>]+>/g, "")
+        // Strip timestamp lines
+        .replace(/\d{2}:\d{2}:\d{2}\.\d{3} --> \d{2}:\d{2}:\d{2}\.\d{3}.*\n/g, "")
+        // Strip alignment/position metadata
+        .replace(/align:.*$/gm, "")
+        .split("\n")
+        .map((l) => l.trim())
+        .filter((l) => l.length > 0)
+
+    // Deduplicate consecutive identical lines (auto-captions repeat each line)
+    const deduped: string[] = []
+    for (const line of lines) {
+        if (deduped[deduped.length - 1] !== line) {
+            deduped.push(line)
+        }
+    }
+
+    return deduped.join(" ")
+}
+
+// ---------------------------------------------------------------------------
+// YouTube Metadata (oEmbed — free, no API key)
 // ---------------------------------------------------------------------------
 
 interface YouTubeVideoMetadata {
@@ -50,9 +133,6 @@ interface YouTubeVideoMetadata {
     channel: string
 }
 
-/**
- * Fetch video metadata via YouTube's public oEmbed endpoint (no API key needed).
- */
 async function fetchVideoMetadata(url: string): Promise<YouTubeVideoMetadata> {
     try {
         const oembedUrl = `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`
@@ -68,77 +148,6 @@ async function fetchVideoMetadata(url: string): Promise<YouTubeVideoMetadata> {
     }
 }
 
-/**
- * Fetch transcript via Supadata API.
- * Supadata handles YouTube's anti-bot measures on their infrastructure.
- * Requires SUPADATA_API_KEY environment variable.
- */
-async function fetchTranscriptViaSupadata(
-    url: string
-): Promise<{ content: string; lang: string } | null> {
-    const apiKey = process.env.SUPADATA_API_KEY
-    if (!apiKey) {
-        throw new Error(
-            "SUPADATA_API_KEY is not configured. Sign up at https://supadata.ai and add the key to your .env file."
-        )
-    }
-
-    const encodedUrl = encodeURIComponent(url)
-    const response = await fetch(
-        `${SUPADATA_API_URL}?url=${encodedUrl}&text=true&mode=auto`,
-        {
-            headers: {
-                "x-api-key": apiKey
-            }
-        }
-    )
-
-    if (response.status === 202) {
-        // Async job for long videos — poll for result
-        const { jobId } = await response.json()
-        return await pollTranscriptJob(apiKey, jobId)
-    }
-
-    if (!response.ok) {
-        const errData = await response.json().catch(() => ({}))
-        const msg = (errData as Record<string, string>).message || `HTTP ${response.status}`
-        throw new Error(`Supadata transcript fetch failed: ${msg}`)
-    }
-
-    const data = await response.json()
-    return {
-        content: (data.content as string) || "",
-        lang: (data.lang as string) || "en"
-    }
-}
-
-/**
- * Poll a Supadata async transcript job until complete (for long videos).
- */
-async function pollTranscriptJob(
-    apiKey: string,
-    jobId: string,
-    maxAttempts = 60
-): Promise<{ content: string; lang: string } | null> {
-    for (let i = 0; i < maxAttempts; i++) {
-        await new Promise((r) => setTimeout(r, 2000))
-
-        const res = await fetch(`${SUPADATA_API_URL}/${jobId}`, {
-            headers: { "x-api-key": apiKey }
-        })
-        if (!res.ok) continue
-
-        const data = await res.json()
-        if (data.status === "completed") {
-            return { content: (data.content as string) || "", lang: (data.lang as string) || "en" }
-        }
-        if (data.status === "failed") {
-            return null
-        }
-    }
-    return null
-}
-
 // ---------------------------------------------------------------------------
 // Tool 1: youtube-get-transcript
 // ---------------------------------------------------------------------------
@@ -146,7 +155,7 @@ async function pollTranscriptJob(
 export const youtubeGetTranscriptTool = createTool({
     id: "youtube-get-transcript",
     description:
-        "Extract the full transcript and metadata from a YouTube video. Accepts any YouTube URL format or a bare video ID. For short videos the transcript is returned inline. For long videos the transcript is automatically ingested into the knowledge base and a document ID is returned for targeted RAG queries.",
+        "Extract the full transcript and metadata from a YouTube video using yt-dlp. Accepts any YouTube URL format or a bare video ID. For short videos the transcript is returned inline. For long videos the transcript is automatically ingested into the knowledge base and a document ID is returned for targeted RAG queries.",
     inputSchema: z.object({
         url: z.string().describe("YouTube video URL or video ID")
     }),
@@ -164,43 +173,29 @@ export const youtubeGetTranscriptTool = createTool({
         const normalizedUrl = normalizeYouTubeUrl(url)
         const videoId = extractVideoId(normalizedUrl) || url
 
-        const [metadata, transcriptResult] = await Promise.all([
+        const [metadata, transcriptText] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
-            fetchTranscriptViaSupadata(normalizedUrl).catch((e: Error) => ({
-                content: "",
-                lang: "en",
-                _error: e.message
-            }))
+            fetchTranscriptWithYtDlp(normalizedUrl).catch((e: Error) => e.message)
         ])
 
-        const base = {
-            title: metadata.title,
-            channel: metadata.channel,
-            url: normalizedUrl
-        }
+        const base = { title: metadata.title, channel: metadata.channel, url: normalizedUrl }
 
-        const errorMsg =
-            (transcriptResult as Record<string, string>)?._error || undefined
-        const transcriptText = transcriptResult?.content || ""
-
-        if (!transcriptText || transcriptText.length < 20) {
+        // yt-dlp returned an error string instead of transcript
+        const isError = transcriptText.startsWith("yt-dlp failed:")
+        if (isError || !transcriptText || transcriptText.length < 20) {
             return {
                 ...base,
                 mode: "inline" as const,
                 transcript: "",
-                error:
-                    errorMsg ||
-                    "No transcript available for this video. The video may not have captions enabled."
+                error: isError
+                    ? transcriptText
+                    : "No transcript available for this video. The video may not have captions enabled."
             }
         }
 
         // Short transcript – return inline
         if (transcriptText.length < INLINE_THRESHOLD) {
-            return {
-                ...base,
-                mode: "inline" as const,
-                transcript: transcriptText
-            }
+            return { ...base, mode: "inline" as const, transcript: transcriptText }
         }
 
         // Long transcript – auto-ingest into RAG
@@ -309,18 +304,14 @@ export const youtubeAnalyzeVideoTool = createTool({
         const videoId = extractVideoId(normalizedUrl) || url
         const type = analysisType || "full"
 
-        const [metadata, transcriptResult] = await Promise.all([
+        const [metadata, transcriptText] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
-            fetchTranscriptViaSupadata(normalizedUrl).catch(() => null)
+            fetchTranscriptWithYtDlp(normalizedUrl).catch(() => "")
         ])
 
-        const base = {
-            title: metadata.title,
-            channel: metadata.channel,
-            analysisType: type
-        }
+        const base = { title: metadata.title, channel: metadata.channel, analysisType: type }
 
-        if (!transcriptResult?.content || transcriptResult.content.length < 20) {
+        if (!transcriptText || transcriptText.length < 20) {
             return {
                 ...base,
                 mode: "inline" as const,
@@ -329,7 +320,7 @@ export const youtubeAnalyzeVideoTool = createTool({
             }
         }
 
-        const formatted = `# ${metadata.title}\n**Channel:** ${metadata.channel}\n**URL:** ${normalizedUrl}\n**Requested analysis:** ${type}\n\n### Transcript\n${transcriptResult.content}\n`
+        const formatted = `# ${metadata.title}\n**Channel:** ${metadata.channel}\n**URL:** ${normalizedUrl}\n**Requested analysis:** ${type}\n\n### Transcript\n${transcriptText}\n`
 
         if (formatted.length < INLINE_THRESHOLD) {
             return { ...base, mode: "inline" as const, formattedContent: formatted }
@@ -339,7 +330,7 @@ export const youtubeAnalyzeVideoTool = createTool({
             metadata.title,
             metadata.channel,
             normalizedUrl,
-            transcriptResult.content
+            transcriptText
         )
         const ragResult = await ingestDocument(ragContent, {
             type: "markdown",
@@ -381,12 +372,12 @@ export const youtubeIngestToKnowledgeTool = createTool({
         const normalizedUrl = normalizeYouTubeUrl(url)
         const videoId = extractVideoId(normalizedUrl) || url
 
-        const [metadata, transcriptResult] = await Promise.all([
+        const [metadata, transcriptText] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
-            fetchTranscriptViaSupadata(normalizedUrl).catch(() => null)
+            fetchTranscriptWithYtDlp(normalizedUrl).catch(() => "")
         ])
 
-        if (!transcriptResult?.content || transcriptResult.content.length < 20) {
+        if (!transcriptText || transcriptText.length < 20) {
             return {
                 documentId: "",
                 title: metadata.title || "Unknown",
@@ -401,7 +392,7 @@ export const youtubeIngestToKnowledgeTool = createTool({
             metadata.title,
             metadata.channel,
             normalizedUrl,
-            transcriptResult.content,
+            transcriptText,
             tags
         )
 

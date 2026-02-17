@@ -47,7 +47,12 @@ export async function GET(
                         toolCalls: true
                     }
                 },
-                evaluation: true,
+                evaluation: {
+                    include: {
+                        calibrationChecks: true,
+                        recommendations: true
+                    }
+                },
                 feedbacks: true,
                 costEvents: true,
                 guardrailEvents: true

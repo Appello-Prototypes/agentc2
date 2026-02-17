@@ -8,6 +8,7 @@ import {
 } from "ai";
 import {
     agentResolver,
+    BudgetExceededError,
     resolveRoutingDecision,
     type RoutingConfig,
     type RoutingDecision
@@ -922,6 +923,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         return createUIMessageStreamResponse({ stream });
     } catch (error) {
+        // Budget exceeded: return a valid stream with an inline upgrade prompt
+        // instead of a 500 error. This is a key SaaS revenue touchpoint.
+        if (error instanceof BudgetExceededError) {
+            console.log(
+                `[Agent Chat] Budget exceeded for agent ${error.agentId}: $${error.currentSpendUsd} / $${error.monthlyLimitUsd}`
+            );
+            const budgetStream = createUIMessageStream({
+                execute: async ({ writer }: { writer: UIMessageStreamWriter }) => {
+                    const messageId = generateId();
+                    writer.write({ type: "text-start", id: messageId });
+                    writer.write({
+                        type: "data-budget-exceeded",
+                        data: error.toJSON()
+                    });
+                    writer.write({ type: "text-end", id: messageId });
+                }
+            });
+            return createUIMessageStreamResponse({ stream: budgetStream });
+        }
+
         console.error("[Agent Chat] Error:", error);
         return NextResponse.json(
             {

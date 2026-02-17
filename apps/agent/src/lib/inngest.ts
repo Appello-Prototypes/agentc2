@@ -86,13 +86,21 @@ export const inngest = new Inngest({
                 percentUsed: number;
             };
         };
+        // Feedback-triggered re-evaluation
+        "evaluation/reevaluate": {
+            data: {
+                runId: string;
+                agentId: string;
+                feedbackId: string;
+            };
+        };
         // Closed-Loop Learning Events
         "learning/signal.detected": {
             data: {
                 agentId: string;
-                runId: string;
+                runId?: string;
                 signalType: string;
-                severity: string;
+                severity?: string;
                 scores?: Record<string, number>;
                 pattern?: string;
                 evidence?: string;

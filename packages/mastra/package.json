@@ -28,7 +28,9 @@
     "./channels": "./src/channels/index.ts",
     "./canvas": "./src/canvas/index.ts",
     "./integrations/mcp-oauth": "./src/integrations/mcp-oauth.ts",
-    "./integrations": "./src/integrations/index.ts"
+    "./integrations": "./src/integrations/index.ts",
+    "./activity": "./src/activity/index.ts",
+    "./activity/service": "./src/activity/service.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

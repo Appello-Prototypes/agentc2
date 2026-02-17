@@ -5,7 +5,49 @@
  * Flags runs for Tier 2 AI auditor evaluation if quality concerns are detected.
  */
 
-import type { EvalContext, Tier1Result } from "./types";
+import type { EvalContext, ScorecardCriterion, Tier1Result } from "./types";
+
+/**
+ * Default mapping from Tier 1 heuristic score keys to scorecard criterion IDs.
+ * Each criterion maps to one or more Tier 1 keys; when multiple keys map,
+ * their scores are averaged to produce the criterion estimate.
+ */
+const TIER1_TO_CRITERIA_MAP: Record<string, string[]> = {
+    task_accuracy: ["relevance", "length"],
+    instruction_adherence: ["relevance", "errorFree"],
+    tool_usage: ["toolSuccess"],
+    response_quality: ["length", "relevance"],
+    safety_compliance: ["safety"],
+    safety: ["safety"],
+    efficiency: ["efficiency"]
+};
+
+/**
+ * Map Tier 1 heuristic score keys to scorecard criteria IDs.
+ * This allows Tier 1 evaluations to contribute to the same trend lines
+ * as Tier 2 auditor evaluations in AgentQualityMetricDaily.
+ *
+ * Only criteria with at least one matching Tier 1 key are included;
+ * criteria without a mapping are omitted (avoids false scores).
+ */
+export function normalizeTier1ToScorecard(
+    tier1Scores: Record<string, number>,
+    criteria: ScorecardCriterion[]
+): Record<string, number> {
+    const normalized: Record<string, number> = {};
+    for (const criterion of criteria) {
+        const mappedKeys = TIER1_TO_CRITERIA_MAP[criterion.id];
+        if (mappedKeys) {
+            const mapped = mappedKeys
+                .filter((k) => tier1Scores[k] !== undefined)
+                .map((k) => tier1Scores[k]);
+            if (mapped.length > 0) {
+                normalized[criterion.id] = mapped.reduce((a, b) => a + b, 0) / mapped.length;
+            }
+        }
+    }
+    return normalized;
+}
 
 const TOXICITY_WORDS = [
     "stupid",

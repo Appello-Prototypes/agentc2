@@ -31,6 +31,7 @@
 
 import { prisma, Prisma, RunStatus, RunTriggerType } from "@repo/database";
 import { inngest } from "./inngest";
+import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
 
 /**
  * Source of the agent run (which production channel)
@@ -435,6 +436,22 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
             console.log(
                 `[RunRecorder] Completed run ${run.id} in ${durationMs}ms (${totalTokens} tokens)`
             );
+
+            // Record to Activity Feed
+            recordActivity({
+                type: "RUN_COMPLETED",
+                agentId: options.agentId,
+                agentSlug: options.agentSlug,
+                summary: `${options.agentSlug} completed: ${inputPreview(options.input)}`,
+                detail: completeOptions.output,
+                status: "success",
+                source: options.source,
+                runId: run.id,
+                costUsd: completeOptions.costUsd,
+                durationMs,
+                tokenCount: totalTokens,
+                tenantId: options.tenantId,
+            });
         },
 
         /**
@@ -466,6 +483,20 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
             });
 
             console.error(`[RunRecorder] Run ${run.id} failed: ${errorMessage}`);
+
+            // Record to Activity Feed
+            recordActivity({
+                type: "RUN_FAILED",
+                agentId: options.agentId,
+                agentSlug: options.agentSlug,
+                summary: `${options.agentSlug} failed: ${inputPreview(errorMessage, 120)}`,
+                detail: errorMessage,
+                status: "failure",
+                source: options.source,
+                runId: run.id,
+                durationMs,
+                tenantId: options.tenantId,
+            });
         },
 
         /**

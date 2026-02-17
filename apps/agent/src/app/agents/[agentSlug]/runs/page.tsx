@@ -96,6 +96,30 @@ interface Evaluation {
     scoresJson: Record<string, number>;
     scorerVersion: string | null;
     createdAt: string;
+    evaluationTier?: string | null;
+    overallGrade?: number | null;
+    confidenceScore?: number | null;
+    narrative?: string | null;
+    feedbackJson?: Record<string, string> | null;
+    aarJson?: Record<string, unknown> | null;
+    reEvaluatedAt?: string | null;
+    calibrationChecks?: {
+        id: string;
+        auditorGrade: number | null;
+        humanRating: number | null;
+        disagreement: number | null;
+        aligned: boolean | null;
+        direction: string | null;
+    }[];
+    recommendations?: {
+        id: string;
+        type: string;
+        category: string;
+        title: string;
+        description: string;
+        status: string;
+        frequency: number;
+    }[];
 }
 
 interface Feedback {
@@ -103,6 +127,7 @@ interface Feedback {
     thumbs: boolean | null;
     rating: number | null;
     comment: string | null;
+    source?: string | null;
     createdAt: string;
 }
 
@@ -688,6 +713,9 @@ export default function RunsPage() {
                                     <TabsTrigger value="latency" className="shrink-0">
                                         Latency
                                     </TabsTrigger>
+                                    <TabsTrigger value="reportcard" className="shrink-0">
+                                        Report Card
+                                    </TabsTrigger>
                                 </TabsList>
 
                                 <div className="mt-4 flex-1 overflow-y-auto">
@@ -1212,6 +1240,572 @@ export default function RunsPage() {
                                                         </p>
                                                     </div>
                                                 )}
+                                            </TabsContent>
+
+                                            {/* Report Card Tab */}
+                                            <TabsContent
+                                                value="reportcard"
+                                                className="mt-0 space-y-6"
+                                            >
+                                                {(() => {
+                                                    // Resolve evaluation to a single object
+                                                    const eval_ = Array.isArray(
+                                                        runDetail?.evaluation
+                                                    )
+                                                        ? runDetail?.evaluation[0]
+                                                        : runDetail?.evaluation;
+                                                    // Resolve feedback to an array
+                                                    const feedbackList = Array.isArray(
+                                                        runDetail?.feedback
+                                                    )
+                                                        ? runDetail?.feedback
+                                                        : runDetail?.feedback
+                                                          ? [runDetail.feedback]
+                                                          : [];
+                                                    return (
+                                                        <>
+                                                            {/* Evaluation Summary */}
+                                                            <div>
+                                                                <h3 className="mb-3 text-sm font-semibold">
+                                                                    Evaluation Summary
+                                                                </h3>
+                                                                {eval_ ? (
+                                                                    <div className="space-y-3">
+                                                                        <div className="flex items-center gap-3">
+                                                                            <Badge
+                                                                                variant={
+                                                                                    eval_.evaluationTier ===
+                                                                                    "tier2_auditor"
+                                                                                        ? "default"
+                                                                                        : "secondary"
+                                                                                }
+                                                                            >
+                                                                                {eval_.evaluationTier ===
+                                                                                "tier2_auditor"
+                                                                                    ? "Tier 2 - AI Auditor"
+                                                                                    : "Tier 1 - Heuristic"}
+                                                                            </Badge>
+                                                                            {eval_.reEvaluatedAt && (
+                                                                                <Badge variant="outline">
+                                                                                    Re-evaluated
+                                                                                </Badge>
+                                                                            )}
+                                                                            {eval_.overallGrade !==
+                                                                                null &&
+                                                                                eval_.overallGrade !==
+                                                                                    undefined && (
+                                                                                    <span className="text-2xl font-bold">
+                                                                                        {Math.round(
+                                                                                            eval_.overallGrade *
+                                                                                                100
+                                                                                        )}
+                                                                                        %
+                                                                                    </span>
+                                                                                )}
+                                                                            {eval_.confidenceScore !==
+                                                                                null &&
+                                                                                eval_.confidenceScore !==
+                                                                                    undefined && (
+                                                                                    <span className="text-muted-foreground text-xs">
+                                                                                        Confidence:{" "}
+                                                                                        {Math.round(
+                                                                                            eval_.confidenceScore *
+                                                                                                100
+                                                                                        )}
+                                                                                        %
+                                                                                    </span>
+                                                                                )}
+                                                                        </div>
+                                                                        {evaluationScores &&
+                                                                            Object.keys(
+                                                                                evaluationScores
+                                                                            ).length > 0 && (
+                                                                                <div className="flex flex-wrap gap-3">
+                                                                                    {Object.entries(
+                                                                                        evaluationScores
+                                                                                    ).map(
+                                                                                        ([
+                                                                                            key,
+                                                                                            value
+                                                                                        ]) => {
+                                                                                            const numValue =
+                                                                                                typeof value ===
+                                                                                                "number"
+                                                                                                    ? value
+                                                                                                    : 0;
+                                                                                            return (
+                                                                                                <div
+                                                                                                    key={
+                                                                                                        key
+                                                                                                    }
+                                                                                                    className="bg-muted/50 rounded-lg px-3 py-2 text-center"
+                                                                                                >
+                                                                                                    <div className="text-muted-foreground text-xs">
+                                                                                                        {key
+                                                                                                            .replace(
+                                                                                                                /_/g,
+                                                                                                                " "
+                                                                                                            )
+                                                                                                            .replace(
+                                                                                                                /\b\w/g,
+                                                                                                                (
+                                                                                                                    c
+                                                                                                                ) =>
+                                                                                                                    c.toUpperCase()
+                                                                                                            )}
+                                                                                                    </div>
+                                                                                                    <div className="text-lg font-bold">
+                                                                                                        {numValue <=
+                                                                                                        1
+                                                                                                            ? `${Math.round(numValue * 100)}%`
+                                                                                                            : numValue}
+                                                                                                    </div>
+                                                                                                </div>
+                                                                                            );
+                                                                                        }
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                        {eval_.narrative && (
+                                                                            <div className="bg-muted/20 rounded-lg border p-3">
+                                                                                <p className="text-sm">
+                                                                                    {
+                                                                                        eval_.narrative
+                                                                                    }
+                                                                                </p>
+                                                                            </div>
+                                                                        )}
+                                                                        {eval_.feedbackJson &&
+                                                                            typeof eval_.feedbackJson ===
+                                                                                "object" && (
+                                                                                <div className="space-y-2">
+                                                                                    <h4 className="text-xs font-semibold">
+                                                                                        Per-Criterion
+                                                                                        Feedback
+                                                                                    </h4>
+                                                                                    {Object.entries(
+                                                                                        eval_.feedbackJson as Record<
+                                                                                            string,
+                                                                                            string
+                                                                                        >
+                                                                                    ).map(
+                                                                                        ([
+                                                                                            key,
+                                                                                            fb
+                                                                                        ]) => (
+                                                                                            <div
+                                                                                                key={
+                                                                                                    key
+                                                                                                }
+                                                                                                className="bg-muted/10 rounded border p-2"
+                                                                                            >
+                                                                                                <span className="text-xs font-medium">
+                                                                                                    {key
+                                                                                                        .replace(
+                                                                                                            /_/g,
+                                                                                                            " "
+                                                                                                        )
+                                                                                                        .replace(
+                                                                                                            /\b\w/g,
+                                                                                                            (
+                                                                                                                c
+                                                                                                            ) =>
+                                                                                                                c.toUpperCase()
+                                                                                                        )}
+
+                                                                                                    :
+                                                                                                </span>
+                                                                                                <p className="text-muted-foreground mt-1 text-xs">
+                                                                                                    {
+                                                                                                        fb
+                                                                                                    }
+                                                                                                </p>
+                                                                                            </div>
+                                                                                        )
+                                                                                    )}
+                                                                                </div>
+                                                                            )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-muted-foreground text-sm">
+                                                                        No evaluation available for
+                                                                        this run.
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* After Action Review */}
+                                                            {eval_?.aarJson && (
+                                                                <div>
+                                                                    <h3 className="mb-3 text-sm font-semibold">
+                                                                        After Action Review
+                                                                    </h3>
+                                                                    {(() => {
+                                                                        const aar =
+                                                                            eval_.aarJson as Record<
+                                                                                string,
+                                                                                unknown
+                                                                            >;
+                                                                        return (
+                                                                            <div className="space-y-3">
+                                                                                {aar.what_should_have_happened ? (
+                                                                                    <div className="bg-muted/20 rounded-lg border p-3">
+                                                                                        <h4 className="mb-1 text-xs font-semibold">
+                                                                                            What
+                                                                                            Should
+                                                                                            Have
+                                                                                            Happened
+                                                                                        </h4>
+                                                                                        <p className="text-xs">
+                                                                                            {String(
+                                                                                                aar.what_should_have_happened
+                                                                                            )}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                ) : null}
+                                                                                {aar.what_actually_happened ? (
+                                                                                    <div className="bg-muted/20 rounded-lg border p-3">
+                                                                                        <h4 className="mb-1 text-xs font-semibold">
+                                                                                            What
+                                                                                            Actually
+                                                                                            Happened
+                                                                                        </h4>
+                                                                                        <p className="text-xs">
+                                                                                            {String(
+                                                                                                aar.what_actually_happened
+                                                                                            )}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                ) : null}
+                                                                                {aar.why_difference ? (
+                                                                                    <div className="bg-muted/20 rounded-lg border p-3">
+                                                                                        <h4 className="mb-1 text-xs font-semibold">
+                                                                                            Why the
+                                                                                            Difference
+                                                                                        </h4>
+                                                                                        <p className="text-xs">
+                                                                                            {String(
+                                                                                                aar.why_difference
+                                                                                            )}
+                                                                                        </p>
+                                                                                    </div>
+                                                                                ) : null}
+                                                                                {Array.isArray(
+                                                                                    aar.sustain
+                                                                                ) &&
+                                                                                    aar.sustain
+                                                                                        .length >
+                                                                                        0 && (
+                                                                                        <div>
+                                                                                            <h4 className="mb-1 text-xs font-semibold text-green-600">
+                                                                                                Sustain
+                                                                                            </h4>
+                                                                                            <ul className="list-inside list-disc space-y-1">
+                                                                                                {(
+                                                                                                    aar.sustain as {
+                                                                                                        pattern: string;
+                                                                                                    }[]
+                                                                                                ).map(
+                                                                                                    (
+                                                                                                        s,
+                                                                                                        i
+                                                                                                    ) => (
+                                                                                                        <li
+                                                                                                            key={
+                                                                                                                i
+                                                                                                            }
+                                                                                                            className="text-xs"
+                                                                                                        >
+                                                                                                            {
+                                                                                                                s.pattern
+                                                                                                            }
+                                                                                                        </li>
+                                                                                                    )
+                                                                                                )}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+                                                                                {Array.isArray(
+                                                                                    aar.improve
+                                                                                ) &&
+                                                                                    aar.improve
+                                                                                        .length >
+                                                                                        0 && (
+                                                                                        <div>
+                                                                                            <h4 className="mb-1 text-xs font-semibold text-orange-600">
+                                                                                                Improve
+                                                                                            </h4>
+                                                                                            <ul className="list-inside list-disc space-y-1">
+                                                                                                {(
+                                                                                                    aar.improve as {
+                                                                                                        pattern: string;
+                                                                                                        recommendation: string;
+                                                                                                    }[]
+                                                                                                ).map(
+                                                                                                    (
+                                                                                                        imp,
+                                                                                                        i
+                                                                                                    ) => (
+                                                                                                        <li
+                                                                                                            key={
+                                                                                                                i
+                                                                                                            }
+                                                                                                            className="text-xs"
+                                                                                                        >
+                                                                                                            <span className="font-medium">
+                                                                                                                {
+                                                                                                                    imp.pattern
+                                                                                                                }
+                                                                                                            </span>
+
+                                                                                                            :{" "}
+                                                                                                            {
+                                                                                                                imp.recommendation
+                                                                                                            }
+                                                                                                        </li>
+                                                                                                    )
+                                                                                                )}
+                                                                                            </ul>
+                                                                                        </div>
+                                                                                    )}
+                                                                            </div>
+                                                                        );
+                                                                    })()}
+                                                                </div>
+                                                            )}
+
+                                                            {/* User Feedback */}
+                                                            <div>
+                                                                <h3 className="mb-3 text-sm font-semibold">
+                                                                    User Feedback
+                                                                </h3>
+                                                                {feedbackList.length > 0 ? (
+                                                                    <div className="space-y-2">
+                                                                        {feedbackList.map(
+                                                                            (fb: {
+                                                                                id: string;
+                                                                                thumbs?:
+                                                                                    | boolean
+                                                                                    | null;
+                                                                                rating?:
+                                                                                    | number
+                                                                                    | null;
+                                                                                comment?:
+                                                                                    | string
+                                                                                    | null;
+                                                                                source?:
+                                                                                    | string
+                                                                                    | null;
+                                                                                createdAt: string;
+                                                                            }) => (
+                                                                                <div
+                                                                                    key={fb.id}
+                                                                                    className="bg-muted/20 flex items-start gap-3 rounded-lg border p-3"
+                                                                                >
+                                                                                    <span className="text-lg">
+                                                                                        {fb.thumbs ===
+                                                                                        true
+                                                                                            ? "\u{1F44D}"
+                                                                                            : fb.thumbs ===
+                                                                                                false
+                                                                                              ? "\u{1F44E}"
+                                                                                              : "\u{1F4AC}"}
+                                                                                    </span>
+                                                                                    <div className="flex-1">
+                                                                                        {fb.rating !==
+                                                                                            null &&
+                                                                                            fb.rating !==
+                                                                                                undefined && (
+                                                                                                <span className="text-xs font-medium">
+                                                                                                    Rating:{" "}
+                                                                                                    {
+                                                                                                        fb.rating
+                                                                                                    }
+                                                                                                    /5
+                                                                                                </span>
+                                                                                            )}
+                                                                                        {fb.comment && (
+                                                                                            <p className="text-muted-foreground text-xs">
+                                                                                                {
+                                                                                                    fb.comment
+                                                                                                }
+                                                                                            </p>
+                                                                                        )}
+                                                                                        <span className="text-muted-foreground text-[10px]">
+                                                                                            {fb.source &&
+                                                                                                `via ${fb.source} \u00B7 `}
+                                                                                            {new Date(
+                                                                                                fb.createdAt
+                                                                                            ).toLocaleString()}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            )
+                                                                        )}
+                                                                    </div>
+                                                                ) : (
+                                                                    <p className="text-muted-foreground text-sm">
+                                                                        No feedback submitted for
+                                                                        this run.
+                                                                    </p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* Calibration */}
+                                                            {eval_?.calibrationChecks &&
+                                                                (
+                                                                    eval_.calibrationChecks as {
+                                                                        id: string;
+                                                                        auditorGrade: number | null;
+                                                                        humanRating: number | null;
+                                                                        disagreement: number | null;
+                                                                        aligned: boolean | null;
+                                                                        direction: string | null;
+                                                                    }[]
+                                                                ).length > 0 && (
+                                                                    <div>
+                                                                        <h3 className="mb-3 text-sm font-semibold">
+                                                                            Calibration (AI vs
+                                                                            Human)
+                                                                        </h3>
+                                                                        {(
+                                                                            eval_.calibrationChecks as {
+                                                                                id: string;
+                                                                                auditorGrade:
+                                                                                    | number
+                                                                                    | null;
+                                                                                humanRating:
+                                                                                    | number
+                                                                                    | null;
+                                                                                disagreement:
+                                                                                    | number
+                                                                                    | null;
+                                                                                aligned:
+                                                                                    | boolean
+                                                                                    | null;
+                                                                                direction:
+                                                                                    | string
+                                                                                    | null;
+                                                                            }[]
+                                                                        ).map((cal) => (
+                                                                            <div
+                                                                                key={cal.id}
+                                                                                className="bg-muted/20 flex items-center gap-4 rounded-lg border p-3"
+                                                                            >
+                                                                                <Badge
+                                                                                    variant={
+                                                                                        cal.aligned
+                                                                                            ? "default"
+                                                                                            : "destructive"
+                                                                                    }
+                                                                                >
+                                                                                    {cal.aligned
+                                                                                        ? "Aligned"
+                                                                                        : "Misaligned"}
+                                                                                </Badge>
+                                                                                <div className="text-xs">
+                                                                                    AI:{" "}
+                                                                                    {cal.auditorGrade !==
+                                                                                    null
+                                                                                        ? `${Math.round(cal.auditorGrade * 100)}%`
+                                                                                        : "N/A"}
+                                                                                    {" \u00B7 "}
+                                                                                    Human:{" "}
+                                                                                    {cal.humanRating !==
+                                                                                    null
+                                                                                        ? `${Math.round(cal.humanRating * 100)}%`
+                                                                                        : "N/A"}
+                                                                                    {cal.direction &&
+                                                                                        ` \u00B7 ${cal.direction.replace(/_/g, " ")}`}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+
+                                                            {/* Recommendations Generated */}
+                                                            {eval_?.recommendations &&
+                                                                (
+                                                                    eval_.recommendations as {
+                                                                        id: string;
+                                                                        type: string;
+                                                                        category: string;
+                                                                        title: string;
+                                                                        description: string;
+                                                                        status: string;
+                                                                        frequency: number;
+                                                                    }[]
+                                                                ).length > 0 && (
+                                                                    <div>
+                                                                        <h3 className="mb-3 text-sm font-semibold">
+                                                                            Recommendations
+                                                                            Generated
+                                                                        </h3>
+                                                                        <div className="space-y-2">
+                                                                            {(
+                                                                                eval_.recommendations as {
+                                                                                    id: string;
+                                                                                    type: string;
+                                                                                    category: string;
+                                                                                    title: string;
+                                                                                    description: string;
+                                                                                    status: string;
+                                                                                    frequency: number;
+                                                                                }[]
+                                                                            ).map((rec) => (
+                                                                                <div
+                                                                                    key={rec.id}
+                                                                                    className="bg-muted/20 rounded-lg border p-3"
+                                                                                >
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <Badge
+                                                                                            variant={
+                                                                                                rec.type ===
+                                                                                                "improve"
+                                                                                                    ? "destructive"
+                                                                                                    : "default"
+                                                                                            }
+                                                                                        >
+                                                                                            {
+                                                                                                rec.type
+                                                                                            }
+                                                                                        </Badge>
+                                                                                        <Badge variant="outline">
+                                                                                            {
+                                                                                                rec.category
+                                                                                            }
+                                                                                        </Badge>
+                                                                                        <Badge variant="outline">
+                                                                                            {
+                                                                                                rec.status
+                                                                                            }
+                                                                                        </Badge>
+                                                                                        {rec.frequency >
+                                                                                            1 && (
+                                                                                            <span className="text-muted-foreground text-[10px]">
+                                                                                                x
+                                                                                                {
+                                                                                                    rec.frequency
+                                                                                                }
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <p className="mt-1 text-xs font-medium">
+                                                                                        {rec.title}
+                                                                                    </p>
+                                                                                    <p className="text-muted-foreground mt-1 text-xs">
+                                                                                        {
+                                                                                            rec.description
+                                                                                        }
+                                                                                    </p>
+                                                                                </div>
+                                                                            ))}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+                                                        </>
+                                                    );
+                                                })()}
                                             </TabsContent>
                                         </>
                                     )}

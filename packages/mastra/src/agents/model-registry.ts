@@ -323,7 +323,7 @@ const GOOGLE_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 1048576,
-        pricing: { inputPer1M: 0.15, outputPer1M: 0.60 },
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.6 },
         deprecated: false,
         aliases: [],
         sortOrder: 6
@@ -380,7 +380,7 @@ const GOOGLE_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 1048576,
-        pricing: { inputPer1M: 0.075, outputPer1M: 0.30 },
+        pricing: { inputPer1M: 0.075, outputPer1M: 0.3 },
         deprecated: false,
         aliases: [],
         sortOrder: 21
@@ -463,7 +463,7 @@ const GROQ_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.50, outputPer1M: 0.77 },
+        pricing: { inputPer1M: 0.5, outputPer1M: 0.77 },
         deprecated: false,
         aliases: [],
         sortOrder: 13
@@ -482,7 +482,7 @@ const GROQ_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 8192,
-        pricing: { inputPer1M: 0.20, outputPer1M: 0.20 },
+        pricing: { inputPer1M: 0.2, outputPer1M: 0.2 },
         deprecated: false,
         aliases: [],
         sortOrder: 20
@@ -564,7 +564,7 @@ const DEEPSEEK_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 64000,
-        pricing: { inputPer1M: 0.27, outputPer1M: 1.10 },
+        pricing: { inputPer1M: 0.27, outputPer1M: 1.1 },
         deprecated: false,
         aliases: ["deepseek-v3"],
         sortOrder: 10
@@ -765,7 +765,7 @@ const XAI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.30, outputPer1M: 0.50 },
+        pricing: { inputPer1M: 0.3, outputPer1M: 0.5 },
         deprecated: false,
         aliases: [],
         sortOrder: 12
@@ -784,7 +784,7 @@ const XAI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.60, outputPer1M: 4.0 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 4.0 },
         deprecated: false,
         aliases: [],
         sortOrder: 13
@@ -847,7 +847,7 @@ const TOGETHERAI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.15, outputPer1M: 0.40 },
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.4 },
         deprecated: false,
         aliases: [],
         sortOrder: 11
@@ -923,7 +923,7 @@ const TOGETHERAI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 32768,
-        pricing: { inputPer1M: 0.60, outputPer1M: 0.60 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 0.6 },
         deprecated: false,
         aliases: [],
         sortOrder: 17
@@ -942,7 +942,7 @@ const TOGETHERAI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 65536,
-        pricing: { inputPer1M: 0.60, outputPer1M: 0.60 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 0.6 },
         deprecated: false,
         aliases: [],
         sortOrder: 18
@@ -986,7 +986,7 @@ const FIREWORKS_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.15, outputPer1M: 0.60 },
+        pricing: { inputPer1M: 0.15, outputPer1M: 0.6 },
         deprecated: false,
         aliases: [],
         sortOrder: 11
@@ -1005,7 +1005,7 @@ const FIREWORKS_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        pricing: { inputPer1M: 0.9, outputPer1M: 0.9 },
         deprecated: false,
         aliases: [],
         sortOrder: 12
@@ -1024,7 +1024,7 @@ const FIREWORKS_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 64000,
-        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        pricing: { inputPer1M: 0.9, outputPer1M: 0.9 },
         deprecated: false,
         aliases: [],
         sortOrder: 15
@@ -1043,7 +1043,7 @@ const FIREWORKS_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 32768,
-        pricing: { inputPer1M: 0.90, outputPer1M: 0.90 },
+        pricing: { inputPer1M: 0.9, outputPer1M: 0.9 },
         deprecated: false,
         aliases: [],
         sortOrder: 16
@@ -1227,7 +1227,7 @@ const KIMI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 262144,
-        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 2.4 },
         deprecated: false,
         aliases: [],
         sortOrder: 10
@@ -1246,7 +1246,7 @@ const KIMI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 262144,
-        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 2.4 },
         deprecated: false,
         aliases: [],
         sortOrder: 11
@@ -1265,7 +1265,7 @@ const KIMI_FALLBACK_MODELS: ModelDefinition[] = [
             streaming: true
         },
         contextWindow: 131072,
-        pricing: { inputPer1M: 0.60, outputPer1M: 2.40 },
+        pricing: { inputPer1M: 0.6, outputPer1M: 2.4 },
         deprecated: false,
         aliases: [],
         sortOrder: 12
@@ -1649,8 +1649,9 @@ export async function getModelsByProvider(
     try {
         const apiKey = await getOrgApiKey(provider, organizationId);
         if (!apiKey) {
-            console.warn(`[ModelRegistry] No API key for ${provider}, using fallback`);
-            return getFallbackModels(provider);
+            // No API key configured — skip this provider entirely
+            setCachedModels(cacheKey, []);
+            return [];
         }
 
         let models: ModelDefinition[];

@@ -14,6 +14,7 @@ const navItems = [
     { label: "Agents", href: "/agents" },
     { label: "Workflows", href: "/workflows" },
     { label: "Networks", href: "/networks" },
+    { label: "Activity", href: "/activity" },
     { label: "Live Runs", href: "/live" },
     { label: "Automations", href: "/triggers" },
     { label: "Knowledge", href: "/knowledge" },

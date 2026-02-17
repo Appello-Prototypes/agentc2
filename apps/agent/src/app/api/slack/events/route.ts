@@ -119,7 +119,9 @@ async function resolveThreadOriginAgent(threadTs: string): Promise<string | null
         });
         if (chatMsg?.metadata) {
             const meta =
-                typeof chatMsg.metadata === "object" ? (chatMsg.metadata as Record<string, unknown>) : null;
+                typeof chatMsg.metadata === "object"
+                    ? (chatMsg.metadata as Record<string, unknown>)
+                    : null;
             if (meta?.agentSlug && typeof meta.agentSlug === "string") {
                 return meta.agentSlug;
             }

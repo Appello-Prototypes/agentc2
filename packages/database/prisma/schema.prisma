@@ -743,6 +743,8 @@ model Agent {
     scorecard              AgentScorecard?
     calibrationChecks      CalibrationCheck[]
     recommendations        AgentRecommendation[]
+    healthScores           AgentHealthScore[]
+    backlog                Backlog?
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -1375,6 +1377,11 @@ model AgentEvaluation {
     // AAR (After Action Review) structured output
     aarJson Json? // {what_should_have_happened, what_actually_happened, why_difference, sustain[], improve[]}
 
+    // Re-evaluation support (feedback-triggered)
+    reEvaluatedAt      DateTime? // When this evaluation was re-assessed with human feedback
+    previousScoresJson Json? // Snapshot of scores before re-evaluation
+    rawScoresJson      Json? // Original Tier 1 heuristic scores (before normalization to scorecard criteria)
+
     createdAt DateTime @default(now())
 
     // Relations
@@ -1705,6 +1712,39 @@ model AgentQualityMetricDaily {
     @@map("agent_quality_metric_daily")
 }
 
+// Agent Health Score - Composite daily health metric per agent
+model AgentHealthScore {
+    id       String   @id @default(cuid())
+    agentId  String
+    agent    Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId String?
+    date     DateTime @db.Date
+
+    // Composite components (0.0-1.0)
+    evalScore            Float // Weighted avg of last N eval scores
+    feedbackScore        Float // Positive feedback ratio
+    toolSuccessRate      Float // Tool call success rate
+    improvementVelocity  Float // Score trend direction
+    recommendationHealth Float // Ratio of graduated vs active recs
+
+    // Composite health (weighted combination)
+    healthScore  Float // The single number: 0.0-1.0
+    healthStatus String // "excellent" | "good" | "fair" | "poor" | "critical"
+    confidence   Float  @default(0.0) // 0.0-1.0: how much data backs this score
+
+    // Context
+    runCount      Int // Runs in this period
+    evalCount     Int // Evaluations in this period
+    feedbackCount Int // Feedback items in this period
+
+    createdAt DateTime @default(now())
+
+    @@unique([agentId, date])
+    @@index([agentId, date])
+    @@index([tenantId])
+    @@map("agent_health_score")
+}
+
 // Agent Feedback Aggregate Daily - Feedback summaries
 model AgentFeedbackAggregateDaily {
     id            String   @id @default(cuid())
@@ -1758,14 +1798,20 @@ model EvaluationTheme {
 
 // Insight - AI-generated insights
 model Insight {
-    id          String   @id @default(cuid())
+    id          String  @id @default(cuid())
     agentId     String
-    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    agent       Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId    String?
-    type        String // "performance", "cost", "quality", etc.
+    type        String // "performance", "cost", "quality", "warning", "info"
     title       String
-    description String   @db.Text
-    createdAt   DateTime @default(now())
+    description String  @db.Text
+
+    // Action pipeline (insights can trigger downstream events)
+    actionType   String? @default("informational") // "learning_trigger" | "alert" | "scorecard_adjustment" | "informational"
+    actionStatus String  @default("pending") // "pending" | "executed" | "dismissed"
+    actionRef    String? // ID of learning session, alert, etc. created by the action
+
+    createdAt DateTime @default(now())
 
     @@index([agentId, createdAt])
     @@index([tenantId])
@@ -3659,4 +3705,166 @@ model CampaignLog {
 
     @@index([campaignId, createdAt])
     @@map("campaign_log")
+}
+
+// ============================================================================
+// Activity Feed & Backlog System
+// ============================================================================
+
+// ActivityEvent - Denormalized event store for the unified Activity Feed.
+// Every significant platform event gets a row. Single-table query for fast reads.
+model ActivityEvent {
+    id        String            @id @default(cuid())
+    type      ActivityEventType
+    timestamp DateTime          @default(now())
+
+    // Actor
+    agentId   String?
+    agentSlug String?
+    agentName String?
+    userId    String?
+
+    // Content
+    summary String  @db.Text // Human-readable event description
+    detail  String? @db.Text // Extended detail for drill-down
+    status  String? // "success", "failure", "info", "warning"
+
+    // Context links
+    source       String? // "slack", "schedule", "webhook", "api", "heartbeat", "campaign"
+    runId        String? // Link to AgentRun
+    taskId       String? // Link to BacklogTask
+    networkRunId String? // Link to NetworkRun
+    campaignId   String? // Link to Campaign
+
+    // Metrics (denormalized for feed display without joins)
+    costUsd    Float?
+    durationMs Int?
+    tokenCount Int?
+
+    // Metadata
+    metadata Json?
+    tags     String[]
+
+    // Tenancy
+    tenantId    String?
+    workspaceId String?
+
+    @@index([timestamp])
+    @@index([agentId, timestamp])
+    @@index([type, timestamp])
+    @@index([source, timestamp])
+    @@index([tenantId, timestamp])
+    @@index([workspaceId, timestamp])
+    @@map("activity_event")
+}
+
+enum ActivityEventType {
+    // Agent execution
+    RUN_COMPLETED
+    RUN_FAILED
+    RUN_STARTED
+
+    // Heartbeat
+    HEARTBEAT_RAN
+    HEARTBEAT_ALERT
+
+    // Backlog
+    TASK_CREATED
+    TASK_COMPLETED
+    TASK_FAILED
+    TASK_DEFERRED
+
+    // Network delegation
+    NETWORK_ROUTED
+    NETWORK_COMPLETED
+
+    // Campaign
+    CAMPAIGN_STARTED
+    CAMPAIGN_COMPLETED
+    CAMPAIGN_FAILED
+    MISSION_COMPLETED
+
+    // Triggers
+    TRIGGER_FIRED
+    SCHEDULE_EXECUTED
+
+    // Communication
+    SLACK_MESSAGE_HANDLED
+    EMAIL_PROCESSED
+
+    // Platform
+    AGENT_CREATED
+    AGENT_UPDATED
+    SKILL_CREATED
+    INTEGRATION_EVENT
+    GUARDRAIL_TRIGGERED
+    ALERT_RAISED
+
+    // System
+    SYSTEM_EVENT
+}
+
+// Backlog - An agent's persistent work queue. One per agent.
+model Backlog {
+    id          String  @id @default(cuid())
+    agentId     String  @unique
+    agent       Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    name        String  @default("Backlog")
+    description String? @db.Text
+    tenantId    String?
+    workspaceId String?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    tasks BacklogTask[]
+
+    @@index([agentId])
+    @@index([tenantId])
+    @@map("backlog")
+}
+
+// BacklogTask - A work item on an agent's backlog.
+model BacklogTask {
+    id          String            @id @default(cuid())
+    backlogId   String
+    backlog     Backlog           @relation(fields: [backlogId], references: [id], onDelete: Cascade)
+    title       String
+    description String?           @db.Text
+    status      BacklogTaskStatus @default(PENDING)
+    priority    Int               @default(5) // 0=low, 10=critical
+
+    // Scheduling
+    dueDate DateTime?
+
+    // Source tracking
+    source      String? // "human", "agent", "heartbeat", "campaign", "trigger", "slack"
+    createdById String? // userId or agentSlug that created this task
+
+    // Execution
+    agentRunId      String? // Link to the AgentRun that processed this task
+    lastAttemptAt   DateTime?
+    lastAttemptNote String?   @db.Text
+
+    // Context and result
+    contextJson Json?
+    tags        String[]
+    result      String? @db.Text
+    completedAt DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([backlogId, status, priority])
+    @@index([backlogId, dueDate])
+    @@index([status])
+    @@map("backlog_task")
+}
+
+enum BacklogTaskStatus {
+    PENDING
+    IN_PROGRESS
+    COMPLETED
+    FAILED
+    DEFERRED
 }

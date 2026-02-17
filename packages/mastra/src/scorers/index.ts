@@ -17,7 +17,7 @@ export type {
 } from "./types";
 export { DEFAULT_SCORECARD_CRITERIA, validateCriteriaWeights, computeWeightedScore } from "./types";
 export { runTier2Auditor, buildAuditorPrompt } from "./auditor";
-export { runTier1Prescreen, shouldRunTier2 } from "./tier1";
+export { runTier1Prescreen, shouldRunTier2, normalizeTier1ToScorecard } from "./tier1";
 export { generateScorecard } from "./scorecard-generator";
 export { SCORECARD_TEMPLATES } from "./templates";
 export type { ScorecardTemplateDefinition } from "./templates";

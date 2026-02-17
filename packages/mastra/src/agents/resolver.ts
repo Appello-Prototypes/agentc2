@@ -182,6 +182,50 @@ interface ModelConfig {
 }
 
 /**
+ * Structured error thrown when an agent's monthly spend exceeds its hard budget limit.
+ * Carries budget details so consumers (e.g. chat route) can render a user-facing upgrade flow
+ * instead of a generic 500 error. This is a critical SaaS revenue touchpoint.
+ */
+export class BudgetExceededError extends Error {
+    public readonly code = "BUDGET_EXCEEDED" as const;
+    public readonly agentId: string;
+    public readonly currentSpendUsd: number;
+    public readonly monthlyLimitUsd: number;
+    public readonly periodStart: string;
+    public readonly periodEnd: string;
+
+    constructor(details: {
+        agentId: string;
+        currentSpendUsd: number;
+        monthlyLimitUsd: number;
+        periodStart: string;
+        periodEnd: string;
+    }) {
+        super(
+            `Agent budget exceeded: $${details.currentSpendUsd.toFixed(2)} / $${details.monthlyLimitUsd} monthly limit`
+        );
+        this.name = "BudgetExceededError";
+        this.agentId = details.agentId;
+        this.currentSpendUsd = details.currentSpendUsd;
+        this.monthlyLimitUsd = details.monthlyLimitUsd;
+        this.periodStart = details.periodStart;
+        this.periodEnd = details.periodEnd;
+    }
+
+    /** Serialize to a plain object for API responses / stream data parts */
+    toJSON() {
+        return {
+            code: this.code,
+            agentId: this.agentId,
+            currentSpendUsd: this.currentSpendUsd,
+            monthlyLimitUsd: this.monthlyLimitUsd,
+            periodStart: this.periodStart,
+            periodEnd: this.periodEnd
+        };
+    }
+}
+
+/**
  * AgentResolver class
  *
  * Provides database-first agent resolution with fallback to code-defined agents.
@@ -472,8 +516,8 @@ export class AgentResolver {
                     const isEssential = essentialPrefixes.some(
                         (p) => toolKey === p || toolKey.startsWith(p + "-")
                     );
-                    const isAlwaysLoaded = alwaysLoaded.some(
-                        (t) => toolKey.toLowerCase().includes(t.toLowerCase())
+                    const isAlwaysLoaded = alwaysLoaded.some((t) =>
+                        toolKey.toLowerCase().includes(t.toLowerCase())
                     );
                     if (!isEssential && !isAlwaysLoaded) {
                         delete tools[toolKey];
@@ -615,7 +659,7 @@ export class AgentResolver {
 
     /**
      * Check if an agent has exceeded its hard budget limit.
-     * Throws if the agent's monthly spend >= the configured limit with hardLimit enabled.
+     * Throws BudgetExceededError if the agent's monthly spend >= the configured limit with hardLimit enabled.
      * Called before hydration to reject runs early without incurring tool/skill loading costs.
      */
     private async checkBudgetLimit(agentId: string): Promise<void> {
@@ -642,9 +686,13 @@ export class AgentResolver {
         const currentMonthCost = costEvents.reduce((sum, e) => sum + (e.costUsd || 0), 0);
 
         if (currentMonthCost >= budgetPolicy.monthlyLimitUsd) {
-            throw new Error(
-                `Agent budget exceeded: $${currentMonthCost.toFixed(2)} / $${budgetPolicy.monthlyLimitUsd} monthly limit`
-            );
+            throw new BudgetExceededError({
+                agentId,
+                currentSpendUsd: Math.round(currentMonthCost * 100) / 100,
+                monthlyLimitUsd: budgetPolicy.monthlyLimitUsd,
+                periodStart: startOfMonth.toISOString(),
+                periodEnd: new Date().toISOString()
+            });
         }
     }
 
