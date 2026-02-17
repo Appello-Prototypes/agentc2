@@ -157,8 +157,7 @@ async function firecrawlScrapeYouTube(
         },
         body: JSON.stringify({
             url,
-            formats: ["markdown"],
-            onlyMainContent: true
+            formats: ["markdown"]
         })
     });
 
