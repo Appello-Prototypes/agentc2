@@ -201,7 +201,8 @@ export const youtubeGetTranscriptTool = createTool({
         transcript: z.string().optional(),
         ragDocumentId: z.string().optional(),
         ragChunkCount: z.number().optional(),
-        error: z.string().optional()
+        error: z.string().optional(),
+        debug: z.string().optional()
     }),
     execute: async ({ url }) => {
         const normalizedUrl = normalizeYouTubeUrl(url);
@@ -227,7 +228,8 @@ export const youtubeGetTranscriptTool = createTool({
                 ...base,
                 mode: "inline" as const,
                 transcript: "",
-                error: "No transcript available for this video. The video may not have captions enabled."
+                error: "No transcript available for this video. The video may not have captions enabled.",
+                debug: `markdown_length=${markdown.length}; first_300=${markdown.substring(0, 300).replace(/\n/g, "\\n")}; has_transcript_heading=${markdown.includes("## Transcript")}; has_views=${markdown.includes("**Views**")}; has_uploaded_by=${markdown.includes("**Uploaded by**")}`
             };
         }
 
