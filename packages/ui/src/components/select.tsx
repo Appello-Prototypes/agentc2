@@ -4,13 +4,6 @@ import * as React from "react";
 import { Select as SelectPrimitive } from "@base-ui/react/select";
 
 import { cn } from "../lib/utils";
-import { HugeiconsIcon } from "@hugeicons/react";
-import {
-    UnfoldMoreIcon,
-    Tick02Icon,
-    ArrowUp01Icon,
-    ArrowDown01Icon
-} from "@hugeicons/core-free-icons";
 
 const Select = SelectPrimitive.Root;
 
@@ -55,11 +48,21 @@ function SelectTrigger({
             {children}
             <SelectPrimitive.Icon
                 render={
-                    <HugeiconsIcon
-                        icon={UnfoldMoreIcon}
-                        strokeWidth={2}
+                    <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
                         className="text-muted-foreground pointer-events-none size-4"
-                    />
+                    >
+                        <path d="M7 15l5 5 5-5" />
+                        <path d="M7 9l5-5 5 5" />
+                    </svg>
                 }
             />
         </SelectPrimitive.Trigger>
@@ -136,7 +139,20 @@ function SelectItem({ className, children, ...props }: SelectPrimitive.Item.Prop
                     <span className="pointer-events-none absolute right-2 flex size-4 items-center justify-center" />
                 }
             >
-                <HugeiconsIcon icon={Tick02Icon} strokeWidth={2} className="pointer-events-none" />
+                <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="pointer-events-none"
+                >
+                    <polyline points="20 6 9 17 4 12" />
+                </svg>
             </SelectPrimitive.ItemIndicator>
         </SelectPrimitive.Item>
     );
@@ -165,7 +181,19 @@ function SelectScrollUpButton({
             )}
             {...props}
         >
-            <HugeiconsIcon icon={ArrowUp01Icon} strokeWidth={2} />
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            >
+                <path d="M18 15l-6-6-6 6" />
+            </svg>
         </SelectPrimitive.ScrollUpArrow>
     );
 }
@@ -183,7 +211,19 @@ function SelectScrollDownButton({
             )}
             {...props}
         >
-            <HugeiconsIcon icon={ArrowDown01Icon} strokeWidth={2} />
+            <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+            >
+                <path d="M6 9l6 6 6-6" />
+            </svg>
         </SelectPrimitive.ScrollDownArrow>
     );
 }

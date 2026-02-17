@@ -56,6 +56,11 @@ export const gmailSearchEmailsTool = createTool({
             z.object({
                 id: z.string(),
                 threadId: z.string(),
+                messageIdHeader: z
+                    .string()
+                    .describe(
+                        "RFC822 Message-ID header. Use for Gmail web links: https://mail.google.com/mail/u/0/#search/rfc822msgid:<value>"
+                    ),
                 from: z.string(),
                 to: z.string(),
                 subject: z.string(),
@@ -102,7 +107,10 @@ export const gmailSearchEmailsTool = createTool({
                         address,
                         `/users/me/messages/${msg.id}`,
                         {
-                            params: { format: "metadata", metadataHeaders: "From,To,Subject,Date" }
+                            params: {
+                                format: "metadata",
+                                metadataHeaders: "From,To,Subject,Date,Message-ID"
+                            }
                         }
                     );
                     if (!detailResponse.ok) return null;
@@ -115,6 +123,7 @@ export const gmailSearchEmailsTool = createTool({
                 .map((m) => ({
                     id: m.id,
                     threadId: m.threadId,
+                    messageIdHeader: getHeader(m.payload?.headers, "Message-ID"),
                     from: getHeader(m.payload?.headers, "From"),
                     to: getHeader(m.payload?.headers, "To"),
                     subject: getHeader(m.payload?.headers, "Subject"),

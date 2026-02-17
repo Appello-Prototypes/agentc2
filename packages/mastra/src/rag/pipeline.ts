@@ -82,6 +82,7 @@ export async function ingestDocument(
         sourceId?: string;
         sourceName?: string;
         chunkOptions?: ChunkOptions;
+        metadata?: Record<string, any>;
     } = {}
 ): Promise<{
     documentId: string;
@@ -104,6 +105,7 @@ export async function ingestDocument(
     });
 
     const metadata = chunks.map((chunk, index) => ({
+        ...options.metadata,
         ...chunk.metadata,
         documentId,
         sourceName: sourceName || documentId,

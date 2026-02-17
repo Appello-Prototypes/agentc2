@@ -668,20 +668,18 @@ export default function UnifiedChatPage() {
 
     // Transport
     const transport = useMemo(() => {
+        console.log(`[Chat Transport] Building transport for agent: ${selectedAgentSlug}`);
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const bodyExtra: Record<string, any> = {
             threadId,
             requestContext: { userId: "chat-user", mode: "live" }
         };
-        // Send runId for conversation continuation (subsequent messages in same conversation)
         if (currentRunId) bodyExtra.runId = currentRunId;
-        // Send interaction mode for mode-aware tool filtering
         bodyExtra.interactionMode = interactionMode;
         if (modelOverride) bodyExtra.modelOverride = modelOverride;
         if (thinkingEnabled && isAnthropicModel(modelOverride?.name || null)) {
             bodyExtra.thinkingOverride = { type: "enabled", budgetTokens: 10000 };
         }
-        console.log(`[Chat Transport] Building transport for agent: ${selectedAgentSlug}`);
         return new DefaultChatTransport({
             api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
             body: bodyExtra
@@ -698,6 +696,7 @@ export default function UnifiedChatPage() {
     const { messages, setMessages, sendMessage, status, stop } = useChat({ transport });
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
+    const isBusy = isStreaming || isSubmitted;
     const hasMessages = messages.length > 0;
     const submitStatus = isSubmitted
         ? ("submitted" as const)
@@ -742,7 +741,7 @@ export default function UnifiedChatPage() {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             for (const part of (message.parts || []) as any[]) {
                 if (part.type === "data-run-metadata" && part.data?.runId) {
-                    // eslint-disable-next-line react-hooks/set-state-in-effect
+                    // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync stream-derived metadata into state
                     setCurrentRunId(part.data.runId);
                     return;
                 }
@@ -765,9 +764,13 @@ export default function UnifiedChatPage() {
     // Handlers
     const handleAgentChange = useCallback(
         (newSlug: string, agent: AgentInfo) => {
+            // Always sync agent metadata (model, name, routing) regardless of
+            // whether the slug changed. This ensures initial load and re-selections
+            // correctly populate the header bar and model selector.
             setAgentDefaultModel(agent.modelName);
             setAgentRoutingMode(agent.routingConfig?.mode || null);
             setAgentName(agent.name);
+
             if (newSlug !== selectedAgentSlug) {
                 setSelectedAgentSlug(newSlug);
                 setModelOverride(null);
@@ -981,7 +984,6 @@ export default function UnifiedChatPage() {
             <PromptInputBody>
                 <PromptInputTextarea
                     placeholder={textareaPlaceholder}
-                    disabled={isStreaming}
                     className="min-h-[48px] text-[15px]"
                 />
             </PromptInputBody>
@@ -1038,13 +1040,13 @@ export default function UnifiedChatPage() {
                     <AgentSelector
                         value={selectedAgentSlug}
                         onChange={handleAgentChange}
-                        disabled={isStreaming}
+                        disabled={isBusy}
                     />
                     <ModelSelector
                         value={modelOverride?.name || null}
                         agentDefault={agentDefaultModel}
                         onChange={setModelOverride}
-                        disabled={isStreaming}
+                        disabled={isBusy}
                     />
                     {agentRoutingMode === "auto" && !modelOverride && (
                         <span

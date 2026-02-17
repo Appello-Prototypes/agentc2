@@ -691,6 +691,7 @@ model Agent {
     // Policies
     requiresApproval Boolean @default(false) // Require human approval for runs
     maxSpendUsd      Float? // Max spend per run in USD
+    autoVectorize    Boolean @default(true) // Auto-embed outputs into RAG knowledge base
 
     // Metadata
     metadata          Json?
@@ -745,6 +746,7 @@ model Agent {
     recommendations        AgentRecommendation[]
     healthScores           AgentHealthScore[]
     backlog                Backlog?
+    outputActions          OutputAction[]
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -3867,4 +3869,29 @@ enum BacklogTaskStatus {
     COMPLETED
     FAILED
     DEFERRED
+}
+
+// Output Action - Configurable output destinations for agent run results
+// Handles plumbing (webhooks, agent chaining). Agents own their own communication via MCP tools.
+model OutputAction {
+    id         String           @id @default(cuid())
+    agentId    String
+    agent      Agent            @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    tenantId   String?
+    name       String
+    type       OutputActionType
+    configJson Json
+    isActive   Boolean          @default(true)
+    createdAt  DateTime         @default(now())
+    updatedAt  DateTime         @updatedAt
+    createdBy  String?
+
+    @@index([agentId, isActive])
+    @@index([tenantId])
+    @@map("output_action")
+}
+
+enum OutputActionType {
+    WEBHOOK
+    CHAIN_AGENT
 }

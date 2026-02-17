@@ -1319,7 +1319,11 @@ export default function ConfigurePage() {
                                         }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue>
+                                                {PROVIDER_DISPLAY_NAMES[
+                                                    formData.modelProvider ?? ""
+                                                ] ?? formData.modelProvider}
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="anthropic">Anthropic</SelectItem>
@@ -1355,7 +1359,11 @@ export default function ConfigurePage() {
                                         }}
                                     >
                                         <SelectTrigger>
-                                            <SelectValue />
+                                            <SelectValue>
+                                                {availableModels.find(
+                                                    (m) => m.name === formData.modelName
+                                                )?.displayName ?? formData.modelName}
+                                            </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
                                             {availableModels
@@ -1774,7 +1782,11 @@ export default function ConfigurePage() {
                                                     }}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue />
+                                                        <SelectValue>
+                                                            {PROVIDER_DISPLAY_NAMES[
+                                                                fastModelProvider
+                                                            ] ?? fastModelProvider}
+                                                        </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="anthropic">
@@ -1822,7 +1834,11 @@ export default function ConfigurePage() {
                                                     }}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue />
+                                                        <SelectValue>
+                                                            {availableModels.find(
+                                                                (m) => m.name === fastModelName
+                                                            )?.displayName ?? fastModelName}
+                                                        </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         {availableModels
@@ -1872,7 +1888,11 @@ export default function ConfigurePage() {
                                                     }}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue />
+                                                        <SelectValue>
+                                                            {PROVIDER_DISPLAY_NAMES[
+                                                                escalationModelProvider
+                                                            ] ?? escalationModelProvider}
+                                                        </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="anthropic">
@@ -1921,7 +1941,16 @@ export default function ConfigurePage() {
                                                     }}
                                                 >
                                                     <SelectTrigger>
-                                                        <SelectValue />
+                                                        <SelectValue>
+                                                            {escalationModelName
+                                                                ? (availableModels.find(
+                                                                      (m) =>
+                                                                          m.name ===
+                                                                          escalationModelName
+                                                                  )?.displayName ??
+                                                                  escalationModelName)
+                                                                : "None (use primary)"}
+                                                        </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
                                                         <SelectItem value="none">
@@ -2696,6 +2725,26 @@ export default function ConfigurePage() {
                                     </div>
                                 </div>
                             )}
+
+                            {/* Auto-Vectorize Toggle */}
+                            <div className="border-t pt-6">
+                                <div className="flex items-center gap-4">
+                                    <Switch
+                                        checked={(formData as Record<string, unknown>).autoVectorize !== false}
+                                        onCheckedChange={(checked) =>
+                                            handleChange("autoVectorize" as keyof Agent, checked)
+                                        }
+                                    />
+                                    <div>
+                                        <Label>Auto-vectorize outputs</Label>
+                                        <p className="text-muted-foreground text-xs">
+                                            Completed run outputs are embedded into the shared
+                                            knowledge base with quality scores. Any agent with RAG
+                                            access can search this agent&apos;s history.
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
                         </CardContent>
                     </Card>
                 </TabsContent>

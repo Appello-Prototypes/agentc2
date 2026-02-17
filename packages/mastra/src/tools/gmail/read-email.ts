@@ -103,6 +103,11 @@ export const gmailReadEmailTool = createTool({
             .object({
                 id: z.string(),
                 threadId: z.string(),
+                messageIdHeader: z
+                    .string()
+                    .describe(
+                        "RFC822 Message-ID header (e.g. <CADGUa...@mail.gmail.com>). Use this for Gmail web links: https://mail.google.com/mail/u/0/#search/rfc822msgid:<value>"
+                    ),
                 from: z.string(),
                 to: z.string(),
                 cc: z.string(),
@@ -146,6 +151,7 @@ export const gmailReadEmailTool = createTool({
                 message: {
                     id: msg.id,
                     threadId: msg.threadId,
+                    messageIdHeader: getHeader(msg.payload?.headers, "Message-ID"),
                     from: getHeader(msg.payload?.headers, "From"),
                     to: getHeader(msg.payload?.headers, "To"),
                     cc: getHeader(msg.payload?.headers, "Cc"),

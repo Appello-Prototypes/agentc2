@@ -515,6 +515,35 @@ export const runCompletedFunction = inngest.createFunction(
             });
         });
 
+        // Step 5: Execute output actions (immediate plumbing -- WEBHOOK, CHAIN_AGENT)
+        await step.run("execute-output-actions", async () => {
+            const { executeOutputAction } = await import("./output-actions");
+
+            const actions = await prisma.outputAction.findMany({
+                where: { agentId, isActive: true }
+            });
+            if (actions.length === 0) return;
+
+            const run = await prisma.agentRun.findUnique({
+                where: { id: runId },
+                select: { outputText: true, inputText: true, source: true }
+            });
+            if (!run?.outputText) return;
+
+            for (const action of actions) {
+                try {
+                    const result = await executeOutputAction(action, run, { agentId, runId });
+                    if (!result.success) {
+                        console.error(
+                            `[OutputAction] ${action.type}/${action.id} failed: ${result.error}`
+                        );
+                    }
+                } catch (err) {
+                    console.error(`[OutputAction] ${action.type}/${action.id} threw:`, err);
+                }
+            }
+        });
+
         return { runId, processed: true };
     }
 );
@@ -649,6 +678,68 @@ export const evaluationCompletedFunction = inngest.createFunction(
         // Compute and persist Agent Health Score
         await step.run("compute-health-score", async () => {
             await computeAndUpsertHealthScore(agentId);
+        });
+
+        // Auto-vectorize output into RAG with quality metadata
+        await step.run("auto-vectorize-output", async () => {
+            const { runId } = event.data;
+            if (!runId) return;
+
+            const run = await prisma.agentRun.findUnique({
+                where: { id: runId },
+                select: {
+                    id: true,
+                    outputText: true,
+                    source: true,
+                    triggerType: true,
+                    agentId: true,
+                    createdAt: true
+                }
+            });
+            if (!run?.outputText || run.outputText.length < 50) return;
+
+            const agent = await prisma.agent.findUnique({
+                where: { id: run.agentId },
+                select: { slug: true, name: true, autoVectorize: true }
+            });
+            if (!agent?.autoVectorize) return;
+
+            const evaluation = await prisma.agentEvaluation.findUnique({
+                where: { id: evaluationId },
+                select: {
+                    overallGrade: true,
+                    confidenceScore: true,
+                    evaluationTier: true
+                }
+            });
+
+            try {
+                const { ingestDocument } = await import("@repo/mastra");
+
+                await ingestDocument(run.outputText, {
+                    type: "markdown",
+                    sourceId: `agent-output/${agent.slug}/${run.id}`,
+                    sourceName: `${agent.name} - ${run.createdAt.toISOString().split("T")[0]}`,
+                    metadata: {
+                        contentType: "agent-output",
+                        agentSlug: agent.slug,
+                        agentName: agent.name,
+                        runId: run.id,
+                        source: run.source || "unknown",
+                        triggerType: run.triggerType,
+                        overallGrade: evaluation?.overallGrade ?? null,
+                        confidenceScore: evaluation?.confidenceScore ?? null,
+                        evaluationTier: evaluation?.evaluationTier ?? null,
+                        timestamp: run.createdAt.toISOString()
+                    }
+                });
+
+                console.log(
+                    `[AutoVectorize] Ingested output for ${agent.slug}/${run.id}`
+                );
+            } catch (err) {
+                console.error(`[AutoVectorize] Failed for ${run.id}:`, err);
+            }
         });
 
         return { evaluationId, processed: true };
@@ -5999,6 +6090,7 @@ export const gmailMessageProcessFunction = inngest.createFunction(
                     integrationConnectionId: connectionId,
                     threadId: message.threadId,
                     messageId: message.messageId,
+                    messageIdHeader: message.messageIdHeader,
                     from: message.from,
                     to: message.to,
                     cc: message.cc,
