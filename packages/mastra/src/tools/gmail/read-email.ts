@@ -150,7 +150,7 @@ export const gmailReadEmailTool = createTool({
                 message: {
                     id: msg.id,
                     threadId: msg.threadId,
-                    webUrl: buildGmailWebUrl(msg.threadId),
+                    webUrl: buildGmailWebUrl(msg.threadId, address),
                     messageIdHeader: getHeader(msg.payload?.headers, "Message-ID"),
                     from: getHeader(msg.payload?.headers, "From"),
                     to: getHeader(msg.payload?.headers, "To"),

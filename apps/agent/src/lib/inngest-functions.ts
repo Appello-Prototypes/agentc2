@@ -42,7 +42,7 @@ import { updateTriggerEventRecord } from "./trigger-events";
  * Encodes the thread ID into Gmail's FMfcg... view token format.
  * Algorithm: https://github.com/ArsenalRecon/GmailURLDecoder (MIT)
  */
-function buildGmailWebUrl(hexThreadId: string): string {
+function buildGmailWebUrl(hexThreadId: string, gmailAddress?: string): string {
     const FULL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
     const REDUCED = "BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz";
 
@@ -95,7 +95,8 @@ function buildGmailWebUrl(hexThreadId: string): string {
     const decimal = BigInt("0x" + hexThreadId).toString();
     const b64 = Buffer.from(`f:${decimal}`).toString("base64").replace(/=+$/, "");
     const token = baseConvert(b64, FULL, REDUCED);
-    return `https://mail.google.com/mail/u/0/#all/${token}`;
+    const authParam = gmailAddress ? `?authuser=${encodeURIComponent(gmailAddress)}` : "/u/0/";
+    return `https://mail.google.com/mail/${authParam}#all/${token}`;
 }
 
 // ==============================
@@ -6150,7 +6151,7 @@ export const gmailMessageProcessFunction = inngest.createFunction(
                     threadId: message.threadId,
                     messageId: message.messageId,
                     messageIdHeader: message.messageIdHeader,
-                    webUrl: buildGmailWebUrl(message.threadId),
+                    webUrl: buildGmailWebUrl(message.threadId, gmailAddress),
                     from: message.from,
                     to: message.to,
                     cc: message.cc,

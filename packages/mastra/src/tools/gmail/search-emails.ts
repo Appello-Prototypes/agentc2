@@ -122,7 +122,7 @@ export const gmailSearchEmailsTool = createTool({
                 .map((m) => ({
                     id: m.id,
                     threadId: m.threadId,
-                    webUrl: buildGmailWebUrl(m.threadId),
+                    webUrl: buildGmailWebUrl(m.threadId, address),
                     messageIdHeader: getHeader(m.payload?.headers, "Message-ID"),
                     from: getHeader(m.payload?.headers, "From"),
                     to: getHeader(m.payload?.headers, "To"),

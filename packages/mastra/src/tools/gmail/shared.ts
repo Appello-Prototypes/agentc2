@@ -337,9 +337,10 @@ function gmailTransform(token: string, charsetIn: string, charsetOut: string): s
     return outBuff.join("");
 }
 
-export function buildGmailWebUrl(hexThreadId: string): string {
+export function buildGmailWebUrl(hexThreadId: string, gmailAddress?: string): string {
     const decimal = BigInt("0x" + hexThreadId).toString();
     const b64 = Buffer.from(`f:${decimal}`).toString("base64").replace(/=+$/, "");
     const token = gmailTransform(b64, CHARSET_FULL, CHARSET_REDUCED);
-    return `https://mail.google.com/mail/u/0/#all/${token}`;
+    const authParam = gmailAddress ? `?authuser=${encodeURIComponent(gmailAddress)}` : "/u/0/";
+    return `https://mail.google.com/mail/${authParam}#all/${token}`;
 }
