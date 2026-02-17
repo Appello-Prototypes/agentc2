@@ -365,6 +365,62 @@ You don't just wait to be asked. You are autonomous. You think, you act, you imp
         maxSteps: 15,
         metadata: {
             mcpEnabled: true,
+            maxToolsLoaded: 50,
+            alwaysLoadedTools: [
+                // Utilities & meta-tools
+                "date-time",
+                "calculator",
+                "web-fetch",
+                "json-parser",
+                "generate-id",
+                "memory-recall",
+                "search-skills",
+                "activate-skill",
+                "list-active-skills",
+                "rag-query",
+                "document-search",
+                "document-create",
+                "document-read",
+                "document-update",
+                "execute-code",
+                "write-workspace-file",
+                "read-workspace-file",
+                "list-workspace-files",
+                "updateWorkingMemory",
+                // Platform operations
+                "agent-list",
+                "agent-overview",
+                "agent-analytics",
+                "agent-create",
+                "agent-read",
+                "agent-update",
+                "agent-costs",
+                "agent-budget-get",
+                "agent-budget-update",
+                // Monitoring
+                "live-stats",
+                "live-runs",
+                "live-metrics",
+                "metrics-live-summary",
+                // Campaigns
+                "campaign-create",
+                "campaign-list",
+                "campaign-get",
+                "campaign-update",
+                // Learning
+                "agent-learning-start",
+                "agent-learning-sessions",
+                "agent-learning-session-get",
+                // Skills
+                "skill-create",
+                "skill-read",
+                "skill-list",
+                "skill-update",
+                // Goals
+                "goal-create",
+                "goal-list",
+                "goal-get"
+            ],
             slack: {
                 displayName: "Big Jim",
                 iconEmoji: ":man:"

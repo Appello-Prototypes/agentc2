@@ -777,6 +777,95 @@ export function extractToolCalls(response: {
 // ─── Conversation-level Run Functions ────────────────────────────────────────
 
 /**
+ * Internal helper: finalize a conversation run by aggregating turn steps into
+ * the trace and setting COMPLETED status. Idempotent — safe to call multiple
+ * times. Used by completeTurn (auto-finalize) and finalizeConversationRun.
+ */
+async function finalizeConversationRunInternal(runId: string, agentId: string): Promise<void> {
+    await prisma.$transaction(async (tx) => {
+        // Gather all turn steps for the unified trace
+        const allTurns = await tx.agentRunTurn.findMany({
+            where: { runId },
+            orderBy: { turnIndex: "asc" },
+            select: { stepsJson: true, outputText: true }
+        });
+
+        const unifiedSteps: unknown[] = [];
+        for (const t of allTurns) {
+            if (Array.isArray(t.stepsJson)) {
+                for (const step of t.stepsJson as unknown[]) {
+                    unifiedSteps.push(step);
+                }
+            }
+        }
+
+        // Get final aggregates
+        const agg = await tx.agentRunTurn.aggregate({
+            where: { runId },
+            _sum: {
+                promptTokens: true,
+                completionTokens: true,
+                totalTokens: true,
+                costUsd: true
+            }
+        });
+
+        await tx.agentRun.update({
+            where: { id: runId },
+            data: {
+                status: "COMPLETED",
+                completedAt: new Date(),
+                promptTokens: agg._sum.promptTokens || 0,
+                completionTokens: agg._sum.completionTokens || 0,
+                totalTokens: agg._sum.totalTokens || 0,
+                costUsd: agg._sum.costUsd || 0
+            }
+        });
+
+        // Update trace
+        const trace = await tx.agentTrace.findFirst({
+            where: { runId },
+            select: { id: true }
+        });
+
+        if (trace) {
+            await tx.agentTrace.update({
+                where: { id: trace.id },
+                data: {
+                    status: "COMPLETED",
+                    outputText: allTurns[allTurns.length - 1]?.outputText,
+                    stepsJson: unifiedSteps as unknown as Prisma.JsonArray,
+                    tokensJson: {
+                        prompt: agg._sum.promptTokens || 0,
+                        completion: agg._sum.completionTokens || 0,
+                        total: agg._sum.totalTokens || 0
+                    }
+                }
+            });
+        }
+    });
+
+    // Fire run/completed event for evaluations, learning, etc.
+    try {
+        await inngest.send({
+            name: "run/completed",
+            data: {
+                runId,
+                agentId,
+                status: "COMPLETED",
+                isConversation: true
+            }
+        });
+    } catch (inngestError) {
+        console.warn(
+            `[RunRecorder] Failed to emit run/completed for auto-finalize: ${inngestError}`
+        );
+    }
+
+    console.log(`[RunRecorder] Auto-finalized conversation run ${runId}`);
+}
+
+/**
  * Helper: build turn handle methods for a given turn within a conversation run.
  */
 function buildTurnMethods(
@@ -915,6 +1004,14 @@ function buildTurnMethods(
             console.log(
                 `[RunRecorder] Completed turn ${turnIndex} of run ${runId} in ${durationMs}ms (${totalTokens} tokens)`
             );
+
+            // Auto-finalize: aggregate turn steps into trace and set COMPLETED.
+            // If more turns arrive, continueTurn() will re-open the run.
+            try {
+                await finalizeConversationRunInternal(runId, agentId);
+            } catch (finalizeError) {
+                console.warn(`[RunRecorder] Auto-finalize failed for run ${runId}:`, finalizeError);
+            }
         },
 
         async failTurn(error: Error | string): Promise<void> {
@@ -1152,79 +1249,7 @@ export async function startConversationRun(
         },
 
         async finalizeRun(): Promise<void> {
-            await prisma.$transaction(async (tx) => {
-                // Gather all turn steps for the unified trace
-                const allTurns = await tx.agentRunTurn.findMany({
-                    where: { runId: run.id },
-                    orderBy: { turnIndex: "asc" },
-                    select: { turnIndex: true, stepsJson: true, inputText: true, outputText: true }
-                });
-
-                // Build unified stepsJson for the trace
-                const unifiedSteps: unknown[] = [];
-                for (const t of allTurns) {
-                    if (Array.isArray(t.stepsJson)) {
-                        for (const step of t.stepsJson as unknown[]) {
-                            unifiedSteps.push(step);
-                        }
-                    }
-                }
-
-                // Get final aggregates
-                const agg = await tx.agentRunTurn.aggregate({
-                    where: { runId: run.id },
-                    _sum: {
-                        promptTokens: true,
-                        completionTokens: true,
-                        totalTokens: true,
-                        costUsd: true
-                    }
-                });
-
-                await tx.agentRun.update({
-                    where: { id: run.id },
-                    data: {
-                        status: "COMPLETED",
-                        completedAt: new Date(),
-                        promptTokens: agg._sum.promptTokens || 0,
-                        completionTokens: agg._sum.completionTokens || 0,
-                        totalTokens: agg._sum.totalTokens || 0,
-                        costUsd: agg._sum.costUsd || 0
-                    }
-                });
-
-                await tx.agentTrace.update({
-                    where: { id: trace.id },
-                    data: {
-                        status: "COMPLETED",
-                        outputText: allTurns[allTurns.length - 1]?.outputText,
-                        stepsJson: unifiedSteps as unknown as Prisma.JsonArray,
-                        tokensJson: {
-                            prompt: agg._sum.promptTokens || 0,
-                            completion: agg._sum.completionTokens || 0,
-                            total: agg._sum.totalTokens || 0
-                        }
-                    }
-                });
-            });
-
-            // Fire run/completed event for evaluations, learning, etc.
-            try {
-                await inngest.send({
-                    name: "run/completed",
-                    data: {
-                        runId: run.id,
-                        agentId: options.agentId,
-                        status: "COMPLETED",
-                        isConversation: true
-                    }
-                });
-            } catch (inngestError) {
-                console.warn(
-                    `[RunRecorder] Failed to emit run/completed for conversation: ${inngestError}`
-                );
-            }
-
+            await finalizeConversationRunInternal(run.id, options.agentId);
             console.log(`[RunRecorder] Finalized conversation run ${run.id}`);
         }
     };
@@ -1244,8 +1269,8 @@ export async function continueTurn(options: ContinueTurnOptions): Promise<TurnHa
             select: { turnCount: true, status: true }
         });
 
-        if (currentRun.status === "COMPLETED" || currentRun.status === "FAILED") {
-            throw new Error(`Cannot add turn to ${currentRun.status} run ${options.runId}`);
+        if (currentRun.status === "FAILED") {
+            throw new Error(`Cannot add turn to FAILED run ${options.runId}`);
         }
 
         const newIndex = currentRun.turnCount;
@@ -1260,11 +1285,27 @@ export async function continueTurn(options: ContinueTurnOptions): Promise<TurnHa
             }
         });
 
-        // Increment turn count
+        // Increment turn count and re-open the run if it was COMPLETED
         await tx.agentRun.update({
             where: { id: options.runId },
-            data: { turnCount: newIndex + 1 }
+            data: {
+                turnCount: newIndex + 1,
+                status: "RUNNING",
+                completedAt: null
+            }
         });
+
+        // Also re-open the trace
+        const traceRecord = await tx.agentTrace.findFirst({
+            where: { runId: options.runId },
+            select: { id: true }
+        });
+        if (traceRecord) {
+            await tx.agentTrace.update({
+                where: { id: traceRecord.id },
+                data: { status: "RUNNING" }
+            });
+        }
 
         // Get the trace ID
         const trace = await tx.agentTrace.findFirst({
@@ -1321,84 +1362,7 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
         return true;
     }
 
-    await prisma.$transaction(async (tx) => {
-        // Gather all turn steps for the unified trace
-        const allTurns = await tx.agentRunTurn.findMany({
-            where: { runId },
-            orderBy: { turnIndex: "asc" },
-            select: { stepsJson: true, outputText: true }
-        });
-
-        const unifiedSteps: unknown[] = [];
-        for (const t of allTurns) {
-            if (Array.isArray(t.stepsJson)) {
-                for (const step of t.stepsJson as unknown[]) {
-                    unifiedSteps.push(step);
-                }
-            }
-        }
-
-        // Get final aggregates
-        const agg = await tx.agentRunTurn.aggregate({
-            where: { runId },
-            _sum: {
-                promptTokens: true,
-                completionTokens: true,
-                totalTokens: true,
-                costUsd: true
-            }
-        });
-
-        await tx.agentRun.update({
-            where: { id: runId },
-            data: {
-                status: "COMPLETED",
-                completedAt: new Date(),
-                promptTokens: agg._sum.promptTokens || 0,
-                completionTokens: agg._sum.completionTokens || 0,
-                totalTokens: agg._sum.totalTokens || 0,
-                costUsd: agg._sum.costUsd || 0
-            }
-        });
-
-        // Update trace
-        const trace = await tx.agentTrace.findFirst({
-            where: { runId },
-            select: { id: true }
-        });
-
-        if (trace) {
-            await tx.agentTrace.update({
-                where: { id: trace.id },
-                data: {
-                    status: "COMPLETED",
-                    outputText: allTurns[allTurns.length - 1]?.outputText,
-                    stepsJson: unifiedSteps as unknown as Prisma.JsonArray,
-                    tokensJson: {
-                        prompt: agg._sum.promptTokens || 0,
-                        completion: agg._sum.completionTokens || 0,
-                        total: agg._sum.totalTokens || 0
-                    }
-                }
-            });
-        }
-    });
-
-    // Fire run/completed event
-    try {
-        await inngest.send({
-            name: "run/completed",
-            data: {
-                runId,
-                agentId: run.agentId,
-                status: "COMPLETED",
-                isConversation: true,
-                turnCount: run.turnCount
-            }
-        });
-    } catch (inngestError) {
-        console.warn(`[RunRecorder] Failed to emit run/completed for finalize: ${inngestError}`);
-    }
+    await finalizeConversationRunInternal(runId, run.agentId);
 
     // Record to Activity Feed
     recordActivity({
@@ -1410,6 +1374,5 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
         runId
     });
 
-    console.log(`[RunRecorder] Finalized conversation run ${runId}`);
     return true;
 }

@@ -110,6 +110,7 @@ export interface RunDetail {
         promptTokens: number | null;
         completionTokens: number | null;
         costUsd: number | null;
+        stepsJson?: unknown;
         toolCalls?: ToolCall[];
     }>;
     trace: Trace | null;

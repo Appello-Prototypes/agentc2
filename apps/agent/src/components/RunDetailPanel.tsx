@@ -328,6 +328,17 @@ export default function RunDetailPanel({
                                 const hasStepsJson =
                                     Array.isArray(stepsJson) && stepsJson.length > 0;
 
+                                // Fallback: aggregate stepsJson from turns when trace-level steps are empty
+                                const turnSteps: unknown[] = [];
+                                if (!hasSteps && !hasStepsJson && Array.isArray(runDetail?.turns)) {
+                                    for (const turn of runDetail.turns) {
+                                        if (Array.isArray(turn.stepsJson)) {
+                                            turnSteps.push(...(turn.stepsJson as unknown[]));
+                                        }
+                                    }
+                                }
+                                const hasTurnSteps = turnSteps.length > 0;
+
                                 if (hasSteps) {
                                     return (
                                         <div className="space-y-3">
@@ -366,6 +377,41 @@ export default function RunDetailPanel({
                                     return (
                                         <div className="space-y-3">
                                             {stepsJson.map((step: unknown, idx: number) => {
+                                                const s = step as Record<string, unknown>;
+                                                return (
+                                                    <div
+                                                        key={idx}
+                                                        className="bg-muted/30 rounded-lg border p-4"
+                                                    >
+                                                        <div className="mb-2 flex items-center justify-between">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="bg-primary/10 text-primary flex size-7 items-center justify-center rounded-full text-sm font-medium">
+                                                                    {idx + 1}
+                                                                </span>
+                                                                <Badge variant="outline">
+                                                                    {String(s.type || "step")}
+                                                                </Badge>
+                                                            </div>
+                                                            <span className="text-muted-foreground text-sm">
+                                                                {typeof s.durationMs === "number"
+                                                                    ? formatLatency(s.durationMs)
+                                                                    : "-"}
+                                                            </span>
+                                                        </div>
+                                                        <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                            {JSON.stringify(s, null, 2)}
+                                                        </pre>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                }
+
+                                if (hasTurnSteps) {
+                                    return (
+                                        <div className="space-y-3">
+                                            {turnSteps.map((step: unknown, idx: number) => {
                                                 const s = step as Record<string, unknown>;
                                                 return (
                                                     <div

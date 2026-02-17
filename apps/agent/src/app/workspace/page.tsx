@@ -60,6 +60,10 @@ import {
     QueueItemIndicator,
     QueueItemContent,
     QueueItemDescription,
+    ChainOfThought,
+    ChainOfThoughtHeader,
+    ChainOfThoughtContent,
+    ChainOfThoughtStep,
     type PromptInputMessage,
     type ToolActivity
 } from "@repo/ui";
@@ -124,28 +128,55 @@ function CollapsibleToolCall({ toolName, hasResult }: { toolName: string; hasRes
     );
 }
 
-function CollapsibleThinking({ text }: { text: string }) {
-    const [expanded, setExpanded] = useState(false);
+function parseReasoningSteps(text: string): { label: string; description?: string }[] {
+    if (!text.trim()) return [];
+
+    // Split by double newlines (paragraphs) first
+    const paragraphs = text
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter(Boolean);
+
+    if (paragraphs.length > 1) {
+        return paragraphs.map((paragraph) => {
+            const lines = paragraph.split("\n").filter(Boolean);
+            const label = lines[0] || paragraph.slice(0, 120);
+            const rest = lines.slice(1).join("\n").trim();
+            return { label, description: rest || undefined };
+        });
+    }
+
+    // Single paragraph -- split by sentences
+    const sentences = text
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+
+    if (sentences.length > 1) {
+        return sentences.map((sentence) => ({ label: sentence }));
+    }
+
+    // Fallback: single step with the full text
+    return [{ label: text.trim() }];
+}
+
+function ReasoningDisplay({ text }: { text: string }) {
+    const steps = useMemo(() => parseReasoningSteps(text), [text]);
 
     return (
-        <div className="my-1">
-            <button
-                onClick={() => setExpanded(!expanded)}
-                className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm transition-colors"
-            >
-                {expanded ? (
-                    <ChevronDownIcon className="size-3.5" />
-                ) : (
-                    <ChevronRightIcon className="size-3.5" />
-                )}
-                <span>Thought process</span>
-            </button>
-            {expanded && (
-                <div className="text-muted-foreground mt-1 rounded-md border p-3 text-xs leading-relaxed">
-                    {text}
-                </div>
-            )}
-        </div>
+        <ChainOfThought className="my-2">
+            <ChainOfThoughtHeader>Thought process</ChainOfThoughtHeader>
+            <ChainOfThoughtContent>
+                {steps.map((step, i) => (
+                    <ChainOfThoughtStep
+                        key={i}
+                        label={step.label}
+                        description={step.description}
+                        status="complete"
+                    />
+                ))}
+            </ChainOfThoughtContent>
+        </ChainOfThought>
     );
 }
 
@@ -1066,7 +1097,7 @@ export default function UnifiedChatPage() {
             );
         }
         if (part.type === "reasoning") {
-            return <CollapsibleThinking key={index} text={part.reasoning || part.text || ""} />;
+            return <ReasoningDisplay key={index} text={part.reasoning || part.text || ""} />;
         }
         if (part.type === "tool-invocation") {
             const toolName = part.toolInvocation?.toolName || "unknown";

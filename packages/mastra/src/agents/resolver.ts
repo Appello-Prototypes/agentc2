@@ -491,8 +491,9 @@ export class AgentResolver {
         }
 
         // Context-aware tool budgeting: when an agent has many tools and a maxToolsLoaded
-        // threshold is configured in metadata, only load essential tools to reduce token overhead.
-        // Remaining tools stay accessible via skill activation meta-tools.
+        // threshold is configured in metadata, cap the number of tools loaded to reduce
+        // token overhead. Essential + always-loaded tools are kept first, then remaining
+        // tools fill the budget. Overflow tools stay accessible via skill activation meta-tools.
         const maxToolsLoaded = (metadata?.maxToolsLoaded as number) || 0;
         if (maxToolsLoaded > 0 && !loadAllSkills) {
             const totalTools = Object.keys(tools).length;
@@ -511,23 +512,48 @@ export class AgentResolver {
                 ];
                 // Also keep tools explicitly listed in metadata.alwaysLoadedTools
                 const alwaysLoaded = (metadata?.alwaysLoadedTools as string[]) || [];
-                const beforeCount = Object.keys(tools).length;
+
+                // Partition tools into priority tiers
+                const priorityTools: string[] = [];
+                const remainingTools: string[] = [];
+
                 for (const toolKey of Object.keys(tools)) {
                     const isEssential = essentialPrefixes.some(
                         (p) => toolKey === p || toolKey.startsWith(p + "-")
                     );
-                    const isAlwaysLoaded = alwaysLoaded.some((t) =>
-                        toolKey.toLowerCase().includes(t.toLowerCase())
+                    const isAlwaysLoaded = alwaysLoaded.some(
+                        (t) => toolKey === t || toolKey.toLowerCase().includes(t.toLowerCase())
                     );
-                    if (!isEssential && !isAlwaysLoaded) {
+                    // Protect all skill-origin tools (pinned + thread-activated)
+                    // and meta-tools -- these must never be budget-cut
+                    const origin = toolOriginMap[toolKey] ?? "";
+                    const isSkillTool = origin.startsWith("skill:") || origin.includes("|skill:");
+                    const isMetaTool = origin === "meta";
+
+                    if (isEssential || isAlwaysLoaded || isSkillTool || isMetaTool) {
+                        priorityTools.push(toolKey);
+                    } else {
+                        remainingTools.push(toolKey);
+                    }
+                }
+
+                // Budget: fill remaining slots with non-priority tools
+                const budget = Math.max(0, maxToolsLoaded - priorityTools.length);
+                const toolsToKeep = new Set([...priorityTools, ...remainingTools.slice(0, budget)]);
+
+                const beforeCount = Object.keys(tools).length;
+                for (const toolKey of Object.keys(tools)) {
+                    if (!toolsToKeep.has(toolKey)) {
                         delete tools[toolKey];
                     }
                 }
                 const afterCount = Object.keys(tools).length;
                 console.log(
                     `[AgentResolver] Tool budget applied for "${record.slug}": ` +
-                        `${beforeCount} -> ${afterCount} tools (maxToolsLoaded: ${maxToolsLoaded}). ` +
-                        `Remaining tools accessible via skill activation.`
+                        `${beforeCount} -> ${afterCount} tools ` +
+                        `(${priorityTools.length} priority + ${Math.min(budget, remainingTools.length)} additional, ` +
+                        `maxToolsLoaded: ${maxToolsLoaded}). ` +
+                        `${beforeCount - afterCount} tools accessible via skill activation.`
                 );
             }
         }

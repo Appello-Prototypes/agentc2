@@ -59,7 +59,8 @@ const navItems: { id: string; label: string; icon: IconName }[] = [
     { id: "costs", label: "Costs", icon: "dollar" },
     { id: "versions", label: "Versions", icon: "git-branch" },
     { id: "guardrails", label: "Guardrails", icon: "shield" },
-    { id: "simulations", label: "Simulations", icon: "play-list" }
+    { id: "simulations", label: "Simulations", icon: "play-list" },
+    { id: "backlog", label: "Backlog", icon: "task-list" }
 ];
 
 export default function AgentDetailLayout({ children }: { children: React.ReactNode }) {
