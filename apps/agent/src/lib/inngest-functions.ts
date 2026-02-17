@@ -37,6 +37,67 @@ import { getGmailClient, watchMailbox, listHistory, getMessagesWithConcurrency }
 import { createApprovalRequest, extractGmailDraftAction } from "./approvals";
 import { updateTriggerEventRecord } from "./trigger-events";
 
+/**
+ * Build a Gmail web URL from a hex thread ID.
+ * Encodes the thread ID into Gmail's FMfcg... view token format.
+ * Algorithm: https://github.com/ArsenalRecon/GmailURLDecoder (MIT)
+ */
+function buildGmailWebUrl(hexThreadId: string): string {
+    const FULL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    const REDUCED = "BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz";
+
+    const baseConvert = (token: string, chIn: string, chOut: string): string => {
+        const sIn = chIn.length;
+        const sOut = chOut.length;
+        const map: Record<string, number> = {};
+        for (let i = 0; i < sIn; i++) map[chIn[i]!] = i;
+
+        const inIdx: number[] = [];
+        for (let i = token.length - 1; i >= 0; i--) inIdx.push(map[token[i]!]!);
+
+        const outIdx: number[] = [];
+        for (let i = inIdx.length - 1; i >= 0; i--) {
+            let off = 0;
+            for (let j = 0; j < outIdx.length; j++) {
+                let v = sIn * outIdx[j]! + off;
+                if (v >= sOut) {
+                    const r = v % sOut;
+                    off = (v - r) / sOut;
+                    v = r;
+                } else off = 0;
+                outIdx[j] = v;
+            }
+            while (off) {
+                const r = off % sOut;
+                outIdx.push(r);
+                off = (off - r) / sOut;
+            }
+            off = inIdx[i]!;
+            let j = 0;
+            while (off) {
+                if (j >= outIdx.length) outIdx.push(0);
+                let v = outIdx[j]! + off;
+                if (v >= sOut) {
+                    const r = v % sOut;
+                    off = (v - r) / sOut;
+                    v = r;
+                } else off = 0;
+                outIdx[j] = v;
+                j++;
+            }
+        }
+        return outIdx
+            .reverse()
+            .map((i) => chOut[i])
+            .join("");
+    };
+
+    const decimal = BigInt("0x" + hexThreadId).toString();
+    const b64 = Buffer.from(`f:${decimal}`).toString("base64").replace(/=+$/, "");
+    const token = baseConvert(b64, FULL, REDUCED);
+    return `https://mail.google.com/mail/u/0/#all/${token}`;
+}
+
 // ==============================
 // Shared Helpers
 // ==============================
@@ -734,9 +795,7 @@ export const evaluationCompletedFunction = inngest.createFunction(
                     }
                 });
 
-                console.log(
-                    `[AutoVectorize] Ingested output for ${agent.slug}/${run.id}`
-                );
+                console.log(`[AutoVectorize] Ingested output for ${agent.slug}/${run.id}`);
             } catch (err) {
                 console.error(`[AutoVectorize] Failed for ${run.id}:`, err);
             }
@@ -6091,6 +6150,7 @@ export const gmailMessageProcessFunction = inngest.createFunction(
                     threadId: message.threadId,
                     messageId: message.messageId,
                     messageIdHeader: message.messageIdHeader,
+                    webUrl: buildGmailWebUrl(message.threadId),
                     from: message.from,
                     to: message.to,
                     cc: message.cc,

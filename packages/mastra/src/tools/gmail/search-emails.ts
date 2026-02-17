@@ -7,7 +7,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callGmailApi, resolveGmailAddress } from "./shared";
+import { callGmailApi, resolveGmailAddress, buildGmailWebUrl } from "./shared";
 
 type GmailMessage = {
     id: string;
@@ -56,11 +56,10 @@ export const gmailSearchEmailsTool = createTool({
             z.object({
                 id: z.string(),
                 threadId: z.string(),
-                messageIdHeader: z
+                webUrl: z
                     .string()
-                    .describe(
-                        "RFC822 Message-ID header. Use for Gmail web links: https://mail.google.com/mail/u/0/#search/rfc822msgid:<value>"
-                    ),
+                    .describe("Direct Gmail web URL that opens this email thread in the browser"),
+                messageIdHeader: z.string(),
                 from: z.string(),
                 to: z.string(),
                 subject: z.string(),
@@ -109,13 +108,7 @@ export const gmailSearchEmailsTool = createTool({
                         {
                             params: {
                                 format: "metadata",
-                                metadataHeaders: [
-                                    "From",
-                                    "To",
-                                    "Subject",
-                                    "Date",
-                                    "Message-ID"
-                                ]
+                                metadataHeaders: ["From", "To", "Subject", "Date", "Message-ID"]
                             }
                         }
                     );
@@ -129,6 +122,7 @@ export const gmailSearchEmailsTool = createTool({
                 .map((m) => ({
                     id: m.id,
                     threadId: m.threadId,
+                    webUrl: buildGmailWebUrl(m.threadId),
                     messageIdHeader: getHeader(m.payload?.headers, "Message-ID"),
                     from: getHeader(m.payload?.headers, "From"),
                     to: getHeader(m.payload?.headers, "To"),

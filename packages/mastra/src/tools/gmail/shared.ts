@@ -261,3 +261,85 @@ export const checkGoogleScopes = async (
     const missing = requiredScopes.filter((s) => !grantedScopes.has(s));
     return { ok: missing.length === 0, missing };
 };
+
+/**
+ * Build a Gmail web URL from a hex thread ID.
+ *
+ * Gmail's web UI uses an encoded "view token" (e.g. FMfcgzQfBsmN...) that
+ * differs from the API's hex thread ID. The encoding was reverse-engineered
+ * by Arsenal Recon (MIT-licensed GmailURLDecoder). The algorithm:
+ *   1. Convert hex thread ID → decimal
+ *   2. Build the string "thread-f:<decimal>"
+ *   3. Base64-encode it (no padding)
+ *   4. Base-convert from the standard base64 charset to a vowel-free charset
+ *
+ * Reference: https://github.com/ArsenalRecon/GmailURLDecoder
+ */
+
+const CHARSET_FULL = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+const CHARSET_REDUCED = "BCDFGHJKLMNPQRSTVWXZbcdfghjklmnpqrstvwxz";
+
+function gmailTransform(token: string, charsetIn: string, charsetOut: string): string {
+    const sizeIn = charsetIn.length;
+    const sizeOut = charsetOut.length;
+
+    const alphMap: Record<string, number> = {};
+    for (let i = 0; i < sizeIn; i++) {
+        alphMap[charsetIn[i]!] = i;
+    }
+
+    const inStrIdx: number[] = [];
+    for (let i = token.length - 1; i >= 0; i--) {
+        inStrIdx.push(alphMap[token[i]!]!);
+    }
+
+    const outStrIdx: number[] = [];
+    for (let i = inStrIdx.length - 1; i >= 0; i--) {
+        let offset = 0;
+        for (let j = 0; j < outStrIdx.length; j++) {
+            let idx = sizeIn * outStrIdx[j]! + offset;
+            if (idx >= sizeOut) {
+                const rest = idx % sizeOut;
+                offset = (idx - rest) / sizeOut;
+                idx = rest;
+            } else {
+                offset = 0;
+            }
+            outStrIdx[j] = idx;
+        }
+        while (offset) {
+            const rest = offset % sizeOut;
+            outStrIdx.push(rest);
+            offset = (offset - rest) / sizeOut;
+        }
+
+        offset = inStrIdx[i]!;
+        let j = 0;
+        while (offset) {
+            if (j >= outStrIdx.length) outStrIdx.push(0);
+            let idx = outStrIdx[j]! + offset;
+            if (idx >= sizeOut) {
+                const rest = idx % sizeOut;
+                offset = (idx - rest) / sizeOut;
+                idx = rest;
+            } else {
+                offset = 0;
+            }
+            outStrIdx[j] = idx;
+            j++;
+        }
+    }
+
+    const outBuff: string[] = [];
+    for (let i = outStrIdx.length - 1; i >= 0; i--) {
+        outBuff.push(charsetOut[outStrIdx[i]!]!);
+    }
+    return outBuff.join("");
+}
+
+export function buildGmailWebUrl(hexThreadId: string): string {
+    const decimal = BigInt("0x" + hexThreadId).toString();
+    const b64 = Buffer.from(`f:${decimal}`).toString("base64").replace(/=+$/, "");
+    const token = gmailTransform(b64, CHARSET_FULL, CHARSET_REDUCED);
+    return `https://mail.google.com/mail/u/0/#all/${token}`;
+}

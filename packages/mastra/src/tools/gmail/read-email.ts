@@ -7,7 +7,7 @@
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { callGmailApi, resolveGmailAddress } from "./shared";
+import { callGmailApi, resolveGmailAddress, buildGmailWebUrl } from "./shared";
 
 type GmailFullMessage = {
     id: string;
@@ -103,11 +103,10 @@ export const gmailReadEmailTool = createTool({
             .object({
                 id: z.string(),
                 threadId: z.string(),
-                messageIdHeader: z
+                webUrl: z
                     .string()
-                    .describe(
-                        "RFC822 Message-ID header (e.g. <CADGUa...@mail.gmail.com>). Use this for Gmail web links: https://mail.google.com/mail/u/0/#search/rfc822msgid:<value>"
-                    ),
+                    .describe("Direct Gmail web URL that opens this email thread in the browser"),
+                messageIdHeader: z.string(),
                 from: z.string(),
                 to: z.string(),
                 cc: z.string(),
@@ -151,6 +150,7 @@ export const gmailReadEmailTool = createTool({
                 message: {
                     id: msg.id,
                     threadId: msg.threadId,
+                    webUrl: buildGmailWebUrl(msg.threadId),
                     messageIdHeader: getHeader(msg.payload?.headers, "Message-ID"),
                     from: getHeader(msg.payload?.headers, "From"),
                     to: getHeader(msg.payload?.headers, "To"),
