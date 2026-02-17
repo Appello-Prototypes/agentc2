@@ -226,6 +226,26 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "supadata",
+        name: "Supadata",
+        description:
+            "YouTube transcript extraction API — reliably fetches transcripts and captions from YouTube videos with AI fallback for videos without native captions",
+        category: "knowledge",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["SUPADATA_API_KEY"],
+            fieldDefinitions: {
+                SUPADATA_API_KEY: {
+                    label: "Supadata API key",
+                    description: "Get your API key at https://dash.supadata.ai",
+                    placeholder: "sd_...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
         key: "firecrawl",
         name: "Firecrawl",
         description: "Web scraping and crawling - extract data from websites",

@@ -270,7 +270,7 @@ export default function ActivityFeedPage() {
             {/* Filters */}
             <div className="border-b px-6 py-3">
                 <div className="flex flex-wrap items-center gap-3">
-                    <Select value={timeRange} onValueChange={setTimeRange}>
+                    <Select value={timeRange} onValueChange={(v) => v && setTimeRange(v)}>
                         <SelectTrigger className="w-[130px]">
                             <SelectValue />
                         </SelectTrigger>
@@ -283,7 +283,7 @@ export default function ActivityFeedPage() {
                         </SelectContent>
                     </Select>
 
-                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <Select value={typeFilter} onValueChange={(v) => v && setTypeFilter(v)}>
                         <SelectTrigger className="w-[140px]">
                             <SelectValue placeholder="Type" />
                         </SelectTrigger>
@@ -297,7 +297,7 @@ export default function ActivityFeedPage() {
                         </SelectContent>
                     </Select>
 
-                    <Select value={sourceFilter} onValueChange={setSourceFilter}>
+                    <Select value={sourceFilter} onValueChange={(v) => v && setSourceFilter(v)}>
                         <SelectTrigger className="w-[130px]">
                             <SelectValue placeholder="Source" />
                         </SelectTrigger>
@@ -311,7 +311,7 @@ export default function ActivityFeedPage() {
                         </SelectContent>
                     </Select>
 
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
+                    <Select value={statusFilter} onValueChange={(v) => v && setStatusFilter(v)}>
                         <SelectTrigger className="w-[120px]">
                             <SelectValue placeholder="Status" />
                         </SelectTrigger>
@@ -344,7 +344,7 @@ export default function ActivityFeedPage() {
                 ) : events.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
                         <HugeiconsIcon
-                            icon={icons.ActivityIcon}
+                            icon={icons.activity}
                             className="text-muted-foreground mb-4 h-12 w-12"
                         />
                         <h3 className="text-lg font-medium">No activity yet</h3>
