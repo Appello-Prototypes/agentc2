@@ -8,7 +8,6 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
-    HugeiconsIcon,
     Input,
     Select,
     SelectContent,
@@ -16,7 +15,6 @@ import {
     SelectTrigger,
     SelectValue,
     Skeleton,
-    icons,
 } from "@repo/ui"
 import { getApiBase } from "@/lib/utils"
 import {
@@ -343,10 +341,9 @@ export default function ActivityFeedPage() {
                     </div>
                 ) : events.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-20 text-center">
-                        <HugeiconsIcon
-                            icon={icons.activity}
-                            className="text-muted-foreground mb-4 h-12 w-12"
-                        />
+                        <div className="text-muted-foreground mb-4 text-5xl">
+                            {"//"}
+                        </div>
                         <h3 className="text-lg font-medium">No activity yet</h3>
                         <p className="text-muted-foreground mt-1 text-sm">
                             Events will appear here as your agents work.
