@@ -129,14 +129,20 @@ export const callGmailApi = async (
     options?: {
         method?: string;
         body?: unknown;
-        params?: Record<string, string>;
+        params?: Record<string, string | string[]>;
     }
 ): Promise<Response> => {
     let token = await getAccessToken(gmailAddress);
 
     const url = new URL(`${GMAIL_API}${path}`);
     if (options?.params) {
-        Object.entries(options.params).forEach(([k, v]) => url.searchParams.set(k, v));
+        Object.entries(options.params).forEach(([k, v]) => {
+            if (Array.isArray(v)) {
+                v.forEach((item) => url.searchParams.append(k, item));
+            } else {
+                url.searchParams.set(k, v);
+            }
+        });
     }
 
     const fetchOptions: RequestInit = {

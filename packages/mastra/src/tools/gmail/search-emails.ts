@@ -109,7 +109,13 @@ export const gmailSearchEmailsTool = createTool({
                         {
                             params: {
                                 format: "metadata",
-                                metadataHeaders: "From,To,Subject,Date,Message-ID"
+                                metadataHeaders: [
+                                    "From",
+                                    "To",
+                                    "Subject",
+                                    "Date",
+                                    "Message-ID"
+                                ]
                             }
                         }
                     );
