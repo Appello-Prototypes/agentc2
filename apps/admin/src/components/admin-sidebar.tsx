@@ -10,13 +10,17 @@ import {
     Activity,
     FileText,
     Settings,
-    Shield
+    Shield,
+    ClipboardList,
+    Bug
 } from "lucide-react";
 
 const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tenants", label: "Tenants", icon: Building2 },
     { href: "/users", label: "Users", icon: Users },
+    { href: "/tickets", label: "Tickets", icon: Bug },
+    { href: "/waitlist", label: "Waitlist", icon: ClipboardList },
     { href: "/flags", label: "Feature Flags", icon: Flag },
     { href: "/observability", label: "Observability", icon: Activity },
     { href: "/audit", label: "Audit Log", icon: FileText },

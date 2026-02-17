@@ -248,6 +248,12 @@ import {
     backlogCompleteTaskTool
 } from "./backlog-tools";
 import {
+    submitSupportTicketTool,
+    listMyTicketsTool,
+    viewTicketDetailsTool,
+    commentOnTicketTool
+} from "./support";
+import {
     agentRunsListTool,
     agentRunsGetTool,
     triggerEventsListTool,
@@ -516,6 +522,12 @@ export const toolCategoryMap: Record<string, string> = {
     "bim-clash": "BIM",
     "bim-handover": "BIM",
 
+    // Support
+    "submit-support-ticket": "Support",
+    "list-my-tickets": "Support",
+    "view-ticket-details": "Support",
+    "comment-on-ticket": "Support",
+
     // Canvas
     "canvas-create": "Canvas",
     "canvas-read": "Canvas",
@@ -551,7 +563,8 @@ export const toolCategoryOrder: string[] = [
     "Email & Calendar",
     "File Storage",
     "BIM",
-    "Canvas"
+    "Canvas",
+    "Support"
 ];
 
 /**
@@ -884,7 +897,13 @@ export const toolRegistry: Record<string, any> = {
     // Skill discovery meta-tools (Dynamic ReAct pattern)
     "search-skills": searchSkillsTool,
     "activate-skill": activateSkillTool,
-    "list-active-skills": listActiveSkillsTool
+    "list-active-skills": listActiveSkillsTool,
+
+    // Support ticket tools
+    "submit-support-ticket": submitSupportTicketTool,
+    "list-my-tickets": listMyTicketsTool,
+    "view-ticket-details": viewTicketDetailsTool,
+    "comment-on-ticket": commentOnTicketTool
 };
 
 /**

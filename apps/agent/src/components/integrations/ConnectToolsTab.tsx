@@ -3,6 +3,15 @@
 import { useState, useEffect, useCallback } from "react";
 import { getApiBase } from "@/lib/utils";
 import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogMedia,
+    AlertDialogTitle,
     Badge,
     Button,
     Card,
@@ -18,6 +27,7 @@ import {
     Separator
 } from "@repo/ui";
 import {
+    AlertTriangleIcon,
     CheckIcon,
     ChevronDownIcon,
     CopyIcon,
@@ -131,6 +141,8 @@ export function ConnectToolsTab() {
     const [mcpApiKeyLoading, setMcpApiKeyLoading] = useState(false);
     const [mcpApiKeyError, setMcpApiKeyError] = useState<string | null>(null);
     const [showMcpApiKey, setShowMcpApiKey] = useState(false);
+    const [showRotateConfirm, setShowRotateConfirm] = useState(false);
+    const [showRevokeConfirm, setShowRevokeConfirm] = useState(false);
 
     // ── Detect instance URL ──────────────────────────────────────────
     useEffect(() => {
@@ -198,10 +210,18 @@ export function ConnectToolsTab() {
             } else {
                 setMcpApiKey("");
                 setMcpApiKeyActive(false);
+                if (res.status !== 403) {
+                    setMcpApiKeyError(
+                        data.error || "Failed to load MCP API key. Please try refreshing."
+                    );
+                }
             }
         } catch {
             setMcpApiKey("");
             setMcpApiKeyActive(false);
+            setMcpApiKeyError(
+                "Unable to load MCP API key. Check your connection and try refreshing."
+            );
         } finally {
             setMcpApiKeyLoading(false);
         }
@@ -739,18 +759,28 @@ await server.connect(transport);
                         <div className="flex flex-wrap gap-2">
                             {canManageKeys ? (
                                 <>
-                                    <Button
-                                        size="sm"
-                                        onClick={handleGenerateKey}
-                                        disabled={mcpApiKeyLoading}
-                                    >
-                                        {mcpApiKey ? "Rotate Key" : "Generate Key"}
-                                    </Button>
+                                    {mcpApiKey ? (
+                                        <Button
+                                            size="sm"
+                                            onClick={() => setShowRotateConfirm(true)}
+                                            disabled={mcpApiKeyLoading}
+                                        >
+                                            Rotate Key
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            size="sm"
+                                            onClick={handleGenerateKey}
+                                            disabled={mcpApiKeyLoading}
+                                        >
+                                            Generate Key
+                                        </Button>
+                                    )}
                                     {mcpApiKey && (
                                         <Button
                                             variant="destructive"
                                             size="sm"
-                                            onClick={handleRevokeKey}
+                                            onClick={() => setShowRevokeConfirm(true)}
                                             disabled={mcpApiKeyLoading}
                                         >
                                             Revoke Key
@@ -763,6 +793,67 @@ await server.connect(transport);
                                 </p>
                             )}
                         </div>
+
+                        {/* ── Rotate Key Confirmation ── */}
+                        <AlertDialog open={showRotateConfirm} onOpenChange={setShowRotateConfirm}>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogMedia className="bg-orange-500/20">
+                                        <AlertTriangleIcon className="h-4 w-4 text-orange-500" />
+                                    </AlertDialogMedia>
+                                    <AlertDialogTitle>Rotate MCP API Key?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will generate a new API key and{" "}
+                                        <strong>immediately invalidate the current key</strong> for
+                                        everyone in the <strong>{organization?.name}</strong>{" "}
+                                        organization. All members using the existing key in Cursor,
+                                        Claude, or other MCP clients will need to update to the new
+                                        key.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        onClick={() => {
+                                            setShowRotateConfirm(false);
+                                            handleGenerateKey();
+                                        }}
+                                    >
+                                        Rotate Key
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
+
+                        {/* ── Revoke Key Confirmation ── */}
+                        <AlertDialog open={showRevokeConfirm} onOpenChange={setShowRevokeConfirm}>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogMedia className="bg-destructive/20">
+                                        <AlertTriangleIcon className="text-destructive h-4 w-4" />
+                                    </AlertDialogMedia>
+                                    <AlertDialogTitle>Revoke MCP API Key?</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                        This will permanently deactivate the current API key for
+                                        everyone in the <strong>{organization?.name}</strong>{" "}
+                                        organization. All MCP connections using this key will stop
+                                        working immediately.
+                                    </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        variant="destructive"
+                                        onClick={() => {
+                                            setShowRevokeConfirm(false);
+                                            handleRevokeKey();
+                                        }}
+                                    >
+                                        Revoke Key
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                     </div>
                 </CardContent>
             </Card>

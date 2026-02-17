@@ -672,7 +672,7 @@ export default function UnifiedChatPage() {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const bodyExtra: Record<string, any> = {
             threadId,
-            requestContext: { userId: "chat-user", mode: "live" }
+            requestContext: { userId: session?.user?.id || "chat-user", mode: "live" }
         };
         if (currentRunId) bodyExtra.runId = currentRunId;
         bodyExtra.interactionMode = interactionMode;
@@ -690,7 +690,8 @@ export default function UnifiedChatPage() {
         modelOverride,
         thinkingEnabled,
         currentRunId,
-        interactionMode
+        interactionMode,
+        session?.user?.id
     ]);
 
     const { messages, setMessages, sendMessage, status, stop } = useChat({ transport });

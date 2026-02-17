@@ -48,6 +48,11 @@ export type AdminAuditAction =
     | "SUBSCRIPTION_CREATE"
     | "SUBSCRIPTION_UPDATE"
     | "SUBSCRIPTION_CANCEL"
+    // Platform invites
+    | "PLATFORM_INVITE_CREATE"
+    | "PLATFORM_INVITE_REVOKE"
+    // Support tickets
+    | "TICKET_UPDATE"
     // Admin users
     | "ADMIN_USER_CREATE"
     | "ADMIN_USER_UPDATE"

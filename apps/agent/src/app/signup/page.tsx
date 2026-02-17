@@ -17,7 +17,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const isInviteOnly = process.env.FEATURE_INVITE_ONLY === "true";
+const isInviteOnly = process.env.FEATURE_INVITE_ONLY !== "false";
 
 const PLATFORM_FEATURES = [
     {

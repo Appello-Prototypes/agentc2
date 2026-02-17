@@ -23,6 +23,7 @@ model User {
     accounts               Account[]
     agents                 Agent[]
     integrationConnections IntegrationConnection[]
+    supportTickets         SupportTicket[]
 
     @@map("user")
 }
@@ -127,6 +128,7 @@ model Organization {
     featureFlagOverrides  FeatureFlagOverride[]
     lifecycleEvents       TenantLifecycleEvent[]
     impersonationSessions ImpersonationSession[]
+    supportTickets        SupportTicket[]
 
     @@index([slug])
     @@index([status])
@@ -3279,9 +3281,10 @@ model AdminUser {
     createdAt   DateTime  @default(now())
     updatedAt   DateTime  @updatedAt
 
-    sessions       AdminSession[]
-    auditLogs      AdminAuditLog[]
-    impersonations ImpersonationSession[]
+    sessions        AdminSession[]
+    auditLogs       AdminAuditLog[]
+    impersonations  ImpersonationSession[]
+    assignedTickets SupportTicket[]
 
     @@map("admin_user")
 }
@@ -3897,6 +3900,23 @@ enum OutputActionType {
     CHAIN_AGENT
 }
 
+// Platform Invite - Access codes that let users past the waitlist to create their own org
+// Separate from OrganizationInvite which joins users into an existing org
+model PlatformInvite {
+    id        String    @id @default(cuid())
+    code      String    @unique
+    label     String? // human-readable label, e.g. "YC Demo Day batch"
+    expiresAt DateTime?
+    maxUses   Int?
+    usedCount Int       @default(0)
+    isActive  Boolean   @default(true)
+    createdBy String?
+    createdAt DateTime  @default(now())
+    updatedAt DateTime  @updatedAt
+
+    @@map("platform_invite")
+}
+
 // Waitlist - Collects emails from users who want early access
 model Waitlist {
     id        String   @id @default(cuid())
@@ -3909,4 +3929,97 @@ model Waitlist {
     updatedAt DateTime @updatedAt
 
     @@map("waitlist")
+}
+
+// ==============================
+// Support Ticket System
+// ==============================
+
+enum TicketType {
+    BUG
+    FEATURE_REQUEST
+    IMPROVEMENT
+    QUESTION
+}
+
+enum TicketStatus {
+    NEW
+    TRIAGED
+    IN_PROGRESS
+    WAITING_ON_CUSTOMER
+    RESOLVED
+    CLOSED
+}
+
+enum TicketPriority {
+    CRITICAL
+    HIGH
+    MEDIUM
+    LOW
+}
+
+// SupportTicket - Bug reports, feature requests, and questions from org users
+model SupportTicket {
+    id           String         @id @default(cuid())
+    ticketNumber Int            @unique @default(autoincrement())
+    type         TicketType
+    status       TicketStatus   @default(NEW)
+    priority     TicketPriority @default(MEDIUM)
+    title        String
+    description  String         @db.Text
+
+    // Submitter
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id])
+    submittedById  String
+    submittedBy    User         @relation(fields: [submittedById], references: [id])
+
+    // Assignment
+    assignedToId String?
+    assignedTo   AdminUser? @relation(fields: [assignedToId], references: [id])
+
+    // Metadata
+    tags     String[] @default([])
+    metadata Json?
+
+    // Lifecycle timestamps
+    triagedAt  DateTime?
+    resolvedAt DateTime?
+    closedAt   DateTime?
+
+    // Comments
+    comments SupportTicketComment[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([organizationId])
+    @@index([submittedById])
+    @@index([status])
+    @@index([type])
+    @@index([priority])
+    @@index([createdAt])
+    @@map("support_ticket")
+}
+
+// SupportTicketComment - Threaded comments on tickets (from users or admins)
+model SupportTicketComment {
+    id       String        @id @default(cuid())
+    ticketId String
+    ticket   SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+    // Author (either "user" or "admin")
+    authorType String
+    authorId   String
+    authorName String
+
+    content    String  @db.Text
+    isInternal Boolean @default(false) // Admin-only notes not visible to users
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([ticketId])
+    @@index([createdAt])
+    @@map("support_ticket_comment")
 }

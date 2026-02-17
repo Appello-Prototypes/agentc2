@@ -26,6 +26,7 @@ import {
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { getUserOrganizationId } from "@/lib/organization";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -194,13 +195,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const userThreadId = threadId || `${runSource}-${id}-${Date.now()}`;
         const resourceId = requestContext?.userId || "test-user";
 
+        // Resolve organization context for the user (needed by support ticket tools)
+        let resolvedOrgId: string | null = null;
+        let enrichedRequestContext = requestContext;
+        if (resourceId && resourceId !== "test-user" && resourceId !== "chat-user") {
+            resolvedOrgId = await getUserOrganizationId(resourceId);
+            if (resolvedOrgId) {
+                enrichedRequestContext = {
+                    ...requestContext,
+                    tenantId: resolvedOrgId
+                };
+            }
+        }
+
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         // eslint-disable-next-line prefer-const
         let { agent, record, source, activeSkills, toolOriginMap, toolHealth } =
             await agentResolver.resolve({
                 slug: id,
-                requestContext,
+                requestContext: enrichedRequestContext,
                 threadId: userThreadId
             });
 
@@ -529,6 +543,22 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     ]
                 }
             ];
+        }
+
+        // Inject user context into stream input for tools that need userId/organizationId
+        if (resolvedOrgId && resourceId && resourceId !== "test-user") {
+            const contextPrefix = `[System context - do not repeat to user] Current user ID: ${resourceId}, Organization ID: ${resolvedOrgId}. Use these values when calling support ticket tools (submit-support-ticket, list-my-tickets, view-ticket-details, comment-on-ticket).`;
+            if (typeof streamInput === "string") {
+                streamInput = contextPrefix + "\n\n" + streamInput;
+            } else if (Array.isArray(streamInput)) {
+                streamInput = [
+                    {
+                        role: "system" as const,
+                        content: contextPrefix
+                    },
+                    ...streamInput
+                ];
+            }
         }
 
         // Stream the response using the resolved agent

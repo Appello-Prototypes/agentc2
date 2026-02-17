@@ -43,6 +43,15 @@ export type AdminAction =
     // Observability
     | "metrics:read"
     | "audit:read"
+    // Platform invites
+    | "platform-invite:list"
+    | "platform-invite:create"
+    // Support tickets
+    | "ticket:list"
+    | "ticket:read"
+    | "ticket:triage"
+    | "ticket:comment"
+    | "ticket:delete"
     // Admin user management
     | "admin:list"
     | "admin:create"
@@ -93,6 +102,17 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
     // Observability
     "metrics:read": "viewer",
     "audit:read": "support_agent",
+
+    // Platform invites
+    "platform-invite:list": "platform_admin",
+    "platform-invite:create": "platform_admin",
+
+    // Support tickets
+    "ticket:list": "viewer",
+    "ticket:read": "viewer",
+    "ticket:triage": "support_agent",
+    "ticket:comment": "support_agent",
+    "ticket:delete": "platform_admin",
 
     // Admin user management
     "admin:list": "super_admin",

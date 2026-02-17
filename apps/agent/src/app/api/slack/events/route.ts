@@ -545,8 +545,8 @@ function markdownToSlack(text: string): string {
 /**
  * Parse an optional agent directive from the message text.
  * Supports:
- *   "agent:research What is X?" -> { slug: "research", text: "What is X?" }
- *   "What is X?"                -> { slug: defaultSlug, text: "What is X?" }
+ *   "agent:research What is X?" -> { slug: "research", text: "What is X?", isExplicitSlug: true }
+ *   "What is X?"                -> { slug: defaultSlug, text: "What is X?", isExplicitSlug: false }
  *   "agent:list"                -> { slug: null, text: "", isListCommand: true }
  *   "help"                      -> { slug: null, text: "", isListCommand: true }
  */
@@ -557,22 +557,28 @@ function parseAgentDirective(
     slug: string | null;
     text: string;
     isListCommand: boolean;
+    isExplicitSlug: boolean;
 } {
     const trimmed = text.trim();
 
     // Check for help / list commands
     if (/^(help|agent:list)$/i.test(trimmed)) {
-        return { slug: null, text: "", isListCommand: true };
+        return { slug: null, text: "", isListCommand: true, isExplicitSlug: false };
     }
 
     // Check for agent:slug prefix
     const match = trimmed.match(/^agent:([a-z0-9_-]+)\s*(.*)/i);
     if (match) {
-        return { slug: match[1], text: match[2].trim(), isListCommand: false };
+        return {
+            slug: match[1],
+            text: match[2].trim(),
+            isListCommand: false,
+            isExplicitSlug: true
+        };
     }
 
     // No directive -- use default agent
-    return { slug: defaultSlug, text: trimmed, isListCommand: false };
+    return { slug: defaultSlug, text: trimmed, isListCommand: false, isExplicitSlug: false };
 }
 
 /**
@@ -1351,15 +1357,22 @@ export async function POST(request: NextRequest) {
                     return;
                 }
 
-                // If no explicit agent directive and this is a thread reply,
-                // route to the agent that originally created the thread
-                let resolvedSlug = directive.slug || undefined;
+                // If the user didn't explicitly pick an agent (via agent:slug) and
+                // this is a thread reply, route to the agent that originally
+                // created the thread so the conversation stays in context.
+                let resolvedSlug = directive.isExplicitSlug
+                    ? directive.slug || undefined
+                    : undefined;
                 if (!resolvedSlug && mentionEvent.thread_ts) {
                     const originSlug = await resolveThreadOriginAgent(mentionEvent.thread_ts);
                     if (originSlug) {
                         console.log(`[Slack] Thread-origin routing: ${originSlug}`);
                         resolvedSlug = originSlug;
                     }
+                }
+                // Fall back to the default agent when no thread-origin match
+                if (!resolvedSlug) {
+                    resolvedSlug = directive.slug || undefined;
                 }
 
                 // Show "thinking" reaction while processing
@@ -1635,13 +1648,23 @@ export async function POST(request: NextRequest) {
                 }
             }
 
-            // For DMs with a thread_ts that aren't already active via AgentRun,
-            // check if the thread was started by an agent tool call (e.g. email triage DM)
+            // For thread replies that aren't already active via AgentRun,
+            // check if the thread was started by an agent tool call (e.g. email triage DM
+            // or agent posting to a channel). This enables two-way conversation in threads
+            // the agent originally created, even without a prior AgentRun record.
             const isAgentOriginThread =
-                isDM &&
                 messageEvent.thread_ts &&
                 !isActiveThreadReply &&
                 (await resolveThreadOriginAgent(messageEvent.thread_ts)) !== null;
+
+            // In channels, if the message @mentions the bot, defer to the app_mention
+            // handler which already processes it — avoids duplicate responses.
+            if (!isDM && botUserId && messageEvent.text.includes(`<@${botUserId}>`)) {
+                console.log(
+                    "[Slack] Skipping bot-mentioned channel message (app_mention handler will process)"
+                );
+                return NextResponse.json({ ok: true });
+            }
 
             if (isDM || isActiveThreadReply || isAgentOriginThread) {
                 const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);
@@ -1666,15 +1689,22 @@ export async function POST(request: NextRequest) {
                         return;
                     }
 
-                    // If no explicit agent directive and this is a thread reply,
-                    // route to the agent that originally created the thread
-                    let resolvedSlug = directive.slug || undefined;
+                    // If the user didn't explicitly pick an agent (via agent:slug) and
+                    // this is a thread reply, route to the agent that originally
+                    // created the thread so the conversation stays in context.
+                    let resolvedSlug = directive.isExplicitSlug
+                        ? directive.slug || undefined
+                        : undefined;
                     if (!resolvedSlug && messageEvent.thread_ts) {
                         const originSlug = await resolveThreadOriginAgent(messageEvent.thread_ts);
                         if (originSlug) {
                             console.log(`[Slack] Thread-origin routing: ${originSlug}`);
                             resolvedSlug = originSlug;
                         }
+                    }
+                    // Fall back to the default agent when no thread-origin match
+                    if (!resolvedSlug) {
+                        resolvedSlug = directive.slug || undefined;
                     }
 
                     // Show "thinking" reaction while processing

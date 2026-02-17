@@ -85,8 +85,35 @@ export async function bootstrapUserOrganization(
         };
     }
 
-    // Try invite code
+    // Try invite code — check platform-level access codes first, then org-scoped invites
     if (inviteCode) {
+        // 1. Check platform invite (grants access to create own org)
+        const platformInvite = await prisma.platformInvite.findUnique({
+            where: { code: inviteCode }
+        });
+
+        if (platformInvite) {
+            if (!platformInvite.isActive) {
+                return { success: false, error: "Invalid invite code" };
+            }
+            if (platformInvite.expiresAt && platformInvite.expiresAt < new Date()) {
+                return { success: false, error: "Invite code has expired" };
+            }
+            if (platformInvite.maxUses && platformInvite.usedCount >= platformInvite.maxUses) {
+                return { success: false, error: "Invite code has reached its limit" };
+            }
+
+            // Valid platform invite — increment usage and let user create their own org
+            await prisma.platformInvite.update({
+                where: { id: platformInvite.id },
+                data: { usedCount: { increment: 1 } }
+            });
+
+            // Defer org creation so onboarding handles it (user creates their own org)
+            return { success: true };
+        }
+
+        // 2. Check org-scoped invite (joins user into existing org)
         const invite = await prisma.organizationInvite.findUnique({
             where: { code: inviteCode },
             include: { organization: true }

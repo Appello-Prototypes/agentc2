@@ -6089,6 +6089,25 @@ export const gmailMessageProcessFunction = inngest.createFunction(
             let skippedDuplicates = 0;
 
             for (const message of messages) {
+                // ── Skip non-INBOX messages (SENT, DRAFT, etc.) ──────────
+                // The history.list call filters by INBOX labelId, but as a
+                // safety net we also check the message labels. If a message
+                // has SENT or DRAFT labels but NOT INBOX, it's an outgoing
+                // message or draft — not something the triage agent should process.
+                const messageLabels = (message.labels || []).map((l: string) => l.toUpperCase());
+                const isInInbox = messageLabels.includes("INBOX");
+                const isSentOrDraft =
+                    messageLabels.includes("SENT") || messageLabels.includes("DRAFT");
+
+                if (!isInInbox && isSentOrDraft) {
+                    console.log(
+                        `[Gmail Process] Skipping non-INBOX message ${message.messageId} ` +
+                            `(labels: ${messageLabels.join(", ")})`
+                    );
+                    skippedDuplicates++;
+                    continue;
+                }
+
                 // ── Dedup: skip if this messageId was already triggered ──
                 // Check both payloadJson (structured query) and payloadPreview (string fallback).
                 // payloadJson is null when the payload exceeds 10KB (e.g. long email bodies),

@@ -263,6 +263,7 @@ export const listHistory = async (
             userId: "me",
             startHistoryId,
             historyTypes: ["messageAdded"],
+            labelId: "INBOX", // Only return messages added to INBOX (excludes SENT, DRAFT)
             pageToken
         });
 

@@ -159,7 +159,7 @@ function getCtaHref(path: string) {
 }
 
 const isInviteOnlyClient =
-    typeof process !== "undefined" && process.env.NEXT_PUBLIC_FEATURE_INVITE_ONLY === "true";
+    typeof process === "undefined" || process.env.NEXT_PUBLIC_FEATURE_INVITE_ONLY !== "false";
 
 /** Inline signup/waitlist card rendered when the agent outputs [SIGNUP_CTA]. */
 function SignupCTACard() {
