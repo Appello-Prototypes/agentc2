@@ -48,6 +48,12 @@ import {
 import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool, webScrapeTool } from "./web-search";
+import {
+    youtubeGetTranscriptTool,
+    youtubeSearchVideosTool,
+    youtubeAnalyzeVideoTool,
+    youtubeIngestToKnowledgeTool
+} from "./youtube";
 import { memoryRecallTool } from "./memory-recall";
 import { jsonParserTool } from "./json-parser";
 import {
@@ -275,6 +281,12 @@ export const toolCategoryMap: Record<string, string> = {
     "web-search": "Utilities",
     "web-scrape": "Utilities",
     "memory-recall": "Utilities",
+
+    // YouTube
+    "youtube-get-transcript": "YouTube",
+    "youtube-search-videos": "YouTube",
+    "youtube-analyze-video": "YouTube",
+    "youtube-ingest-to-knowledge": "YouTube",
     "json-parser": "Utilities",
     "ask-questions": "Utilities",
     "execute-code": "Code Execution",
@@ -590,6 +602,12 @@ export const toolRegistry: Record<string, any> = {
     "web-search": webSearchTool,
     "web-scrape": webScrapeTool,
     "memory-recall": memoryRecallTool,
+
+    // YouTube
+    "youtube-get-transcript": youtubeGetTranscriptTool,
+    "youtube-search-videos": youtubeSearchVideosTool,
+    "youtube-analyze-video": youtubeAnalyzeVideoTool,
+    "youtube-ingest-to-knowledge": youtubeIngestToKnowledgeTool,
     "json-parser": jsonParserTool,
 
     // Code execution & workspace tools

@@ -2,6 +2,12 @@ export { dateTimeTool, calculatorTool, generateIdTool, tools } from "./example-t
 export { askQuestionsTool } from "./ask-questions";
 export { webFetchTool } from "./web-fetch";
 export { webSearchTool, webScrapeTool } from "./web-search";
+export {
+    youtubeGetTranscriptTool,
+    youtubeSearchVideosTool,
+    youtubeAnalyzeVideoTool,
+    youtubeIngestToKnowledgeTool
+} from "./youtube";
 export { memoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";

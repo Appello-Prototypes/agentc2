@@ -208,6 +208,24 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "youtube-transcript",
+        name: "YouTube Transcript",
+        description:
+            "Extract transcripts and captions from YouTube videos with language selection and ad filtering",
+        category: "knowledge",
+        authType: "none",
+        providerType: "mcp",
+        configJson: {
+            importHints: {
+                matchNames: ["YouTube Transcript", "youtube-transcript", "YouTube"],
+                matchArgs: [
+                    "@kimtaeyoon83/mcp-server-youtube-transcript",
+                    "mcp-server-youtube-transcript"
+                ]
+            }
+        }
+    },
+    {
         key: "firecrawl",
         name: "Firecrawl",
         description: "Web scraping and crawling - extract data from websites",
@@ -1671,8 +1689,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "mistral",
         name: "Mistral",
-        description:
-            "European AI models — Mistral Large, Codestral, Mistral Small, and open Nemo.",
+        description: "European AI models — Mistral Large, Codestral, Mistral Small, and open Nemo.",
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
@@ -1733,8 +1750,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "fireworks",
         name: "Fireworks AI",
-        description:
-            "Fast open-source model inference — Llama, DeepSeek, Qwen at low cost.",
+        description: "Fast open-source model inference — Llama, DeepSeek, Qwen at low cost.",
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
@@ -1754,8 +1770,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
     {
         key: "openrouter",
         name: "OpenRouter",
-        description:
-            "Access 300+ models through one API. Many FREE models available ($0/token).",
+        description: "Access 300+ models through one API. Many FREE models available ($0/token).",
         category: "ai",
         authType: "apiKey",
         providerType: "ai-model",
@@ -2469,6 +2484,12 @@ function buildServerDefinitionForProvider(options: {
             return {
                 command: "npx",
                 args: ["-y", "@playwright/mcp@latest"]
+            };
+        case "youtube-transcript":
+            return {
+                command: "npx",
+                args: ["-y", "@kimtaeyoon83/mcp-server-youtube-transcript"],
+                env: {}
             };
         case "firecrawl": {
             const firecrawlKey =
