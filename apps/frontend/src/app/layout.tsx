@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Suspense } from "react";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
@@ -71,7 +72,9 @@ export default function RootLayout({
                     }}
                 />
                 <AppProvidersWrapper>{children}</AppProvidersWrapper>
-                <GoogleAnalytics />
+                <Suspense fallback={null}>
+                    <GoogleAnalytics />
+                </Suspense>
             </body>
         </html>
     );
