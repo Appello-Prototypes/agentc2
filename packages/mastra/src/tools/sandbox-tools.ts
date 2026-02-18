@@ -56,8 +56,11 @@ function buildSafeEnv(): Record<string, string> {
             safe[key] = value;
         }
     }
-    // Always include PATH so commands can be found
-    safe.PATH = process.env.PATH || "/usr/local/bin:/usr/bin:/bin";
+    const basePath = process.env.PATH || "/usr/local/bin:/usr/bin:/bin";
+    const extraPaths = ["/root/.bun/bin", "/home/bun/.bun/bin", "/usr/local/bun/bin"];
+    const existing = new Set(basePath.split(":"));
+    const additions = extraPaths.filter((p) => !existing.has(p));
+    safe.PATH = additions.length ? `${additions.join(":")}:${basePath}` : basePath;
     return safe;
 }
 
@@ -225,7 +228,8 @@ export const writeWorkspaceFileTool = createTool({
     description:
         "Write a file to the agent's persistent workspace. Files survive between " +
         "runs. Use for saving scripts, data files, configurations, or any content " +
-        "the agent needs to persist. Path is relative to the workspace root.",
+        "the agent needs to persist. Path is relative to the workspace root. " +
+        "HTML files can be previewed in the browser at /api/workspace/{agentId}/{path}.",
     inputSchema: z.object({
         path: z
             .string()
