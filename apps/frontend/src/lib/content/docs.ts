@@ -420,10 +420,8 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
         "Cover configuration risk trade-offs explicitly, including model settings, tool permissions, and the impact of defaults on quality and spend.",
     "model-providers":
         "Compare providers by decision criteria teams actually use in production: latency budget, tool reliability, prompt adherence, and cost envelopes.",
-    memory:
-        "Document memory strategy as policy, not just feature toggles. Include retention, recall boundaries, and privacy implications for long-lived threads.",
-    tools:
-        "Treat tool access as controlled capability exposure. Include permission boundaries, failure handling, and expected verification of tool outputs.",
+    memory: "Document memory strategy as policy, not just feature toggles. Include retention, recall boundaries, and privacy implications for long-lived threads.",
+    tools: "Treat tool access as controlled capability exposure. Include permission boundaries, failure handling, and expected verification of tool outputs.",
     "version-control":
         "Emphasize release discipline: version intent, change notes, validation evidence, and rollback readiness.",
     "budgets-and-costs":
@@ -467,12 +465,9 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
     hubspot:
         "Document CRM-specific risk controls such as write permissions, field-level validation, and duplicate-update prevention.",
     jira: "Include issue lifecycle assumptions, transition permissions, and audit expectations for automatically generated updates.",
-    slack:
-        "Explain threaded context behavior, channel identity controls, and operational safeguards for externally visible responses.",
-    github:
-        "Cover repo-level scoping, branch protection awareness, and review checkpoints for automation that changes code state.",
-    gmail:
-        "Call out mailbox scope, send safeguards, and escalation patterns to avoid unintended outbound communication.",
+    slack: "Explain threaded context behavior, channel identity controls, and operational safeguards for externally visible responses.",
+    github: "Cover repo-level scoping, branch protection awareness, and review checkpoints for automation that changes code state.",
+    gmail: "Call out mailbox scope, send safeguards, and escalation patterns to avoid unintended outbound communication.",
     "google-drive":
         "Define file retrieval boundaries, document freshness checks, and source provenance expectations for knowledge workflows.",
     "google-calendar":
@@ -487,8 +482,7 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
         "Cover voice quality trade-offs, latency expectations, and safe tool invocation in voice interactions.",
     firecrawl:
         "Explain crawl boundaries, content freshness, and extraction validation before downstream decisioning.",
-    fathom:
-        "Define transcript reliability assumptions and review workflow for actions generated from meeting content.",
+    fathom: "Define transcript reliability assumptions and review workflow for actions generated from meeting content.",
     justcall:
         "Document communication compliance boundaries and opt-in safeguards for call and messaging automation.",
     "building-custom":
@@ -497,10 +491,8 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
         "Clarify message delivery constraints, template requirements, and conversation state continuity.",
     telegram:
         "Document bot identity behavior, command parsing expectations, and fallback messaging strategy.",
-    voice:
-        "Cover call lifecycle, interruption handling, and human handoff policies for high-risk conversations.",
-    embed:
-        "Explain embed token controls, branding configuration, rate limiting, and public abuse prevention.",
+    voice: "Cover call lifecycle, interruption handling, and human handoff policies for high-risk conversations.",
+    embed: "Explain embed token controls, branding configuration, rate limiting, and public abuse prevention.",
     "document-ingestion":
         "Define ingestion as a controlled pipeline: source validation, chunking strategy, embedding policy, and provenance capture.",
     "vector-search":
@@ -529,14 +521,12 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
         "Explain event-driven processing semantics, retry behavior, and idempotency requirements for asynchronous operations.",
     deployment:
         "Provide release sequencing, cutover checks, rollback criteria, and post-deploy verification requirements.",
-    agents:
-        "Reference should include route groups, required fields, common error modes, and safe invocation patterns.",
+    agents: "Reference should include route groups, required fields, common error modes, and safe invocation patterns.",
     workflows:
         "Reference should include step payload conventions and run lifecycle endpoints for debugging workflow execution.",
     networks:
         "Reference should include topology, run, trace, and version endpoints with guidance on expected response structures.",
-    skills:
-        "Reference should include create/update/version endpoints and attachment semantics for safe reuse across agents.",
+    skills: "Reference should include create/update/version endpoints and attachment semantics for safe reuse across agents.",
     integrations:
         "Reference should include provider setup, connection health, and tool execution routes with auth requirements.",
     knowledge:
@@ -670,13 +660,7 @@ const pages: DocsPageEntry[] = SECTION_SEEDS.flatMap((seed) =>
         const cta = ctaForSection(seed.section);
         const sectionPages = seed.pages.map((candidate) => `${seed.section}/${candidate}`);
         const relatedSlugs = sectionPages.filter((candidate) => candidate !== slug).slice(0, 4);
-        const body = buildRichBody(
-            seed.section,
-            title,
-            slug,
-            pageSlug,
-            seed.defaultPrimaryKeyword
-        );
+        const body = buildRichBody(seed.section, title, slug, pageSlug, seed.defaultPrimaryKeyword);
 
         const searchIntent: DocsPageEntry["searchIntent"] =
             pageIndex === 0

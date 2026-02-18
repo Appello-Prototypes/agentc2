@@ -1,7 +1,49 @@
 import Link from "next/link";
 import Image from "next/image";
+import { DocsSearch } from "@/components/docs/docs-search";
+import { DOCS_PAGES } from "@/lib/content/docs";
+import { getAllDocSlugs, getDocPage } from "@/lib/content/mdx";
+
+function buildSearchEntries() {
+    const entries: Array<{
+        slug: string;
+        title: string;
+        section: string;
+        description: string;
+    }> = [];
+    const seen = new Set<string>();
+
+    const mdxSlugs = getAllDocSlugs();
+    for (const slug of mdxSlugs) {
+        const page = getDocPage(slug);
+        if (page) {
+            seen.add(slug);
+            entries.push({
+                slug,
+                title: page.frontmatter.title,
+                section: page.frontmatter.section,
+                description: page.frontmatter.description
+            });
+        }
+    }
+
+    for (const page of DOCS_PAGES) {
+        if (!seen.has(page.slug)) {
+            entries.push({
+                slug: page.slug,
+                title: page.title.replace(" | AgentC2 Docs", ""),
+                section: page.section,
+                description: page.description
+            });
+        }
+    }
+
+    return entries;
+}
 
 export default function DocsLayout({ children }: { children: React.ReactNode }) {
+    const searchEntries = buildSearchEntries();
+
     return (
         <div className="min-h-screen">
             <header className="border-border/50 sticky top-0 z-40 border-b bg-black/80 backdrop-blur-xl">
@@ -18,9 +60,7 @@ export default function DocsLayout({ children }: { children: React.ReactNode }) 
                     </Link>
 
                     <div className="flex items-center gap-4">
-                        <div className="text-muted-foreground hidden rounded-md border px-3 py-1.5 text-xs sm:block">
-                            Search coming soon
-                        </div>
+                        <DocsSearch entries={searchEntries} />
                         <Link
                             href="/"
                             className="text-muted-foreground hover:text-foreground text-sm transition-colors"

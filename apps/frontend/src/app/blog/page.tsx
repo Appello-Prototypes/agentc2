@@ -12,7 +12,37 @@ export const metadata: Metadata = buildPageMetadata({
     keywords: ["AI agent orchestration blog", "MCP guide", "AI agent best practices"]
 });
 
-export default function BlogIndexPage() {
+const CATEGORY_LABELS: Record<string, string> = {
+    all: "All",
+    comparison: "Comparisons",
+    pillar: "Pillar",
+    tutorial: "Tutorials",
+    feature: "Features",
+    educational: "Educational",
+    "use-case": "Use Cases",
+    integration: "Integrations",
+    "pain-point": "Pain Points",
+    technical: "Technical"
+};
+
+function getActiveCategories(): string[] {
+    const seen: Set<string> = new Set(BLOG_POSTS.map((p) => p.category));
+    return ["all", ...Object.keys(CATEGORY_LABELS).filter((k) => k !== "all" && seen.has(k))];
+}
+
+interface BlogIndexProps {
+    searchParams: Promise<{ category?: string }>;
+}
+
+export default async function BlogIndexPage({ searchParams }: BlogIndexProps) {
+    const { category } = await searchParams;
+    const activeCategory = category || "all";
+    const categories = getActiveCategories();
+    const filteredPosts =
+        activeCategory === "all"
+            ? BLOG_POSTS
+            : BLOG_POSTS.filter((p) => p.category === activeCategory);
+
     return (
         <main className="mx-auto max-w-4xl px-6 py-12">
             <ContentPageTracker
@@ -27,8 +57,27 @@ export default function BlogIndexPage() {
                 </p>
             </header>
 
+            <nav className="mb-8 flex flex-wrap gap-2" aria-label="Filter by category">
+                {categories.map((cat) => {
+                    const isActive = cat === activeCategory;
+                    return (
+                        <Link
+                            key={cat}
+                            href={cat === "all" ? "/blog" : `/blog?category=${cat}`}
+                            className={`rounded-full border px-3 py-1 text-sm transition-colors ${
+                                isActive
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/30"
+                            }`}
+                        >
+                            {CATEGORY_LABELS[cat] ?? cat}
+                        </Link>
+                    );
+                })}
+            </nav>
+
             <ul className="space-y-6">
-                {BLOG_POSTS.map((post) => (
+                {filteredPosts.map((post) => (
                     <li key={post.slug} className="border-border rounded-lg border p-6">
                         <p className="text-muted-foreground text-xs tracking-wide uppercase">
                             {post.category}
@@ -48,6 +97,12 @@ export default function BlogIndexPage() {
                     </li>
                 ))}
             </ul>
+
+            {filteredPosts.length === 0 && (
+                <p className="text-muted-foreground py-12 text-center">
+                    No posts in this category yet.
+                </p>
+            )}
         </main>
     );
 }

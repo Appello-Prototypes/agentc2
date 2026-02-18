@@ -26,7 +26,7 @@ const navItems = [
     { href: "/observability", label: "Observability", icon: Activity },
     { href: "/federation", label: "Federation", icon: Globe2 },
     { href: "/audit", label: "Audit Log", icon: FileText },
-    { href: "/settings", label: "Admin Users", icon: Settings }
+    { href: "/settings", label: "Settings", icon: Settings }
 ];
 
 export function AdminSidebar() {

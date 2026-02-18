@@ -1,0 +1,272 @@
+---
+title: "AI-Assisted Network Design"
+description: "Use the designer chat to generate network topologies automatically from natural language descriptions."
+section: "networks"
+order: 4
+primaryKeyword: "AI network design"
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/topology"]
+secondaryKeywords:
+    [
+        "network generation",
+        "designer chat",
+        "automatic topology",
+        "network AI",
+        "topology generation"
+    ]
+pageType: "concept"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# AI-Assisted Network Design
+
+AI-assisted network design uses the designer chat endpoint to automatically generate network topologies from natural language descriptions. Describe your network requirements in plain English, and the system generates a complete topology JSON with nodes, edges, and primitive attachments.
+
+## How it works
+
+The designer chat uses the `assistant` agent to analyze your network requirements and generate a complete network definition:
+
+1. **Describe your network** — Provide a natural language description of what you want
+2. **AI generates topology** — The system creates nodes, edges, and primitive attachments
+3. **Review and refine** — Validate the generated topology and make adjustments
+4. **Deploy** — Use the generated topology to create your network
+
+## Designer chat endpoint
+
+Send a `POST` request to `/agent/api/networks/{slug}/designer-chat`:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Create a research network with a coordinator that routes research tasks to a research agent, analysis tasks to an analyst, and writing tasks to a writer. The coordinator should maintain context across all interactions."
+  }'
+```
+
+### Response format
+
+```json
+{
+  "success": true,
+  "topologyJson": {
+    "nodes": [
+      {"id": "coordinator", "type": "coordinator", "label": "Coordinator"},
+      {"id": "researcher", "type": "agent", "label": "Research Agent"},
+      {"id": "analyst", "type": "agent", "label": "Analysis Agent"},
+      {"id": "writer", "type": "agent", "label": "Writing Agent"}
+    ],
+    "edges": [
+      {"from": "coordinator", "to": "researcher"},
+      {"from": "coordinator", "to": "analyst"},
+      {"from": "coordinator", "to": "writer"}
+    ]
+  },
+  "primitives": [
+    {"primitiveType": "agent", "agentId": "research-agent-id"},
+    {"primitiveType": "agent", "agentId": "analysis-agent-id"},
+    {"primitiveType": "agent", "agentId": "writing-agent-id"}
+  },
+  "suggestions": [
+    "Consider adding a fact-check workflow after research",
+    "Add error handling for routing failures"
+  ]
+}
+```
+
+## Network generation endpoint
+
+For one-shot generation without an existing network, use `/agent/api/networks/generate`:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a customer support network with technical support, billing support, and general support agents. The coordinator should route based on request content."
+  }'
+```
+
+This endpoint:
+
+- Lists all available agents, workflows, and tools
+- Generates topology JSON based on your prompt
+- Validates the generated topology
+- Returns suggestions for improvements
+
+### Example generation
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "I need a content creation pipeline: research → outline → draft → edit → publish. Each step should feed into the next."
+  }'
+```
+
+**Generated topology**:
+
+```json
+{
+  "topologyJson": {
+    "nodes": [
+      {"id": "research", "type": "agent", "label": "Research"},
+      {"id": "outline", "type": "agent", "label": "Outline"},
+      {"id": "draft", "type": "agent", "label": "Draft"},
+      {"id": "edit", "type": "agent", "label": "Edit"},
+      {"id": "publish", "type": "agent", "label": "Publish"}
+    ],
+    "edges": [
+      {"from": "research", "to": "outline"},
+      {"from": "outline", "to": "draft"},
+      {"from": "draft", "to": "edit"},
+      {"from": "edit", "to": "publish"}
+    ]
+  },
+  "primitives": [
+    {"primitiveType": "agent", "agentId": "research-agent-id"},
+    {"primitiveType": "agent", "agentId": "outline-agent-id"},
+    {"primitiveType": "agent", "agentId": "draft-agent-id"},
+    {"primitiveType": "agent", "agentId": "edit-agent-id"},
+    {"primitiveType": "agent", "agentId": "publish-agent-id"}
+  }
+}
+```
+
+## Best practices
+
+### Provide clear requirements
+
+**Good prompts**:
+
+- "Create a research network with coordinator routing to research, analysis, and writing agents"
+- "Build a sequential pipeline: research → analysis → writing → editing"
+- "Design a parallel market analysis network that analyzes competitors, trends, and feedback simultaneously"
+
+**Vague prompts** (avoid):
+
+- "Make a network"
+- "I need agents"
+- "Create something for research"
+
+### Specify topology type
+
+Mention the desired topology pattern:
+
+- **Router**: "coordinator routes to specialists"
+- **Sequential**: "pipeline", "chain", "step-by-step"
+- **Parallel**: "simultaneously", "in parallel", "fan-out"
+
+### Include context
+
+Provide details about:
+
+- **Number of agents**: "3-agent network"
+- **Agent roles**: "research agent", "writing agent"
+- **Execution flow**: "research feeds into analysis"
+- **Special requirements**: "maintain context", "error handling"
+
+## Iterative refinement
+
+Use the designer chat for iterative refinement:
+
+```bash
+# Initial generation
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Create a research network"
+  }'
+
+# Refine based on response
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Add a fact-check workflow after research"
+  }'
+
+# Further refinement
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "Make the fact-check optional - only run if research confidence is low"
+  }'
+```
+
+## Validation
+
+The generated topology is automatically validated:
+
+```json
+{
+  "success": true,
+  "topologyJson": {...},
+  "primitives": [...],
+  "validation": {
+    "valid": true,
+    "warnings": [],
+    "errors": []
+  }
+}
+```
+
+**Validation checks**:
+
+- All edge references point to valid nodes
+- All primitive IDs exist
+- No circular dependencies
+- Coordinator exists for router topology
+
+## Limitations
+
+AI-assisted design has some limitations:
+
+- **Primitive selection**: The system selects from existing agents/workflows. Create primitives first if they don't exist.
+- **Complex topologies**: Very complex topologies may require manual refinement.
+- **Custom logic**: Advanced routing logic (custom conditions, weights) may need manual configuration.
+
+<Callout type="tip">
+    Use AI-assisted design for initial topology generation, then manually refine complex routing
+    logic and edge conditions.
+</Callout>
+
+## Complete example
+
+Generate and deploy a complete network:
+
+```bash
+# Step 1: Generate topology
+curl -X POST https://agentc2.ai/agent/api/networks/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a customer support network with technical, billing, and general support. Coordinator routes based on request content."
+  }' > topology.json
+
+# Step 2: Extract topology and primitives from response
+TOPOLOGY=$(cat topology.json | jq -r '.topologyJson')
+PRIMITIVES=$(cat topology.json | jq -r '.primitives')
+
+# Step 3: Create network with generated topology
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"name\": \"Customer Support Network\",
+    \"instructions\": \"You are a coordinator. Route technical questions to technical support, billing questions to billing support, and general inquiries to general support.\",
+    \"modelProvider\": \"openai\",
+    \"modelName\": \"gpt-4o\",
+    \"topologyJson\": $TOPOLOGY,
+    \"primitives\": $PRIMITIVES
+  }"
+```
+
+## Next steps
+
+- **[Creating Networks](/docs/networks/creating-networks)** — Use generated topologies to create networks
+- **[Network Topology](/docs/networks/topology)** — Understand topology types and routing
+- **[Networks Overview](/docs/networks/overview)** — Learn about network capabilities

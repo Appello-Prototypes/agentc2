@@ -1,0 +1,487 @@
+---
+title: "Add Voice to Your Agent"
+description: "Enable voice capabilities for your agent using ElevenLabs, configure webhooks, and handle interruptions and handoffs."
+section: "guides"
+order: 5
+primaryKeyword: "voice AI agent"
+secondaryKeywords: ["ElevenLabs voice", "voice agent setup", "conversational AI voice"]
+relatedSlugs: ["integrations/elevenlabs", "channels/voice", "agents/configuration"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Add Voice to Your Agent
+
+This guide walks you through adding voice capabilities to your agent using ElevenLabs. You'll set up conversational AI agents, configure webhooks for tool invocation, handle interruptions, and implement graceful handoffs between voice and text channels.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- ElevenLabs account with API access
+- ngrok or similar tool for webhook tunneling (local development)
+- An existing agent you want to add voice to
+
+<Callout type="info">
+    Voice agents enable natural, real-time conversations. This guide covers both text-to-speech (TTS) for agent responses and full conversational AI agents with tool invocation.
+</Callout>
+
+## Architecture overview
+
+Your voice-enabled agent will support:
+
+1. **Text-to-Speech (TTS)** — Convert agent text responses to speech
+2. **Conversational AI** — Two-way voice conversations with tool invocation
+3. **Webhook Integration** — ElevenLabs calls your agent for tool execution
+4. **Interruption Handling** — Graceful handling of user interruptions
+5. **Channel Handoff** — Seamless transition between voice and text
+
+```
+┌─────────────┐
+│   User      │
+│  (Voice)    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  ElevenLabs     │
+│  Voice Agent    │
+└──────┬──────────┘
+       │
+       ├──► Tool Call ──► Webhook ──► AgentC2 Agent
+       │                                      │
+       └──◄ Response ◄────────────────────────┘
+```
+
+## Step 1: Set up ElevenLabs account
+
+### Create account and get API key
+
+1. **Sign up** at [elevenlabs.io](https://elevenlabs.io)
+2. **Navigate to Profile** > **API Key**
+3. **Copy API key** (starts with `sk_`)
+
+### Create conversational AI agent
+
+1. **Go to Conversational AI** > **Agents**
+2. **Click Create Agent**
+3. **Configure agent**:
+   - **Name**: "AgentC2 Voice Assistant"
+   - **Voice**: Select a voice (e.g., "Rachel", "Adam")
+   - **Instructions**: Basic agent behavior
+   - **Knowledge Base**: (Optional) Upload documents
+4. **Note the Agent ID** (starts with `agent_`)
+
+<Callout type="tip">
+    Start with a pre-built voice, then experiment with voice cloning for custom voices later.
+</Callout>
+
+## Step 2: Configure environment variables
+
+Set up ElevenLabs configuration:
+
+```bash
+# ElevenLabs API key
+ELEVENLABS_API_KEY="sk_..."
+
+# Conversational AI agent ID
+ELEVENLABS_AGENT_ID="agent_..."
+
+# Webhook secret (for webhook verification)
+ELEVENLABS_WEBHOOK_SECRET="wsec_..."
+
+# Webhook URL (ngrok domain for local dev)
+ELEVENLABS_MCP_WEBHOOK_URL="https://your-domain.ngrok-free.dev/agent/api/demos/live-agent-mcp/tools"
+```
+
+## Step 3: Set up ngrok for webhooks
+
+For local development, expose your agent API via ngrok:
+
+### Install ngrok
+
+```bash
+# macOS
+brew install ngrok
+
+# Or download from ngrok.com
+```
+
+### Start ngrok tunnel
+
+```bash
+# Start tunnel on port 3001 (agent app port)
+ngrok http 3001 --domain=your-domain.ngrok-free.dev
+```
+
+Or use the provided script:
+
+```bash
+./scripts/start-ngrok.sh
+```
+
+### Configure stable domain
+
+For production, use a stable ngrok domain:
+
+```bash
+# Set in .env
+NGROK_DOMAIN="your-subdomain.ngrok-free.dev"
+```
+
+<Callout type="warning">
+    Webhooks require HTTPS. Use ngrok for local development, or deploy to production for stable URLs.
+</Callout>
+
+## Step 4: Configure webhook endpoint
+
+Set up the webhook endpoint that ElevenLabs will call:
+
+### Verify webhook endpoint exists
+
+The endpoint should be at:
+```
+POST /agent/api/demos/live-agent-mcp/tools
+```
+
+This endpoint:
+- Receives tool invocation requests from ElevenLabs
+- Verifies webhook signature
+- Executes tools via your agent
+- Returns results to ElevenLabs
+
+### Test webhook endpoint
+
+```bash
+curl -X POST https://your-domain.ngrok-free.dev/agent/api/demos/live-agent-mcp/tools \
+  -H "Content-Type: application/json" \
+  -H "X-ElevenLabs-Signature: ..." \
+  -d '{
+    "agent_id": "agent_...",
+    "conversation_id": "conv_...",
+    "tool_calls": [
+      {
+        "tool_name": "web-fetch",
+        "arguments": {
+          "url": "https://example.com"
+        }
+      }
+    ]
+  }'
+```
+
+## Step 5: Configure ElevenLabs agent webhooks
+
+In the ElevenLabs dashboard:
+
+1. **Go to your agent** settings
+2. **Navigate to Webhooks**
+3. **Add webhook**:
+   - **URL**: `https://your-domain.ngrok-free.dev/agent/api/demos/live-agent-mcp/tools`
+   - **Secret**: Your `ELEVENLABS_WEBHOOK_SECRET`
+   - **Events**: Select "tool_calls"
+4. **Save**
+
+### Verify webhook configuration
+
+ElevenLabs will send a verification request. Ensure your endpoint responds correctly:
+
+```typescript
+// Endpoint should verify signature and return 200
+if (verifySignature(request, ELEVENLABS_WEBHOOK_SECRET)) {
+  return { status: "ok" };
+}
+```
+
+## Step 6: Create voice-enabled agent
+
+Create or update your agent for voice interactions:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Voice Assistant",
+    "slug": "voice-assistant",
+    "description": "Voice-enabled agent with tool invocation",
+    "instructions": "You are a voice assistant that helps users via natural conversation.\n\n**Voice Interaction Guidelines:**\n\n1. **Keep responses concise** — Voice responses should be 2-3 sentences max\n2. **Use natural language** — Speak conversationally, not like a robot\n3. **Confirm actions** — Before executing important actions, confirm with the user\n4. **Handle interruptions** — If the user interrupts, stop and listen\n5. **Provide status updates** — When using tools, explain what you're doing\n\n**Tool Usage:**\n- Use tools naturally during conversation\n- Explain tool results in plain language\n- If a tool fails, explain the error and suggest alternatives\n\n**Conversation Flow:**\n- Greet users warmly\n- Ask clarifying questions when needed\n- Summarize actions before executing\n- Confirm completion of tasks",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "maxTokens": 500,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 10,
+      "semanticRecall": {
+        "topK": 3
+      }
+    },
+    "maxSteps": 10,
+    "tools": ["web-fetch", "calculator"],
+    "metadata": {
+      "channel": "voice",
+      "elevenlabsAgentId": "agent_..."
+    }
+  }'
+```
+
+### Key configuration for voice
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| **Max Tokens** | 500 | Shorter responses for voice (2-3 sentences) |
+| **Temperature** | 0.7 | Natural, conversational tone |
+| **Memory** | Enabled | Remember conversation context |
+| **Max Steps** | 10 | Allow tool usage during conversation |
+
+<Callout type="tip">
+    Voice responses should be shorter than text responses. Users can't easily scan long voice messages, so keep it concise.
+</Callout>
+
+## Step 7: Configure voice agent tools
+
+Attach tools that work well in voice conversations:
+
+```bash
+# Attach web-fetch for looking things up
+curl -X POST https://agentc2.ai/agent/api/agents/voice-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "web-fetch" }'
+
+# Attach calculator for quick math
+curl -X POST https://agentc2.ai/agent/api/agents/voice-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "calculator" }'
+
+# Attach memory tools for context
+curl -X POST https://agentc2.ai/agent/api/agents/voice-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "memory-recall" }'
+```
+
+### Tool selection for voice
+
+Prefer tools that:
+- ✅ Return quick results (low latency)
+- ✅ Have simple, clear outputs
+- ✅ Don't require complex inputs
+- ✅ Work well with natural language
+
+Avoid tools that:
+- ❌ Require complex structured input
+- ❌ Have long execution times
+- ❌ Return large data structures
+- ❌ Need visual output
+
+## Step 8: Handle interruptions
+
+Configure your agent to handle user interruptions gracefully:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a voice assistant that helps users via natural conversation.\n\n**Interruption Handling:**\n\nWhen a user interrupts you:\n1. **Stop immediately** — Don't continue your previous response\n2. **Acknowledge** — Say \"Got it\" or \"Sure\"\n3. **Listen** — Process the new request\n4. **Respond** — Address the interruption\n\n**Examples:**\n- User: \"Wait, actually...\" → Stop, acknowledge, listen\n- User: \"No, that's not right\" → Stop, ask for clarification\n- User: \"Hold on\" → Stop, wait for next input\n\n**Long Responses:**\n- Break long explanations into chunks\n- Pause between points\n- Ask \"Should I continue?\" for long content\n- Offer to send details via text/email"
+  }'
+```
+
+### Configure ElevenLabs interruption settings
+
+In ElevenLabs agent settings:
+
+1. **Enable interruption detection**
+2. **Set interruption sensitivity** (medium recommended)
+3. **Configure interruption behavior**:
+   - Stop current response
+   - Process new input immediately
+
+## Step 9: Test voice conversation
+
+Test your voice agent end-to-end:
+
+### Start a voice call
+
+1. **Open ElevenLabs dashboard**
+2. **Go to your agent**
+3. **Click "Test"** or use the phone number
+4. **Start conversation**
+
+### Test scenarios
+
+**Scenario 1: Simple query**
+- User: "What's the weather today?"
+- Agent: Uses web-fetch, responds with weather
+
+**Scenario 2: Tool usage**
+- User: "Calculate 15% tip on $50"
+- Agent: Uses calculator, responds with result
+
+**Scenario 3: Interruption**
+- Agent: "Let me look that up for you..."
+- User: "Actually, never mind"
+- Agent: "Sure, what can I help with instead?"
+
+**Scenario 4: Long response**
+- User: "Tell me about AI agents"
+- Agent: "AI agents are systems that... [pauses] Should I continue?"
+
+## Step 10: Implement channel handoff
+
+Enable seamless transition between voice and text:
+
+### Add handoff instructions
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a voice assistant that helps users via natural conversation.\n\n**Channel Handoff:**\n\nWhen appropriate, offer to switch channels:\n- **Complex information**: \"I can send you a detailed email with this information\"\n- **Long content**: \"This is a lot to cover over voice. Would you like me to send you a text summary?\"\n- **Visual content**: \"I can share a link with charts and graphs\"\n- **User preference**: \"Would you prefer to continue this conversation via text?\"\n\n**Handoff Process:**\n1. Recognize when handoff is beneficial\n2. Offer handoff option\n3. If accepted, provide summary and next steps\n4. Continue in new channel seamlessly\n\n**Maintain Context:**\n- Remember conversation across channels\n- Reference previous voice conversation in text\n- Seamlessly continue where you left off"
+  }'
+```
+
+### Implement handoff API
+
+Create an endpoint to handle channel transitions:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/voice-assistant/handoff \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "fromChannel": "voice",
+    "toChannel": "text",
+    "conversationId": "conv_...",
+    "summary": "User asked about AI agents, discussed basics, wants detailed email"
+  }'
+```
+
+## Step 11: Optimize for latency
+
+Voice interactions require low latency. Optimize your agent:
+
+### Reduce response time
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "modelConfig": {
+      "toolChoice": "auto",
+      "parallelToolCalls": true,
+      "cacheControl": {
+        "enabled": true,
+        "ttl": 3600
+      }
+    },
+    "maxSteps": 5
+  }'
+```
+
+### Use faster models for simple queries
+
+Consider using `gpt-4o-mini` for simple queries:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "modelName": "gpt-4o-mini",
+    "instructions": "You are a voice assistant. For simple queries, respond quickly. For complex queries requiring reasoning, use tools and provide thorough answers."
+  }'
+```
+
+<Callout type="tip">
+    Balance response quality with latency. Use faster models for simple queries, slower models for complex reasoning.
+</Callout>
+
+## Step 12: Monitor voice agent performance
+
+Track key metrics for voice interactions:
+
+### Latency metrics
+
+```bash
+curl https://agentc2.ai/agent/api/agents/voice-assistant/runs?limit=100 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Track:
+- **Time to first token**: How quickly agent starts responding
+- **Total response time**: End-to-end latency
+- **Tool execution time**: Time spent in tools
+
+### Quality metrics
+
+- **Interruption rate**: How often users interrupt
+- **Completion rate**: How often conversations complete successfully
+- **Tool success rate**: Percentage of successful tool calls
+
+### User satisfaction
+
+- **Conversation length**: Longer = more engaged
+- **Return rate**: Users coming back = satisfied
+- **Escalation rate**: Switching to text = voice issues
+
+## Step 13: Handle edge cases
+
+Configure handling for common voice interaction issues:
+
+### Poor audio quality
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a voice assistant.\n\n**Audio Quality Issues:**\n\nIf you receive unclear or garbled input:\n1. Politely ask the user to repeat\n2. Suggest moving to a quieter location\n3. Offer to switch to text if audio issues persist\n\n**Examples:**\n- \"I'm having trouble hearing you clearly. Could you repeat that?\"\n- \"The audio is a bit unclear. Would you like to continue via text?\""
+  }'
+```
+
+### Background noise
+
+Configure ElevenLabs to filter background noise:
+1. **Agent settings** > **Audio processing**
+2. **Enable noise reduction**
+3. **Set sensitivity** (medium recommended)
+
+### Long pauses
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a voice assistant.\n\n**Long Pauses:**\n\nIf the user is silent for more than 5 seconds:\n1. Gently check if they're still there\n2. Offer to help with something else\n3. Don't assume they're done\n\n**Examples:**\n- \"Are you still there?\"\n- \"Is there anything else I can help with?\""
+  }'
+```
+
+## What you've built
+
+You've created a voice-enabled agent with:
+
+✅ **ElevenLabs integration** for conversational AI  
+✅ **Webhook configuration** for tool invocation  
+✅ **Interruption handling** for natural conversations  
+✅ **Channel handoff** between voice and text  
+✅ **Low-latency optimization** for responsive interactions  
+✅ **Edge case handling** for audio quality and pauses  
+✅ **Performance monitoring** for voice-specific metrics
+
+## Next steps
+
+- **[Voice Channel Configuration](/docs/channels/voice)** — Learn advanced voice channel settings
+- **[Advanced Tool Integration](/docs/integrations/elevenlabs)** — Add more tools for voice interactions
+- **[Multi-Channel Agents](/docs/channels/overview)** — Support voice, text, and other channels
+- **[Continuous Learning](/docs/agents/learning)** — Improve voice responses from user feedback
+- **[Production Deployment](/docs/platform/deployment)** — Deploy voice agents to production
+- **[Guardrails for Voice](/docs/agents/guardrails)** — Add safety checks for voice interactions

@@ -1,0 +1,488 @@
+---
+title: "Integrations API"
+description: "Complete API reference for integration providers, connections, MCP tools, and OAuth flows."
+section: "api-reference"
+order: 5
+primaryKeyword: "integrations API reference"
+relatedSlugs: ["integrations/overview", "integrations/building-custom"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Integrations API
+
+Complete reference for all integration-related API endpoints. All endpoints are prefixed with `/agent/api/integrations` or `/agent/api/mcp` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Providers
+
+<ApiEndpoint method="GET" path="/agent/api/integrations/providers" />
+
+List all available integration providers. Returns providers with their connection status, tool counts, and health information.
+
+### Query Parameters
+
+| Parameter   | Type    | Default | Description                    |
+| ----------- | ------- | ------- | ------------------------------ |
+| `category`  | string  | —       | Filter by category             |
+| `active`   | boolean | `true`  | Filter to active providers only |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/integrations/providers?active=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "providers": [
+        {
+            "id": "prov_hubspot",
+            "key": "hubspot",
+            "name": "HubSpot",
+            "description": "CRM and marketing automation",
+            "category": "CRM",
+            "authType": "API_KEY",
+            "providerType": "mcp",
+            "maturityLevel": "stable",
+            "status": "connected",
+            "connections": [
+                {
+                    "id": "conn_abc123",
+                    "isDefault": true,
+                    "scope": "org",
+                    "isActive": true
+                }
+            ],
+            "toolCount": 15,
+            "toolDiscovery": "dynamic",
+            "hasBlueprint": true,
+            "healthStatus": "healthy"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Get Provider
+
+<ApiEndpoint method="GET" path="/agent/api/integrations/providers/{id}" />
+
+Get details for a specific integration provider by key or ID. Returns provider configuration, available actions, triggers, and connection status.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `id`      | string | Provider key or ID  |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/integrations/providers/hubspot \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "provider": {
+        "id": "prov_hubspot",
+        "key": "hubspot",
+        "name": "HubSpot",
+        "description": "CRM and marketing automation",
+        "category": "CRM",
+        "authType": "API_KEY",
+        "providerType": "mcp",
+        "maturityLevel": "stable",
+        "actions": [
+            {
+                "name": "create_contact",
+                "description": "Create a new contact",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "email": {"type": "string"},
+                        "firstName": {"type": "string"},
+                        "lastName": {"type": "string"}
+                    }
+                }
+            }
+        ],
+        "triggers": [
+            {
+                "name": "contact_created",
+                "description": "Triggered when a contact is created"
+            }
+        ],
+        "config": {
+            "apiKeyRequired": true,
+            "oauthSupported": false
+        },
+        "connections": [
+            {
+                "id": "conn_abc123",
+                "isDefault": true,
+                "scope": "org",
+                "isActive": true
+            }
+        ],
+        "toolCount": 15,
+        "healthStatus": "healthy"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Provider not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Connections
+
+<ApiEndpoint method="GET" path="/agent/api/integrations/connections" />
+
+List all integration connections for the authenticated user's organization. Returns connections with their status, scope, and provider information.
+
+### Query Parameters
+
+| Parameter    | Type   | Default | Description                    |
+| ------------ | ------ | ------- | ------------------------------ |
+| `providerId` | string | —       | Filter by provider ID           |
+| `active`     | boolean | `true`  | Filter to active connections only |
+| `scope`      | string | —       | Filter by scope (`"org"` or `"user"`) |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/integrations/connections?active=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "connections": [
+        {
+            "id": "conn_abc123",
+            "providerId": "prov_hubspot",
+            "providerKey": "hubspot",
+            "providerName": "HubSpot",
+            "scope": "org",
+            "isDefault": true,
+            "isActive": true,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T12:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Connection
+
+<ApiEndpoint method="POST" path="/agent/api/integrations/connections" />
+
+Create a new integration connection. For API key providers, include credentials directly. For OAuth providers, use the OAuth flow endpoints.
+
+### Request Body
+
+| Field        | Type   | Required | Description                    |
+| ------------ | ------ | -------- | ------------------------------ |
+| `providerId` | string | ✅ Yes   | Provider ID or key             |
+| `scope`      | string | ❌ No    | `"org"` or `"user"` (default: `"org"`) |
+| `isDefault`  | boolean | ❌ No    | Whether this is the default connection |
+| `credentials` | object | ❌ No    | Provider-specific credentials (for API key providers) |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/integrations/connections \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "providerId": "hubspot",
+    "scope": "org",
+    "isDefault": true,
+    "credentials": {
+      "apiKey": "pat-na1-..."
+    }
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "connection": {
+        "id": "conn_abc123",
+        "providerId": "prov_hubspot",
+        "providerKey": "hubspot",
+        "scope": "org",
+        "isDefault": true,
+        "isActive": true,
+        "createdAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_CREDENTIALS`    | Invalid credentials                |
+| `400`  | `INVALID_PROVIDER`        | Provider not found                |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `409`  | `CONNECTION_EXISTS`       | Connection already exists         |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Delete Connection
+
+<ApiEndpoint method="DELETE" path="/agent/api/integrations/connections/{id}" />
+
+Delete an integration connection. This will remove the connection and make its tools unavailable. This action is permanent and cannot be undone.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Connection ID    |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/integrations/connections/conn_abc123 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "message": "Connection deleted successfully"
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Connection not found               |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List MCP Tools
+
+<ApiEndpoint method="GET" path="/agent/api/mcp/tools" />
+
+List all available MCP (Model Context Protocol) tools from connected integrations. Returns tool definitions with metadata for discovery.
+
+### Query Parameters
+
+| Parameter         | Type    | Default | Description                    |
+| ----------------- | ------- | ------- | ------------------------------ |
+| `includeInactive` | boolean | `false` | Include tools from inactive connections |
+| `server`          | string  | —       | Filter by MCP server ID        |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/mcp/tools?includeInactive=false" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "protocol": "mcp-agent-gateway/1.0",
+    "server_info": {
+        "name": "mastra-agent-gateway",
+        "version": "1.0.0",
+        "capabilities": ["tools", "invoke"]
+    },
+    "tools": [
+        {
+            "name": "hubspot_hubspot-get-user-details",
+            "description": "Get user details from HubSpot",
+            "version": "1.0.0",
+            "metadata": {
+                "server": "hubspot",
+                "provider": "hubspot"
+            },
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "userId": {
+                        "type": "string",
+                        "description": "User ID"
+                    }
+                },
+                "required": ["userId"]
+            },
+            "outputSchema": {
+                "type": "object"
+            },
+            "invoke_url": "/api/mcp/tools/hubspot_hubspot-get-user-details/execute"
+        }
+    ],
+    "total": 45
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Execute MCP Tool
+
+<ApiEndpoint method="POST" path="/agent/api/mcp/tools/{toolId}/execute" />
+
+Execute an MCP tool with the provided arguments. The tool will be invoked through the appropriate integration connection.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `toolId`  | string | Tool name or ID  |
+
+### Request Body
+
+| Field     | Type   | Required | Description                    |
+| --------- | ------ | -------- | ------------------------------ |
+| `arguments` | object | ✅ Yes   | Tool arguments matching input schema |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/mcp/tools/hubspot_hubspot-get-user-details/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "arguments": {
+      "userId": "12345"
+    }
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "result": {
+        "id": "12345",
+        "email": "user@example.com",
+        "firstName": "John",
+        "lastName": "Doe",
+        "properties": {
+            "company": "Acme Corp"
+        }
+    },
+    "metadata": {
+        "toolName": "hubspot_hubspot-get-user-details",
+        "server": "hubspot",
+        "durationMs": 234
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_ARGUMENTS` | Arguments do not match schema   |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Tool not found                     |
+| `500`  | `TOOL_EXECUTION_ERROR` | Tool execution failed          |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `INVALID_CREDENTIALS`    | Invalid credentials                | Check credentials format          |
+| `400`  | `INVALID_PROVIDER`        | Provider not found                 | Check provider ID/key             |
+| `400`  | `INVALID_ARGUMENTS`       | Arguments do not match schema       | Validate arguments against schema |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Resource not found                 | Check ID/key is correct           |
+| `409`  | `CONNECTION_EXISTS`       | Connection already exists          | Use existing connection or delete first |
+| `500`  | `TOOL_EXECUTION_ERROR`    | Tool execution failed              | Check integration connection       |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Invalid API key format",
+    "code": "INVALID_CREDENTIALS"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Tool execution endpoints**: 60 requests per minute per IP
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 45
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Integrations Overview](/docs/integrations/overview)** — Learn about available integrations
+- **[Building Custom Integrations](/docs/integrations/building-custom)** — Create custom integration providers

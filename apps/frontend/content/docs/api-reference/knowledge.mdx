@@ -1,0 +1,395 @@
+---
+title: "Knowledge API"
+description: "Complete API reference for RAG document ingestion, query, search, versioning, and management."
+section: "api-reference"
+order: 6
+primaryKeyword: "knowledge API reference"
+relatedSlugs: ["knowledge/overview", "knowledge/document-ingestion", "knowledge/vector-search"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Knowledge API
+
+Complete reference for all knowledge/RAG and document-related API endpoints. All endpoints are prefixed with `/agent/api/rag` or `/agent/api/documents` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## Ingest Document
+
+<ApiEndpoint method="POST" path="/agent/api/rag/ingest" />
+
+Ingest a document into the RAG system. The document will be chunked, embedded, and indexed for semantic search.
+
+### Request Body
+
+| Field          | Type     | Required | Description                    |
+| -------------- | -------- | -------- | ------------------------------ |
+| `content`      | string   | ✅ Yes   | Document content               |
+| `type`         | string   | ❌ No    | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
+| `sourceId`     | string   | ❌ No    | Source identifier              |
+| `sourceName`   | string   | ❌ No    | Source display name            |
+| `category`     | string   | ❌ No    | Document category              |
+| `tags`         | string[] | ❌ No    | Array of tags                  |
+| `metadata`     | object   | ❌ No    | Custom JSON metadata           |
+| `chunkOptions` | object   | ❌ No    | Chunking configuration         |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/ingest \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "# Product Guide\n\nThis guide explains how to use the product...",
+    "type": "markdown",
+    "sourceId": "product-docs",
+    "sourceName": "Product Documentation",
+    "category": "documentation",
+    "tags": ["product", "guide"],
+    "chunkOptions": {
+      "strategy": "semantic",
+      "maxChunkSize": 1000
+    }
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "documentId": "doc_abc123",
+    "chunkCount": 5,
+    "message": "Document ingested successfully"
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_CONTENT_TYPE`   | Invalid content type               |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `500`  | `INGESTION_ERROR`         | Document ingestion failed          |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Query RAG
+
+<ApiEndpoint method="POST" path="/agent/api/rag/query" />
+
+Query the RAG system for relevant document chunks. Returns semantically similar content based on the query.
+
+### Request Body
+
+| Field      | Type   | Required | Description                    |
+| ---------- | ------ | -------- | ------------------------------ |
+| `query`    | string | ✅ Yes   | Search query                   |
+| `topK`     | number | ❌ No    | Number of results (default: 5) |
+| `minScore` | number | ❌ No    | Minimum similarity score (default: 0.7) |
+| `filters`  | object | ❌ No    | Metadata filters               |
+| `hybrid`   | object | ❌ No    | Hybrid search configuration    |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I configure the product?",
+    "topK": 5,
+    "minScore": 0.7,
+    "filters": {
+      "category": "documentation"
+    }
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "results": [
+        {
+            "chunkId": "vec_1",
+            "content": "To configure the product, navigate to Settings...",
+            "score": 0.92,
+            "metadata": {
+                "sourceId": "product-docs",
+                "sourceName": "Product Documentation",
+                "category": "documentation",
+                "chunkIndex": 2
+            }
+        }
+    ],
+    "query": "How do I configure the product?",
+    "totalResults": 5
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `MISSING_QUERY` | Query is required                  |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `QUERY_ERROR`  | RAG query failed                   |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Documents
+
+<ApiEndpoint method="GET" path="/agent/api/documents" />
+
+List all documents accessible to the authenticated user. Returns documents with their metadata and chunk counts.
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description                    |
+| --------- | ------ | ------- | ------------------------------ |
+| `category` | string | —       | Filter by category             |
+| `tag`      | string | —       | Filter by tag                  |
+| `limit`    | number | `50`    | Maximum number of documents    |
+| `offset`   | number | `0`     | Number of documents to skip    |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/documents?category=documentation&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "documents": [
+        {
+            "id": "doc_abc123",
+            "slug": "product-docs",
+            "name": "Product Documentation",
+            "description": "Complete product guide",
+            "category": "documentation",
+            "tags": ["product", "guide"],
+            "chunkCount": 15,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T12:00:00.000Z"
+        }
+    ],
+    "total": 25,
+    "limit": 10,
+    "offset": 0
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Get Document
+
+<ApiEndpoint method="GET" path="/agent/api/documents/{id}" />
+
+Get details for a specific document by ID or slug. Returns full document content, metadata, and chunk information.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `id`      | string | Document ID or slug  |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/documents/product-docs \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "document": {
+        "id": "doc_abc123",
+        "slug": "product-docs",
+        "name": "Product Documentation",
+        "description": "Complete product guide",
+        "content": "# Product Guide\n\nThis guide explains...",
+        "contentType": "markdown",
+        "category": "documentation",
+        "tags": ["product", "guide"],
+        "metadata": {
+            "author": "Product Team",
+            "version": "1.0"
+        },
+        "chunkCount": 15,
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Insufficient permissions           |
+| `404`  | `NOT_FOUND`    | Document not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Delete Document
+
+<ApiEndpoint method="DELETE" path="/agent/api/documents/{id}" />
+
+Delete a document from the RAG system. This will remove all associated chunks and embeddings. This action is permanent and cannot be undone.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `id`      | string | Document ID or slug  |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/documents/product-docs \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "message": "Document deleted successfully"
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Document not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Versions
+
+<ApiEndpoint method="GET" path="/agent/api/documents/{id}/versions" />
+
+List all versions for a document. Returns version history with change notes and timestamps.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `id`      | string | Document ID or slug  |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/documents/product-docs/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "versions": [
+        {
+            "id": "dv_abc123",
+            "documentId": "doc_xyz789",
+            "version": 3,
+            "changeNotes": "Updated configuration section",
+            "chunkCount": 15,
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        },
+        {
+            "id": "dv_def456",
+            "documentId": "doc_xyz789",
+            "version": 2,
+            "changeNotes": "Added troubleshooting section",
+            "chunkCount": 12,
+            "createdAt": "2026-02-15T10:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Document not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `MISSING_QUERY`           | Query is required                  | Provide query parameter           |
+| `400`  | `INVALID_CONTENT_TYPE`    | Invalid content type               | Use supported content types       |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Document or resource not found     | Check ID/slug is correct          |
+| `500`  | `INGESTION_ERROR`         | Document ingestion failed          | Check document format             |
+| `500`  | `QUERY_ERROR`             | RAG query failed                   | Retry query                       |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Document content is too large (max 10MB)",
+    "code": "INGESTION_ERROR"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Query endpoints**: 60 requests per minute per IP
+- **Ingestion endpoints**: 20 requests per minute per user
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 60
+X-RateLimit-Remaining: 45
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Knowledge Overview](/docs/knowledge/overview)** — Learn about RAG and knowledge management
+- **[Document Ingestion](/docs/knowledge/document-ingestion)** — How to ingest documents into the RAG system
+- **[Vector Search](/docs/knowledge/vector-search)** — Understanding semantic search and retrieval

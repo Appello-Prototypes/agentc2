@@ -1,0 +1,562 @@
+---
+title: "Networks API"
+description: "Complete API reference for network CRUD operations, execution, runs, and versions."
+section: "api-reference"
+order: 3
+primaryKeyword: "networks API reference"
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/version-control"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Networks API
+
+Complete reference for all network-related API endpoints. All endpoints are prefixed with `/agent/api/networks` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Networks
+
+<ApiEndpoint method="GET" path="/agent/api/networks" />
+
+List all networks accessible to the authenticated user. Returns both published and draft networks with their topology and primitive counts.
+
+### Query Parameters
+
+| Parameter   | Type    | Default | Description                    |
+| ----------- | ------- | ------- | ------------------------------ |
+| `active`    | boolean | `true`  | Filter to active networks only |
+| `published` | boolean | —       | Filter to published networks   |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/networks?active=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "networks": [
+        {
+            "id": "net_abc123",
+            "slug": "research-network",
+            "name": "Research Network",
+            "description": "Multi-agent research network",
+            "version": 3,
+            "isPublished": true,
+            "isActive": true,
+            "runCount": 150,
+            "primitiveCount": 3,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T14:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Network
+
+<ApiEndpoint method="POST" path="/agent/api/networks" />
+
+Create a new network with specified topology and primitives. Networks orchestrate multiple agents, workflows, and tools.
+
+### Request Body
+
+| Field           | Type    | Required | Default                  | Description                                     |
+| --------------- | ------- | -------- | ------------------------ | ----------------------------------------------- |
+| `name`          | string  | ✅ Yes   | —                        | Display name for the network                    |
+| `slug`          | string  | ❌ No    | Auto-generated           | URL-safe identifier (unique per workspace)      |
+| `description`   | string  | ❌ No    | `null`                   | Human-readable description                      |
+| `instructions`  | string  | ✅ Yes   | —                        | System instructions for the routing coordinator |
+| `modelProvider` | string  | ✅ Yes   | —                        | `"openai"` or `"anthropic"`                     |
+| `modelName`     | string  | ✅ Yes   | —                        | Model identifier (e.g., `"gpt-4o"`)             |
+| `temperature`   | number  | ❌ No    | `0.7`                    | Sampling temperature (0-2)                      |
+| `topologyJson`  | object  | ❌ No    | `{nodes: [], edges: []}` | Network topology graph                          |
+| `memoryConfig`  | object  | ❌ No    | `{}`                     | Memory configuration                            |
+| `maxSteps`      | number  | ❌ No    | `10`                     | Maximum execution steps                         |
+| `primitives`    | array   | ❌ No    | `[]`                     | Array of primitive attachments                  |
+| `isPublished`   | boolean | ❌ No    | `false`                  | Whether network is published                    |
+| `isActive`      | boolean | ❌ No    | `true`                   | Whether network is active                       |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Network",
+    "slug": "research-network",
+    "description": "Multi-agent research network",
+    "instructions": "You are a routing coordinator for a research network. Route tasks to the appropriate specialized agents.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "topologyJson": {
+      "nodes": [
+        {"id": "coordinator", "type": "agent", "agentId": "coordinator-agent"},
+        {"id": "researcher", "type": "agent", "agentId": "research-agent"}
+      ],
+      "edges": [
+        {"from": "coordinator", "to": "researcher"}
+      ]
+    },
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "coordinator-agent"},
+      {"primitiveType": "agent", "agentId": "research-agent"}
+    ]
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "network": {
+        "id": "net_abc123",
+        "slug": "research-network",
+        "name": "Research Network",
+        "description": "Multi-agent research network",
+        "version": 1,
+        "isPublished": false,
+        "isActive": true,
+        "primitiveCount": 2,
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_TOPOLOGY`        | Invalid network topology           |
+| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference         |
+| `400`  | `INVALID_MODEL`           | Model not found for provider       |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Get Network
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}" />
+
+Get details for a specific network by slug or ID. Returns full network configuration including topology, primitives, and routing instructions.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "network": {
+        "id": "net_abc123",
+        "slug": "research-network",
+        "name": "Research Network",
+        "description": "Multi-agent research network",
+        "instructions": "You are a routing coordinator...",
+        "modelProvider": "openai",
+        "modelName": "gpt-4o",
+        "temperature": 0.3,
+        "topologyJson": {
+            "nodes": [
+                {"id": "coordinator", "type": "agent", "agentId": "coordinator-agent"},
+                {"id": "researcher", "type": "agent", "agentId": "research-agent"}
+            ],
+            "edges": [
+                {"from": "coordinator", "to": "researcher"}
+            ]
+        },
+        "primitives": [
+            {"primitiveType": "agent", "agentId": "coordinator-agent"},
+            {"primitiveType": "agent", "agentId": "research-agent"}
+        ],
+        "maxSteps": 10,
+        "version": 3,
+        "isPublished": true,
+        "isActive": true,
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T14:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Insufficient permissions           |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Update Network
+
+<ApiEndpoint method="PATCH" path="/agent/api/networks/{slug}" />
+
+Update an existing network. Only USER-type networks can be updated. All fields are optional—only include fields you want to update.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+All fields are optional:
+
+| Field          | Type    | Required | Description                    |
+| -------------- | ------- | -------- | ------------------------------ |
+| `name`         | string  | ❌ No    | Display name                   |
+| `description`  | string  | ❌ No    | Human-readable description     |
+| `instructions` | string | ❌ No    | Routing coordinator instructions |
+| `topologyJson` | object  | ❌ No    | Network topology graph         |
+| `primitives`   | array   | ❌ No    | Array of primitive attachments  |
+| `isPublished`  | boolean | ❌ No    | Whether network is published  |
+| `isActive`     | boolean | ❌ No    | Whether network is active     |
+
+### Example Request
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isPublished": true,
+    "maxSteps": 15
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "network": {
+        "id": "net_abc123",
+        "slug": "research-network",
+        "isPublished": true,
+        "maxSteps": 15,
+        "updatedAt": "2026-02-18T14:05:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_TOPOLOGY` | Invalid network topology        |
+| `400`  | `INVALID_PRIMITIVE` | Invalid primitive reference     |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Cannot update SYSTEM network       |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Delete Network
+
+<ApiEndpoint method="DELETE" path="/agent/api/networks/{slug}" />
+
+Delete a network. Only USER-type networks can be deleted. This action is permanent and cannot be undone.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "message": "Network deleted successfully"
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Cannot delete SYSTEM network       |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Execute Network
+
+<ApiEndpoint method="POST" path="/agent/api/networks/{slug}/execute" />
+
+Execute a network with the provided input. The routing coordinator will determine which primitives to invoke and in what order.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+| Field  | Type   | Required | Description                    |
+| ------ | ------ | -------- | ------------------------------ |
+| `input` | string | ✅ Yes   | Input text or task description  |
+| `threadId` | string | ❌ No    | Conversation thread ID (for memory) |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Research the latest developments in quantum computing",
+    "threadId": "thread_123"
+  }'
+```
+
+### Response `200 OK`
+
+The response is a streaming Server-Sent Events (SSE) stream:
+
+```
+data: {"type":"coordinator_start","input":"Research the latest developments..."}
+
+data: {"type":"primitive_invoke","primitiveType":"agent","primitiveId":"research-agent","input":"..."}
+
+data: {"type":"primitive_result","primitiveType":"agent","primitiveId":"research-agent","output":"..."}
+
+data: {"type":"network_complete","runId":"net_run_abc123","output":"Recent quantum computing developments include..."}
+```
+
+### Response Format
+
+| Field          | Type   | Description                                    |
+| -------------- | ------ | ---------------------------------------------- |
+| `type`         | string | `"coordinator_start"`, `"primitive_invoke"`, `"primitive_result"`, `"network_complete"` |
+| `primitiveType` | string | `"agent"`, `"workflow"`, or `"tool"`          |
+| `primitiveId`  | string | Primitive ID                                   |
+| `input`        | string | Input to primitive                             |
+| `output`       | string | Output from primitive                          |
+| `runId`        | string | Network run ID (for completion event)         |
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_INPUT` | Invalid input format              |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded              |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Runs
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}/runs" />
+
+List network execution runs with filtering and pagination. Returns historical runs with their status and outputs.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description                                    |
+| --------- | ------ | ------- | ---------------------------------------------- |
+| `limit`   | number | `50`    | Maximum number of runs to return               |
+| `offset`  | number | `0`     | Number of runs to skip                         |
+| `status`  | string | —       | Filter by status (`"completed"`, `"failed"`)   |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/networks/research-network/runs?limit=10&status=completed" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "runs": [
+        {
+            "id": "net_run_abc123",
+            "networkId": "net_xyz789",
+            "input": "Research the latest developments in quantum computing",
+            "output": "Recent quantum computing developments include...",
+            "status": "completed",
+            "durationMs": 5234,
+            "stepsExecuted": 3,
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        }
+    ],
+    "total": 75,
+    "limit": 10,
+    "offset": 0
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Version
+
+<ApiEndpoint method="POST" path="/agent/api/networks/{slug}/versions" />
+
+Create a version snapshot of the current network configuration. Useful for tracking changes and rolling back if needed.
+
+### Path Parameters
+
+| Parameter | Type   | Description       |
+| --------- | ------ | ----------------- |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+| Field         | Type   | Required | Description                                   |
+| ------------- | ------ | -------- | --------------------------------------------- |
+| `changeNotes` | string | ❌ No    | Notes describing what changed in this version |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "changeNotes": "Added new research agent to topology"
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "version": {
+        "id": "nv_abc123",
+        "networkId": "net_xyz789",
+        "version": 4,
+        "changeNotes": "Added new research agent to topology",
+        "configSnapshot": {
+            "topologyJson": {...},
+            "primitives": [...],
+            "instructions": "..."
+        },
+        "createdAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Network not found                  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `INVALID_TOPOLOGY`        | Invalid network topology           | Check topology structure           |
+| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference         | Verify primitive IDs exist         |
+| `400`  | `INVALID_MODEL`           | Model not found for provider       | Check available models            |
+| `400`  | `INVALID_INPUT`           | Invalid input format               | Use correct input format          |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Network or resource not found     | Check slug/ID is correct          |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                | Use a different slug              |
+| `429`  | `RATE_LIMIT_EXCEEDED`     | Rate limit exceeded                | Wait before retrying              |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Primitive 'agent_xyz' not found",
+    "code": "INVALID_PRIMITIVE"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Execute endpoints**: 30 requests per minute per IP
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 25
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Creating Networks](/docs/networks/creating-networks)** — Step-by-step guide to creating networks
+- **[Network Topology](/docs/networks/topology)** — Learn about network structure and routing
+- **[Network Version Control](/docs/networks/version-control)** — Manage network versions and rollbacks

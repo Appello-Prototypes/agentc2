@@ -1,7 +1,7 @@
 import { prisma } from "@repo/database";
 import { cookies } from "next/headers";
 import { validateAdminSession } from "@repo/admin-auth";
-import { AdminUsersManager } from "./admin-users-manager";
+import { SettingsTabs } from "./settings-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -30,7 +30,5 @@ export default async function AdminSettingsPage() {
         createdAt: a.createdAt.toISOString()
     }));
 
-    return (
-        <AdminUsersManager initialAdmins={serialized} currentAdminId={session?.adminUserId ?? ""} />
-    );
+    return <SettingsTabs initialAdmins={serialized} currentAdminId={session?.adminUserId ?? ""} />;
 }

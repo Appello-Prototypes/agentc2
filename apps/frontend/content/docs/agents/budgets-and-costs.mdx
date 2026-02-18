@@ -1,0 +1,347 @@
+---
+title: "Budgets and Costs"
+description: "Set spending limits, track per-run costs, and manage LLM spend across agents."
+section: "agents"
+order: 8
+primaryKeyword: "AI agent cost management"
+relatedSlugs: ["agents/configuration", "agents/model-providers"]
+pageType: "how-to"
+---
+
+# Budgets and Costs
+
+AgentC2 tracks LLM usage costs for every agent run and enforces budget limits to prevent runaway spending. Each run records token usage and cost, enabling per-agent cost analysis and organization-wide spend management.
+
+## Setting budget limits
+
+Set a monthly spending limit on any agent:
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/agents/research-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "maxSpendUsd": 10.0
+  }'
+```
+
+The `maxSpendUsd` field sets a monthly limit in USD. Budget enforcement:
+
+- **80% threshold** — Logs a warning when the agent reaches 80% of its budget
+- **100% threshold** — Blocks new runs when the budget is exceeded, returning a `BUDGET_EXCEEDED` error
+
+<Callout type="warning">
+    Budget limits are **monthly** and reset on the first day of each month. They're enforced
+    per-agent, not per-organization.
+</Callout>
+
+## Cost tracking per run
+
+Every agent run records detailed cost information in the `AgentRun` model:
+
+| Field              | Type   | Description                                                 |
+| ------------------ | ------ | ----------------------------------------------------------- |
+| `promptTokens`     | Int    | Input tokens consumed                                       |
+| `completionTokens` | Int    | Output tokens generated                                     |
+| `totalTokens`      | Int    | Total tokens (prompt + completion)                          |
+| `costUsd`          | Float  | Total cost in USD                                           |
+| `modelProvider`    | String | Model provider (`"openai"`, `"anthropic"`)                  |
+| `modelName`        | String | Model identifier (`"gpt-4o"`, `"claude-sonnet-4-20250514"`) |
+
+Retrieve cost data for recent runs:
+
+```bash
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response includes cost breakdown:
+
+```json
+{
+    "runs": [
+        {
+            "id": "run-123",
+            "status": "COMPLETED",
+            "inputText": "What are the latest AI developments?",
+            "outputText": "Recent developments include...",
+            "promptTokens": 1250,
+            "completionTokens": 850,
+            "totalTokens": 2100,
+            "costUsd": 0.0126,
+            "modelProvider": "openai",
+            "modelName": "gpt-4o",
+            "durationMs": 2340,
+            "startedAt": "2026-02-18T10:00:00Z"
+        }
+    ]
+}
+```
+
+## Querying costs
+
+Aggregate costs across runs for analysis:
+
+### Per-agent cost summary
+
+```bash
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?startDate=2026-02-01&endDate=2026-02-18&aggregate=cost" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response includes aggregated metrics:
+
+```json
+{
+    "summary": {
+        "totalRuns": 150,
+        "totalCostUsd": 1.89,
+        "avgCostPerRun": 0.0126,
+        "totalTokens": 315000,
+        "avgTokensPerRun": 2100
+    },
+    "byModel": [
+        {
+            "modelProvider": "openai",
+            "modelName": "gpt-4o",
+            "runs": 150,
+            "totalCostUsd": 1.89,
+            "avgCostPerRun": 0.0126
+        }
+    ],
+    "byDay": [
+        {
+            "date": "2026-02-18",
+            "runs": 12,
+            "costUsd": 0.15
+        },
+        {
+            "date": "2026-02-17",
+            "runs": 8,
+            "costUsd": 0.1
+        }
+    ]
+}
+```
+
+### Organization-wide costs
+
+Query costs across all agents in your organization:
+
+```bash
+curl "https://agentc2.ai/agent/api/runs?organizationId=org-123&startDate=2026-02-01&aggregate=cost" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+<Callout type="info">
+    Cost aggregation queries support filtering by date range, agent ID, model provider, and run
+    status. Use these filters to analyze spend patterns and identify optimization opportunities.
+</Callout>
+
+## Budget enforcement
+
+When an agent reaches its budget limit, new runs are blocked:
+
+```json
+{
+    "success": false,
+    "error": "BUDGET_EXCEEDED",
+    "message": "Agent 'research-assistant' has exceeded its monthly budget of $10.00. Current spend: $10.15",
+    "agentId": "agent-123",
+    "currentSpend": 10.15,
+    "budgetLimit": 10.0,
+    "resetDate": "2026-03-01T00:00:00Z"
+}
+```
+
+Budget checks happen:
+
+1. **Before run starts** — Prevents spending on runs that would exceed budget
+2. **After run completes** — Final validation (in case of concurrent runs)
+
+<Callout type="warning">
+    Budget enforcement is **per-agent**. If you need organization-wide limits, set budgets on
+    individual agents or implement custom logic in your application layer.
+</Callout>
+
+### Budget warnings
+
+At 80% of budget, the system logs a warning:
+
+```json
+{
+    "type": "BUDGET_WARNING",
+    "agentId": "agent-123",
+    "agentSlug": "research-assistant",
+    "currentSpend": 8.0,
+    "budgetLimit": 10.0,
+    "percentage": 80.0,
+    "message": "Agent 'research-assistant' has reached 80% of its monthly budget"
+}
+```
+
+Warnings are recorded in `AgentAlert` and can trigger webhooks or notifications.
+
+## Cost by model provider
+
+Different model providers have different pricing structures:
+
+| Provider      | Model                      | Input (per 1M tokens) | Output (per 1M tokens) | Notes                           |
+| ------------- | -------------------------- | --------------------- | ---------------------- | ------------------------------- |
+| **OpenAI**    | `gpt-4o`                   | $2.50                 | $10.00                 | Best for tool use, multi-modal  |
+| **OpenAI**    | `gpt-4o-mini`              | $0.15                 | $0.60                  | Cost-effective for simple tasks |
+| **OpenAI**    | `gpt-4-turbo`              | $10.00                | $30.00                 | Legacy, higher cost             |
+| **Anthropic** | `claude-sonnet-4-20250514` | $3.00                 | $15.00                 | Strong reasoning, long context  |
+| **Anthropic** | `claude-haiku-3`           | $0.25                 | $1.25                  | Fast, cost-effective            |
+
+<Callout type="tip">
+    Use `gpt-4o-mini` or `claude-haiku-3` for high-volume, low-complexity tasks. Reserve `gpt-4o`
+    and `claude-sonnet-4` for tasks requiring advanced reasoning or tool use.
+</Callout>
+
+### Estimating costs
+
+Estimate costs before setting budgets:
+
+```bash
+# Example: 1000 runs/month, avg 2000 tokens per run
+# Using gpt-4o: $2.50/1M input + $10.00/1M output
+# Assume 60% input, 40% output tokens
+#
+# Input: 1000 runs × 1200 tokens × $2.50/1M = $3.00
+# Output: 1000 runs × 800 tokens × $10.00/1M = $8.00
+# Total: ~$11.00/month
+
+# Using gpt-4o-mini: $0.15/1M input + $0.60/1M output
+# Input: 1000 runs × 1200 tokens × $0.15/1M = $0.18
+# Output: 1000 runs × 800 tokens × $0.60/1M = $0.48
+# Total: ~$0.66/month (94% cost reduction)
+```
+
+## Strategies to reduce costs
+
+### 1. Use smaller models for simple tasks
+
+Reserve expensive models (`gpt-4o`, `claude-sonnet-4`) for complex reasoning. Use `gpt-4o-mini` or `claude-haiku-3` for:
+
+- Simple Q&A
+- Text formatting
+- Basic data extraction
+- Low-stakes conversations
+
+```bash
+# Switch to cost-effective model
+curl -X PATCH https://agentc2.ai/agent/api/agents/simple-qa \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "modelProvider": "openai",
+    "modelName": "gpt-4o-mini"
+  }'
+```
+
+### 2. Reduce maxSteps
+
+Limit the number of tool calls per run:
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/agents/research-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "maxSteps": 5  # Reduced from 10
+  }'
+```
+
+Fewer steps mean fewer LLM calls, reducing costs.
+
+### 3. Focus instructions
+
+Clear, focused instructions reduce token usage:
+
+- **Be specific** — Avoid vague instructions that require clarification
+- **Use examples** — Show desired behavior rather than describing it
+- **Set boundaries** — Clearly define what the agent should and shouldn't do
+
+Shorter instructions = fewer input tokens = lower costs.
+
+### 4. Enable response streaming
+
+Streaming responses don't reduce costs, but they improve perceived latency and allow users to cancel long-running generations early.
+
+### 5. Cache common responses
+
+For frequently asked questions, consider:
+
+- **Memory storage** — Store common answers in agent memory
+- **RAG retrieval** — Use semantic search to find cached responses
+- **Workflow branching** — Route simple queries to cached responses
+
+### 6. Monitor and optimize
+
+Regularly review cost reports to identify:
+
+- **High-cost runs** — Investigate why certain runs consume more tokens
+- **Inefficient tool usage** — Tools that are called but don't add value
+- **Redundant LLM calls** — Opportunities to cache or reuse results
+
+```bash
+# Find most expensive runs
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?sort=costUsd&order=desc&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## Cost tracking best practices
+
+### 1. Set realistic budgets
+
+Base budgets on historical usage:
+
+```bash
+# Check last month's spend
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?startDate=2026-01-01&endDate=2026-01-31&aggregate=cost" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Set budgets 20-30% above historical spend to account for growth.
+
+### 2. Monitor budget warnings
+
+Set up alerts for budget warnings (80% threshold) to avoid unexpected blocks:
+
+```bash
+# Check for agents approaching budget
+curl "https://agentc2.ai/agent/api/agents?includeBudgetStatus=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 3. Track costs by version
+
+Compare costs across agent versions:
+
+```bash
+# Compare version 2 vs version 3 costs
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?versionId=version-122&aggregate=cost" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Model changes (e.g., switching from `gpt-4o` to `gpt-4o-mini`) can significantly impact costs.
+
+### 4. Review tool call costs
+
+Tool calls don't directly cost money, but they trigger additional LLM calls. Monitor tool usage:
+
+```bash
+# Check tool call frequency
+curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?includeToolCalls=true&limit=100" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+High tool call counts may indicate inefficient agent behavior.
+
+## Related topics
+
+- **[Agent Configuration](/docs/agents/configuration)** — Learn about all agent settings including `maxSpendUsd`
+- **[Model Providers](/docs/agents/model-providers)** — Compare OpenAI and Anthropic pricing
+- **[Version Control](/docs/agents/version-control)** — Track costs per version for A/B testing
+- **[Evaluations](/docs/agents/evaluations)** — Balance cost and quality metrics

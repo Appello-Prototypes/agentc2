@@ -1,0 +1,715 @@
+---
+title: "Workflows API Reference"
+description: "Complete API reference for workflow CRUD, execution, versions, runs, metrics, and validation."
+section: "workflows"
+order: 8
+primaryKeyword: "workflows API reference"
+secondaryKeywords: ["workflow API", "workflow endpoints", "workflow CRUD", "workflow execution"]
+relatedSlugs: ["workflows/overview", "workflows/creating-workflows", "workflows/version-control"]
+pageType: "reference"
+---
+
+# Workflows API Reference
+
+Complete reference for all workflow-related API endpoints. All endpoints are prefixed with `/agent/api/workflows` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Workflows
+
+<ApiEndpoint method="GET" path="/agent/api/workflows" />
+
+List all workflows accessible to the authenticated user.
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "workflows": [
+        {
+            "id": "wf_abc123",
+            "slug": "support-triage",
+            "name": "Support Ticket Triage",
+            "description": "Automatically triage and route support tickets",
+            "version": 3,
+            "isPublished": true,
+            "isActive": true,
+            "runCount": 150,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T12:05:00.000Z"
+        }
+    ]
+}
+```
+
+## Create Workflow
+
+<ApiEndpoint method="POST" path="/agent/api/workflows" />
+
+Create a new workflow.
+
+### Request Body
+
+| Field                | Type    | Required | Default             | Description                                  |
+| -------------------- | ------- | -------- | ------------------- | -------------------------------------------- |
+| `name`               | string  | ✅ Yes   | —                   | Display name for the workflow                |
+| `slug`               | string  | ❌ No    | Auto-generated      | URL-safe identifier (unique)                 |
+| `description`        | string  | ❌ No    | `null`              | Human-readable description                   |
+| `definitionJson`     | JSON    | ✅ Yes   | —                   | Workflow definition (steps, edges, viewport) |
+| `inputSchemaJson`    | JSON    | ❌ No    | `null`              | Input schema (JSON Schema format)            |
+| `outputSchemaJson`   | JSON    | ❌ No    | `null`              | Output schema (JSON Schema format)           |
+| `maxSteps`           | number  | ❌ No    | `50`                | Maximum steps allowed                        |
+| `timeout`            | number  | ❌ No    | `null`              | Maximum execution time in seconds            |
+| `retryConfig`        | JSON    | ❌ No    | `null`              | Retry configuration                          |
+| `isPublished`        | boolean | ❌ No    | `false`             | Whether workflow is published                |
+| `isActive`           | boolean | ❌ No    | `true`              | Whether workflow is active                   |
+| `workspaceId`        | string  | ❌ No    | Auto-detected       | Workspace ID                                 |
+| `type`               | string  | ❌ No    | `"USER"`            | `"USER"` or `"SYSTEM"`                       |
+| `versionDescription` | string  | ❌ No    | `"Initial version"` | Description for version 1                    |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support Ticket Triage",
+    "slug": "support-triage",
+    "description": "Automatically triage and route support tickets",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "analyze",
+          "type": "agent",
+          "config": { "agentSlug": "triage-agent" }
+        }
+      ]
+    },
+    "inputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string" }
+      }
+    }
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "workflow": {
+    "id": "wf_abc123",
+    "slug": "support-triage",
+    "name": "Support Ticket Triage",
+    "definitionJson": {...},
+    "version": 1,
+    "isPublished": false,
+    "isActive": true,
+    "createdAt": "2026-02-18T12:00:00.000Z"
+  }
+}
+```
+
+## Get Workflow
+
+<ApiEndpoint method="GET" path="/agent/api/workflows/{slug}" />
+
+Get details for a specific workflow by slug or ID.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "workflow": {
+    "id": "wf_abc123",
+    "slug": "support-triage",
+    "name": "Support Ticket Triage",
+    "description": "Automatically triage and route support tickets",
+    "definitionJson": {...},
+    "inputSchemaJson": {...},
+    "outputSchemaJson": {...},
+    "maxSteps": 50,
+    "timeout": 300,
+    "retryConfig": {...},
+    "version": 3,
+    "isPublished": true,
+    "isActive": true,
+    "runCount": 150,
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "updatedAt": "2026-02-18T12:05:00.000Z"
+  }
+}
+```
+
+## Update Workflow
+
+<ApiEndpoint method="PUT" path="/agent/api/workflows/{slug}" />
+
+Update an existing workflow. Only USER-type workflows can be updated; SYSTEM workflows are protected.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Request Body
+
+All fields are optional. Only include fields you want to update:
+
+| Field                | Type    | Description                                             |
+| -------------------- | ------- | ------------------------------------------------------- |
+| `name`               | string  | Display name                                            |
+| `description`        | string  | Human-readable description                              |
+| `definitionJson`     | JSON    | Workflow definition (creates new version if changed)    |
+| `inputSchemaJson`    | JSON    | Input schema                                            |
+| `outputSchemaJson`   | JSON    | Output schema                                           |
+| `maxSteps`           | number  | Maximum steps allowed                                   |
+| `timeout`            | number  | Maximum execution time in seconds                       |
+| `retryConfig`        | JSON    | Retry configuration                                     |
+| `isPublished`        | boolean | Whether workflow is published                           |
+| `isActive`           | boolean | Whether workflow is active                              |
+| `versionDescription` | string  | Description for new version (if definitionJson changes) |
+
+### Example Request
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "definitionJson": {
+      "steps": [...]
+    },
+    "versionDescription": "Added human approval step"
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "workflow": {
+        "id": "wf_abc123",
+        "slug": "support-triage",
+        "version": 4,
+        "updatedAt": "2026-02-18T12:10:00.000Z"
+    }
+}
+```
+
+## Delete Workflow
+
+<ApiEndpoint method="DELETE" path="/agent/api/workflows/{slug}" />
+
+Delete a workflow. Only USER-type workflows can be deleted; SYSTEM workflows are protected.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true
+}
+```
+
+## Execute Workflow
+
+<ApiEndpoint method="POST" path="/agent/api/workflows/{slug}/execute" />
+
+Execute a workflow with input data.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Request Body
+
+| Field         | Type   | Required | Description                                                           |
+| ------------- | ------ | -------- | --------------------------------------------------------------------- |
+| `input`       | object | ✅ Yes   | Workflow input data                                                   |
+| `environment` | string | ❌ No    | `"development"` or `"production"` (default: `"development"`)          |
+| `triggerType` | string | ❌ No    | `"api"`, `"schedule"`, `"trigger"`, or `"network"` (default: `"api"`) |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "ticketId": "TKT-123",
+      "ticketContent": "Unable to reset password",
+      "customerEmail": "customer@example.com"
+    },
+    "environment": "production"
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "runId": "wr_abc123",
+    "status": "RUNNING",
+    "workflow": {
+        "id": "wf_xyz789",
+        "slug": "support-triage"
+    }
+}
+```
+
+## Get Workflow Run
+
+<ApiEndpoint method="GET" path="/agent/api/workflows/{slug}/runs/{runId}" />
+
+Get details for a specific workflow run.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+| `runId`   | string | Workflow run ID     |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/workflows/support-triage/runs/wr_abc123 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "run": {
+    "id": "wr_abc123",
+    "workflowId": "wf_xyz789",
+    "status": "COMPLETED",
+    "inputJson": {...},
+    "outputJson": {...},
+    "steps": [
+      {
+        "id": "step_1",
+        "stepId": "analyze",
+        "status": "COMPLETED",
+        "output": {...}
+      }
+    ],
+    "durationMs": 2340,
+    "startedAt": "2026-02-18T12:00:00.000Z",
+    "completedAt": "2026-02-18T12:00:03.340Z"
+  }
+}
+```
+
+## List Workflow Runs
+
+<ApiEndpoint method="GET" path="/agent/api/workflows/{slug}/runs" />
+
+List workflow runs with filtering and pagination.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Query Parameters
+
+| Parameter     | Type   | Default | Description                                                              |
+| ------------- | ------ | ------- | ------------------------------------------------------------------------ |
+| `limit`       | number | `50`    | Maximum number of runs to return                                         |
+| `status`      | string | —       | Filter by status (`"COMPLETED"`, `"FAILED"`, `"RUNNING"`, `"SUSPENDED"`) |
+| `environment` | string | —       | Filter by environment (`"development"`, `"production"`)                  |
+| `triggerType` | string | —       | Filter by trigger type                                                   |
+| `from`        | string | —       | Start date (ISO 8601)                                                    |
+| `to`          | string | —       | End date (ISO 8601)                                                      |
+| `search`      | string | —       | Search in input/output                                                   |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/workflows/support-triage/runs?limit=10&status=COMPLETED" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "runs": [
+    {
+      "id": "wr_abc123",
+      "status": "COMPLETED",
+      "inputJson": {...},
+      "outputJson": {...},
+      "durationMs": 2340,
+      "startedAt": "2026-02-18T12:00:00.000Z",
+      "completedAt": "2026-02-18T12:00:03.340Z"
+    }
+  ],
+  "total": 150,
+  "limit": 10
+}
+```
+
+## Resume Workflow Run
+
+<ApiEndpoint method="POST" path="/agent/api/workflows/{slug}/runs/{runId}/resume" />
+
+Resume a suspended workflow run (human-in-the-loop).
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+| `runId`   | string | Workflow run ID     |
+
+### Request Body
+
+| Field            | Type   | Required | Description        |
+| ---------------- | ------ | -------- | ------------------ |
+| `resumeData`     | object | ✅ Yes   | Approval/form data |
+| `requestContext` | object | ❌ No    | Additional context |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/runs/wr_abc123/resume \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "resumeData": {
+      "approved": true,
+      "comments": "Looks good!"
+    }
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "run": {
+        "id": "wr_abc123",
+        "status": "RUNNING"
+    }
+}
+```
+
+## List Workflow Versions
+
+<ApiEndpoint method="GET" path="/agent/api/workflows/{slug}/versions" />
+
+List all versions for a workflow.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/workflows/support-triage/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "versions": [
+        {
+            "id": "wv_abc123",
+            "version": 3,
+            "description": "Updated to use new-agent",
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "createdBy": "user_xyz789"
+        },
+        {
+            "id": "wv_def456",
+            "version": 2,
+            "description": "Added human approval step",
+            "createdAt": "2026-02-15T10:00:00.000Z",
+            "createdBy": "user_xyz789"
+        }
+    ]
+}
+```
+
+## Generate Workflow
+
+<ApiEndpoint method="POST" path="/agent/api/workflows/generate" />
+
+Generate a workflow definition from a natural language prompt.
+
+### Request Body
+
+| Field    | Type   | Required | Description                              |
+| -------- | ------ | -------- | ---------------------------------------- |
+| `prompt` | string | ✅ Yes   | Natural language description of workflow |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a workflow that fetches data, transforms it, and saves to database"
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "definitionJson": {
+    "steps": [...]
+  },
+  "validation": {
+    "valid": true,
+    "errors": []
+  }
+}
+```
+
+## Validate Workflow
+
+<ApiEndpoint method="POST" path="/agent/api/workflows/validate" />
+
+Validate a workflow definition.
+
+### Request Body
+
+| Field            | Type | Required | Description                     |
+| ---------------- | ---- | -------- | ------------------------------- |
+| `definitionJson` | JSON | ✅ Yes   | Workflow definition to validate |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/validate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "definitionJson": {
+      "steps": [...]
+    }
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "valid": true,
+    "errors": []
+}
+```
+
+## Designer Chat
+
+<ApiEndpoint method="POST" path="/agent/api/workflows/{slug}/designer-chat" />
+
+Chat with AI assistant to refine workflow definitions.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Request Body
+
+| Field            | Type   | Required | Description                       |
+| ---------------- | ------ | -------- | --------------------------------- |
+| `prompt`         | string | ✅ Yes   | User request/refinement           |
+| `definitionJson` | JSON   | ✅ Yes   | Current workflow definition       |
+| `selected`       | object | ❌ No    | Selected step/element for context |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Add human approval step before publishing",
+    "definitionJson": {
+      "steps": [...]
+    }
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "summary": "Added human approval step",
+  "patch": [
+    {
+      "op": "add",
+      "path": "/steps/-",
+      "value": {
+        "id": "approval",
+        "type": "human",
+        "config": {...}
+      }
+    }
+  ]
+}
+```
+
+## Get Workflow Metrics
+
+<ApiEndpoint method="GET" path="/agent/api/workflows/{slug}/metrics" />
+
+Get workflow execution metrics.
+
+### Path Parameters
+
+| Parameter | Type   | Description         |
+| --------- | ------ | ------------------- |
+| `slug`    | string | Workflow slug or ID |
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description               |
+| --------- | ------ | ------- | ------------------------- |
+| `days`    | number | `30`    | Number of days to include |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/workflows/support-triage/metrics?days=7" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "metrics": {
+        "totalRuns": 150,
+        "completedRuns": 140,
+        "failedRuns": 10,
+        "averageDurationMs": 2340,
+        "successRate": 0.93
+    }
+}
+```
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                       | Solution                          |
+| ------ | ------------------------- | --------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields           | Include all required fields       |
+| `400`  | `INVALID_DEFINITION`      | Invalid workflow definition       | Check step structure and types    |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters  | Use alphanumeric and hyphens only |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions          | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Workflow or resource not found    | Check slug/ID is correct          |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists               | Use a different slug              |
+| `429`  | `RATE_LIMIT_EXCEEDED`     | Rate limit exceeded               | Wait before retrying              |
+| `500`  | `INTERNAL_ERROR`          | Server error                      | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Workflow slug 'support-triage' already exists",
+    "code": "SLUG_CONFLICT"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **CRUD endpoints**: 100 requests per minute per user
+- **Execution endpoints**: 60 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 45
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Workflows Overview](/docs/workflows/overview)** — Understand the workflow system architecture
+- **[Creating Workflows](/docs/workflows/creating-workflows)** — Step-by-step guide to creating workflows
+- **[Step Types](/docs/workflows/step-types)** — Learn about available step types
+- **[Workflow Version Control](/docs/workflows/version-control)** — Track changes and roll back versions

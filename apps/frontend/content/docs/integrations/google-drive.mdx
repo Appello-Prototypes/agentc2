@@ -1,0 +1,318 @@
+---
+title: "Google Drive"
+description: "Connect agents to Google Drive for file search, document reading, and file creation via Google OAuth2."
+section: "integrations"
+order: 8
+primaryKeyword: "Google Drive integration"
+relatedSlugs:
+    ["integrations/overview", "integrations/gmail", "integrations/google-calendar", "agents/tools"]
+pageType: "how-to"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+---
+
+# Google Drive
+
+Google Drive integration enables agents to search files, read documents (Docs, Sheets, Slides), and create new files using Google OAuth2 authentication. The integration shares OAuth credentials with Gmail and Google Calendar—one OAuth connection enables all three Google services.
+
+## Overview
+
+The Google Drive integration provides OAuth-native tools that agents can call during conversations. Agents can search for files by name or content, read Google Docs/Sheets/Slides, and create new documents—all while respecting Google Drive's API rate limits and file permissions.
+
+<Callout type="info">
+    Google Drive integration uses the same Google OAuth2 connection as Gmail and Google Calendar. If
+    you've already connected Gmail, Drive tools are automatically available.
+</Callout>
+
+## Prerequisites
+
+- Google account with Google Drive access
+- Google Cloud project with OAuth2 credentials (same as Gmail)
+- OAuth consent screen configured with Drive scopes
+- Required scopes authorized
+
+## Setup
+
+### Step 1: Configure Google Cloud OAuth
+
+If you've already set up Gmail integration, skip to Step 2. Otherwise:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) and create or select a project
+2. Navigate to **APIs & Services > Credentials**
+3. Click **Create Credentials > OAuth client ID**
+4. Application type: **Web application**
+5. Authorized redirect URIs: `https://your-domain/api/integrations/gmail/callback`
+6. Copy **Client ID** and **Client Secret**
+
+### Step 2: Add Drive scopes
+
+1. Navigate to **APIs & Services > OAuth consent screen**
+2. Add scopes:
+    - `https://www.googleapis.com/auth/drive.readonly` (read files)
+    - `https://www.googleapis.com/auth/drive.file` (create/modify files you create)
+    - `https://www.googleapis.com/auth/drive` (full Drive access - use with caution)
+
+<Callout type="warning">
+    `drive` scope provides full access to all files. Prefer `drive.readonly` + `drive.file` for
+    least-privilege access.
+</Callout>
+
+### Step 3: Configure in AgentC2
+
+**Environment variables:**
+
+```bash
+GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-client-secret"
+CREDENTIAL_ENCRYPTION_KEY="..." # Same as Gmail
+```
+
+**Via UI:**
+
+1. Navigate to **Settings > Integrations**
+2. Find **Google Drive** (or **Gmail** - they share connection)
+3. Click **Connect via Google Sign-In**
+4. Authorize AgentC2 to access Google Drive
+5. Tokens are automatically stored encrypted
+6. Tools are immediately available
+
+**Note:** If Gmail is already connected, Drive tools are automatically enabled. No separate connection needed.
+
+### Step 4: Attach tools to agents
+
+List available Google Drive tools:
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq '.tools[] | select(.id | startswith("google-drive-"))'
+```
+
+Attach tools to an agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/document-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "google-drive-search-files"
+  }'
+```
+
+## Environment variables
+
+| Variable                    | Required | Description                                              |
+| --------------------------- | -------- | -------------------------------------------------------- |
+| `GOOGLE_CLIENT_ID`          | Yes      | Google OAuth2 client ID (shared with Gmail/Calendar)     |
+| `GOOGLE_CLIENT_SECRET`      | Yes      | Google OAuth2 client secret (shared with Gmail/Calendar) |
+| `CREDENTIAL_ENCRYPTION_KEY` | Yes      | AES-256-GCM encryption key (same as Gmail)               |
+
+## Available tools
+
+| Tool Name                   | Description                                 |
+| --------------------------- | ------------------------------------------- |
+| `google-drive-search-files` | Search files by name or content             |
+| `google-drive-list-files`   | List files in a folder or root              |
+| `google-drive-read-file`    | Read Google Docs, Sheets, or Slides content |
+| `google-drive-create-doc`   | Create a new Google Doc                     |
+
+Tool names use the `google-drive-` prefix. Use the tools API to see the full list with parameter schemas.
+
+## Common patterns
+
+### Search files
+
+```typescript
+// Agent receives: "Find the budget spreadsheet"
+// Agent calls:
+{
+  tool: "google-drive-search-files",
+  arguments: {
+    query: "budget spreadsheet",
+    maxResults: 10
+  }
+}
+// Returns: Array of file metadata (name, id, mimeType, webViewLink)
+```
+
+### Read Google Doc
+
+```typescript
+// Agent receives: "Read the project plan document"
+// Agent calls:
+{
+  tool: "google-drive-search-files",
+  arguments: {
+    query: "project plan",
+    mimeType: "application/vnd.google-apps.document",
+    maxResults: 1
+  }
+}
+// Then:
+{
+  tool: "google-drive-read-file",
+  arguments: {
+    fileId: "file-id-from-search"
+  }
+}
+// Returns: Document content as text or HTML
+```
+
+### Read Google Sheet
+
+```typescript
+// Agent receives: "Show me the sales data"
+// Agent calls:
+{
+  tool: "google-drive-read-file",
+  arguments: {
+    fileId: "spreadsheet-id",
+    exportFormat: "text/csv" // or "application/vnd.google-apps.spreadsheet"
+  }
+}
+// Returns: Sheet data as CSV or structured JSON
+```
+
+### Create document
+
+```typescript
+// Agent receives: "Create a meeting notes document"
+// Agent calls:
+{
+  tool: "google-drive-create-doc",
+  arguments: {
+    title: "Meeting Notes - 2025-02-18",
+    content: "# Meeting Notes\n\n## Agenda\n- Item 1\n- Item 2"
+  }
+}
+// Returns: Created file metadata with webViewLink
+```
+
+## File types and MIME types
+
+Google Drive supports various file types:
+
+| File Type         | MIME Type                                  | Readable           | Creatable |
+| ----------------- | ------------------------------------------ | ------------------ | --------- |
+| **Google Docs**   | `application/vnd.google-apps.document`     | Yes (as text/HTML) | Yes       |
+| **Google Sheets** | `application/vnd.google-apps.spreadsheet`  | Yes (as CSV/JSON)  | Yes       |
+| **Google Slides** | `application/vnd.google-apps.presentation` | Yes (as text)      | Yes       |
+| **PDF**           | `application/pdf`                          | Yes (via export)   | No        |
+| **Images**        | `image/*`                                  | Yes (download)     | No        |
+| **Other**         | Various                                    | Download only      | No        |
+
+<Callout type="tip">
+    Google Workspace files (Docs, Sheets, Slides) must be exported to readable formats. Use
+    `exportFormat` parameter: `text/plain`, `text/csv`, `application/pdf`, etc.
+</Callout>
+
+## Search queries
+
+Google Drive search supports various operators:
+
+| Query                                             | Description                           |
+| ------------------------------------------------- | ------------------------------------- |
+| `name:budget`                                     | Files with "budget" in name           |
+| `fullText:meeting`                                | Files containing "meeting" in content |
+| `mimeType:'application/vnd.google-apps.document'` | Filter by MIME type                   |
+| `'folder-id' in parents`                          | Files in specific folder              |
+| `modifiedTime > '2025-01-01'`                     | Files modified after date             |
+| `sharedWithMe`                                    | Files shared with user                |
+
+Combine queries:
+
+```
+name:report mimeType:'application/vnd.google-apps.document' modifiedTime > '2025-01-01'
+```
+
+## File permissions
+
+Google Drive files have permission models:
+
+- **Owned by user**: Full access if `drive.file` or `drive` scope
+- **Shared with user**: Read access if `drive.readonly` or `drive` scope
+- **Public**: Read access if file is publicly shared
+
+<Callout type="warning">
+    If a file isn't accessible, check: 1. File is shared with the OAuth user 2. OAuth scopes include
+    required permissions 3. File hasn't been deleted or moved
+</Callout>
+
+## Troubleshooting
+
+| Problem                        | Solution                                                                                                              |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| **"File not found"**           | Verify file ID is correct. Check file is shared with OAuth user or is publicly accessible.                            |
+| **"Insufficient permissions"** | Ensure OAuth scopes include `drive.readonly` (for read) or `drive.file` (for create). Re-authorize if scopes changed. |
+| **"Export failed"**            | Google Workspace files must be exported. Use correct `exportFormat` (e.g., `text/plain` for Docs).                    |
+| **"Rate limit exceeded"**      | Google Drive API limits: 1,000 requests/100 seconds/user. Implement exponential backoff.                              |
+| **"Invalid file type"**        | Check file MIME type. Some file types (e.g., binary) cannot be read directly—download instead.                        |
+
+## Rate limiting
+
+Google Drive API quota limits:
+
+- **Per-user rate limit**: 1,000 requests per 100 seconds per user
+- **Daily quota**: Varies by project (default: 1 billion quota units)
+
+Quota costs:
+
+- `files.get`: 1 unit
+- `files.list`: 1 unit
+- `files.create`: 2 units
+- `files.export`: 10 units (for Google Workspace files)
+
+Monitor quota usage via response headers or Google Cloud Console.
+
+## Best practices
+
+### 1. Filter by MIME type
+
+Reduce search results by filtering file types:
+
+```typescript
+{
+  tool: "google-drive-search-files",
+  arguments: {
+    query: "budget",
+    mimeType: "application/vnd.google-apps.spreadsheet", // Only Sheets
+    maxResults: 5
+  }
+}
+```
+
+### 2. Cache file metadata
+
+Cache frequently accessed file metadata:
+
+```typescript
+const cacheKey = `gdrive:file:${fileId}`;
+const cached = await cache.get(cacheKey);
+if (cached) return cached;
+
+const file = await callTool("google-drive-read-file", { fileId });
+await cache.set(cacheKey, file, 300); // Cache 5 minutes
+```
+
+### 3. Handle large files
+
+Large files may timeout. Consider pagination or streaming:
+
+```typescript
+// For Sheets, export as CSV and parse incrementally
+{
+  tool: "google-drive-read-file",
+  arguments: {
+    fileId: "large-sheet-id",
+    exportFormat: "text/csv",
+    range: "A1:Z100" // Limit range if possible
+  }
+}
+```
+
+## Related topics
+
+- **[Integrations Overview](/docs/integrations/overview)** — Learn about integration architecture
+- **[Gmail Integration](/docs/integrations/gmail)** — Email integration (shares OAuth)
+- **[Google Calendar](/docs/integrations/google-calendar)** — Calendar integration (shares OAuth)
+- **[Agent Tools](/docs/agents/tools)** — Attach tools to agents

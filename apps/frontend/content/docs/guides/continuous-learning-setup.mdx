@@ -1,0 +1,548 @@
+---
+title: "Continuous Learning Setup"
+description: "Enable continuous learning on your agent, configure signal extraction, set up proposal generation, and monitor improvements."
+section: "guides"
+order: 6
+primaryKeyword: "AI agent continuous learning"
+secondaryKeywords: ["agent learning system", "automatic agent improvement", "agent optimization"]
+relatedSlugs: ["agents/learning", "agents/evaluations", "agents/guardrails"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Continuous Learning Setup
+
+This guide walks you through enabling continuous learning on your agent. You'll configure signal extraction to identify improvement opportunities, set up proposal generation for agent enhancements, configure A/B experiments, and establish human approval gates for promoting improvements to production.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- An existing agent you want to enable learning on
+- Inngest dev server running (for learning event processing)
+- Understanding of agent evaluation metrics
+
+<Callout type="info">
+    Continuous learning enables agents to improve automatically from real-world usage. This guide covers the complete learning loop from signal extraction to production promotion.
+</Callout>
+
+## Architecture overview
+
+The learning system operates in a closed loop:
+
+1. **Signal Extraction** — Identify patterns in successful and failed interactions
+2. **Proposal Generation** — Generate improvement proposals based on signals
+3. **Experiment Execution** — Run A/B tests with proposed changes
+4. **Human Approval** — Review and approve winning changes
+5. **Promotion** — Deploy improvements to production
+
+```
+┌──────────────┐
+│ Agent Runs   │
+│ (Production) │
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────┐
+│ Signal          │
+│ Extraction      │
+└──────┬───────────┘
+       │
+       ▼
+┌─────────────────┐
+│ Proposal        │
+│ Generation      │
+└──────┬──────────┘
+       │
+       ▼
+┌─────────────────┐
+│ A/B Experiment  │
+└──────┬──────────┘
+       │
+       ├──► Winner ──► Human Approval ──► Promote
+       │
+       └──► Loser ──► Discard
+```
+
+## Step 1: Understand learning signals
+
+Learning signals are metrics extracted from agent runs that indicate quality, success, or failure. Common signals include:
+
+### Quality signals
+
+- **Response quality score** — Evaluation scorer results
+- **User satisfaction** — Explicit or implicit feedback
+- **Task completion** — Whether the user's goal was achieved
+- **Error rate** — Frequency of errors or failures
+
+### Efficiency signals
+
+- **Response time** — Latency of agent responses
+- **Token usage** — Cost efficiency
+- **Tool call efficiency** — Optimal tool usage
+- **Conversation length** — Shorter = more efficient
+
+### Safety signals
+
+- **Guardrail violations** — Frequency of policy violations
+- **PII leakage** — Unauthorized data exposure
+- **Toxicity** — Inappropriate content generation
+
+<Callout type="tip">
+    Start with 2-3 key signals that matter most for your use case. You can add more signals later as you refine your learning system.
+</Callout>
+
+## Step 2: Enable learning on your agent
+
+Enable the learning system for your agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/enable \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signalExtraction": {
+      "enabled": true,
+      "metrics": ["responseQuality", "userSatisfaction", "taskCompletion"],
+      "thresholds": {
+        "responseQuality": 0.8,
+        "userSatisfaction": 0.7,
+        "taskCompletion": 0.9
+      }
+    },
+    "proposalGeneration": {
+      "enabled": true,
+      "frequency": "weekly",
+      "minSignals": 50
+    },
+    "experimentConfig": {
+      "enabled": true,
+      "trafficSplit": 0.1,
+      "minRuns": 100
+    }
+  }'
+```
+
+### Configuration options
+
+| Setting | Description | Default |
+|--------|-------------|---------|
+| **signalExtraction.enabled** | Enable signal extraction from runs | `true` |
+| **signalExtraction.metrics** | Which metrics to track | `[]` |
+| **signalExtraction.thresholds** | Success thresholds for each metric | `{}` |
+| **proposalGeneration.frequency** | How often to generate proposals | `"weekly"` |
+| **proposalGeneration.minSignals** | Minimum signals before generating proposals | `50` |
+| **experimentConfig.trafficSplit** | Percentage of traffic for experiments | `0.1` (10%) |
+| **experimentConfig.minRuns** | Minimum runs before evaluating experiment | `100` |
+
+## Step 3: Configure signal extraction
+
+Define which signals to extract and how:
+
+### Set up quality scorers
+
+First, ensure you have evaluation scorers configured:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/scorers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scorers": ["quality", "safety", "completeness"]
+  }'
+```
+
+### Configure signal extraction
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/signals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signals": [
+      {
+        "name": "responseQuality",
+        "source": "scorer",
+        "scorerName": "quality",
+        "threshold": 0.8,
+        "weight": 1.0
+      },
+      {
+        "name": "userSatisfaction",
+        "source": "metadata",
+        "metadataKey": "userRating",
+        "threshold": 0.7,
+        "weight": 0.8
+      },
+      {
+        "name": "taskCompletion",
+        "source": "metadata",
+        "metadataKey": "taskCompleted",
+        "threshold": 0.9,
+        "weight": 1.0
+      },
+      {
+        "name": "responseTime",
+        "source": "metric",
+        "metricName": "duration",
+        "threshold": 2000,
+        "weight": 0.5,
+        "direction": "lower"
+      }
+    ]
+  }'
+```
+
+### Signal configuration fields
+
+| Field | Description | Example |
+|-------|-------------|---------|
+| **name** | Unique signal identifier | `"responseQuality"` |
+| **source** | Where signal comes from (`scorer`, `metadata`, `metric`) | `"scorer"` |
+| **threshold** | Success threshold | `0.8` |
+| **weight** | Importance weight (0-1) | `1.0` |
+| **direction** | `higher` = better, `lower` = better | `"higher"` |
+
+<Callout type="info">
+    Signals are extracted automatically after each agent run. The learning system aggregates signals over time to identify patterns.
+</Callout>
+
+## Step 4: Set up proposal generation
+
+Configure how improvement proposals are generated:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/proposals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "generationConfig": {
+      "frequency": "weekly",
+      "minSignals": 50,
+      "focusAreas": ["instructions", "tools", "temperature", "maxSteps"],
+      "proposalTypes": ["instruction-refinement", "tool-addition", "parameter-tuning"]
+    },
+    "reviewConfig": {
+      "requireApproval": true,
+      "approvalEmail": "ai-team@example.com",
+      "autoApprove": false
+    }
+  }'
+```
+
+### Proposal types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **instruction-refinement** | Improve agent instructions | "Add guidance on handling edge cases" |
+| **tool-addition** | Add new tools | "Add calculator tool for math queries" |
+| **tool-removal** | Remove unused tools | "Remove unused web-fetch tool" |
+| **parameter-tuning** | Adjust model parameters | "Reduce temperature from 0.7 to 0.5" |
+| **memory-config** | Optimize memory settings | "Increase semantic recall topK to 10" |
+
+## Step 5: Configure A/B experiments
+
+Set up experiments to test proposals:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/experiments \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "experimentConfig": {
+      "enabled": true,
+      "trafficSplit": 0.1,
+      "minRuns": 100,
+      "duration": 604800,
+      "successMetric": "responseQuality",
+      "successThreshold": 0.05,
+      "minImprovement": 0.02
+    },
+    "rolloutConfig": {
+      "gradualRollout": true,
+      "rolloutSteps": [0.1, 0.25, 0.5, 1.0],
+      "stepDuration": 86400
+    }
+  }'
+```
+
+### Experiment configuration
+
+| Setting | Description | Default |
+|---------|-------------|---------|
+| **trafficSplit** | Percentage of traffic for experiment variant | `0.1` (10%) |
+| **minRuns** | Minimum runs before evaluation | `100` |
+| **duration** | Experiment duration in seconds | `604800` (7 days) |
+| **successMetric** | Primary metric for evaluation | `"responseQuality"` |
+| **successThreshold** | Minimum improvement to consider success | `0.05` (5%) |
+| **minImprovement** | Minimum improvement to promote | `0.02` (2%) |
+
+<Callout type="warning">
+    Start with small traffic splits (5-10%) to minimize risk. Gradually increase as you gain confidence in the learning system.
+</Callout>
+
+## Step 6: Set up human approval gates
+
+Configure approval workflow for promoting improvements:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/approval \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approvalConfig": {
+      "requireApproval": true,
+      "approvers": ["ai-team@example.com", "product-manager@example.com"],
+      "approvalTimeout": 172800,
+      "escalationEmail": "engineering-lead@example.com",
+      "autoApprove": false,
+      "autoApproveThreshold": 0.95
+    },
+    "notificationConfig": {
+      "notifyOnProposal": true,
+      "notifyOnExperimentStart": true,
+      "notifyOnExperimentComplete": true,
+      "notifyOnApprovalRequest": true
+    }
+  }'
+```
+
+### Approval workflow
+
+1. **Proposal generated** → Notification sent to approvers
+2. **Human reviews** proposal → Approves or rejects
+3. **If approved** → Experiment starts automatically
+4. **Experiment completes** → Results sent for review
+5. **If successful** → Approval requested for promotion
+6. **If approved** → Gradual rollout begins
+
+## Step 7: Monitor learning system
+
+Track learning system activity:
+
+### View extracted signals
+
+```bash
+curl https://agentc2.ai/agent/api/agents/your-agent/learning/signals?limit=100 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Review:
+- Signal values over time
+- Success/failure patterns
+- Correlation between signals
+
+### View proposals
+
+```bash
+curl https://agentc2.ai/agent/api/agents/your-agent/learning/proposals?status=pending \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Review:
+- Proposed changes
+- Expected impact
+- Evidence (signals supporting proposal)
+
+### View experiments
+
+```bash
+curl https://agentc2.ai/agent/api/agents/your-agent/learning/experiments?status=running \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Review:
+- Experiment progress
+- Current metrics
+- Projected outcomes
+
+## Step 8: Review and approve proposals
+
+When a proposal is generated, review it:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/your-agent/learning/proposals/proposal_abc123 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Proposal includes:
+- **Change description** — What will be modified
+- **Expected impact** — Predicted improvement
+- **Evidence** — Signals supporting the proposal
+- **Risk assessment** — Potential downsides
+- **Rollback plan** — How to revert if needed
+
+### Approve a proposal
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/proposals/proposal_abc123/approve \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true,
+    "comments": "Looks good, proceed with experiment"
+  }'
+```
+
+### Reject a proposal
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/proposals/proposal_abc123/approve \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": false,
+    "comments": "Too risky, need more evidence"
+  }'
+```
+
+## Step 9: Monitor experiment results
+
+Track experiment performance:
+
+### View experiment metrics
+
+```bash
+curl https://agentc2.ai/agent/api/agents/your-agent/learning/experiments/exp_abc123/metrics \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Compare:
+- **Control group** (current agent) metrics
+- **Variant group** (proposed changes) metrics
+- **Statistical significance** (p-value)
+- **Confidence interval**
+
+### Evaluate experiment success
+
+An experiment is successful if:
+- ✅ Variant performs better than control
+- ✅ Improvement exceeds `minImprovement` threshold
+- ✅ Statistical significance (p < 0.05)
+- ✅ No regressions in other metrics
+
+## Step 10: Promote winning experiments
+
+After a successful experiment, promote to production:
+
+### Request promotion approval
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/experiments/exp_abc123/promote \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "requestApproval": true,
+    "rolloutPlan": "gradual"
+  }'
+```
+
+### Approve promotion
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/experiments/exp_abc123/approve-promotion \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "approved": true,
+    "rolloutStrategy": "gradual"
+  }'
+```
+
+### Gradual rollout
+
+The system will:
+1. **10% rollout** — Deploy to 10% of traffic, monitor for 24 hours
+2. **25% rollout** — Increase to 25%, monitor for 24 hours
+3. **50% rollout** — Increase to 50%, monitor for 24 hours
+4. **100% rollout** — Full deployment
+
+At each step, if metrics degrade, rollout pauses for review.
+
+## Step 11: Handle experiment failures
+
+If an experiment fails, handle it gracefully:
+
+### Automatic rollback
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/experiments \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "experimentConfig": {
+      "autoRollback": true,
+      "rollbackThreshold": -0.05,
+      "rollbackDelay": 3600
+    }
+  }'
+```
+
+### Manual rollback
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/experiments/exp_abc123/rollback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "reason": "Metrics degraded significantly"
+  }'
+```
+
+## Step 12: Optimize learning configuration
+
+Refine your learning setup based on results:
+
+### Adjust signal thresholds
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/signals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signals": [
+      {
+        "name": "responseQuality",
+        "threshold": 0.85,
+        "weight": 1.0
+      }
+    ]
+  }'
+```
+
+### Tune proposal frequency
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/proposals \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "generationConfig": {
+      "frequency": "bi-weekly",
+      "minSignals": 100
+    }
+  }'
+```
+
+## What you've built
+
+You've set up a complete continuous learning system with:
+
+✅ **Signal extraction** identifying improvement opportunities  
+✅ **Proposal generation** creating actionable improvements  
+✅ **A/B experiments** testing changes safely  
+✅ **Human approval gates** ensuring quality control  
+✅ **Gradual rollout** minimizing risk  
+✅ **Monitoring** tracking learning system performance  
+✅ **Rollback capability** handling failures gracefully
+
+## Next steps
+
+- **[Agent Evaluations](/docs/agents/evaluations)** — Set up custom scorers for better signal extraction
+- **[Guardrails](/docs/agents/guardrails)** — Ensure learning doesn't violate safety policies
+- **[Simulations](/docs/agents/simulations)** — Test proposals in simulation before experiments
+- **[Budget Controls](/docs/agents/budgets-and-costs)** — Set cost limits for learning experiments
+- **[Production Monitoring](/docs/platform/observability)** — Monitor learning system in production
+- **[Advanced Learning](/docs/agents/learning)** — Explore advanced learning techniques

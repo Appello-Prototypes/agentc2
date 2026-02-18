@@ -1,0 +1,380 @@
+---
+title: "Gmail"
+description: "Connect agents to Gmail for email reading, sending, and archiving via Google OAuth2 with encrypted token storage."
+section: "integrations"
+order: 7
+primaryKeyword: "Gmail integration"
+relatedSlugs:
+    [
+        "integrations/overview",
+        "integrations/google-calendar",
+        "integrations/google-drive",
+        "agents/tools"
+    ]
+pageType: "how-to"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+---
+
+# Gmail
+
+Gmail integration enables agents to read emails, send messages, archive threads, and search inboxes using Google OAuth2 authentication. Tokens are encrypted at rest using AES-256-GCM, and the integration automatically refreshes expired tokens. Gmail integration shares OAuth credentials with Google Calendar and Google Drive—one OAuth connection enables all three.
+
+## Overview
+
+The Gmail integration provides OAuth-native tools that agents can call during conversations. Agents can search emails, read message content, draft replies, send emails, and archive threads—all while maintaining conversation context and respecting Gmail's API rate limits.
+
+<Callout type="info">
+    Gmail integration uses Google OAuth2 with PKCE (Proof Key for Code Exchange) for secure
+    authentication. Tokens are encrypted before storage and automatically refreshed when expired.
+</Callout>
+
+## Prerequisites
+
+- Google account with Gmail access
+- Google Cloud project with OAuth2 credentials
+- OAuth consent screen configured
+- Required scopes authorized
+
+## Setup
+
+### Step 1: Configure Google Cloud OAuth
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com) and create or select a project
+2. Navigate to **APIs & Services > Credentials**
+3. Click **Create Credentials > OAuth client ID**
+4. Application type: **Web application**
+5. Authorized redirect URIs: `https://your-domain/api/integrations/gmail/callback`
+6. Copy **Client ID** and **Client Secret**
+
+### Step 2: Configure OAuth consent screen
+
+1. Navigate to **APIs & Services > OAuth consent screen**
+2. User Type: **External** (or Internal for Google Workspace)
+3. Add scopes:
+    - `https://www.googleapis.com/auth/gmail.modify` (read, send, archive)
+    - `https://www.googleapis.com/auth/gmail.send` (send only)
+4. Add test users (if app is in testing)
+5. Submit for verification (if publishing publicly)
+
+### Step 3: Configure in AgentC2
+
+**Environment variables:**
+
+```bash
+GOOGLE_CLIENT_ID="your-client-id.apps.googleusercontent.com"
+GOOGLE_CLIENT_SECRET="your-client-secret"
+CREDENTIAL_ENCRYPTION_KEY="..." # Generate with: openssl rand -hex 32
+```
+
+**Via UI:**
+
+1. Navigate to **Settings > Integrations**
+2. Find **Gmail** and click **Connect**
+3. Click **Connect via Google Sign-In**
+4. Authorize AgentC2 to access Gmail
+5. Tokens are automatically stored encrypted
+6. Tools are immediately available
+
+**Via API:**
+
+```bash
+# Start OAuth flow
+curl https://agentc2.ai/api/integrations/gmail/start \
+  -H "Authorization: Bearer $TOKEN"
+
+# Redirects to Google OAuth, then callback stores tokens
+# Connection is created automatically
+```
+
+### Step 4: Attach tools to agents
+
+List available Gmail tools:
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq '.tools[] | select(.id | startswith("gmail-"))'
+```
+
+Attach tools to an agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/email-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "gmail-search-emails"
+  }'
+```
+
+## Environment variables
+
+| Variable                    | Required | Description                              |
+| --------------------------- | -------- | ---------------------------------------- |
+| `GOOGLE_CLIENT_ID`          | Yes      | Google OAuth2 client ID                  |
+| `GOOGLE_CLIENT_SECRET`      | Yes      | Google OAuth2 client secret              |
+| `CREDENTIAL_ENCRYPTION_KEY` | Yes      | AES-256-GCM encryption key (32-byte hex) |
+
+<Callout type="warning">
+    `CREDENTIAL_ENCRYPTION_KEY` must be set for production. Generate with `openssl rand -hex 32` and
+    store securely. Losing this key means all encrypted tokens become unrecoverable.
+</Callout>
+
+## Available tools
+
+| Tool Name             | Description                                      |
+| --------------------- | ------------------------------------------------ |
+| `gmail-search-emails` | Search emails by query (from, to, subject, etc.) |
+| `gmail-read-email`    | Read email content by message ID                 |
+| `gmail-draft-email`   | Create a draft email                             |
+| `gmail-send-email`    | Send an email                                    |
+| `gmail-archive-email` | Archive an email (remove from inbox)             |
+
+Tool names use the `gmail-` prefix. Use the tools API to see the full list with parameter schemas.
+
+## Common patterns
+
+### Search inbox
+
+```typescript
+// Agent receives: "Find emails from john@example.com"
+// Agent calls:
+{
+  tool: "gmail-search-emails",
+  arguments: {
+    query: "from:john@example.com",
+    maxResults: 10
+  }
+}
+// Returns: Array of email summaries with IDs, subjects, snippets
+```
+
+### Read email content
+
+```typescript
+// Agent receives: "Read the latest email from support"
+// Agent calls:
+{
+  tool: "gmail-search-emails",
+  arguments: {
+    query: "from:support@example.com",
+    maxResults: 1
+  }
+}
+// Then:
+{
+  tool: "gmail-read-email",
+  arguments: {
+    messageId: "message-id-from-search"
+  }
+}
+// Returns: Full email with body, attachments, headers
+```
+
+### Send email
+
+```typescript
+// Agent receives: "Send an email to john@example.com about the meeting"
+// Agent calls:
+{
+  tool: "gmail-send-email",
+  arguments: {
+    to: "john@example.com",
+    subject: "Meeting tomorrow",
+    body: "Hi John,\n\nReminder: We have a meeting tomorrow at 3pm.\n\nBest regards",
+    bodyType: "text" // or "html"
+  }
+}
+```
+
+### Archive email
+
+```typescript
+// Agent receives: "Archive the email about the project"
+// Agent calls:
+{
+  tool: "gmail-search-emails",
+  arguments: {
+    query: "subject:project",
+    maxResults: 1
+  }
+}
+// Then:
+{
+  tool: "gmail-archive-email",
+  arguments: {
+    messageId: "message-id-from-search"
+  }
+}
+```
+
+## Gmail search queries
+
+Gmail search uses Gmail's query syntax:
+
+| Query                   | Description                    |
+| ----------------------- | ------------------------------ |
+| `from:user@example.com` | Emails from sender             |
+| `to:user@example.com`   | Emails to recipient            |
+| `subject:keyword`       | Emails with keyword in subject |
+| `has:attachment`        | Emails with attachments        |
+| `is:unread`             | Unread emails                  |
+| `is:starred`            | Starred emails                 |
+| `label:important`       | Emails with label              |
+| `after:2025/1/1`        | Emails after date              |
+| `before:2025/12/31`     | Emails before date             |
+
+Combine queries:
+
+```
+from:john@example.com subject:meeting is:unread
+```
+
+<Callout type="tip">
+    Gmail search queries are case-insensitive. Use Gmail's web UI to test queries before using them
+    in agent tools.
+</Callout>
+
+## Token management
+
+### Automatic refresh
+
+OAuth tokens are automatically refreshed when expired:
+
+```typescript
+// Token refresh flow
+const token = await getOAuthToken(connectionId);
+if (token.expired) {
+    // Automatically refresh using refresh_token
+    const newToken = await refreshOAuthToken(connectionId);
+    // New token encrypted and stored
+    return newToken;
+}
+```
+
+### Token storage
+
+Tokens are encrypted before storage:
+
+```typescript
+// Encryption using AES-256-GCM
+const encrypted = encrypt(
+    JSON.stringify({
+        access_token: "...",
+        refresh_token: "...",
+        expires_at: 1234567890
+    }),
+    CREDENTIAL_ENCRYPTION_KEY
+);
+
+// Stored in IntegrationConnection.credentials
+connection.credentials = { encrypted };
+```
+
+### Re-authentication
+
+If refresh fails (e.g., user revoked access), the connection is marked inactive:
+
+```typescript
+// Refresh failed
+connection.isActive = false;
+connection.errorMessage = "Token refresh failed. Please re-authenticate.";
+// User must complete OAuth flow again
+```
+
+## Email threading
+
+Gmail groups emails into threads. Tools operate on individual messages, but you can search by thread:
+
+```typescript
+// Get thread ID from message
+const email = await callTool("gmail-read-email", { messageId });
+const threadId = email.threadId;
+
+// Search all messages in thread
+const threadMessages = await callTool("gmail-search-emails", {
+    query: `rfc822msgid:${threadId}`
+});
+```
+
+## Troubleshooting
+
+| Problem                        | Solution                                                                                                    |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| **"Invalid credentials"**      | Verify `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are correct. Check OAuth consent screen is configured. |
+| **"Token expired"**            | Tokens are automatically refreshed. If refresh fails, user must re-authenticate via OAuth flow.             |
+| **"Insufficient permissions"** | Ensure OAuth scopes include `gmail.modify` or `gmail.send`. Re-authorize if scopes changed.                 |
+| **"Rate limit exceeded"**      | Gmail API limits: 1 billion quota units/day. Implement exponential backoff for retries.                     |
+| **"Message not found"**        | Verify message ID is correct. Check user has access to the message (not deleted, in accessible label).      |
+
+## Rate limiting
+
+Gmail API quota limits:
+
+- **Daily quota**: 1 billion quota units (default)
+- **Per-user rate limit**: 250 quota units/second/user
+
+Quota costs:
+
+- `messages.get`: 5 units
+- `messages.list`: 5 units
+- `messages.send`: 100 units
+- `messages.modify`: 5 units
+
+Monitor quota usage:
+
+```typescript
+// Check quota in response headers
+const response = await callTool("gmail-search-emails", {});
+const quotaUsed = response.headers["x-ratelimit-used"];
+const quotaLimit = response.headers["x-ratelimit-limit"];
+```
+
+## Best practices
+
+### 1. Use search efficiently
+
+Limit search results to reduce quota usage:
+
+```typescript
+{
+  tool: "gmail-search-emails",
+  arguments: {
+    query: "from:important@example.com",
+    maxResults: 5 // Only fetch what you need
+  }
+}
+```
+
+### 2. Cache email content
+
+Cache frequently accessed emails:
+
+```typescript
+const cacheKey = `gmail:email:${messageId}`;
+const cached = await cache.get(cacheKey);
+if (cached) return cached;
+
+const email = await callTool("gmail-read-email", { messageId });
+await cache.set(cacheKey, email, 300); // Cache 5 minutes
+```
+
+### 3. Handle large attachments
+
+Email attachments can be large. Consider downloading only when needed:
+
+```typescript
+const email = await callTool("gmail-read-email", { messageId });
+if (email.attachments && email.attachments.length > 0) {
+    // Download attachments only if user requests
+    // Use Gmail API attachment endpoint
+}
+```
+
+## Related topics
+
+- **[Integrations Overview](/docs/integrations/overview)** — Learn about integration architecture
+- **[Google Calendar](/docs/integrations/google-calendar)** — Calendar integration (shares OAuth)
+- **[Google Drive](/docs/integrations/google-drive)** — Drive integration (shares OAuth)
+- **[Agent Tools](/docs/agents/tools)** — Attach tools to agents

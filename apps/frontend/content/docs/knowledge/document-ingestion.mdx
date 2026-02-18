@@ -1,0 +1,406 @@
+---
+title: "Document Ingestion"
+description: "Ingest documents via API: supported formats, chunking strategies, metadata, versioning, and automatic RAG embedding."
+section: "knowledge"
+order: 2
+primaryKeyword: "document ingestion"
+relatedSlugs: ["knowledge/overview", "knowledge/vector-search", "knowledge/api-reference"]
+secondaryKeywords: ["document upload", "RAG ingestion", "document chunking", "document embedding", "document versioning"]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Document Ingestion
+
+Ingest documents into AgentC2's RAG pipeline via API or UI. Documents are automatically chunked, embedded, and stored in the vector database for semantic search.
+
+## Prerequisites
+
+Before ingesting documents, ensure you have:
+
+- An AgentC2 account with authentication configured
+- Documents in supported formats (markdown, text, HTML, JSON)
+- (Optional) OpenAI API key configured for embeddings
+
+## Ingestion endpoints
+
+AgentC2 provides two ingestion endpoints:
+
+### 1. Documents API
+
+Full document management with versioning:
+
+```
+POST /agent/api/documents
+```
+
+### 2. RAG Ingest API
+
+Simplified ingestion focused on RAG:
+
+```
+POST /agent/api/rag/ingest
+```
+
+## Ingest via Documents API
+
+Create a document with automatic RAG embedding:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "description": "Complete product documentation",
+    "content": "# Product Guide\n\n## Overview\n\n...",
+    "contentType": "markdown",
+    "category": "documentation",
+    "tags": ["product", "guide", "user-manual"],
+    "metadata": {
+      "author": "John Doe",
+      "version": "1.0",
+      "lastUpdated": "2026-02-18"
+    }
+  }'
+```
+
+### Request fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `slug` | string | ✅ Yes | URL-safe identifier (unique) |
+| `name` | string | ✅ Yes | Display name |
+| `description` | string | ❌ No | Human-readable description |
+| `content` | string | ✅ Yes | Document content |
+| `contentType` | string | ❌ No | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
+| `category` | string | ❌ No | Document category |
+| `tags` | string[] | ❌ No | Array of tags |
+| `metadata` | object | ❌ No | Custom JSON metadata |
+| `chunkOptions` | object | ❌ No | Chunking configuration |
+
+### Response
+
+```json
+{
+  "id": "doc_abc123",
+  "slug": "product-docs",
+  "name": "Product Documentation",
+  "content": "# Product Guide\n\n...",
+  "contentType": "markdown",
+  "vectorIds": ["vec_1", "vec_2", "vec_3"],
+  "chunkCount": 3,
+  "embeddedAt": "2026-02-18T12:00:00.000Z",
+  "category": "documentation",
+  "tags": ["product", "guide"],
+  "version": 1,
+  "createdAt": "2026-02-18T12:00:00.000Z"
+}
+```
+
+## Ingest via RAG Ingest API
+
+Simplified ingestion for RAG-focused use cases:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/ingest \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "# Product Guide\n\n...",
+    "type": "markdown",
+    "sourceId": "product-docs",
+    "sourceName": "Product Documentation",
+    "description": "Product documentation",
+    "category": "documentation",
+    "tags": ["product"],
+    "chunkOptions": {
+      "chunkSize": 1000,
+      "chunkOverlap": 100
+    }
+  }'
+```
+
+## Supported formats
+
+AgentC2 supports the following document formats:
+
+| Format | Content Type | Description |
+|--------|-------------|-------------|
+| **Markdown** | `markdown` | Markdown text with formatting |
+| **Plain Text** | `text` | Plain text without formatting |
+| **HTML** | `html` | HTML content (stripped of tags for embedding) |
+| **JSON** | `json` | JSON documents (stringified for embedding) |
+| **PDF** | `pdf` | PDF files (requires extraction, see upload endpoint) |
+
+### Format examples
+
+**Markdown**:
+
+```markdown
+# Product Guide
+
+## Overview
+
+This guide covers...
+```
+
+**Plain Text**:
+
+```
+Product Guide
+
+Overview
+
+This guide covers...
+```
+
+**HTML**:
+
+```html
+<h1>Product Guide</h1>
+<h2>Overview</h2>
+<p>This guide covers...</p>
+```
+
+## Chunking strategies
+
+Documents are chunked into smaller pieces for embedding. Choose a strategy based on your content:
+
+### Fixed-size chunking
+
+Split content into fixed-size chunks:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "...",
+    "chunkOptions": {
+      "strategy": "fixed",
+      "chunkSize": 1000,
+      "chunkOverlap": 100
+    }
+  }'
+```
+
+**Parameters**:
+
+- `chunkSize`: Characters per chunk (default: 1000)
+- `chunkOverlap`: Overlap between chunks (default: 100)
+
+### Semantic chunking
+
+Chunk at semantic boundaries (sentences, paragraphs):
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "...",
+    "chunkOptions": {
+      "strategy": "semantic",
+      "maxChunkSize": 1000,
+      "minChunkSize": 200
+    }
+  }'
+```
+
+**Parameters**:
+
+- `maxChunkSize`: Maximum characters per chunk
+- `minChunkSize`: Minimum characters per chunk
+
+### Recursive chunking
+
+Hierarchical chunking with multiple levels:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "...",
+    "chunkOptions": {
+      "strategy": "recursive",
+      "chunkSizes": [2000, 1000, 500],
+      "chunkOverlap": 100
+    }
+  }'
+```
+
+**Parameters**:
+
+- `chunkSizes`: Array of chunk sizes for each level
+- `chunkOverlap`: Overlap between chunks
+
+<Callout type="tip">
+Use **semantic chunking** for documents with clear structure (markdown, HTML). Use **fixed-size** for unstructured text. Use **recursive** for very long documents.
+</Callout>
+
+## Metadata
+
+Add metadata to documents for filtering and organization:
+
+### Category and tags
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "...",
+    "category": "documentation",
+    "tags": ["product", "guide", "user-manual"]
+  }'
+```
+
+### Custom metadata
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "...",
+    "metadata": {
+      "author": "John Doe",
+      "version": "1.0",
+      "lastUpdated": "2026-02-18",
+      "department": "Engineering",
+      "priority": "high"
+    }
+  }'
+```
+
+Metadata is stored with each chunk and can be used for filtering during search.
+
+## Versioning
+
+Documents support version control via `DocumentVersion`:
+
+### Automatic versioning
+
+When you update a document, a new version is automatically created:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/documents/product-docs \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "# Updated Product Guide\n\n..."
+  }'
+```
+
+### Manual versioning
+
+Create versions explicitly:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents/product-docs/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "changeSummary": "Updated product features section"
+  }'
+```
+
+### List versions
+
+```bash
+curl https://agentc2.ai/agent/api/documents/product-docs/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## File upload
+
+Upload files directly (PDF, images, etc.):
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents/upload \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@document.pdf" \
+  -F "slug=product-docs" \
+  -F "name=Product Documentation" \
+  -F "category=documentation"
+```
+
+**Supported file types**:
+
+- PDF (extracted to text)
+- Images (OCR if needed)
+- Text files
+- Markdown files
+
+## Re-embedding
+
+Re-embed documents after chunking strategy changes:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/documents/product-docs/reembed \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chunkOptions": {
+      "strategy": "semantic",
+      "maxChunkSize": 1500
+    }
+  }'
+```
+
+This:
+
+1. Deletes old vectors
+2. Re-chunks content with new strategy
+3. Re-embeds chunks
+4. Updates `vectorIds` and `chunkCount`
+
+## Batch ingestion
+
+Ingest multiple documents:
+
+```bash
+# Create multiple documents
+for doc in docs/*.md; do
+  curl -X POST https://agentc2.ai/agent/api/documents \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "{
+      \"slug\": \"$(basename $doc .md)\",
+      \"name\": \"$(basename $doc)\",
+      \"content\": \"$(cat $doc)\",
+      \"contentType\": \"markdown\"
+    }"
+done
+```
+
+## Error handling
+
+Common errors and solutions:
+
+| Status | Error | Solution |
+|--------|-------|----------|
+| `400` | Missing required fields | Include `slug`, `name`, `content` |
+| `400` | Invalid content type | Use supported content types |
+| `409` | Slug already exists | Use different slug or update existing |
+| `500` | Embedding failed | Check OpenAI API key configuration |
+
+## Next steps
+
+- **[Vector Search](/docs/knowledge/vector-search)** — Learn how semantic search works
+- **[Hybrid Search](/docs/knowledge/hybrid-search)** — Combine semantic and lexical search
+- **[Knowledge API Reference](/docs/knowledge/api-reference)** — Complete API documentation

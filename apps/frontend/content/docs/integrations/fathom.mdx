@@ -1,0 +1,365 @@
+---
+title: "Fathom"
+description: "Connect agents to Fathom for meeting recordings, transcripts, summaries, and knowledge extraction via Model Context Protocol."
+section: "integrations"
+order: 15
+primaryKeyword: "Fathom meeting integration"
+relatedSlugs: ["integrations/overview", "integrations/model-context-protocol", "agents/tools"]
+pageType: "how-to"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+---
+
+# Fathom
+
+Fathom integration enables agents to access meeting recordings, transcripts, summaries, and action items from Fathom AI. The integration uses Fathom's MCP server, providing standardized tool access to meeting knowledge and insights.
+
+## Overview
+
+The Fathom integration exposes meeting operations as MCP tools that agents can call during conversations. Agents can search for meetings, retrieve transcripts, access summaries, extract action items, and query meeting content—all while respecting user permissions and meeting privacy.
+
+<Callout type="info">
+Fathom uses a self-hosted MCP server that communicates with Fathom's API. The integration requires an API key and handles authentication automatically.
+</Callout>
+
+## Prerequisites
+
+- Fathom account with API access
+- API key from Fathom account settings
+- Meetings recorded in Fathom
+
+## Setup
+
+### Step 1: Get Fathom API key
+
+1. Log in to [Fathom Dashboard](https://app.fathom.ai)
+2. Navigate to **Settings** > **API**
+3. Click **Generate API Key** or copy existing key
+4. Save the key securely (starts with `fathom_`)
+
+### Step 2: Configure in AgentC2
+
+**Environment variables:**
+```bash
+FATHOM_API_KEY="fathom_..."
+```
+
+**Via UI:**
+1. Navigate to **Settings > Integrations**
+2. Find **Fathom** and click **Connect**
+3. Enter your API key
+4. Click **Test Connection** to verify credentials
+5. Tools are automatically discovered and available
+
+**Via API:**
+```bash
+curl -X POST https://agentc2.ai/agent/api/integrations/connections \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "providerKey": "fathom",
+    "name": "Production Fathom",
+    "credentials": {
+      "FATHOM_API_KEY": "fathom_..."
+    }
+  }'
+```
+
+### Step 3: Attach tools to agents
+
+List available Fathom tools:
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  | jq '.tools[] | select(.id | startswith("fathom-"))'
+```
+
+Attach tools to an agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/meeting-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "fathom_fathom-list-meetings"
+  }'
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `FATHOM_API_KEY` | Yes | Fathom API key (format: `fathom_...`) |
+
+<Callout type="warning">
+Store `FATHOM_API_KEY` securely. In production, use environment variables or encrypted credential storage. Never commit keys to version control.
+</Callout>
+
+## Available tools
+
+| Tool Name | Description |
+|-----------|-------------|
+| `fathom_fathom-list-meetings` | List meetings with metadata (date, participants, duration) |
+| `fathom_fathom-get-meeting` | Get meeting details including transcript and summary |
+| `fathom_fathom-get-transcript` | Get full transcript of a meeting |
+| `fathom_fathom-get-summary` | Get AI-generated summary of a meeting |
+| `fathom_fathom-get-action-items` | Extract action items from a meeting |
+
+Tool names follow the pattern `fathom_{tool-name}`. Use the tools API to see the full list with parameter schemas.
+
+## Common patterns
+
+### List recent meetings
+
+```typescript
+// Agent receives: "Show me meetings from this week"
+// Agent calls:
+{
+  tool: "fathom_fathom-list-meetings",
+  arguments: {
+    startDate: "2025-02-10",
+    endDate: "2025-02-18",
+    limit: 10
+  }
+}
+// Returns: Array of meetings with IDs, dates, participants, durations
+```
+
+### Get meeting summary
+
+```typescript
+// Agent receives: "Summarize the meeting from yesterday"
+// Agent calls:
+{
+  tool: "fathom_fathom-list-meetings",
+  arguments: {
+    startDate: "2025-02-17",
+    endDate: "2025-02-17",
+    limit: 1
+  }
+}
+// Then:
+{
+  tool: "fathom_fathom-get-summary",
+  arguments: {
+    meetingId: "meeting-id-from-list"
+  }
+}
+// Returns: AI-generated summary with key points
+```
+
+### Extract action items
+
+```typescript
+// Agent receives: "What are the action items from the last meeting?"
+// Agent calls:
+{
+  tool: "fathom_fathom-list-meetings",
+  arguments: {
+    limit: 1
+  }
+}
+// Then:
+{
+  tool: "fathom_fathom-get-action-items",
+  arguments: {
+    meetingId: "meeting-id-from-list"
+  }
+}
+// Returns: Array of action items with assignees and due dates
+```
+
+### Search meeting content
+
+```typescript
+// Agent receives: "Find meetings where we discussed the budget"
+// Agent calls:
+{
+  tool: "fathom_fathom-list-meetings",
+  arguments: {
+    query: "budget", // Search in transcripts
+    limit: 10
+  }
+}
+// Returns: Meetings containing "budget" in transcript
+```
+
+## Meeting metadata
+
+Meetings include rich metadata:
+
+```typescript
+{
+  id: "meeting-123",
+  title: "Q1 Planning Meeting",
+  date: "2025-02-18T15:00:00Z",
+  duration: 3600, // seconds
+  participants: [
+    { name: "John Doe", email: "john@example.com" },
+    { name: "Jane Smith", email: "jane@example.com" }
+  ],
+  recordingUrl: "https://...",
+  transcriptUrl: "https://..."
+}
+```
+
+## Transcripts and summaries
+
+### Full transcript
+
+Get complete meeting transcript:
+
+```typescript
+{
+  tool: "fathom_fathom-get-transcript",
+  arguments: {
+    meetingId: "meeting-123"
+  }
+}
+// Returns: Full transcript with speaker labels and timestamps
+```
+
+### AI summary
+
+Get AI-generated summary:
+
+```typescript
+{
+  tool: "fathom_fathom-get-summary",
+  arguments: {
+    meetingId: "meeting-123"
+  }
+}
+// Returns: Summary with key points, decisions, and outcomes
+```
+
+### Action items
+
+Extract structured action items:
+
+```typescript
+{
+  tool: "fathom_fathom-get-action-items",
+  arguments: {
+    meetingId: "meeting-123"
+  }
+}
+// Returns: [
+//   {
+//     text: "Review budget proposal",
+//     assignee: "John Doe",
+//     dueDate: "2025-02-25"
+//   },
+//   ...
+// ]
+```
+
+## Privacy and permissions
+
+### User permissions
+
+Fathom respects user permissions:
+- Users can only access meetings they participated in
+- API keys are scoped to the user's account
+- Private meetings are not accessible via API
+
+### Meeting privacy
+
+Some meetings may be private:
+- Check `isPrivate` flag in meeting metadata
+- Private meetings require explicit access
+- API may return `403 Forbidden` for inaccessible meetings
+
+<Callout type="warning">
+Always respect meeting privacy. Only access meetings the authenticated user has permission to view.
+</Callout>
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **"Authentication failed"** | Verify `FATHOM_API_KEY` is correct and not expired. Regenerate key in Fathom settings if needed. |
+| **"Meeting not found"** | Verify meeting ID is correct. Check user has access to the meeting (participated or shared). |
+| **"Permission denied"** | User lacks permission to access meeting. Verify meeting is not private or restricted. |
+| **"Transcript not available"** | Some meetings may not have transcripts (recording failed, processing). Check meeting status. |
+| **"Rate limit exceeded"** | Fathom limits API calls per plan. Upgrade plan or implement rate limiting/queuing. |
+| **"Summary not generated"** | Summaries are generated asynchronously. Wait a few minutes after meeting ends, then retry. |
+
+## Rate limiting
+
+Fathom API rate limits vary by plan:
+
+- **Free tier**: Limited requests/month
+- **Pro/Enterprise**: Higher limits
+
+Monitor usage:
+
+```bash
+curl https://api.fathom.ai/v1/usage \
+  -H "Authorization: Bearer $FATHOM_API_KEY"
+```
+
+## Best practices
+
+### 1. Cache meeting metadata
+
+Cache frequently accessed meeting metadata:
+
+```typescript
+const cacheKey = `fathom:meeting:${meetingId}`;
+const cached = await cache.get(cacheKey);
+if (cached) return cached;
+
+const meeting = await callTool("fathom_fathom-get-meeting", { meetingId });
+await cache.set(cacheKey, meeting, 3600); // Cache 1 hour
+```
+
+### 2. Handle missing transcripts gracefully
+
+Some meetings may not have transcripts:
+
+```typescript
+try {
+  const transcript = await callTool("fathom_fathom-get-transcript", { meetingId });
+  return transcript;
+} catch (error) {
+  if (error.message.includes("not available")) {
+    return "Transcript is not available for this meeting. Summary may be available instead.";
+  }
+  throw error;
+}
+```
+
+### 3. Use summaries for quick insights
+
+For quick insights, use summaries instead of full transcripts:
+
+```typescript
+// Faster: Get summary
+const summary = await callTool("fathom_fathom-get-summary", { meetingId });
+
+// Slower: Get full transcript
+const transcript = await callTool("fathom_fathom-get-transcript", { meetingId });
+```
+
+### 4. Filter by date range
+
+Use date filters to limit results:
+
+```typescript
+{
+  tool: "fathom_fathom-list-meetings",
+  arguments: {
+    startDate: "2025-02-01",
+    endDate: "2025-02-28",
+    limit: 20
+  }
+}
+```
+
+## Related topics
+
+- **[Integrations Overview](/docs/integrations/overview)** — Learn about integration architecture
+- **[Model Context Protocol](/docs/integrations/model-context-protocol)** — Understand MCP tool execution
+- **[Agent Tools](/docs/agents/tools)** — Attach tools to agents

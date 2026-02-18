@@ -1,0 +1,641 @@
+---
+title: "Step Types"
+description: "Reference guide for all available workflow step types: agent, tool, workflow, branch, parallel, foreach, human, transform, and delay."
+section: "workflows"
+order: 3
+primaryKeyword: "workflow step types"
+secondaryKeywords:
+    ["workflow steps", "step configuration", "agent step", "tool step", "branch step"]
+relatedSlugs: ["workflows/overview", "workflows/creating-workflows", "workflows/control-flow"]
+pageType: "reference"
+---
+
+# Step Types
+
+Workflows support nine step types for different execution patterns. Each step type has a specific configuration schema and use case.
+
+## Step type overview
+
+| Step Type     | Purpose               | Use Case                                |
+| ------------- | --------------------- | --------------------------------------- |
+| **agent**     | Invoke an AI agent    | LLM reasoning, conversational tasks     |
+| **tool**      | Execute a tool        | External API calls, database operations |
+| **workflow**  | Invoke a sub-workflow | Workflow composition, reuse             |
+| **branch**    | Conditional branching | If/else logic, routing                  |
+| **parallel**  | Parallel execution    | Concurrent operations                   |
+| **foreach**   | Loop over array       | Iterate over data                       |
+| **human**     | Human approval gate   | Human-in-the-loop                       |
+| **transform** | Data transformation   | Format conversion, data mapping         |
+| **delay**     | Wait/delay            | Rate limiting, timing                   |
+
+## Agent step
+
+Invokes an AI agent for LLM reasoning or conversational tasks.
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "agent",
+    "name": "Step Name",
+    "config": {
+        "agentSlug": "agent-slug",
+        "inputMapping": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "{{input.prompt}}"
+                }
+            ],
+            "threadId": "{{input.threadId}}"
+        }
+    }
+}
+```
+
+### Config fields
+
+| Field          | Type   | Required | Description                  |
+| -------------- | ------ | -------- | ---------------------------- |
+| `agentSlug`    | string | ✅ Yes   | Agent slug or ID to invoke   |
+| `inputMapping` | object | ❌ No    | Input mapping for agent chat |
+
+### Example
+
+```json
+{
+    "id": "analyze",
+    "type": "agent",
+    "name": "Analyze Ticket",
+    "config": {
+        "agentSlug": "triage-agent",
+        "inputMapping": {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": "Analyze this support ticket and determine priority: {{input.ticketContent}}"
+                }
+            ]
+        }
+    }
+}
+```
+
+### Output
+
+Agent step output is the agent's response:
+
+```json
+{
+  "output": {
+    "content": "Agent response text",
+    "runId": "run_abc123",
+    "toolCalls": [...]
+  }
+}
+```
+
+## Tool step
+
+Executes a tool (built-in, MCP, or custom).
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "tool",
+    "name": "Step Name",
+    "config": {
+        "toolId": "tool-id",
+        "inputMapping": {
+            "arg1": "{{input.value1}}",
+            "arg2": "{{previousStep.output}}"
+        }
+    }
+}
+```
+
+### Config fields
+
+| Field          | Type   | Required | Description           |
+| -------------- | ------ | -------- | --------------------- |
+| `toolId`       | string | ✅ Yes   | Tool ID to execute    |
+| `inputMapping` | object | ❌ No    | Tool argument mapping |
+
+### Example
+
+```json
+{
+    "id": "fetch",
+    "type": "tool",
+    "name": "Fetch Data",
+    "config": {
+        "toolId": "web-fetch",
+        "inputMapping": {
+            "url": "{{input.apiUrl}}",
+            "method": "GET"
+        }
+    }
+}
+```
+
+### Output
+
+Tool step output is the tool's result:
+
+```json
+{
+    "output": {
+        "result": "Tool result data",
+        "toolName": "web-fetch"
+    }
+}
+```
+
+## Workflow step
+
+Invokes a sub-workflow (workflow composition).
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "workflow",
+    "name": "Step Name",
+    "config": {
+        "workflowSlug": "workflow-slug",
+        "inputMapping": {
+            "inputField": "{{input.value}}"
+        }
+    }
+}
+```
+
+### Config fields
+
+| Field          | Type   | Required | Description                    |
+| -------------- | ------ | -------- | ------------------------------ |
+| `workflowSlug` | string | ✅ Yes   | Workflow slug or ID to invoke  |
+| `inputMapping` | object | ❌ No    | Input mapping for sub-workflow |
+
+### Example
+
+```json
+{
+    "id": "subprocess",
+    "type": "workflow",
+    "name": "Process Data",
+    "config": {
+        "workflowSlug": "data-processor",
+        "inputMapping": {
+            "data": "{{fetch.output.result}}",
+            "format": "json"
+        }
+    }
+}
+```
+
+### Output
+
+Workflow step output is the sub-workflow's output:
+
+```json
+{
+    "output": {
+        "result": "Sub-workflow output",
+        "runId": "run_abc123"
+    }
+}
+```
+
+## Branch step
+
+Conditional branching (if/else logic).
+
+### Schema
+
+```json
+{
+  "id": "step-id",
+  "type": "branch",
+  "name": "Step Name",
+  "config": {
+    "condition": "{{previousStep.output.priority}} === 'high'",
+    "branches": [
+      {
+        "condition": "high",
+        "steps": [...]
+      },
+      {
+        "condition": "default",
+        "steps": [...]
+      }
+    ]
+  }
+}
+```
+
+### Config fields
+
+| Field       | Type   | Required | Description                                          |
+| ----------- | ------ | -------- | ---------------------------------------------------- |
+| `condition` | string | ✅ Yes   | Condition expression (evaluated as JavaScript)       |
+| `branches`  | array  | ✅ Yes   | Array of branch objects with `condition` and `steps` |
+
+### Example
+
+```json
+{
+    "id": "route",
+    "type": "branch",
+    "name": "Route by Priority",
+    "config": {
+        "condition": "{{analyze.output.priority}}",
+        "branches": [
+            {
+                "condition": "high",
+                "steps": [
+                    {
+                        "id": "escalate",
+                        "type": "tool",
+                        "config": {
+                            "toolId": "escalate-ticket"
+                        }
+                    }
+                ]
+            },
+            {
+                "condition": "default",
+                "steps": [
+                    {
+                        "id": "assign",
+                        "type": "agent",
+                        "config": {
+                            "agentSlug": "support-agent"
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+### Output
+
+Branch step output is the output of the executed branch's last step.
+
+## Parallel step
+
+Execute multiple steps in parallel.
+
+### Schema
+
+```json
+{
+  "id": "step-id",
+  "type": "parallel",
+  "name": "Step Name",
+  "config": {
+    "branches": [
+      {
+        "steps": [...]
+      },
+      {
+        "steps": [...]
+      }
+    ]
+  }
+}
+```
+
+### Config fields
+
+| Field      | Type  | Required | Description                          |
+| ---------- | ----- | -------- | ------------------------------------ |
+| `branches` | array | ✅ Yes   | Array of branch objects with `steps` |
+
+### Example
+
+```json
+{
+    "id": "parallel-fetch",
+    "type": "parallel",
+    "name": "Fetch Multiple Sources",
+    "config": {
+        "branches": [
+            {
+                "steps": [
+                    {
+                        "id": "fetch1",
+                        "type": "tool",
+                        "config": {
+                            "toolId": "fetch-api-1",
+                            "inputMapping": { "url": "{{input.url1}}" }
+                        }
+                    }
+                ]
+            },
+            {
+                "steps": [
+                    {
+                        "id": "fetch2",
+                        "type": "tool",
+                        "config": {
+                            "toolId": "fetch-api-2",
+                            "inputMapping": { "url": "{{input.url2}}" }
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+### Output
+
+Parallel step output is an object with branch outputs:
+
+```json
+{
+    "output": {
+        "branch0": { "output": "..." },
+        "branch1": { "output": "..." }
+    }
+}
+```
+
+## Foreach step
+
+Loop over an array and execute steps for each item.
+
+### Schema
+
+```json
+{
+  "id": "step-id",
+  "type": "foreach",
+  "name": "Step Name",
+  "config": {
+    "items": "{{input.items}}",
+    "itemVariable": "item",
+    "steps": [...]
+  }
+}
+```
+
+### Config fields
+
+| Field          | Type   | Required | Description                                      |
+| -------------- | ------ | -------- | ------------------------------------------------ |
+| `items`        | string | ✅ Yes   | Template expression returning array              |
+| `itemVariable` | string | ❌ No    | Variable name for current item (default: `item`) |
+| `steps`        | array  | ✅ Yes   | Steps to execute for each item                   |
+
+### Example
+
+```json
+{
+    "id": "process-items",
+    "type": "foreach",
+    "name": "Process Items",
+    "config": {
+        "items": "{{fetch.output.result.items}}",
+        "itemVariable": "item",
+        "steps": [
+            {
+                "id": "transform",
+                "type": "transform",
+                "config": {
+                    "transform": "{{item | map: { id: .id, name: .name | upper } }}"
+                }
+            },
+            {
+                "id": "save",
+                "type": "tool",
+                "config": {
+                    "toolId": "save-item",
+                    "inputMapping": {
+                        "data": "{{transform.output}}"
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+### Output
+
+Foreach step output is an array of outputs from each iteration:
+
+```json
+{
+    "output": [{ "output": "..." }, { "output": "..." }]
+}
+```
+
+## Human step
+
+Human approval gate (human-in-the-loop).
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "human",
+    "name": "Step Name",
+    "config": {
+        "prompt": "Please review and approve",
+        "formSchema": {
+            "type": "object",
+            "properties": {
+                "approved": { "type": "boolean" },
+                "comments": { "type": "string" }
+            }
+        },
+        "timeout": 3600
+    }
+}
+```
+
+### Config fields
+
+| Field        | Type   | Required | Description                              |
+| ------------ | ------ | -------- | ---------------------------------------- |
+| `prompt`     | string | ✅ Yes   | Prompt message for human                 |
+| `formSchema` | object | ❌ No    | JSON Schema for approval form            |
+| `timeout`    | number | ❌ No    | Timeout in seconds (default: no timeout) |
+
+### Example
+
+```json
+{
+    "id": "approval",
+    "type": "human",
+    "name": "Human Approval",
+    "config": {
+        "prompt": "Please review this content and approve or reject: {{generate.output.content}}",
+        "formSchema": {
+            "type": "object",
+            "properties": {
+                "approved": {
+                    "type": "boolean",
+                    "description": "Approve this content?"
+                },
+                "comments": {
+                    "type": "string",
+                    "description": "Optional comments"
+                }
+            },
+            "required": ["approved"]
+        },
+        "timeout": 3600
+    }
+}
+```
+
+### Output
+
+Human step output is the form submission:
+
+```json
+{
+    "output": {
+        "approved": true,
+        "comments": "Looks good!"
+    }
+}
+```
+
+See [Human in the Loop](/docs/workflows/human-in-the-loop) for details.
+
+## Transform step
+
+Data transformation using template expressions.
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "transform",
+    "name": "Step Name",
+    "config": {
+        "transform": "{{input.data | map: { id: .id, name: .name | upper } }}"
+    }
+}
+```
+
+### Config fields
+
+| Field       | Type   | Required | Description                            |
+| ----------- | ------ | -------- | -------------------------------------- |
+| `transform` | string | ✅ Yes   | Template expression for transformation |
+
+### Example
+
+```json
+{
+    "id": "format",
+    "type": "transform",
+    "name": "Format Data",
+    "config": {
+        "transform": "{{fetch.output.result | map: { id: .id, name: .name | upper, timestamp: now() } }}"
+    }
+}
+```
+
+### Output
+
+Transform step output is the transformed data:
+
+```json
+{
+    "output": {
+        "result": "Transformed data"
+    }
+}
+```
+
+## Delay step
+
+Wait/delay for a specified duration.
+
+### Schema
+
+```json
+{
+    "id": "step-id",
+    "type": "delay",
+    "name": "Step Name",
+    "config": {
+        "duration": 5000
+    }
+}
+```
+
+### Config fields
+
+| Field      | Type   | Required | Description                    |
+| ---------- | ------ | -------- | ------------------------------ |
+| `duration` | number | ✅ Yes   | Delay duration in milliseconds |
+
+### Example
+
+```json
+{
+    "id": "wait",
+    "type": "delay",
+    "name": "Wait 5 seconds",
+    "config": {
+        "duration": 5000
+    }
+}
+```
+
+### Output
+
+Delay step has no output (passes through previous output).
+
+## Step execution order
+
+Steps execute in the order defined in the `steps` array:
+
+1. **Sequential** — Steps execute one after another
+2. **Branch** — Only one branch executes based on condition
+3. **Parallel** — All branches execute concurrently
+4. **Foreach** — Steps execute for each item in array
+5. **Human** — Workflow suspends until human responds
+
+## Input mapping
+
+All step types support `inputMapping` to map data from previous steps or workflow input:
+
+```json
+{
+    "inputMapping": {
+        "field1": "{{input.value}}",
+        "field2": "{{previousStep.output.field}}",
+        "field3": "{{stepId.output.nested.field}}"
+    }
+}
+```
+
+Template expressions:
+
+- `{{input.fieldName}}` — Workflow input
+- `{{stepId.output}}` — Previous step output
+- `{{stepId.output.fieldName}}` — Nested field
+
+## Next steps
+
+- **[Creating Workflows](/docs/workflows/creating-workflows)** — Learn how to create workflows with steps
+- **[Control Flow](/docs/workflows/control-flow)** — Understand sequential, branching, and parallel execution
+- **[Human in the Loop](/docs/workflows/human-in-the-loop)** — Set up approval gates and suspend/resume
+- **[Workflows API Reference](/docs/workflows/api-reference)** — Complete API documentation

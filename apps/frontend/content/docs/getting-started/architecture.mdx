@@ -1,0 +1,129 @@
+---
+title: "Architecture"
+description: "Understand AgentC2's monorepo structure, service boundaries, and data flow."
+section: "getting-started"
+order: 3
+primaryKeyword: "AI agent platform architecture"
+secondaryKeywords: ["agent framework architecture", "monorepo structure"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+relatedSlugs:
+    ["getting-started/key-concepts", "getting-started/introduction", "platform/deployment"]
+---
+
+# Architecture
+
+AgentC2 is a monorepo platform built on Bun, Next.js 16, and Mastra. This page explains how the system is organized, how requests flow through it, and where the key code lives.
+
+## System overview
+
+The platform runs as three Next.js applications behind a Caddy reverse proxy, with shared packages for database, auth, UI, and the Mastra agent framework:
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   Caddy (HTTPS)                     │
+│  agentc2.ai/* → Agent App (3001)                    │
+│  agentc2.ai/docs, /blog → Frontend (3000)           │
+│  agentc2.ai/admin → Admin Portal (3003)             │
+└─────────────┬──────────────┬──────────────┬─────────┘
+              │              │              │
+    ┌─────────▼──┐   ┌──────▼───┐   ┌──────▼───┐
+    │ Agent App  │   │ Frontend │   │  Admin   │
+    │ port 3001  │   │ port 3000│   │ port 3003│
+    │ API + Chat │   │ Docs,Blog│   │ Settings │
+    │ Webhooks   │   │ Landing  │   │ Tickets  │
+    └─────┬──────┘   └──────────┘   └──────────┘
+          │
+    ┌─────▼──────────────────────────┐
+    │       Shared Packages          │
+    │  @repo/mastra  (agents, tools) │
+    │  @repo/database (Prisma)       │
+    │  @repo/auth    (Better Auth)   │
+    │  @repo/ui      (shadcn/ui)     │
+    └─────┬──────────────────────────┘
+          │
+    ┌─────▼──────┐    ┌─────────────┐
+    │ PostgreSQL │    │   Inngest   │
+    │ (Supabase) │    │ (Jobs/Events│
+    └────────────┘    └─────────────┘
+```
+
+## Monorepo structure
+
+```
+/
+├── apps/
+│   ├── agent/         # Primary app: API routes, chat, webhooks (port 3001)
+│   ├── frontend/      # Public site: landing, docs, blog (port 3000)
+│   ├── admin/         # Admin portal: settings, tickets (port 3003)
+│   ├── inngest/       # Inngest dev server launcher (port 8288)
+│   └── ngrok/         # ngrok tunnel management for webhooks
+│
+├── packages/
+│   ├── mastra/        # Core: agents, tools, workflows, MCP, RAG
+│   ├── database/      # Prisma schema and generated client
+│   ├── auth/          # Better Auth configuration
+│   ├── ui/            # Shared UI components (shadcn/ui)
+│   ├── next-config/   # Shared Next.js configuration
+│   └── typescript-config/  # Shared TypeScript configs
+```
+
+## Request flow
+
+When a user sends a message to an agent, the request flows through these layers:
+
+1. **Caddy** receives the HTTPS request and routes it to the Agent App on port 3001
+2. **Next.js middleware** validates the session cookie via Better Auth
+3. **API route handler** (`/api/agents/[id]/chat`) parses the request body
+4. **Agent Resolver** loads the agent definition from PostgreSQL, hydrates it with tools and memory, and builds a Mastra `Agent` instance
+5. **Mastra Agent** calls the configured LLM (OpenAI or Anthropic), executes any tool calls, and streams the response
+6. **Run Recorder** writes the run trace, token usage, and cost to the database
+7. **Evaluations** run asynchronously via Inngest to score the response
+
+## Key packages
+
+### @repo/mastra
+
+The core agent framework package. Contains:
+
+- **Agent Resolver** (`src/agents/resolver.ts`) -- Database-first agent loading with tool hydration, memory configuration, and budget enforcement
+- **Tool Registry** (`src/tools/registry.ts`) -- Central registry for 145+ tools from MCP servers and native implementations
+- **MCP Client** (`src/mcp/client.ts`) -- Connects to external MCP servers (HubSpot, Jira, Slack, GitHub, etc.)
+- **Workflows** (`src/workflows/`) -- Graph-based workflow engine with branching, looping, and human approval
+- **RAG** (`src/rag/`) -- Document ingestion, chunking, embedding, and retrieval
+- **Guardrails** (`src/guardrails/`) -- Input/output policy enforcement
+
+### @repo/database
+
+Prisma 6 schema with 50+ models covering agents, workflows, networks, skills, campaigns, integrations, audit logs, and cost tracking. All agent definitions are database-driven.
+
+### @repo/auth
+
+Better Auth configuration for session-based authentication with cross-app cookie sharing via Caddy.
+
+## Database architecture
+
+Agent definitions are fully database-driven. The core entity relationships:
+
+- **Agent** → has many **AgentTool**, **AgentSkill**, **AgentVersion**, **AgentRun**
+- **AgentRun** → has many **AgentTrace** (step-level telemetry)
+- **Workflow** → has many **WorkflowVersion**, **WorkflowRun** → **WorkflowRunStep**
+- **Network** → has many **NetworkPrimitive**, **NetworkVersion**, **NetworkRun**
+- **IntegrationProvider** → has many **IntegrationConnection** (OAuth tokens, encrypted)
+
+This design means you can version, audit, and roll back any agent configuration change through the database.
+
+## Environment
+
+Key environment variables:
+
+| Variable                    | Purpose                                    |
+| --------------------------- | ------------------------------------------ |
+| `DATABASE_URL`              | PostgreSQL connection string               |
+| `OPENAI_API_KEY`            | OpenAI API key for GPT models              |
+| `ANTHROPIC_API_KEY`         | Anthropic API key for Claude models        |
+| `BETTER_AUTH_SECRET`        | Auth encryption key                        |
+| `INNGEST_EVENT_KEY`         | Background job event publishing            |
+| `CREDENTIAL_ENCRYPTION_KEY` | AES-256-GCM key for OAuth token encryption |

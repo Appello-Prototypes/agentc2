@@ -1,0 +1,313 @@
+---
+title: "Network Topology"
+description: "Understand network topology types: router, sequential, and parallel patterns for multi-agent orchestration."
+section: "networks"
+order: 2
+primaryKeyword: "network topology"
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/ai-assisted-design"]
+secondaryKeywords:
+    [
+        "topology types",
+        "router topology",
+        "sequential pipeline",
+        "parallel execution",
+        "agent routing"
+    ]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Network Topology
+
+Network topology defines how agents and workflows are connected and executed within a network. AgentC2 supports three primary topology types: router (coordinator delegates to specialists), sequential (pipeline), and parallel (fan-out/fan-in), each optimized for different execution patterns.
+
+## Topology types
+
+### Router topology
+
+Router topology uses a coordinator agent that analyzes incoming requests and routes them to specialized agents based on task requirements and confidence scores.
+
+**When to use**: Tasks that require intelligent routing to different specialists based on request content.
+
+**Example**: A customer support network where the coordinator routes technical questions to a technical support agent, billing questions to a billing agent, and general inquiries to a general support agent.
+
+```json
+{
+    "nodes": [
+        { "id": "coordinator", "type": "agent", "label": "Support Router" },
+        { "id": "technical", "type": "agent", "label": "Technical Support" },
+        { "id": "billing", "type": "agent", "label": "Billing Support" },
+        { "id": "general", "type": "agent", "label": "General Support" }
+    ],
+    "edges": [
+        { "from": "coordinator", "to": "technical", "condition": "technical_issue" },
+        { "from": "coordinator", "to": "billing", "condition": "billing_question" },
+        { "from": "coordinator", "to": "general", "condition": "default" }
+    ]
+}
+```
+
+**Routing confidence**: The coordinator evaluates each routing option and assigns confidence scores. Routes with confidence above a threshold (default: 0.7) are selected. If no route meets the threshold, the fallback route is used.
+
+### Sequential topology
+
+Sequential topology chains agents and workflows in a pipeline where output from one step feeds into the next.
+
+**When to use**: Multi-step processes where each stage depends on the previous stage's output.
+
+**Example**: A content creation pipeline: research → analysis → writing → editing → publishing.
+
+```json
+{
+    "nodes": [
+        { "id": "research", "type": "agent", "label": "Research Agent" },
+        { "id": "analysis", "type": "agent", "label": "Analysis Agent" },
+        { "id": "writing", "type": "agent", "label": "Writing Agent" },
+        { "id": "editing", "type": "agent", "label": "Editing Agent" }
+    ],
+    "edges": [
+        { "from": "research", "to": "analysis" },
+        { "from": "analysis", "to": "writing" },
+        { "from": "writing", "to": "editing" }
+    ]
+}
+```
+
+**Execution flow**: Each step receives the previous step's output as input. If any step fails, the pipeline stops and returns an error unless error handling is configured.
+
+### Parallel topology
+
+Parallel topology executes multiple agents or workflows simultaneously, then aggregates their outputs.
+
+**When to use**: Tasks that can be broken into independent subtasks that run concurrently.
+
+**Example**: A market research network that simultaneously analyzes competitor pricing, reviews, and feature sets, then synthesizes findings.
+
+```json
+{
+    "nodes": [
+        { "id": "coordinator", "type": "agent", "label": "Coordinator" },
+        { "id": "pricing", "type": "agent", "label": "Pricing Analysis" },
+        { "id": "reviews", "type": "agent", "label": "Review Analysis" },
+        { "id": "features", "type": "agent", "label": "Feature Analysis" },
+        { "id": "synthesizer", "type": "agent", "label": "Synthesis Agent" }
+    ],
+    "edges": [
+        { "from": "coordinator", "to": "pricing" },
+        { "from": "coordinator", "to": "reviews" },
+        { "from": "coordinator", "to": "features" },
+        { "from": "pricing", "to": "synthesizer" },
+        { "from": "reviews", "to": "synthesizer" },
+        { "from": "features", "to": "synthesizer" }
+    ]
+}
+```
+
+**Fan-out/fan-in**: The coordinator fans out requests to parallel agents, waits for all to complete, then fans in results to the synthesizer for aggregation.
+
+## TopologyJson schema
+
+The `topologyJson` field stores the network structure as a JSON object:
+
+```typescript
+{
+  nodes: Array<{
+    id: string;           // Unique node identifier
+    type: "agent" | "workflow" | "tool" | "coordinator";
+    label?: string;       // Display name
+    position?: { x: number; y: number }; // Visual position
+    metadata?: Record<string, unknown>;    // Custom metadata
+  }>;
+  edges: Array<{
+    from: string;         // Source node ID
+    to: string;           // Target node ID
+    condition?: string;   // Routing condition (for router topology)
+    weight?: number;      // Edge weight for routing decisions
+    metadata?: Record<string, unknown>;    // Custom metadata
+  }>;
+  viewport?: {            // Visual viewport settings
+    x: number;
+    y: number;
+    zoom: number;
+  };
+}
+```
+
+### Node types
+
+| Type          | Description                                 | Use Case                             |
+| ------------- | ------------------------------------------- | ------------------------------------ |
+| `coordinator` | Routing agent that delegates to other nodes | Router topology coordinator          |
+| `agent`       | AI agent primitive                          | Specialized agent for specific tasks |
+| `workflow`    | Deterministic workflow primitive            | Step-by-step processes               |
+| `tool`        | Tool primitive                              | External API calls, utilities        |
+
+### Edge conditions
+
+For router topology, edges can include `condition` fields that define when routing occurs:
+
+- **Explicit condition**: `"condition": "technical_issue"` — Route when coordinator identifies technical issue
+- **Confidence threshold**: `"weight": 0.8` — Route when routing confidence >= 0.8
+- **Default fallback**: `"condition": "default"` — Route when no other conditions match
+
+## Routing confidence
+
+The coordinator agent evaluates routing options and assigns confidence scores (0.0 to 1.0) to each potential route:
+
+```bash
+# Example routing decision
+{
+  "input": "I need help with my billing statement",
+  "routingOptions": [
+    {"target": "billing", "confidence": 0.95, "reason": "Contains 'billing' keyword"},
+    {"target": "technical", "confidence": 0.15, "reason": "Low relevance"},
+    {"target": "general", "confidence": 0.60, "reason": "Fallback option"}
+  ],
+  "selectedRoute": "billing",
+  "confidence": 0.95
+}
+```
+
+**Confidence thresholds**:
+
+- **High confidence** (≥ 0.8): Route immediately
+- **Medium confidence** (0.5-0.8): Route with fallback monitoring
+- **Low confidence** (< 0.5): Use fallback route or request clarification
+
+## Fallback behavior
+
+Networks support fallback strategies when routing fails or confidence is low:
+
+### Fallback types
+
+| Type                 | Description                         | Configuration                          |
+| -------------------- | ----------------------------------- | -------------------------------------- |
+| **Default agent**    | Route to a designated default agent | `"fallbackAgentId": "general-support"` |
+| **Error handling**   | Return error response               | `"onRoutingFailure": "error"`          |
+| **Retry routing**    | Retry with different parameters     | `"retryCount": 2`                      |
+| **Human escalation** | Escalate to human support           | `"escalateToHuman": true`              |
+
+### Example fallback configuration
+
+```json
+{
+  "topologyJson": {
+    "nodes": [...],
+    "edges": [...],
+    "fallback": {
+      "strategy": "default_agent",
+      "defaultAgentId": "general-support",
+      "onLowConfidence": "use_fallback",
+      "confidenceThreshold": 0.7
+    }
+  }
+}
+```
+
+## Topology validation
+
+Before deploying a network, validate the topology:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/validate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {
+      "nodes": [...],
+      "edges": [...]
+    },
+    "primitives": [...]
+  }'
+```
+
+**Validation checks**:
+
+- All edge `from` and `to` references point to valid nodes
+- No circular dependencies in sequential topologies
+- All primitives referenced in nodes exist
+- Coordinator node exists for router topology
+- Synthesizer node exists for parallel topology
+
+## Visual topology editor
+
+The workspace UI provides a visual topology editor where you can:
+
+- **Drag and drop** agents and workflows onto the canvas
+- **Connect nodes** with edges to define flow
+- **Configure routing** conditions and confidence thresholds
+- **Preview execution** flow before deploying
+- **Export topology** as JSON for version control
+
+<Callout type="tip">
+    Use the AI-assisted designer chat to generate topology JSON automatically from natural language
+    descriptions. See [AI-Assisted Network Design](/docs/networks/ai-assisted-design) for details.
+</Callout>
+
+## Topology examples
+
+### Research network (router)
+
+```json
+{
+    "nodes": [
+        { "id": "coordinator", "type": "coordinator", "label": "Research Router" },
+        { "id": "web-research", "type": "agent", "label": "Web Research" },
+        { "id": "academic-research", "type": "agent", "label": "Academic Research" },
+        { "id": "synthesis", "type": "agent", "label": "Synthesis Agent" }
+    ],
+    "edges": [
+        { "from": "coordinator", "to": "web-research", "condition": "web_query" },
+        { "from": "coordinator", "to": "academic-research", "condition": "academic_query" },
+        { "from": "web-research", "to": "synthesis" },
+        { "from": "academic-research", "to": "synthesis" }
+    ]
+}
+```
+
+### Content pipeline (sequential)
+
+```json
+{
+    "nodes": [
+        { "id": "research", "type": "agent", "label": "Research" },
+        { "id": "outline", "type": "agent", "label": "Outline" },
+        { "id": "draft", "type": "agent", "label": "Draft" },
+        { "id": "edit", "type": "agent", "label": "Edit" }
+    ],
+    "edges": [
+        { "from": "research", "to": "outline" },
+        { "from": "outline", "to": "draft" },
+        { "from": "draft", "to": "edit" }
+    ]
+}
+```
+
+### Market analysis (parallel)
+
+```json
+{
+    "nodes": [
+        { "id": "coordinator", "type": "coordinator", "label": "Coordinator" },
+        { "id": "competitor-analysis", "type": "agent", "label": "Competitor Analysis" },
+        { "id": "market-trends", "type": "agent", "label": "Market Trends" },
+        { "id": "customer-feedback", "type": "agent", "label": "Customer Feedback" },
+        { "id": "synthesizer", "type": "agent", "label": "Synthesizer" }
+    ],
+    "edges": [
+        { "from": "coordinator", "to": "competitor-analysis" },
+        { "from": "coordinator", "to": "market-trends" },
+        { "from": "coordinator", "to": "customer-feedback" },
+        { "from": "competitor-analysis", "to": "synthesizer" },
+        { "from": "market-trends", "to": "synthesizer" },
+        { "from": "customer-feedback", "to": "synthesizer" }
+    ]
+}
+```
+
+## Next steps
+
+- **[Creating Networks](/docs/networks/creating-networks)** — Build networks with router, sequential, or parallel topologies
+- **[AI-Assisted Design](/docs/networks/ai-assisted-design)** — Generate topologies automatically from descriptions
+- **[Networks Overview](/docs/networks/overview)** — Learn about network capabilities and lifecycle

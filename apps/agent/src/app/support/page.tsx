@@ -4,7 +4,8 @@ import { redirect } from "next/navigation";
 import { prisma, Prisma } from "@repo/database";
 import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
-import { Search, TicketIcon } from "lucide-react";
+import { Search, TicketIcon, Plus } from "lucide-react";
+import { SupportChatWidget } from "./support-chat-widget";
 
 export const dynamic = "force-dynamic";
 
@@ -104,6 +105,13 @@ export default async function SupportTicketsPage({
                             {total} ticket{total !== 1 ? "s" : ""} submitted by your organization
                         </p>
                     </div>
+                    <Link
+                        href="/support/new"
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New Ticket
+                    </Link>
                 </div>
 
                 {/* KPI Cards */}
@@ -274,6 +282,7 @@ export default async function SupportTicketsPage({
                     </div>
                 )}
             </div>
+            <SupportChatWidget />
         </div>
     );
 }

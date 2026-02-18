@@ -1,0 +1,433 @@
+---
+title: "Creating Workflows"
+description: "Create workflows via the API or UI with step definitions, input/output schemas, and visual builder."
+section: "workflows"
+order: 2
+primaryKeyword: "create workflow"
+secondaryKeywords: ["workflow creation", "workflow API", "workflow definition", "visual builder"]
+relatedSlugs: ["workflows/overview", "workflows/step-types", "workflows/api-reference"]
+pageType: "how-to"
+---
+
+# Creating Workflows
+
+Create workflows in AgentC2 via the REST API or workspace UI. Workflows are stored in PostgreSQL and executed by the workflow engine, enabling version control, dynamic updates, and multi-tenant isolation.
+
+## Prerequisites
+
+Before creating a workflow, ensure you have:
+
+- An AgentC2 account with authentication configured
+- (Optional) Agents created if you want to invoke them in workflow steps
+- (Optional) Tools configured if you want to execute them in workflow steps
+- (Optional) Other workflows created if you want to invoke them as sub-workflows
+
+<Callout type="info">
+    Workflows can reference agents, tools, and other workflows by their slugs or IDs. These are
+    resolved at execution time, so you can create workflows before creating the referenced
+    resources.
+</Callout>
+
+## Create via API
+
+Send a `POST` request to `/agent/api/workflows` with the workflow configuration:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support Ticket Triage",
+    "slug": "support-triage",
+    "description": "Automatically triage and route support tickets based on priority",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "analyze",
+          "type": "agent",
+          "name": "Analyze Ticket",
+          "description": "Use AI agent to analyze ticket content and determine priority",
+          "config": {
+            "agentSlug": "triage-agent",
+            "inputMapping": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Analyze this support ticket: {{input.ticketContent}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "route",
+          "type": "branch",
+          "name": "Route by Priority",
+          "config": {
+            "condition": "{{analyze.output.priority}}",
+            "branches": [
+              {
+                "condition": "high",
+                "steps": [
+                  {
+                    "id": "escalate",
+                    "type": "tool",
+                    "config": {
+                      "toolId": "escalate-ticket",
+                      "inputMapping": {
+                        "ticketId": "{{input.ticketId}}",
+                        "priority": "high"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "default",
+                "steps": [
+                  {
+                    "id": "assign",
+                    "type": "agent",
+                    "config": {
+                      "agentSlug": "support-agent",
+                      "inputMapping": {
+                        "ticketId": "{{input.ticketId}}",
+                        "priority": "{{analyze.output.priority}}"
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "inputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string" },
+        "ticketContent": { "type": "string" },
+        "customerEmail": { "type": "string" }
+      },
+      "required": ["ticketId", "ticketContent"]
+    },
+    "outputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string" },
+        "priority": { "type": "string", "enum": ["low", "medium", "high"] },
+        "assignedAgent": { "type": "string" }
+      }
+    },
+    "maxSteps": 50,
+    "timeout": 300,
+    "retryConfig": {
+      "maxRetries": 3,
+      "backoff": "exponential",
+      "initialDelay": 1000
+    }
+  }'
+```
+
+### Request fields
+
+All fields in the workflow creation request:
+
+| Field              | Type    | Required | Default        | Description                                  |
+| ------------------ | ------- | -------- | -------------- | -------------------------------------------- |
+| `name`             | string  | ✅ Yes   | —              | Display name for the workflow                |
+| `slug`             | string  | ❌ No    | Auto-generated | URL-safe identifier (unique)                 |
+| `description`      | string  | ❌ No    | `null`         | Human-readable description                   |
+| `definitionJson`   | JSON    | ✅ Yes   | —              | Workflow definition (steps, edges, viewport) |
+| `inputSchemaJson`  | JSON    | ❌ No    | `null`         | Input schema (JSON Schema format)            |
+| `outputSchemaJson` | JSON    | ❌ No    | `null`         | Output schema (JSON Schema format)           |
+| `maxSteps`         | number  | ❌ No    | `50`           | Maximum steps allowed                        |
+| `timeout`          | number  | ❌ No    | `null`         | Maximum execution time in seconds            |
+| `retryConfig`      | JSON    | ❌ No    | `null`         | Retry configuration                          |
+| `isPublished`      | boolean | ❌ No    | `false`        | Whether workflow is published                |
+| `isActive`         | boolean | ❌ No    | `true`         | Whether workflow is active                   |
+| `workspaceId`      | string  | ❌ No    | Auto-detected  | Workspace ID                                 |
+| `type`             | string  | ❌ No    | `"USER"`       | `"USER"` or `"SYSTEM"`                       |
+
+### Response format
+
+Successful creation returns:
+
+```json
+{
+  "success": true,
+  "workflow": {
+    "id": "wf_abc123",
+    "slug": "support-triage",
+    "name": "Support Ticket Triage",
+    "description": "Automatically triage and route support tickets",
+    "definitionJson": {
+      "steps": [...]
+    },
+    "inputSchemaJson": {...},
+    "outputSchemaJson": {...},
+    "maxSteps": 50,
+    "timeout": 300,
+    "version": 1,
+    "isPublished": false,
+    "isActive": true,
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "updatedAt": "2026-02-18T12:00:00.000Z"
+  }
+}
+```
+
+## Workflow definition format
+
+The `definitionJson` field contains the workflow structure. It follows this format:
+
+```json
+{
+    "steps": [
+        {
+            "id": "step-1",
+            "type": "agent",
+            "name": "Step Name",
+            "description": "Optional description",
+            "config": {
+                // Step-specific configuration
+            },
+            "inputMapping": {
+                // Input mapping (optional)
+            }
+        }
+    ],
+    "edges": [
+        // Optional: Visual edges for UI (React Flow format)
+        {
+            "id": "edge-1",
+            "source": "step-1",
+            "target": "step-2"
+        }
+    ],
+    "viewport": {
+        // Optional: Viewport position for UI
+        "x": 0,
+        "y": 0,
+        "zoom": 1
+    }
+}
+```
+
+### Step structure
+
+Each step in `steps` array:
+
+| Field          | Type   | Required | Description                                                                                             |
+| -------------- | ------ | -------- | ------------------------------------------------------------------------------------------------------- |
+| `id`           | string | ✅ Yes   | Unique step identifier                                                                                  |
+| `type`         | string | ✅ Yes   | Step type (`agent`, `tool`, `workflow`, `branch`, `parallel`, `foreach`, `human`, `transform`, `delay`) |
+| `name`         | string | ❌ No    | Display name                                                                                            |
+| `description`  | string | ❌ No    | Step description                                                                                        |
+| `config`       | object | ✅ Yes   | Step-specific configuration                                                                             |
+| `inputMapping` | object | ❌ No    | Input mapping from previous steps or workflow input                                                     |
+
+See [Step Types](/docs/workflows/step-types) for detailed schemas for each step type.
+
+## Input/output schemas
+
+Define input and output schemas using JSON Schema format:
+
+### Input schema
+
+```json
+{
+    "inputSchemaJson": {
+        "type": "object",
+        "properties": {
+            "ticketId": {
+                "type": "string",
+                "description": "Support ticket ID"
+            },
+            "ticketContent": {
+                "type": "string",
+                "description": "Ticket content to analyze"
+            },
+            "customerEmail": {
+                "type": "string",
+                "format": "email"
+            }
+        },
+        "required": ["ticketId", "ticketContent"]
+    }
+}
+```
+
+### Output schema
+
+```json
+{
+    "outputSchemaJson": {
+        "type": "object",
+        "properties": {
+            "ticketId": { "type": "string" },
+            "priority": {
+                "type": "string",
+                "enum": ["low", "medium", "high"]
+            },
+            "assignedAgent": { "type": "string" }
+        }
+    }
+}
+```
+
+Schemas are used for:
+
+- **Validation** — Validate input/output at runtime
+- **Documentation** — Auto-generate API documentation
+- **Type safety** — TypeScript type generation (future)
+
+## Connecting steps
+
+Steps are connected via input mapping. Use template expressions to reference previous step outputs:
+
+```json
+{
+    "steps": [
+        {
+            "id": "step1",
+            "type": "agent",
+            "config": {
+                "agentSlug": "analyzer"
+            }
+        },
+        {
+            "id": "step2",
+            "type": "tool",
+            "config": {
+                "toolId": "process-data"
+            },
+            "inputMapping": {
+                "data": "{{step1.output}}",
+                "metadata": "{{input.metadata}}"
+            }
+        }
+    ]
+}
+```
+
+Template expressions:
+
+- `{{input.fieldName}}` — Reference workflow input
+- `{{stepId.output}}` — Reference previous step output
+- `{{stepId.output.fieldName}}` — Reference nested field
+
+## Create via UI
+
+The workspace UI provides a visual workflow builder:
+
+1. **Navigate to Workflows** — Click "Workflows" in the sidebar, then "New Workflow"
+2. **Fill basic info** — Name, description, and slug
+3. **Add steps** — Drag and drop step types from the palette
+4. **Configure steps** — Set step-specific configuration (agent slug, tool ID, etc.)
+5. **Connect steps** — Draw edges between steps to define flow
+6. **Set input/output schemas** — Define schemas in JSON Schema format
+7. **Configure settings** — Max steps, timeout, retry config
+8. **Test** — Execute with test data
+9. **Publish** — Mark as published for production use
+
+<Callout type="tip">
+    The visual builder validates workflow structure in real-time and shows helpful error messages.
+    Invalid configurations are highlighted before saving.
+</Callout>
+
+## Validation rules
+
+The API enforces the following validation rules:
+
+### Slug uniqueness
+
+The `slug` must be unique. If omitted, a slug is auto-generated from the `name`:
+
+```bash
+# Auto-generated slug: "support-ticket-triage" from "Support Ticket Triage"
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "Support Ticket Triage",
+    "definitionJson": { "steps": [] }
+  }'
+```
+
+If a slug conflict occurs, the API returns:
+
+```json
+{
+    "success": false,
+    "error": "Workflow slug 'support-triage' already exists"
+}
+```
+
+### Step validation
+
+- **Step IDs** — Must be unique within the workflow
+- **Step types** — Must be one of: `agent`, `tool`, `workflow`, `branch`, `parallel`, `foreach`, `human`, `transform`, `delay`
+- **Required config** — Each step type requires specific config fields
+- **Input mapping** — Template expressions must reference valid step IDs or `input`
+
+### Schema validation
+
+- **JSON Schema** — Input/output schemas must be valid JSON Schema
+- **Type safety** — Schema types are validated at execution time
+
+## Error codes
+
+Common error responses:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing `name` or `definitionJson` | Include all required fields       |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
+| `400`  | `INVALID_DEFINITION`      | Invalid workflow definition        | Check step structure and types    |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                | Use a different slug              |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `500`  | `INTERNAL_ERROR`          | Server error during creation       | Retry request or contact support  |
+
+## Minimal example
+
+Create a workflow with only required fields:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Simple Workflow",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "step1",
+          "type": "tool",
+          "config": {
+            "toolId": "echo"
+          }
+        }
+      ]
+    }
+  }'
+```
+
+This creates a workflow with:
+
+- Auto-generated slug from name
+- Default maxSteps (50)
+- No timeout or retry config
+- Not published (isPublished: false)
+- Active by default (isActive: true)
+- Version 1 (auto-created)
+
+## Next steps
+
+After creating a workflow:
+
+- **[Step Types](/docs/workflows/step-types)** — Learn about available step types and their configurations
+- **[Control Flow](/docs/workflows/control-flow)** — Understand sequential, branching, and parallel execution
+- **[Human in the Loop](/docs/workflows/human-in-the-loop)** — Add approval gates and suspend/resume
+- **[Workflows API Reference](/docs/workflows/api-reference)** — Complete API documentation
+- **[Workflow Version Control](/docs/workflows/version-control)** — Track changes and roll back versions

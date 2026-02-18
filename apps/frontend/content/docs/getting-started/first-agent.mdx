@@ -1,0 +1,202 @@
+---
+title: "First Agent"
+description: "Build a complete agent with tools, memory, and guardrails from scratch."
+section: "getting-started"
+order: 5
+primaryKeyword: "build AI agent tutorial"
+secondaryKeywords: ["create AI agent", "AI agent step by step", "agent with tools"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+relatedSlugs:
+    ["getting-started/quickstart", "agents/creating-agents", "agents/tools", "agents/memory"]
+---
+
+# Build Your First Agent
+
+This tutorial walks you through building a complete agent that can search the web, remember conversations, and operate within guardrails. By the end, you'll have a production-ready agent with tools, memory, cost controls, and traceability.
+
+## What you'll build
+
+A research assistant agent that can:
+
+- Search the web for current information
+- Remember previous conversations
+- Stay within a monthly cost budget
+- Produce traced, auditable runs
+
+## Step 1: Create the agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Assistant",
+    "slug": "research-assistant",
+    "instructions": "You are a research assistant. When asked a question, search the web for current information and synthesize a clear, well-sourced answer. Always cite your sources. If you are unsure about something, say so rather than guessing.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "maxTokens": 4096,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 20,
+      "semanticRecall": {
+        "topK": 3
+      }
+    },
+    "maxSteps": 10
+  }'
+```
+
+Key configuration choices:
+
+- **Low temperature (0.3)** -- Research needs precision, not creativity
+- **Memory enabled** with semantic recall -- The agent can reference relevant messages from past conversations
+- **maxSteps: 10** -- Allows multiple tool calls per turn for thorough research
+
+## Step 2: Attach tools
+
+Give the agent access to the web-fetch tool so it can retrieve web pages:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "web-fetch" }'
+```
+
+You can list available tools to see what else you can attach:
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Tools are sourced from three places:
+
+1. **Built-in tools** -- Core utilities like `web-fetch`, `calculator`, `memory-recall`
+2. **MCP server tools** -- External services like HubSpot, Jira, GitHub
+3. **Skill tools** -- Tools bundled with attached skills
+
+## Step 3: Test the agent
+
+Send a research question:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What are the latest developments in AI agent frameworks in 2026?"
+      }
+    ]
+  }'
+```
+
+The agent will:
+
+1. Receive your message
+2. Decide to use the `web-fetch` tool to search for current information
+3. Fetch and read relevant web pages
+4. Synthesize the findings into a clear answer with citations
+5. Stream the response back
+
+## Step 4: Inspect the run trace
+
+Every agent execution is fully traced. Retrieve the trace to see exactly what happened:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/research-assistant/runs?limit=1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The trace shows:
+
+- Each LLM call with input/output tokens
+- Every tool invocation with arguments and results
+- Total cost in USD
+- Duration in milliseconds
+- Any guardrail violations
+
+<Callout type="info">
+    Run traces are stored for 180 days by default. You can query historical runs for debugging, cost
+    analysis, and compliance reporting.
+</Callout>
+
+## Step 5: Add a conversation thread
+
+Memory works with threads -- each thread maintains its own conversation history. Use threads to have multiple independent conversations with the same agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "Tell me about the Mastra framework" }
+    ],
+    "threadId": "research-thread-1"
+  }'
+```
+
+Follow up in the same thread:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      { "role": "user", "content": "How does it compare to LangChain?" }
+    ],
+    "threadId": "research-thread-1"
+  }'
+```
+
+The agent remembers the previous messages in the thread and can reference them in its answer.
+
+## Step 6: Set a budget
+
+Protect against runaway costs by setting a monthly spend limit:
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/agents/research-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "maxSpendUsd": 10.0
+  }'
+```
+
+When the agent reaches 80% of its budget, it logs a warning. At 100%, it returns a budget-exceeded error instead of making additional LLM calls.
+
+## Step 7: Create a version
+
+Before making changes, snapshot the current configuration:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "changeNotes": "Initial production configuration with web-fetch tool and semantic recall"
+  }'
+```
+
+Versions let you roll back to a known-good state if a change causes regressions.
+
+## What's next
+
+Your agent is now production-ready with tools, memory, cost controls, and version history. From here you can:
+
+- **[Add guardrails](/docs/agents/guardrails)** -- Layer input/output policies to prevent unsafe behavior
+- **[Run evaluations](/docs/agents/evaluations)** -- Score your agent's responses with automated scorers
+- **[Add integrations](/docs/integrations/overview)** -- Connect to CRM, email, and project management tools
+- **[Build a workflow](/docs/workflows/overview)** -- Define deterministic multi-step processes
+- **[Create a network](/docs/networks/overview)** -- Orchestrate multiple specialized agents

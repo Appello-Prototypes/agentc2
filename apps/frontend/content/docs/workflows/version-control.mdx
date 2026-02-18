@@ -1,0 +1,356 @@
+---
+title: "Workflow Version Control"
+description: "Track changes to workflows with version snapshots, compare versions, and roll back to previous configurations."
+section: "workflows"
+order: 7
+primaryKeyword: "workflow version control"
+secondaryKeywords: ["workflow versions", "version history", "rollback", "change tracking"]
+relatedSlugs: ["workflows/overview", "workflows/creating-workflows", "workflows/api-reference"]
+pageType: "how-to"
+---
+
+# Workflow Version Control
+
+Workflow version control enables you to track changes, compare versions, and roll back to previous configurations. Every workflow maintains a version history in the `WorkflowVersion` table, allowing you to safely experiment and revert changes.
+
+## How versioning works
+
+When you create or update a workflow:
+
+1. **Current version** — The `Workflow` model's `version` field tracks the current version number (starts at 1)
+2. **Version snapshots** — Each change to `definitionJson` creates a `WorkflowVersion` record
+3. **Immutable history** — Version records are immutable (cannot be modified after creation)
+4. **Rollback support** — Restore any previous version by updating the workflow with version data
+
+## Creating versions
+
+Versions are automatically created when `definitionJson` changes:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "updated-step",
+          "type": "agent",
+          "config": { "agentSlug": "new-agent" }
+        }
+      ]
+    },
+    "versionDescription": "Updated to use new-agent"
+  }'
+```
+
+### Automatic versioning
+
+Versions are automatically created when:
+
+- **Workflow creation** — Initial version (v1) is created automatically
+- **Definition update** — New version created when `definitionJson` changes
+- **Manual creation** — Explicit version creation via API (future)
+
+### Version snapshot contents
+
+Each `WorkflowVersion` record contains:
+
+| Field            | Type     | Description                                |
+| ---------------- | -------- | ------------------------------------------ |
+| `id`             | string   | Unique version record ID                   |
+| `workflowId`     | string   | Reference to the workflow                  |
+| `version`        | number   | Version number (1, 2, 3, ...)              |
+| `definitionJson` | JSON     | Snapshot of definitionJson at this version |
+| `description`    | string   | Human-readable description of changes      |
+| `createdAt`      | DateTime | When this version was created              |
+| `createdBy`      | string   | User ID who created the version            |
+
+### Example version record
+
+```json
+{
+    "id": "wv_abc123",
+    "workflowId": "wf_xyz789",
+    "version": 3,
+    "definitionJson": {
+        "steps": [
+            {
+                "id": "analyze",
+                "type": "agent",
+                "config": { "agentSlug": "triage-agent" }
+            }
+        ]
+    },
+    "description": "Updated to use new-agent",
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "createdBy": "user_xyz789"
+}
+```
+
+## Listing versions
+
+List all versions for a workflow:
+
+```bash
+curl https://agentc2.ai/agent/api/workflows/support-triage/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response format
+
+```json
+{
+    "success": true,
+    "versions": [
+        {
+            "id": "wv_abc123",
+            "version": 3,
+            "description": "Updated to use new-agent",
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "createdBy": "user_xyz789"
+        },
+        {
+            "id": "wv_def456",
+            "version": 2,
+            "description": "Added human approval step",
+            "createdAt": "2026-02-15T10:00:00.000Z",
+            "createdBy": "user_xyz789"
+        },
+        {
+            "id": "wv_ghi789",
+            "version": 1,
+            "description": "Initial version",
+            "createdAt": "2026-02-10T08:00:00.000Z",
+            "createdBy": "user_xyz789"
+        }
+    ]
+}
+```
+
+## Comparing versions
+
+Compare two versions to see what changed:
+
+```bash
+curl "https://agentc2.ai/agent/api/workflows/support-triage/versions/compare?from=2&to=3" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Comparison response
+
+```json
+{
+    "success": true,
+    "fromVersion": 2,
+    "toVersion": 3,
+    "changes": {
+        "steps": {
+            "added": [
+                {
+                    "id": "new-step",
+                    "type": "tool",
+                    "name": "New Step"
+                }
+            ],
+            "removed": [
+                {
+                    "id": "old-step",
+                    "type": "agent",
+                    "name": "Old Step"
+                }
+            ],
+            "modified": [
+                {
+                    "step": "analyze",
+                    "changes": {
+                        "config.agentSlug": {
+                            "from": "old-agent",
+                            "to": "new-agent"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
+```
+
+## Rolling back
+
+Restore a previous version by updating the workflow with version data:
+
+```bash
+# Step 1: Get version data
+curl https://agentc2.ai/agent/api/workflows/support-triage/versions/2 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Step 2: Update workflow with version data
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "definitionJson": {
+      "steps": [...]
+    },
+    "versionDescription": "Rolled back to version 2"
+  }'
+```
+
+### Automated rollback endpoint
+
+Some implementations provide a dedicated rollback endpoint:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/versions/2/restore \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionDescription": "Rolled back to version 2 due to issues"
+  }'
+```
+
+## Version best practices
+
+### 1. Use descriptive version descriptions
+
+Write clear version descriptions that explain what changed and why:
+
+```json
+{
+    "versionDescription": "Added human approval step before publishing to ensure content quality"
+}
+```
+
+**Good descriptions:**
+
+- "Added human approval step before publishing"
+- "Updated to use new triage-agent with improved accuracy"
+- "Fixed bug in error handling logic"
+
+**Poor descriptions:**
+
+- "Updated"
+- "Changes"
+- "Fixed"
+
+### 2. Version before major changes
+
+Always create a version snapshot before making significant changes:
+
+```bash
+# Current version is v3
+# Make a copy/backup, then update
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "definitionJson": {...},
+    "versionDescription": "Pre-update snapshot before refactoring"
+  }'
+# Creates v4 automatically
+```
+
+### 3. Compare before rolling back
+
+Always compare versions before rolling back to understand what will change:
+
+```bash
+# Compare current (v3) with target (v2)
+curl "https://agentc2.ai/agent/api/workflows/support-triage/versions/compare?from=2&to=3" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Review changes, then roll back if needed
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/versions/2/restore \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 4. Version frequently
+
+Create versions for:
+
+- **Major changes** — Significant definition updates
+- **Before experiments** — Before trying new approaches
+- **Production releases** — Before deploying to production
+- **Bug fixes** — After fixing issues
+
+## Version limits
+
+Workflows maintain version history with these limits:
+
+- **No automatic deletion** — Versions are never automatically deleted
+- **Manual cleanup** — Admins can delete old versions if needed (with caution)
+- **Storage consideration** — Each version stores a full `definitionJson` snapshot
+
+<Callout type="warning">
+    Deleting versions is irreversible. Only delete versions if you're certain they're no longer
+    needed.
+</Callout>
+
+## Version promotion
+
+Promote a version to production by updating the workflow's current version:
+
+```bash
+# Promote version 5 to current
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/versions/5/promote \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "versionDescription": "Promoted version 5 to production after successful testing"
+  }'
+```
+
+Promotion:
+
+1. Updates the workflow's `version` field to the promoted version number
+2. Updates `definitionJson` with promoted version data
+3. Creates a new version record documenting the promotion
+4. Makes the promoted version the active version for all executions
+
+## Example: Version workflow
+
+Complete version workflow example:
+
+```bash
+# Step 1: Create initial workflow
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "Support Triage",
+    "definitionJson": { "steps": [...] }
+  }'
+# Creates version 1 automatically
+
+# Step 2: Update definition
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "definitionJson": { "steps": [...] },
+    "versionDescription": "Added human approval step"
+  }'
+# Creates version 2
+
+# Step 3: Update again
+curl -X PUT https://agentc2.ai/agent/api/workflows/support-triage \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "definitionJson": { "steps": [...] },
+    "versionDescription": "Updated to use new-agent"
+  }'
+# Creates version 3
+
+# Step 4: Compare versions
+curl "https://agentc2.ai/agent/api/workflows/support-triage/versions/compare?from=2&to=3" \
+  -H "Authorization: Bearer $TOKEN"
+
+# Step 5: Roll back if needed
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/versions/2/restore \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "versionDescription": "Rolled back due to issues" }'
+```
+
+## Next steps
+
+- **[Workflows Overview](/docs/workflows/overview)** — Understand the workflow system architecture
+- **[Creating Workflows](/docs/workflows/creating-workflows)** — Learn how to create and update workflows
+- **[Workflows API Reference](/docs/workflows/api-reference)** — Complete API documentation for version endpoints

@@ -1,0 +1,699 @@
+---
+title: "Build a Customer Support Agent"
+description: "Build a production-ready customer support agent that triages tickets, routes to specialists, auto-responds using RAG, and escalates to humans when needed."
+section: "guides"
+order: 1
+primaryKeyword: "AI customer support agent"
+secondaryKeywords: ["customer support automation", "support ticket triage", "AI support chatbot"]
+relatedSlugs: ["agents/creating-agents", "agents/tools", "agents/memory", "agents/guardrails", "integrations/jira", "integrations/slack", "knowledge/overview"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Build a Customer Support Agent
+
+This guide walks you through building a production-ready customer support agent that automatically triages incoming tickets, routes them to specialist agents, auto-responds to known issues using RAG, and escalates to human support when confidence is low. By the end, you'll have a multi-agent support system with intelligent routing, knowledge base integration, and human escalation workflows.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- API keys for OpenAI or Anthropic
+- (Optional) Jira integration configured for ticket management
+- (Optional) Slack integration configured for team notifications
+- A knowledge base with support documentation (for RAG)
+
+<Callout type="info">
+    This guide builds a complete support system. You can start with a basic agent and add integrations incrementally. Each step includes both API and UI instructions.
+</Callout>
+
+## Architecture overview
+
+Your support system will consist of:
+
+1. **Triage Agent** — Analyzes incoming tickets and determines priority
+2. **Specialist Agents** — Handle specific issue types (billing, technical, account)
+3. **Knowledge Base** — RAG-powered responses for common issues
+4. **Routing Logic** — Workflow that routes tickets based on triage results
+5. **Escalation Handler** — Human-in-the-loop for complex issues
+
+```
+┌─────────────┐
+│   Ticket    │
+│   Arrives   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│  Triage Agent   │
+│  (Priority +    │
+│   Category)     │
+└──────┬──────────┘
+       │
+       ├──► High Priority ──► Escalate to Human
+       │
+       ├──► Known Issue ──► RAG Auto-Response
+       │
+       └──► Route to Specialist Agent
+```
+
+## Step 1: Create the triage agent
+
+The triage agent analyzes incoming support tickets and determines their priority, category, and whether they can be auto-resolved.
+
+### Create via API
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support Triage Agent",
+    "slug": "support-triage",
+    "description": "Analyzes support tickets and determines priority, category, and routing",
+    "instructions": "You are a support ticket triage agent. Analyze incoming support tickets and determine:\n\n1. Priority: 'low', 'medium', 'high', or 'critical'\n2. Category: 'billing', 'technical', 'account', 'feature-request', or 'other'\n3. Auto-resolvable: true if this is a known issue with a documented solution, false otherwise\n4. Confidence: 0.0 to 1.0 indicating how confident you are in the categorization\n\nRespond with a JSON object containing these fields. Be conservative with 'critical' priority—only use it for issues that require immediate attention (e.g., security breaches, service outages).",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.2,
+    "maxTokens": 1000,
+    "memoryEnabled": false,
+    "maxSteps": 3,
+    "tools": [],
+    "scorers": ["quality"],
+    "metadata": {
+      "category": "support",
+      "role": "triage"
+    }
+  }'
+```
+
+### Key configuration decisions
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| **Temperature** | 0.2 | Low temperature for consistent, deterministic categorization |
+| **Memory** | Disabled | Triage is stateless—each ticket is analyzed independently |
+| **Max Steps** | 3 | Minimal tool calls needed for classification |
+| **Scorers** | quality | Track categorization accuracy over time |
+
+<Callout type="tip">
+    Start with a low temperature for triage to ensure consistent results. You can increase it later if you need more nuanced categorization.
+</Callout>
+
+## Step 2: Create specialist agents
+
+Create specialized agents for different support categories. Each agent handles a specific domain:
+
+### Billing specialist agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Billing Support Agent",
+    "slug": "billing-support",
+    "description": "Handles billing inquiries, subscription changes, and payment issues",
+    "instructions": "You are a billing support specialist. Help customers with:\n\n- Subscription changes and upgrades\n- Payment issues and failed charges\n- Invoice questions\n- Refund requests\n- Billing disputes\n\nAlways verify account ownership before making changes. For refunds or disputes, escalate to human support. Be empathetic and clear about billing policies.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 10,
+      "semanticRecall": {
+        "topK": 3,
+        "minScore": 0.7
+      }
+    },
+    "maxSteps": 10,
+    "tools": ["web-fetch"],
+    "metadata": {
+      "category": "support",
+      "specialization": "billing"
+    }
+  }'
+```
+
+### Technical specialist agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Technical Support Agent",
+    "slug": "technical-support",
+    "description": "Handles technical issues, bugs, and troubleshooting",
+    "instructions": "You are a technical support specialist. Help customers with:\n\n- Bug reports and error messages\n- Feature usage questions\n- Integration troubleshooting\n- API and developer questions\n- Performance issues\n\nUse the knowledge base to find solutions. If the issue is not documented, gather detailed information and escalate to engineering. Always ask for error logs, screenshots, or steps to reproduce.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "memoryEnabled": true,
+    "maxSteps": 15,
+    "tools": ["web-fetch", "rag-query"],
+    "metadata": {
+      "category": "support",
+      "specialization": "technical"
+    }
+  }'
+```
+
+### Account specialist agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Account Support Agent",
+    "slug": "account-support",
+    "description": "Handles account management, access, and security issues",
+    "instructions": "You are an account support specialist. Help customers with:\n\n- Account access and login issues\n- Password resets\n- Two-factor authentication\n- Account settings and preferences\n- Team member management\n- Security concerns\n\nAlways verify identity before making account changes. For security-related issues, escalate immediately.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "memoryEnabled": true,
+    "maxSteps": 10,
+    "tools": ["web-fetch"],
+    "metadata": {
+      "category": "support",
+      "specialization": "account"
+    }
+  }'
+```
+
+## Step 3: Set up knowledge base with RAG
+
+Create a knowledge base containing common support issues and solutions. The RAG system will enable auto-responses for known issues.
+
+### Ingest support documentation
+
+```bash
+# Ingest a support article
+curl -X POST https://agentc2.ai/agent/api/rag/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "# How to Reset Your Password\n\nIf you forgot your password:\n\n1. Go to the login page\n2. Click \"Forgot Password\"\n3. Enter your email address\n4. Check your email for reset instructions\n5. Click the reset link\n6. Enter a new password\n\nIf you don't receive the email, check your spam folder or contact support.",
+    "metadata": {
+      "title": "Password Reset Guide",
+      "category": "account",
+      "tags": ["password", "login", "account-access"]
+    }
+  }'
+```
+
+### Query the knowledge base
+
+Test RAG retrieval to ensure it finds relevant solutions:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "I forgot my password",
+    "maxResults": 3
+  }'
+```
+
+<Callout type="info">
+    RAG retrieval uses semantic search to find relevant documents even if the exact keywords don't match. This enables natural language queries like "I can't log in" to find password reset guides.
+</Callout>
+
+## Step 4: Add tools to specialist agents
+
+Attach MCP tools for external integrations. For example, connect Jira for ticket management and Slack for team notifications.
+
+### Connect Jira integration
+
+First, configure Jira in your workspace settings:
+
+```bash
+# Set environment variables
+JIRA_URL="https://your-org.atlassian.net"
+JIRA_USERNAME="support@example.com"
+JIRA_API_TOKEN="ATATT3x..."
+JIRA_PROJECTS_FILTER="SUPPORT"
+```
+
+Then attach Jira tools to your technical support agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/technical-support/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "jira.jira-create-issue" }'
+```
+
+### Connect Slack integration
+
+Configure Slack for team notifications:
+
+```bash
+# Set environment variables
+SLACK_BOT_TOKEN="xoxb-..."
+SLACK_SIGNING_SECRET="..."
+SLACK_DEFAULT_AGENT_SLUG="support-triage"
+```
+
+Attach Slack tools for notifications:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/support-triage/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "slack.slack-post-message" }'
+```
+
+## Step 5: Configure memory for context
+
+Enable memory on specialist agents so they can reference previous conversations:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/billing-support \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 20,
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      },
+      "workingMemory": {
+        "enabled": true,
+        "maxItems": 10
+      }
+    }
+  }'
+```
+
+<Callout type="tip">
+    Semantic recall allows agents to reference relevant messages from past conversations, even if they're not in the immediate context window. This is especially useful for support agents handling ongoing issues.
+</Callout>
+
+## Step 6: Add guardrails
+
+Configure guardrails to prevent unsafe behavior and ensure compliance:
+
+### Input guardrails
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/billing-support/guardrails \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configJson": {
+      "input": {
+        "piiDetection": {
+          "enabled": true,
+          "action": "warn"
+        },
+        "topicFiltering": {
+          "enabled": true,
+          "blockedTopics": ["violence", "illegal-activity"],
+          "action": "block"
+        }
+      }
+    }
+  }'
+```
+
+### Output guardrails
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/billing-support/guardrails \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configJson": {
+      "output": {
+        "piiLeakPrevention": {
+          "enabled": true,
+          "action": "block"
+        },
+        "toxicityFilter": {
+          "enabled": true,
+          "action": "modify"
+        }
+      }
+    }
+  }'
+```
+
+## Step 7: Create routing workflow
+
+Build a workflow that routes tickets based on triage results:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Support Ticket Router",
+    "slug": "support-router",
+    "description": "Routes support tickets to appropriate agents or escalates to humans",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "triage",
+          "type": "agent",
+          "name": "Triage Ticket",
+          "config": {
+            "agentSlug": "support-triage",
+            "inputMapping": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Analyze this support ticket:\n\n{{input.ticketContent}}\n\nCustomer: {{input.customerEmail}}\nTicket ID: {{input.ticketId}}"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "check-confidence",
+          "type": "branch",
+          "name": "Check Confidence",
+          "config": {
+            "condition": "{{triage.output.confidence}}",
+            "branches": [
+              {
+                "condition": "< 0.7",
+                "steps": [
+                  {
+                    "id": "escalate-low-confidence",
+                    "type": "tool",
+                    "config": {
+                      "toolId": "escalate-to-human",
+                      "inputMapping": {
+                        "ticketId": "{{input.ticketId}}",
+                        "reason": "Low confidence in triage categorization"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "default",
+                "steps": [
+                  {
+                    "id": "check-auto-resolve",
+                    "type": "branch",
+                    "name": "Check Auto-Resolve",
+                    "config": {
+                      "condition": "{{triage.output.autoResolvable}}",
+                      "branches": [
+                        {
+                          "condition": "true",
+                          "steps": [
+                            {
+                              "id": "rag-response",
+                              "type": "agent",
+                              "config": {
+                                "agentSlug": "technical-support",
+                                "inputMapping": {
+                                  "messages": [
+                                    {
+                                      "role": "user",
+                                      "content": "Find a solution for this issue using the knowledge base:\n\n{{input.ticketContent}}"
+                                    }
+                                  ]
+                                }
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "condition": "default",
+                          "steps": [
+                            {
+                              "id": "route-to-specialist",
+                              "type": "branch",
+                              "name": "Route to Specialist",
+                              "config": {
+                                "condition": "{{triage.output.category}}",
+                                "branches": [
+                                  {
+                                    "condition": "billing",
+                                    "steps": [
+                                      {
+                                        "id": "handle-billing",
+                                        "type": "agent",
+                                        "config": {
+                                          "agentSlug": "billing-support",
+                                          "inputMapping": {
+                                            "messages": [
+                                              {
+                                                "role": "user",
+                                                "content": "{{input.ticketContent}}"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "condition": "technical",
+                                    "steps": [
+                                      {
+                                        "id": "handle-technical",
+                                        "type": "agent",
+                                        "config": {
+                                          "agentSlug": "technical-support",
+                                          "inputMapping": {
+                                            "messages": [
+                                              {
+                                                "role": "user",
+                                                "content": "{{input.ticketContent}}"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "condition": "account",
+                                    "steps": [
+                                      {
+                                        "id": "handle-account",
+                                        "type": "agent",
+                                        "config": {
+                                          "agentSlug": "account-support",
+                                          "inputMapping": {
+                                            "messages": [
+                                              {
+                                                "role": "user",
+                                                "content": "{{input.ticketContent}}"
+                                              }
+                                            ]
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  },
+                                  {
+                                    "condition": "default",
+                                    "steps": [
+                                      {
+                                        "id": "escalate-unknown",
+                                        "type": "tool",
+                                        "config": {
+                                          "toolId": "escalate-to-human",
+                                          "inputMapping": {
+                                            "ticketId": "{{input.ticketId}}",
+                                            "reason": "Unknown category: {{triage.output.category}}"
+                                          }
+                                        }
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "inputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "ticketId": { "type": "string" },
+        "ticketContent": { "type": "string" },
+        "customerEmail": { "type": "string" }
+      },
+      "required": ["ticketId", "ticketContent"]
+    }
+  }'
+```
+
+## Step 8: Test with sample tickets
+
+Test your support system with sample tickets to verify routing and responses:
+
+### Test 1: Known issue (auto-resolve)
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "ticketId": "TICKET-001",
+      "ticketContent": "I forgot my password and cannot log in to my account.",
+      "customerEmail": "user@example.com"
+    }
+  }'
+```
+
+Expected flow:
+1. Triage agent categorizes as "account" with high confidence
+2. RAG system finds password reset guide
+3. Agent responds with step-by-step instructions
+
+### Test 2: Billing inquiry
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "ticketId": "TICKET-002",
+      "ticketContent": "I was charged twice for my subscription this month. Can you help me get a refund?",
+      "customerEmail": "customer@example.com"
+    }
+  }'
+```
+
+Expected flow:
+1. Triage agent categorizes as "billing" with high priority
+2. Routes to billing specialist agent
+3. Agent requests account verification
+4. Escalates refund request to human (per instructions)
+
+### Test 3: Low confidence (escalation)
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "ticketId": "TICKET-003",
+      "ticketContent": "Something weird is happening with my account and I'm not sure what to do.",
+      "customerEmail": "user@example.com"
+    }
+  }'
+```
+
+Expected flow:
+1. Triage agent has low confidence (< 0.7)
+2. Workflow escalates directly to human support
+3. Slack notification sent to support team
+
+## Step 9: Monitor and iterate
+
+### Review triage accuracy
+
+Check triage agent performance:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/support-triage/runs?limit=100 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Look for:
+- Consistent categorization
+- Appropriate priority assignment
+- Confidence scores correlating with accuracy
+
+### Monitor specialist agent responses
+
+Review specialist agent runs for quality:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/billing-support/runs?limit=50 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Track escalation rate
+
+Monitor how often tickets escalate to humans:
+
+```bash
+curl "https://agentc2.ai/agent/api/workflows/support-router/runs?status=completed&limit=100" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Calculate escalation rate: `escalated_tickets / total_tickets`
+
+<Callout type="tip">
+    Aim for an escalation rate of 10-20% initially. Too high means your agents need better instructions or tools. Too low might mean you're auto-resolving issues that need human attention.
+</Callout>
+
+## Step 10: Enable continuous learning
+
+Enable learning on your specialist agents to improve over time:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/billing-support/learning/enable \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "signalExtraction": {
+      "metrics": ["responseQuality", "customerSatisfaction", "resolutionTime"],
+      "thresholds": {
+        "responseQuality": 0.8,
+        "customerSatisfaction": 0.7
+      }
+    },
+    "proposalGeneration": {
+      "enabled": true,
+      "frequency": "weekly"
+    }
+  }'
+```
+
+The learning system will:
+1. Extract signals from successful and failed interactions
+2. Generate improvement proposals
+3. Run A/B experiments
+4. Promote winning changes after human approval
+
+## What you've built
+
+You've created a complete customer support system with:
+
+✅ **Triage agent** that categorizes tickets by priority and type  
+✅ **Specialist agents** for billing, technical, and account support  
+✅ **RAG-powered knowledge base** for auto-responses to common issues  
+✅ **Intelligent routing workflow** that directs tickets to the right agent  
+✅ **Human escalation** for complex or low-confidence cases  
+✅ **Guardrails** to prevent unsafe behavior  
+✅ **Memory** for context-aware conversations  
+✅ **Monitoring** to track performance and iterate
+
+## Next steps
+
+- **[Configure Evaluations](/docs/agents/evaluations)** — Set up quality scorers to automatically evaluate support responses
+- **[Set Up Budgets](/docs/agents/budgets-and-costs)** — Configure cost limits to prevent runaway spending
+- **[Enable Learning](/docs/agents/learning)** — Let your agents improve automatically from feedback
+- **[Add More Integrations](/docs/integrations/overview)** — Connect Gmail for email support, or add more MCP tools
+- **[Create Support Campaigns](/docs/campaigns/creating-campaigns)** — Organize complex multi-step support workflows
+- **[Production Guardrails](/docs/guides/production-guardrails)** — Add org-level policies for compliance

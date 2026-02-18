@@ -1,0 +1,100 @@
+---
+title: "Microsoft Teams"
+description: "Connect Microsoft Teams to AgentC2 for channel messaging, chat interactions, and adaptive cards."
+section: "integrations"
+order: 11
+primaryKeyword: "Microsoft Teams AI agent"
+secondaryKeywords: ["Teams bot integration", "Teams AI automation"]
+searchIntent: "informational"
+pageType: "how-to"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+relatedSlugs: ["integrations/overview", "integrations/microsoft-outlook", "integrations/slack"]
+---
+
+# Microsoft Teams
+
+The Microsoft Teams integration allows AgentC2 agents to interact with Teams channels and chats, enabling automated messaging, notifications, and conversational AI within your organization's Teams workspace.
+
+## Prerequisites
+
+- A Microsoft 365 tenant with Teams enabled
+- An Azure AD app registration with Teams permissions
+- Microsoft Graph API credentials (same as Outlook integration)
+
+## Setup
+
+1. Use the same Azure AD app registration from your [Microsoft Outlook](/docs/integrations/microsoft-outlook) setup, or create a new one in the Azure Portal
+
+2. Add Teams-specific API permissions:
+   - `ChannelMessage.Send` -- Post messages to channels
+   - `Chat.ReadWrite` -- Read and send chat messages
+   - `Team.ReadBasic.All` -- List teams and channels
+
+3. Configure environment variables:
+
+```bash
+MICROSOFT_CLIENT_ID="your-azure-app-client-id"
+MICROSOFT_CLIENT_SECRET="your-azure-app-client-secret"
+MICROSOFT_TENANT_ID="your-tenant-id"
+```
+
+4. Verify the connection:
+
+```bash
+curl https://agentc2.ai/agent/api/integrations/providers/microsoft-teams/status \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## Environment variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `MICROSOFT_CLIENT_ID` | Yes | Azure AD application client ID |
+| `MICROSOFT_CLIENT_SECRET` | Yes | Azure AD application client secret |
+| `MICROSOFT_TENANT_ID` | Yes | Azure AD tenant ID (use "common" for multi-tenant) |
+
+## Available capabilities
+
+| Capability | Description |
+|-----------|-------------|
+| Send channel message | Post messages to Teams channels |
+| Send chat message | Send direct or group chat messages |
+| List teams | List teams the app has access to |
+| List channels | List channels within a team |
+| Create adaptive card | Send rich, interactive card messages |
+
+## Common patterns
+
+### Post agent summaries to a channel
+
+After an agent completes a task, post a summary to a Teams channel:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/report-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [{
+      "role": "user",
+      "content": "Generate a daily sales summary and post it to the #sales-updates Teams channel"
+    }]
+  }'
+```
+
+### Interactive approvals via adaptive cards
+
+Use adaptive cards to create approval buttons that users can click directly in Teams, triggering workflow steps in AgentC2.
+
+<Callout type="info">
+Microsoft Teams and Slack serve similar roles. If your organization uses both, consider standardizing on one channel to simplify agent configuration and reduce maintenance overhead.
+</Callout>
+
+## Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| Authentication failed | Verify client ID, secret, and tenant ID are correct |
+| Permission denied | Ensure the Azure AD app has the required Graph API permissions and admin consent |
+| Messages not appearing | Check the app is installed in the target team and has channel access |
+| Rate limited | Microsoft Graph has throttling limits; implement retry with exponential backoff |

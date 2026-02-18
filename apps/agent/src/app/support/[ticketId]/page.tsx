@@ -6,6 +6,9 @@ import { auth } from "@repo/auth";
 import { getUserOrganizationId } from "@/lib/organization";
 import { ArrowLeft } from "lucide-react";
 import { TicketCommentForm } from "./comment-form";
+import { EditTicketButton } from "./edit-ticket";
+import { DeleteTicketButton } from "./delete-ticket";
+import { SupportChatWidget } from "../support-chat-widget";
 
 export const dynamic = "force-dynamic";
 
@@ -37,11 +40,14 @@ export default async function TicketDetailPage({
 
     if (!ticket || ticket.organizationId !== organizationId) notFound();
 
+    const isSubmitter = ticket.submittedById === session.user.id;
+    const canEdit = isSubmitter && ticket.status !== "CLOSED";
+
     return (
         <div className="h-full overflow-y-auto">
             <div className="mx-auto max-w-5xl space-y-6 p-4 md:p-6">
                 {/* Breadcrumb */}
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between">
                     <Link
                         href="/support"
                         className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-sm"
@@ -49,6 +55,20 @@ export default async function TicketDetailPage({
                         <ArrowLeft className="h-4 w-4" />
                         Back to Tickets
                     </Link>
+                    {isSubmitter && (
+                        <div className="flex items-center gap-1">
+                            {canEdit && (
+                                <EditTicketButton
+                                    ticketId={ticket.id}
+                                    currentTitle={ticket.title}
+                                    currentDescription={ticket.description}
+                                    currentType={ticket.type}
+                                    currentTags={ticket.tags}
+                                />
+                            )}
+                            <DeleteTicketButton ticketId={ticket.id} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Header */}
@@ -207,6 +227,7 @@ export default async function TicketDetailPage({
                     </div>
                 </div>
             </div>
+            <SupportChatWidget />
         </div>
     );
 }

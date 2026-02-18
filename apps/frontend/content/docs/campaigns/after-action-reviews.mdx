@@ -1,0 +1,335 @@
+---
+title: "After-Action Reviews"
+description: "Automated after-action reviews (AARs): what they are, automated generation, signal extraction, feeding findings back into agent/workflow improvements, and AAR structure."
+section: "campaigns"
+order: 4
+primaryKeyword: "after-action reviews"
+relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/templates"]
+secondaryKeywords: ["AAR", "after-action review", "lessons learned", "campaign analysis", "signal extraction"]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# After-Action Reviews
+
+After-action reviews (AARs) are automated analyses of campaign execution that compare planned vs actual outcomes, extract lessons learned, and feed findings back into agent and workflow improvements.
+
+## What are AARs?
+
+An after-action review (AAR) is a structured analysis of campaign execution that:
+
+- **Compares plan vs actual**: How did execution differ from the plan?
+- **Identifies successes**: What worked well?
+- **Identifies failures**: What didn't work?
+- **Extracts lessons**: What can we learn?
+- **Recommends improvements**: How can we do better next time?
+
+AARs are automatically generated after campaign completion and stored in the `aarJson` field.
+
+## AAR structure
+
+AARs follow a standardized structure:
+
+```json
+{
+  "campaignId": "camp_abc123",
+  "campaignName": "Support Optimization Campaign",
+  "executionSummary": {
+    "status": "COMPLETE",
+    "durationMinutes": 720,
+    "totalCostUsd": 4500,
+    "missionsCompleted": 5,
+    "missionsTotal": 7,
+    "tasksCompleted": 23,
+    "tasksTotal": 30,
+    "successRate": 0.77
+  },
+  "planVsActual": {
+    "estimatedCostUsd": 5000,
+    "actualCostUsd": 4500,
+    "costVariance": -0.10,
+    "estimatedDurationMinutes": 600,
+    "actualDurationMinutes": 720,
+    "durationVariance": 0.20,
+    "plannedMissions": 7,
+    "actualMissions": 7,
+    "plannedTasks": 30,
+    "actualTasks": 30
+  },
+  "successes": [
+    {
+      "mission": "Automated Ticket Routing",
+      "outcome": "Reduced average resolution time by 45%",
+      "keyFactors": ["Effective workflow design", "Proper agent assignment"]
+    }
+  ],
+  "failures": [
+    {
+      "mission": "Agent Training",
+      "issue": "Training materials were incomplete",
+      "impact": "Delayed mission completion by 2 days",
+      "rootCause": "Insufficient content preparation"
+    }
+  ],
+  "lessonsLearned": [
+    "Automated routing significantly improves efficiency",
+    "Training materials must be prepared before campaign start",
+    "Budget estimates were accurate within 10%"
+  ],
+  "recommendations": [
+    "Use automated routing workflow in future campaigns",
+    "Add training material preparation as a prerequisite task",
+    "Maintain current budget estimation methodology"
+  ],
+  "agentImprovements": [
+    {
+      "agentId": "support-agent-id",
+      "suggestion": "Add ticket categorization tool",
+      "rationale": "Would improve routing accuracy"
+    }
+  ],
+  "workflowImprovements": [
+    {
+      "workflowId": "ticket-routing-workflow-id",
+      "suggestion": "Add fallback routing for edge cases",
+      "rationale": "Would reduce manual intervention"
+    }
+  ],
+  "signals": [
+    {
+      "type": "performance",
+      "metric": "resolution_time",
+      "value": 0.45,
+      "direction": "improvement",
+      "significance": "high"
+    }
+  ],
+  "generatedAt": "2026-02-18T18:00:00.000Z"
+}
+```
+
+## Automated generation
+
+AARs are automatically generated when campaigns complete:
+
+### Generation trigger
+
+AARs are generated:
+- **On completion**: When campaign status changes to `COMPLETE`
+- **On failure**: When campaign status changes to `FAILED`
+- **On manual request**: Via API endpoint
+
+### Generation process
+
+1. **Data collection**: Gather execution data (costs, durations, outcomes)
+2. **Plan comparison**: Compare actual vs planned metrics
+3. **Signal extraction**: Extract performance signals
+4. **Analysis**: Identify successes, failures, lessons
+5. **Recommendations**: Generate improvement recommendations
+6. **Storage**: Store AAR in `aarJson` field
+
+### Accessing AARs
+
+```bash
+curl https://agentc2.ai/agent/api/campaigns/{campaignId} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Response includes `aarJson`:
+
+```json
+{
+  "id": "camp_abc123",
+  "status": "COMPLETE",
+  "aarJson": {
+    "executionSummary": {...},
+    "planVsActual": {...},
+    "lessonsLearned": [...],
+    "recommendations": [...]
+  }
+}
+```
+
+## Signal extraction
+
+AARs extract performance signals from execution data:
+
+### Signal types
+
+| Type | Description | Example |
+|------|-------------|---------|
+| **Performance** | Performance improvements/degradations | Resolution time reduced by 45% |
+| **Cost** | Cost efficiency signals | Budget underrun by 10% |
+| **Quality** | Quality improvements | Satisfaction score increased |
+| **Efficiency** | Efficiency gains | Tasks completed 20% faster |
+
+### Signal extraction process
+
+1. **Metric calculation**: Calculate key metrics (cost, duration, success rate)
+2. **Variance analysis**: Compare actual vs planned
+3. **Significance testing**: Determine if variance is significant
+4. **Signal classification**: Classify signals by type and direction
+
+### Example signals
+
+```json
+{
+  "signals": [
+    {
+      "type": "performance",
+      "metric": "resolution_time",
+      "value": 0.45,
+      "direction": "improvement",
+      "significance": "high",
+      "description": "Resolution time reduced by 45%"
+    },
+    {
+      "type": "cost",
+      "metric": "budget_variance",
+      "value": -0.10,
+      "direction": "efficiency",
+      "significance": "medium",
+      "description": "Budget underrun by 10%"
+    }
+  ]
+}
+```
+
+## Feeding findings back
+
+AAR findings feed back into agent and workflow improvements:
+
+### Agent improvements
+
+AARs suggest agent improvements:
+
+```json
+{
+  "agentImprovements": [
+    {
+      "agentId": "support-agent-id",
+      "suggestion": "Add ticket categorization tool",
+      "rationale": "Would improve routing accuracy",
+      "priority": "high",
+      "estimatedImpact": "Reduce routing errors by 30%"
+    }
+  ]
+}
+```
+
+### Workflow improvements
+
+AARs suggest workflow improvements:
+
+```json
+{
+  "workflowImprovements": [
+    {
+      "workflowId": "ticket-routing-workflow-id",
+      "suggestion": "Add fallback routing for edge cases",
+      "rationale": "Would reduce manual intervention",
+      "priority": "medium",
+      "estimatedImpact": "Reduce manual routing by 20%"
+    }
+  ]
+}
+```
+
+### Applying improvements
+
+Manually apply AAR recommendations:
+
+```bash
+# Update agent with AAR suggestion
+curl -X PATCH https://agentc2.ai/agent/api/agents/support-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tools": ["ticket-categorization-tool"]
+  }'
+
+# Update workflow with AAR suggestion
+curl -X PUT https://agentc2.ai/agent/api/workflows/ticket-routing-workflow \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "steps": [
+      {...},
+      {"type": "fallback", "condition": "edge_case"}
+    ]
+  }'
+```
+
+## AAR analysis
+
+Analyze AARs across multiple campaigns:
+
+### Aggregate AAR analysis
+
+```bash
+curl https://agentc2.ai/agent/api/campaigns/aars/aggregate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "customer-onboarding",
+    "fromDate": "2026-01-01",
+    "toDate": "2026-02-18"
+  }'
+```
+
+### Common patterns
+
+Identify common patterns across AARs:
+
+- **Recurring failures**: Same issues across multiple campaigns
+- **Success factors**: What consistently works well
+- **Cost trends**: Budget estimation accuracy over time
+- **Performance trends**: Performance improvements/degradations
+
+## Manual AAR generation
+
+Generate AARs manually:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/{campaignId}/aar \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "forceRegenerate": true
+  }'
+```
+
+## Best practices
+
+### 1. Review AARs regularly
+
+Review AARs after each campaign to identify improvements:
+
+```bash
+# List recent campaigns with AARs
+curl "https://agentc2.ai/agent/api/campaigns?status=COMPLETE&includeAAR=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### 2. Apply recommendations
+
+Act on AAR recommendations to improve future campaigns:
+
+- **High priority**: Apply immediately
+- **Medium priority**: Plan for next campaign
+- **Low priority**: Consider for future
+
+### 3. Track improvements
+
+Track whether AAR recommendations improve outcomes:
+
+- **Before**: Baseline metrics
+- **After**: Metrics after applying recommendations
+- **Comparison**: Measure improvement
+
+## Next steps
+
+- **[Creating Campaigns](/docs/campaigns/creating-campaigns)** — Learn how to create campaigns
+- **[Campaign Templates](/docs/campaigns/templates)** — Create reusable campaign templates
+- **[Campaigns Overview](/docs/campaigns/overview)** — Learn about campaign capabilities

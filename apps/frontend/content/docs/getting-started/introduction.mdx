@@ -1,0 +1,72 @@
+---
+title: "Introduction"
+description: "What AgentC2 is, who it's for, and what you can build with a production-grade AI agent platform."
+section: "getting-started"
+order: 1
+primaryKeyword: "AI agent platform"
+secondaryKeywords: ["build AI agents", "deploy AI agents", "AI agent orchestration"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+relatedSlugs:
+    ["getting-started/quickstart", "getting-started/architecture", "getting-started/key-concepts"]
+---
+
+# About AgentC2
+
+AgentC2 is a platform for building, deploying, and operating AI agents that connect to your tools and work across every channel. It gives you everything you need to go from a prototype to a production agent: model routing, memory, guardrails, cost controls, versioning, and observability.
+
+## Why AgentC2?
+
+Most AI agent frameworks help you get a demo working. AgentC2 is designed for what comes after:
+
+- **Production reliability** -- Guardrails, budget limits, and input/output policy layers prevent agents from going off-script. Every run is traced and scored.
+- **Database-driven agents** -- Agent definitions, versions, tools, and metrics live in PostgreSQL, not in code files. You can audit, compare, and roll back any change.
+- **40+ integrations** -- Connect agents to HubSpot, Jira, Slack, GitHub, Gmail, Google Drive, Microsoft Outlook, Dropbox, and more via MCP (Model Context Protocol) servers and native OAuth.
+- **Multi-agent orchestration** -- Build networks of specialized agents that delegate tasks, verify each other's work, and converge on a final answer.
+- **Every channel** -- Deploy the same agent logic across Slack, WhatsApp, Telegram, voice (ElevenLabs), and web embed widgets.
+
+## What can you build?
+
+- **Customer support agents** that triage tickets, route to specialists, and auto-respond to known issues
+- **Research agents** that scrape the web, ingest documents, and synthesize findings with RAG
+- **Sales agents** that qualify leads in your CRM, draft follow-up emails, and schedule meetings
+- **Multi-agent networks** where a coordinator delegates tasks to specialized agents for analysis, writing, and review
+- **Voice agents** that handle phone calls with real-time speech synthesis and tool execution
+
+## Core primitives
+
+AgentC2 is organized around six primitives. Each is a first-class, versioned entity in your database:
+
+| Primitive       | Purpose                                                                             |
+| --------------- | ----------------------------------------------------------------------------------- |
+| **Agent**       | Autonomous executor with instructions, model routing, tools, memory, and guardrails |
+| **Skill**       | Reusable capability bundle that can be attached to any agent                        |
+| **Workflow**    | Deterministic multi-step process with branching, approvals, and retries             |
+| **Network**     | Multi-agent topology that routes tasks to the best-fit agent                        |
+| **Campaign**    | Mission-style operation that decomposes a goal into tasks across agents             |
+| **Integration** | External service connection via MCP or OAuth (CRM, email, project management)       |
+
+## Technology stack
+
+AgentC2 is built on Mastra, the open-source TypeScript AI agent framework, extended with enterprise features:
+
+| Layer    | Technology                                       |
+| -------- | ------------------------------------------------ |
+| Runtime  | Bun, Next.js 16, TypeScript 5                    |
+| AI       | Mastra Core, AI SDK, OpenAI, Anthropic           |
+| Database | PostgreSQL (Supabase), Prisma 6                  |
+| Auth     | Better Auth with session-based cross-app cookies |
+| UI       | shadcn/ui, Tailwind CSS 4                        |
+| Voice    | ElevenLabs, OpenAI Realtime                      |
+| Jobs     | Inngest for background event processing          |
+
+## Get started
+
+Choose your path:
+
+- **[Quickstart](/docs/getting-started/quickstart)** -- Create and test your first agent in under 5 minutes
+- **[Architecture](/docs/getting-started/architecture)** -- Understand the platform's service boundaries and data flow
+- **[Key Concepts](/docs/getting-started/key-concepts)** -- Learn the six primitives and how they relate
+- **[First Agent](/docs/getting-started/first-agent)** -- Build a complete agent with tools, memory, and guardrails

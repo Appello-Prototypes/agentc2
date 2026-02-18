@@ -1,0 +1,376 @@
+---
+title: "Security"
+description: "Credential encryption with AES-256-GCM, token lifecycle management, scope minimization, key rotation, OAuth token refresh, and security headers."
+section: "platform"
+order: 3
+primaryKeyword: "security"
+relatedSlugs: ["platform/authentication", "platform/multi-tenancy", "platform/federation", "integrations/overview"]
+pageType: "concept"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Security
+
+AgentC2 implements defense-in-depth security with AES-256-GCM credential encryption at rest, OAuth token lifecycle management, scope minimization, automatic token refresh, and comprehensive security headers. All sensitive credentials are encrypted before storage, and the platform enforces tenant isolation, rate limiting, and audit logging.
+
+## Credential encryption
+
+All OAuth tokens and API keys are encrypted at rest using AES-256-GCM (Galois/Counter Mode) before storage in PostgreSQL.
+
+### Encryption key
+
+The platform uses a single Key Encryption Key (KEK) stored in `CREDENTIAL_ENCRYPTION_KEY`:
+
+```bash
+# Generate a secure 32-byte hex key
+openssl rand -hex 32
+```
+
+Set in `.env`:
+
+```bash
+CREDENTIAL_ENCRYPTION_KEY="a1b2c3d4e5f6..." # 64-character hex string (32 bytes)
+```
+
+<Callout type="warning">
+    **Never commit encryption keys**: Store `CREDENTIAL_ENCRYPTION_KEY` in `.env` only. Never commit to version control. Rotate keys periodically in production.
+</Callout>
+
+### Encryption format
+
+Encrypted credentials are stored as JSON payloads:
+
+```json
+{
+  "__enc": "v1",
+  "iv": "base64-encoded-initialization-vector",
+  "tag": "base64-encoded-authentication-tag",
+  "data": "base64-encoded-ciphertext"
+}
+```
+
+### Encryption implementation
+
+```typescript
+// apps/agent/src/lib/credential-crypto.ts
+import { createCipheriv, randomBytes } from "crypto"
+
+export const encryptCredentials = (value: Record<string, unknown>) => {
+  const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex")
+  const iv = randomBytes(12) // 12-byte IV for GCM
+  const cipher = createCipheriv("aes-256-gcm", key, iv)
+  
+  const plaintext = JSON.stringify(value)
+  const encrypted = Buffer.concat([
+    cipher.update(plaintext, "utf8"),
+    cipher.final()
+  ])
+  const tag = cipher.getAuthTag()
+  
+  return {
+    __enc: "v1",
+    iv: iv.toString("base64"),
+    tag: tag.toString("base64"),
+    data: encrypted.toString("base64")
+  }
+}
+```
+
+### Decryption
+
+```typescript
+export const decryptCredentials = (value: EncryptedPayload) => {
+  const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex")
+  const iv = Buffer.from(value.iv, "base64")
+  const tag = Buffer.from(value.tag, "base64")
+  const encrypted = Buffer.from(value.data, "base64")
+  
+  const decipher = createDecipheriv("aes-256-gcm", key, iv)
+  decipher.setAuthTag(tag)
+  
+  const decrypted = Buffer.concat([
+    decipher.update(encrypted),
+    decipher.final()
+  ]).toString("utf8")
+  
+  return JSON.parse(decrypted)
+}
+```
+
+## Token lifecycle handling
+
+OAuth tokens are managed with automatic refresh, expiration tracking, and secure storage:
+
+### Token storage
+
+Tokens are stored in `IntegrationConnection` model with encrypted `credentials` field:
+
+```typescript
+// Encrypt before storage
+const encrypted = encryptCredentials({
+  accessToken: "ya29.a0...",
+  refreshToken: "1//0g...",
+  expiresAt: "2026-02-19T12:00:00Z"
+})
+
+await prisma.integrationConnection.create({
+  data: {
+    organizationId: "org_123",
+    integrationKey: "google",
+    credentials: encrypted
+  }
+})
+```
+
+### Automatic token refresh
+
+The platform automatically refreshes expired tokens:
+
+```typescript
+// packages/mastra/src/tools/gmail/shared.ts
+async function getAccessToken(connectionId: string): Promise<string> {
+  const connection = await prisma.integrationConnection.findUnique({
+    where: { id: connectionId }
+  })
+  
+  const credentials = decryptCredentials(connection.credentials)
+  
+  // Check expiration
+  if (new Date(credentials.expiresAt) > new Date()) {
+    return credentials.accessToken
+  }
+  
+  // Refresh token
+  const refreshed = await refreshOAuthToken(credentials.refreshToken)
+  
+  // Update encrypted storage
+  await prisma.integrationConnection.update({
+    where: { id: connectionId },
+    data: {
+      credentials: encryptCredentials({
+        accessToken: refreshed.accessToken,
+        refreshToken: refreshed.refreshToken || credentials.refreshToken,
+        expiresAt: refreshed.expiresAt
+      })
+    }
+  })
+  
+  return refreshed.accessToken
+}
+```
+
+### Token scope minimization
+
+Request only the minimum OAuth scopes required:
+
+| Integration | Scopes | Purpose |
+| ----------- | ------ | ------- |
+| **Google** | `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly` | Gmail read access only |
+| **Microsoft** | `User.Read`, `Mail.Read`, `Calendars.ReadWrite` | Outlook + Calendar |
+| **GitHub** | `repo`, `read:org` | Repository access |
+
+<Callout type="tip">
+    **Principle of least privilege**: Request only the scopes your integration needs. Users are more likely to approve minimal permission requests.
+</Callout>
+
+## Key rotation
+
+Rotate `CREDENTIAL_ENCRYPTION_KEY` periodically in production:
+
+### Rotation procedure
+
+1. **Generate new key**:
+   ```bash
+   openssl rand -hex 32
+   ```
+
+2. **Re-encrypt credentials**:
+   ```typescript
+   // Migration script: decrypt with old key, encrypt with new key
+   const oldKey = process.env.OLD_CREDENTIAL_ENCRYPTION_KEY
+   const newKey = process.env.CREDENTIAL_ENCRYPTION_KEY
+   
+   const connections = await prisma.integrationConnection.findMany()
+   for (const conn of connections) {
+     const decrypted = decryptWithKey(conn.credentials, oldKey)
+     const reEncrypted = encryptWithKey(decrypted, newKey)
+     await prisma.integrationConnection.update({
+       where: { id: conn.id },
+       data: { credentials: reEncrypted }
+     })
+   }
+   ```
+
+3. **Update environment**:
+   ```bash
+   # Set new key in production
+   export CREDENTIAL_ENCRYPTION_KEY="new-key-here"
+   ```
+
+4. **Verify decryption**:
+   ```typescript
+   // Test decryption with new key
+   const test = await prisma.integrationConnection.findFirst()
+   const decrypted = decryptCredentials(test.credentials)
+   console.assert(decrypted.accessToken !== undefined)
+   ```
+
+### Key versioning
+
+For zero-downtime rotation, support key versioning:
+
+```typescript
+// Store key version in encrypted payload
+{
+  "__enc": "v1",
+  "__keyVersion": 2, // Track which key was used
+  "iv": "...",
+  "tag": "...",
+  "data": "..."
+}
+```
+
+## OAuth token refresh
+
+OAuth providers issue refresh tokens for long-lived access:
+
+### Refresh token flow
+
+1. **Initial authorization** — User grants permissions, receives `accessToken` + `refreshToken`
+2. **Token storage** — Both tokens encrypted and stored in `IntegrationConnection`
+3. **Access token usage** — `accessToken` used for API calls
+4. **Expiration detection** — Platform checks `expiresAt` before each API call
+5. **Automatic refresh** — Expired tokens refreshed using `refreshToken`
+6. **Storage update** — New tokens encrypted and stored
+
+### Refresh implementation
+
+```typescript
+async function refreshOAuthToken(refreshToken: string) {
+  const response = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+      refresh_token: refreshToken,
+      grant_type: "refresh_token"
+    })
+  })
+  
+  const data = await response.json()
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token || refreshToken, // May not be returned
+    expiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString()
+  }
+}
+```
+
+## Incident response readiness
+
+The platform includes audit logging and monitoring for security incidents:
+
+### Audit logging
+
+All sensitive operations are logged:
+
+```typescript
+// FederationAuditLog tracks cross-org interactions
+await prisma.federationAuditLog.create({
+  data: {
+    organizationId: "org_123",
+    actorType: "user",
+    actorId: userId,
+    action: "credential_access",
+    resourceType: "integration_connection",
+    resourceId: connectionId,
+    metadata: { integrationKey: "google" }
+  }
+})
+```
+
+### Security monitoring
+
+- **Failed login attempts** — Rate limiting and account lockout
+- **Credential access** — Log all decryption operations
+- **Token refresh** — Monitor refresh failures
+- **Suspicious activity** — Track `riskScore` per organization
+
+### Incident response checklist
+
+1. **Identify breach** — Review audit logs, identify affected resources
+2. **Rotate keys** — Immediately rotate `CREDENTIAL_ENCRYPTION_KEY`
+3. **Revoke tokens** — Revoke OAuth tokens for affected integrations
+4. **Notify users** — Inform affected organizations
+5. **Forensic analysis** — Review logs, identify root cause
+6. **Prevent recurrence** — Update security controls, patch vulnerabilities
+
+## Security headers
+
+The platform enforces security headers via Caddy and Next.js middleware:
+
+### HTTP security headers
+
+| Header | Value | Purpose |
+| ------ | ----- | ------- |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Force HTTPS (HSTS) |
+| `Content-Security-Policy` | `default-src 'self'` | Prevent XSS attacks |
+| `X-Frame-Options` | `DENY` | Prevent clickjacking |
+| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` | Control referrer leakage |
+
+### Caddyfile configuration
+
+```caddyfile
+agentc2.ai {
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    reverse_proxy /agent* localhost:3001
+    reverse_proxy * localhost:3000
+}
+```
+
+### Content Security Policy
+
+For stricter CSP, configure in Next.js:
+
+```typescript
+// next.config.ts
+const securityHeaders = [
+  {
+    key: "Content-Security-Policy",
+    value: [
+      "default-src 'self'",
+      "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://api.openai.com https://api.anthropic.com"
+    ].join("; ")
+  }
+]
+```
+
+## Best practices
+
+1. **Encrypt all credentials** — Never store plaintext tokens or API keys
+2. **Rotate keys regularly** — Rotate `CREDENTIAL_ENCRYPTION_KEY` every 6-12 months
+3. **Minimize scopes** — Request only necessary OAuth permissions
+4. **Monitor token refresh** — Alert on refresh failures
+5. **Audit sensitive operations** — Log all credential access and decryption
+6. **Enforce HTTPS** — Use HSTS to prevent downgrade attacks
+7. **Rate limit authentication** — Prevent brute force attacks
+
+## Related topics
+
+- **[Authentication](/docs/platform/authentication)** — Session management and OAuth flows
+- **[Multi-Tenancy](/docs/platform/multi-tenancy)** — Tenant isolation and data boundaries
+- **[Federation](/docs/platform/federation)** — Cross-organization security
+- **[Integrations Overview](/docs/integrations/overview)** — OAuth integration setup

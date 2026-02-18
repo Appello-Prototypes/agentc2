@@ -1,0 +1,272 @@
+---
+title: "Progressive Disclosure"
+description: "Context-driven skill activation reduces context window overhead by loading capabilities only when needed."
+section: "skills"
+order: 3
+primaryKeyword: "progressive disclosure skills"
+secondaryKeywords:
+    [
+        "skill activation",
+        "context-driven loading",
+        "discoverable skills",
+        "pinned skills",
+        "maxToolsLoaded"
+    ]
+relatedSlugs: ["skills/overview", "skills/creating-skills", "agents/overview"]
+pageType: "concept"
+---
+
+# Progressive Disclosure
+
+Progressive disclosure is a context-driven skill activation system that reduces context window overhead by loading capabilities only when conversation context requires them. Skills can be attached to agents in two modes: **pinned** (always loaded) or **discoverable** (loaded on-demand).
+
+## The problem
+
+Agents with many attached skills can exceed context window limits:
+
+- **Tool overload** — Each skill may attach multiple tools, increasing the tool list size
+- **Instruction bloat** — Merged skill instructions consume tokens even when not needed
+- **Document overhead** — Reference documents are loaded even if irrelevant to the current conversation
+- **Performance cost** — Larger context windows increase latency and cost
+
+Progressive disclosure solves this by loading skills dynamically based on conversation context.
+
+## Skill attachment modes
+
+When attaching a skill to an agent, you specify the attachment mode:
+
+### Pinned skills (`pinned: true`)
+
+Always loaded when the agent resolves. Use for core capabilities the agent needs in every conversation.
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "email-drafting",
+    "pinned": true
+  }'
+```
+
+**Use pinned skills for:**
+
+- Core agent capabilities (e.g., a support agent always needs ticket management)
+- Frequently used skills (e.g., email drafting for communication agents)
+- Skills required for agent identity (e.g., a "research agent" always needs research skills)
+
+### Discoverable skills (`pinned: false`)
+
+Loaded on-demand when context requires them. The agent resolver uses meta-tools to discover and activate relevant skills during conversation.
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "advanced-analytics",
+    "pinned": false
+  }'
+```
+
+**Use discoverable skills for:**
+
+- Specialized capabilities (e.g., advanced analytics, code review)
+- Rarely used skills (e.g., report generation, data export)
+- Context-specific skills (e.g., calendar management only needed when scheduling)
+
+<Callout type="tip">
+    By default, skills are attached as `pinned: true`. Set `pinned: false` explicitly to make them
+    discoverable.
+</Callout>
+
+## How discovery works
+
+When an agent has discoverable skills, the resolver:
+
+1. **Initial resolution** — Loads only pinned skills, keeping context window small
+2. **Conversation start** — Agent receives meta-tools (`list-discoverable-skills`, `activate-skill`) to explore available capabilities
+3. **Context detection** — Agent analyzes conversation context to determine if discoverable skills are relevant
+4. **Skill activation** — Agent calls `activate-skill` to load a discoverable skill when needed
+5. **Thread persistence** — Activated skills are stored in `ThreadSkillState` so subsequent turns in the same thread automatically load them
+
+### Example discovery flow
+
+```typescript
+// Agent receives user message
+User: "Generate a quarterly sales report with charts"
+
+// Agent checks discoverable skills
+Agent calls: list-discoverable-skills()
+Response: [
+  { slug: "report-generation", description: "Generate reports with charts..." },
+  { slug: "data-export", description: "Export data to CSV, Excel..." }
+]
+
+// Agent activates relevant skill
+Agent calls: activate-skill({ skillSlug: "report-generation" })
+
+// Skill is now loaded for this thread
+// Agent uses report-generation tools and instructions
+```
+
+## maxToolsLoaded budget
+
+The agent resolver enforces a `maxToolsLoaded` budget to prevent context window overflow:
+
+```json
+{
+    "agentConfig": {
+        "maxToolsLoaded": 20
+    }
+}
+```
+
+When resolving an agent:
+
+1. **Count pinned tools** — Sum tools from all pinned skills
+2. **Check budget** — If pinned tools exceed `maxToolsLoaded`, log a warning
+3. **Discoverable tools** — Not counted until activated
+4. **Activation check** — When activating a discoverable skill, verify total tools don't exceed budget
+
+<Callout type="warning">
+    If pinned skills exceed `maxToolsLoaded`, the agent may fail to resolve or experience degraded
+    performance. Reduce pinned skills or increase the budget.
+</Callout>
+
+## Thread skill state
+
+When an agent activates a discoverable skill, the activation is persisted in `ThreadSkillState`:
+
+```prisma
+model ThreadSkillState {
+    id         String   @id @default(cuid())
+    threadId   String   @unique
+    agentId    String
+    skillSlugs String[] // Activated skill slugs
+    createdAt  DateTime @default(now())
+    updatedAt  DateTime @updatedAt
+}
+```
+
+**Benefits:**
+
+- **Persistence** — Activated skills remain loaded for the entire conversation thread
+- **Efficiency** — No need to re-discover skills on subsequent turns
+- **Context continuity** — Skills stay active even if conversation pauses
+
+**Example:**
+
+```typescript
+// Turn 1: User asks about reports
+User: "Can you generate a report?"
+Agent: [activates report-generation skill]
+ThreadSkillState: { skillSlugs: ["report-generation"] }
+
+// Turn 2: User asks follow-up
+User: "Make it a PDF"
+Agent: [report-generation skill already loaded, no re-activation needed]
+```
+
+## Best practices
+
+### When to pin vs discover
+
+| Scenario                                               | Mode         | Reason                      |
+| ------------------------------------------------------ | ------------ | --------------------------- |
+| Core agent capability                                  | Pinned       | Always needed               |
+| Frequently used (over 50% of conversations)            | Pinned       | Reduces activation overhead |
+| Specialized capability (under 10% of conversations)    | Discoverable | Reduces context window      |
+| Context-specific (e.g., calendar only when scheduling) | Discoverable | Loaded only when relevant   |
+| Tool-heavy skill (over 5 tools)                        | Discoverable | Reduces tool list size      |
+
+### Optimizing tool count
+
+1. **Audit pinned skills** — Review which skills are truly always needed
+2. **Split large skills** — Break tool-heavy skills into smaller, focused skills
+3. **Use discoverable for specialization** — Move specialized capabilities to discoverable
+4. **Monitor activation patterns** — If a discoverable skill is activated over 80% of the time, consider pinning it
+
+### Monitoring activation
+
+Track skill activation patterns:
+
+```bash
+# List thread skill states for an agent
+curl https://agentc2.ai/agent/api/agents/support-agent/thread-states \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response shows activation frequency
+{
+  "skillSlugs": ["report-generation"],
+  "activationCount": 45,
+  "totalThreads": 100,
+  "activationRate": 0.45
+}
+```
+
+## Example: Support agent configuration
+
+Configure a support agent with progressive disclosure:
+
+```bash
+# Core capabilities (pinned)
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "ticket-management",
+    "pinned": true
+  }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "email-drafting",
+    "pinned": true
+  }'
+
+# Specialized capabilities (discoverable)
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "advanced-analytics",
+    "pinned": false
+  }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "report-generation",
+    "pinned": false
+  }'
+```
+
+**Result:**
+
+- **Initial context**: 2 pinned skills (ticket-management, email-drafting)
+- **On-demand**: 2 discoverable skills (advanced-analytics, report-generation)
+- **Tool count**: ~8 tools from pinned skills (within budget)
+- **Activation**: Discoverable skills load only when user requests analytics or reports
+
+## Limitations
+
+Progressive disclosure has some limitations:
+
+1. **Activation latency** — First use of a discoverable skill requires activation (adds ~100-200ms)
+2. **Discovery overhead** — Meta-tools consume tokens for skill discovery
+3. **Thread isolation** — Skills activated in one thread don't affect other threads
+4. **No cross-agent sharing** — Each agent maintains its own thread skill state
+
+<Callout type="info">
+For high-frequency skills (over 50% activation rate), consider pinning them to avoid activation overhead.
+</Callout>
+
+## Next steps
+
+- **[Skills Overview](/docs/skills/overview)** — Understand the skill system architecture
+- **[Creating Skills](/docs/skills/creating-skills)** — Learn how to create and attach skills
+- **[Skills API Reference](/docs/skills/api-reference)** — API documentation for skill attachment

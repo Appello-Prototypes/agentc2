@@ -1,0 +1,381 @@
+---
+title: "Telegram"
+description: "Telegram bot integration: bot setup, command parsing, webhook configuration, and fallback messaging."
+section: "channels"
+order: 4
+primaryKeyword: "Telegram integration"
+relatedSlugs: ["channels/overview", "channels/slack", "channels/whatsapp"]
+secondaryKeywords: ["Telegram bot", "Telegram webhook", "Telegram commands", "Telegram API"]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Telegram
+
+AgentC2 integrates with Telegram Bot API to enable AI agents in Telegram chats. Users can send messages, use commands, and interact with agents directly from Telegram.
+
+## Prerequisites
+
+Before setting up Telegram integration, ensure you have:
+
+- A Telegram account
+- An AgentC2 account with at least one agent created
+- A public URL for webhooks (use ngrok for local development)
+
+## Step 1: Create Telegram Bot
+
+1. **Open Telegram**: Open Telegram app or web
+2. **Find BotFather**: Search for `@BotFather` and start a chat
+3. **Create Bot**: Send `/newbot` command
+4. **Set Bot Name**: Enter a display name (e.g., "AgentC2 Assistant")
+5. **Set Bot Username**: Enter a unique username ending in `bot` (e.g., `agentc2_assistant_bot`)
+6. **Copy Bot Token**: BotFather will provide a bot token (starts with `1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`)
+
+## Step 2: Configure Environment Variables
+
+Add Telegram credentials to your `.env` file:
+
+```bash
+# Telegram Bot Token (from BotFather)
+TELEGRAM_BOT_TOKEN="1234567890:ABCdefGHIjklMNOpqrsTUVwxyz"
+
+# Default agent for Telegram (optional)
+TELEGRAM_DEFAULT_AGENT_SLUG="assistant"
+```
+
+<Callout type="warning">
+    Keep your `TELEGRAM_BOT_TOKEN` secure. Anyone with this token can control your bot. Never commit
+    it to version control.
+</Callout>
+
+## Step 3: Configure Webhook
+
+Set the webhook URL for your bot:
+
+```bash
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-domain.com/agent/api/telegram/webhook",
+    "allowed_updates": ["message", "callback_query"]
+  }'
+```
+
+For local development with ngrok:
+
+```bash
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://your-subdomain.ngrok-free.dev/agent/api/telegram/webhook",
+    "allowed_updates": ["message", "callback_query"]
+  }'
+```
+
+### Verify webhook
+
+Check webhook status:
+
+```bash
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getWebhookInfo"
+```
+
+Response:
+
+```json
+{
+    "ok": true,
+    "result": {
+        "url": "https://your-domain.com/agent/api/telegram/webhook",
+        "has_custom_certificate": false,
+        "pending_update_count": 0
+    }
+}
+```
+
+## Step 4: Test Integration
+
+1. **Find Your Bot**: Search for your bot username in Telegram
+2. **Start Chat**: Click "Start" to begin a conversation
+3. **Send Message**: Send a test message:
+    ```
+    Hello, what can you do?
+    ```
+4. **Verify Response**: The bot should respond
+
+## Command parsing
+
+Telegram supports slash commands for bot interactions:
+
+### Built-in commands
+
+| Command                   | Description                 |
+| ------------------------- | --------------------------- |
+| `/start`                  | Start conversation with bot |
+| `/help`                   | Show help message           |
+| `/agent:list`             | List available agents       |
+| `/agent:{slug} {message}` | Route to specific agent     |
+
+### Custom commands
+
+Register commands with BotFather:
+
+1. **Send `/setcommands`** to BotFather
+2. **Select your bot**
+3. **Enter commands**:
+    ```
+    start - Start conversation
+    help - Show help
+    agent:list - List agents
+    ```
+
+### Command examples
+
+```
+/start
+→ Routes to default agent with welcome message
+
+/agent:research What are AI developments?
+→ Routes to research agent
+
+/agent:list
+→ Lists all available agents
+```
+
+## Agent routing
+
+Telegram supports routing to different agents using commands:
+
+### Basic routing
+
+```
+/agent:research What are the latest AI developments?
+```
+
+The message is routed to the `research` agent instead of the default agent.
+
+### Default agent
+
+If no command prefix is provided, the default agent (configured via `TELEGRAM_DEFAULT_AGENT_SLUG`) handles the request:
+
+```
+What time is it?
+```
+
+Routes to the default agent.
+
+## Inline keyboards
+
+Telegram supports inline keyboards for interactive responses:
+
+```bash
+# Send message with inline keyboard
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chat_id": "123456789",
+    "text": "Choose an option:",
+    "reply_markup": {
+      "inline_keyboard": [
+        [
+          {"text": "Research", "callback_data": "agent:research"},
+          {"text": "Writing", "callback_data": "agent:writing"}
+        ]
+      ]
+    }
+  }'
+```
+
+### Handling callbacks
+
+When users click inline keyboard buttons, Telegram sends `callback_query` events:
+
+```json
+{
+  "update_id": 123456789,
+  "callback_query": {
+    "id": "callback-id",
+    "from": {"id": 123456789, "username": "user"},
+    "message": {...},
+    "data": "agent:research"
+  }
+}
+```
+
+AgentC2 automatically handles callback queries and routes them to the appropriate agent.
+
+## Media support
+
+Telegram supports rich media:
+
+- **Images**: JPEG, PNG, GIF, WebP
+- **Videos**: MP4, WebM
+- **Audio**: MP3, OGG, WAV
+- **Documents**: PDF, DOC, DOCX, ZIP, etc.
+- **Voice messages**: OGG (Opus)
+- **Stickers**: WebP
+
+### Sending media
+
+```bash
+# Send image
+curl -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendPhoto" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "chat_id": "123456789",
+    "photo": "https://example.com/image.jpg",
+    "caption": "Image caption"
+  }'
+```
+
+## Markdown formatting
+
+Telegram supports Markdown and HTML formatting:
+
+### Markdown
+
+```
+*bold text*
+_italic text_
+[link](https://example.com)
+`code`
+```
+
+### HTML
+
+```html
+<b>bold text</b>
+<i>italic text</i>
+<a href="https://example.com">link</a>
+<code>code</code>
+```
+
+Configure formatting in agent responses:
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/agents/research-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "metadata": {
+      "telegram": {
+        "parseMode": "Markdown"
+      }
+    }
+  }'
+```
+
+## Conversation memory
+
+Telegram conversations maintain memory per chat:
+
+- **Chat-based**: Each chat maintains its own conversation context
+- **Cross-chat**: Different chats don't share context
+- **Group chats**: Group chats maintain context per group
+- **Semantic recall**: Agents can recall relevant past messages
+
+### Memory configuration
+
+Configure memory per agent:
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/agents/research-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 20,
+      "semanticRecall": {
+        "topK": 3,
+        "minScore": 0.7
+      }
+    }
+  }'
+```
+
+## Fallback messaging
+
+If webhook processing fails, Telegram supports long polling as a fallback:
+
+### Long polling (development)
+
+For local development without webhooks:
+
+```bash
+# Get updates via long polling
+curl "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/getUpdates?timeout=10"
+```
+
+AgentC2 can be configured to use long polling instead of webhooks for development.
+
+## Webhook endpoint
+
+The Telegram webhook endpoint is:
+
+```
+POST /agent/api/telegram/webhook
+```
+
+### Webhook payload
+
+Telegram sends webhook updates:
+
+```json
+{
+    "update_id": 123456789,
+    "message": {
+        "message_id": 1,
+        "from": {
+            "id": 123456789,
+            "is_bot": false,
+            "first_name": "John",
+            "username": "john_doe"
+        },
+        "chat": {
+            "id": 123456789,
+            "type": "private"
+        },
+        "date": 1234567890,
+        "text": "Hello"
+    }
+}
+```
+
+## Error handling
+
+Common Telegram API errors:
+
+| Error Code | Description         | Solution                 |
+| ---------- | ------------------- | ------------------------ |
+| `400`      | Bad request         | Check request parameters |
+| `401`      | Unauthorized        | Verify bot token         |
+| `403`      | Forbidden           | Bot blocked by user      |
+| `429`      | Rate limit exceeded | Wait before retrying     |
+
+## Troubleshooting
+
+### Bot not responding
+
+1. **Check webhook**: Verify webhook URL is set correctly
+2. **Verify token**: Ensure `TELEGRAM_BOT_TOKEN` is valid
+3. **Review logs**: Check AgentC2 logs for webhook processing errors
+
+### Commands not working
+
+1. **Register commands**: Use `/setcommands` with BotFather
+2. **Check syntax**: Ensure command format is correct (`/agent:slug message`)
+3. **Verify agent**: Ensure agent slug exists
+
+### Webhook not receiving updates
+
+1. **Check webhook URL**: Verify URL in `getWebhookInfo`
+2. **Review allowed_updates**: Ensure `message` and `callback_query` are allowed
+3. **Test webhook**: Send test message and check logs
+
+## Next steps
+
+- **[Channels Overview](/docs/channels/overview)** — Learn about other supported channels
+- **[Slack Integration](/docs/channels/slack)** — Set up Slack integration
+- **[Voice Agents](/docs/channels/voice)** — Configure voice agents

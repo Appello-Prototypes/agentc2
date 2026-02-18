@@ -1,0 +1,603 @@
+---
+title: "Deployment"
+description: "Digital Ocean production deployment: server setup, Bun + Node + PM2 + Caddy installation, git clone + build, Caddyfile configuration, PM2 ecosystem, DNS setup, SSL via Let's Encrypt, pre-deploy checklist, rollback plan."
+section: "platform"
+order: 8
+primaryKeyword: "deployment"
+relatedSlugs: ["platform/authentication", "platform/security", "getting-started/architecture"]
+pageType: "tutorial"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Deployment
+
+AgentC2 is deployed to Digital Ocean production servers using Bun runtime, PM2 process manager, and Caddy reverse proxy. This guide covers server setup, application installation, Caddyfile configuration, PM2 ecosystem setup, DNS configuration, SSL certificates, and deployment procedures.
+
+## Server specifications
+
+Production deployment uses Digital Ocean droplets with:
+
+| Specification | Value | Purpose |
+| ------------- | ----- | ------- |
+| **RAM** | 32 GB | Handle concurrent agent runs, large models |
+| **vCPUs** | 8 | Parallel processing, multiple apps |
+| **Storage** | 640 GB SSD | Database, logs, build artifacts |
+| **Cost** | $96/month | Production-grade infrastructure |
+
+### Server details
+
+- **Host**: `138.197.150.253`
+- **User**: `root`
+- **SSH Key**: `~/.ssh/appello_digitalocean`
+- **App Directory**: `/var/www/mastra`
+- **Domain**: `https://agentc2.ai`
+
+## Prerequisites
+
+Before deployment, ensure you have:
+
+- **SSH access** — SSH key configured for server access
+- **Domain configured** — DNS A record pointing to server IP
+- **Environment variables** — `.env` file with all required variables
+- **Database access** — PostgreSQL connection string configured
+- **GitHub access** — Repository access for cloning
+
+## Server setup
+
+### 1. Initial server configuration
+
+```bash
+# SSH to server
+ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+
+# Update system packages
+apt update && apt upgrade -y
+
+# Install basic utilities
+apt install -y git curl wget build-essential
+```
+
+### 2. Install Bun
+
+Bun is the JavaScript runtime and package manager:
+
+```bash
+# Install Bun
+curl -fsSL https://bun.sh/install | bash
+
+# Add to PATH
+export PATH="$HOME/.bun/bin:$PATH"
+echo 'export PATH="$HOME/.bun/bin:$PATH"' >> ~/.bashrc
+
+# Verify installation
+bun --version
+```
+
+### 3. Install Node.js (for PM2)
+
+PM2 requires Node.js:
+
+```bash
+# Install Node.js 20.x
+curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+apt install -y nodejs
+
+# Verify installation
+node --version
+npm --version
+```
+
+### 4. Install PM2
+
+PM2 manages application processes:
+
+```bash
+# Install PM2 globally
+npm install -g pm2
+
+# Setup PM2 startup script
+pm2 startup systemd
+
+# Verify installation
+pm2 --version
+```
+
+### 5. Install Caddy
+
+Caddy provides reverse proxy and SSL:
+
+```bash
+# Install Caddy
+apt install -y debian-keyring debian-archive-keyring apt-transport-https
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' | gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' | tee /etc/apt/sources.list.d/caddy-stable.list
+apt update
+apt install -y caddy
+
+# Verify installation
+caddy version
+```
+
+### 6. Install PostgreSQL client (optional)
+
+For database management:
+
+```bash
+apt install -y postgresql-client
+```
+
+## Application installation
+
+### 1. Clone repository
+
+```bash
+# Create app directory
+mkdir -p /var/www
+cd /var/www
+
+# Clone repository
+git clone https://github.com/your-org/mastra-experiment.git mastra
+cd mastra
+
+# Checkout production branch
+git checkout main
+```
+
+### 2. Install dependencies
+
+```bash
+# Install all dependencies
+bun install
+
+# Generate Prisma client
+bun run db:generate
+```
+
+### 3. Configure environment
+
+```bash
+# Copy .env.example to .env
+cp .env.example .env
+
+# Edit .env with production values
+nano .env
+```
+
+Required environment variables:
+
+```bash
+# Database
+DATABASE_URL="postgresql://user:password@host:5432/database"
+
+# Authentication
+NEXT_PUBLIC_APP_URL="https://agentc2.ai"
+BETTER_AUTH_SECRET="your-secret-key"
+
+# AI Providers
+OPENAI_API_KEY="sk-..."
+ANTHROPIC_API_KEY="sk-ant-..."
+
+# ... (see CLAUDE.md for complete list)
+```
+
+### 4. Build applications
+
+```bash
+# Build all apps (with increased memory for large builds)
+NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
+```
+
+This builds:
+- `apps/frontend` → `.next` directory
+- `apps/agent` → `.next` directory
+- All packages
+
+<Callout type="warning">
+    **Memory limits**: Large builds may require increased memory. Set `NODE_OPTIONS="--max-old-space-size=24576"` for 24GB limit.
+</Callout>
+
+## Caddyfile configuration
+
+Caddy provides reverse proxy and automatic SSL:
+
+### Production Caddyfile
+
+```caddyfile
+# /etc/caddy/Caddyfile
+agentc2.ai {
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Frame-Options "DENY"
+        X-Content-Type-Options "nosniff"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+    
+    # Reverse proxy to agent app
+    reverse_proxy /agent* localhost:3001 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # Reverse proxy to frontend app
+    reverse_proxy * localhost:3000 {
+        header_up Host {host}
+        header_up X-Real-IP {remote}
+        header_up X-Forwarded-For {remote}
+        header_up X-Forwarded-Proto {scheme}
+    }
+    
+    # Automatic SSL via Let's Encrypt
+    tls {
+        dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+    }
+}
+```
+
+### Deploy Caddyfile
+
+```bash
+# Copy Caddyfile to Caddy config directory
+cp apps/caddy/Caddyfile.production /etc/caddy/Caddyfile
+
+# Validate Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
+
+# Reload Caddy
+systemctl reload caddy
+```
+
+### SSL certificates
+
+Caddy automatically obtains SSL certificates from Let's Encrypt:
+
+1. **DNS challenge** — Caddy verifies domain ownership via DNS
+2. **Certificate issuance** — Let's Encrypt issues certificate
+3. **Automatic renewal** — Caddy renews certificates automatically
+
+<Callout type="tip">
+    **DNS provider**: Configure DNS provider credentials in Caddyfile for automatic certificate issuance. Cloudflare, Digital Ocean, and other providers are supported.
+</Callout>
+
+## PM2 ecosystem
+
+PM2 manages application processes:
+
+### Ecosystem configuration
+
+```javascript
+// ecosystem.config.js
+module.exports = {
+  apps: [
+    {
+      name: "frontend",
+      cwd: "/var/www/mastra/apps/frontend",
+      script: "bun",
+      args: "run start",
+      instances: 2,
+      exec_mode: "cluster",
+      env: {
+        NODE_ENV: "production",
+        PORT: 3000
+      },
+      error_file: "/var/log/pm2/frontend-error.log",
+      out_file: "/var/log/pm2/frontend-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      name: "agent",
+      cwd: "/var/www/mastra/apps/agent",
+      script: "bun",
+      args: "run start",
+      instances: 2,
+      exec_mode: "cluster",
+      env: {
+        NODE_ENV: "production",
+        PORT: 3001
+      },
+      error_file: "/var/log/pm2/agent-error.log",
+      out_file: "/var/log/pm2/agent-out.log",
+      log_date_format: "YYYY-MM-DD HH:mm:ss Z"
+    },
+    {
+      name: "inngest",
+      cwd: "/var/www/mastra/apps/inngest",
+      script: "bun",
+      args: "run start",
+      instances: 1,
+      env: {
+        NODE_ENV: "production",
+        PORT: 8288
+      },
+      error_file: "/var/log/pm2/inngest-error.log",
+      out_file: "/var/log/pm2/inngest-out.log"
+    }
+  ]
+}
+```
+
+### Start applications
+
+```bash
+# Start all apps
+pm2 start ecosystem.config.js
+
+# Save PM2 configuration
+pm2 save
+
+# Check status
+pm2 status
+```
+
+### PM2 commands
+
+```bash
+# View logs
+pm2 logs
+pm2 logs frontend
+pm2 logs agent
+
+# Restart apps
+pm2 restart ecosystem.config.js --update-env
+
+# Stop apps
+pm2 stop ecosystem.config.js
+
+# Reload apps (zero-downtime)
+pm2 reload ecosystem.config.js
+
+# Monitor resources
+pm2 monit
+
+# View process info
+pm2 info frontend
+```
+
+## DNS setup
+
+Configure DNS to point domain to server:
+
+### A record
+
+Create an A record:
+
+```
+Type: A
+Name: @ (or agentc2)
+Value: 138.197.150.253
+TTL: 3600
+```
+
+### Verify DNS
+
+```bash
+# Check DNS resolution
+dig agentc2.ai +short
+# Should return: 138.197.150.253
+
+# Test from server
+curl -I https://agentc2.ai
+```
+
+## Deployment procedures
+
+### Automated deployment (CI/CD)
+
+Deployments happen automatically via GitHub Actions on push to `main`:
+
+1. **Test job** — Runs `bun run type-check` and `bun run lint`
+2. **Deploy job** — SSH to server, pull, install, build, restart
+3. **Health check** — Verifies apps are running
+4. **Slack notification** — Posts success/failure to Slack
+
+### Manual deployment
+
+If CI/CD is unavailable:
+
+```bash
+# SSH to server
+ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+
+# Navigate to app directory
+cd /var/www/mastra
+
+# Pull latest changes
+git pull origin main
+
+# Install dependencies
+bun install
+
+# Generate Prisma client
+bun run db:generate
+
+# Push database schema (if changed)
+bun run db:push
+
+# Build applications
+NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
+
+# Restart PM2 processes
+pm2 restart ecosystem.config.js --update-env
+
+# Check status
+pm2 status
+```
+
+### Deployment script
+
+Use the deployment script:
+
+```bash
+./scripts/deploy-do.sh 138.197.150.253 root
+```
+
+## Pre-deploy checklist
+
+Before deploying to production:
+
+- [ ] **Run type check** — `bun run type-check`
+- [ ] **Run linter** — `bun run lint`
+- [ ] **Run formatter** — `bun run format`
+- [ ] **Test build** — `bun run build`
+- [ ] **Review changes** — `git diff main`
+- [ ] **Update database** — Run migrations if schema changed
+- [ ] **Update environment** — Verify `.env` has all required variables
+- [ ] **Test locally** — Verify apps start correctly
+- [ ] **Backup database** — Backup production database before schema changes
+
+## Rollback plan
+
+If deployment fails:
+
+### Automatic rollback
+
+The CI/CD workflow backs up `.next` directories before building:
+
+```bash
+# Restore previous build
+cd /var/www/mastra
+[ -d apps/agent/.next.bak ] && rm -rf apps/agent/.next && mv apps/agent/.next.bak apps/agent/.next
+[ -d apps/frontend/.next.bak ] && rm -rf apps/frontend/.next && mv apps/frontend/.next.bak apps/frontend/.next
+
+# Restart PM2
+pm2 restart ecosystem.config.js --update-env
+```
+
+### Manual rollback
+
+```bash
+# Revert to previous commit
+git reset --hard HEAD~1
+
+# Rebuild
+NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
+
+# Restart
+pm2 restart ecosystem.config.js --update-env
+```
+
+### Database rollback
+
+If database migrations fail:
+
+```bash
+# Restore from backup
+psql $DATABASE_URL < backup.sql
+
+# Or revert migration
+bun run db:migrate:rollback
+```
+
+## Monitoring
+
+### PM2 monitoring
+
+```bash
+# View logs
+pm2 logs --lines 100
+
+# Monitor resources
+pm2 monit
+
+# Check process status
+pm2 status
+```
+
+### System monitoring
+
+```bash
+# Check memory usage
+free -h
+
+# Check disk usage
+df -h
+
+# Check CPU usage
+htop
+
+# Check Caddy status
+systemctl status caddy
+
+# View Caddy logs
+journalctl -u caddy -f
+```
+
+### Application health
+
+```bash
+# Test frontend
+curl -I https://agentc2.ai
+
+# Test agent app
+curl -I https://agentc2.ai/agent
+
+# Test API endpoint
+curl https://agentc2.ai/agent/api/health
+```
+
+## Troubleshooting
+
+### Build failures
+
+```bash
+# Clear build cache
+rm -rf apps/*/node_modules apps/*/.next
+bun install
+bun run build
+```
+
+### PM2 process crashes
+
+```bash
+# Check logs
+pm2 logs --err
+
+# Restart crashed process
+pm2 restart frontend
+
+# Check system resources
+free -h
+df -h
+```
+
+### Caddy SSL issues
+
+```bash
+# Check Caddy logs
+journalctl -u caddy -f
+
+# Validate Caddyfile
+caddy validate --config /etc/caddy/Caddyfile
+
+# Reload Caddy
+systemctl reload caddy
+```
+
+### Database connection issues
+
+```bash
+# Test database connection
+psql $DATABASE_URL -c "SELECT 1"
+
+# Check Prisma client
+bun run db:generate
+```
+
+## Best practices
+
+1. **Always test locally** — Verify builds work before deploying
+2. **Use CI/CD** — Automate deployments for consistency
+3. **Monitor deployments** — Watch PM2 logs during deployment
+4. **Backup before changes** — Backup database before migrations
+5. **Rollback quickly** — Have rollback plan ready
+6. **Monitor resources** — Track memory, CPU, disk usage
+7. **Update dependencies** — Keep Bun, Node, PM2 updated
+
+## Related topics
+
+- **[Authentication](/docs/platform/authentication)** — Production auth configuration
+- **[Security](/docs/platform/security)** — Security headers and SSL setup
+- **[Architecture](/docs/getting-started/architecture)** — System architecture overview

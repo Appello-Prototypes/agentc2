@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface TriageTicket {
@@ -24,6 +24,16 @@ interface AdminUser {
     email: string;
 }
 
+interface PipelineRepository {
+    id: string;
+    url: string;
+    name: string;
+    owner: string;
+    isDefault: boolean;
+}
+
+const MANUAL_REPO_OPTION = "__manual__";
+
 export function TicketTriagePanel({
     ticket,
     adminUsers
@@ -37,9 +47,55 @@ export function TicketTriagePanel({
     const [priority, setPriority] = useState(ticket.priority);
     const [assignedToId, setAssignedToId] = useState(ticket.assignedToId ?? "");
     const [showPipelineModal, setShowPipelineModal] = useState(false);
-    const [pipelineRepo, setPipelineRepo] = useState("");
+    const [pipelineRepoSelection, setPipelineRepoSelection] = useState("");
+    const [manualPipelineRepo, setManualPipelineRepo] = useState("");
+    const [pipelineRepos, setPipelineRepos] = useState<PipelineRepository[]>([]);
+    const [pipelineReposLoading, setPipelineReposLoading] = useState(false);
+    const [pipelineReposError, setPipelineReposError] = useState("");
     const [pipelineDispatching, setPipelineDispatching] = useState(false);
     const [pipelineRunId, setPipelineRunId] = useState(ticket.pipelineRunId ?? null);
+
+    useEffect(() => {
+        if (!showPipelineModal) return;
+
+        const loadRepos = async () => {
+            setPipelineReposLoading(true);
+            setPipelineReposError("");
+            try {
+                const response = await fetch("/admin/api/settings/repos", {
+                    credentials: "include"
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.error || "Failed to load repositories");
+                }
+
+                const repositories = (data.repositories ?? []) as PipelineRepository[];
+                setPipelineRepos(repositories);
+                const defaultRepo = repositories.find((repo) => repo.isDefault);
+                if (defaultRepo) {
+                    setPipelineRepoSelection(defaultRepo.id);
+                } else {
+                    setPipelineRepoSelection(MANUAL_REPO_OPTION);
+                }
+            } catch (error) {
+                setPipelineRepos([]);
+                setPipelineRepoSelection(MANUAL_REPO_OPTION);
+                setPipelineReposError(
+                    error instanceof Error ? error.message : "Failed to load repositories"
+                );
+            } finally {
+                setPipelineReposLoading(false);
+            }
+        };
+
+        void loadRepos();
+    }, [showPipelineModal]);
+
+    const selectedRepoUrl =
+        pipelineRepoSelection === MANUAL_REPO_OPTION
+            ? manualPipelineRepo.trim()
+            : pipelineRepos.find((repo) => repo.id === pipelineRepoSelection)?.url || "";
 
     async function handleUpdate(updates: Record<string, unknown>) {
         setSaving(true);
@@ -73,7 +129,7 @@ export function TicketTriagePanel({
     }
 
     async function handleDispatchPipeline() {
-        if (!pipelineRepo.trim()) return;
+        if (!selectedRepoUrl) return;
         setPipelineDispatching(true);
         try {
             const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
@@ -84,7 +140,7 @@ export function TicketTriagePanel({
                 body: JSON.stringify({
                     sourceType: "support_ticket",
                     sourceId: ticket.id,
-                    repository: pipelineRepo.trim(),
+                    repository: selectedRepoUrl,
                     variant: "standard"
                 })
             });
@@ -92,6 +148,7 @@ export function TicketTriagePanel({
             if (data.success && data.pipelineRunId) {
                 setPipelineRunId(data.pipelineRunId);
                 setShowPipelineModal(false);
+                setManualPipelineRepo("");
                 setStatus("IN_PROGRESS");
                 router.refresh();
             }
@@ -234,23 +291,56 @@ export function TicketTriagePanel({
                                     <label className="text-muted-foreground block text-xs font-medium">
                                         Target Repository
                                     </label>
-                                    <input
-                                        type="text"
-                                        value={pipelineRepo}
-                                        onChange={(e) => setPipelineRepo(e.target.value)}
-                                        placeholder="https://github.com/org/repo"
-                                        className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
-                                    />
+                                    {pipelineReposLoading ? (
+                                        <div className="text-muted-foreground rounded-md bg-gray-500/10 px-3 py-2 text-sm">
+                                            Loading repositories...
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <select
+                                                value={pipelineRepoSelection}
+                                                onChange={(e) =>
+                                                    setPipelineRepoSelection(e.target.value)
+                                                }
+                                                className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                            >
+                                                {pipelineRepos.map((repo) => (
+                                                    <option key={repo.id} value={repo.id}>
+                                                        {repo.owner}/{repo.name}
+                                                        {repo.isDefault ? " (Default)" : ""}
+                                                    </option>
+                                                ))}
+                                                <option value={MANUAL_REPO_OPTION}>Other...</option>
+                                            </select>
+                                            {pipelineRepoSelection === MANUAL_REPO_OPTION && (
+                                                <input
+                                                    type="text"
+                                                    value={manualPipelineRepo}
+                                                    onChange={(e) =>
+                                                        setManualPipelineRepo(e.target.value)
+                                                    }
+                                                    placeholder="https://github.com/org/repo"
+                                                    className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                                />
+                                            )}
+                                        </>
+                                    )}
+                                    {pipelineReposError && (
+                                        <p className="text-xs text-red-500">{pipelineReposError}</p>
+                                    )}
                                     <div className="flex gap-2">
                                         <button
                                             onClick={handleDispatchPipeline}
-                                            disabled={pipelineDispatching || !pipelineRepo.trim()}
+                                            disabled={pipelineDispatching || !selectedRepoUrl}
                                             className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
                                         >
                                             {pipelineDispatching ? "Dispatching..." : "Dispatch"}
                                         </button>
                                         <button
-                                            onClick={() => setShowPipelineModal(false)}
+                                            onClick={() => {
+                                                setShowPipelineModal(false);
+                                                setManualPipelineRepo("");
+                                            }}
                                             className="rounded-md bg-gray-500/10 px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-500/20"
                                         >
                                             Cancel

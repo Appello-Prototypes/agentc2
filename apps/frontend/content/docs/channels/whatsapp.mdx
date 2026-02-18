@@ -1,0 +1,316 @@
+---
+title: "WhatsApp"
+description: "WhatsApp Business API integration: template requirements, delivery constraints, setup guide, and conversation state management."
+section: "channels"
+order: 3
+primaryKeyword: "WhatsApp integration"
+relatedSlugs: ["channels/overview", "channels/slack", "channels/telegram"]
+secondaryKeywords:
+    ["WhatsApp Business API", "WhatsApp webhook", "WhatsApp templates", "WhatsApp messages"]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# WhatsApp
+
+AgentC2 integrates with WhatsApp Business API to enable AI agents in WhatsApp conversations. Users can send messages, media, and interact with agents directly from WhatsApp.
+
+## Prerequisites
+
+Before setting up WhatsApp integration, ensure you have:
+
+- A WhatsApp Business Account (WABA)
+- A Meta Business account
+- A verified phone number for your business
+- An AgentC2 account with at least one agent created
+- A public URL for webhooks (use ngrok for local development)
+
+## WhatsApp Business API setup
+
+### Step 1: Create Meta Business Account
+
+1. **Navigate to Meta Business**: Go to https://business.facebook.com
+2. **Create Business**: Click "Create Account" and follow the setup wizard
+3. **Verify Business**: Complete business verification (required for production)
+
+### Step 2: Create WhatsApp Business Account
+
+1. **Navigate to WhatsApp Manager**: Go to https://business.facebook.com/wa/manage
+2. **Create WABA**: Click "Create Account" and follow the setup wizard
+3. **Add Phone Number**: Add and verify your business phone number
+4. **Get Phone Number ID**: Note your Phone Number ID (used in API calls)
+
+### Step 3: Get API Credentials
+
+1. **Navigate to System Users**: Go to Meta Business Settings > System Users
+2. **Create System User**: Create a system user with WhatsApp permissions
+3. **Generate Token**: Generate a permanent access token with `whatsapp_business_messaging` permission
+4. **Get App Secret**: Note your App Secret from App Settings
+
+## Step 4: Configure Environment Variables
+
+Add WhatsApp credentials to your `.env` file:
+
+```bash
+# WhatsApp Business API
+WHATSAPP_API_KEY="your-permanent-access-token"
+WHATSAPP_PHONE_NUMBER_ID="123456789012345"
+WHATSAPP_APP_SECRET="your-app-secret"
+WHATSAPP_VERIFY_TOKEN="your-verify-token"  # For webhook verification
+
+# Default agent for WhatsApp (optional)
+WHATSAPP_DEFAULT_AGENT_SLUG="support"
+```
+
+## Step 5: Configure Webhook
+
+1. **Navigate to WhatsApp Manager**: Go to https://business.facebook.com/wa/manage
+2. **Configure Webhook**: Go to Configuration > Webhooks
+3. **Set Callback URL**: Enter your webhook URL:
+    ```
+    https://your-domain.com/agent/api/whatsapp/webhook
+    ```
+    For local development with ngrok:
+    ```
+    https://your-subdomain.ngrok-free.dev/agent/api/whatsapp/webhook
+    ```
+4. **Set Verify Token**: Enter the same token as `WHATSAPP_VERIFY_TOKEN`
+5. **Subscribe to Fields**: Subscribe to:
+    - `messages` — Incoming messages
+    - `message_status` — Delivery receipts
+6. **Verify Webhook**: Click "Verify and Save"
+
+## Template requirements
+
+WhatsApp requires message templates for outbound messages (except within the 24-hour customer service window).
+
+### Creating templates
+
+1. **Navigate to Message Templates**: Go to WhatsApp Manager > Message Templates
+2. **Create Template**: Click "Create Template"
+3. **Configure Template**:
+    - **Name**: Template name (e.g., "welcome_message")
+    - **Category**: `UTILITY` or `MARKETING`
+    - **Language**: Select language (e.g., "English")
+    - **Content**: Template text with variables
+
+### Template example
+
+```
+Template Name: welcome_message
+Category: UTILITY
+Language: English
+
+Content:
+Hello {{1}}! Welcome to AgentC2. How can I help you today?
+```
+
+### Using templates
+
+Send templated messages via API:
+
+```bash
+curl -X POST https://graph.facebook.com/v18.0/{phone-number-id}/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messaging_product": "whatsapp",
+    "to": "1234567890",
+    "type": "template",
+    "template": {
+      "name": "welcome_message",
+      "language": { "code": "en" },
+      "components": [
+        {
+          "type": "body",
+          "parameters": [
+            {"type": "text", "text": "John"}
+          ]
+        }
+      ]
+    }
+  }'
+```
+
+## Delivery constraints
+
+WhatsApp has strict delivery constraints:
+
+### 24-hour window
+
+- **Free messages**: Can send free-form messages within 24 hours of customer's last message
+- **Outside window**: Must use approved message templates
+- **Template approval**: Templates require Meta approval (can take hours to days)
+
+### Message types
+
+| Type            | When to Use            | Requirements                  |
+| --------------- | ---------------------- | ----------------------------- |
+| **Text**        | Within 24-hour window  | No template needed            |
+| **Template**    | Outside 24-hour window | Pre-approved template         |
+| **Media**       | Within 24-hour window  | Image, video, document, audio |
+| **Interactive** | Within 24-hour window  | Buttons, lists                |
+
+<Callout type="warning">
+    Always respond to customer messages within 24 hours to maintain the free messaging window.
+    Outside this window, you must use approved templates.
+</Callout>
+
+## Conversation state
+
+WhatsApp conversations maintain state per phone number:
+
+- **24-hour window**: Free messaging window starts when customer sends a message
+- **Template window**: After 24 hours, must use templates
+- **Session persistence**: Conversation context maintained per phone number
+- **Memory**: Agent memory persists across messages within the window
+
+### Managing conversation state
+
+```bash
+# Check if customer is within 24-hour window
+curl https://agentc2.ai/agent/api/whatsapp/conversations/{phone-number} \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response:
+{
+  "phoneNumber": "1234567890",
+  "lastMessageAt": "2026-02-18T10:00:00.000Z",
+  "within24HourWindow": true,
+  "canSendFreeMessage": true
+}
+```
+
+## Agent routing
+
+WhatsApp supports routing to different agents using the `agent:` prefix:
+
+### Basic routing
+
+```
+agent:research What are the latest AI developments?
+```
+
+The message is routed to the `research` agent instead of the default agent.
+
+### Default agent
+
+If no `agent:` prefix is provided, the default agent (configured via `WHATSAPP_DEFAULT_AGENT_SLUG`) handles the request:
+
+```
+What time is it?
+```
+
+Routes to the default agent.
+
+## Media support
+
+WhatsApp supports rich media:
+
+- **Images**: JPEG, PNG, GIF
+- **Videos**: MP4, 3GP
+- **Audio**: AAC, AMR, MP3, OGG
+- **Documents**: PDF, DOC, DOCX, XLS, XLSX, PPT, PPTX
+
+### Sending media
+
+```bash
+curl -X POST https://graph.facebook.com/v18.0/{phone-number-id}/messages \
+  -H "Authorization: Bearer $WHATSAPP_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messaging_product": "whatsapp",
+    "to": "1234567890",
+    "type": "image",
+    "image": {
+      "link": "https://example.com/image.jpg"
+    }
+  }'
+```
+
+## Webhook endpoint
+
+The WhatsApp webhook endpoint is:
+
+```
+POST /agent/api/whatsapp/webhook
+```
+
+### Webhook payload
+
+WhatsApp sends webhook events:
+
+```json
+{
+    "object": "whatsapp_business_account",
+    "entry": [
+        {
+            "id": "entry-id",
+            "changes": [
+                {
+                    "value": {
+                        "messaging_product": "whatsapp",
+                        "metadata": {
+                            "display_phone_number": "1234567890",
+                            "phone_number_id": "phone-number-id"
+                        },
+                        "contacts": [
+                            {
+                                "profile": { "name": "John Doe" },
+                                "wa_id": "1234567890"
+                            }
+                        ],
+                        "messages": [
+                            {
+                                "from": "1234567890",
+                                "id": "message-id",
+                                "timestamp": "1234567890",
+                                "text": { "body": "Hello" },
+                                "type": "text"
+                            }
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}
+```
+
+## Error handling
+
+Common WhatsApp API errors:
+
+| Error Code | Description                    | Solution                   |
+| ---------- | ------------------------------ | -------------------------- |
+| `100`      | Invalid parameter              | Check request parameters   |
+| `131047`   | Message outside 24-hour window | Use approved template      |
+| `131026`   | Template not approved          | Wait for template approval |
+| `131031`   | Rate limit exceeded            | Wait before retrying       |
+
+## Troubleshooting
+
+### Webhook not receiving messages
+
+1. **Verify webhook URL**: Check webhook URL in WhatsApp Manager matches your endpoint
+2. **Check verify token**: Ensure `WHATSAPP_VERIFY_TOKEN` matches webhook configuration
+3. **Review subscriptions**: Verify `messages` field is subscribed
+
+### Messages not sending
+
+1. **Check 24-hour window**: Verify customer is within the free messaging window
+2. **Verify template**: If outside window, ensure template is approved
+3. **Review API key**: Verify `WHATSAPP_API_KEY` is valid and has permissions
+
+### Template approval delays
+
+1. **Review template content**: Ensure template follows WhatsApp guidelines
+2. **Check category**: Use `UTILITY` for customer service, `MARKETING` for promotions
+3. **Wait for approval**: Template approval can take hours to days
+
+## Next steps
+
+- **[Channels Overview](/docs/channels/overview)** — Learn about other supported channels
+- **[Slack Integration](/docs/channels/slack)** — Set up Slack integration
+- **[Telegram Integration](/docs/channels/telegram)** — Configure Telegram bot

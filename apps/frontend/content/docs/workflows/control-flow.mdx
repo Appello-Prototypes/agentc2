@@ -1,0 +1,498 @@
+---
+title: "Control Flow"
+description: "Control workflow execution with sequential steps, branching logic, parallel execution, loops, retries, and error handling."
+section: "workflows"
+order: 4
+primaryKeyword: "workflow control flow"
+secondaryKeywords:
+    ["sequential execution", "branching", "parallel execution", "looping", "retry logic"]
+relatedSlugs: ["workflows/overview", "workflows/step-types", "workflows/creating-workflows"]
+pageType: "reference"
+---
+
+# Control Flow
+
+Workflows support multiple control flow patterns: sequential execution, branching, parallel execution, looping, retries, and error handling. Understanding these patterns enables you to build complex, production-ready automation.
+
+## Sequential execution
+
+Steps execute in the order defined in the `steps` array. Each step receives output from the previous step.
+
+### Example
+
+```json
+{
+    "steps": [
+        {
+            "id": "fetch",
+            "type": "tool",
+            "config": { "toolId": "fetch-data" }
+        },
+        {
+            "id": "transform",
+            "type": "transform",
+            "config": {
+                "transform": "{{fetch.output | map: { ... } }}"
+            }
+        },
+        {
+            "id": "save",
+            "type": "tool",
+            "config": {
+                "toolId": "save-data",
+                "inputMapping": {
+                    "data": "{{transform.output}}"
+                }
+            }
+        }
+    ]
+}
+```
+
+**Execution flow:**
+
+1. `fetch` executes → produces output
+2. `transform` executes with `fetch.output` → produces output
+3. `save` executes with `transform.output` → completes workflow
+
+### Input passing
+
+Steps pass data via template expressions:
+
+- `{{input.fieldName}}` — Workflow input
+- `{{stepId.output}}` — Previous step output
+- `{{stepId.output.fieldName}}` — Nested field access
+
+## Branching
+
+Use `branch` step type for conditional logic (if/else).
+
+### Simple branch
+
+```json
+{
+    "id": "route",
+    "type": "branch",
+    "config": {
+        "condition": "{{analyze.output.priority}}",
+        "branches": [
+            {
+                "condition": "high",
+                "steps": [
+                    {
+                        "id": "escalate",
+                        "type": "tool",
+                        "config": { "toolId": "escalate-ticket" }
+                    }
+                ]
+            },
+            {
+                "condition": "default",
+                "steps": [
+                    {
+                        "id": "assign",
+                        "type": "agent",
+                        "config": { "agentSlug": "support-agent" }
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+**Execution flow:**
+
+1. Condition evaluates: `{{analyze.output.priority}}`
+2. If `"high"` → execute `escalate` step
+3. Otherwise → execute `assign` step
+4. Branch output becomes workflow output
+
+### Complex conditions
+
+Conditions are evaluated as JavaScript expressions:
+
+```json
+{
+    "condition": "{{analyze.output.priority}} === 'high' && {{input.urgent}} === true"
+}
+```
+
+Supported operators:
+
+- `===`, `!==`, `==`, `!=` — Equality
+- `>`, `<`, `>=`, `<=` — Comparison
+- `&&`, `||` — Logical
+- `!` — Negation
+
+### Multiple branches
+
+```json
+{
+  "branches": [
+    {
+      "condition": "high",
+      "steps": [...]
+    },
+    {
+      "condition": "medium",
+      "steps": [...]
+    },
+    {
+      "condition": "low",
+      "steps": [...]
+    },
+    {
+      "condition": "default",
+      "steps": [...]
+    }
+  ]
+}
+```
+
+Branches are evaluated in order. First matching condition executes. `default` branch executes if no conditions match.
+
+## Parallel execution
+
+Use `parallel` step type to execute multiple branches concurrently.
+
+### Basic parallel
+
+```json
+{
+    "id": "parallel-fetch",
+    "type": "parallel",
+    "config": {
+        "branches": [
+            {
+                "steps": [
+                    {
+                        "id": "fetch1",
+                        "type": "tool",
+                        "config": {
+                            "toolId": "fetch-api-1",
+                            "inputMapping": { "url": "{{input.url1}}" }
+                        }
+                    }
+                ]
+            },
+            {
+                "steps": [
+                    {
+                        "id": "fetch2",
+                        "type": "tool",
+                        "config": {
+                            "toolId": "fetch-api-2",
+                            "inputMapping": { "url": "{{input.url2}}" }
+                        }
+                    }
+                ]
+            }
+        ]
+    }
+}
+```
+
+**Execution flow:**
+
+1. Both `fetch1` and `fetch2` execute simultaneously
+2. Workflow waits for both to complete
+3. Output combines both branch outputs
+
+### Parallel output
+
+Parallel step output structure:
+
+```json
+{
+    "output": {
+        "branch0": {
+            "output": "fetch1 result"
+        },
+        "branch1": {
+            "output": "fetch2 result"
+        }
+    }
+}
+```
+
+Access branch outputs:
+
+- `{{parallel-fetch.output.branch0.output}}` — First branch
+- `{{parallel-fetch.output.branch1.output}}` — Second branch
+
+### Error handling in parallel
+
+If any branch fails, the parallel step fails. Use error handling (see [Error Handling](#error-handling)) to recover.
+
+## Looping
+
+Use `foreach` step type to loop over arrays.
+
+### Basic loop
+
+```json
+{
+    "id": "process-items",
+    "type": "foreach",
+    "config": {
+        "items": "{{fetch.output.result.items}}",
+        "itemVariable": "item",
+        "steps": [
+            {
+                "id": "transform",
+                "type": "transform",
+                "config": {
+                    "transform": "{{item | map: { id: .id, name: .name | upper } }}"
+                }
+            },
+            {
+                "id": "save",
+                "type": "tool",
+                "config": {
+                    "toolId": "save-item",
+                    "inputMapping": {
+                        "data": "{{transform.output}}"
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+**Execution flow:**
+
+1. `items` expression evaluates to array: `[{id: 1}, {id: 2}, {id: 3}]`
+2. For each item:
+    - `transform` executes with `item` variable
+    - `save` executes with `transform.output`
+3. Loop completes when all items processed
+
+### Loop output
+
+Foreach step output is an array:
+
+```json
+{
+    "output": [
+        { "output": "result for item 1" },
+        { "output": "result for item 2" },
+        { "output": "result for item 3" }
+    ]
+}
+```
+
+### Nested loops
+
+Loops can be nested:
+
+```json
+{
+    "steps": [
+        {
+            "id": "outer-loop",
+            "type": "foreach",
+            "config": {
+                "items": "{{input.categories}}",
+                "itemVariable": "category",
+                "steps": [
+                    {
+                        "id": "inner-loop",
+                        "type": "foreach",
+                        "config": {
+                            "items": "{{category.items}}",
+                            "itemVariable": "item",
+                            "steps": [
+                                {
+                                    "id": "process",
+                                    "type": "tool",
+                                    "config": { "toolId": "process-item" }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        }
+    ]
+}
+```
+
+## Retry behavior
+
+Configure retry policies at workflow or step level.
+
+### Workflow-level retry
+
+```json
+{
+    "retryConfig": {
+        "maxRetries": 3,
+        "backoff": "exponential",
+        "initialDelay": 1000
+    }
+}
+```
+
+**Retry config fields:**
+
+| Field          | Type   | Description                                              |
+| -------------- | ------ | -------------------------------------------------------- |
+| `maxRetries`   | number | Maximum retry attempts (default: 0)                      |
+| `backoff`      | string | `"exponential"` or `"linear"` (default: `"exponential"`) |
+| `initialDelay` | number | Initial delay in milliseconds (default: 1000)            |
+
+### Step-level retry
+
+```json
+{
+    "id": "fetch",
+    "type": "tool",
+    "config": {
+        "toolId": "fetch-api",
+        "retry": {
+            "maxRetries": 5,
+            "backoff": "exponential",
+            "initialDelay": 2000
+        }
+    }
+}
+```
+
+### Retry backoff
+
+- **Exponential**: `delay = initialDelay * 2^attempt` (1s, 2s, 4s, 8s...)
+- **Linear**: `delay = initialDelay * attempt` (1s, 2s, 3s, 4s...)
+
+## Error handling
+
+Workflows handle errors at multiple levels.
+
+### Step failure
+
+If a step fails:
+
+1. **Retry** — If retry config exists, retry the step
+2. **Workflow failure** — If retries exhausted, workflow fails
+3. **Error output** — Error details available in workflow output
+
+### Error output
+
+Failed workflow output:
+
+```json
+{
+    "success": false,
+    "error": "Step 'fetch' failed: Tool execution error",
+    "failedStep": "fetch",
+    "errorDetails": {
+        "message": "Tool execution error",
+        "code": "TOOL_ERROR",
+        "stepId": "fetch"
+    }
+}
+```
+
+### Error recovery
+
+Use branching to handle errors:
+
+```json
+{
+    "steps": [
+        {
+            "id": "fetch",
+            "type": "tool",
+            "config": { "toolId": "fetch-api" }
+        },
+        {
+            "id": "handle-error",
+            "type": "branch",
+            "config": {
+                "condition": "{{fetch.output.success}} === false",
+                "branches": [
+                    {
+                        "condition": true,
+                        "steps": [
+                            {
+                                "id": "fallback",
+                                "type": "tool",
+                                "config": { "toolId": "fetch-fallback" }
+                            }
+                        ]
+                    },
+                    {
+                        "condition": "default",
+                        "steps": [
+                            {
+                                "id": "process",
+                                "type": "tool",
+                                "config": { "toolId": "process-data" }
+                            }
+                        ]
+                    }
+                ]
+            }
+        }
+    ]
+}
+```
+
+## Dead-end prevention
+
+The workflow engine prevents dead-ends:
+
+1. **Validation** — Workflow definition validated before execution
+2. **Step connectivity** — All steps must be reachable from start
+3. **Output requirements** — Steps requiring input must have valid sources
+
+<Callout type="warning">
+    Circular dependencies are detected and rejected. Steps cannot reference their own output or
+    create cycles.
+</Callout>
+
+## Timeout handling
+
+Configure timeouts at workflow or step level.
+
+### Workflow timeout
+
+```json
+{
+    "timeout": 300
+}
+```
+
+Workflow fails if execution exceeds timeout (seconds).
+
+### Step timeout
+
+```json
+{
+    "id": "fetch",
+    "type": "tool",
+    "config": {
+        "toolId": "fetch-api",
+        "timeout": 60
+    }
+}
+```
+
+Step fails if execution exceeds timeout (seconds).
+
+## Best practices
+
+1. **Use branching for conditional logic** — Avoid nested if/else in transform steps
+2. **Use parallel for independent operations** — Speed up workflows with concurrent execution
+3. **Use loops for array processing** — Iterate over data systematically
+4. **Configure retries for external calls** — Handle transient failures
+5. **Set timeouts** — Prevent workflows from hanging indefinitely
+6. **Handle errors gracefully** — Use branching for error recovery
+
+## Next steps
+
+- **[Step Types](/docs/workflows/step-types)** — Learn about available step types
+- **[Creating Workflows](/docs/workflows/creating-workflows)** — Build workflows with control flow
+- **[Human in the Loop](/docs/workflows/human-in-the-loop)** — Add approval gates and suspend/resume
+- **[Workflows API Reference](/docs/workflows/api-reference)** — Complete API documentation

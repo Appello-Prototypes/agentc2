@@ -1,0 +1,420 @@
+---
+title: "Campaign Templates"
+description: "Create reusable campaign templates with parameterization, scheduling, and governance. Reuse campaign definitions across multiple executions."
+section: "campaigns"
+order: 3
+primaryKeyword: "campaign templates"
+relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
+secondaryKeywords: ["campaign templates", "reusable campaigns", "campaign parameterization", "campaign scheduling", "campaign governance"]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Campaign Templates
+
+Campaign templates enable you to create reusable campaign definitions with parameterization, scheduling, and governance. Templates can be instantiated multiple times with different parameter values, scheduled for recurring execution, or triggered by events.
+
+## What are campaign templates?
+
+A campaign template is a reusable campaign definition with parameterized fields. Templates define the structure (intent, end state, constraints, restraints) while allowing parameter values to be provided at instantiation time.
+
+Templates support:
+- **Parameterization**: Use `{{parameterName}}` placeholders in intent/end state
+- **Reuse**: Instantiate the same template multiple times
+- **Scheduling**: Schedule recurring campaigns via cron
+- **Event triggers**: Trigger campaigns via webhooks or events
+- **Governance**: Centralized management of campaign definitions
+
+## CampaignTemplate model
+
+Templates are stored in the `CampaignTemplate` table:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Unique template ID |
+| `slug` | string | URL-safe identifier |
+| `name` | string | Display name |
+| `description` | text | Human-readable description |
+| `category` | string | Template category (`"sales"`, `"operations"`, `"safety"`, etc.) |
+| `intentTemplate` | text | Intent template with `{{parameter}}` placeholders |
+| `endStateTemplate` | text | End state template with placeholders |
+| `constraints` | string[] | Must-do requirements |
+| `restraints` | string[] | Must-not-do requirements |
+| `parameters` | JSON | Parameter definitions |
+| `requireApproval` | boolean | Require approval before execution |
+| `maxCostUsd` | number | Budget ceiling |
+| `timeoutMinutes` | number | Maximum execution time |
+| `isSystem` | boolean | System-provided template |
+| `isActive` | boolean | Whether template is active |
+
+## Creating templates
+
+Create a template via API:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/templates \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Customer Onboarding Campaign",
+    "slug": "customer-onboarding",
+    "description": "Onboard new customers with personalized welcome and setup",
+    "category": "sales",
+    "intentTemplate": "Onboard {{customerName}} with personalized welcome, account setup, and initial training to achieve {{targetMetric}} within {{targetDate}}",
+    "endStateTemplate": "{{customerName}} has completed onboarding, with {{targetMetric}} achieved and satisfaction score above {{satisfactionThreshold}}",
+    "constraints": [
+      "Must maintain data privacy",
+      "Must comply with onboarding SLA"
+    ],
+    "restraints": [
+      "Cannot exceed {{maxBudget}} budget",
+      "Cannot skip required steps"
+    ],
+    "parameters": {
+      "customerName": {
+        "type": "string",
+        "required": true,
+        "description": "Name of the customer"
+      },
+      "targetMetric": {
+        "type": "string",
+        "required": true,
+        "description": "Target metric to achieve"
+      },
+      "targetDate": {
+        "type": "string",
+        "required": true,
+        "description": "Target completion date (ISO 8601)"
+      },
+      "satisfactionThreshold": {
+        "type": "number",
+        "required": false,
+        "default": 4.5,
+        "description": "Minimum satisfaction score"
+      },
+      "maxBudget": {
+        "type": "number",
+        "required": false,
+        "default": 5000,
+        "description": "Maximum budget in USD"
+      }
+    },
+    "requireApproval": false,
+    "maxCostUsd": 5000,
+    "timeoutMinutes": 1440
+  }'
+```
+
+### Request fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `name` | string | ✅ Yes | Display name |
+| `slug` | string | ❌ No | URL-safe identifier (auto-generated if omitted) |
+| `description` | string | ❌ No | Human-readable description |
+| `category` | string | ❌ No | Template category |
+| `intentTemplate` | string | ✅ Yes | Intent template with `{{parameter}}` placeholders |
+| `endStateTemplate` | string | ✅ Yes | End state template with placeholders |
+| `constraints` | string[] | ❌ No | Must-do requirements |
+| `restraints` | string[] | ❌ No | Must-not-do requirements |
+| `parameters` | object | ❌ No | Parameter definitions |
+| `requireApproval` | boolean | ❌ No | Require approval (default: `false`) |
+| `maxCostUsd` | number | ❌ No | Budget ceiling |
+| `timeoutMinutes` | number | ❌ No | Maximum execution time |
+
+### Parameter definitions
+
+Parameters define the template's input schema:
+
+```json
+{
+  "parameters": {
+    "parameterName": {
+      "type": "string" | "number" | "boolean" | "date",
+      "required": true | false,
+      "default": "default value",
+      "description": "Parameter description"
+    }
+  }
+}
+```
+
+## Parameterization
+
+Templates use `{{parameterName}}` placeholders that are replaced at instantiation:
+
+### Intent template
+
+```json
+{
+  "intentTemplate": "Onboard {{customerName}} with personalized welcome, account setup, and initial training to achieve {{targetMetric}} within {{targetDate}}"
+}
+```
+
+### End state template
+
+```json
+{
+  "endStateTemplate": "{{customerName}} has completed onboarding, with {{targetMetric}} achieved and satisfaction score above {{satisfactionThreshold}}"
+}
+```
+
+### Constraints/restraints
+
+```json
+{
+  "restraints": [
+    "Cannot exceed {{maxBudget}} budget"
+  ]
+}
+```
+
+## Instantiating templates
+
+Create campaigns from templates:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "template_abc123",
+    "parameterValues": {
+      "customerName": "Acme Corp",
+      "targetMetric": "first successful API call",
+      "targetDate": "2026-06-30",
+      "satisfactionThreshold": 4.5,
+      "maxBudget": 5000
+    }
+  }'
+```
+
+### Parameter interpolation
+
+Parameter values are interpolated into templates:
+
+**Before interpolation**:
+```
+"Onboard {{customerName}} with personalized welcome..."
+```
+
+**After interpolation**:
+```
+"Onboard Acme Corp with personalized welcome..."
+```
+
+## Reuse
+
+Templates enable campaign reuse:
+
+### Multiple instantiations
+
+```bash
+# Campaign 1: Acme Corp
+curl -X POST https://agentc2.ai/agent/api/campaigns \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "customer-onboarding",
+    "parameterValues": {
+      "customerName": "Acme Corp",
+      "targetMetric": "first API call",
+      "targetDate": "2026-06-30"
+    }
+  }'
+
+# Campaign 2: Beta Inc
+curl -X POST https://agentc2.ai/agent/api/campaigns \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "templateId": "customer-onboarding",
+    "parameterValues": {
+      "customerName": "Beta Inc",
+      "targetMetric": "first API call",
+      "targetDate": "2026-07-15"
+    }
+  }'
+```
+
+## Scheduling
+
+Schedule recurring campaigns via cron:
+
+### Create schedule
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/templates/{templateId}/schedules \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Monthly Customer Onboarding",
+    "cronExpr": "0 0 1 * *",
+    "timezone": "America/New_York",
+    "inputJson": {
+      "parameterValues": {
+        "targetMetric": "first API call",
+        "satisfactionThreshold": 4.5
+      }
+    },
+    "isActive": true
+  }'
+```
+
+### Cron expression format
+
+```
+┌───────────── minute (0 - 59)
+│ ┌───────────── hour (0 - 23)
+│ │ ┌───────────── day of month (1 - 31)
+│ │ │ ┌───────────── month (1 - 12)
+│ │ │ │ ┌───────────── day of week (0 - 6) (Sunday to Saturday)
+│ │ │ │ │
+* * * * *
+```
+
+**Examples**:
+- `0 0 1 * *` — First day of every month at midnight
+- `0 9 * * 1` — Every Monday at 9 AM
+- `0 */6 * * *` — Every 6 hours
+
+### Schedule management
+
+```bash
+# List schedules
+curl https://agentc2.ai/agent/api/campaigns/templates/{templateId}/schedules \
+  -H "Authorization: Bearer $TOKEN"
+
+# Update schedule
+curl -X PUT https://agentc2.ai/agent/api/campaigns/templates/{templateId}/schedules/{scheduleId} \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isActive": false
+  }'
+
+# Delete schedule
+curl -X DELETE https://agentc2.ai/agent/api/campaigns/templates/{templateId}/schedules/{scheduleId} \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## Event triggers
+
+Trigger campaigns via webhooks or events:
+
+### Create trigger
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/templates/{templateId}/triggers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "New Customer Webhook",
+    "triggerType": "webhook",
+    "webhookPath": "customer-onboarding",
+    "webhookSecret": "secret_abc123",
+    "inputMapping": {
+      "customerName": "payload.customer.name",
+      "targetMetric": "payload.customer.targetMetric"
+    },
+    "filterJson": {
+      "customer.tier": "enterprise"
+    },
+    "isActive": true
+  }'
+```
+
+### Webhook endpoint
+
+When webhook is called, campaign is instantiated:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/webhooks/customer-onboarding \
+  -H "X-Webhook-Secret: secret_abc123" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "customer": {
+      "name": "Acme Corp",
+      "targetMetric": "first API call",
+      "tier": "enterprise"
+    }
+  }'
+```
+
+## Governance
+
+Templates enable centralized governance:
+
+### Template management
+
+- **Centralized definitions**: All campaign logic in templates
+- **Version control**: Track template changes over time
+- **Access control**: Control who can create/modify templates
+- **Audit trail**: Track template usage and instantiations
+
+### Template categories
+
+Organize templates by category:
+
+- `"sales"` — Sales and customer acquisition
+- `"operations"` — Operational efficiency
+- `"safety"` — Safety and compliance
+- `"support"` — Customer support
+- `"marketing"` — Marketing campaigns
+
+## Best practices
+
+### 1. Parameterize everything
+
+Make templates flexible with parameters:
+
+```json
+{
+  "intentTemplate": "{{action}} {{target}} to achieve {{goal}} by {{deadline}}",
+  "parameters": {
+    "action": {"type": "string", "required": true},
+    "target": {"type": "string", "required": true},
+    "goal": {"type": "string", "required": true},
+    "deadline": {"type": "date", "required": true}
+  }
+}
+```
+
+### 2. Provide defaults
+
+Include default values for optional parameters:
+
+```json
+{
+  "parameters": {
+    "satisfactionThreshold": {
+      "type": "number",
+      "required": false,
+      "default": 4.5
+    }
+  }
+}
+```
+
+### 3. Document parameters
+
+Add descriptions for all parameters:
+
+```json
+{
+  "parameters": {
+    "customerName": {
+      "type": "string",
+      "required": true,
+      "description": "Name of the customer company"
+    }
+  }
+}
+```
+
+## Next steps
+
+- **[Creating Campaigns](/docs/campaigns/creating-campaigns)** — Learn how to create campaigns from templates
+- **[After-Action Reviews](/docs/campaigns/after-action-reviews)** — Understand AARs and lessons learned
+- **[Campaigns Overview](/docs/campaigns/overview)** — Learn about campaign capabilities

@@ -1,0 +1,293 @@
+---
+title: "Creating Skills"
+description: "Create skills via the API or UI with instructions, tools, and documents."
+section: "skills"
+order: 2
+primaryKeyword: "create skill"
+secondaryKeywords: ["skill creation", "skill API", "attach tools", "attach documents"]
+relatedSlugs: ["skills/overview", "skills/api-reference", "agents/overview"]
+pageType: "how-to"
+---
+
+# Creating Skills
+
+Create skills in AgentC2 via the REST API or workspace UI. Skills are stored in PostgreSQL and resolved at runtime, enabling version control, dynamic updates, and multi-tenant isolation.
+
+## Prerequisites
+
+Before creating a skill, ensure you have:
+
+- An AgentC2 account with authentication configured
+- (Optional) Tools configured if you want to attach them during creation
+- (Optional) Documents created if you want to attach reference materials
+
+<Callout type="info">
+    Skills can be created independently of agents. You can create a skill, attach tools and
+    documents, then attach it to multiple agents later.
+</Callout>
+
+## Create via API
+
+Send a `POST` request to `/agent/api/skills` with the skill configuration:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "email-drafting",
+    "name": "Email Drafting",
+    "description": "Draft professional emails with proper formatting, tone, and structure",
+    "instructions": "When drafting emails:\n\n1. **Subject Line**: Use clear, concise subject lines that summarize the email purpose\n2. **Greeting**: Start with a professional greeting (Hi [Name], Dear [Name])\n3. **Body**: Structure content with short paragraphs, bullet points for lists, and clear action items\n4. **Tone**: Maintain a professional yet friendly tone appropriate for the recipient\n5. **Call-to-Action**: Include a clear call-to-action if action is required\n6. **Closing**: End with a professional closing (Best regards, Sincerely) and your name",
+    "examples": "Subject: Meeting Request for Q4 Planning\n\nHi Sarah,\n\nI would like to schedule a meeting to discuss our Q4 planning strategy. Would you be available next week?\n\nPlease let me know your availability:\n- Monday, 2-4 PM\n- Wednesday, 10 AM-12 PM\n- Thursday, 3-5 PM\n\nBest regards,\nJohn",
+    "category": "communication",
+    "tags": ["email", "drafting", "professional", "business"],
+    "metadata": {
+      "difficulty": "beginner",
+      "estimatedTime": "5 minutes"
+    }
+  }'
+```
+
+### Request fields
+
+All fields in the skill creation request:
+
+| Field          | Type     | Required | Default       | Description                                                |
+| -------------- | -------- | -------- | ------------- | ---------------------------------------------------------- |
+| `slug`         | string   | ✅ Yes   | —             | URL-safe identifier (unique per workspace)                 |
+| `name`         | string   | ✅ Yes   | —             | Display name for the skill                                 |
+| `description`  | string   | ❌ No    | `null`        | Human-readable description                                 |
+| `instructions` | string   | ✅ Yes   | —             | Procedural knowledge describing how to perform the task    |
+| `examples`     | string   | ❌ No    | `null`        | Reference outputs, patterns, or examples                   |
+| `category`     | string   | ❌ No    | `null`        | Category for organization (e.g., "communication", "crm")   |
+| `tags`         | string[] | ❌ No    | `[]`          | Array of tags for filtering and discovery                  |
+| `metadata`     | object   | ❌ No    | `null`        | Custom JSON metadata                                       |
+| `type`         | string   | ❌ No    | `"USER"`      | `"USER"` or `"SYSTEM"` (SYSTEM requires admin permissions) |
+| `workspaceId`  | string   | ❌ No    | Auto-detected | Workspace ID (defaults to user's default workspace)        |
+
+### Response format
+
+Successful creation returns:
+
+```json
+{
+    "success": true,
+    "skill": {
+        "id": "cm123abc456",
+        "slug": "email-drafting",
+        "name": "Email Drafting",
+        "description": "Draft professional emails with proper formatting, tone, and structure",
+        "instructions": "When drafting emails:\n\n1. **Subject Line**: Use clear...",
+        "examples": "Subject: Meeting Request...",
+        "category": "communication",
+        "tags": ["email", "drafting", "professional", "business"],
+        "metadata": {
+            "difficulty": "beginner",
+            "estimatedTime": "5 minutes"
+        },
+        "version": 1,
+        "type": "USER",
+        "workspaceId": "ws_abc123",
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:00:00.000Z",
+        "createdBy": "user_xyz789"
+    }
+}
+```
+
+## Attach tools
+
+After creating a skill, attach tools it requires:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "send-email"
+  }'
+```
+
+You can attach multiple tools:
+
+```bash
+# Attach multiple tools sequentially
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "search-contacts" }'
+
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "format-calendar-event" }'
+```
+
+<Callout type="tip">
+    Tools can be built-in tools (e.g., `web-fetch`, `calculator`), MCP tools (e.g.,
+    `hubspot-get-contact`), or custom tools registered in your workspace.
+</Callout>
+
+## Attach documents
+
+Attach reference documents, examples, or context materials:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documentId": "doc_email_templates",
+    "role": "reference"
+  }'
+```
+
+The `role` field indicates how the document should be used:
+
+- `"reference"` — Reference material (default)
+- `"procedure"` — Step-by-step procedure
+- `"example"` — Example output
+- `"context"` — Background context
+
+## Complete example: Email drafting skill
+
+Create a complete email drafting skill with tools and documents:
+
+```bash
+# Step 1: Create the skill
+curl -X POST https://agentc2.ai/agent/api/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "email-drafting",
+    "name": "Email Drafting",
+    "description": "Draft professional emails with proper formatting and tone",
+    "instructions": "When drafting emails:\n1. Use clear subject lines\n2. Structure with paragraphs\n3. Include call-to-action\n4. Professional closing",
+    "examples": "Subject: Meeting Request\n\nHi [Name],\n\nI would like to schedule...",
+    "category": "communication",
+    "tags": ["email", "drafting"]
+  }'
+
+# Step 2: Attach tools
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "send-email" }'
+
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "search-contacts" }'
+
+# Step 3: Attach documents (if you have document IDs)
+curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "documentId": "doc_email_templates", "role": "reference" }'
+
+# Step 4: Attach to an agent
+curl -X POST https://agentc2.ai/agent/api/agents/support-agent/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skillId": "email-drafting",
+    "pinned": true
+  }'
+```
+
+## Create via UI
+
+The workspace UI provides a guided form for creating skills:
+
+1. **Navigate to Skills** — Click "Skills" in the sidebar, then "New Skill"
+2. **Fill basic info** — Slug, name, description, and instructions
+3. **Add examples** — Paste example outputs or patterns
+4. **Set metadata** — Category, tags, and custom metadata
+5. **Attach tools** — Select from available tools (built-ins, MCP servers, custom)
+6. **Attach documents** — Select reference documents from your document library
+7. **Review and create** — Preview configuration, then click "Create Skill"
+
+<Callout type="tip">
+    The UI validates all fields in real-time and shows helpful error messages. Required fields are
+    marked with an asterisk (*).
+</Callout>
+
+## Validation rules
+
+The API enforces the following validation rules:
+
+### Slug uniqueness
+
+The `slug` must be unique within your workspace. If a slug conflict occurs, the API returns:
+
+```json
+{
+    "success": false,
+    "error": "Skill with slug 'email-drafting' already exists in this workspace"
+}
+```
+
+### Field constraints
+
+- `slug`: Must be URL-safe (alphanumeric, hyphens, underscores only)
+- `name`: Must be non-empty string
+- `instructions`: Must be non-empty string (procedural knowledge)
+- `tags`: Array of strings, each tag must be non-empty
+- `category`: String, optional
+- `metadata`: Valid JSON object
+
+### Instructions quality
+
+While not enforced by the API, effective instructions should:
+
+- Be specific and actionable
+- Include step-by-step procedures when applicable
+- Reference tools and documents when relevant
+- Provide examples or patterns
+- Use clear formatting (markdown supported)
+
+## Error codes
+
+Common error responses:
+
+| Status | Error Code                | Description                               | Solution                                      |
+| ------ | ------------------------- | ----------------------------------------- | --------------------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing `slug`, `name`, or `instructions` | Include all required fields                   |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters          | Use alphanumeric and hyphens only             |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists in workspace          | Use a different slug or update existing skill |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication token   | Include `Authorization: Bearer $TOKEN` header |
+| `403`  | `FORBIDDEN`               | Insufficient permissions                  | Ensure you have skill creation permissions    |
+| `500`  | `INTERNAL_ERROR`          | Server error during creation              | Retry the request or contact support          |
+
+## Minimal example
+
+Create a skill with only required fields:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "slug": "simple-skill",
+    "name": "Simple Skill",
+    "instructions": "This is a simple skill with basic instructions."
+  }'
+```
+
+This creates a skill with:
+
+- Auto-generated version (1)
+- No category or tags
+- No tools or documents attached
+- USER type (default)
+- No metadata
+
+## Next steps
+
+After creating a skill:
+
+- **[Attach to agents](/docs/agents/creating-agents)** — Make the skill available to agents
+- **[Progressive Disclosure](/docs/skills/progressive-disclosure)** — Configure pinned vs discoverable attachment
+- **[Version Control](/docs/skills/version-control)** — Create versions before making changes
+- **[Skills API Reference](/docs/skills/api-reference)** — Complete API documentation

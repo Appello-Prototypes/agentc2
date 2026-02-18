@@ -1,0 +1,559 @@
+---
+title: "Campaigns API"
+description: "Complete API reference for campaign CRUD operations, missions, tasks, status updates, and after-action reviews."
+section: "api-reference"
+order: 7
+primaryKeyword: "campaigns API reference"
+relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Campaigns API
+
+Complete reference for all campaign-related API endpoints. All endpoints are prefixed with `/agent/api/campaigns` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Campaigns
+
+<ApiEndpoint method="GET" path="/agent/api/campaigns" />
+
+List all campaigns for the authenticated user. Returns campaigns with their status, mission counts, and metadata.
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description                    |
+| --------- | ------ | ------- | ------------------------------ |
+| `status`  | string | —       | Filter by status (`"PLANNING"`, `"READY"`, `"RUNNING"`, `"COMPLETED"`, `"FAILED"`) |
+| `limit`   | number | `50`    | Maximum number of campaigns    |
+| `offset`  | number | `0`     | Number of campaigns to skip    |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/campaigns?status=RUNNING&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "campaigns": [
+        {
+            "id": "camp_abc123",
+            "name": "Q1 Product Launch",
+            "description": "Marketing campaign for Q1 product launch",
+            "status": "RUNNING",
+            "intent": "Launch new product and generate 1000 signups",
+            "missions": [
+                {
+                    "id": "miss_1",
+                    "name": "Email Campaign",
+                    "status": "COMPLETED",
+                    "sequence": 1
+                }
+            ],
+            "_count": {
+                "missions": 5,
+                "logs": 150
+            },
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T14:00:00.000Z"
+        }
+    ],
+    "total": 25,
+    "limit": 10,
+    "offset": 0
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Campaign
+
+<ApiEndpoint method="POST" path="/agent/api/campaigns" />
+
+Create a new campaign with specified intent and configuration. Campaigns orchestrate multiple missions and tasks.
+
+### Request Body
+
+| Field         | Type   | Required | Description                    |
+| ------------- | ------ | -------- | ------------------------------ |
+| `name`        | string | ✅ Yes   | Display name for the campaign   |
+| `description` | string | ❌ No    | Human-readable description      |
+| `intent`      | string | ✅ Yes   | Campaign goal or objective      |
+| `status`      | string | ❌ No    | Initial status (default: `"PLANNING"`) |
+| `metadata`    | object | ❌ No    | Custom JSON metadata            |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Q1 Product Launch",
+    "description": "Marketing campaign for Q1 product launch",
+    "intent": "Launch new product and generate 1000 signups",
+    "status": "PLANNING"
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "campaign": {
+        "id": "camp_abc123",
+        "name": "Q1 Product Launch",
+        "description": "Marketing campaign for Q1 product launch",
+        "intent": "Launch new product and generate 1000 signups",
+        "status": "PLANNING",
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_STATUS`          | Invalid status value               |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Get Campaign
+
+<ApiEndpoint method="GET" path="/agent/api/campaigns/{id}" />
+
+Get details for a specific campaign by ID. Returns full campaign configuration including missions, tasks, logs, and after-action review.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Campaign ID      |
+
+### Query Parameters
+
+| Parameter  | Type   | Default | Description                    |
+| ---------- | ------ | ------- | ------------------------------ |
+| `logLimit` | number | `50`    | Maximum number of logs to return |
+| `logOffset` | number | `0`     | Number of logs to skip          |
+| `logFilter` | string | —       | Filter logs by event type       |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/campaigns/camp_abc123?logLimit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "campaign": {
+        "id": "camp_abc123",
+        "name": "Q1 Product Launch",
+        "description": "Marketing campaign for Q1 product launch",
+        "intent": "Launch new product and generate 1000 signups",
+        "status": "RUNNING",
+        "missions": [
+            {
+                "id": "miss_1",
+                "name": "Email Campaign",
+                "status": "COMPLETED",
+                "sequence": 1,
+                "tasks": [
+                    {
+                        "id": "task_1",
+                        "name": "Send welcome emails",
+                        "status": "COMPLETED",
+                        "sequence": 1,
+                        "agentRun": {
+                            "id": "run_abc123",
+                            "status": "completed",
+                            "outputText": "Sent 500 welcome emails",
+                            "costUsd": 0.15
+                        }
+                    }
+                ]
+            }
+        ],
+        "logs": [
+            {
+                "id": "log_1",
+                "event": "mission_started",
+                "message": "Mission 'Email Campaign' started",
+                "metadata": {"missionId": "miss_1"},
+                "createdAt": "2026-02-18T12:00:00.000Z"
+            }
+        ],
+        "aarJson": {
+            "summary": "Campaign completed successfully",
+            "intentAchieved": true,
+            "overallScore": 0.85
+        },
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T14:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Insufficient permissions           |
+| `404`  | `NOT_FOUND`    | Campaign not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Update Status
+
+<ApiEndpoint method="PATCH" path="/agent/api/campaigns/{id}" />
+
+Update campaign status or other fields. Supports status transitions and action-based updates (e.g., approve missions).
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Campaign ID      |
+
+### Request Body
+
+For status updates:
+
+| Field   | Type   | Required | Description                    |
+| ------- | ------ | -------- | ------------------------------ |
+| `status` | string | ❌ No    | New status                     |
+| `action` | string | ❌ No    | Action to perform (`"approve-mission"`, etc.) |
+
+For action-based updates (e.g., approve mission):
+
+| Field      | Type   | Required | Description                    |
+| ---------- | ------ | -------- | ------------------------------ |
+| `action`   | string | ✅ Yes   | `"approve-mission"`            |
+| `missionId` | string | ❌ No    | Mission ID to approve          |
+| `sequence` | number | ❌ No    | Mission sequence to approve    |
+| `notes`    | string | ❌ No    | Approval notes                 |
+
+### Example Request
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/campaigns/camp_abc123 \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "status": "RUNNING"
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "campaign": {
+        "id": "camp_abc123",
+        "status": "RUNNING",
+        "updatedAt": "2026-02-18T14:05:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_STATUS` | Invalid status transition       |
+| `400`  | `INVALID_ACTION` | Invalid action                   |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Campaign or mission not found     |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Missions
+
+<ApiEndpoint method="GET" path="/agent/api/campaigns/{id}/missions" />
+
+List all missions for a campaign. Returns missions with their status, tasks, and execution details.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Campaign ID      |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/campaigns/camp_abc123/missions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "missions": [
+        {
+            "id": "miss_1",
+            "campaignId": "camp_abc123",
+            "name": "Email Campaign",
+            "description": "Send welcome emails to new users",
+            "status": "COMPLETED",
+            "sequence": 1,
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "name": "Send welcome emails",
+                    "status": "COMPLETED",
+                    "sequence": 1
+                }
+            ],
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Campaign not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Mission
+
+<ApiEndpoint method="POST" path="/agent/api/campaigns/{id}/missions" />
+
+Create a new mission within a campaign. Missions contain tasks that are executed by agents.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Campaign ID      |
+
+### Request Body
+
+| Field         | Type   | Required | Description                    |
+| ------------- | ------ | -------- | ------------------------------ |
+| `name`        | string | ✅ Yes   | Display name for the mission   |
+| `description` | string | ❌ No    | Human-readable description      |
+| `sequence`   | number | ❌ No    | Mission sequence (auto-assigned if omitted) |
+| `status`      | string | ❌ No    | Initial status (default: `"PENDING"`) |
+| `tasks`       | array  | ❌ No    | Array of task definitions       |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/campaigns/camp_abc123/missions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Email Campaign",
+    "description": "Send welcome emails to new users",
+    "sequence": 1,
+    "tasks": [
+      {
+        "name": "Send welcome emails",
+        "agentSlug": "email-agent",
+        "input": "Send welcome emails to new signups"
+      }
+    ]
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "mission": {
+        "id": "miss_1",
+        "campaignId": "camp_abc123",
+        "name": "Email Campaign",
+        "description": "Send welcome emails to new users",
+        "status": "PENDING",
+        "sequence": 1,
+        "createdAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_STATUS`          | Invalid status value               |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`               | Campaign not found                 |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Export AAR
+
+<ApiEndpoint method="GET" path="/agent/api/campaigns/{id}/aar" />
+
+Export the after-action review (AAR) for a campaign as markdown. Includes campaign summary, mission results, lessons learned, and recommendations.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `id`      | string | Campaign ID      |
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description                    |
+| --------- | ------ | ------- | ------------------------------ |
+| `format`  | string | `"markdown"` | Export format (`"markdown"` or `"json"`) |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/campaigns/camp_abc123/aar?format=markdown" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+For markdown format:
+
+```markdown
+# After Action Review: Q1 Product Launch
+
+## Campaign Summary
+
+Campaign completed successfully. Generated 1,200 signups, exceeding the goal of 1,000.
+
+**Intent Achieved**: Yes
+**Overall Score**: 0.85
+
+## Missions
+
+### Mission 1: Email Campaign
+- Status: COMPLETED
+- Output: Sent 500 welcome emails
+- Cost: $0.15
+
+### Mission 2: Social Media Campaign
+- Status: COMPLETED
+- Output: Posted 10 social media updates
+- Cost: $0.08
+
+## Lessons Learned
+
+- Email campaigns had higher conversion rates than expected
+- Social media engagement peaked during weekday afternoons
+
+## Recommendations
+
+- Increase email campaign budget for next quarter
+- Schedule social media posts for optimal engagement times
+```
+
+For JSON format:
+
+```json
+{
+    "success": true,
+    "aar": {
+        "summary": "Campaign completed successfully",
+        "intentAchieved": true,
+        "overallScore": 0.85,
+        "lessonsLearned": [
+            "Email campaigns had higher conversion rates than expected",
+            "Social media engagement peaked during weekday afternoons"
+        ],
+        "recommendations": [
+            "Increase email campaign budget for next quarter",
+            "Schedule social media posts for optimal engagement times"
+        ],
+        "missions": [...]
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Campaign not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `INVALID_STATUS`          | Invalid status value               | Use valid status values           |
+| `400`  | `INVALID_ACTION`          | Invalid action                     | Use supported actions             |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Campaign or resource not found     | Check ID is correct               |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Invalid status transition from COMPLETED to RUNNING",
+    "code": "INVALID_STATUS"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+- **Export endpoints**: 10 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Creating Campaigns](/docs/campaigns/creating-campaigns)** — Step-by-step guide to creating campaigns
+- **[Campaigns Overview](/docs/campaigns/overview)** — Learn about campaigns and missions
+- **[After Action Reviews](/docs/campaigns/after-action-reviews)** — Understanding AARs and campaign analysis

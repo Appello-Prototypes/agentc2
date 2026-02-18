@@ -178,6 +178,8 @@ async function runEvaluationsAsync(
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
+    const t0 = performance.now();
+    const timing: Record<string, number> = {};
     try {
         const csrf = enforceCsrf(request);
         if (csrf.response) {
@@ -202,6 +204,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 { status: 429 }
             );
         }
+        timing.auth = Math.round(performance.now() - t0);
 
         const body = await request.json();
         if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
@@ -232,6 +235,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Resolve organization and workspace context for the user
         let resolvedOrgId: string | null = null;
         let enrichedRequestContext = requestContext;
+        const tOrg = performance.now();
         if (resourceId && resourceId !== "test-user" && resourceId !== "chat-user") {
             const [orgId, workspaceId] = await Promise.all([
                 getUserOrganizationId(resourceId),
@@ -246,9 +250,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 };
             }
         }
+        timing.orgResolve = Math.round(performance.now() - tOrg);
 
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
+        const tResolve = performance.now();
         // eslint-disable-next-line prefer-const
         let { agent, record, source, activeSkills, toolOriginMap, toolHealth } =
             await agentResolver.resolve({
@@ -256,45 +262,27 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 requestContext: enrichedRequestContext,
                 threadId: userThreadId
             });
+        timing.agentResolve = Math.round(performance.now() - tResolve);
 
         console.log(
             `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
         );
 
         // ── Model Routing ───────────────────────────────────────────────────
-        // If agent has routingConfig.mode === "auto" and no manual model override,
-        // classify input complexity and select the appropriate model tier.
+        // Note: Model routing and interaction mode previously tried to reconstruct
+        // the Agent via `new AgentClass(...)`, but Mastra's Agent doesn't expose its
+        // internal config. Reconstructing loses tools, memory, and skills.
+        // Instead, we log the routing decision and use the resolved agent as-is.
+        // The resolved agent from agentResolver already has the correct model.
         let routingDecision: RoutingDecision | null = null;
 
-        // Apply model override if provided (user selected a different model in the UI)
         if (modelOverride && modelOverride.provider && modelOverride.name) {
-            const { Agent: AgentClass } = await import("@mastra/core/agent");
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const baseConfig = (agent as any).__config || {};
-            const overriddenModel = `${modelOverride.provider}/${modelOverride.name}`;
-
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            let providerOptions: Record<string, any> | undefined;
-            if (thinkingOverride && modelOverride.provider === "anthropic") {
-                providerOptions = { anthropic: { thinking: thinkingOverride } };
-            }
-
-            agent = new AgentClass({
-                ...baseConfig,
-                model: overriddenModel,
-                ...(providerOptions
-                    ? { defaultOptions: { ...baseConfig.defaultOptions, providerOptions } }
-                    : {})
-            });
-
             console.log(
-                `[Agent Chat] Model override: ${overriddenModel}${thinkingOverride ? " (thinking)" : ""}`
+                `[Agent Chat] Model override requested: ${modelOverride.provider}/${modelOverride.name} (using resolved agent's model instead — override requires agent rebuild)`
             );
         } else if (record) {
-            // No manual model override — check for auto-routing
             const routingConfig = record.routingConfig as RoutingConfig | null;
             if (routingConfig?.mode === "auto") {
-                // Extract the last user message text for complexity classification
                 const lastMsg = messages
                     ?.filter((m: { role: string }) => m.role === "user")
                     .pop() as
@@ -315,57 +303,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         { provider: record.modelProvider, name: record.modelName },
                         inputForRouting
                     );
-
-                    if (routingDecision && routingDecision.tier !== "PRIMARY") {
-                        const { Agent: AgentClass } = await import("@mastra/core/agent");
-                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                        const baseConfig = (agent as any).__config || {};
-                        const routedModel = `${routingDecision.model.provider}/${routingDecision.model.name}`;
-                        agent = new AgentClass({
-                            ...baseConfig,
-                            model: routedModel
-                        });
-                        console.log(
-                            `[Agent Chat] Model routing: ${routingDecision.tier} -> ${routedModel} (${routingDecision.reason})`
-                        );
-                    } else if (routingDecision) {
-                        console.log(
-                            `[Agent Chat] Model routing: PRIMARY (${routingDecision.reason})`
-                        );
-                    }
+                    console.log(
+                        `[Agent Chat] Model routing decision: ${routingDecision?.tier || "PRIMARY"} (${routingDecision?.reason || "default"})`
+                    );
                 }
             }
-        }
-
-        // ── Interaction Mode Handling ──────────────────────────────────────
-        // Ask Mode: Filter tools to read-only only (no destructive operations)
-        // Plan Mode: Inject createPlan tool instruction into system prompt
-        // Agent Mode: Default behavior, no changes
-        if (interactionMode === "ask") {
-            // In ask mode, we modify the agent to remove destructive tools.
-            // For now, prepend a strong instruction since tool filtering requires
-            // knowing which tools are read-only (to be done via registry metadata).
-            const { Agent: AgentClass } = await import("@mastra/core/agent");
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const baseConfig = (agent as any).__config || {};
-            const askPrefix =
-                "IMPORTANT: You are in Ask Mode. Only answer questions and perform lookups. Do NOT call any tools that create, update, delete, or modify data. Only use search, read, list, and get tools.\n\n";
-            agent = new AgentClass({
-                ...baseConfig,
-                instructions: askPrefix + (baseConfig.instructions || "")
-            });
-            console.log(`[Agent Chat] Ask Mode: Added read-only instruction prefix`);
-        } else if (interactionMode === "plan") {
-            const { Agent: AgentClass } = await import("@mastra/core/agent");
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const baseConfig = (agent as any).__config || {};
-            const planSuffix =
-                "\n\nIMPORTANT: You are in Plan Mode. Before taking any action, first outline a structured plan of what you will do. Format it as:\n1. Step description\n2. Step description\n...\n\nAfter presenting the plan, wait for the user to confirm before executing.";
-            agent = new AgentClass({
-                ...baseConfig,
-                instructions: (baseConfig.instructions || "") + planSuffix
-            });
-            console.log(`[Agent Chat] Plan Mode: Added planning instruction suffix`);
         }
 
         // Extract the last user message with all content parts (text + files/images)
@@ -410,9 +352,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Fallback agents (code-defined, no DB record) cannot be recorded due to FK constraints
         const agentId = record?.id || null;
 
-        // Compute instructions hash for tracing (base + skill instructions merged)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const mergedInstructions = (agent as any).__config?.instructions || "";
+        // Compute instructions hash for tracing
+        const mergedInstructions = record?.instructions || "";
         const instructionsHash = mergedInstructions
             ? createHash("sha256").update(mergedInstructions).digest("hex")
             : undefined;
@@ -545,6 +486,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const maxSteps = record?.maxSteps ?? 5;
 
         // Enforce input guardrails before starting the stream
+        const tGuardrails = performance.now();
         if (agentId && lastUserMessage) {
             const { enforceInputGuardrails } = await import("@repo/mastra/guardrails");
             const inputCheck = await enforceInputGuardrails(agentId, lastUserMessage, {
@@ -561,6 +503,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 );
             }
         }
+        timing.guardrails = Math.round(performance.now() - tGuardrails);
 
         // Collect output and tool calls for recording
         let fullOutput = "";
@@ -617,13 +560,26 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Stream the response using the resolved agent
-        const responseStream = await agent.stream(streamInput, {
-            maxSteps,
-            memory: {
-                thread: userThreadId,
-                resource: resourceId
-            }
-        });
+        const tStream = performance.now();
+        let responseStream;
+        try {
+            responseStream = await agent.stream(streamInput, {
+                maxSteps,
+                memory: {
+                    thread: userThreadId,
+                    resource: resourceId
+                }
+            });
+        } catch (streamInitError) {
+            console.error(
+                `[Agent Chat] agent.stream() INIT FAILED:`,
+                streamInitError instanceof Error ? streamInitError.stack : streamInitError
+            );
+            throw streamInitError;
+        }
+        timing.streamStart = Math.round(performance.now() - tStream);
+        timing.total = Math.round(performance.now() - t0);
+        console.log(`[Agent Chat] ⏱ Timing (ms): ${JSON.stringify(timing)}`);
 
         // Create a UI message stream compatible with useChat
         const stream = createUIMessageStream({
@@ -784,25 +740,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     };
 
                     if (fullStream && textStream) {
-                        const toolPromise = (async () => {
-                            for await (const chunk of fullStream) {
-                                const c = normalizeChunk(chunk);
-                                handleToolChunk(c);
+                        // Drain tool events from fullStream in the background.
+                        // Tool calls complete before the final text chunk, so they'll
+                        // be captured before we snapshot. Remaining fullStream events
+                        // (usage stats, finish reasons) should NOT block the response.
+                        void (async () => {
+                            try {
+                                for await (const chunk of fullStream) {
+                                    const c = normalizeChunk(chunk);
+                                    handleToolChunk(c);
+                                }
+                            } catch (e) {
+                                console.error("[Agent Chat] fullStream background drain error:", e);
                             }
                         })();
 
-                        const textPromise = (async () => {
-                            for await (const chunk of textStream) {
-                                fullOutput += chunk;
-                                writer.write({
-                                    type: "text-delta",
-                                    id: messageId,
-                                    delta: chunk
-                                });
-                            }
-                        })();
-
-                        await Promise.all([toolPromise, textPromise]);
+                        for await (const chunk of textStream) {
+                            fullOutput += chunk;
+                            writer.write({
+                                type: "text-delta",
+                                id: messageId,
+                                delta: chunk
+                            });
+                        }
                     } else if (fullStream) {
                         for await (const chunk of fullStream) {
                             const c = normalizeChunk(chunk);

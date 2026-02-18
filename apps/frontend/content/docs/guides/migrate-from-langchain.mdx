@@ -1,0 +1,702 @@
+---
+title: "Migrate from LangChain"
+description: "Migrate your LangChain agents, tools, chains, and LangGraph networks to AgentC2 with a phased approach and rollback safeguards."
+section: "guides"
+order: 8
+primaryKeyword: "migrate LangChain to AgentC2"
+secondaryKeywords: ["LangChain migration", "LangGraph migration", "agent framework migration"]
+relatedSlugs: ["agents/overview", "agents/creating-agents", "workflows/overview", "networks/overview", "agents/tools"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Migrate from LangChain
+
+This guide helps you migrate from LangChain to AgentC2. You'll learn how to map LangChain concepts to AgentC2 primitives, execute a phased migration strategy, and implement rollback safeguards to ensure a smooth transition.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- Existing LangChain/LangGraph codebase
+- Understanding of your current agent architecture
+- AgentC2 account with authentication configured
+- Access to your LangChain agents, tools, and chains
+
+<Callout type="info">
+    This guide covers migration from LangChain and LangGraph. AgentC2 provides similar capabilities with a database-driven, production-focused architecture.
+</Callout>
+
+## Concept mapping
+
+Understanding how LangChain concepts map to AgentC2:
+
+| LangChain Concept | AgentC2 Equivalent | Notes |
+|-------------------|-------------------|-------|
+| **Agent** | **Agent** | Database-driven, versioned agents |
+| **Tool** | **Tool** (built-in, MCP, or skill) | Tools are standardized via MCP |
+| **Chain** | **Workflow** | Multi-step deterministic workflows |
+| **LangGraph** | **Network** | Multi-agent orchestration with topology |
+| **Memory** | **Memory** | Conversation memory with semantic recall |
+| **PromptTemplate** | **InstructionsTemplate** | Runtime variable resolution |
+| **LLMChain** | **Agent** (single-step) | Agents handle LLM calls |
+| **SequentialChain** | **Workflow** (sequential steps) | Workflows define step order |
+| **RouterChain** | **Network** (router topology) | Networks route to specialist agents |
+
+## Architecture differences
+
+### LangChain: Code-driven
+
+```python
+# LangChain: Agents defined in code
+from langchain.agents import create_openai_functions_agent
+from langchain.tools import Tool
+
+agent = create_openai_functions_agent(
+    llm=llm,
+    tools=[Tool(name="search", func=search_func)],
+    prompt=prompt
+)
+```
+
+### AgentC2: Database-driven
+
+```bash
+# AgentC2: Agents stored in database, resolved at runtime
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "My Agent",
+    "instructions": "...",
+    "tools": ["search-tool"]
+  }'
+```
+
+**Key differences:**
+- ✅ **Version control** — Agent versions tracked in database
+- ✅ **Multi-tenant** — Workspace isolation built-in
+- ✅ **Observability** — All runs traced automatically
+- ✅ **Governance** — Guardrails and policies at org level
+
+## Phase 1: Migrate tools
+
+Start by migrating your LangChain tools to AgentC2.
+
+### LangChain tool example
+
+```python
+# LangChain tool
+from langchain.tools import Tool
+
+search_tool = Tool(
+    name="search",
+    description="Search the web",
+    func=search_function
+)
+```
+
+### AgentC2 equivalent
+
+**Option 1: Use built-in tool**
+
+```bash
+# If web-fetch matches your needs
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{ "toolId": "web-fetch" }'
+```
+
+**Option 2: Create MCP tool**
+
+```bash
+# Create custom MCP server tool
+curl -X POST https://agentc2.ai/agent/api/mcp/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "search",
+    "description": "Search the web",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string" }
+      }
+    },
+    "server": "custom-mcp-server"
+  }'
+```
+
+**Option 3: Create skill tool**
+
+```bash
+# Bundle tool in a skill
+curl -X POST https://agentc2.ai/agent/api/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "Search Skill",
+    "tools": ["search-tool"],
+    "instructions": "Use search tool for web queries"
+  }'
+```
+
+### Migration checklist
+
+- [ ] Identify all LangChain tools
+- [ ] Map to AgentC2 equivalents (built-in, MCP, or custom)
+- [ ] Test each tool independently
+- [ ] Verify input/output schemas match
+- [ ] Document any differences
+
+## Phase 2: Migrate agents
+
+Migrate your LangChain agents to AgentC2.
+
+### LangChain agent example
+
+```python
+# LangChain agent
+from langchain.agents import create_openai_functions_agent
+from langchain.prompts import ChatPromptTemplate
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", "You are a helpful assistant."),
+    ("human", "{input}")
+])
+
+agent = create_openai_functions_agent(
+    llm=llm,
+    tools=tools,
+    prompt=prompt
+)
+```
+
+### AgentC2 equivalent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Helpful Assistant",
+    "slug": "helpful-assistant",
+    "instructions": "You are a helpful assistant.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "tools": ["web-fetch", "calculator"],
+    "memoryEnabled": true
+  }'
+```
+
+### Key mappings
+
+| LangChain Setting | AgentC2 Equivalent |
+|-------------------|-------------------|
+| `llm` | `modelProvider` + `modelName` |
+| `temperature` | `temperature` |
+| `tools` | `tools` (array of tool IDs) |
+| `prompt` | `instructions` |
+| `memory` | `memoryEnabled` + `memoryConfig` |
+| `max_iterations` | `maxSteps` |
+
+### Migration steps
+
+1. **Extract agent configuration** from LangChain code
+2. **Create AgentC2 agent** via API or UI
+3. **Attach tools** (migrated in Phase 1)
+4. **Test agent** with sample queries
+5. **Compare outputs** with LangChain version
+6. **Iterate** until behavior matches
+
+### Testing comparison
+
+```python
+# LangChain test
+result = agent.invoke({"input": "What is the weather?"})
+print(result["output"])
+
+# AgentC2 test
+curl -X POST https://agentc2.ai/agent/api/agents/helpful-assistant/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "messages": [{"role": "user", "content": "What is the weather?"}]
+  }'
+```
+
+Compare outputs to ensure parity.
+
+## Phase 3: Migrate chains to workflows
+
+Convert LangChain chains to AgentC2 workflows.
+
+### LangChain chain example
+
+```python
+# LangChain SequentialChain
+from langchain.chains import LLMChain, SimpleSequentialChain
+
+chain1 = LLMChain(llm=llm, prompt=prompt1)
+chain2 = LLMChain(llm=llm, prompt=prompt2)
+
+chain = SimpleSequentialChain(chains=[chain1, chain2])
+result = chain.run(input)
+```
+
+### AgentC2 workflow equivalent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sequential Workflow",
+    "slug": "sequential-workflow",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "step1",
+          "type": "agent",
+          "config": {
+            "agentSlug": "agent1",
+            "inputMapping": {
+              "messages": [
+                {"role": "user", "content": "{{input.input}}"}
+              ]
+            }
+          }
+        },
+        {
+          "id": "step2",
+          "type": "agent",
+          "config": {
+            "agentSlug": "agent2",
+            "inputMapping": {
+              "messages": [
+                {"role": "user", "content": "{{step1.output}}"}
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }'
+```
+
+### Complex chain example
+
+```python
+# LangChain: Chain with conditional logic
+from langchain.chains import LLMChain
+from langchain.chains.base import Chain
+
+class ConditionalChain(Chain):
+    def __init__(self, chain_a, chain_b):
+        self.chain_a = chain_a
+        self.chain_b = chain_b
+    
+    def _call(self, inputs):
+        if inputs["condition"]:
+            return self.chain_a.run(inputs)
+        else:
+            return self.chain_b.run(inputs)
+```
+
+### AgentC2 workflow equivalent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Conditional Workflow",
+    "slug": "conditional-workflow",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "route",
+          "type": "branch",
+          "config": {
+            "condition": "{{input.condition}}",
+            "branches": [
+              {
+                "condition": "true",
+                "steps": [
+                  {
+                    "id": "path-a",
+                    "type": "agent",
+                    "config": {
+                      "agentSlug": "agent-a"
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "default",
+                "steps": [
+                  {
+                    "id": "path-b",
+                    "type": "agent",
+                    "config": {
+                      "agentSlug": "agent-b"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }'
+```
+
+### Chain migration checklist
+
+- [ ] Identify all LangChain chains
+- [ ] Map chain steps to workflow steps
+- [ ] Convert conditional logic to branches
+- [ ] Map input/output between steps
+- [ ] Test workflow execution
+- [ ] Verify output matches chain output
+
+## Phase 4: Migrate LangGraph to networks
+
+Convert LangGraph state machines to AgentC2 networks.
+
+### LangGraph example
+
+```python
+# LangGraph state machine
+from langgraph.graph import StateGraph, END
+
+workflow = StateGraph(State)
+
+workflow.add_node("agent", agent_node)
+workflow.add_node("tool", tool_node)
+workflow.add_conditional_edges(
+    "agent",
+    route_function,
+    {"continue": "tool", "end": END}
+)
+workflow.add_edge("tool", "agent")
+```
+
+### AgentC2 network equivalent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Agent-Tool Network",
+    "slug": "agent-tool-network",
+    "topologyJson": {
+      "type": "router",
+      "nodes": [
+        {
+          "id": "agent",
+          "agentSlug": "my-agent",
+          "role": "specialist"
+        },
+        {
+          "id": "tool",
+          "agentSlug": "tool-handler",
+          "role": "specialist"
+        }
+      ],
+      "edges": [
+        {
+          "from": "agent",
+          "to": "tool",
+          "condition": "toolNeeded"
+        },
+        {
+          "from": "tool",
+          "to": "agent",
+          "condition": "always"
+        }
+      ]
+    }
+  }'
+```
+
+### LangGraph state → AgentC2 network
+
+| LangGraph Concept | AgentC2 Equivalent |
+|-------------------|-------------------|
+| **State** | **Network input/output** |
+| **Node** | **Agent** (in network) |
+| **Edge** | **Network edge** |
+| **Conditional edge** | **Edge with condition** |
+| **State update** | **Agent output** |
+
+## Phase 5: Add governance
+
+Add production-grade governance that LangChain doesn't provide:
+
+### Guardrails
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/guardrails \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configJson": {
+      "input": {
+        "promptInjection": {
+          "enabled": true,
+          "action": "block"
+        }
+      },
+      "output": {
+        "piiLeakPrevention": {
+          "enabled": true,
+          "action": "block"
+        }
+      },
+      "execution": {
+        "costLimit": {
+          "enabled": true,
+          "maxCostPerRun": 1.0
+        }
+      }
+    }
+  }'
+```
+
+### Evaluations
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/scorers \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "scorers": ["quality", "safety", "completeness"]
+  }'
+```
+
+### Version control
+
+```bash
+# Create new version
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "changes": "Updated instructions for better accuracy"
+  }'
+
+# Rollback if needed
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/versions/prev-version/promote \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## Rollback safeguards
+
+Implement safeguards to enable safe rollback:
+
+### 1. Parallel running
+
+Run both systems in parallel:
+
+```python
+# Run LangChain and AgentC2 in parallel
+langchain_result = langchain_agent.invoke(input)
+agentc2_result = agentc2_client.chat(agent_id, input)
+
+# Compare results
+if results_match(langchain_result, agentc2_result):
+    use_agentc2_result()
+else:
+    use_langchain_result()  # Fallback
+```
+
+### 2. Feature flags
+
+Use feature flags to control migration:
+
+```python
+if feature_flag_enabled("use_agentc2"):
+    result = agentc2_client.chat(agent_id, input)
+else:
+    result = langchain_agent.invoke(input)
+```
+
+### 3. Gradual rollout
+
+Migrate incrementally:
+
+1. **Week 1**: 10% traffic to AgentC2
+2. **Week 2**: 25% traffic
+3. **Week 3**: 50% traffic
+4. **Week 4**: 100% traffic
+
+Monitor metrics at each stage.
+
+### 4. Version pinning
+
+Pin AgentC2 agent versions:
+
+```bash
+# Use specific version
+curl -X POST https://agentc2.ai/agent/api/agents/your-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "messages": [...],
+    "version": "v1.2.3"
+  }'
+```
+
+## Common pitfalls
+
+### Pitfall 1: Tool signature mismatches
+
+**Problem**: LangChain tools may have different signatures than AgentC2 tools.
+
+**Solution**: Create adapter layer or custom MCP tools:
+
+```bash
+# Create adapter tool
+curl -X POST https://agentc2.ai/agent/api/mcp/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "name": "langchain-adapter",
+    "description": "Adapter for LangChain tool",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "langchain_input": { "type": "string" }
+      }
+    }
+  }'
+```
+
+### Pitfall 2: Memory differences
+
+**Problem**: LangChain memory may behave differently than AgentC2 memory.
+
+**Solution**: Test memory behavior and adjust configuration:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/your-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "memoryConfig": {
+      "lastMessages": 20,  # Adjust to match LangChain
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      }
+    }
+  }'
+```
+
+### Pitfall 3: Prompt template differences
+
+**Problem**: LangChain prompt templates may use different syntax.
+
+**Solution**: Convert templates:
+
+```python
+# LangChain
+prompt = "Hello {name}, you are {role}"
+
+# AgentC2
+instructionsTemplate = "Hello {{name}}, you are {{role}}"
+```
+
+### Pitfall 4: Error handling
+
+**Problem**: LangChain error handling may not translate directly.
+
+**Solution**: Implement equivalent error handling in workflows:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "step1",
+          "type": "agent",
+          "config": {
+            "agentSlug": "agent1",
+            "errorHandling": {
+              "retry": {
+                "maxRetries": 3,
+                "backoff": "exponential"
+              },
+              "onFailure": "step-error-handler"
+            }
+          }
+        }
+      ]
+    }
+  }'
+```
+
+## Migration checklist
+
+### Pre-migration
+
+- [ ] Audit existing LangChain codebase
+- [ ] Document all agents, tools, and chains
+- [ ] Identify dependencies between components
+- [ ] Set up AgentC2 account and workspace
+- [ ] Create migration plan with phases
+
+### Phase 1: Tools
+
+- [ ] Migrate all tools
+- [ ] Test tool functionality
+- [ ] Verify input/output schemas
+
+### Phase 2: Agents
+
+- [ ] Migrate agents one by one
+- [ ] Test each agent independently
+- [ ] Compare outputs with LangChain
+
+### Phase 3: Chains → Workflows
+
+- [ ] Convert chains to workflows
+- [ ] Test workflow execution
+- [ ] Verify step outputs
+
+### Phase 4: LangGraph → Networks
+
+- [ ] Convert state machines to networks
+- [ ] Test network routing
+- [ ] Verify state transitions
+
+### Phase 5: Governance
+
+- [ ] Add guardrails
+- [ ] Set up evaluations
+- [ ] Configure version control
+
+### Post-migration
+
+- [ ] Run parallel systems for validation
+- [ ] Monitor metrics and errors
+- [ ] Gradual rollout with feature flags
+- [ ] Decommission LangChain when stable
+
+## What you've migrated
+
+You've successfully migrated from LangChain to AgentC2 with:
+
+✅ **Tools** migrated to AgentC2 (built-in, MCP, or custom)  
+✅ **Agents** converted to database-driven agents  
+✅ **Chains** transformed into workflows  
+✅ **LangGraph** converted to networks  
+✅ **Governance** added (guardrails, evaluations, versioning)  
+✅ **Rollback safeguards** implemented for safe migration
+
+## Next steps
+
+- **[Agent Configuration](/docs/agents/configuration)** — Fine-tune migrated agents
+- **[Workflow Optimization](/docs/workflows/control-flow)** — Optimize migrated workflows
+- **[Network Topology](/docs/networks/topology)** — Refine network routing
+- **[Production Guardrails](/docs/guides/production-guardrails)** — Add comprehensive safety policies
+- **[Continuous Learning](/docs/guides/continuous-learning-setup)** — Enable automatic improvement
+- **[Observability](/docs/platform/observability)** — Monitor migrated agents in production

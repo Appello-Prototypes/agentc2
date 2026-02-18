@@ -1,0 +1,351 @@
+---
+title: "AI-Assisted Design"
+description: "Use the workflow designer chat to generate workflow definitions, validate designs, and iterate on generated workflows."
+section: "workflows"
+order: 6
+primaryKeyword: "AI workflow design"
+secondaryKeywords: ["workflow generation", "designer chat", "workflow AI", "auto-generate workflow"]
+relatedSlugs: ["workflows/overview", "workflows/creating-workflows", "workflows/step-types"]
+pageType: "concept"
+---
+
+# AI-Assisted Design
+
+The workflow designer chat uses AI to generate workflow definitions from natural language descriptions. Describe your automation needs in plain English, and the AI generates a complete workflow definition with steps, connections, and configurations.
+
+## How it works
+
+The AI-assisted designer:
+
+1. **Accepts natural language** — Describe your workflow in plain English
+2. **Generates definition** — AI creates a complete `definitionJson` with steps and connections
+3. **Validates structure** — Ensures workflow definition is valid
+4. **Iterates** — Refine the design through conversation
+
+## Using the designer chat
+
+Access the designer chat in the workflow UI or via API.
+
+### Via UI
+
+1. **Open workflow designer** — Navigate to a workflow's design page
+2. **Open chat panel** — Click "AI Assistant" or chat icon
+3. **Describe workflow** — Type your workflow description
+4. **Review generated design** — AI generates workflow definition
+5. **Iterate** — Refine through conversation
+
+### Via API
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a workflow that analyzes support tickets, routes high-priority tickets to escalation, and assigns low-priority tickets to support agents",
+    "definitionJson": null,
+    "selected": []
+  }'
+```
+
+## Workflow generation
+
+Generate complete workflows from descriptions.
+
+### Example prompt
+
+```
+Create a workflow that:
+1. Fetches data from an API
+2. Transforms the data
+3. Saves to database
+4. Sends notification email
+```
+
+### Generated definition
+
+```json
+{
+    "steps": [
+        {
+            "id": "fetch",
+            "type": "tool",
+            "name": "Fetch Data",
+            "config": {
+                "toolId": "web-fetch",
+                "inputMapping": {
+                    "url": "{{input.apiUrl}}"
+                }
+            }
+        },
+        {
+            "id": "transform",
+            "type": "transform",
+            "name": "Transform Data",
+            "config": {
+                "transform": "{{fetch.output | map: { id: .id, name: .name } }}"
+            }
+        },
+        {
+            "id": "save",
+            "type": "tool",
+            "name": "Save to Database",
+            "config": {
+                "toolId": "save-to-db",
+                "inputMapping": {
+                    "data": "{{transform.output}}"
+                }
+            }
+        },
+        {
+            "id": "notify",
+            "type": "tool",
+            "name": "Send Notification",
+            "config": {
+                "toolId": "send-email",
+                "inputMapping": {
+                    "to": "{{input.email}}",
+                    "subject": "Data processed",
+                    "body": "Data has been processed successfully"
+                }
+            }
+        }
+    ]
+}
+```
+
+## Iterating on designs
+
+Refine generated workflows through conversation.
+
+### Refinement prompts
+
+```
+Add a human approval step before saving to database
+```
+
+```
+Change the notification to use Slack instead of email
+```
+
+```
+Add error handling with retry logic
+```
+
+### Iterative generation
+
+```bash
+# Initial generation
+curl -X POST https://agentc2.ai/agent/api/workflows/my-workflow/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "prompt": "Create a data processing workflow",
+    "definitionJson": null
+  }'
+
+# Refine existing definition
+curl -X POST https://agentc2.ai/agent/api/workflows/my-workflow/designer-chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "prompt": "Add human approval before saving",
+    "definitionJson": {
+      "steps": [...]
+    }
+  }'
+```
+
+## Validation
+
+Generated workflows are automatically validated:
+
+1. **Structure validation** — Steps, types, and connections validated
+2. **Schema validation** — Input/output schemas checked
+3. **Reference validation** — Agent slugs, tool IDs verified
+4. **Error detection** — Dead-ends, cycles, invalid expressions flagged
+
+### Validation errors
+
+If generation produces invalid workflow:
+
+```json
+{
+    "success": false,
+    "error": "Invalid workflow definition",
+    "errors": [
+        {
+            "step": "fetch",
+            "error": "Tool 'invalid-tool' not found"
+        }
+    ]
+}
+```
+
+## Workflow generation API
+
+Generate workflows programmatically.
+
+### Generate endpoint
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a support ticket triage workflow"
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "workflow": {
+    "name": "Support Ticket Triage",
+    "slug": "support-ticket-triage",
+    "description": "Automatically triage and route support tickets",
+    "definitionJson": {
+      "steps": [...]
+    },
+    "inputSchemaJson": {...},
+    "outputSchemaJson": {...}
+  }
+}
+```
+
+## Best practices
+
+1. **Be specific** — Include step details, conditions, and requirements
+2. **Mention tools/agents** — Reference specific tool IDs or agent slugs when known
+3. **Describe flow** — Explain sequential, branching, or parallel execution
+4. **Iterate** — Start with basic workflow, refine through conversation
+5. **Validate** — Always validate generated workflows before deploying
+
+### Good prompts
+
+```
+Create a workflow that:
+- Fetches customer data from HubSpot API
+- Analyzes ticket content using triage-agent
+- Routes high-priority tickets to escalation tool
+- Assigns low-priority tickets to support-agent
+- Sends Slack notification with results
+```
+
+### Poor prompts
+
+```
+Make a workflow
+```
+
+```
+Do stuff
+```
+
+## Limitations
+
+AI-assisted design has some limitations:
+
+1. **Tool/agent references** — May generate references to non-existent tools/agents
+2. **Complex logic** — May struggle with very complex branching or nested loops
+3. **Custom transformations** — May not generate optimal transform expressions
+4. **Human steps** — May need manual configuration for approval forms
+
+<Callout type="tip">
+    Always review and test generated workflows before deploying to production. AI-generated
+    workflows are starting points, not final implementations.
+</Callout>
+
+## Example: Complete workflow generation
+
+Generate a complete content publishing workflow:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a content publishing workflow that:\n1. Generates blog post using content-generator agent\n2. Requires human approval\n3. Formats content\n4. Publishes to CMS\n5. Sends notification email"
+  }'
+```
+
+**Generated workflow:**
+
+```json
+{
+    "name": "Content Publishing",
+    "slug": "content-publishing",
+    "definitionJson": {
+        "steps": [
+            {
+                "id": "generate",
+                "type": "agent",
+                "name": "Generate Content",
+                "config": {
+                    "agentSlug": "content-generator",
+                    "inputMapping": {
+                        "messages": [
+                            {
+                                "role": "user",
+                                "content": "Generate blog post about: {{input.topic}}"
+                            }
+                        ]
+                    }
+                }
+            },
+            {
+                "id": "approval",
+                "type": "human",
+                "name": "Human Approval",
+                "config": {
+                    "prompt": "Please review and approve this content: {{generate.output.content}}",
+                    "formSchema": {
+                        "type": "object",
+                        "properties": {
+                            "approved": { "type": "boolean" }
+                        },
+                        "required": ["approved"]
+                    }
+                }
+            },
+            {
+                "id": "format",
+                "type": "transform",
+                "name": "Format Content",
+                "config": {
+                    "transform": "{{generate.output.content | format: 'markdown' }}"
+                }
+            },
+            {
+                "id": "publish",
+                "type": "tool",
+                "name": "Publish to CMS",
+                "config": {
+                    "toolId": "publish-cms",
+                    "inputMapping": {
+                        "content": "{{format.output}}"
+                    }
+                }
+            },
+            {
+                "id": "notify",
+                "type": "tool",
+                "name": "Send Notification",
+                "config": {
+                    "toolId": "send-email",
+                    "inputMapping": {
+                        "to": "{{input.email}}",
+                        "subject": "Content published",
+                        "body": "Your content has been published successfully"
+                    }
+                }
+            }
+        ]
+    }
+}
+```
+
+## Next steps
+
+- **[Creating Workflows](/docs/workflows/creating-workflows)** — Learn how to create workflows manually
+- **[Step Types](/docs/workflows/step-types)** — Understand available step types
+- **[Workflows API Reference](/docs/workflows/api-reference)** — API documentation for generation endpoints

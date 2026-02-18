@@ -1,0 +1,465 @@
+---
+title: "Observability"
+description: "Agent run traces, step-by-step execution logs, aggregate metrics, cost dashboards, trace querying API, health scores, and debugging guidance."
+section: "platform"
+order: 4
+primaryKeyword: "observability"
+relatedSlugs: ["platform/multi-tenancy", "agents/overview", "agents/evaluations"]
+pageType: "concept"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Observability
+
+AgentC2 provides comprehensive observability through agent run traces, step-by-step execution logs, aggregate metrics, cost dashboards, and health scoring. Every agent run generates a complete trace with LLM calls, tool executions, memory operations, and guardrail checks, enabling debugging, performance analysis, and compliance auditing.
+
+## Run traces
+
+Every agent execution creates an `AgentTrace` record that captures the complete execution context:
+
+### Trace structure
+
+```typescript
+// Database model: AgentTrace
+{
+  id: "trace_123",
+  runId: "run_456", // Links to AgentRun
+  agentId: "agent_789",
+  tenantId: "org_abc",
+  status: "COMPLETED", // RUNNING, COMPLETED, FAILED, CANCELLED
+  inputText: "What is the weather in San Francisco?",
+  outputText: "The weather in San Francisco is...",
+  durationMs: 2341,
+  stepsJson: [ /* step details */ ],
+  modelJson: { provider: "openai", model: "gpt-4o", temperature: 0.7 },
+  tokensJson: { input: 45, output: 120, total: 165 },
+  scoresJson: { quality: 0.92, safety: 1.0, relevance: 0.88 },
+  instructionsHash: "sha256:...",
+  instructionsSnapshot: "You are a helpful assistant..."
+}
+```
+
+### Trace steps
+
+Each trace contains detailed step-by-step execution logs in `AgentTraceStep`:
+
+```typescript
+// Database model: AgentTraceStep
+{
+  id: "step_001",
+  traceId: "trace_123",
+  stepNumber: 1,
+  type: "llm", // "llm" | "tool" | "memory" | "guardrail"
+  content: {
+    prompt: "...",
+    response: "...",
+    model: "gpt-4o",
+    tokens: { input: 45, output: 120 }
+  },
+  timestamp: "2026-02-18T12:00:00Z",
+  durationMs: 1234
+}
+```
+
+### Step types
+
+| Step Type | Description | Content Structure |
+| --------- | ----------- | ----------------- |
+| **llm** | LLM call (prompt + response) | `{ prompt, response, model, tokens }` |
+| **tool** | Tool execution | `{ toolKey, input, output, durationMs }` |
+| **memory** | Memory operation (recall/store) | `{ operation, query, results }` |
+| **guardrail** | Guardrail check | `{ guardrailId, passed, blocked, reason }` |
+
+## Querying traces
+
+Traces can be queried via API or database:
+
+### API endpoint
+
+```bash
+# List traces for an agent
+curl https://agentc2.ai/agent/api/agents/research-assistant/traces?limit=50 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Get specific trace
+curl https://agentc2.ai/agent/api/traces/trace_123 \
+  -H "Authorization: Bearer $TOKEN"
+
+# Query with filters
+curl "https://agentc2.ai/agent/api/traces?status=FAILED&startDate=2026-02-01&endDate=2026-02-18" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Database queries
+
+```typescript
+// Find traces by status
+const failedTraces = await prisma.agentTrace.findMany({
+  where: {
+    agentId: "agent_123",
+    status: "FAILED",
+    createdAt: {
+      gte: new Date("2026-02-01"),
+      lte: new Date("2026-02-18")
+    }
+  },
+  include: {
+    steps: {
+      orderBy: { stepNumber: "asc" }
+    }
+  }
+})
+
+// Find traces with tool calls
+const tracesWithTools = await prisma.agentTrace.findMany({
+  where: {
+    agentId: "agent_123",
+    steps: {
+      some: {
+        type: "tool"
+      }
+    }
+  },
+  include: {
+    steps: true,
+    toolCalls: true
+  }
+})
+```
+
+## Aggregate metrics
+
+The platform aggregates metrics across runs for dashboards and analytics:
+
+### Cost metrics
+
+| Metric | Description | Calculation |
+| ------ | ----------- | ----------- |
+| **Total tokens** | Sum of input + output tokens | `SUM(tokensJson->>'total')` |
+| **Total cost** | Cost in USD | `SUM(tokens * model_rate)` |
+| **Average latency** | Mean duration per run | `AVG(durationMs)` |
+| **P95 latency** | 95th percentile duration | `PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY durationMs)` |
+
+### Quality metrics
+
+| Metric | Description | Source |
+| ------ | ----------- | ------ |
+| **Average quality score** | Mean evaluation score | `AVG(scoresJson->>'quality')` |
+| **Failure rate** | Percentage of failed runs | `COUNT(status='FAILED') / COUNT(*)` |
+| **Guardrail blocks** | Number of blocked outputs | `COUNT(guardrail blocks)` |
+
+### Usage metrics
+
+| Metric | Description | Calculation |
+| ------ | ----------- | ----------- |
+| **Runs per day** | Daily run count | `COUNT(*) GROUP BY DATE(createdAt)` |
+| **Active agents** | Agents with runs in period | `COUNT(DISTINCT agentId)` |
+| **Tool usage** | Most-used tools | `COUNT(*) GROUP BY toolKey` |
+
+### Querying metrics
+
+```typescript
+// Daily cost aggregation
+const dailyCosts = await prisma.$queryRaw`
+  SELECT 
+    DATE(created_at) as date,
+    SUM((tokens_json->>'total')::int) as total_tokens,
+    SUM((tokens_json->>'total')::int * 0.00001) as cost_usd
+  FROM agent_trace
+  WHERE agent_id = ${agentId}
+    AND created_at >= NOW() - INTERVAL '30 days'
+  GROUP BY DATE(created_at)
+  ORDER BY date DESC
+`
+
+// Tool usage statistics
+const toolUsage = await prisma.agentToolCall.groupBy({
+  by: ["toolKey"],
+  where: {
+    trace: {
+      agentId: agentId,
+      createdAt: { gte: thirtyDaysAgo }
+    }
+  },
+  _count: { id: true }
+})
+```
+
+## Cost dashboards
+
+Cost dashboards provide real-time visibility into spending:
+
+### Organization-level costs
+
+```bash
+# Get organization costs
+curl https://agentc2.ai/agent/api/organizations/acme-corp/metrics/cost \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "period": "2026-02",
+  "totalCost": 1234.56,
+  "totalTokens": 123456789,
+  "byAgent": [
+    { "agentId": "agent_1", "cost": 567.89, "tokens": 56789012 },
+    { "agentId": "agent_2", "cost": 666.67, "tokens": 66667877 }
+  ],
+  "byModel": [
+    { "model": "gpt-4o", "cost": 1000.00 },
+    { "model": "claude-sonnet-4", "cost": 234.56 }
+  ]
+}
+```
+
+### Budget alerts
+
+Organizations can set budget thresholds:
+
+```typescript
+// Set monthly budget
+await prisma.organization.update({
+  where: { id: organizationId },
+  data: {
+    metadata: {
+      ...existingMetadata,
+      budget: {
+        monthlyLimit: 10000, // $10,000/month
+        alertThreshold: 0.8, // Alert at 80%
+        alertEmail: "admin@acme.com"
+      }
+    }
+  }
+})
+```
+
+When budget thresholds are exceeded, the platform:
+
+1. **Logs alert** — Creates `BudgetAlert` record
+2. **Sends notification** — Emails alert recipients
+3. **Enforces limits** — Blocks new runs if `enforceLimit: true`
+
+<Callout type="warning">
+    **Budget enforcement**: When `enforceLimit: true` and budget is exceeded, all agent runs are blocked until the budget is increased or the period resets.
+</Callout>
+
+## Health scores
+
+Organizations receive health scores based on multiple factors:
+
+### Health score calculation
+
+```typescript
+// Health score factors (0-100 scale)
+const healthScore = {
+  reliability: calculateReliability(),      // Based on failure rate
+  performance: calculatePerformance(),     // Based on latency P95
+  quality: calculateQuality(),             // Based on evaluation scores
+  security: calculateSecurity(),          // Based on security incidents
+  compliance: calculateCompliance()       // Based on guardrail violations
+}
+
+// Weighted average
+const overallScore = (
+  reliability * 0.3 +
+  performance * 0.2 +
+  quality * 0.2 +
+  security * 0.15 +
+  compliance * 0.15
+)
+```
+
+### Health score thresholds
+
+| Score Range | Status | Action |
+| ----------- | ------ | ------ |
+| 90-100 | **Excellent** | No action needed |
+| 70-89 | **Good** | Monitor trends |
+| 50-69 | **Fair** | Review metrics, optimize |
+| 0-49 | **Poor** | Immediate attention required |
+
+### Health check API
+
+```bash
+# Get organization health score
+curl https://agentc2.ai/agent/api/organizations/acme-corp/health \
+  -H "Authorization: Bearer $TOKEN"
+
+# Response
+{
+  "score": 87,
+  "status": "good",
+  "factors": {
+    "reliability": 92,
+    "performance": 85,
+    "quality": 88,
+    "security": 90,
+    "compliance": 82
+  },
+  "lastUpdated": "2026-02-18T12:00:00Z",
+  "recommendations": [
+    "Consider optimizing agent latency (P95: 3.2s)",
+    "Review guardrail violations (5 in last 7 days)"
+  ]
+}
+```
+
+## Alert thresholds
+
+Configure alert thresholds for proactive monitoring:
+
+### Alert configuration
+
+```typescript
+// Set alert thresholds
+await prisma.organization.update({
+  where: { id: organizationId },
+  data: {
+    metadata: {
+      alerts: {
+        failureRate: { threshold: 0.05, enabled: true },      // 5% failure rate
+        latencyP95: { threshold: 5000, enabled: true },       // 5s P95 latency
+        costSpike: { threshold: 1.5, enabled: true },          // 1.5x average cost
+        qualityDrop: { threshold: 0.1, enabled: true }         // 10% quality drop
+      }
+    }
+  }
+})
+```
+
+### Alert delivery
+
+Alerts are delivered via:
+
+- **Email** — Sent to organization admins
+- **Webhook** — POST to configured webhook URL
+- **Slack** — Posted to Slack channel (if configured)
+
+## Debugging with traces
+
+Traces provide complete execution context for debugging:
+
+### Common debugging scenarios
+
+#### 1. Failed runs
+
+```typescript
+// Find failed runs with error details
+const failedTrace = await prisma.agentTrace.findFirst({
+  where: {
+    agentId: "agent_123",
+    status: "FAILED"
+  },
+  include: {
+    steps: {
+      orderBy: { stepNumber: "asc" }
+    }
+  }
+})
+
+// Check last step for error
+const lastStep = failedTrace.steps[failedTrace.steps.length - 1]
+console.log("Error:", lastStep.content.error)
+```
+
+#### 2. Slow runs
+
+```typescript
+// Find slow runs (P95+)
+const slowTraces = await prisma.agentTrace.findMany({
+  where: {
+    agentId: "agent_123",
+    durationMs: { gte: 5000 } // >5s
+  },
+  include: { steps: true },
+  orderBy: { durationMs: "desc" },
+  take: 10
+})
+
+// Analyze step durations
+for (const trace of slowTraces) {
+  const slowSteps = trace.steps.filter(s => s.durationMs > 1000)
+  console.log(`Trace ${trace.id}: slow steps:`, slowSteps)
+}
+```
+
+#### 3. Tool execution issues
+
+```typescript
+// Find traces with tool failures
+const toolFailures = await prisma.agentToolCall.findMany({
+  where: {
+    trace: { agentId: "agent_123" },
+    outputJson: {
+      path: ["error"],
+      not: null
+    }
+  },
+  include: { trace: true }
+})
+
+// Analyze tool error patterns
+const errorPatterns = toolFailures.reduce((acc, call) => {
+  const tool = call.toolKey
+  acc[tool] = (acc[tool] || 0) + 1
+  return acc
+}, {})
+```
+
+#### 4. Guardrail violations
+
+```typescript
+// Find guardrail blocks
+const guardrailBlocks = await prisma.agentTraceStep.findMany({
+  where: {
+    trace: { agentId: "agent_123" },
+    type: "guardrail",
+    content: {
+      path: ["blocked"],
+      equals: true
+    }
+  },
+  include: { trace: true }
+})
+
+// Analyze blocked content
+for (const step of guardrailBlocks) {
+  console.log("Blocked:", step.content.reason)
+  console.log("Input:", step.trace.inputText)
+}
+```
+
+## Monitoring guidance
+
+### Key metrics to monitor
+
+1. **Failure rate** — Should be under 5% for production agents
+2. **P95 latency** — Should be under 3s for conversational agents
+3. **Cost per run** — Track trends, alert on spikes
+4. **Quality scores** — Should maintain >0.8 average
+5. **Token usage** — Monitor for efficiency improvements
+
+### Dashboard setup
+
+Create dashboards for:
+
+- **Real-time metrics** — Current run status, active agents
+- **Cost tracking** — Daily/weekly/monthly spend by agent/model
+- **Quality trends** — Evaluation scores over time
+- **Performance** — Latency percentiles, throughput
+- **Reliability** — Failure rates, error patterns
+
+### Alerting best practices
+
+1. **Set realistic thresholds** — Base on historical data, not arbitrary values
+2. **Avoid alert fatigue** — Only alert on actionable issues
+3. **Use multiple channels** — Email for critical, Slack for informational
+4. **Review regularly** — Adjust thresholds based on false positives
+5. **Document runbooks** — Include remediation steps in alerts
+
+## Related topics
+
+- **[Multi-Tenancy](/docs/platform/multi-tenancy)** — How traces are scoped to organizations
+- **[Agents Overview](/docs/agents/overview)** — How agents generate traces
+- **[Agent Evaluations](/docs/agents/evaluations)** — Quality scoring and evaluation

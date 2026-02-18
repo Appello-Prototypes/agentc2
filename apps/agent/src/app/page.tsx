@@ -1,6 +1,7 @@
 import { prisma } from "@repo/database";
 import WelcomeEmbed from "@/components/WelcomeEmbed";
 import type { EmbedConfig } from "@/components/WelcomeEmbed";
+import { HomeNavMenu } from "@/components/HomeNavMenu";
 
 /**
  * Default embed configuration — same defaults used by the /api/agents/[id]/embed route.
@@ -45,6 +46,7 @@ export default async function RootPage() {
     if (!agent || !agent.publicToken) {
         return (
             <div className="flex h-dvh flex-col items-center justify-center bg-black text-white">
+                <HomeNavMenu />
                 <h1 className="text-2xl font-semibold tracking-tight">AgentC2</h1>
                 <p className="text-muted-foreground mt-2 text-sm">
                     The platform is being configured. Check back shortly.
@@ -70,9 +72,12 @@ export default async function RootPage() {
     };
 
     return (
-        <WelcomeEmbed
-            embedData={{ slug: agent.slug, name: agent.name, config }}
-            token={agent.publicToken}
-        />
+        <>
+            <HomeNavMenu />
+            <WelcomeEmbed
+                embedData={{ slug: agent.slug, name: agent.name, config }}
+                token={agent.publicToken}
+            />
+        </>
     );
 }

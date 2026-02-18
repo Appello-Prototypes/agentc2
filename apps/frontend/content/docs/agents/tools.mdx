@@ -1,0 +1,302 @@
+---
+title: "Agent Tools"
+description: "Attach MCP tools, built-in tools, and skill tools to give agents external capabilities."
+section: "agents"
+order: 6
+primaryKeyword: "AI agent tools"
+relatedSlugs: ["agents/creating-agents", "integrations/overview", "skills/overview"]
+pageType: "how-to"
+---
+
+# Agent Tools
+
+Tools are structured interfaces that connect agents to external APIs, databases, and services. They enable agents to perform actions beyond text generation—searching the web, updating CRM records, querying databases, sending emails, and more.
+
+## What are tools?
+
+A tool is a function definition that an agent can call during conversation. Each tool has:
+
+- **Name and description** — What the tool does, visible to the LLM
+- **Input schema** — Parameters the tool accepts (JSON Schema)
+- **Output schema** — What the tool returns
+- **Execution logic** — The actual code that runs when the tool is invoked
+
+When an agent receives a user request, the LLM decides which tools to use, constructs the parameters, and the platform executes the tool call. The result is fed back to the LLM, which synthesizes a response.
+
+<Callout type="info">
+    Tools are **declarative**—you define what they do, not how the agent uses them. The LLM decides
+    when and how to invoke tools based on the user's request and the tool descriptions.
+</Callout>
+
+## Three sources of tools
+
+AgentC2 provides tools from three sources, each serving different use cases:
+
+### 1. Built-in tools
+
+Core utilities available to all agents without configuration:
+
+| Tool ID         | Description                              | Use Case                         |
+| --------------- | ---------------------------------------- | -------------------------------- |
+| `web-fetch`     | Fetch and parse web pages                | Web research, content extraction |
+| `calculator`    | Perform mathematical calculations        | Math problems, unit conversions  |
+| `memory-recall` | Search conversation history semantically | Context-aware responses          |
+| `memory-store`  | Store key-value pairs in memory          | Remember user preferences, facts |
+
+Built-in tools are always available and require no API keys or external services.
+
+### 2. MCP server tools
+
+Tools from Model Context Protocol (MCP) servers—external integrations like HubSpot, Jira, GitHub, Slack, and more:
+
+| MCP Server     | Example Tools                                | Use Case                         |
+| -------------- | -------------------------------------------- | -------------------------------- |
+| **HubSpot**    | `hubspot-get-contact`, `hubspot-create-deal` | CRM operations, lead management  |
+| **Jira**       | `jira-create-issue`, `jira-search-issues`    | Project management, bug tracking |
+| **GitHub**     | `github-create-issue`, `github-list-repos`   | Code repository management       |
+| **Slack**      | `slack-send-message`, `slack-list-channels`  | Team communication               |
+| **Firecrawl**  | `firecrawl-scrape-url`                       | Web scraping at scale            |
+| **Playwright** | `playwright-navigate`, `playwright-click`    | Browser automation               |
+
+MCP tools require integration setup (API keys, OAuth tokens) and are scoped to your organization.
+
+### 3. Skill tools
+
+Tools bundled with skills—reusable capability bundles that can be attached to agents:
+
+| Skill                | Tools Included                     | Use Case           |
+| -------------------- | ---------------------------------- | ------------------ |
+| `research-assistant` | `web-search`, `summarize-content`  | Research workflows |
+| `data-analyst`       | `query-database`, `generate-chart` | Data analysis      |
+| `email-manager`      | `send-email`, `archive-thread`     | Email automation   |
+
+When you attach a skill to an agent, its tools become available automatically.
+
+## Listing available tools
+
+Query the tools API to see what's available for your organization:
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The response includes all three tool sources:
+
+```json
+{
+    "success": true,
+    "tools": [
+        {
+            "id": "web-fetch",
+            "name": "web-fetch",
+            "description": "Fetch and parse content from a URL",
+            "source": "registry"
+        },
+        {
+            "id": "hubspot_hubspot-get-contact",
+            "name": "hubspot_hubspot-get-contact",
+            "description": "Get contact details from HubSpot CRM",
+            "source": "mcp:hubspot"
+        },
+        {
+            "id": "research-assistant_web-search",
+            "name": "research-assistant_web-search",
+            "description": "Search the web for current information",
+            "source": "skill:research-assistant"
+        }
+    ],
+    "mcpServerStatus": {
+        "hubspot": { "connected": true, "toolCount": 12 },
+        "jira": { "connected": false, "toolCount": 0 }
+    }
+}
+```
+
+<Callout type="tip">
+    MCP tools are namespaced with the server name (e.g., `hubspot_hubspot-get-contact`). This
+    prevents naming conflicts when multiple MCP servers provide tools with similar names.
+</Callout>
+
+## Attaching tools to agents
+
+Attach tools when creating an agent or update an existing agent's tool set:
+
+### During creation
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sales Assistant",
+    "slug": "sales-assistant",
+    "instructions": "You help sales reps manage leads and deals in HubSpot.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "tools": [
+      "web-fetch",
+      "hubspot_hubspot-get-contact",
+      "hubspot_hubspot-create-deal"
+    ]
+  }'
+```
+
+### Adding tools to existing agent
+
+Attach tools via the agent update endpoint:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/sales-assistant \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tools": [
+      "web-fetch",
+      "hubspot_hubspot-get-contact",
+      "hubspot_hubspot-create-deal",
+      "hubspot_hubspot-update-contact"
+    ]
+  }'
+```
+
+<Callout type="warning">
+    Updating an agent's tools **replaces** the entire tool set. Include all tools you want to keep,
+    not just the new ones.
+</Callout>
+
+## Tool configuration
+
+Some tools accept configuration overrides via the `AgentTool.config` field:
+
+```bash
+# Attach tool with custom config
+curl -X POST https://agentc2.ai/agent/api/agents/sales-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "web-fetch",
+    "config": {
+      "timeout": 10000,
+      "maxContentLength": 50000
+    }
+  }'
+```
+
+Configuration options vary by tool. Check the tool's documentation for available parameters.
+
+## Tool permissions and filtering
+
+Tools are filtered based on:
+
+1. **Organization context** — MCP tools are only available if your organization has the corresponding integration configured
+2. **User permissions** — Some tools may require specific role permissions (admin-only tools)
+3. **Agent type** — System agents may have access to privileged tools
+
+When listing tools, the API returns only tools available to your organization and user context.
+
+## AgentTool model
+
+Tools are stored in the `AgentTool` junction table:
+
+| Field       | Type    | Description                                                              |
+| ----------- | ------- | ------------------------------------------------------------------------ |
+| `id`        | String  | Unique identifier (CUID)                                                 |
+| `agentId`   | String  | Foreign key to `Agent`                                                   |
+| `toolId`    | String  | Tool registry key (e.g., `"web-fetch"`, `"hubspot_hubspot-get-contact"`) |
+| `config`    | JSON    | Optional tool-specific configuration                                     |
+| `isEnabled` | Boolean | Whether the tool is active (default: `true`)                             |
+
+The `(agentId, toolId)` pair is unique—each tool can only be attached once per agent.
+
+## Tool health monitoring
+
+Monitor tool usage and health via the agent runs API:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/sales-assistant/runs?limit=10 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Each run includes tool call details:
+
+```json
+{
+    "runs": [
+        {
+            "id": "run-123",
+            "toolCalls": [
+                {
+                    "toolKey": "hubspot_hubspot-get-contact",
+                    "success": true,
+                    "durationMs": 245,
+                    "inputJson": { "contactId": "12345" },
+                    "outputJson": { "name": "Acme Corp", "email": "..." }
+                }
+            ]
+        }
+    ]
+}
+```
+
+Failed tool calls include error messages:
+
+```json
+{
+    "toolKey": "hubspot_hubspot-get-contact",
+    "success": false,
+    "error": "Contact not found",
+    "durationMs": 120
+}
+```
+
+<Callout type="info">
+    Tool call metrics are aggregated daily in `AgentToolMetricDaily` for performance analysis and
+    cost tracking.
+</Callout>
+
+## Best practices
+
+### 1. Start minimal, add incrementally
+
+Attach only the tools your agent needs. More tools increase:
+
+- Token usage (tool descriptions consume context)
+- Decision complexity (LLM must choose from more options)
+- Cost (each tool call adds latency and potential API costs)
+
+### 2. Use descriptive tool names
+
+MCP tools are automatically namespaced, but if you create custom tools, use clear, descriptive names that help the LLM understand their purpose.
+
+### 3. Monitor tool usage
+
+Review tool call patterns to identify:
+
+- Unused tools (remove to reduce context)
+- Overused tools (may indicate instruction issues)
+- Failed calls (integration or permission problems)
+
+### 4. Test tool combinations
+
+Some tools work better together. For example:
+
+- `web-fetch` + `memory-store` — Research and remember facts
+- `hubspot-get-contact` + `slack-send-message` — CRM lookup and notification
+- `jira-create-issue` + `github-create-issue` — Cross-platform issue tracking
+
+### 5. Handle tool failures gracefully
+
+Configure agents to handle tool failures:
+
+```
+If a tool call fails, explain what went wrong and suggest alternatives.
+Never make up data if a tool call fails—be transparent about errors.
+```
+
+## Related topics
+
+- **[Creating Agents](/docs/agents/creating-agents)** — Learn how to create agents with tools
+- **[Integrations Overview](/docs/integrations/overview)** — Set up MCP server integrations
+- **[Skills Overview](/docs/skills/overview)** — Bundle tools into reusable skills
+- **[Agent Configuration](/docs/agents/configuration)** — Configure tool execution limits and timeouts

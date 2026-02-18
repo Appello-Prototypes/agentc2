@@ -1,0 +1,599 @@
+---
+title: "Build a Sales Agent"
+description: "Build a sales agent that qualifies leads in CRM, drafts follow-up emails, and schedules meetings with approval gates for outbound communications."
+section: "guides"
+order: 3
+primaryKeyword: "AI sales agent"
+secondaryKeywords: ["CRM automation", "sales automation AI", "lead qualification agent"]
+relatedSlugs: ["agents/creating-agents", "integrations/hubspot", "integrations/gmail", "integrations/google-calendar", "agents/guardrails", "workflows/human-in-the-loop"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Build a Sales Agent
+
+This guide walks you through building a production-ready sales agent that qualifies leads in your CRM, drafts personalized follow-up emails, and schedules meetings—all while maintaining human approval gates for outbound communications. By the end, you'll have an agent that augments your sales team without risking unauthorized outreach.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- API keys for OpenAI or Anthropic
+- HubSpot account with API access (for CRM)
+- Gmail account with OAuth configured (for email)
+- Google Calendar access (for scheduling)
+
+<Callout type="warning">
+    Sales agents interact with real customers and prospects. Always use approval gates for outbound communications to prevent unauthorized outreach and maintain brand reputation.
+</Callout>
+
+## Architecture overview
+
+Your sales agent will:
+
+1. **Qualify leads** — Analyze CRM data to determine lead quality and fit
+2. **Draft emails** — Create personalized follow-up emails based on lead context
+3. **Request approval** — Submit drafts for human review before sending
+4. **Schedule meetings** — Propose meeting times and add to calendar
+5. **Update CRM** — Log interactions and update lead status
+
+```
+┌─────────────┐
+│   Lead      │
+│   Created   │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────┐
+│ Qualification   │
+│ Agent           │
+└──────┬──────────┘
+       │
+       ├──► High Quality ──► Draft Email ──► Human Approval ──► Send
+       │
+       └──► Low Quality ──► Update CRM Status
+```
+
+## Step 1: Connect HubSpot integration
+
+Configure HubSpot for CRM access:
+
+### Set up HubSpot
+
+1. **Get API token** — Go to HubSpot Settings > Integrations > Private Apps
+2. **Create private app** with scopes:
+   - `crm.objects.contacts.read`
+   - `crm.objects.contacts.write`
+   - `crm.objects.companies.read`
+   - `crm.objects.deals.read`
+   - `crm.objects.deals.write`
+3. **Copy access token** (starts with `pat-na1-`)
+
+### Configure in AgentC2
+
+```bash
+# Set environment variable
+HUBSPOT_ACCESS_TOKEN="pat-na1-..."
+```
+
+Or configure via UI:
+1. Navigate to **Settings > Integrations**
+2. Find **HubSpot** and click **Connect**
+3. Enter your access token
+4. Test connection
+
+<Callout type="info">
+    HubSpot integration uses MCP tools, so the agent can access CRM data through standardized tool calls. No custom code needed.
+</Callout>
+
+## Step 2: Connect Gmail integration
+
+Configure Gmail for email sending:
+
+### Set up Gmail OAuth
+
+1. **Create Google Cloud project** — Go to [console.cloud.google.com](https://console.cloud.google.com)
+2. **Enable Gmail API** — APIs & Services > Enable APIs > Gmail API
+3. **Create OAuth credentials** — OAuth 2.0 Client ID
+4. **Add redirect URI**: `https://your-domain/agent/api/integrations/gmail/callback`
+
+### Configure in AgentC2
+
+**Via UI:**
+1. Navigate to **Settings > Integrations**
+2. Find **Gmail** and click **Connect**
+3. Authorize with Google OAuth
+4. Grant permissions: `gmail.send`, `gmail.readonly`
+
+**Via API:**
+```bash
+curl -X POST https://agentc2.ai/agent/api/integrations/gmail/connect \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "redirectUri": "https://your-domain/agent/api/integrations/gmail/callback"
+  }'
+```
+
+## Step 3: Connect Google Calendar integration
+
+Configure Google Calendar for meeting scheduling:
+
+### Set up Google Calendar OAuth
+
+1. **Enable Calendar API** — In the same Google Cloud project
+2. **Add Calendar scopes** to OAuth consent screen:
+   - `https://www.googleapis.com/auth/calendar.events`
+   - `https://www.googleapis.com/auth/calendar.readonly`
+
+### Configure in AgentC2
+
+**Via UI:**
+1. Navigate to **Settings > Integrations**
+2. Find **Google Calendar** and click **Connect**
+3. Authorize with Google OAuth
+4. Grant calendar permissions
+
+## Step 4: Create the sales agent
+
+Create the main sales agent with instructions for lead qualification and outreach:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sales Agent",
+    "slug": "sales-agent",
+    "description": "Qualifies leads, drafts emails, and schedules meetings with approval gates",
+    "instructions": "You are a sales agent assistant that helps qualify leads and draft personalized outreach.\n\n**Your Responsibilities:**\n\n1. **Lead Qualification**\n   - Analyze CRM data (company size, industry, engagement history)\n   - Determine lead quality score (1-10)\n   - Identify key pain points and opportunities\n   - Recommend next steps\n\n2. **Email Drafting**\n   - Create personalized emails based on lead context\n   - Reference specific company information and pain points\n   - Include clear value propositions\n   - End with a specific call-to-action\n   - Keep emails concise (3-4 paragraphs max)\n\n3. **Meeting Scheduling**\n   - Propose 2-3 meeting time options\n   - Check calendar availability\n   - Include meeting agenda in calendar invite\n\n**Important Rules:**\n- NEVER send emails without human approval\n- Always request approval before any outbound communication\n- Update CRM after every interaction\n- Be professional, empathetic, and value-focused\n- Personalize every message—never use templates verbatim",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "maxTokens": 2000,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 15,
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      }
+    },
+    "maxSteps": 15,
+    "tools": ["web-fetch"],
+    "metadata": {
+      "category": "sales",
+      "requiresApproval": true
+    }
+  }'
+```
+
+## Step 5: Attach CRM tools
+
+Attach HubSpot MCP tools for CRM access:
+
+```bash
+# List available HubSpot tools
+curl https://agentc2.ai/agent/api/mcp/tools?server=hubspot \
+  -H "Authorization: Bearer $TOKEN"
+
+# Attach key CRM tools
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "hubspot.hubspot-get-contact-by-id" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "hubspot.hubspot-get-contact-by-email" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "hubspot.hubspot-get-company-by-id" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "hubspot.hubspot-update-contact" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "hubspot.hubspot-create-deal" }'
+```
+
+## Step 6: Attach email tools
+
+Attach Gmail tools for email operations:
+
+```bash
+# Attach Gmail tools
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "gmail.gmail-list-messages" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "gmail.gmail-send-message" }'
+```
+
+<Callout type="warning">
+    The `gmail-send-message` tool should only be used after human approval. We'll set up approval gates in the next step.
+</Callout>
+
+## Step 7: Attach calendar tools
+
+Attach Google Calendar tools for scheduling:
+
+```bash
+# Attach calendar tools
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "google-calendar.google-calendar-list-events" }'
+
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "google-calendar.google-calendar-create-event" }'
+```
+
+## Step 8: Create approval workflow
+
+Create a workflow with human-in-the-loop approval for email sending:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Sales Outreach with Approval",
+    "slug": "sales-outreach-approval",
+    "description": "Qualifies leads, drafts emails, and requests approval before sending",
+    "definitionJson": {
+      "steps": [
+        {
+          "id": "qualify-lead",
+          "type": "agent",
+          "name": "Qualify Lead",
+          "config": {
+            "agentSlug": "sales-agent",
+            "inputMapping": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Qualify this lead:\n\nContact ID: {{input.contactId}}\nEmail: {{input.email}}\nCompany: {{input.company}}\n\nAnalyze the lead in HubSpot and provide:\n1. Quality score (1-10)\n2. Key pain points\n3. Recommended outreach approach\n4. Email draft (ready for review)"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "request-approval",
+          "type": "human",
+          "name": "Request Email Approval",
+          "config": {
+            "approvalType": "email-draft",
+            "timeout": 86400,
+            "escalationEmail": "sales-manager@example.com",
+            "inputMapping": {
+              "draft": "{{qualify-lead.output.emailDraft}}",
+              "leadInfo": "{{qualify-lead.output.leadAnalysis}}",
+              "contactId": "{{input.contactId}}"
+            }
+          }
+        },
+        {
+          "id": "check-approval",
+          "type": "branch",
+          "name": "Check Approval Status",
+          "config": {
+            "condition": "{{request-approval.output.approved}}",
+            "branches": [
+              {
+                "condition": "true",
+                "steps": [
+                  {
+                    "id": "send-email",
+                    "type": "tool",
+                    "config": {
+                      "toolId": "gmail.gmail-send-message",
+                      "inputMapping": {
+                        "to": "{{input.email}}",
+                        "subject": "{{request-approval.output.approvedSubject}}",
+                        "body": "{{request-approval.output.approvedBody}}"
+                      }
+                    }
+                  },
+                  {
+                    "id": "update-crm",
+                    "type": "tool",
+                    "config": {
+                      "toolId": "hubspot.hubspot-update-contact",
+                      "inputMapping": {
+                        "contactId": "{{input.contactId}}",
+                        "properties": {
+                          "hs_sales_email_sent": "true",
+                          "hs_sales_email_sent_date": "{{now}}",
+                          "hs_last_contacted_date": "{{now}}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "condition": "false",
+                "steps": [
+                  {
+                    "id": "log-rejection",
+                    "type": "tool",
+                    "config": {
+                      "toolId": "hubspot.hubspot-update-contact",
+                      "inputMapping": {
+                        "contactId": "{{input.contactId}}",
+                        "properties": {
+                          "hs_sales_email_rejected": "true",
+                          "hs_sales_email_rejection_reason": "{{request-approval.output.rejectionReason}}"
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    },
+    "inputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "contactId": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "company": { "type": "string" }
+      },
+      "required": ["contactId", "email"]
+    }
+  }'
+```
+
+<Callout type="info">
+    The human approval step suspends the workflow and sends a notification. A human reviewer can approve, reject, or modify the email draft before the workflow continues.
+</Callout>
+
+## Step 9: Test lead qualification
+
+Test the agent's ability to qualify leads:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Qualify this lead:\n\nContact ID: 12345\nEmail: prospect@example.com\n\nAnalyze the lead in HubSpot and provide:\n1. Company information\n2. Quality score (1-10) with reasoning\n3. Key pain points\n4. Recommended outreach approach"
+      }
+    ]
+  }'
+```
+
+The agent should:
+1. Fetch contact from HubSpot
+2. Fetch associated company data
+3. Analyze engagement history
+4. Provide quality score and recommendations
+
+## Step 10: Test email drafting
+
+Test email draft creation:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Draft a personalized follow-up email for:\n\nContact: John Doe\nCompany: Acme Corp (500 employees, SaaS industry)\nPain point: They're struggling with customer retention\n\nMake it personalized, reference their specific situation, and include a clear call-to-action for a demo."
+      }
+    ]
+  }'
+```
+
+Verify the draft:
+- ✅ Personalized with company-specific details
+- ✅ References pain points
+- ✅ Clear value proposition
+- ✅ Specific call-to-action
+- ✅ Professional tone
+
+## Step 11: Test approval workflow
+
+Test the complete approval workflow:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/sales-outreach-approval/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "contactId": "12345",
+      "email": "prospect@example.com",
+      "company": "Acme Corp"
+    }
+  }'
+```
+
+The workflow will:
+1. Qualify the lead
+2. Draft an email
+3. Suspend and request approval
+4. Wait for human review
+5. Send email if approved, or log rejection
+
+### Approve the email
+
+Once the workflow is suspended, approve it:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/workflows/sales-outreach-approval/resume \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "runId": "run_abc123",
+    "input": {
+      "approved": true,
+      "approvedSubject": "How Acme Corp can improve customer retention",
+      "approvedBody": "[Modified email body]"
+    }
+  }'
+```
+
+## Step 12: Add meeting scheduling
+
+Enhance the workflow to schedule meetings:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/workflows/sales-outreach-approval \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "definitionJson": {
+      "steps": [
+        // ... existing steps ...
+        {
+          "id": "schedule-meeting",
+          "type": "agent",
+          "name": "Schedule Meeting",
+          "config": {
+            "agentSlug": "sales-agent",
+            "inputMapping": {
+              "messages": [
+                {
+                  "role": "user",
+                  "content": "Schedule a demo meeting with {{input.email}}. Check calendar availability and propose 2-3 time slots for next week. Include agenda: 'Product demo focusing on customer retention solutions'"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "id": "create-calendar-event",
+          "type": "tool",
+          "config": {
+            "toolId": "google-calendar.google-calendar-create-event",
+            "inputMapping": {
+              "summary": "Product Demo - {{input.company}}",
+              "description": "{{schedule-meeting.output.agenda}}",
+              "start": "{{schedule-meeting.output.proposedTime}}",
+              "end": "{{schedule-meeting.output.proposedEndTime}}",
+              "attendees": ["{{input.email}}"]
+            }
+          }
+        }
+      ]
+    }
+  }'
+```
+
+## Step 13: Configure guardrails
+
+Add guardrails to prevent unauthorized actions:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/sales-agent/guardrails \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configJson": {
+      "output": {
+        "emailContentFilter": {
+          "enabled": true,
+          "blockedPhrases": ["guaranteed", "100%", "risk-free"],
+          "action": "warn"
+        },
+        "piiLeakPrevention": {
+          "enabled": true,
+          "action": "block"
+        }
+      },
+      "execution": {
+        "requireApprovalForEmail": {
+          "enabled": true,
+          "action": "block"
+        }
+      }
+    }
+  }'
+```
+
+<Callout type="warning">
+    The `requireApprovalForEmail` guardrail blocks email sending unless explicitly approved. This ensures no emails are sent without human review.
+</Callout>
+
+## Step 14: Monitor sales agent performance
+
+Track key metrics:
+
+### Email approval rate
+
+```bash
+curl "https://agentc2.ai/agent/api/workflows/sales-outreach-approval/runs?status=completed&limit=100" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Calculate:
+- Approval rate: `approved / total`
+- Average time to approval
+- Rejection reasons
+
+### Lead qualification accuracy
+
+```bash
+curl https://agentc2.ai/agent/api/agents/sales-agent/runs?limit=100 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Review:
+- Quality score distribution
+- Correlation with conversion
+- False positives/negatives
+
+### Email effectiveness
+
+Track in HubSpot:
+- Open rates
+- Reply rates
+- Meeting conversion rates
+
+## What you've built
+
+You've created a production-ready sales agent with:
+
+✅ **CRM integration** via HubSpot for lead data  
+✅ **Email capabilities** via Gmail with approval gates  
+✅ **Calendar integration** for meeting scheduling  
+✅ **Lead qualification** with quality scoring  
+✅ **Personalized email drafting** based on lead context  
+✅ **Human approval workflow** preventing unauthorized outreach  
+✅ **CRM updates** logging all interactions  
+✅ **Guardrails** ensuring compliance and quality
+
+## Next steps
+
+- **[Advanced Workflows](/docs/workflows/control-flow)** — Add conditional routing based on lead quality
+- **[Multi-Agent Orchestration](/docs/guides/multi-agent-orchestration)** — Create specialist agents for different sales stages
+- **[Continuous Learning](/docs/agents/learning)** — Let the agent improve email quality from approval feedback
+- **[Evaluation Setup](/docs/agents/evaluations)** — Create custom scorers for email quality and lead qualification accuracy
+- **[Production Guardrails](/docs/guides/production-guardrails)** — Add org-level policies for sales compliance
+- **[Campaign Management](/docs/campaigns/creating-campaigns)** — Organize multi-touch sales campaigns

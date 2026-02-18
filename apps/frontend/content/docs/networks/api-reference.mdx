@@ -1,0 +1,682 @@
+---
+title: "Networks API Reference"
+description: "Complete API reference for network CRUD, execution, versions, runs, metrics, and evaluations."
+section: "networks"
+order: 6
+primaryKeyword: "networks API reference"
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/version-control"]
+secondaryKeywords:
+    ["network API", "network endpoints", "network execution", "network runs", "network metrics"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Networks API Reference
+
+Complete reference for all network-related API endpoints. All endpoints are prefixed with `/agent/api/networks` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Networks
+
+<ApiEndpoint method="GET" path="/agent/api/networks" />
+
+List all networks accessible to the authenticated user.
+
+### Query Parameters
+
+| Parameter   | Type    | Default | Description                    |
+| ----------- | ------- | ------- | ------------------------------ |
+| `active`    | boolean | `true`  | Filter to active networks only |
+| `published` | boolean | —       | Filter to published networks   |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/networks?active=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "networks": [
+        {
+            "id": "net_abc123",
+            "slug": "research-network",
+            "name": "Research Network",
+            "description": "Multi-agent research network",
+            "version": 3,
+            "isPublished": true,
+            "isActive": true,
+            "runCount": 150,
+            "primitiveCount": 3,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T14:00:00.000Z"
+        }
+    ]
+}
+```
+
+## Create Network
+
+<ApiEndpoint method="POST" path="/agent/api/networks" />
+
+Create a new network.
+
+### Request Body
+
+| Field           | Type    | Required | Default                  | Description                                     |
+| --------------- | ------- | -------- | ------------------------ | ----------------------------------------------- |
+| `name`          | string  | ✅ Yes   | —                        | Display name for the network                    |
+| `slug`          | string  | ❌ No    | Auto-generated           | URL-safe identifier (unique per workspace)      |
+| `description`   | string  | ❌ No    | `null`                   | Human-readable description                      |
+| `instructions`  | string  | ✅ Yes   | —                        | System instructions for the routing coordinator |
+| `modelProvider` | string  | ✅ Yes   | —                        | `"openai"` or `"anthropic"`                     |
+| `modelName`     | string  | ✅ Yes   | —                        | Model identifier (e.g., `"gpt-4o"`)             |
+| `temperature`   | number  | ❌ No    | `0.7`                    | Sampling temperature (0-2)                      |
+| `topologyJson`  | object  | ❌ No    | `{nodes: [], edges: []}` | Network topology graph                          |
+| `memoryConfig`  | object  | ❌ No    | `{}`                     | Memory configuration                            |
+| `maxSteps`      | number  | ❌ No    | `10`                     | Maximum execution steps                         |
+| `primitives`    | array   | ❌ No    | `[]`                     | Array of primitive attachments                  |
+| `isPublished`   | boolean | ❌ No    | `false`                  | Whether network is published                    |
+| `isActive`      | boolean | ❌ No    | `true`                   | Whether network is active                       |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Network",
+    "slug": "research-network",
+    "instructions": "You are a coordinator. Route research tasks to the research agent.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "topologyJson": {
+      "nodes": [
+        {"id": "coordinator", "type": "coordinator"},
+        {"id": "researcher", "type": "agent"}
+      ],
+      "edges": [
+        {"from": "coordinator", "to": "researcher"}
+      ]
+    },
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "research-agent-id"}
+    ]
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "network": {
+    "id": "net_abc123",
+    "slug": "research-network",
+    "name": "Research Network",
+    "instructions": "You are a coordinator...",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "topologyJson": {...},
+    "memoryConfig": {},
+    "maxSteps": 10,
+    "isPublished": false,
+    "isActive": true,
+    "version": 1,
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "updatedAt": "2026-02-18T12:00:00.000Z"
+  }
+}
+```
+
+## Get Network
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}" />
+
+Get details for a specific network by slug or ID.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "network": {
+    "id": "net_abc123",
+    "slug": "research-network",
+    "name": "Research Network",
+    "description": "Multi-agent research network",
+    "instructions": "You are a coordinator...",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "topologyJson": {...},
+    "memoryConfig": {...},
+    "maxSteps": 15,
+    "isPublished": true,
+    "isActive": true,
+    "version": 3,
+    "primitives": [...],
+    "runCount": 150,
+    "primitiveCount": 3,
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "updatedAt": "2026-02-18T14:00:00.000Z"
+  }
+}
+```
+
+## Update Network
+
+<ApiEndpoint method="PUT" path="/agent/api/networks/{slug}" />
+
+Update an existing network. Only USER-type networks can be updated; SYSTEM networks are protected.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+All fields are optional. Only include fields you want to update:
+
+```json
+{
+  "name": "Updated Name",
+  "instructions": "Updated instructions",
+  "topologyJson": {...},
+  "primitives": [...],
+  "isPublished": true
+}
+```
+
+### Example Request
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {
+      "nodes": [...],
+      "edges": [...]
+    },
+    "versionDescription": "Added fact-check workflow"
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "network": {
+    "id": "net_abc123",
+    "version": 4,
+    "topologyJson": {...},
+    "updatedAt": "2026-02-18T15:00:00.000Z"
+  }
+}
+```
+
+<Callout type="info">
+    Updating `topologyJson` or `primitives` automatically creates a new version. Include
+    `versionDescription` to add notes about the changes.
+</Callout>
+
+## Delete Network
+
+<ApiEndpoint method="DELETE" path="/agent/api/networks/{slug}" />
+
+Delete a network. Only USER-type networks can be deleted.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true
+}
+```
+
+## Execute Network
+
+<ApiEndpoint method="POST" path="/agent/api/networks/{slug}/execute" />
+
+Execute a network with input and receive the result.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+| Field            | Type   | Required | Description                                 |
+| ---------------- | ------ | -------- | ------------------------------------------- |
+| `input`          | string | ✅ Yes   | Input text for the network                  |
+| `threadId`       | string | ❌ No    | Conversation thread ID (for memory)         |
+| `requestContext` | object | ❌ No    | Additional context (userId, metadata, etc.) |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Research quantum computing breakthroughs in 2025",
+    "threadId": "thread_123"
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "runId": "run_abc123",
+    "output": "Research findings: ...",
+    "status": "completed",
+    "steps": [
+        {
+            "step": 1,
+            "agent": "coordinator",
+            "action": "routed to researcher",
+            "output": "..."
+        },
+        {
+            "step": 2,
+            "agent": "researcher",
+            "action": "web research",
+            "output": "..."
+        }
+    ],
+    "costUsd": 0.045,
+    "latencyMs": 3420
+}
+```
+
+## Stream Network Execution
+
+<ApiEndpoint method="POST" path="/agent/api/networks/{slug}/execute/stream" />
+
+Execute a network with streaming response updates.
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/execute/stream \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Research quantum computing",
+    "threadId": "thread_123"
+  }'
+```
+
+### Response
+
+Server-Sent Events (SSE) stream:
+
+```
+data: {"type":"step","step":1,"agent":"coordinator","action":"routing"}
+
+data: {"type":"step","step":2,"agent":"researcher","action":"web_research"}
+
+data: {"type":"output","delta":"Research findings:","text":"Research findings:"}
+
+data: {"type":"done","runId":"run_abc123"}
+```
+
+## List Network Runs
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}/runs" />
+
+List network execution runs with filtering and pagination.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Query Parameters
+
+| Parameter     | Type   | Default | Description                                                 |
+| ------------- | ------ | ------- | ----------------------------------------------------------- |
+| `limit`       | number | `50`    | Maximum number of runs to return                            |
+| `offset`      | number | `0`     | Number of runs to skip                                      |
+| `status`      | string | —       | Filter by status (`"completed"`, `"failed"`, `"cancelled"`) |
+| `environment` | string | —       | Filter by environment (`"production"`, `"development"`)     |
+| `triggerType` | string | —       | Filter by trigger type                                      |
+| `from`        | string | —       | Filter runs from date (ISO 8601)                            |
+| `to`          | string | —       | Filter runs to date (ISO 8601)                              |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/networks/research-network/runs?limit=10&status=completed" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "runs": [
+        {
+            "id": "run_abc123",
+            "networkId": "net_xyz789",
+            "input": "Research quantum computing",
+            "output": "Research findings: ...",
+            "status": "completed",
+            "costUsd": 0.045,
+            "latencyMs": 3420,
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        }
+    ],
+    "total": 150,
+    "limit": 10,
+    "offset": 0
+}
+```
+
+## Get Network Run
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}/runs/{runId}" />
+
+Get details for a specific network run.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+| `runId`   | string | Run ID             |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network/runs/run_abc123 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+## List Network Versions
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}/versions" />
+
+List all versions for a network.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "versions": [
+    {
+      "id": "nv_abc123",
+      "networkId": "net_xyz789",
+      "version": 3,
+      "description": "Added fact-check workflow",
+      "topologyJson": {...},
+      "primitivesJson": [...],
+      "createdAt": "2026-02-18T14:00:00.000Z"
+    }
+  ]
+}
+```
+
+## Create Network Version
+
+<ApiEndpoint method="POST" path="/agent/api/networks/{slug}/versions" />
+
+Create a version snapshot of the current network configuration.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Request Body
+
+| Field         | Type   | Required | Description                                   |
+| ------------- | ------ | -------- | --------------------------------------------- |
+| `description` | string | ❌ No    | Notes describing what changed in this version |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Production-ready configuration"
+  }'
+```
+
+## Get Network Metrics
+
+<ApiEndpoint method="GET" path="/agent/api/networks/{slug}/metrics" />
+
+Get network performance metrics.
+
+### Path Parameters
+
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `slug`    | string | Network slug or ID |
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description           |
+| --------- | ------ | ------- | --------------------- |
+| `from`    | string | —       | Start date (ISO 8601) |
+| `to`      | string | —       | End date (ISO 8601)   |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/networks/research-network/metrics?from=2026-02-01&to=2026-02-18" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "metrics": {
+        "totalRuns": 150,
+        "completedRuns": 145,
+        "failedRuns": 5,
+        "averageLatencyMs": 3200,
+        "totalCostUsd": 6.75,
+        "averageCostUsd": 0.045,
+        "routingDecisions": {
+            "researcher": 80,
+            "analyst": 50,
+            "writer": 20
+        }
+    }
+}
+```
+
+## Generate Network Topology
+
+<ApiEndpoint method="POST" path="/agent/api/networks/generate" />
+
+Generate network topology from a natural language description.
+
+### Request Body
+
+| Field    | Type   | Required | Description                                 |
+| -------- | ------ | -------- | ------------------------------------------- |
+| `prompt` | string | ✅ Yes   | Natural language description of the network |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/generate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "Create a research network with coordinator routing to research, analysis, and writing agents"
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "topologyJson": {...},
+  "primitives": [...],
+  "validation": {
+    "valid": true,
+    "warnings": [],
+    "errors": []
+  }
+}
+```
+
+## Validate Network Topology
+
+<ApiEndpoint method="POST" path="/agent/api/networks/validate" />
+
+Validate network topology JSON and primitives.
+
+### Request Body
+
+| Field          | Type   | Required | Description                  |
+| -------------- | ------ | -------- | ---------------------------- |
+| `topologyJson` | object | ✅ Yes   | Topology JSON to validate    |
+| `primitives`   | array  | ✅ Yes   | Primitives array to validate |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/validate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {...},
+    "primitives": [...]
+  }'
+```
+
+### Response
+
+```json
+{
+    "success": true,
+    "valid": true,
+    "warnings": [],
+    "errors": []
+}
+```
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                       | Solution                         |
+| ------ | ------------------------- | --------------------------------- | -------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields           | Include all required fields      |
+| `400`  | `INVALID_TOPOLOGY`        | Invalid topology JSON             | Validate topology structure      |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication | Include `Authorization` header   |
+| `403`  | `FORBIDDEN`               | Insufficient permissions          | Ensure you have access           |
+| `404`  | `NOT_FOUND`               | Network or resource not found     | Check slug/ID is correct         |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists               | Use a different slug             |
+| `429`  | `RATE_LIMIT_EXCEEDED`     | Rate limit exceeded               | Wait before retrying             |
+| `500`  | `INTERNAL_ERROR`          | Server error                      | Retry request or contact support |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Network with slug 'research-network' already exists",
+    "code": "SLUG_CONFLICT"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Execution endpoints**: 30 requests per minute per IP
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 30
+X-RateLimit-Remaining: 25
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Creating Networks](/docs/networks/creating-networks)** — Step-by-step guide to creating networks
+- **[Network Topology](/docs/networks/topology)** — Learn about topology types
+- **[Version Control](/docs/networks/version-control)** — Manage network versions

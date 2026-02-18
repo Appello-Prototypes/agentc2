@@ -1,0 +1,746 @@
+---
+title: "Building Custom Integrations"
+description: "Learn how to build custom MCP servers and OAuth integrations for AgentC2, including authentication, tool discovery, and error handling."
+section: "integrations"
+order: 17
+primaryKeyword: "custom integrations"
+relatedSlugs: ["integrations/overview", "integrations/model-context-protocol", "agents/tools"]
+pageType: "tutorial"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+---
+
+# Building Custom Integrations
+
+Build custom integrations for AgentC2 by creating MCP servers or OAuth-native integrations. This tutorial covers authentication models, scope management, error handling, observability, and how to add new integrations to AgentC2's configuration.
+
+## Integration architecture overview
+
+AgentC2 supports two integration architectures:
+
+1. **MCP-based**: Expose tools via Model Context Protocol server
+2. **OAuth-native**: Direct OAuth2 integration with encrypted token storage
+
+Choose based on your use case:
+
+| Architecture | Use When | Complexity |
+|--------------|----------|------------|
+| **MCP Server** | Service provides API that can be wrapped as tools | Medium |
+| **OAuth Native** | Service requires user consent and token management | High |
+
+<Callout type="info">
+MCP servers are easier to build and maintain. OAuth-native integrations provide better user experience and token management but require more code.
+</Callout>
+
+## Build checklist
+
+Before building, ensure you have:
+
+- [ ] **Authentication model**: API keys, OAuth2, or custom?
+- [ ] **Scope model**: What permissions/scopes are needed?
+- [ ] **Error handling**: How to handle rate limits, auth failures, etc.?
+- [ ] **Observability**: Logging, metrics, debugging hooks
+- [ ] **Tool definitions**: What tools will be exposed?
+- [ ] **Testing strategy**: How to test integration locally?
+
+## Building an MCP server integration
+
+### Step 1: Create MCP server
+
+Create an MCP server that exposes your service's API as tools:
+
+```typescript
+// mcp-server-example.ts
+import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const server = new Server({
+  name: "my-service-mcp",
+  version: "1.0.0"
+}, {
+  capabilities: {
+    tools: {}
+  }
+});
+
+// Define tools
+server.setRequestHandler("tools/list", async () => ({
+  tools: [
+    {
+      name: "my-service-get-item",
+      description: "Get an item from My Service",
+      inputSchema: {
+        type: "object",
+        properties: {
+          itemId: {
+            type: "string",
+            description: "Item ID"
+          }
+        },
+        required: ["itemId"]
+      }
+    }
+  ]
+}));
+
+// Handle tool execution
+server.setRequestHandler("tools/call", async (request) => {
+  const { name, arguments: args } = request.params;
+
+  if (name === "my-service-get-item") {
+    // Call your service API
+    const response = await fetch(`https://api.myservice.com/items/${args.itemId}`, {
+      headers: {
+        "Authorization": `Bearer ${process.env.MY_SERVICE_API_KEY}`
+      }
+    });
+    const data = await response.json();
+    return { content: [{ type: "text", text: JSON.stringify(data) }] };
+  }
+
+  throw new Error(`Unknown tool: ${name}`);
+});
+
+// Start server
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+### Step 2: Add to AgentC2 configuration
+
+Add your MCP server to `packages/mastra/src/mcp/client.ts`:
+
+```typescript
+const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
+  // ... existing providers
+  {
+    key: "my-service",
+    name: "My Service",
+    description: "Custom service integration",
+    category: "productivity",
+    authType: "apiKey",
+    providerType: "mcp",
+    configJson: {
+      requiredFields: ["MY_SERVICE_API_KEY"],
+      fieldDefinitions: {
+        MY_SERVICE_API_KEY: {
+          label: "My Service API key",
+          description: "Get your API key from My Service dashboard",
+          placeholder: "sk_...",
+          type: "password"
+        }
+      },
+      importHints: {
+        matchNames: ["My Service", "my-service"],
+        matchArgs: ["my-service-mcp"],
+        envAliases: {
+          MY_SERVICE_API_KEY: "MY_SERVICE_API_KEY"
+        }
+      }
+    }
+  }
+];
+```
+
+### Step 3: Test integration
+
+Test your MCP server:
+
+```bash
+# Start MCP server
+MY_SERVICE_API_KEY="sk_..." node mcp-server-example.js
+
+# Test tool discovery
+echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list"}' | node mcp-server-example.js
+
+# Test tool execution
+echo '{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {"name": "my-service-get-item", "arguments": {"itemId": "123"}}}' | node mcp-server-example.js
+```
+
+## Building an OAuth-native integration
+
+### Step 1: Implement OAuth flow
+
+Create OAuth start and callback endpoints:
+
+```typescript
+// apps/agent/src/app/api/integrations/my-service/start/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { generateCodeVerifier, generateCodeChallenge } from "@/lib/oauth-pkce";
+
+export async function GET(request: NextRequest) {
+  const codeVerifier = generateCodeVerifier();
+  const codeChallenge = await generateCodeChallenge(codeVerifier);
+
+  // Store codeVerifier in session
+  const session = await getSession();
+  session.oauthCodeVerifier = codeVerifier;
+  await session.save();
+
+  // Build authorization URL
+  const authUrl = new URL("https://myservice.com/oauth/authorize");
+  authUrl.searchParams.set("client_id", process.env.MY_SERVICE_CLIENT_ID!);
+  authUrl.searchParams.set("redirect_uri", `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/my-service/callback`);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("code_challenge", codeChallenge);
+  authUrl.searchParams.set("code_challenge_method", "S256");
+  authUrl.searchParams.set("scope", "read write");
+
+  return NextResponse.redirect(authUrl.toString());
+}
+```
+
+```typescript
+// apps/agent/src/app/api/integrations/my-service/callback/route.ts
+import { NextRequest, NextResponse } from "next/server";
+import { encrypt } from "@/lib/credential-crypto";
+
+export async function GET(request: NextRequest) {
+  const code = request.nextUrl.searchParams.get("code");
+  const session = await getSession();
+  const codeVerifier = session.oauthCodeVerifier;
+
+  // Exchange code for tokens
+  const tokenResponse = await fetch("https://myservice.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: `${process.env.NEXT_PUBLIC_APP_URL}/api/integrations/my-service/callback`,
+      client_id: process.env.MY_SERVICE_CLIENT_ID!,
+      client_secret: process.env.MY_SERVICE_CLIENT_SECRET!,
+      code_verifier: codeVerifier
+    })
+  });
+
+  const tokens = await tokenResponse.json();
+
+  // Encrypt and store tokens
+  const encrypted = encrypt(JSON.stringify({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in * 1000)
+  }), process.env.CREDENTIAL_ENCRYPTION_KEY!);
+
+  // Create IntegrationConnection
+  await prisma.integrationConnection.create({
+    data: {
+      providerId: "my-service-provider-id",
+      organizationId: session.organizationId,
+      credentials: { encrypted },
+      isActive: true
+    }
+  });
+
+  return NextResponse.redirect("/workspace/integrations?connected=my-service");
+}
+```
+
+### Step 2: Implement tool execution
+
+Create tools that use OAuth tokens:
+
+```typescript
+// packages/mastra/src/tools/my-service-tools.ts
+import { decrypt } from "@/lib/credential-crypto";
+
+export async function myServiceGetItem(itemId: string, connectionId: string) {
+  // Get encrypted tokens
+  const connection = await prisma.integrationConnection.findUnique({
+    where: { id: connectionId }
+  });
+
+  // Decrypt tokens
+  const tokens = JSON.parse(decrypt(connection.credentials.encrypted, process.env.CREDENTIAL_ENCRYPTION_KEY!));
+
+  // Check if token expired
+  if (Date.now() >= tokens.expires_at) {
+    // Refresh token
+    tokens = await refreshMyServiceToken(tokens.refresh_token);
+    // Update stored tokens
+  }
+
+  // Call API with token
+  const response = await fetch(`https://api.myservice.com/items/${itemId}`, {
+    headers: {
+      "Authorization": `Bearer ${tokens.access_token}`
+    }
+  });
+
+  return response.json();
+}
+```
+
+### Step 3: Register tools
+
+Register tools in the tool registry:
+
+```typescript
+// packages/mastra/src/tools/registry.ts
+import { myServiceGetItem } from "./my-service-tools";
+
+toolRegistry.register("my-service-get-item", {
+  description: "Get an item from My Service",
+  execute: async (args, context) => {
+    const connection = await getConnectionForTool("my-service", context.organizationId);
+    return myServiceGetItem(args.itemId, connection.id);
+  },
+  inputSchema: {
+    type: "object",
+    properties: {
+      itemId: { type: "string" }
+    },
+    required: ["itemId"]
+  }
+});
+```
+
+### Step 4: Add provider configuration
+
+Add provider to `packages/mastra/src/mcp/client.ts`:
+
+```typescript
+{
+  key: "my-service",
+  name: "My Service",
+  description: "Custom OAuth service integration",
+  category: "productivity",
+  authType: "oauth",
+  providerType: "oauth",
+  configJson: {
+    requiredScopes: ["read", "write"],
+    oauthConfig: {
+      socialProvider: null, // Custom OAuth (not Google/Microsoft)
+      scopes: ["read", "write"],
+      authorizationEndpoint: "https://myservice.com/oauth/authorize",
+      tokenEndpoint: "https://myservice.com/oauth/token",
+      statusEndpoint: "/api/integrations/my-service/status",
+      startEndpoint: "/api/integrations/my-service/start",
+      callbackEndpoint: "/api/integrations/my-service/callback"
+    }
+  }
+}
+```
+
+## Authentication models
+
+### API key authentication
+
+For MCP servers with API keys:
+
+```typescript
+// Store in IntegrationConnection.credentials
+{
+  MY_SERVICE_API_KEY: "sk_..."
+}
+
+// Pass to MCP server as environment variable
+process.env.MY_SERVICE_API_KEY = connection.credentials.MY_SERVICE_API_KEY;
+```
+
+### OAuth2 authentication
+
+For OAuth2 integrations:
+
+```typescript
+// Encrypt tokens before storage
+const encrypted = encrypt(JSON.stringify({
+  access_token: "...",
+  refresh_token: "...",
+  expires_at: 1234567890
+}), CREDENTIAL_ENCRYPTION_KEY);
+
+// Store encrypted
+connection.credentials = { encrypted };
+```
+
+### Token refresh
+
+Implement automatic token refresh:
+
+```typescript
+async function getValidToken(connectionId: string) {
+  const connection = await getConnection(connectionId);
+  const tokens = decryptTokens(connection.credentials);
+
+  if (Date.now() >= tokens.expires_at - 60000) { // Refresh 1 min before expiry
+    const newTokens = await refreshToken(tokens.refresh_token);
+    await updateConnectionTokens(connectionId, newTokens);
+    return newTokens;
+  }
+
+  return tokens;
+}
+```
+
+## Scope model
+
+### Required scopes
+
+Define required scopes in provider configuration:
+
+```typescript
+{
+  requiredScopes: ["read", "write"],
+  oauthConfig: {
+    scopes: ["read", "write", "admin"] // Requested scopes
+  }
+}
+```
+
+### Scope validation
+
+Validate scopes on token receipt:
+
+```typescript
+const grantedScopes = tokenResponse.scope.split(" ");
+const requiredScopes = ["read", "write"];
+
+const hasAllScopes = requiredScopes.every(scope => grantedScopes.includes(scope));
+if (!hasAllScopes) {
+  throw new Error("Missing required scopes");
+}
+```
+
+## Error handling
+
+### Rate limiting
+
+Handle rate limits gracefully:
+
+```typescript
+async function callWithRetry(apiCall: () => Promise<Response>, retries = 3) {
+  try {
+    return await apiCall();
+  } catch (error) {
+    if (error.status === 429 && retries > 0) {
+      const retryAfter = error.headers["retry-after"] || 60;
+      await sleep(retryAfter * 1000);
+      return callWithRetry(apiCall, retries - 1);
+    }
+    throw error;
+  }
+}
+```
+
+### Authentication errors
+
+Handle auth failures:
+
+```typescript
+try {
+  return await callAPI();
+} catch (error) {
+  if (error.status === 401) {
+    // Token expired or invalid
+    await refreshToken(connectionId);
+    return await callAPI(); // Retry with new token
+  }
+  if (error.status === 403) {
+    // Insufficient permissions
+    connection.isActive = false;
+    connection.errorMessage = "Insufficient permissions. Please re-authorize.";
+    throw error;
+  }
+  throw error;
+}
+```
+
+### Network errors
+
+Handle network failures:
+
+```typescript
+async function callWithBackoff(apiCall: () => Promise<Response>, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (error.code === "ECONNREFUSED" || error.code === "ETIMEDOUT") {
+        await sleep(Math.pow(2, i) * 1000); // Exponential backoff
+        continue;
+      }
+      throw error;
+    }
+  }
+  throw new Error("Max retries exceeded");
+}
+```
+
+## Observability
+
+### Logging
+
+Log integration events:
+
+```typescript
+// Log tool execution
+logger.info("Tool executed", {
+  toolId: "my-service-get-item",
+  connectionId,
+  organizationId,
+  durationMs: Date.now() - startTime,
+  success: true
+});
+
+// Log errors
+logger.error("Tool execution failed", {
+  toolId: "my-service-get-item",
+  connectionId,
+  error: error.message,
+  stack: error.stack
+});
+```
+
+### Metrics
+
+Track integration metrics:
+
+```typescript
+// Track tool calls
+metrics.increment("integration.tool.calls", {
+  provider: "my-service",
+  tool: "get-item"
+});
+
+// Track latency
+metrics.histogram("integration.tool.latency", durationMs, {
+  provider: "my-service",
+  tool: "get-item"
+});
+
+// Track errors
+metrics.increment("integration.tool.errors", {
+  provider: "my-service",
+  error: error.type
+});
+```
+
+### Integration events
+
+Log lifecycle events:
+
+```typescript
+await prisma.integrationEvent.create({
+  data: {
+    connectionId,
+    eventType: "tool.executed",
+    success: true,
+    durationMs: 245,
+    metadata: {
+      toolId: "my-service-get-item",
+      itemId: "123"
+    }
+  }
+});
+```
+
+## Testing strategy
+
+### Unit tests
+
+Test tool execution:
+
+```typescript
+describe("my-service-get-item", () => {
+  it("should get item by ID", async () => {
+    const result = await myServiceGetItem("123", "connection-id");
+    expect(result).toHaveProperty("id", "123");
+  });
+
+  it("should handle API errors", async () => {
+    mockAPI.mockReject(new Error("API error"));
+    await expect(myServiceGetItem("123", "connection-id")).rejects.toThrow();
+  });
+});
+```
+
+### Integration tests
+
+Test OAuth flow:
+
+```typescript
+describe("OAuth flow", () => {
+  it("should redirect to authorization URL", async () => {
+    const response = await fetch("/api/integrations/my-service/start");
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toContain("myservice.com/oauth/authorize");
+  });
+
+  it("should handle callback and store tokens", async () => {
+    const response = await fetch("/api/integrations/my-service/callback?code=test-code");
+    expect(response.status).toBe(302);
+    // Verify connection created
+    const connection = await prisma.integrationConnection.findFirst({
+      where: { providerId: "my-service" }
+    });
+    expect(connection).toBeDefined();
+  });
+});
+```
+
+### End-to-end tests
+
+Test full integration:
+
+```typescript
+describe("My Service integration E2E", () => {
+  it("should execute tool end-to-end", async () => {
+    // Create connection
+    const connection = await createConnection("my-service");
+    
+    // Attach tool to agent
+    await attachTool("my-agent", "my-service-get-item");
+    
+    // Execute via agent
+    const result = await agent.callTool("my-service-get-item", { itemId: "123" });
+    expect(result).toHaveProperty("id", "123");
+  });
+});
+```
+
+## Adding to AgentC2 configuration
+
+### 1. Add provider seed
+
+Add to `packages/mastra/src/mcp/client.ts`:
+
+```typescript
+const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
+  // ... existing providers
+  {
+    key: "my-service",
+    name: "My Service",
+    description: "Custom service integration",
+    category: "productivity",
+    authType: "apiKey", // or "oauth"
+    providerType: "mcp", // or "oauth"
+    configJson: {
+      // Provider-specific config
+    }
+  }
+];
+```
+
+### 2. Register tools
+
+Register tools in `packages/mastra/src/tools/registry.ts`:
+
+```typescript
+import { myServiceGetItem } from "./my-service-tools";
+
+toolRegistry.register("my-service-get-item", {
+  description: "Get an item from My Service",
+  execute: async (args, context) => {
+    // Tool execution logic
+  },
+  inputSchema: {
+    // JSON Schema
+  }
+});
+```
+
+### 3. Create OAuth routes (if OAuth)
+
+Create routes in `apps/agent/src/app/api/integrations/my-service/`:
+- `start/route.ts` - OAuth start
+- `callback/route.ts` - OAuth callback
+- `status/route.ts` - Connection status
+
+### 4. Update environment variables
+
+Add to `.env.example`:
+
+```bash
+MY_SERVICE_API_KEY="..."
+MY_SERVICE_CLIENT_ID="..."
+MY_SERVICE_CLIENT_SECRET="..."
+```
+
+## Best practices
+
+### 1. Use TypeScript
+
+Type your integration code:
+
+```typescript
+interface MyServiceItem {
+  id: string;
+  name: string;
+  createdAt: string;
+}
+
+async function myServiceGetItem(itemId: string): Promise<MyServiceItem> {
+  // Implementation
+}
+```
+
+### 2. Validate inputs
+
+Validate tool inputs:
+
+```typescript
+import { z } from "zod";
+
+const itemIdSchema = z.string().min(1).max(100);
+
+async function myServiceGetItem(itemId: string) {
+  const validated = itemIdSchema.parse(itemId);
+  // Use validated
+}
+```
+
+### 3. Handle edge cases
+
+Handle all edge cases:
+
+```typescript
+async function myServiceGetItem(itemId: string) {
+  try {
+    const response = await fetch(`https://api.myservice.com/items/${itemId}`);
+    
+    if (response.status === 404) {
+      throw new Error("Item not found");
+    }
+    
+    if (!response.ok) {
+      throw new Error(`API error: ${response.statusText}`);
+    }
+    
+    return await response.json();
+  } catch (error) {
+    if (error instanceof TypeError) {
+      // Network error
+      throw new Error("Network error. Please try again.");
+    }
+    throw error;
+  }
+}
+```
+
+### 4. Document your integration
+
+Document your integration:
+
+```typescript
+/**
+ * My Service Integration
+ * 
+ * Provides tools for interacting with My Service API.
+ * 
+ * Required scopes: read, write
+ * Rate limits: 100 requests/minute
+ * 
+ * @example
+ * ```typescript
+ * const item = await myServiceGetItem("123");
+ * ```
+ */
+```
+
+## Related topics
+
+- **[Integrations Overview](/docs/integrations/overview)** — Learn about integration architecture
+- **[Model Context Protocol](/docs/integrations/model-context-protocol)** — Understand MCP tool execution
+- **[Agent Tools](/docs/agents/tools)** — Attach tools to agents

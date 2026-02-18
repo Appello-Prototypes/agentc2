@@ -1,0 +1,379 @@
+---
+title: "Platform API"
+description: "Complete API reference for organizations, activity feeds, audit logs, and health checks."
+section: "api-reference"
+order: 8
+primaryKeyword: "platform API reference"
+relatedSlugs: ["platform/multi-tenancy"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Platform API
+
+Complete reference for all platform-related API endpoints. All endpoints are prefixed with `/agent/api` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Organizations
+
+<ApiEndpoint method="GET" path="/agent/api/organizations" />
+
+List all organizations the authenticated user is a member of. Returns organizations with their metadata and membership details.
+
+### Query Parameters
+
+| Parameter | Type   | Default | Description                    |
+| --------- | ------ | ------- | ------------------------------ |
+| `role`    | string | —       | Filter by user role (`"OWNER"`, `"ADMIN"`, `"MEMBER"`) |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/organizations" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "organizations": [
+        {
+            "id": "org_abc123",
+            "slug": "acme-corp",
+            "name": "Acme Corporation",
+            "description": "Leading provider of widgets",
+            "role": "OWNER",
+            "memberCount": 15,
+            "workspaceCount": 3,
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Organization
+
+<ApiEndpoint method="POST" path="/agent/api/organizations" />
+
+Create a new organization. The authenticated user will be set as the owner. A default workspace will be created automatically.
+
+### Request Body
+
+| Field         | Type   | Required | Description                    |
+| ------------- | ------ | -------- | ------------------------------ |
+| `name`        | string | ✅ Yes   | Display name for the organization |
+| `slug`        | string | ❌ No    | URL-safe identifier (auto-generated if omitted) |
+| `description` | string | ❌ No    | Human-readable description      |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/organizations \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Acme Corporation",
+    "slug": "acme-corp",
+    "description": "Leading provider of widgets"
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "organization": {
+        "id": "org_abc123",
+        "slug": "acme-corp",
+        "name": "Acme Corporation",
+        "description": "Leading provider of widgets",
+        "createdAt": "2026-02-18T12:00:00.000Z"
+    },
+    "defaultWorkspace": {
+        "id": "ws_abc123",
+        "name": "Default Workspace",
+        "slug": "default",
+        "environment": "production"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Get Activity Feed
+
+<ApiEndpoint method="GET" path="/agent/api/activity" />
+
+Get unified activity feed across all agents. Returns activity events with filtering, cursor pagination, and aggregate metrics.
+
+### Query Parameters
+
+| Parameter   | Type   | Default | Description                    |
+| ----------- | ------ | ------- | ------------------------------ |
+| `type`      | string | —       | Filter by event type (comma-separated) |
+| `agentId`   | string | —       | Filter by agent ID             |
+| `agentSlug` | string | —       | Filter by agent slug            |
+| `source`    | string | —       | Filter by source               |
+| `status`    | string | —       | Filter by status                |
+| `from`      | string | —       | Start date (ISO string)        |
+| `to`        | string | —       | End date (ISO string)           |
+| `search`    | string | —       | Search in summary/detail        |
+| `tags`      | string | —       | Filter by tags (comma-separated) |
+| `cursor`    | string | —       | Pagination cursor               |
+| `limit`     | number | `50`    | Maximum results (max: 200)     |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/activity?type=agent_run&agentSlug=research-agent&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "events": [
+        {
+            "id": "evt_abc123",
+            "type": "agent_run",
+            "agentId": "cm_xyz789",
+            "agentSlug": "research-agent",
+            "agentName": "Research Agent",
+            "summary": "Completed research query",
+            "detail": "Query: What are AI developments?",
+            "status": "completed",
+            "costUsd": 0.023,
+            "durationMs": 2340,
+            "tags": ["research", "ai"],
+            "timestamp": "2026-02-18T12:00:00.000Z"
+        }
+    ],
+    "metrics": {
+        "totalEvents": 1500,
+        "byType": {
+            "agent_run": 1200,
+            "workflow_execution": 200,
+            "network_execution": 100
+        },
+        "byAgent": [
+            {
+                "agentSlug": "research-agent",
+                "agentName": "Research Agent",
+                "count": 500
+            }
+        ],
+        "totalCost": 45.67,
+        "avgDuration": 2150
+    },
+    "hasMore": true,
+    "nextCursor": "evt_def456"
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_DATE` | Invalid date format                |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## List Audit Logs
+
+<ApiEndpoint method="GET" path="/agent/api/audit-logs" />
+
+Query audit logs with filtering and pagination. Returns audit trail of platform actions and changes.
+
+### Query Parameters
+
+| Parameter   | Type   | Default | Description                    |
+| ----------- | ------ | ------- | ------------------------------ |
+| `entityType` | string | —       | Filter by entity type (e.g., `"Agent"`, `"AgentVersion"`) |
+| `entityId`  | string | —       | Filter by entity ID             |
+| `action`    | string | —       | Filter by action type           |
+| `from`      | string | —       | Start date (ISO string)         |
+| `to`        | string | —       | End date (ISO string)           |
+| `limit`     | number | `50`    | Maximum results (max: 100)      |
+| `cursor`    | string | —       | Pagination cursor               |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/audit-logs?entityType=Agent&action=CREATE&limit=20" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "logs": [
+        {
+            "id": "audit_abc123",
+            "action": "CREATE",
+            "entityType": "Agent",
+            "entityId": "cm_xyz789",
+            "actorId": "user_123",
+            "metadata": {
+                "slug": "research-agent",
+                "name": "Research Agent"
+            },
+            "createdAt": "2026-02-18T12:00:00.000Z"
+        }
+    ],
+    "hasMore": false,
+    "nextCursor": null
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_DATE` | Invalid date format                |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Insufficient permissions (audit logs require admin access) |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Get Health Check
+
+<ApiEndpoint method="GET" path="/agent/api/health" />
+
+Get platform health status. Returns system status, database connectivity, and service availability.
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/health \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "status": "healthy",
+    "timestamp": "2026-02-18T12:00:00.000Z",
+    "services": {
+        "database": {
+            "status": "healthy",
+            "latencyMs": 12
+        },
+        "vectorStore": {
+            "status": "healthy",
+            "latencyMs": 45
+        },
+        "mcp": {
+            "status": "healthy",
+            "serversConnected": 8
+        }
+    },
+    "version": "1.0.0"
+}
+```
+
+### Response `503 Service Unavailable`
+
+```json
+{
+    "success": false,
+    "status": "unhealthy",
+    "timestamp": "2026-02-18T12:00:00.000Z",
+    "services": {
+        "database": {
+            "status": "unhealthy",
+            "error": "Connection timeout"
+        }
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `503`  | `SERVICE_UNAVAILABLE` | One or more services are unhealthy |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
+| `400`  | `INVALID_DATE`            | Invalid date format                | Use ISO 8601 date format          |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have required role     |
+| `404`  | `NOT_FOUND`               | Resource not found                 | Check ID/slug is correct          |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                | Use a different slug              |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+| `503`  | `SERVICE_UNAVAILABLE`     | Service temporarily unavailable    | Retry after delay                 |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Organization with slug 'acme-corp' already exists",
+    "code": "SLUG_CONFLICT"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **Activity feed endpoints**: 100 requests per minute per user
+- **Audit log endpoints**: 50 requests per minute per user (admin only)
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+- **Health check endpoints**: 60 requests per minute per IP
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Multi-Tenancy](/docs/platform/multi-tenancy)** — Learn about organizations and workspaces
+- **[Authentication](/docs/platform/authentication)** — Understanding authentication and authorization

@@ -1,0 +1,463 @@
+---
+title: "Skills API"
+description: "Complete API reference for skill CRUD operations, versions, and agent attachments."
+section: "api-reference"
+order: 4
+primaryKeyword: "skills API reference"
+relatedSlugs: ["skills/overview", "skills/creating-skills", "skills/version-control"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Skills API
+
+Complete reference for all skill-related API endpoints. All endpoints are prefixed with `/agent/api/skills` and require authentication via Bearer token or session cookie.
+
+## Authentication
+
+All endpoints require authentication. Use one of these methods:
+
+- **Bearer token**: `Authorization: Bearer $TOKEN`
+- **Session cookie**: Include session cookie from workspace login
+
+<Callout type="info">
+    API tokens can be generated in workspace settings. Session cookies are automatically set when
+    logging in via the workspace UI.
+</Callout>
+
+## List Skills
+
+<ApiEndpoint method="GET" path="/agent/api/skills" />
+
+List all skills accessible to the authenticated user. Skills are reusable tool collections that can be attached to multiple agents.
+
+### Query Parameters
+
+| Parameter | Type    | Default | Description                    |
+| --------- | ------- | ------- | ------------------------------ |
+| `active`  | boolean | `true`  | Filter to active skills only    |
+| `pinned`  | boolean | —       | Filter to pinned skills         |
+
+### Example Request
+
+```bash
+curl "https://agentc2.ai/agent/api/skills?active=true" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "skills": [
+        {
+            "id": "sk_abc123",
+            "slug": "web-research",
+            "name": "Web Research",
+            "description": "Tools for web research and information gathering",
+            "version": 2,
+            "isActive": true,
+            "isPinned": false,
+            "toolCount": 3,
+            "agentCount": 5,
+            "createdAt": "2026-02-18T12:00:00.000Z",
+            "updatedAt": "2026-02-18T12:05:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Skill
+
+<ApiEndpoint method="POST" path="/agent/api/skills" />
+
+Create a new skill with specified tools. Skills group related tools together for easy attachment to agents.
+
+### Request Body
+
+| Field         | Type     | Required | Default        | Description                                |
+| ------------- | -------- | -------- | -------------- | ------------------------------------------ |
+| `name`        | string   | ✅ Yes   | —              | Display name for the skill                 |
+| `slug`        | string   | ❌ No    | Auto-generated | URL-safe identifier (unique per workspace) |
+| `description` | string   | ❌ No    | `null`         | Human-readable description                 |
+| `tools`       | string[] | ✅ Yes   | —              | Array of tool IDs to include in skill      |
+| `isPinned`    | boolean  | ❌ No    | `false`        | Whether skill is pinned                    |
+| `isActive`    | boolean  | ❌ No    | `true`         | Whether skill is active                    |
+| `metadata`    | object   | ❌ No    | `null`         | Custom JSON metadata                       |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Web Research",
+    "slug": "web-research",
+    "description": "Tools for web research and information gathering",
+    "tools": ["web-fetch", "web-scrape", "web-search"],
+    "isPinned": false
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "skill": {
+        "id": "sk_abc123",
+        "slug": "web-research",
+        "name": "Web Research",
+        "description": "Tools for web research and information gathering",
+        "version": 1,
+        "isActive": true,
+        "isPinned": false,
+        "toolCount": 3,
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code                | Description                        |
+| ------ | ------------------------- | ---------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
+| `400`  | `INVALID_TOOL`            | Tool not found                     |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                |
+| `500`  | `INTERNAL_ERROR`          | Server error                       |
+
+## Get Skill
+
+<ApiEndpoint method="GET" path="/agent/api/skills/{slug}" />
+
+Get details for a specific skill by slug or ID. Returns full skill configuration including all attached tools.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `slug`    | string | Skill slug or ID |
+
+### Example Request
+
+```bash
+curl https://agentc2.ai/agent/api/skills/web-research \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "skill": {
+        "id": "sk_abc123",
+        "slug": "web-research",
+        "name": "Web Research",
+        "description": "Tools for web research and information gathering",
+        "tools": [
+            {
+                "id": "web-fetch",
+                "name": "Web Fetch",
+                "description": "Fetch content from a URL"
+            },
+            {
+                "id": "web-scrape",
+                "name": "Web Scrape",
+                "description": "Scrape structured data from a webpage"
+            },
+            {
+                "id": "web-search",
+                "name": "Web Search",
+                "description": "Search the web for information"
+            }
+        ],
+        "version": 2,
+        "isActive": true,
+        "isPinned": false,
+        "agentCount": 5,
+        "createdAt": "2026-02-18T12:00:00.000Z",
+        "updatedAt": "2026-02-18T12:05:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `403`  | `FORBIDDEN`    | Insufficient permissions           |
+| `404`  | `NOT_FOUND`    | Skill not found                    |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Update Skill
+
+<ApiEndpoint method="PATCH" path="/agent/api/skills/{slug}" />
+
+Update an existing skill. All fields are optional—only include fields you want to update.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `slug`    | string | Skill slug or ID |
+
+### Request Body
+
+All fields are optional:
+
+| Field         | Type     | Required | Description                    |
+| ------------- | -------- | -------- | ------------------------------ |
+| `name`        | string   | ❌ No    | Display name                   |
+| `description` | string   | ❌ No    | Human-readable description     |
+| `tools`       | string[] | ❌ No    | Array of tool IDs               |
+| `isPinned`    | boolean  | ❌ No    | Whether skill is pinned        |
+| `isActive`    | boolean  | ❌ No    | Whether skill is active        |
+
+### Example Request
+
+```bash
+curl -X PATCH https://agentc2.ai/agent/api/skills/web-research \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "tools": ["web-fetch", "web-scrape", "web-search", "web-summarize"],
+    "isPinned": true
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "skill": {
+        "id": "sk_abc123",
+        "slug": "web-research",
+        "tools": ["web-fetch", "web-scrape", "web-search", "web-summarize"],
+        "isPinned": true,
+        "toolCount": 4,
+        "updatedAt": "2026-02-18T12:05:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_TOOL` | Tool not found                     |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Skill not found                    |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Delete Skill
+
+<ApiEndpoint method="DELETE" path="/agent/api/skills/{slug}" />
+
+Delete a skill. This will remove the skill from all agents that have it attached. This action is permanent and cannot be undone.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `slug`    | string | Skill slug or ID |
+
+### Example Request
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/skills/web-research \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "message": "Skill deleted successfully"
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Skill not found                    |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Create Version
+
+<ApiEndpoint method="POST" path="/agent/api/skills/{slug}/versions" />
+
+Create a version snapshot of the current skill configuration. Useful for tracking changes and rolling back if needed.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `slug`    | string | Skill slug or ID |
+
+### Request Body
+
+| Field         | Type   | Required | Description                                   |
+| ------------- | ------ | -------- | --------------------------------------------- |
+| `changeNotes` | string | ❌ No    | Notes describing what changed in this version |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills/web-research/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "changeNotes": "Added web-summarize tool"
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "version": {
+        "id": "sv_abc123",
+        "skillId": "sk_xyz789",
+        "version": 3,
+        "changeNotes": "Added web-summarize tool",
+        "configSnapshot": {
+            "tools": ["web-fetch", "web-scrape", "web-search", "web-summarize"]
+        },
+        "createdAt": "2026-02-18T12:00:00.000Z"
+    }
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Skill not found                    |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Attach to Agent
+
+<ApiEndpoint method="POST" path="/agent/api/skills/{slug}/agents" />
+
+Attach a skill to one or more agents. The skill's tools will become available to the specified agents.
+
+### Path Parameters
+
+| Parameter | Type   | Description      |
+| --------- | ------ | ---------------- |
+| `slug`    | string | Skill slug or ID |
+
+### Request Body
+
+| Field     | Type     | Required | Description                    |
+| --------- | -------- | -------- | ------------------------------ |
+| `agentIds` | string[] | ✅ Yes   | Array of agent IDs to attach to |
+
+### Example Request
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/skills/web-research/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "agentIds": ["cm_agent1", "cm_agent2"]
+  }'
+```
+
+### Response `200 OK`
+
+```json
+{
+    "success": true,
+    "attached": [
+        {
+            "agentId": "cm_agent1",
+            "agentSlug": "research-agent-1",
+            "attachedAt": "2026-02-18T12:00:00.000Z"
+        },
+        {
+            "agentId": "cm_agent2",
+            "agentSlug": "research-agent-2",
+            "attachedAt": "2026-02-18T12:00:00.000Z"
+        }
+    ]
+}
+```
+
+### Errors
+
+| Status | Error Code     | Description                        |
+| ------ | -------------- | ---------------------------------- |
+| `400`  | `INVALID_AGENT` | Agent not found                    |
+| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| `404`  | `NOT_FOUND`    | Skill not found                    |
+| `500`  | `INTERNAL_ERROR` | Server error                       |
+
+## Error Codes
+
+All endpoints may return these error codes:
+
+| Status | Error Code                | Description                        | Solution                          |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
+| `400`  | `INVALID_TOOL`            | Tool not found                     | Check tool ID is correct          |
+| `400`  | `INVALID_AGENT`           | Agent not found                    | Check agent ID is correct         |
+| `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
+| `404`  | `NOT_FOUND`               | Skill or resource not found        | Check slug/ID is correct          |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists                | Use a different slug              |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+
+### Error Response Format
+
+```json
+{
+    "success": false,
+    "error": "Tool 'invalid-tool' not found",
+    "code": "INVALID_TOOL"
+}
+```
+
+## Rate Limits
+
+API endpoints are rate-limited to prevent abuse:
+
+- **CRUD endpoints**: 100 requests per minute per user
+- **List endpoints**: 200 requests per minute per user
+
+Rate limit headers are included in responses:
+
+```
+X-RateLimit-Limit: 100
+X-RateLimit-Remaining: 95
+X-RateLimit-Reset: 1642608000
+```
+
+## Related Topics
+
+- **[Creating Skills](/docs/skills/creating-skills)** — Step-by-step guide to creating skills
+- **[Skills Overview](/docs/skills/overview)** — Learn about skills and tool collections
+- **[Skills Version Control](/docs/skills/version-control)** — Manage skill versions and rollbacks

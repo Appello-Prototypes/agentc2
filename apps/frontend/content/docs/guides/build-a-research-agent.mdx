@@ -1,0 +1,494 @@
+---
+title: "Build a Research Agent"
+description: "Build a research agent that scrapes web pages, ingests documents, and synthesizes findings into comprehensive reports."
+section: "guides"
+order: 2
+primaryKeyword: "AI research agent"
+secondaryKeywords: ["web scraping agent", "document research AI", "research automation"]
+relatedSlugs: ["agents/creating-agents", "agents/tools", "integrations/firecrawl", "knowledge/document-ingestion", "knowledge/vector-search"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Build a Research Agent
+
+This guide walks you through building a production-ready research agent that can scrape web pages, ingest documents into a knowledge base, query multiple sources, and synthesize comprehensive research reports. By the end, you'll have an agent capable of conducting deep research across web sources and internal documents.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- API keys for OpenAI or Anthropic
+- Firecrawl API key (for web scraping)
+- (Optional) Documents ready for ingestion into the knowledge base
+
+<Callout type="info">
+    This guide builds a research agent that combines web scraping, document ingestion, and RAG retrieval. You can start with basic web research and add document capabilities incrementally.
+</Callout>
+
+## Architecture overview
+
+Your research agent will:
+
+1. **Accept research queries** — Natural language questions or topics
+2. **Scrape web sources** — Use Firecrawl to extract content from URLs
+3. **Query knowledge base** — Search ingested documents via RAG
+4. **Synthesize findings** — Combine multiple sources into coherent reports
+5. **Cite sources** — Provide references for all claims
+
+```
+┌──────────────┐
+│ Research     │
+│ Query        │
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────┐      ┌──────────────┐
+│ Web Scraping    │      │ Knowledge    │
+│ (Firecrawl)     │      │ Base (RAG)   │
+└────────┬────────┘      └──────┬───────┘
+         │                      │
+         └──────────┬───────────┘
+                    │
+                    ▼
+         ┌──────────────────┐
+         │ Synthesis Agent  │
+         │ (Report Writer)  │
+         └─────────┬────────┘
+                   │
+                   ▼
+         ┌──────────────────┐
+         │ Research Report  │
+         │ + Citations      │
+         └──────────────────┘
+```
+
+## Step 1: Create the research agent
+
+Create the main research agent with instructions for conducting thorough research:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Agent",
+    "slug": "research-agent",
+    "description": "Conducts comprehensive research by scraping web sources and querying knowledge bases",
+    "instructions": "You are a research agent specializing in comprehensive information gathering and synthesis.\n\nYour process:\n\n1. **Understand the query** — Break down the research question into sub-topics\n2. **Identify sources** — Determine which URLs to scrape and which knowledge base queries to run\n3. **Gather information** — Use Firecrawl to scrape web pages and RAG to query documents\n4. **Evaluate sources** — Assess credibility, recency, and relevance of each source\n5. **Synthesize findings** — Combine information from multiple sources into a coherent report\n6. **Cite sources** — Provide clear citations for all claims, including URLs and document references\n\nGuidelines:\n- Always use multiple sources to verify claims\n- Prefer recent sources (check publication dates)\n- Distinguish between facts and opinions\n- Note any contradictions between sources\n- If information is incomplete, say so explicitly\n- Format citations as: [Source Name](URL) or [Document Title](document-id)",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "maxTokens": 8000,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 30,
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      }
+    },
+    "maxSteps": 20,
+    "tools": ["web-fetch"],
+    "metadata": {
+      "category": "research",
+      "capabilities": ["web-scraping", "rag-query", "synthesis"]
+    }
+  }'
+```
+
+### Key configuration decisions
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| **Temperature** | 0.3 | Low temperature for factual accuracy and consistent citation formatting |
+| **Max Tokens** | 8000 | Large context window for comprehensive reports |
+| **Max Steps** | 20 | Multiple tool calls needed for thorough research |
+| **Memory** | Enabled | Remember previous research queries and findings |
+
+## Step 2: Configure Firecrawl integration
+
+Firecrawl enables the agent to scrape web pages and extract clean content:
+
+### Set up Firecrawl
+
+1. **Get API key** — Sign up at [firecrawl.dev](https://firecrawl.dev) and get your API key
+2. **Configure environment variable**:
+
+```bash
+FIRECRAWL_API_KEY="fc-..."
+```
+
+### Attach Firecrawl tools
+
+Attach Firecrawl MCP tools to your research agent:
+
+```bash
+# List available Firecrawl tools
+curl https://agentc2.ai/agent/api/mcp/tools?server=firecrawl \
+  -H "Authorization: Bearer $TOKEN"
+
+# Attach Firecrawl scrape tool
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "firecrawl.firecrawl-scrape-url" }'
+
+# Attach Firecrawl crawl tool (for multiple pages)
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "firecrawl.firecrawl-crawl-url" }'
+```
+
+<Callout type="tip">
+    Firecrawl's `scrape-url` tool is best for single pages, while `crawl-url` can follow links and scrape multiple related pages. Use crawl for comprehensive research on a topic.
+</Callout>
+
+## Step 3: Set up knowledge base with document ingestion
+
+Create a knowledge base to store internal documents, research papers, and reference materials:
+
+### Ingest documents
+
+Ingest documents into your knowledge base:
+
+```bash
+# Ingest a PDF document
+curl -X POST https://agentc2.ai/agent/api/rag/documents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "content": "# Research Paper: AI Agent Frameworks\n\n## Abstract\n\nThis paper examines the current state of AI agent frameworks, comparing approaches to tool use, memory, and orchestration...\n\n## Introduction\n\nAI agents have evolved from simple chatbots to sophisticated systems capable of tool use and multi-step reasoning...",
+    "metadata": {
+      "title": "AI Agent Frameworks: A Comparative Analysis",
+      "author": "Research Team",
+      "date": "2026-01-15",
+      "type": "research-paper",
+      "tags": ["ai", "agents", "frameworks"]
+    }
+  }'
+
+# Ingest multiple documents in batch
+curl -X POST https://agentc2.ai/agent/api/rag/documents/batch \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "documents": [
+      {
+        "content": "Document 1 content...",
+        "metadata": { "title": "Doc 1" }
+      },
+      {
+        "content": "Document 2 content...",
+        "metadata": { "title": "Doc 2" }
+      }
+    ]
+  }'
+```
+
+### Configure RAG retrieval
+
+Attach RAG query tools to your research agent:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{ "toolId": "rag-query" }'
+```
+
+<Callout type="info">
+    RAG retrieval uses semantic search to find relevant document chunks. The agent can query the knowledge base with natural language questions, and the system returns the most relevant passages.
+</Callout>
+
+## Step 4: Enhance agent instructions for multi-source research
+
+Update the agent instructions to emphasize multi-source research:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/research-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a research agent specializing in comprehensive information gathering and synthesis.\n\n**Research Process:**\n\n1. **Break down the query** — Identify key sub-topics and questions\n2. **Gather from multiple sources** — Use BOTH web scraping (Firecrawl) AND knowledge base (RAG) queries\n3. **Verify claims** — Cross-reference information across sources\n4. **Assess credibility** — Consider source authority, recency, and bias\n5. **Synthesize** — Combine findings into a coherent narrative\n6. **Cite everything** — Every claim must have a source citation\n\n**Source Selection:**\n- For current events and news: Use web scraping\n- For established knowledge and internal docs: Use knowledge base\n- Always use at least 3 sources for any major claim\n- Prefer authoritative sources (academic papers, official documentation, reputable news)\n\n**Citation Format:**\n- Web sources: [Page Title](URL) - Published: YYYY-MM-DD\n- Documents: [Document Title](document-id) - Author: Name, Date: YYYY-MM-DD\n- Include page numbers or section references when available\n\n**Quality Standards:**\n- Distinguish facts from opinions\n- Note contradictions between sources\n- Explicitly state when information is incomplete or uncertain\n- Flag any potential biases in sources"
+  }'
+```
+
+## Step 5: Test web scraping
+
+Test Firecrawl scraping with a sample query:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Research the latest developments in AI agent frameworks in 2026. Scrape at least 3 relevant web pages and provide a comprehensive summary with citations."
+      }
+    ]
+  }'
+```
+
+The agent should:
+1. Identify relevant URLs to scrape
+2. Use Firecrawl to extract content
+3. Synthesize findings
+4. Provide citations
+
+### Verify tool usage
+
+Check the run trace to see tool invocations:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/research-agent/runs?limit=1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Look for:
+- Multiple `firecrawl-scrape-url` calls
+- Proper URL selection
+- Content extraction success
+
+## Step 6: Test knowledge base queries
+
+Test RAG retrieval with a query about ingested documents:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "What do our internal research papers say about AI agent memory systems? Query the knowledge base and summarize findings."
+      }
+    ]
+  }'
+```
+
+The agent should:
+1. Use `rag-query` to search the knowledge base
+2. Retrieve relevant document chunks
+3. Synthesize information from multiple documents
+4. Cite document sources
+
+## Step 7: Test combined research
+
+Test the agent's ability to combine web and document sources:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Research the current state of RAG (Retrieval Augmented Generation) systems. Use both web sources and our internal knowledge base. Provide a comprehensive report comparing public research with our internal findings."
+      }
+    ]
+  }'
+```
+
+Expected behavior:
+1. Agent queries knowledge base for internal documents
+2. Agent scrapes relevant web pages about RAG
+3. Agent synthesizes findings from both sources
+4. Agent compares and contrasts public vs. internal research
+5. Agent provides citations for all sources
+
+## Step 8: Add source validation
+
+Enhance the agent to validate source credibility:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/research-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a research agent specializing in comprehensive information gathering and synthesis.\n\n**Source Validation:**\n\nBefore using a source, assess:\n- **Authority**: Is the author/organization credible?\n- **Recency**: When was this published? Is it still current?\n- **Bias**: Are there potential conflicts of interest?\n- **Evidence**: Does the source provide citations or data?\n\n**Red Flags:**\n- Sources older than 2 years for rapidly evolving topics\n- Unverified claims without citations\n- Sources with clear commercial bias\n- Social media posts (unless verified official accounts)\n\n**Preferred Sources:**\n- Academic papers and journals\n- Official documentation from authoritative organizations\n- Reputable news outlets with fact-checking\n- Industry reports from recognized research firms\n- Internal documents from your organization\n\nWhen you encounter a red flag, note it in your report but still use the source if it's the best available—just flag the limitation."
+  }'
+```
+
+## Step 9: Configure output format
+
+Set up structured output for research reports:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/research-agent \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a research agent specializing in comprehensive information gathering and synthesis.\n\n**Report Format:**\n\nStructure your research reports as follows:\n\n# Research Report: [Topic]\n\n## Executive Summary\n[2-3 sentence overview of key findings]\n\n## Methodology\n- Sources consulted: [number] web pages, [number] documents\n- Research date: [date]\n- Key sub-topics explored: [list]\n\n## Key Findings\n\n### [Sub-topic 1]\n[Findings with citations]\n\n### [Sub-topic 2]\n[Findings with citations]\n\n## Analysis\n[Synthesis and comparison of findings]\n\n## Limitations\n[What information is missing or uncertain]\n\n## Sources\n\n### Web Sources\n1. [Title](URL) - Published: [date]\n2. [Title](URL) - Published: [date]\n\n### Documents\n1. [Title](document-id) - Author: [name], Date: [date]\n\n## Recommendations\n[Actionable insights based on research]"
+  }'
+```
+
+## Step 10: Add guardrails for research quality
+
+Configure guardrails to ensure research quality:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/research-agent/guardrails \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "configJson": {
+      "output": {
+        "citationRequirement": {
+          "enabled": true,
+          "minCitations": 3,
+          "action": "block"
+        },
+        "sourceDiversity": {
+          "enabled": true,
+          "minSources": 3,
+          "action": "warn"
+        }
+      },
+      "execution": {
+        "minToolCalls": {
+          "enabled": true,
+          "minCalls": 3,
+          "action": "warn"
+        }
+      }
+    }
+  }'
+```
+
+<Callout type="warning">
+    These guardrails ensure the agent doesn't produce reports based on insufficient research. Adjust thresholds based on your quality requirements.
+</Callout>
+
+## Step 11: Test end-to-end research workflow
+
+Run a comprehensive research query:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Research the impact of large language models on software development practices. Include:\n- Current trends in AI-assisted coding\n- Adoption rates and developer sentiment\n- Comparison of different AI coding tools\n- Future predictions\n\nUse at least 5 sources (mix of web and documents) and provide a comprehensive report with citations."
+      }
+    ]
+  }'
+```
+
+Verify:
+- ✅ Multiple sources consulted (web + documents)
+- ✅ Proper citations throughout
+- ✅ Structured report format
+- ✅ Analysis and synthesis, not just summarization
+- ✅ Limitations and uncertainties noted
+
+## Step 12: Monitor research quality
+
+Track research agent performance:
+
+### Review source diversity
+
+```bash
+curl https://agentc2.ai/agent/api/agents/research-agent/runs?limit=50 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Check:
+- Average number of sources per report
+- Mix of web vs. document sources
+- Citation quality
+
+### Track tool usage
+
+Monitor which tools are used most:
+
+```bash
+curl "https://agentc2.ai/agent/api/agents/research-agent/runs?limit=100" \
+  -H "Authorization: Bearer $TOKEN" | \
+  jq '.runs[].traces[] | select(.type=="tool") | .toolId' | \
+  sort | uniq -c
+```
+
+### Evaluate report quality
+
+Set up evaluations to automatically score research reports:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/research-agent/scorers \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "scorers": ["quality", "completeness", "citation-quality"]
+  }'
+```
+
+## Step 13: Optimize for specific research domains
+
+Customize the agent for specific research domains:
+
+### Academic research agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Academic Research Agent",
+    "slug": "academic-research",
+    "instructions": "You are an academic research agent specializing in scholarly research.\n\n**Focus:**\n- Academic papers and journals (prefer arXiv, PubMed, Google Scholar)\n- Peer-reviewed sources\n- Methodology and experimental design\n- Statistical significance and limitations\n\n**Citation Style:** APA format\n- Author, A. A. (Year). Title. *Journal*, Volume(Issue), Pages. DOI\n\n**Standards:**\n- Prioritize recent publications (last 3 years)\n- Note sample sizes and statistical methods\n- Identify gaps in research\n- Compare methodologies across studies",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.2,
+    "maxSteps": 25,
+    "tools": ["web-fetch", "rag-query"]
+  }'
+```
+
+### Market research agent
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Market Research Agent",
+    "slug": "market-research",
+    "instructions": "You are a market research agent specializing in industry analysis.\n\n**Focus:**\n- Industry reports and market analyses\n- Competitive intelligence\n- Consumer trends and surveys\n- Financial data and forecasts\n\n**Sources:**\n- Industry research firms (Gartner, Forrester, IDC)\n- Financial reports and earnings calls\n- Trade publications\n- Government economic data\n\n**Output:**\n- Market size and growth projections\n- Competitive landscape\n- Key trends and drivers\n- Risks and opportunities",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "maxSteps": 20,
+    "tools": ["web-fetch", "rag-query"]
+  }'
+```
+
+## What you've built
+
+You've created a comprehensive research agent with:
+
+✅ **Web scraping capabilities** via Firecrawl for current information  
+✅ **Knowledge base integration** via RAG for internal documents  
+✅ **Multi-source synthesis** combining web and document sources  
+✅ **Citation system** with proper source attribution  
+✅ **Quality guardrails** ensuring thorough research  
+✅ **Structured output** for consistent report formatting  
+✅ **Domain specialization** options for different research types
+
+## Next steps
+
+- **[Advanced RAG Configuration](/docs/knowledge/vector-search)** — Tune retrieval parameters for better relevance
+- **[Workflow Orchestration](/docs/workflows/creating-workflows)** — Create multi-step research workflows with human review
+- **[Continuous Learning](/docs/agents/learning)** — Let the agent improve its source selection and synthesis over time
+- **[Add More Tools](/docs/integrations/overview)** — Integrate GitHub for code research, or Jira for project documentation
+- **[Evaluation Setup](/docs/agents/evaluations)** — Create custom scorers for research quality metrics
+- **[Production Guardrails](/docs/guides/production-guardrails)** — Add org-level policies for research standards

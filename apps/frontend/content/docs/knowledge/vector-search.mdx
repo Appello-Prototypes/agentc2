@@ -1,0 +1,409 @@
+---
+title: "Vector Search"
+description: "Semantic vector search: how it works, embedding models, similarity metrics, tuning topK and minScore, and query API examples."
+section: "knowledge"
+order: 3
+primaryKeyword: "vector search"
+relatedSlugs: ["knowledge/overview", "knowledge/document-ingestion", "knowledge/hybrid-search"]
+secondaryKeywords: ["semantic search", "vector embeddings", "similarity search", "cosine similarity", "embedding model"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Vector Search
+
+Vector search enables semantic similarity search over document embeddings. Queries are embedded into vectors and compared against document chunks using cosine similarity to find the most relevant content.
+
+## How vector search works
+
+Vector search follows a four-step process:
+
+### 1. Query embedding
+
+The query text is embedded into a vector:
+
+```bash
+Query: "How do I configure the product?"
+↓
+Embedding: [0.123, -0.456, 0.789, ...] (1536 dimensions)
+```
+
+### 2. Similarity calculation
+
+The query vector is compared against all document chunk vectors using cosine similarity:
+
+```
+similarity = cosine(query_vector, chunk_vector)
+```
+
+Cosine similarity ranges from -1 (opposite) to 1 (identical), with values closer to 1 indicating higher similarity.
+
+### 3. Ranking
+
+Chunks are ranked by similarity score:
+
+```
+Chunk A: similarity = 0.92
+Chunk B: similarity = 0.85
+Chunk C: similarity = 0.78
+...
+```
+
+### 4. Retrieval
+
+Top-K chunks are returned:
+
+```json
+{
+  "results": [
+    {
+      "chunkId": "vec_1",
+      "documentId": "doc_abc123",
+      "content": "To configure the product...",
+      "score": 0.92,
+      "metadata": {...}
+    },
+    {
+      "chunkId": "vec_2",
+      "documentId": "doc_abc123",
+      "content": "Configuration settings include...",
+      "score": 0.85,
+      "metadata": {...}
+    }
+  ]
+}
+```
+
+## Embedding models
+
+AgentC2 uses OpenAI's embedding model:
+
+### Model details
+
+| Property | Value |
+|----------|-------|
+| **Model** | `text-embedding-3-small` |
+| **Dimensions** | 1536 |
+| **Max tokens** | 8191 |
+| **Cost** | ~$0.02 per 1M tokens |
+| **Latency** | ~100-200ms per batch |
+
+### Embedding quality
+
+The model is optimized for:
+
+- **Semantic similarity**: Captures meaning, not just keywords
+- **Multilingual support**: Works across multiple languages
+- **Domain adaptation**: Adapts to domain-specific terminology
+- **Context awareness**: Understands context and nuance
+
+## Similarity metrics
+
+AgentC2 uses cosine similarity for vector comparison:
+
+### Cosine similarity
+
+```
+similarity = (A · B) / (||A|| × ||B||)
+```
+
+Where:
+- `A · B` is the dot product of vectors A and B
+- `||A||` and `||B||` are the magnitudes (L2 norms) of vectors A and B
+
+### Why cosine similarity?
+
+- **Scale-invariant**: Normalized by vector magnitude, so document length doesn't affect similarity
+- **Semantic focus**: Captures semantic similarity rather than exact matches
+- **Efficient**: Fast computation with vectorized operations
+
+### Similarity scores
+
+| Score Range | Interpretation |
+|-------------|----------------|
+| `0.9 - 1.0` | Very high similarity (nearly identical meaning) |
+| `0.7 - 0.9` | High similarity (related content) |
+| `0.5 - 0.7` | Moderate similarity (somewhat related) |
+| `0.0 - 0.5` | Low similarity (unrelated content) |
+
+<Callout type="tip">
+Use `minScore: 0.7` to filter out low-relevance results. Adjust based on your use case: stricter (0.8+) for precision, looser (0.6+) for recall.
+</Callout>
+
+## Query API
+
+Query the RAG system for relevant chunks:
+
+### Basic query
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I configure the product?",
+    "topK": 5,
+    "minScore": 0.7
+  }'
+```
+
+### Response
+
+```json
+{
+  "success": true,
+  "results": [
+    {
+      "chunkId": "vec_1",
+      "documentId": "doc_abc123",
+      "documentSlug": "product-docs",
+      "documentName": "Product Documentation",
+      "content": "To configure the product, navigate to Settings > Configuration...",
+      "score": 0.92,
+      "metadata": {
+        "chunkIndex": 0,
+        "category": "documentation",
+        "tags": ["product", "configuration"]
+      }
+    },
+    {
+      "chunkId": "vec_2",
+      "documentId": "doc_abc123",
+      "documentSlug": "product-docs",
+      "documentName": "Product Documentation",
+      "content": "Configuration settings include API keys, webhooks, and integrations...",
+      "score": 0.85,
+      "metadata": {...}
+    }
+  ],
+  "queryEmbedding": [0.123, -0.456, ...],
+  "totalResults": 2
+}
+```
+
+## Tuning topK
+
+`topK` controls how many results to return:
+
+### Low topK (1-3)
+
+**Use when**: You want the single best match
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 1
+}
+```
+
+**Pros**: Fast, precise
+**Cons**: May miss relevant content
+
+### Medium topK (5-10)
+
+**Use when**: You want a few relevant results
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 5
+}
+```
+
+**Pros**: Balanced precision and recall
+**Cons**: May include some less relevant results
+
+### High topK (20+)
+
+**Use when**: You want comprehensive coverage
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 20
+}
+```
+
+**Pros**: High recall
+**Cons**: Slower, includes less relevant results
+
+<Callout type="info">
+Start with `topK: 5` and adjust based on your use case. For agent context injection, 3-5 chunks is usually sufficient.
+</Callout>
+
+## Tuning minScore
+
+`minScore` filters results by similarity threshold:
+
+### High threshold (0.8+)
+
+**Use when**: You need highly relevant results only
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 10,
+  "minScore": 0.8
+}
+```
+
+**Pros**: High precision, only very relevant results
+**Cons**: May miss some relevant content
+
+### Medium threshold (0.7)
+
+**Use when**: You want a balance of precision and recall
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 10,
+  "minScore": 0.7
+}
+```
+
+**Pros**: Balanced results
+**Cons**: May include some less relevant content
+
+### Low threshold (0.5-0.6)
+
+**Use when**: You want comprehensive coverage
+
+```bash
+{
+  "query": "How do I configure the product?",
+  "topK": 10,
+  "minScore": 0.6
+}
+```
+
+**Pros**: High recall
+**Cons**: Includes less relevant results
+
+## Metadata filtering
+
+Filter results by document metadata:
+
+### Filter by category
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I configure the product?",
+    "topK": 5,
+    "minScore": 0.7,
+    "filters": {
+      "category": "documentation"
+    }
+  }'
+```
+
+### Filter by tags
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I configure the product?",
+    "topK": 5,
+    "minScore": 0.7,
+    "filters": {
+      "tags": ["product", "configuration"]
+    }
+  }'
+```
+
+### Filter by document
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How do I configure the product?",
+    "topK": 5,
+    "minScore": 0.7,
+    "filters": {
+      "documentId": "doc_abc123"
+    }
+  }'
+```
+
+## Performance optimization
+
+### Indexing
+
+Vector search uses HNSW (Hierarchical Navigable Small World) index:
+
+- **Build time**: O(n log n) for n vectors
+- **Query time**: O(log n) for top-K search
+- **Memory**: ~1-2KB per vector
+
+### Batch queries
+
+Query multiple documents efficiently:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query/batch \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "queries": [
+      "How do I configure the product?",
+      "What are the API endpoints?",
+      "How do I set up webhooks?"
+    ],
+    "topK": 5,
+    "minScore": 0.7
+  }'
+```
+
+## Query examples
+
+### Product documentation
+
+```bash
+{
+  "query": "How do I configure API keys?",
+  "topK": 5,
+  "minScore": 0.7,
+  "filters": {
+    "category": "documentation",
+    "tags": ["api", "configuration"]
+  }
+}
+```
+
+### Support knowledge base
+
+```bash
+{
+  "query": "How do I reset my password?",
+  "topK": 3,
+  "minScore": 0.8,
+  "filters": {
+    "category": "support",
+    "tags": ["authentication"]
+  }
+}
+```
+
+### General search
+
+```bash
+{
+  "query": "What are the latest features?",
+  "topK": 10,
+  "minScore": 0.6
+}
+```
+
+## Next steps
+
+- **[Hybrid Search](/docs/knowledge/hybrid-search)** — Combine semantic and lexical search
+- **[Document Ingestion](/docs/knowledge/document-ingestion)** — Learn how to ingest documents
+- **[Knowledge API Reference](/docs/knowledge/api-reference)** — Complete API documentation

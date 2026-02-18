@@ -100,6 +100,44 @@ export function softwareApplicationJsonLd() {
     };
 }
 
+export function articleJsonLd(post: {
+    title: string;
+    description: string;
+    slug: string;
+    publishedAt: string;
+    updatedAt: string;
+    primaryKeyword: string;
+    secondaryKeywords: string[];
+}) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "Article",
+        headline: post.title,
+        description: post.description,
+        datePublished: post.publishedAt,
+        dateModified: post.updatedAt,
+        author: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+        publisher: { "@type": "Organization", name: SITE_NAME, url: SITE_URL },
+        mainEntityOfPage: {
+            "@type": "WebPage",
+            "@id": absoluteUrl(`/blog/${post.slug}`)
+        },
+        keywords: [post.primaryKeyword, ...post.secondaryKeywords].join(", ")
+    };
+}
+
+export function faqJsonLd(items: Array<{ question: string; answer: string }>) {
+    return {
+        "@context": "https://schema.org",
+        "@type": "FAQPage",
+        mainEntity: items.map((item) => ({
+            "@type": "Question",
+            name: item.question,
+            acceptedAnswer: { "@type": "Answer", text: item.answer }
+        }))
+    };
+}
+
 export function breadcrumbJsonLd(items: Array<{ name: string; path: string }>) {
     return {
         "@context": "https://schema.org",

@@ -1,0 +1,529 @@
+---
+title: "Multi-Agent Orchestration"
+description: "Build a 3-agent network with coordinator, researcher, and writer agents that delegate tasks and verify outputs."
+section: "guides"
+order: 4
+primaryKeyword: "multi-agent orchestration tutorial"
+secondaryKeywords: ["multi-agent system", "agent networks", "agent delegation"]
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/topology", "agents/creating-agents"]
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+---
+
+# Multi-Agent Orchestration
+
+This guide walks you through building a 3-agent network where a coordinator agent routes tasks to specialist agents (researcher and writer), and a verifier agent ensures quality. By the end, you'll understand how to design agent networks with clear responsibilities, delegation patterns, and quality verification.
+
+## Prerequisites
+
+Before starting, ensure you have:
+
+- An AgentC2 account with authentication configured
+- API keys for OpenAI or Anthropic
+- Understanding of basic agent creation
+- (Optional) Tools configured for research (Firecrawl, RAG)
+
+<Callout type="info">
+    Multi-agent systems excel when tasks require different expertise. This guide shows how to coordinate specialists while maintaining quality through verification.
+</Callout>
+
+## Architecture overview
+
+Your network will consist of:
+
+1. **Coordinator Agent** — Routes tasks to appropriate specialists
+2. **Researcher Agent** — Gathers information from multiple sources
+3. **Writer Agent** — Synthesizes findings into polished output
+4. **Verifier Agent** — Validates quality and completeness
+
+```
+┌──────────────┐
+│   User       │
+│   Request    │
+└──────┬───────┘
+       │
+       ▼
+┌─────────────────┐
+│  Coordinator    │
+│  (Router)       │
+└──────┬──────────┘
+       │
+       ├──► Research Task ──► Researcher ──► Results
+       │                                          │
+       └──► Writing Task ──► Writer ◄────────────┘
+                                    │
+                                    ▼
+                            ┌──────────────┐
+                            │   Verifier   │
+                            │  (Quality)   │
+                            └──────────────┘
+```
+
+## Step 1: Create the researcher agent
+
+Create a specialist agent focused on information gathering:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Researcher Agent",
+    "slug": "researcher",
+    "description": "Specializes in gathering information from multiple sources",
+    "instructions": "You are a research specialist. Your role is to gather comprehensive information on assigned topics.\n\n**Process:**\n1. Break down the research question into sub-topics\n2. Identify relevant sources (web, documents, databases)\n3. Gather information from multiple sources\n4. Verify facts across sources\n5. Organize findings into structured notes\n\n**Output Format:**\n- Executive summary (2-3 sentences)\n- Key findings (bullet points with citations)\n- Sources consulted (list with URLs/document IDs)\n- Gaps or uncertainties\n\n**Quality Standards:**\n- Use at least 3 sources per major claim\n- Distinguish facts from opinions\n- Note contradictions\n- Flag incomplete information",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "maxTokens": 4000,
+    "memoryEnabled": false,
+    "maxSteps": 20,
+    "tools": ["web-fetch", "rag-query"],
+    "metadata": {
+      "role": "specialist",
+      "specialization": "research"
+    }
+  }'
+```
+
+### Key characteristics
+
+| Aspect | Value | Rationale |
+|--------|-------|-----------|
+| **Temperature** | 0.3 | Low for factual accuracy |
+| **Memory** | Disabled | Stateless—each research task is independent |
+| **Max Steps** | 20 | Multiple tool calls for thorough research |
+| **Tools** | web-fetch, rag-query | Access to web and document sources |
+
+## Step 2: Create the writer agent
+
+Create a specialist agent focused on content creation:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Writer Agent",
+    "slug": "writer",
+    "description": "Specializes in synthesizing research into polished written content",
+    "instructions": "You are a writing specialist. Your role is to transform research findings into polished, engaging content.\n\n**Process:**\n1. Review research findings provided\n2. Identify key themes and insights\n3. Structure content logically\n4. Write clear, engaging prose\n5. Ensure proper citations\n\n**Writing Style:**\n- Clear and concise\n- Engaging but professional\n- Well-structured with headings\n- Proper citations throughout\n- Appropriate tone for audience\n\n**Output Formats:**\n- Articles and blog posts\n- Reports and summaries\n- Documentation\n- Marketing copy\n\n**Quality Standards:**\n- No unsupported claims\n- All facts cited\n- Logical flow\n- Appropriate length\n- Grammar and style consistency",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.7,
+    "maxTokens": 6000,
+    "memoryEnabled": false,
+    "maxSteps": 10,
+    "tools": [],
+    "metadata": {
+      "role": "specialist",
+      "specialization": "writing"
+    }
+  }'
+```
+
+### Key characteristics
+
+| Aspect | Value | Rationale |
+|--------|-------|-----------|
+| **Temperature** | 0.7 | Higher for creative writing |
+| **Memory** | Disabled | Stateless—works from provided research |
+| **Max Steps** | 10 | Fewer tool calls, more text generation |
+| **Tools** | None | Focuses on writing, not research |
+
+## Step 3: Create the verifier agent
+
+Create an agent that validates quality and completeness:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Verifier Agent",
+    "slug": "verifier",
+    "description": "Validates quality, completeness, and accuracy of agent outputs",
+    "instructions": "You are a quality verification specialist. Your role is to validate outputs from other agents.\n\n**Verification Checklist:**\n\n1. **Completeness**\n   - Does the output address all requirements?\n   - Are all questions answered?\n   - Is the scope appropriate?\n\n2. **Accuracy**\n   - Are facts correct?\n   - Are citations valid?\n   - Are claims supported?\n\n3. **Quality**\n   - Is the writing clear and engaging?\n   - Is the structure logical?\n   - Are there grammar or style issues?\n\n4. **Compliance**\n   - Does it meet specified guidelines?\n   - Are guardrails respected?\n   - Is the tone appropriate?\n\n**Output Format:**\n- Overall assessment: PASS / FAIL / NEEDS_REVISION\n- Score (0-100)\n- Specific issues found (if any)\n- Recommendations for improvement\n\n**Scoring:**\n- 90-100: Excellent, ready for use\n- 70-89: Good, minor improvements needed\n- 50-69: Needs revision\n- <50: Significant issues, requires rework",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.2,
+    "maxTokens": 2000,
+    "memoryEnabled": false,
+    "maxSteps": 5,
+    "tools": [],
+    "metadata": {
+      "role": "verifier",
+      "specialization": "quality-assurance"
+    }
+  }'
+```
+
+### Key characteristics
+
+| Aspect | Value | Rationale |
+|--------|-------|-----------|
+| **Temperature** | 0.2 | Very low for consistent, objective evaluation |
+| **Memory** | Disabled | Evaluates each output independently |
+| **Max Steps** | 5 | Minimal processing, focused evaluation |
+| **Tools** | None | Evaluates provided content only |
+
+## Step 4: Create the coordinator agent
+
+Create the coordinator that routes tasks and orchestrates the network:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Coordinator Agent",
+    "slug": "coordinator",
+    "description": "Routes tasks to specialist agents and coordinates multi-agent workflows",
+    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Available Specialists:**\n- **researcher**: For gathering information, conducting research, finding sources\n- **writer**: For creating written content, synthesizing information, writing articles\n- **verifier**: For quality checking, validation, review\n\n**Routing Logic:**\n1. Analyze the user request\n2. Determine required capabilities\n3. Delegate to appropriate specialist(s)\n4. Coordinate handoffs between agents\n5. Collect and synthesize final output\n\n**Delegation Patterns:**\n- **Research + Write**: Delegate to researcher first, then writer\n- **Write Only**: Delegate directly to writer (if research already done)\n- **Verify**: Always delegate to verifier after writing\n- **Research Only**: Delegate to researcher, return findings\n\n**Coordination:**\n- Pass research findings to writer\n- Pass written content to verifier\n- If verifier finds issues, route back to writer for revision\n- Only return final output when verifier passes\n\n**Output:**\n- Final deliverable\n- Summary of agent contributions\n- Verification results",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.5,
+    "maxTokens": 4000,
+    "memoryEnabled": true,
+    "memoryConfig": {
+      "lastMessages": 20
+    },
+    "maxSteps": 30,
+    "subAgents": ["researcher", "writer", "verifier"],
+    "metadata": {
+      "role": "coordinator",
+      "network": "research-writer-verifier"
+    }
+  }'
+```
+
+### Key characteristics
+
+| Aspect | Value | Rationale |
+|--------|-------|-----------|
+| **SubAgents** | researcher, writer, verifier | Can delegate to these agents |
+| **Max Steps** | 30 | Multiple delegation rounds |
+| **Memory** | Enabled | Tracks conversation and delegation history |
+| **Temperature** | 0.5 | Balanced for routing decisions |
+
+<Callout type="info">
+    The coordinator uses `subAgents` to delegate tasks. When it calls a sub-agent, that agent runs independently and returns results.
+</Callout>
+
+## Step 5: Test individual agents
+
+Before building the network, test each agent independently:
+
+### Test researcher
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/researcher/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Research the latest developments in AI agent frameworks in 2026. Use at least 3 sources and provide structured findings."
+      }
+    ]
+  }'
+```
+
+Verify:
+- ✅ Multiple sources consulted
+- ✅ Structured findings
+- ✅ Citations provided
+
+### Test writer
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/writer/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Write a 500-word article based on these research findings:\n\n[Research findings from researcher]\n\nMake it engaging and well-structured with proper citations."
+      }
+    ]
+  }'
+```
+
+Verify:
+- ✅ Clear structure
+- ✅ Engaging prose
+- ✅ Citations included
+
+### Test verifier
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/verifier/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "Verify this content for quality, completeness, and accuracy:\n\n[Content from writer]\n\nProvide a score and specific feedback."
+      }
+    ]
+  }'
+```
+
+Verify:
+- ✅ Objective assessment
+- ✅ Specific issues identified
+- ✅ Actionable recommendations
+
+## Step 6: Test coordinator delegation
+
+Test the coordinator's ability to delegate:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/agents/coordinator/chat \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "messages": [
+      {
+        "role": "user",
+        "content": "I need a comprehensive article about AI agent frameworks. Research the topic thoroughly and write a polished 1000-word article."
+      }
+    ]
+  }'
+```
+
+Expected flow:
+1. Coordinator analyzes request
+2. Delegates to researcher for information gathering
+3. Receives research findings
+4. Delegates to writer with research findings
+5. Receives written article
+6. Delegates to verifier for quality check
+7. Returns final verified article
+
+### Inspect delegation trace
+
+Check the run trace to see delegation:
+
+```bash
+curl https://agentc2.ai/agent/api/agents/coordinator/runs?limit=1 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Look for:
+- Sub-agent invocations
+- Handoff points
+- Data passed between agents
+
+## Step 7: Create a network topology
+
+Create a formal network definition with explicit topology:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research-Writer-Verifier Network",
+    "slug": "research-writer-network",
+    "description": "Multi-agent network for research and content creation with quality verification",
+    "topologyJson": {
+      "type": "router",
+      "nodes": [
+        {
+          "id": "coordinator",
+          "agentSlug": "coordinator",
+          "role": "router",
+          "routingRules": [
+            {
+              "condition": "requiresResearch",
+              "target": "researcher"
+            },
+            {
+              "condition": "requiresWriting",
+              "target": "writer"
+            },
+            {
+              "condition": "requiresVerification",
+              "target": "verifier"
+            }
+          ]
+        },
+        {
+          "id": "researcher",
+          "agentSlug": "researcher",
+          "role": "specialist"
+        },
+        {
+          "id": "writer",
+          "agentSlug": "writer",
+          "role": "specialist"
+        },
+        {
+          "id": "verifier",
+          "agentSlug": "verifier",
+          "role": "verifier"
+        }
+      ],
+      "edges": [
+        {
+          "from": "coordinator",
+          "to": "researcher",
+          "condition": "researchNeeded"
+        },
+        {
+          "from": "researcher",
+          "to": "writer",
+          "condition": "always"
+        },
+        {
+          "from": "writer",
+          "to": "verifier",
+          "condition": "always"
+        },
+        {
+          "from": "verifier",
+          "to": "writer",
+          "condition": "needsRevision"
+        },
+        {
+          "from": "verifier",
+          "to": "coordinator",
+          "condition": "passed"
+        }
+      ]
+    },
+    "inputSchemaJson": {
+      "type": "object",
+      "properties": {
+        "task": { "type": "string" },
+        "requirements": { "type": "string" },
+        "outputFormat": { "type": "string" }
+      },
+      "required": ["task"]
+    }
+  }'
+```
+
+<Callout type="tip">
+    Networks provide explicit topology and routing rules, making delegation patterns clear and debuggable. Use networks for complex multi-agent workflows.
+</Callout>
+
+## Step 8: Test the network
+
+Execute the network with a complex task:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-writer-network/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "task": "Create a comprehensive guide to AI agent orchestration",
+      "requirements": "1000 words, well-researched, engaging, properly cited",
+      "outputFormat": "markdown article"
+    }
+  }'
+```
+
+The network will:
+1. Route to researcher for information gathering
+2. Pass findings to writer
+3. Verify output quality
+4. Return final article or request revision
+
+## Step 9: Monitor handoff quality
+
+Track how well agents hand off work:
+
+### Review delegation success rate
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-writer-network/runs?limit=50 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Metrics to track:
+- **Delegation success rate**: Successful handoffs / total handoffs
+- **Revision rate**: Verifier requests revision / total verifications
+- **End-to-end success**: Completed tasks / total tasks
+
+### Analyze handoff data
+
+Check what data is passed between agents:
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-writer-network/runs/run_abc123/traces \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Look for:
+- Complete data transfer
+- Proper formatting
+- No information loss
+
+## Step 10: Add fallback handling
+
+Enhance the coordinator to handle failures:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/coordinator \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Failure Handling:**\n\nIf a specialist agent fails or returns insufficient output:\n1. Log the failure\n2. Try an alternative approach\n3. If researcher fails: Use web-fetch directly\n4. If writer fails: Provide more detailed instructions\n5. If verifier fails: Use basic quality checks\n6. If all else fails: Return partial results with explanation\n\n**Fallback Strategies:**\n- Researcher unavailable: Use web-fetch tool directly\n- Writer unavailable: Return research findings as-is\n- Verifier unavailable: Perform basic checks yourself\n\n**Always:**\n- Inform user of any failures\n- Provide partial results when possible\n- Suggest manual review for critical tasks"
+  }'
+```
+
+## Step 11: Optimize delegation patterns
+
+Refine routing logic based on performance:
+
+### Add routing confidence
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/coordinator \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Routing Confidence:**\n\nBefore delegating, assess:\n- Task complexity (simple/complex)\n- Required expertise (research/writing/verification)\n- Expected output quality\n\n**Confidence Levels:**\n- High (>0.8): Delegate directly\n- Medium (0.5-0.8): Delegate with detailed instructions\n- Low (<0.5): Break task into smaller parts\n\n**Optimization:**\n- For simple tasks: Skip unnecessary steps\n- For complex tasks: Use full pipeline\n- For urgent tasks: Parallelize where possible"
+  }'
+```
+
+## Step 12: Add parallel execution
+
+Enable parallel research for faster results:
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/agents/coordinator \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Parallel Execution:**\n\nFor research tasks with multiple sub-topics:\n1. Break into independent sub-tasks\n2. Delegate to multiple researcher instances (if supported)\n3. Collect results in parallel\n4. Synthesize findings\n\n**When to Parallelize:**\n- Multiple independent research questions\n- Different source types (web vs documents)\n- Non-dependent sub-tasks\n\n**When NOT to Parallelize:**\n- Sequential dependencies\n- Limited resources\n- Simple tasks"
+  }'
+```
+
+## What you've built
+
+You've created a multi-agent orchestration system with:
+
+✅ **Specialist agents** (researcher, writer, verifier) with clear responsibilities  
+✅ **Coordinator agent** that routes tasks intelligently  
+✅ **Delegation patterns** for research → write → verify workflows  
+✅ **Network topology** with explicit routing rules  
+✅ **Quality verification** ensuring outputs meet standards  
+✅ **Failure handling** with fallback strategies  
+✅ **Monitoring** to track handoff quality
+
+## Next steps
+
+- **[Network Topology Patterns](/docs/networks/topology)** — Learn advanced routing patterns
+- **[Workflow Integration](/docs/workflows/creating-workflows)** — Combine networks with workflows for complex processes
+- **[Agent Learning](/docs/agents/learning)** — Let agents improve delegation decisions over time
+- **[Evaluation Setup](/docs/agents/evaluations)** — Create custom scorers for network performance
+- **[Production Guardrails](/docs/guides/production-guardrails)** — Add org-level policies for multi-agent systems
+- **[Advanced Networks](/docs/networks/creating-networks)** — Build more complex topologies with conditional routing

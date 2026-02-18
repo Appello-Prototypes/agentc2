@@ -1,0 +1,443 @@
+---
+title: "Background Jobs"
+description: "Inngest integration for background job processing, event publishing, function registration, key events (learning/session.start, goal/execute), retry behavior, idempotency, local dev server."
+section: "platform"
+order: 7
+primaryKeyword: "background jobs"
+relatedSlugs: ["platform/triggers-and-schedules", "agents/overview", "agents/learning"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Background Jobs
+
+AgentC2 uses Inngest for reliable background job processing, enabling asynchronous agent invocations, scheduled tasks, event-driven workflows, and long-running operations. Inngest provides automatic retries, idempotency, step functions, and a local development server for testing.
+
+## Inngest overview
+
+Inngest is an event-driven background job platform that provides:
+
+- **Reliable execution** — Automatic retries with exponential backoff
+- **Idempotency** — Prevents duplicate execution
+- **Step functions** — Break jobs into atomic steps
+- **Event bus** — Publish/subscribe event system
+- **Local development** — Dev server for testing (port 8288)
+
+### Architecture
+
+```
+Event Publisher → Inngest → Function Registry → Execution Engine
+     ↓              ↓              ↓                ↓
+  inngest.send()  Event      Function         Background
+                  Queue      Matching         Execution
+```
+
+## Event publishing
+
+Events are published using the Inngest client:
+
+### Inngest client setup
+
+```typescript
+// apps/agent/src/lib/inngest.ts
+import { Inngest } from "inngest"
+
+export const inngest = new Inngest({
+  id: "mastra-agent",
+  schemas: new EventSchemas().fromRecord<{
+    "goal/execute": { data: { goalId: string } }
+    "learning/session.start": { data: { sessionId: string; agentId: string } }
+    "run/completed": { data: { runId: string; agentId: string } }
+    // ... more events
+  }>()
+})
+```
+
+### Publishing events
+
+```typescript
+import { inngest } from "@/lib/inngest"
+
+// Publish single event
+await inngest.send({
+  name: "goal/execute",
+  data: {
+    goalId: "goal_123"
+  }
+})
+
+// Publish multiple events
+await inngest.send([
+  {
+    name: "run/completed",
+    data: { runId: "run_1", agentId: "agent_1" }
+  },
+  {
+    name: "run/completed",
+    data: { runId: "run_2", agentId: "agent_2" }
+  }
+])
+```
+
+### Event schemas
+
+Events are typed for safety:
+
+```typescript
+// Define event schema
+type GoalExecuteEvent = {
+  name: "goal/execute"
+  data: {
+    goalId: string
+    userId?: string
+    organizationId?: string
+  }
+}
+
+// Type-safe event publishing
+await inngest.send<GoalExecuteEvent>({
+  name: "goal/execute",
+  data: { goalId: "goal_123" }
+})
+```
+
+## Function registration
+
+Functions are registered and served via the Inngest endpoint:
+
+### Function definition
+
+```typescript
+// apps/agent/src/lib/inngest-functions.ts
+import { inngest } from "./inngest"
+
+export const executeGoalFunction = inngest.createFunction(
+  {
+    id: "execute-goal",
+    retries: 3,
+    concurrency: { limit: 5 }
+  },
+  { event: "goal/execute" },
+  async ({ event, step }) => {
+    const { goalId } = event.data
+    
+    // Step 1: Load goal
+    const goal = await step.run("load-goal", async () => {
+      return await prisma.goal.findUnique({
+        where: { id: goalId }
+      })
+    })
+    
+    // Step 2: Execute goal
+    const result = await step.run("execute-goal", async () => {
+      return await executeGoal(goal)
+    })
+    
+    // Step 3: Save result
+    await step.run("save-result", async () => {
+      await prisma.goal.update({
+        where: { id: goalId },
+        data: { status: "COMPLETED", resultJson: result }
+      })
+    })
+    
+    return { success: true, goalId }
+  }
+)
+```
+
+### Function configuration
+
+| Option | Description | Example |
+| ------ | ----------- | ------- |
+| `id` | Unique function identifier | `"execute-goal"` |
+| `retries` | Number of retry attempts | `3` |
+| `concurrency.limit` | Max concurrent executions | `5` |
+| `timeout` | Function timeout | `"5m"` |
+
+### Function registration
+
+Functions are registered in the Inngest endpoint:
+
+```typescript
+// apps/agent/src/app/api/inngest/route.ts
+import { serve } from "inngest/next"
+import { inngest } from "@/lib/inngest"
+import { inngestFunctions } from "@/lib/inngest-functions"
+
+export const { GET, POST } = serve({
+  client: inngest,
+  functions: inngestFunctions
+})
+```
+
+## Key events
+
+The platform uses several key events for core functionality:
+
+### Learning events
+
+| Event | Purpose | Triggered By |
+| ----- | ------- | ------------ |
+| `learning/session.start` | Start learning session | User action, scheduled trigger |
+| `learning/signals.extract` | Extract signals from runs | Learning session |
+| `learning/proposals.generate` | Generate improvement proposals | Signal extraction |
+| `learning/experiment.run` | Run A/B experiment | Proposal approval |
+| `learning/approval.request` | Request human approval | Proposal generation |
+
+### Goal events
+
+| Event | Purpose | Triggered By |
+| ----- | ------- | ------------ |
+| `goal/execute` | Execute a goal | User submission, API call |
+| `goal/retry` | Retry failed goal | Manual retry, automatic retry |
+
+### Agent workspace events
+
+| Event | Purpose | Triggered By |
+| ----- | ------- | ------------ |
+| `run/completed` | Agent run finished | Agent execution |
+| `run/evaluate` | Evaluate completed run | Run completion |
+| `evaluation/completed` | Evaluation finished | Evaluation job |
+| `guardrail/event` | Guardrail triggered | Guardrail check |
+| `budget/check` | Check budget threshold | Scheduled, run completion |
+| `budget/alert` | Budget threshold exceeded | Budget check |
+
+### Schedule events
+
+| Event | Purpose | Triggered By |
+| ----- | ------- | ------------ |
+| `schedule/trigger` | Trigger scheduled agent | Cron job (every minute) |
+
+## Retry behavior
+
+Inngest automatically retries failed functions with exponential backoff:
+
+### Retry configuration
+
+```typescript
+export const executeGoalFunction = inngest.createFunction(
+  {
+    id: "execute-goal",
+    retries: 3, // Retry up to 3 times
+    // Exponential backoff: 1s, 2s, 4s, 8s
+  },
+  { event: "goal/execute" },
+  async ({ event, step }) => {
+    // Function implementation
+  }
+)
+```
+
+### Retry strategies
+
+| Strategy | Description | Use Case |
+| -------- | ----------- | -------- |
+| **Exponential backoff** | Delay doubles each retry | Network errors, rate limits |
+| **Fixed delay** | Constant delay between retries | Scheduled retries |
+| **Immediate** | Retry immediately | Transient errors |
+
+### Handling retries
+
+```typescript
+async ({ event, step }) => {
+  try {
+    return await executeGoal(event.data.goalId)
+  } catch (error) {
+    // Log error for debugging
+    console.error("Goal execution failed:", error)
+    
+    // Re-throw to trigger retry
+    throw error
+    
+    // Or return error result to skip retry
+    // return { success: false, error: error.message }
+  }
+}
+```
+
+## Idempotency
+
+Inngest ensures functions are idempotent by default:
+
+### Event ID deduplication
+
+Events with the same ID are deduplicated:
+
+```typescript
+// First event
+await inngest.send({
+  name: "goal/execute",
+  id: "goal_123_exec_001", // Unique event ID
+  data: { goalId: "goal_123" }
+})
+
+// Duplicate event (same ID) - ignored
+await inngest.send({
+  name: "goal/execute",
+  id: "goal_123_exec_001", // Same ID
+  data: { goalId: "goal_123" }
+})
+```
+
+### Step-level idempotency
+
+Steps within functions are idempotent:
+
+```typescript
+async ({ event, step }) => {
+  // This step only executes once, even if function retries
+  const goal = await step.run("load-goal", async () => {
+    return await prisma.goal.findUnique({ where: { id: goalId } })
+  })
+  
+  // Subsequent steps use cached result if function retries
+  const result = await step.run("execute-goal", async () => {
+    return await executeGoal(goal)
+  })
+}
+```
+
+<Callout type="tip">
+    **Idempotency benefits**: Idempotent functions can be safely retried without side effects. Use step functions to ensure atomic operations.
+</Callout>
+
+## Local development server
+
+Inngest provides a local development server for testing:
+
+### Starting the dev server
+
+```bash
+# Start Inngest dev server (runs on port 8288)
+bun run dev
+
+# Or manually
+cd apps/inngest
+bunx inngest-cli dev
+```
+
+### Dev server features
+
+- **Dashboard** — http://localhost:8288 — View events, function runs, debug issues
+- **Event replay** — Replay events for testing
+- **Function debugging** — Step-through debugging
+- **Event inspection** — View event payloads and function inputs/outputs
+
+### Development workflow
+
+1. **Start dev server** — `bun run dev` (starts Inngest dev server automatically)
+2. **Publish events** — Events are processed locally
+3. **Debug functions** — Use dashboard to inspect execution
+4. **Test retries** — Simulate failures to test retry logic
+
+<Callout type="info">
+    **Local development**: The Inngest dev server runs automatically with `bun run dev`. Functions are registered and events are processed locally without needing Inngest Cloud.
+</Callout>
+
+## Environment variables
+
+| Variable | Description | Example |
+| -------- | ----------- | ------- |
+| `INNGEST_EVENT_KEY` | Event publishing key | _(optional for local dev)_ |
+| `INNGEST_SIGNING_KEY` | Webhook verification key | _(optional for local dev)_ |
+| `INNGEST_BASE_URL` | Inngest API URL | `http://localhost:8288` (local) |
+
+### Production setup
+
+In production, configure Inngest Cloud:
+
+```bash
+INNGEST_EVENT_KEY="your-event-key"
+INNGEST_SIGNING_KEY="your-signing-key"
+INNGEST_BASE_URL="https://api.inngest.com"
+```
+
+## Function examples
+
+### Learning session start
+
+```typescript
+export const learningSessionStartFunction = inngest.createFunction(
+  { id: "learning-session-start", retries: 2 },
+  { event: "learning/session.start" },
+  async ({ event, step }) => {
+    const { sessionId, agentId } = event.data
+    
+    // Step 1: Mark session as running
+    await step.run("mark-running", async () => {
+      await prisma.learningSession.update({
+        where: { id: sessionId },
+        data: { status: "RUNNING", startedAt: new Date() }
+      })
+    })
+    
+    // Step 2: Extract signals
+    await step.run("extract-signals", async () => {
+      await inngest.send({
+        name: "learning/signals.extract",
+        data: { sessionId, agentId }
+      })
+    })
+    
+    return { sessionId, status: "started" }
+  }
+)
+```
+
+### Schedule trigger
+
+```typescript
+export const scheduleTriggerFunction = inngest.createFunction(
+  { id: "schedule-trigger", retries: 2 },
+  { cron: "* * * * *" }, // Every minute
+  async ({ step }) => {
+    // Step 1: Find due schedules
+    const dueSchedules = await step.run("find-due-schedules", async () => {
+      return await prisma.agentSchedule.findMany({
+        where: {
+          isActive: true,
+          nextRunAt: { lte: new Date() }
+        },
+        take: 50
+      })
+    })
+    
+    // Step 2: Trigger each schedule
+    for (const schedule of dueSchedules) {
+      await step.run(`trigger-${schedule.id}`, async () => {
+        await invokeAgent(schedule.agentId, schedule.inputJson)
+        
+        // Update schedule
+        await prisma.agentSchedule.update({
+          where: { id: schedule.id },
+          data: {
+            lastRunAt: new Date(),
+            nextRunAt: calculateNextRun(schedule.cronExpr, schedule.timezone),
+            runCount: { increment: 1 }
+          }
+        })
+      })
+    }
+    
+    return { processed: dueSchedules.length }
+  }
+)
+```
+
+## Best practices
+
+1. **Use step functions** — Break jobs into atomic steps for idempotency
+2. **Handle errors gracefully** — Log errors, decide on retry vs failure
+3. **Set appropriate retries** — 3 retries for transient errors, 0 for permanent failures
+4. **Use event IDs** — Include unique event IDs for deduplication
+5. **Monitor function execution** — Use Inngest dashboard to track performance
+6. **Test locally** — Use dev server for development and testing
+7. **Limit concurrency** — Set `concurrency.limit` to prevent resource exhaustion
+
+## Related topics
+
+- **[Triggers and Schedules](/docs/platform/triggers-and-schedules)** — How scheduled triggers use Inngest
+- **[Agents Overview](/docs/agents/overview)** — Agent invocation patterns
+- **[Agent Learning](/docs/agents/learning)** — Learning system events

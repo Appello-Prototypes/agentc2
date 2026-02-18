@@ -1,0 +1,361 @@
+---
+title: "Network Version Control"
+description: "Manage network versions, create snapshots, roll back to previous configurations, and track changes over time."
+section: "networks"
+order: 5
+primaryKeyword: "network version control"
+relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/api-reference"]
+secondaryKeywords:
+    [
+        "network versions",
+        "network snapshots",
+        "network rollback",
+        "version history",
+        "network changes"
+    ]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Network Version Control
+
+Network version control enables you to create snapshots of network configurations, track changes over time, and roll back to previous versions. Each version stores the complete topology JSON, primitive attachments, and configuration state.
+
+## NetworkVersion model
+
+Network versions are stored in the `NetworkVersion` table:
+
+| Field            | Type     | Description                              |
+| ---------------- | -------- | ---------------------------------------- |
+| `id`             | string   | Unique version ID                        |
+| `networkId`      | string   | Reference to the network                 |
+| `version`        | number   | Sequential version number (1, 2, 3, ...) |
+| `topologyJson`   | JSON     | Complete topology snapshot               |
+| `primitivesJson` | JSON     | Primitive attachments snapshot           |
+| `description`    | string   | Change notes for this version            |
+| `createdAt`      | datetime | When the version was created             |
+| `createdBy`      | string   | User ID who created the version          |
+
+## Creating versions
+
+Create a version snapshot before making changes:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Added fact-check workflow to research pipeline"
+  }'
+```
+
+### Automatic versioning
+
+When you update a network, a new version is automatically created if the topology or primitives change:
+
+```bash
+# Update network topology
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {
+      "nodes": [...],
+      "edges": [...]
+    }
+  }'
+
+# System automatically creates version 2
+```
+
+### Manual versioning
+
+Create versions explicitly for important milestones:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Production-ready configuration with all optimizations"
+  }'
+```
+
+## Listing versions
+
+List all versions for a network:
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response format
+
+```json
+{
+  "success": true,
+  "versions": [
+    {
+      "id": "nv_abc123",
+      "networkId": "net_xyz789",
+      "version": 3,
+      "description": "Added fact-check workflow",
+      "topologyJson": {...},
+      "primitivesJson": [...],
+      "createdAt": "2026-02-18T14:00:00.000Z",
+      "createdBy": "user_123"
+    },
+    {
+      "id": "nv_def456",
+      "networkId": "net_xyz789",
+      "version": 2,
+      "description": "Initial production configuration",
+      "topologyJson": {...},
+      "primitivesJson": [...],
+      "createdAt": "2026-02-18T12:00:00.000Z",
+      "createdBy": "user_123"
+    },
+    {
+      "id": "nv_ghi789",
+      "networkId": "net_xyz789",
+      "version": 1,
+      "description": "Initial version",
+      "topologyJson": {...},
+      "primitivesJson": [...],
+      "createdAt": "2026-02-18T10:00:00.000Z",
+      "createdBy": "user_123"
+    }
+  ]
+}
+```
+
+## Getting a specific version
+
+Retrieve a specific version by version number:
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network/versions/2 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Response format
+
+```json
+{
+  "success": true,
+  "version": {
+    "id": "nv_def456",
+    "networkId": "net_xyz789",
+    "version": 2,
+    "description": "Initial production configuration",
+    "topologyJson": {
+      "nodes": [...],
+      "edges": [...]
+    },
+    "primitivesJson": [
+      {"primitiveType": "agent", "agentId": "research-agent-id"},
+      {"primitiveType": "agent", "agentId": "analysis-agent-id"}
+    ],
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "createdBy": "user_123"
+  }
+}
+```
+
+## Rolling back
+
+Roll back a network to a previous version:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions/2/rollback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Rolling back due to routing issues in version 3"
+  }'
+```
+
+This:
+
+1. Retrieves version 2's topology and primitives
+2. Updates the network with version 2's configuration
+3. Creates a new version (version 4) with the rollback state
+4. Logs the rollback reason
+
+### Rollback response
+
+```json
+{
+  "success": true,
+  "message": "Network rolled back to version 2",
+  "network": {
+    "id": "net_xyz789",
+    "version": 4,
+    "topologyJson": {...},  // Version 2's topology
+    "primitives": [...]      // Version 2's primitives
+  }
+}
+```
+
+## Version comparison
+
+Compare two versions to see what changed:
+
+```bash
+curl https://agentc2.ai/agent/api/networks/research-network/versions/compare?from=1&to=3 \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### Comparison response
+
+```json
+{
+    "success": true,
+    "fromVersion": 1,
+    "toVersion": 3,
+    "changes": {
+        "topology": {
+            "nodesAdded": [{ "id": "fact-check", "type": "workflow", "label": "Fact Check" }],
+            "nodesRemoved": [],
+            "edgesAdded": [{ "from": "research", "to": "fact-check" }],
+            "edgesRemoved": []
+        },
+        "primitives": {
+            "added": [{ "primitiveType": "workflow", "workflowId": "fact-check-workflow-id" }],
+            "removed": []
+        }
+    }
+}
+```
+
+## Versioning best practices
+
+### Create versions before major changes
+
+```bash
+# Step 1: Create version before changes
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Pre-refactor snapshot"
+  }'
+
+# Step 2: Make changes
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {...}
+  }'
+```
+
+### Use descriptive change notes
+
+**Good descriptions**:
+
+- "Added fact-check workflow after research step"
+- "Increased maxSteps from 10 to 15 for complex queries"
+- "Fixed routing issue where technical questions went to general support"
+
+**Vague descriptions** (avoid):
+
+- "Updated"
+- "Changes"
+- "Fixed bugs"
+
+### Version before production deployments
+
+```bash
+# Before deploying to production
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Production deployment v1.0 - tested and validated"
+  }'
+
+# Deploy
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isPublished": true
+  }'
+```
+
+## Version lifecycle
+
+Every network follows a version lifecycle:
+
+1. **Initial version** — Created automatically when network is first created (version 1)
+2. **Incremental versions** — Created when topology or primitives change
+3. **Rollback versions** — Created when rolling back to a previous version
+4. **Production versions** — Tagged versions deployed to production
+
+### Version numbering
+
+Versions are numbered sequentially:
+
+- Version 1: Initial creation
+- Version 2: First update
+- Version 3: Second update
+- Version 4: Rollback to version 2 (creates new version)
+
+<Callout type="info">
+    Version numbers are sequential and never reused. Rolling back creates a new version number, not
+    a reversion to the old number.
+</Callout>
+
+## Complete example
+
+Full version control workflow:
+
+```bash
+# Step 1: Create network (auto-creates version 1)
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Network",
+    "instructions": "...",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o"
+  }'
+
+# Step 2: Create version before changes
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Baseline configuration"
+  }'
+
+# Step 3: Make changes (auto-creates version 2)
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {...}
+  }'
+
+# Step 4: List versions
+curl https://agentc2.ai/agent/api/networks/research-network/versions \
+  -H "Authorization: Bearer $TOKEN"
+
+# Step 5: Rollback if needed
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions/1/rollback \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "description": "Rolling back due to issues"
+  }'
+```
+
+## Next steps
+
+- **[Creating Networks](/docs/networks/creating-networks)** — Learn how to create networks
+- **[Networks API Reference](/docs/networks/api-reference)** — Complete API documentation for versions
+- **[Networks Overview](/docs/networks/overview)** — Understand network capabilities

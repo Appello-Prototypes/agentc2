@@ -1,0 +1,407 @@
+---
+title: "Creating Networks"
+description: "Create multi-agent networks via API: select primitives, define topology, configure routing, and deploy incrementally."
+section: "networks"
+order: 3
+primaryKeyword: "create network"
+relatedSlugs:
+    ["networks/overview", "networks/topology", "networks/version-control", "networks/api-reference"]
+secondaryKeywords:
+    [
+        "network creation",
+        "network API",
+        "network primitives",
+        "network topology",
+        "network deployment"
+    ]
+pageType: "how-to"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+# Creating Networks
+
+Create networks in AgentC2 via the REST API or workspace UI. Networks combine multiple agents, workflows, and tools into coordinated execution topologies with intelligent routing and memory sharing.
+
+## Prerequisites
+
+Before creating a network, ensure you have:
+
+- An AgentC2 account with authentication configured
+- At least one agent or workflow created (to use as primitives)
+- An OpenAI or Anthropic API key configured for the routing coordinator
+
+<Callout type="info">
+    Networks require a coordinator agent (routing agent) that uses an LLM to make routing decisions.
+    The coordinator's API key is used for routing decisions, while primitive agents use their own
+    configured keys.
+</Callout>
+
+## Create via API
+
+Send a `POST` request to `/agent/api/networks` with the network configuration:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Network",
+    "slug": "research-network",
+    "description": "Multi-agent research network with web research, analysis, and writing",
+    "instructions": "You are a coordinator agent. Analyze incoming requests and route research tasks to the research agent, analysis tasks to the analyst, and writing tasks to the writer. Maintain context across all interactions.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "topologyJson": {
+      "nodes": [
+        {"id": "coordinator", "type": "coordinator", "label": "Coordinator"},
+        {"id": "researcher", "type": "agent", "label": "Research Agent"},
+        {"id": "analyst", "type": "agent", "label": "Analysis Agent"},
+        {"id": "writer", "type": "agent", "label": "Writing Agent"}
+      ],
+      "edges": [
+        {"from": "coordinator", "to": "researcher"},
+        {"from": "coordinator", "to": "analyst"},
+        {"from": "coordinator", "to": "writer"}
+      ]
+    },
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "research-agent-id", "description": "Handles web research queries"},
+      {"primitiveType": "agent", "agentId": "analysis-agent-id", "description": "Performs data analysis"},
+      {"primitiveType": "agent", "agentId": "writing-agent-id", "description": "Creates written content"}
+    ],
+    "memoryConfig": {
+      "lastMessages": 30,
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      }
+    },
+    "maxSteps": 15,
+    "isPublished": false,
+    "isActive": true
+  }'
+```
+
+### Request fields
+
+| Field           | Type    | Required | Default                  | Description                                     |
+| --------------- | ------- | -------- | ------------------------ | ----------------------------------------------- |
+| `name`          | string  | ✅ Yes   | —                        | Display name for the network                    |
+| `slug`          | string  | ❌ No    | Auto-generated           | URL-safe identifier (unique per workspace)      |
+| `description`   | string  | ❌ No    | `null`                   | Human-readable description                      |
+| `instructions`  | string  | ✅ Yes   | —                        | System instructions for the routing coordinator |
+| `modelProvider` | string  | ✅ Yes   | —                        | `"openai"` or `"anthropic"`                     |
+| `modelName`     | string  | ✅ Yes   | —                        | Model identifier (e.g., `"gpt-4o"`)             |
+| `temperature`   | number  | ❌ No    | `0.7`                    | Sampling temperature for coordinator (0-2)      |
+| `topologyJson`  | object  | ❌ No    | `{nodes: [], edges: []}` | Network topology graph                          |
+| `memoryConfig`  | object  | ❌ No    | `{}`                     | Memory configuration for network context        |
+| `maxSteps`      | number  | ❌ No    | `10`                     | Maximum execution steps                         |
+| `primitives`    | array   | ❌ No    | `[]`                     | Array of primitive attachments                  |
+| `isPublished`   | boolean | ❌ No    | `false`                  | Whether network is published                    |
+| `isActive`      | boolean | ❌ No    | `true`                   | Whether network is active                       |
+
+### Primitives array
+
+Each primitive in the `primitives` array defines an agent, workflow, or tool attached to the network:
+
+```json
+{
+  "primitiveType": "agent" | "workflow" | "tool",
+  "agentId": "string",        // Required if primitiveType is "agent"
+  "workflowId": "string",     // Required if primitiveType is "workflow"
+  "toolId": "string",          // Required if primitiveType is "tool"
+  "description": "string",     // Optional: description for routing
+  "position": {                // Optional: visual position
+    "x": 100,
+    "y": 200
+  }
+}
+```
+
+### Response format
+
+Successful creation returns:
+
+```json
+{
+  "success": true,
+  "network": {
+    "id": "net_abc123",
+    "slug": "research-network",
+    "name": "Research Network",
+    "description": "Multi-agent research network...",
+    "instructions": "You are a coordinator agent...",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "topologyJson": {...},
+    "memoryConfig": {...},
+    "maxSteps": 15,
+    "isPublished": false,
+    "isActive": true,
+    "version": 1,
+    "primitives": [
+      {
+        "id": "np_123",
+        "networkId": "net_abc123",
+        "primitiveType": "agent",
+        "agentId": "research-agent-id",
+        "description": "Handles web research queries"
+      }
+    ],
+    "createdAt": "2026-02-18T12:00:00.000Z",
+    "updatedAt": "2026-02-18T12:00:00.000Z"
+  }
+}
+```
+
+## Selecting primitives
+
+Before creating a network, identify which agents, workflows, and tools to include:
+
+### List available agents
+
+```bash
+curl https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### List available workflows
+
+```bash
+curl https://agentc2.ai/agent/api/workflows \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+### List available tools
+
+```bash
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+<Callout type="tip">
+    Use agent/workflow IDs (not slugs) in the `primitives` array. The API returns IDs in the
+    response when you list agents or workflows.
+</Callout>
+
+## Defining topology
+
+The `topologyJson` field defines how primitives are connected. You can:
+
+1. **Define manually** — Create the JSON structure yourself
+2. **Auto-generate** — Omit `topologyJson` and let the system generate it from primitives
+3. **Use AI designer** — Use `/agent/api/networks/generate` to generate topology from a description
+
+### Manual topology definition
+
+```json
+{
+    "nodes": [
+        { "id": "coordinator", "type": "coordinator", "label": "Coordinator" },
+        { "id": "agent-1", "type": "agent", "label": "Research Agent" },
+        { "id": "agent-2", "type": "agent", "label": "Writing Agent" }
+    ],
+    "edges": [
+        { "from": "coordinator", "to": "agent-1" },
+        { "from": "coordinator", "to": "agent-2" }
+    ]
+}
+```
+
+### Auto-generated topology
+
+If you omit `topologyJson` but provide `primitives`, the system auto-generates a router topology:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Simple Network",
+    "instructions": "Route requests to appropriate agents",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "research-agent-id"},
+      {"primitiveType": "agent", "agentId": "writing-agent-id"}
+    ]
+  }'
+```
+
+The system creates a coordinator node and routes to all provided primitives.
+
+## Incremental rollout patterns
+
+Deploy networks incrementally to reduce risk:
+
+### 1. Create draft network
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Network",
+    "instructions": "...",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "isPublished": false,
+    "isActive": false
+  }'
+```
+
+### 2. Test with limited primitives
+
+```bash
+# Add one primitive at a time
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "research-agent-id"}
+    ]
+  }'
+
+# Test execution
+curl -X POST https://agentc2.ai/agent/api/networks/research-network/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"input": "Test query"}'
+```
+
+### 3. Add more primitives
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "primitives": [
+      {"primitiveType": "agent", "agentId": "research-agent-id"},
+      {"primitiveType": "agent", "agentId": "analysis-agent-id"}
+    ]
+  }'
+```
+
+### 4. Publish when ready
+
+```bash
+curl -X PUT https://agentc2.ai/agent/api/networks/research-network \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "isPublished": true,
+    "isActive": true
+  }'
+```
+
+## Example: 3-agent research network
+
+Create a complete research network with research, analysis, and writing agents:
+
+```bash
+# Step 1: Create the network
+curl -X POST https://agentc2.ai/agent/api/networks \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Research Pipeline",
+    "slug": "research-pipeline",
+    "description": "Research → Analysis → Writing pipeline",
+    "instructions": "You coordinate research tasks. Route research queries to the researcher, analysis requests to the analyst, and writing tasks to the writer. Maintain full context across all steps.",
+    "modelProvider": "openai",
+    "modelName": "gpt-4o",
+    "temperature": 0.3,
+    "topologyJson": {
+      "nodes": [
+        {"id": "coordinator", "type": "coordinator", "label": "Coordinator"},
+        {"id": "researcher", "type": "agent", "label": "Researcher"},
+        {"id": "analyst", "type": "agent", "label": "Analyst"},
+        {"id": "writer", "type": "agent", "label": "Writer"}
+      ],
+      "edges": [
+        {"from": "coordinator", "to": "researcher"},
+        {"from": "coordinator", "to": "analyst"},
+        {"from": "coordinator", "to": "writer"}
+      ]
+    },
+    "primitives": [
+      {
+        "primitiveType": "agent",
+        "agentId": "research-agent-id",
+        "description": "Performs web research using search tools"
+      },
+      {
+        "primitiveType": "agent",
+        "agentId": "analysis-agent-id",
+        "description": "Analyzes research findings and extracts insights"
+      },
+      {
+        "primitiveType": "agent",
+        "agentId": "writing-agent-id",
+        "description": "Creates written content from research and analysis"
+      }
+    ],
+    "memoryConfig": {
+      "lastMessages": 50,
+      "semanticRecall": {
+        "topK": 5,
+        "minScore": 0.7
+      }
+    },
+    "maxSteps": 20
+  }'
+
+# Step 2: Execute a research task
+curl -X POST https://agentc2.ai/agent/api/networks/research-pipeline/execute \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": "Research quantum computing breakthroughs in 2025, analyze the implications, and write a comprehensive report",
+    "threadId": "research-thread-123"
+  }'
+```
+
+## Validation
+
+Validate network topology before deploying:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/networks/validate \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "topologyJson": {...},
+    "primitives": [...]
+  }'
+```
+
+**Validation checks**:
+
+- All edge references point to valid nodes
+- All primitive IDs exist
+- No circular dependencies
+- Coordinator node exists for router topology
+
+## Error handling
+
+Common errors and solutions:
+
+| Status | Error                   | Solution                                                     |
+| ------ | ----------------------- | ------------------------------------------------------------ |
+| `400`  | Missing required fields | Include `name`, `instructions`, `modelProvider`, `modelName` |
+| `400`  | Invalid topology        | Validate topology JSON structure                             |
+| `404`  | Primitive not found     | Verify agent/workflow IDs exist                              |
+| `409`  | Slug already exists     | Use a different slug or update existing network              |
+| `500`  | Internal error          | Check API logs and retry                                     |
+
+## Next steps
+
+- **[Network Topology](/docs/networks/topology)** — Learn about router, sequential, and parallel topologies
+- **[AI-Assisted Design](/docs/networks/ai-assisted-design)** — Generate network topologies automatically
+- **[Version Control](/docs/networks/version-control)** — Create network versions and rollbacks
+- **[Networks API Reference](/docs/networks/api-reference)** — Complete API documentation

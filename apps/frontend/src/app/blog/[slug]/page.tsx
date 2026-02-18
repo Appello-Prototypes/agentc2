@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BLOG_POSTS, getBlogPost } from "@/lib/content/blog";
 import { getDocsPage } from "@/lib/content/docs";
-import { breadcrumbJsonLd, buildPageMetadata } from "@/lib/seo";
+import { articleJsonLd, breadcrumbJsonLd, buildPageMetadata, faqJsonLd } from "@/lib/seo";
 import { ContentPageTracker } from "@/components/analytics/content-page-tracker";
 import { TrackedLink } from "@/components/analytics/tracked-link";
 
@@ -43,6 +43,8 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
         { name: "Blog", path: "/blog" },
         { name: post.title, path: `/blog/${post.slug}` }
     ]);
+    const articleSchema = articleJsonLd(post);
+    const faqSchema = post.faqItems && post.faqItems.length > 0 ? faqJsonLd(post.faqItems) : null;
 
     return (
         <main className="mx-auto max-w-3xl px-6 py-12">
@@ -58,6 +60,16 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
                 type="application/ld+json"
                 dangerouslySetInnerHTML={{ __html: JSON.stringify(schema) }}
             />
+            <script
+                type="application/ld+json"
+                dangerouslySetInnerHTML={{ __html: JSON.stringify(articleSchema) }}
+            />
+            {faqSchema && (
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(faqSchema) }}
+                />
+            )}
             <nav className="mb-4 text-sm">
                 <Link href="/blog" className="text-primary hover:text-primary/80">
                     Blog
@@ -99,6 +111,46 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
                     </section>
                 ))}
             </article>
+
+            {post.faqItems && post.faqItems.length > 0 && (
+                <section className="mt-10">
+                    <h2 className="text-foreground mb-4 text-2xl font-semibold">
+                        Frequently Asked Questions
+                    </h2>
+                    <div className="space-y-4">
+                        {post.faqItems.map((item) => (
+                            <div key={item.question}>
+                                <h3 className="text-foreground font-medium">{item.question}</h3>
+                                <p className="text-muted-foreground mt-1 leading-relaxed">
+                                    {item.answer}
+                                </p>
+                            </div>
+                        ))}
+                    </div>
+                </section>
+            )}
+
+            {post.relatedPosts.length > 0 && (
+                <section className="mt-10">
+                    <h2 className="text-foreground mb-3 text-xl font-semibold">Related Posts</h2>
+                    <ul className="space-y-2">
+                        {post.relatedPosts.map((relSlug) => {
+                            const related = getBlogPost(relSlug);
+                            if (!related) return null;
+                            return (
+                                <li key={relSlug}>
+                                    <Link
+                                        href={`/blog/${relSlug}`}
+                                        className="text-primary hover:text-primary/80"
+                                    >
+                                        {related.title}
+                                    </Link>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                </section>
+            )}
 
             <section className="mt-10">
                 <h2 className="text-foreground mb-3 text-xl font-semibold">

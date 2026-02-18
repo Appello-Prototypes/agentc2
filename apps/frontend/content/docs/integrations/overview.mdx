@@ -1,0 +1,359 @@
+---
+title: "Integrations Overview"
+description: "Connect agents to external services via Model Context Protocol (MCP), OAuth-native integrations, and channel-native messaging platforms."
+section: "integrations"
+order: 1
+primaryKeyword: "Model Context Protocol tools"
+relatedSlugs:
+    [
+        "integrations/model-context-protocol",
+        "integrations/hubspot",
+        "integrations/slack",
+        "agents/tools",
+        "platform/security"
+    ]
+pageType: "concept"
+ctaLabel: "Explore Integrations in AgentC2"
+ctaHref: "/workspace"
+---
+
+# Integrations Overview
+
+Integrations connect your agents to external services—CRM systems, communication platforms, productivity tools, and knowledge sources. AgentC2 supports three integration architectures: MCP-based tools (Model Context Protocol), OAuth-native APIs, and channel-native messaging platforms.
+
+## Integration taxonomy
+
+AgentC2 integrations fall into three categories based on their architecture and use case:
+
+### 1. MCP-based integrations
+
+**Model Context Protocol (MCP) servers** expose tools that agents can call during conversations. MCP integrations use a standardized protocol for tool discovery and execution, enabling agents to interact with external APIs through a unified interface.
+
+| Integration   | Category      | Use Case                                             |
+| ------------- | ------------- | ---------------------------------------------------- |
+| **HubSpot**   | CRM           | Contacts, companies, deals, pipeline management      |
+| **Jira**      | Productivity  | Issue tracking, sprint management, project workflows |
+| **GitHub**    | Productivity  | Repository management, issues, PRs, code search      |
+| **Firecrawl** | Web           | Web scraping and content extraction                  |
+| **Fathom**    | Knowledge     | Meeting recordings, transcripts, summaries           |
+| **JustCall**  | Communication | Phone logs, SMS messaging                            |
+
+MCP tools are namespaced with the server name (e.g., `hubspot_hubspot-get-contact`) and are discovered dynamically when an integration connection is active.
+
+<Callout type="info">
+    MCP integrations require API keys or tokens configured at the organization level. Once
+    connected, all agents in your workspace can use the available tools.
+</Callout>
+
+### 2. OAuth-native integrations
+
+**Direct OAuth2 integrations** connect to services that require user consent and token-based authentication. These integrations use encrypted credential storage and automatic token refresh.
+
+| Integration           | Category      | Use Case                                        |
+| --------------------- | ------------- | ----------------------------------------------- |
+| **Gmail**             | Communication | Email read, send, archive via Google OAuth      |
+| **Google Calendar**   | Productivity  | Calendar events CRUD via Google OAuth           |
+| **Google Drive**      | Productivity  | File search, read, create via Google OAuth      |
+| **Microsoft Outlook** | Communication | Mail and Calendar via Microsoft Graph API       |
+| **Dropbox**           | Productivity  | File storage, sharing, search via Dropbox OAuth |
+
+OAuth integrations store encrypted tokens in the `IntegrationConnection` model and automatically refresh expired tokens. Each organization can have multiple connections (e.g., different Gmail accounts).
+
+<Callout type="tip">
+    OAuth integrations use AES-256-GCM encryption for token storage. The `CREDENTIAL_ENCRYPTION_KEY`
+    environment variable must be set for production deployments.
+</Callout>
+
+### 3. Channel-native integrations
+
+**Messaging platform integrations** enable two-way conversations where agents respond directly in communication channels.
+
+| Integration         | Category      | Use Case                                          |
+| ------------------- | ------------- | ------------------------------------------------- |
+| **Slack**           | Communication | Team messaging, channel conversations, DM support |
+| **Microsoft Teams** | Communication | Team chat, channel posting, meeting integration   |
+
+Channel integrations combine MCP tools (for reading/writing messages) with webhook handlers (for receiving events). Agents maintain separate conversation threads per channel thread.
+
+## IntegrationProvider and IntegrationConnection models
+
+AgentC2 uses two database models to manage integrations:
+
+### IntegrationProvider
+
+The `IntegrationProvider` model defines available integration types:
+
+```typescript
+{
+    id: string;
+    key: string; // Unique identifier (e.g., "hubspot", "gmail")
+    name: string; // Display name
+    category: string; // "crm", "communication", "web", etc.
+    authType: string; // "apiKey", "oauth", "none", "webhook"
+    providerType: string; // "mcp", "oauth", "webhook", "custom"
+    configJson: Json; // Required fields, OAuth config, MCP server URL
+    actionsJson: Json; // Cached action metadata
+    triggersJson: Json; // Cached trigger metadata
+}
+```
+
+Providers are seeded at platform startup and define what integrations are available to all organizations.
+
+### IntegrationConnection
+
+The `IntegrationConnection` model stores organization-specific connection instances:
+
+```typescript
+{
+  id: string
+  providerId: string       // Foreign key to IntegrationProvider
+  organizationId: string  // Scoped to organization
+  userId: string?         // Optional user-scoped connection
+  scope: string           // "org" or "user"
+  name: string            // Display name (e.g., "Production HubSpot")
+  isDefault: boolean      // Default connection for this provider
+  isActive: boolean       // Whether connection is active
+  credentials: Json?      // Encrypted API keys or OAuth tokens
+  metadata: Json?         // Additional connection metadata
+  lastUsedAt: DateTime?
+  lastTestedAt: DateTime?
+  errorMessage: string?   // Last error if connection failed
+}
+```
+
+Each organization can have multiple connections per provider (e.g., "Production HubSpot" and "Sandbox HubSpot"). The `isDefault` flag determines which connection is used when no specific connection is specified.
+
+<Callout type="warning">
+    When an `IntegrationConnection` is deleted, all related data (email threads, calendar events,
+    webhook subscriptions) is cascaded. Use `isActive: false` to temporarily disable a connection
+    instead of deleting it.
+</Callout>
+
+## How to choose an integration approach
+
+### Use MCP when:
+
+- The service provides an MCP server (HubSpot, Jira, GitHub, Firecrawl)
+- You need standardized tool discovery and execution
+- Multiple agents should share the same integration credentials
+- The integration exposes discrete tools (not streaming or real-time events)
+
+### Use OAuth-native when:
+
+- The service requires user consent (Gmail, Outlook, Dropbox)
+- You need per-user or per-organization token management
+- The service uses OAuth2 with PKCE (Google, Microsoft, Dropbox)
+- You need automatic token refresh and encrypted storage
+
+### Use channel-native when:
+
+- The integration is a messaging platform (Slack, Teams)
+- You need bidirectional conversations (users message the agent)
+- Webhook events trigger agent responses
+- Per-channel or per-thread conversation context is required
+
+## Integration lifecycle
+
+### 1. Discovery
+
+Browse available integrations in the workspace UI (`/workspace/integrations`) or query the API:
+
+```bash
+curl https://agentc2.ai/agent/api/integrations/providers \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The response includes provider metadata, required fields, and connection status:
+
+```json
+{
+    "success": true,
+    "providers": [
+        {
+            "id": "provider-123",
+            "key": "hubspot",
+            "name": "HubSpot",
+            "category": "crm",
+            "authType": "apiKey",
+            "providerType": "mcp",
+            "status": "available",
+            "connections": [],
+            "toolCount": 12
+        }
+    ]
+}
+```
+
+### 2. Setup
+
+Configure credentials based on the integration type:
+
+**MCP (API Key):**
+
+```bash
+# Set environment variables
+HUBSPOT_ACCESS_TOKEN="pat-na1-..."
+
+# Or configure via UI: Settings > Integrations > HubSpot > Connect
+```
+
+**OAuth:**
+
+```bash
+# Navigate to integration setup page
+# Complete OAuth flow (redirects to provider, then callback)
+# Tokens are automatically stored encrypted
+```
+
+**Channel:**
+
+```bash
+# Configure OAuth app credentials
+SLACK_CLIENT_ID="..."
+SLACK_CLIENT_SECRET="..."
+SLACK_SIGNING_SECRET="..."
+
+# Install app to workspace
+# Webhook URL: https://agentc2.ai/agent/api/slack/events
+```
+
+### 3. Connection testing
+
+Test the connection to verify credentials and tool availability:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/integrations/connections/{connectionId}/test \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+The test endpoint:
+
+- Validates credentials
+- Discovers available tools (for MCP)
+- Checks token validity (for OAuth)
+- Updates `lastTestedAt` and `errorMessage` fields
+
+### 4. Tool attachment
+
+Attach integration tools to agents:
+
+```bash
+# List available tools from active connections
+curl https://agentc2.ai/agent/api/tools \
+  -H "Authorization: Bearer $TOKEN"
+
+# Attach MCP tool to agent
+curl -X POST https://agentc2.ai/agent/api/agents/sales-assistant/tools \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "toolId": "hubspot_hubspot-get-contact"
+  }'
+```
+
+### 5. Monitoring
+
+Track integration health and usage:
+
+```bash
+# View connection status
+curl https://agentc2.ai/agent/api/integrations/connections \
+  -H "Authorization: Bearer $TOKEN"
+
+# Check integration events (lifecycle logs)
+curl https://agentc2.ai/agent/api/integrations/connections/{connectionId}/events \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Integration events log:
+
+- Connection creation, testing, failures
+- Token refresh success/failure
+- Health check results
+- Tool discovery counts
+
+## Integration security
+
+### Credential encryption
+
+OAuth tokens are encrypted at rest using AES-256-GCM:
+
+```bash
+# Generate encryption key
+openssl rand -hex 32
+
+# Set in environment
+CREDENTIAL_ENCRYPTION_KEY="..."
+```
+
+API keys for MCP integrations are stored in `IntegrationConnection.credentials` as JSON. In production, consider encrypting these as well.
+
+### Scope isolation
+
+- **Organization-scoped**: Connections belong to an organization. Users in the same org share access.
+- **User-scoped**: Connections belong to a specific user (e.g., personal Gmail). Only that user's agents can access.
+
+### Token refresh
+
+OAuth integrations automatically refresh expired tokens:
+
+```typescript
+// Automatic refresh on API call
+const token = await getOAuthToken(connectionId);
+// If expired, refresh token is used to get new access token
+// New tokens are encrypted and stored
+```
+
+Failed refresh attempts set `isActive: false` and `errorMessage` with details.
+
+## Common patterns
+
+### Multi-connection strategy
+
+Use multiple connections for different environments:
+
+```bash
+# Production HubSpot
+POST /api/integrations/connections
+{
+  "providerKey": "hubspot",
+  "name": "Production HubSpot",
+  "credentials": { "HUBSPOT_ACCESS_TOKEN": "pat-prod-..." },
+  "isDefault": true
+}
+
+# Sandbox HubSpot
+POST /api/integrations/connections
+{
+  "providerKey": "hubspot",
+  "name": "Sandbox HubSpot",
+  "credentials": { "HUBSPOT_ACCESS_TOKEN": "pat-sandbox-..." },
+  "isDefault": false
+}
+```
+
+Agents can specify which connection to use via tool configuration, or the default connection is used.
+
+### OAuth sibling providers
+
+Google integrations (Gmail, Calendar, Drive) share OAuth credentials:
+
+```typescript
+// Single Google OAuth connection enables all three
+{
+  providerKey: "gmail",
+  // Automatically enables:
+  // - gmail tools (gmail-search-emails, gmail-send-email)
+  // - google-calendar tools (google-calendar-list-events)
+  // - google-drive tools (google-drive-search-files)
+}
+```
+
+Microsoft Outlook similarly enables both Mail and Calendar tools from one OAuth connection.
+
+## Next steps
+
+- **[Model Context Protocol](/docs/integrations/model-context-protocol)** — Learn how MCP works and how AgentC2 wraps it
+- **[HubSpot Integration](/docs/integrations/hubspot)** — Set up CRM integration
+- **[Slack Integration](/docs/integrations/slack)** — Configure team messaging
+- **[Building Custom Integrations](/docs/integrations/building-custom)** — Create your own MCP server or OAuth integration

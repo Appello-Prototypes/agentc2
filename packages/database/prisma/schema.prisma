@@ -3427,6 +3427,18 @@ model AdminAuditLog {
     @@map("admin_audit_log")
 }
 
+// AdminSetting - Global admin portal system settings
+model AdminSetting {
+    id        String   @id @default(cuid())
+    key       String   @unique
+    value     Json
+    updatedBy String?
+    updatedAt DateTime @updatedAt
+    createdAt DateTime @default(now())
+
+    @@map("admin_setting")
+}
+
 // FeatureFlag - Global feature flags managed via admin portal
 model FeatureFlag {
     id           String   @id @default(cuid())
