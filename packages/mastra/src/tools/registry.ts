@@ -1007,16 +1007,36 @@ export async function getToolsByNamesAsync(
         }
     }
 
-    // Find names not in static registry (likely MCP tools)
+    // Find names not in static registry (likely MCP or federation tools)
     const unresolvedNames = names.filter((name) => !result[name]);
 
     if (unresolvedNames.length > 0) {
-        // Load MCP tools and check for matches
-        const mcpTools = await getMcpToolsCached(organizationId);
+        // Split unresolved into federation tools and MCP tools
+        const federationNames = unresolvedNames.filter((n) => n.startsWith("federation:"));
+        const otherUnresolved = unresolvedNames.filter((n) => !n.startsWith("federation:"));
 
-        for (const name of unresolvedNames) {
-            if (mcpTools[name]) {
-                result[name] = mcpTools[name];
+        // Load MCP tools for non-federation unresolved names
+        if (otherUnresolved.length > 0) {
+            const mcpTools = await getMcpToolsCached(organizationId);
+            for (const name of otherUnresolved) {
+                if (mcpTools[name]) {
+                    result[name] = mcpTools[name];
+                }
+            }
+        }
+
+        // Load federation tools if any requested and org context available
+        if (federationNames.length > 0 && organizationId) {
+            try {
+                const { getFederatedTools } = await import("../federation/tools");
+                const fedTools = await getFederatedTools(organizationId);
+                for (const name of federationNames) {
+                    if (fedTools[name]) {
+                        result[name] = fedTools[name];
+                    }
+                }
+            } catch (error) {
+                console.warn("[ToolRegistry] Failed to load federation tools:", error);
             }
         }
     }

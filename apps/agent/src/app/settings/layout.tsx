@@ -1,10 +1,12 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
-import { cn, icons, HugeiconsIcon, Button } from "@repo/ui";
+import { cn, icons, HugeiconsIcon, Button, Badge } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { DetailPageShell } from "@/components/DetailPageShell";
+import { getApiBase } from "@/lib/utils";
 
 interface SettingsNavItem {
     id: string;
@@ -68,12 +70,36 @@ const settingsNavItems: SettingsNavItem[] = [
         icon: "folder",
         description: "Environment management",
         requiresRole: ["owner", "admin"]
+    },
+    {
+        id: "connections",
+        label: "Connections",
+        href: "/settings/connections",
+        icon: "ai-network",
+        description: "Cross-org agent federation",
+        requiresRole: ["owner", "admin"]
     }
 ];
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const activeSection = pathname.split("/")[2] || "profile";
+    const [pendingCount, setPendingCount] = useState(0);
+
+    useEffect(() => {
+        fetch(`${getApiBase()}/api/federation/connections`)
+            .then((r) => r.json())
+            .then((data) => {
+                if (data.success) {
+                    const pending = (data.connections || []).filter(
+                        (c: { status: string; direction: string }) =>
+                            c.status === "pending" && c.direction === "received"
+                    );
+                    setPendingCount(pending.length);
+                }
+            })
+            .catch(() => {});
+    }, []);
 
     return (
         <DetailPageShell
@@ -111,7 +137,15 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                                                 className="size-4 shrink-0"
                                                 strokeWidth={1.5}
                                             />
-                                            <span>{item.label}</span>
+                                            <span className="flex-1">{item.label}</span>
+                                            {item.id === "connections" && pendingCount > 0 && (
+                                                <Badge
+                                                    variant="destructive"
+                                                    className="ml-auto size-5 items-center justify-center rounded-full p-0 text-[10px]"
+                                                >
+                                                    {pendingCount}
+                                                </Badge>
+                                            )}
                                         </Link>
                                     </li>
                                 );

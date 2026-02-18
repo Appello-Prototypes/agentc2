@@ -390,6 +390,50 @@ export type {
     ToolRediscoveryResult
 } from "./integrations";
 
+// Crypto (platform-wide security primitives)
+export {
+    encrypt,
+    decrypt,
+    encryptJson,
+    decryptJson,
+    signPayload,
+    verifySignature,
+    provisionOrgKeyPair,
+    getActiveOrgKeyPair,
+    rotateOrgKeyPair,
+    revokeOrgKeyPairs,
+    getOrgPublicKey
+} from "./crypto";
+export type { EncryptedPayload, OrgKeyPair } from "./crypto";
+
+// Audit (platform-wide logging)
+export { writeAuditLog, writeAuditLogAsync, queryAuditLogs } from "./audit";
+export type { AuditEntry, AuditQueryOptions } from "./audit";
+
+// Federation (cross-org agent communication)
+export {
+    requestConnection,
+    approveConnection,
+    suspendConnection,
+    revokeConnection,
+    listConnections,
+    processInvocation,
+    discoverFederatedAgents,
+    getFederatedTools,
+    invalidateFederationToolsCache,
+    isFederatedToolId,
+    parseFederatedToolId,
+    evaluatePolicy
+} from "./federation";
+export type {
+    AgentCard,
+    FederationInvokeRequest,
+    FederationInvokeResponse,
+    ConnectionRequest,
+    ConnectionApproval,
+    AgreementSummary
+} from "./federation";
+
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";
 export type { Mastra } from "@mastra/core/mastra";

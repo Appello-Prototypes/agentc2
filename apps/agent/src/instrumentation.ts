@@ -10,6 +10,7 @@ export async function register() {
     if (process.env.NEXT_RUNTIME === "nodejs") {
         const { onPostBootstrap } = await import("@repo/auth");
         const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
+        const { provisionOrgKeyPair } = await import("@repo/mastra/crypto");
 
         onPostBootstrap(async (userId, organizationId) => {
             console.log("[PostBootstrap] Syncing Gmail for user:", userId);
@@ -21,6 +22,16 @@ export async function register() {
             }
         });
 
-        console.log("[Instrumentation] Post-bootstrap Gmail sync hook registered");
+        onPostBootstrap(async (_userId, organizationId) => {
+            const keyPair = await provisionOrgKeyPair(organizationId);
+            if (keyPair) {
+                console.log(
+                    "[PostBootstrap] Ed25519 key pair provisioned for org:",
+                    organizationId
+                );
+            }
+        });
+
+        console.log("[Instrumentation] Post-bootstrap hooks registered (Gmail, KeyPair)");
     }
 }

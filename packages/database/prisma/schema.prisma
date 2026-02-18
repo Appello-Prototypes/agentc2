@@ -130,6 +130,17 @@ model Organization {
     impersonationSessions ImpersonationSession[]
     supportTickets        SupportTicket[]
 
+    // Security
+    keyPairs OrganizationKeyPair[]
+
+    // Federation audit
+    federationAuditLogs FederationAuditLog[]
+
+    // Federation
+    federationInitiated FederationAgreement[] @relation("FederationInitiator")
+    federationReceived  FederationAgreement[] @relation("FederationResponder")
+    federationExposures FederationExposure[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -749,6 +760,7 @@ model Agent {
     healthScores           AgentHealthScore[]
     backlog                Backlog?
     outputActions          OutputAction[]
+    federationExposures    FederationExposure[]
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -4022,4 +4034,187 @@ model SupportTicketComment {
     @@index([ticketId])
     @@index([createdAt])
     @@map("support_ticket_comment")
+}
+
+// ==============================
+// Platform Security
+// ==============================
+
+// OrganizationKeyPair - Ed25519 key pairs for org identity and message signing
+model OrganizationKeyPair {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    publicKey           String // Ed25519 public key (base64-encoded DER)
+    encryptedPrivateKey Json // Private key encrypted with platform KEK (AES-256-GCM payload)
+    keyVersion          Int    @default(1)
+    algorithm           String @default("Ed25519")
+
+    status    String    @default("active") // "active", "rotated", "revoked"
+    rotatedAt DateTime?
+    revokedAt DateTime?
+    expiresAt DateTime?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([organizationId, keyVersion])
+    @@index([organizationId, status])
+    @@map("organization_key_pair")
+}
+
+// FederationAuditLog - Federation-specific audit trail for cross-org interactions
+model FederationAuditLog {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id])
+
+    // Who
+    actorType  String // "user", "agent", "system", "federation_agent"
+    actorId    String // userId, agentSlug, "system", or "orgSlug:agentSlug"
+    actorOrgId String? // For cross-org actions: the originating org
+
+    // What
+    action   String // "federation.request", "federation.approve", "federation.invoke"
+    resource String // "federation_agreement:clx123", "agent:deal-copilot"
+    outcome  String // "success", "denied", "error"
+
+    // Context
+    metadata  Json?
+    ipAddress String?
+    userAgent String?
+
+    createdAt DateTime @default(now())
+
+    @@index([organizationId, createdAt])
+    @@index([organizationId, action])
+    @@index([actorId, createdAt])
+    @@map("federation_audit_log")
+}
+
+// ==============================
+// Federation
+// ==============================
+
+// FederationAgreement - Trust relationship between two organizations
+model FederationAgreement {
+    id String @id @default(cuid())
+
+    // Parties
+    initiatorOrgId String
+    initiatorOrg   Organization @relation("FederationInitiator", fields: [initiatorOrgId], references: [id])
+    responderOrgId String
+    responderOrg   Organization @relation("FederationResponder", fields: [responderOrgId], references: [id])
+
+    // Lifecycle
+    status            String    @default("pending") // "pending", "active", "suspended", "revoked"
+    requestedAt       DateTime  @default(now())
+    requestedByUserId String
+    approvedAt        DateTime?
+    approvedByUserId  String?
+    suspendedAt       DateTime?
+    suspendedReason   String?   @db.Text
+    revokedAt         DateTime?
+    revokedByUserId   String?
+    revokedReason     String?   @db.Text
+
+    // Agent Scoping
+    exposures FederationExposure[]
+
+    // Security (channel key encrypted with platform KEK)
+    channelKeyEncrypted Json // AES-256-GCM encrypted payload containing the channel symmetric key
+    channelKeyVersion   Int  @default(1)
+    initiatorKeyVersion Int // Ed25519 key version of initiator org at agreement time
+    responderKeyVersion Int? // Set when responder approves
+
+    // Governance
+    maxRequestsPerHour   Int     @default(500)
+    maxRequestsPerDay    Int     @default(5000)
+    dataClassification   String  @default("internal") // "public", "internal", "confidential", "restricted"
+    allowFileTransfer    Boolean @default(false)
+    allowStructuredData  Boolean @default(true)
+    requireHumanApproval Boolean @default(false)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    messages FederationMessage[]
+
+    @@unique([initiatorOrgId, responderOrgId])
+    @@index([initiatorOrgId, status])
+    @@index([responderOrgId, status])
+    @@map("federation_agreement")
+}
+
+// FederationExposure - Which agents an org shares within a federation agreement
+model FederationExposure {
+    id          String              @id @default(cuid())
+    agreementId String
+    agreement   FederationAgreement @relation(fields: [agreementId], references: [id], onDelete: Cascade)
+
+    // Which org is exposing
+    ownerOrgId String
+    ownerOrg   Organization @relation(fields: [ownerOrgId], references: [id])
+
+    // Which agent
+    agentId String
+    agent   Agent  @relation(fields: [agentId], references: [id])
+
+    // What skills/tools are exposed (empty array = all non-internal tools)
+    exposedSkills String[] @default([])
+
+    // Plain-english description of what the partner can do
+    accessSummary String? @db.Text
+
+    // Per-exposure overrides
+    maxRequestsPerHour Int?
+    enabled            Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([agreementId, ownerOrgId, agentId])
+    @@index([agreementId])
+    @@index([ownerOrgId])
+    @@map("federation_exposure")
+}
+
+// FederationMessage - Encrypted, signed record of every cross-org agent interaction
+model FederationMessage {
+    id          String              @id @default(cuid())
+    agreementId String
+    agreement   FederationAgreement @relation(fields: [agreementId], references: [id])
+
+    // Routing
+    conversationId  String
+    direction       String // "initiator_to_responder" or "responder_to_initiator"
+    sourceOrgId     String
+    sourceAgentSlug String
+    targetOrgId     String
+    targetAgentSlug String
+
+    // Content (encrypted at rest with channel key)
+    encryptedContent String @db.Text // AES-256-GCM encrypted payload (JSON string)
+    contentType      String @default("text") // "text", "structured", "tool_result"
+    iv               String // Initialization vector for decryption
+
+    // Integrity
+    senderSignature  String // Ed25519 signature of plaintext content by sender org
+    senderKeyVersion Int // Which key version was used to sign
+
+    // Metadata (not encrypted -- needed for routing, billing, monitoring)
+    latencyMs     Int?
+    inputTokens   Int?
+    outputTokens  Int?
+    costUsd       Float?
+    policyResult  String @default("approved") // "approved", "filtered", "blocked"
+    policyDetails Json?
+
+    createdAt DateTime @default(now())
+
+    @@index([agreementId, conversationId, createdAt])
+    @@index([sourceOrgId, createdAt])
+    @@map("federation_message")
 }

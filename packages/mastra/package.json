@@ -30,7 +30,10 @@
     "./integrations/mcp-oauth": "./src/integrations/mcp-oauth.ts",
     "./integrations": "./src/integrations/index.ts",
     "./activity": "./src/activity/index.ts",
-    "./activity/service": "./src/activity/service.ts"
+    "./activity/service": "./src/activity/service.ts",
+    "./crypto": "./src/crypto/index.ts",
+    "./audit": "./src/audit/index.ts",
+    "./federation": "./src/federation/index.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

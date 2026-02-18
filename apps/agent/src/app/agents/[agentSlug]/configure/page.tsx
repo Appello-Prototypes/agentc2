@@ -142,6 +142,7 @@ interface ToolGroup {
     displayName: string;
     tools: ToolInfo[];
     isMcp: boolean;
+    isFederation?: boolean;
 }
 
 interface ScorerInfo {
@@ -611,13 +612,19 @@ export default function ConfigurePage() {
         }
     }, [agent, fetchScorecard, fetchScorecardTemplates]);
 
-    // Group tools: built-in by category, MCP by server
+    // Group tools: built-in by category, MCP by server, federation by org
     const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
         const builtInByCategory: Record<string, ToolInfo[]> = {};
         const mcpByServer: Record<string, ToolInfo[]> = {};
+        const federationByOrg: Record<string, ToolInfo[]> = {};
 
         tools.forEach((tool) => {
-            if (tool.source === "registry") {
+            if (tool.id.startsWith("federation:")) {
+                const parts = tool.id.split(":");
+                const orgSlug = parts[1] || "unknown";
+                if (!federationByOrg[orgSlug]) federationByOrg[orgSlug] = [];
+                federationByOrg[orgSlug]!.push(tool);
+            } else if (tool.source === "registry") {
                 const cat = tool.category || "Other";
                 if (!builtInByCategory[cat]) builtInByCategory[cat] = [];
                 builtInByCategory[cat]!.push(tool);
@@ -649,6 +656,17 @@ export default function ConfigurePage() {
                 displayName: server.replace("mcp:", ""),
                 tools: mcpByServer[server]!,
                 isMcp: true
+            });
+        }
+
+        const sortedFedOrgs = Object.keys(federationByOrg).sort();
+        for (const orgSlug of sortedFedOrgs) {
+            groups.push({
+                key: `federation:${orgSlug}`,
+                displayName: orgSlug,
+                tools: federationByOrg[orgSlug]!,
+                isMcp: false,
+                isFederation: true
             });
         }
 
@@ -2169,12 +2187,23 @@ export default function ConfigurePage() {
                                                         group.isMcp &&
                                                         groups.findIndex((g) => g.isMcp) ===
                                                             groups.indexOf(group);
+                                                    const isFirstFederation =
+                                                        group.isFederation &&
+                                                        groups.findIndex((g) => g.isFederation) ===
+                                                            groups.indexOf(group);
                                                     return (
                                                         <div key={group.key}>
                                                             {isFirstMcp && (
                                                                 <div className="mt-6 flex items-center gap-2 border-b pb-2">
                                                                     <h3 className="text-sm font-semibold tracking-wide uppercase">
                                                                         MCP Tools
+                                                                    </h3>
+                                                                </div>
+                                                            )}
+                                                            {isFirstFederation && (
+                                                                <div className="mt-6 flex items-center gap-2 border-b pb-2">
+                                                                    <h3 className="text-sm font-semibold tracking-wide uppercase">
+                                                                        Connected Organizations
                                                                     </h3>
                                                                 </div>
                                                             )}
