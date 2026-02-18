@@ -179,7 +179,29 @@ jobs:
             echo "   Done."
 
             echo ""
-            echo "7. Building applications (on-server, full .env, 24GB heap, remote cache)..."
+            echo "7a. Building sandbox Docker image (if changed)..."
+            DOCKERFILE="packages/mastra/docker/Dockerfile.sandbox"
+            if [ -f "$DOCKERFILE" ]; then
+              CURRENT_HASH=$(sha256sum "$DOCKERFILE" | cut -d' ' -f1)
+              STORED_HASH=""
+              if [ -f "/var/lib/agentc2/.sandbox-image-hash" ]; then
+                STORED_HASH=$(cat /var/lib/agentc2/.sandbox-image-hash)
+              fi
+              if [ "$CURRENT_HASH" != "$STORED_HASH" ] || ! docker image inspect agentc2-sandbox >/dev/null 2>&1; then
+                echo "   Dockerfile changed or image missing — rebuilding..."
+                docker build -t agentc2-sandbox -f "$DOCKERFILE" . 2>&1 | tail -5
+                mkdir -p /var/lib/agentc2
+                echo "$CURRENT_HASH" > /var/lib/agentc2/.sandbox-image-hash
+                echo "   Sandbox image built."
+              else
+                echo "   Sandbox image unchanged — skipping build."
+              fi
+            else
+              echo "   No Dockerfile.sandbox found — skipping."
+            fi
+
+            echo ""
+            echo "7b. Building applications (on-server, full .env, 24GB heap, remote cache)..."
             export TURBO_TOKEN="${{ secrets.TURBO_TOKEN }}"
             export TURBO_TEAM="${{ secrets.TURBO_TEAM }}"
             NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build

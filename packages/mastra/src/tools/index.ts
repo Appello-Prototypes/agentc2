@@ -18,7 +18,9 @@ export {
     agentAnalyticsTool,
     agentCostsTool,
     agentBudgetGetTool,
-    agentBudgetUpdateTool
+    agentBudgetUpdateTool,
+    agentDiscoverTool,
+    agentInvokeDynamicTool
 } from "./agent-operations-tools";
 export {
     agentFeedbackSubmitTool,

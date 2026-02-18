@@ -62,7 +62,9 @@ import {
     agentAnalyticsTool,
     agentCostsTool,
     agentBudgetGetTool,
-    agentBudgetUpdateTool
+    agentBudgetUpdateTool,
+    agentDiscoverTool,
+    agentInvokeDynamicTool
 } from "./agent-operations-tools";
 import {
     agentFeedbackSubmitTool,
@@ -240,6 +242,7 @@ import {
     readWorkspaceFileTool,
     listWorkspaceFilesTool
 } from "./sandbox-tools";
+import { trackResourceTool, listResourcesTool, destroyResourceTool } from "./infra-tools";
 import {
     backlogGetTool,
     backlogAddTaskTool,
@@ -307,6 +310,9 @@ export const toolCategoryMap: Record<string, string> = {
     "write-workspace-file": "Code Execution",
     "read-workspace-file": "Code Execution",
     "list-workspace-files": "Code Execution",
+    "track-resource": "Infrastructure",
+    "list-resources": "Infrastructure",
+    "destroy-resource": "Infrastructure",
     "backlog-get": "Backlog",
     "backlog-add-task": "Backlog",
     "backlog-list-tasks": "Backlog",
@@ -324,6 +330,8 @@ export const toolCategoryMap: Record<string, string> = {
     "agent-costs": "Agent Management",
     "agent-budget-get": "Agent Management",
     "agent-budget-update": "Agent Management",
+    "agent-discover": "Agent Management",
+    "agent-invoke-dynamic": "Agent Management",
 
     // Agent Quality & Runs
     "agent-feedback-submit": "Agent Quality & Runs",
@@ -644,6 +652,11 @@ export const toolRegistry: Record<string, any> = {
     "read-workspace-file": readWorkspaceFileTool,
     "list-workspace-files": listWorkspaceFilesTool,
 
+    // Infrastructure tracking
+    "track-resource": trackResourceTool,
+    "list-resources": listResourcesTool,
+    "destroy-resource": destroyResourceTool,
+
     // Backlog tools
     "backlog-get": backlogGetTool,
     "backlog-add-task": backlogAddTaskTool,
@@ -712,6 +725,8 @@ export const toolRegistry: Record<string, any> = {
     "agent-costs": agentCostsTool,
     "agent-budget-get": agentBudgetGetTool,
     "agent-budget-update": agentBudgetUpdateTool,
+    "agent-discover": agentDiscoverTool,
+    "agent-invoke-dynamic": agentInvokeDynamicTool,
 
     // Agent quality and safety
     "agent-feedback-submit": agentFeedbackSubmitTool,

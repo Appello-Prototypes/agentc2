@@ -1,5 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+import { createDocument, type CreateDocumentInput } from "../documents/service";
+import { queryRag } from "../rag/pipeline";
 
 const baseOutputSchema = z.object({ success: z.boolean().optional() }).passthrough();
 
@@ -63,34 +65,67 @@ export const ragQueryTool = createTool({
     }),
     outputSchema: baseOutputSchema,
     execute: async ({ query, topK, minScore }) => {
-        return callInternalApi("/api/rag/query", {
-            method: "POST",
-            body: {
-                query,
-                topK,
-                minScore,
-                generateResponse: false
-            }
+        const results = await queryRag(query, {
+            topK: topK ?? undefined,
+            minScore: minScore ?? undefined
         });
+        return { success: true, results, resultCount: results.length };
     }
 });
 
 export const ragIngestTool = createTool({
     id: "rag-ingest",
-    description: "Ingest a document into the RAG index.",
+    description:
+        "Ingest a document into the knowledge base. Creates a Document record and embeds content into the RAG vector store for semantic search.",
     inputSchema: z.object({
-        content: z.string(),
-        type: z.string().optional(),
-        sourceId: z.string().optional(),
-        sourceName: z.string().optional(),
-        chunkOptions: z.record(z.unknown()).optional()
+        content: z.string().describe("Document content to ingest"),
+        type: z
+            .enum(["markdown", "text", "html", "json"])
+            .optional()
+            .describe("Content format (default: markdown)"),
+        sourceId: z.string().optional().describe("Used to generate the document slug"),
+        sourceName: z.string().optional().describe("Used as the document display name"),
+        chunkOptions: z.record(z.unknown()).optional().describe("Chunking options"),
+        description: z.string().optional().describe("Brief description of the document"),
+        category: z.string().optional().describe("Category for organization"),
+        tags: z.array(z.string()).optional().describe("Tags for categorization"),
+        workspaceId: z.string().optional().describe("Workspace to associate the document with"),
+        onConflict: z
+            .enum(["error", "skip", "update"])
+            .optional()
+            .describe("Behavior when slug already exists (default: error)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ content, type, sourceId, sourceName, chunkOptions }) => {
-        return callInternalApi("/api/rag/ingest", {
-            method: "POST",
-            body: { content, type, sourceId, sourceName, chunkOptions }
-        });
+    execute: async ({
+        content,
+        type,
+        sourceId,
+        sourceName,
+        chunkOptions,
+        description,
+        category,
+        tags,
+        workspaceId,
+        onConflict
+    }) => {
+        const slug = sourceId || `doc-${Date.now()}`;
+        const name = sourceName || slug;
+
+        const input: CreateDocumentInput = {
+            slug,
+            name,
+            content,
+            description,
+            contentType: (type as CreateDocumentInput["contentType"]) || "markdown",
+            category,
+            tags,
+            workspaceId,
+            chunkOptions: chunkOptions as CreateDocumentInput["chunkOptions"],
+            onConflict: onConflict || "error"
+        };
+
+        const document = await createDocument(input);
+        return document;
     }
 });
 

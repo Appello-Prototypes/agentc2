@@ -1,7 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminLogin, AdminAuthError, ADMIN_COOKIE_NAME } from "@repo/admin-auth";
+import {
+    adminLogin,
+    AdminAuthError,
+    ADMIN_COOKIE_NAME,
+    checkLoginRateLimit,
+    recordFailedLogin,
+    clearLoginRateLimit
+} from "@repo/admin-auth";
 
 export async function POST(request: NextRequest) {
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+
     try {
         const { email, password } = await request.json();
 
@@ -9,11 +18,23 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Email and password required" }, { status: 400 });
         }
 
-        const ipAddress =
-            request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+        const rateLimit = checkLoginRateLimit(ip, email);
+        if (!rateLimit.allowed) {
+            const retryAfterSec = Math.ceil((rateLimit.retryAfterMs || 0) / 1000);
+            return NextResponse.json(
+                { error: rateLimit.reason || "Too many login attempts" },
+                {
+                    status: 429,
+                    headers: { "Retry-After": String(retryAfterSec) }
+                }
+            );
+        }
+
         const userAgent = request.headers.get("user-agent") || undefined;
 
-        const { token, session } = await adminLogin(email, password, ipAddress, userAgent);
+        const { token, session } = await adminLogin(email, password, ip, userAgent);
+
+        clearLoginRateLimit(ip, email);
 
         const response = NextResponse.json({
             success: true,
@@ -25,7 +46,6 @@ export async function POST(request: NextRequest) {
             }
         });
 
-        // Set session cookie
         response.cookies.set(ADMIN_COOKIE_NAME, token, {
             httpOnly: true,
             secure: process.env.NODE_ENV === "production",
@@ -37,6 +57,7 @@ export async function POST(request: NextRequest) {
         return response;
     } catch (error) {
         if (error instanceof AdminAuthError) {
+            recordFailedLogin(ip);
             return NextResponse.json({ error: error.message }, { status: error.status });
         }
         console.error("[Admin Login] Error:", error);

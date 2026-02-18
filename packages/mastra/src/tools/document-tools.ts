@@ -26,12 +26,25 @@ export const documentCreateTool = createTool({
             .optional()
             .describe("Content format"),
         category: z.string().optional().describe("Category for organization"),
-        tags: z.array(z.string()).optional().describe("Tags for categorization")
+        tags: z.array(z.string()).optional().describe("Tags for categorization"),
+        workspaceId: z.string().optional().describe("Workspace to associate the document with"),
+        onConflict: z
+            .enum(["error", "skip", "update"])
+            .optional()
+            .describe("Behavior when slug already exists (default: error)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug, name, content, description, contentType, category, tags }) => {
-        // Call service directly -- eliminates the redundant HTTP self-call
-        // that was causing MCP tool timeouts during RAG embedding
+    execute: async ({
+        slug,
+        name,
+        content,
+        description,
+        contentType,
+        category,
+        tags,
+        workspaceId,
+        onConflict
+    }) => {
         const input: CreateDocumentInput = {
             slug,
             name,
@@ -39,7 +52,9 @@ export const documentCreateTool = createTool({
             description,
             contentType: contentType as CreateDocumentInput["contentType"],
             category,
-            tags
+            tags,
+            workspaceId,
+            onConflict
         };
         const document = await createDocument(input);
         return document;

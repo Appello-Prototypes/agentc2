@@ -69,6 +69,7 @@ export async function GET(request: NextRequest) {
 
             // When ?detail=capabilities, include pinned/discoverable skill breakdown
             const detailMode = searchParams.get("detail");
+            const excludeSlug = searchParams.get("exclude");
             let skillBreakdowns: Map<
                 string,
                 {
@@ -107,6 +108,38 @@ export async function GET(request: NextRequest) {
                     }
                     skillBreakdowns.set(as.agentId, existing);
                 }
+            }
+
+            // detail=discover: lightweight collaboration-focused view for agent-to-agent discovery
+            if (detailMode === "discover") {
+                const filteredAgents = excludeSlug
+                    ? agents.filter((a) => a.slug !== excludeSlug)
+                    : agents;
+
+                const keyword = searchParams.get("keyword")?.toLowerCase();
+                const discoverable = keyword
+                    ? filteredAgents.filter((a) => {
+                          const haystack =
+                              `${a.name} ${a.description || ""} ${a.instructions}`.toLowerCase();
+                          return haystack.includes(keyword);
+                      })
+                    : filteredAgents;
+
+                return NextResponse.json({
+                    success: true,
+                    count: discoverable.length,
+                    agents: discoverable.map((agent) => ({
+                        slug: agent.slug,
+                        name: agent.name,
+                        description: agent.description,
+                        modelProvider: agent.modelProvider,
+                        modelName: agent.modelName,
+                        toolNames: agent.tools.map((t: { toolId: string }) => t.toolId),
+                        specialtySummary: (agent.instructions || "").slice(0, 200),
+                        isActive: agent.isActive
+                    })),
+                    source: "database"
+                });
             }
 
             // Batch-load latest health scores for all agents

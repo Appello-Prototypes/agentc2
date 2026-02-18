@@ -26,7 +26,7 @@ import {
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
-import { getUserOrganizationId } from "@/lib/organization";
+import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -195,15 +195,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const userThreadId = threadId || `${runSource}-${id}-${Date.now()}`;
         const resourceId = requestContext?.userId || "test-user";
 
-        // Resolve organization context for the user (needed by support ticket tools)
+        // Resolve organization and workspace context for the user
         let resolvedOrgId: string | null = null;
         let enrichedRequestContext = requestContext;
         if (resourceId && resourceId !== "test-user" && resourceId !== "chat-user") {
-            resolvedOrgId = await getUserOrganizationId(resourceId);
-            if (resolvedOrgId) {
+            const [orgId, workspaceId] = await Promise.all([
+                getUserOrganizationId(resourceId),
+                getDefaultWorkspaceIdForUser(resourceId)
+            ]);
+            resolvedOrgId = orgId;
+            if (orgId || workspaceId) {
                 enrichedRequestContext = {
                     ...requestContext,
-                    tenantId: resolvedOrgId
+                    ...(orgId ? { tenantId: orgId } : {}),
+                    ...(workspaceId ? { workspaceId } : {})
                 };
             }
         }

@@ -1733,12 +1733,13 @@ export async function getAllModels(
 export async function getAvailableModelsAsync(
     organizationId?: string | null,
     forceRefresh?: boolean
-): Promise<{ provider: string; name: string; displayName: string }[]> {
+): Promise<{ provider: string; name: string; displayName: string; category: string }[]> {
     const models = await getAllModels(organizationId, forceRefresh);
     return models.map((m) => ({
         provider: m.provider,
         name: m.id,
-        displayName: m.displayName
+        displayName: m.displayName,
+        category: m.category
     }));
 }
 

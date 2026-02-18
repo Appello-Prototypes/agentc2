@@ -22,6 +22,7 @@ import { skillToolDefinitions, skillToolRoutes } from "./skills";
 import { canvasToolDefinitions, canvasToolRoutes } from "./canvas";
 import { campaignToolDefinitions, campaignToolRoutes } from "./campaigns";
 import { sandboxToolDefinitions, sandboxToolRoutes } from "./sandbox";
+import { infraToolDefinitions, infraToolRoutes } from "./infra";
 import { backlogToolDefinitions, backlogToolRoutes } from "./backlog";
 import { outputActionToolDefinitions, outputActionToolRoutes } from "./output-actions";
 import type { McpToolDefinition, McpToolRoute } from "./types";
@@ -54,6 +55,7 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...canvasToolDefinitions,
     ...campaignToolDefinitions,
     ...sandboxToolDefinitions,
+    ...infraToolDefinitions,
     ...backlogToolDefinitions,
     ...outputActionToolDefinitions
 ];
@@ -83,6 +85,7 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...canvasToolRoutes,
     ...campaignToolRoutes,
     ...sandboxToolRoutes,
+    ...infraToolRoutes,
     ...backlogToolRoutes,
     ...outputActionToolRoutes
 ];

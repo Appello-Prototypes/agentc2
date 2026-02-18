@@ -135,6 +135,57 @@ export async function adminLogoutAll(adminUserId: string): Promise<void> {
 }
 
 /**
+ * Authenticate admin user via Google SSO.
+ * Only allows sign-in for existing, active AdminUser records — no implicit sign-up.
+ */
+export async function adminLoginWithGoogle(
+    email: string,
+    googleId: string,
+    ipAddress: string,
+    userAgent?: string
+): Promise<{ token: string; session: AdminSessionData }> {
+    const admin = await prisma.adminUser.findUnique({
+        where: { email: email.toLowerCase() }
+    });
+
+    if (!admin || !admin.isActive) {
+        throw new AdminAuthError("No admin account found for this Google email", 403);
+    }
+
+    const token = crypto.randomBytes(48).toString("hex");
+    const expiresAt = new Date(Date.now() + SESSION_MAX_LIFETIME);
+
+    const session = await prisma.adminSession.create({
+        data: {
+            adminUserId: admin.id,
+            token,
+            ipAddress,
+            userAgent: userAgent?.substring(0, 512),
+            expiresAt
+        }
+    });
+
+    await prisma.adminUser.update({
+        where: { id: admin.id },
+        data: { lastLoginAt: new Date() }
+    });
+
+    return {
+        token,
+        session: {
+            id: session.id,
+            adminUserId: admin.id,
+            email: admin.email,
+            name: admin.name,
+            role: admin.role as AdminRole,
+            ipAddress: session.ipAddress,
+            createdAt: session.createdAt,
+            expiresAt: session.expiresAt
+        }
+    };
+}
+
+/**
  * Hash a password for storing in the AdminUser table.
  */
 export async function hashAdminPassword(password: string): Promise<string> {

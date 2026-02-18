@@ -89,6 +89,60 @@ export const agentOperationsToolDefinitions: McpToolDefinition[] = [
         },
         invoke_url: "/api/mcp",
         category: "agent-operations"
+    },
+    {
+        name: "agent-discover",
+        description:
+            "Discover other agents available for collaboration. Returns slug, name, description, model, tools, and specialty summary for each agent.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                keyword: {
+                    type: "string",
+                    description:
+                        "Optional keyword to filter agents by capability (matched against name, description, and instructions)"
+                },
+                activeOnly: {
+                    type: "boolean",
+                    description: "Only return active agents (default true)"
+                },
+                exclude: {
+                    type: "string",
+                    description: "Agent slug to exclude from results"
+                }
+            }
+        },
+        invoke_url: "/api/mcp",
+        category: "agent-operations"
+    },
+    {
+        name: "agent-invoke-dynamic",
+        description:
+            "Dynamically invoke any agent by slug and get back its response. Use agent-discover first to find available agents.",
+        inputSchema: {
+            type: "object",
+            properties: {
+                agentSlug: {
+                    type: "string",
+                    description: "The slug of the agent to invoke"
+                },
+                message: {
+                    type: "string",
+                    description: "The message or task to send to the target agent"
+                },
+                context: {
+                    type: "object",
+                    description: "Optional context variables to pass to the target agent"
+                },
+                maxSteps: {
+                    type: "number",
+                    description: "Override the maximum number of tool-use steps"
+                }
+            },
+            required: ["agentSlug", "message"]
+        },
+        invoke_url: "/api/mcp",
+        category: "agent-operations"
     }
 ];
 
@@ -138,5 +192,7 @@ export const agentOperationsToolRoutes: McpToolRoute[] = [
         path: "/api/agents/{agentId}/budget",
         pathParams: ["agentId"],
         bodyParams: ["enabled", "monthlyLimitUsd", "alertAtPct", "hardLimit"]
-    }
+    },
+    { kind: "registry", name: "agent-discover" },
+    { kind: "registry", name: "agent-invoke-dynamic" }
 ];

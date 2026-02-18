@@ -84,14 +84,7 @@ export default function CanvasViewerPage() {
                 const res = await fetch(`${getApiBase()}/api/canvases/${slug}/data`);
                 if (!res.ok) throw new Error("Failed to load data");
                 const result = await res.json();
-                const queryData = result.queries || {};
-                // Extract data from QueryExecutionResult format if present
-                const extracted: Record<string, unknown> = {};
-                for (const [key, val] of Object.entries(queryData)) {
-                    const typed = val as { data?: unknown };
-                    extracted[key] = typed?.data !== undefined ? typed.data : val;
-                }
-                setData(extracted);
+                setData(result.queries || {});
             } catch (err) {
                 console.error("Canvas data error:", err);
                 // On background refresh failure, keep existing data (SWR pattern)

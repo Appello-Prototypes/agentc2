@@ -77,3 +77,6 @@ storybook-static
 
 # DB dump snapshots
 scripts/dumps/
+
+# Secrets / keys
+keys.txt

@@ -3,6 +3,7 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { DefaultChatTransport } from "ai";
 import { useChat } from "@ai-sdk/react";
+import { useSession } from "@repo/auth/client";
 import { getApiBase } from "@/lib/utils";
 import {
     Badge,
@@ -43,6 +44,7 @@ export function CanvasBuilderPanel({
     existingSchema,
     existingData
 }: CanvasBuilderPanelProps) {
+    const { data: session } = useSession();
     const [threadId] = useState(() => `canvas-${mode}-${existingSlug || "new"}-${Date.now()}`);
     const [canvasSlug, setCanvasSlug] = useState<string | null>(existingSlug || null);
     const [schema, setSchema] = useState<CanvasSchemaForRenderer | null>(existingSchema || null);
@@ -94,24 +96,19 @@ export function CanvasBuilderPanel({
     // Track if the initial context message has been sent
     const contextSentRef = useRef(false);
 
+    const userId = session?.user?.id || "chat-user";
+
     // Chat transport -- in edit mode, include the canvas slug so the agent knows the context
     const transport = useMemo(() => {
-        const body: Record<string, unknown> = {
-            threadId,
-            requestContext: { userId: "canvas-builder", mode: "live" }
-        };
+        const reqCtx: Record<string, unknown> = { userId, mode: "live" };
         if (mode === "edit" && existingSlug) {
-            body.requestContext = {
-                userId: "canvas-builder",
-                mode: "live",
-                editingCanvasSlug: existingSlug
-            };
+            reqCtx.editingCanvasSlug = existingSlug;
         }
         return new DefaultChatTransport({
             api: `${getApiBase()}/api/agents/${CANVAS_BUILDER_SLUG}/chat`,
-            body
+            body: { threadId, requestContext: reqCtx }
         });
-    }, [threadId, mode, existingSlug]);
+    }, [threadId, mode, existingSlug, userId]);
 
     const { messages, sendMessage, status, stop } = useChat({ transport });
 

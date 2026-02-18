@@ -1985,6 +1985,48 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             setupUrl: "/api/channels/whatsapp/qr",
             setupLabel: "Scan QR Code"
         }
+    },
+    {
+        key: "digitalocean",
+        name: "DigitalOcean",
+        description:
+            "Cloud infrastructure — create and manage Droplets, databases, domains, and networking via doctl CLI in the agent sandbox",
+        category: "infrastructure",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["DIGITALOCEAN_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                DIGITALOCEAN_ACCESS_TOKEN: {
+                    label: "DigitalOcean API Token",
+                    description:
+                        "Personal access token from https://cloud.digitalocean.com/account/api/tokens",
+                    placeholder: "dop_v1_...",
+                    type: "password"
+                }
+            }
+        }
+    },
+    {
+        key: "supabase",
+        name: "Supabase",
+        description:
+            "Managed PostgreSQL databases, auth, and storage — create projects and manage databases via Supabase CLI in the agent sandbox",
+        category: "infrastructure",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["SUPABASE_ACCESS_TOKEN"],
+            fieldDefinitions: {
+                SUPABASE_ACCESS_TOKEN: {
+                    label: "Supabase Access Token",
+                    description:
+                        "Personal access token from https://supabase.com/dashboard/account/tokens",
+                    placeholder: "sbp_...",
+                    type: "password"
+                }
+            }
+        }
     }
 ];
 

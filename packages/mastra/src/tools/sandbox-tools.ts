@@ -1,32 +1,38 @@
 /**
- * Sandbox Tools — Code execution and workspace file management
+ * Sandbox Tools — Docker-isolated code execution and workspace file management
  *
  * Provides agents with the ability to:
- * - Execute code (bash, Python, TypeScript) in a controlled child_process
+ * - Execute code (bash, Python, TypeScript) in Docker containers
  * - Read/write files in a persistent per-agent workspace directory
+ * - Optionally inject cloud provider credentials for infrastructure provisioning
  *
- * Security model (v1):
- * - Runs as the server process user (not Docker-isolated yet)
- * - Environment stripped of secrets (DATABASE_URL, API keys, etc.)
- * - Timeout enforced via child_process timeout option
- * - Workspace paths validated (no traversal, no absolute paths, no symlinks)
- * - Future: Docker isolation for untrusted multi-tenant execution
+ * Security model (v2 — Docker):
+ * - Each execution runs in an ephemeral Docker container (agentc2-sandbox image)
+ * - Memory and CPU limits enforced via Docker
+ * - Network isolated by default (--network none), opt-in via networkAccess
+ * - Credentials injected per-execution from encrypted IntegrationConnection records
+ * - Workspace mounted as volume for persistence between runs
+ *
+ * Fallback: If Docker is unavailable, falls back to child_process with env stripping
  */
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { spawn, type ChildProcess } from "child_process";
+import { spawn, execSync, type ChildProcess } from "child_process";
 import { mkdir, writeFile, readFile, stat, readdir } from "fs/promises";
 import { join, normalize, isAbsolute } from "path";
 
 const WORKSPACE_ROOT = process.env.AGENT_WORKSPACE_ROOT || "/var/lib/agentc2/workspaces";
+const SANDBOX_IMAGE = process.env.SANDBOX_DOCKER_IMAGE || "agentc2-sandbox";
 const MAX_TIMEOUT_MS = 120_000;
-const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_FILE_SIZE = 1_048_576; // 1MB
 const MAX_OUTPUT_SIZE = 100_000; // 100KB of stdout/stderr
 
+const DOCKER_MEMORY_LIMIT = process.env.SANDBOX_MEMORY_LIMIT || "512m";
+const DOCKER_CPU_LIMIT = process.env.SANDBOX_CPU_LIMIT || "1.0";
+
 /**
- * Secrets that should NEVER be passed to child processes
+ * Secrets that should NEVER be passed to child processes (fallback mode only)
  */
 const SECRET_PATTERNS = [
     /^DATABASE_URL$/i,
@@ -47,6 +53,19 @@ const SECRET_PATTERNS = [
     /SECRET/i
 ];
 
+let _dockerAvailable: boolean | null = null;
+
+function isDockerAvailable(): boolean {
+    if (_dockerAvailable !== null) return _dockerAvailable;
+    try {
+        execSync("docker info", { stdio: "ignore", timeout: 5000 });
+        _dockerAvailable = true;
+    } catch {
+        _dockerAvailable = false;
+    }
+    return _dockerAvailable;
+}
+
 function buildSafeEnv(): Record<string, string> {
     const safe: Record<string, string> = {};
     for (const [key, value] of Object.entries(process.env)) {
@@ -64,10 +83,6 @@ function buildSafeEnv(): Record<string, string> {
     return safe;
 }
 
-/**
- * Validate and resolve a workspace-relative path.
- * Prevents directory traversal, absolute paths, and symlink escape.
- */
 function resolveWorkspacePath(agentId: string, relativePath: string): string {
     if (isAbsolute(relativePath)) {
         throw new Error("Absolute paths are not allowed. Use relative paths within the workspace.");
@@ -81,7 +96,6 @@ function resolveWorkspacePath(agentId: string, relativePath: string): string {
     const workspaceDir = join(WORKSPACE_ROOT, agentId);
     const resolved = join(workspaceDir, normalized);
 
-    // Double-check the resolved path is still within the workspace
     if (!resolved.startsWith(workspaceDir)) {
         throw new Error("Path escapes the agent workspace.");
     }
@@ -100,15 +114,295 @@ function truncate(text: string, maxLen: number): string {
     return text.slice(0, maxLen) + `\n...[truncated, ${text.length - maxLen} chars omitted]`;
 }
 
+/**
+ * Fetch credentials for specified providers from IntegrationConnection table.
+ * Returns env var mappings to inject into the container.
+ */
+async function resolveCredentials(
+    providers: string[],
+    organizationId?: string
+): Promise<Record<string, string>> {
+    if (!providers.length) return {};
+
+    const envVars: Record<string, string> = {};
+
+    try {
+        const { prisma } = await import("@repo/database");
+        const { decryptJson } = await import("../crypto/encryption");
+
+        const connections = await prisma.integrationConnection.findMany({
+            where: {
+                isActive: true,
+                provider: { key: { in: providers } },
+                ...(organizationId ? { organizationId } : {})
+            },
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { createdAt: "desc" }]
+        });
+
+        const PROVIDER_ENV_MAP: Record<string, Record<string, string>> = {
+            digitalocean: { DIGITALOCEAN_ACCESS_TOKEN: "DIGITALOCEAN_ACCESS_TOKEN" },
+            supabase: { SUPABASE_ACCESS_TOKEN: "SUPABASE_ACCESS_TOKEN" }
+        };
+
+        for (const conn of connections) {
+            const providerKey = conn.provider.key;
+            const mapping = PROVIDER_ENV_MAP[providerKey];
+            if (!mapping) continue;
+
+            const decrypted = decryptJson(conn.credentials);
+            if (!decrypted) continue;
+
+            for (const [credKey, envKey] of Object.entries(mapping)) {
+                const value = decrypted[credKey] as string | undefined;
+                if (value && !envVars[envKey]) {
+                    envVars[envKey] = value;
+                }
+            }
+        }
+    } catch (err) {
+        console.warn("[Sandbox] Failed to resolve credentials:", err);
+    }
+
+    return envVars;
+}
+
+/**
+ * Execute code inside a Docker container.
+ */
+async function executeInDocker(opts: {
+    language: string;
+    code: string;
+    workspaceDir: string;
+    timeoutMs: number;
+    networkAccess: boolean;
+    credentials: Record<string, string>;
+}): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    durationMs: number;
+    timedOut: boolean;
+}> {
+    const { language, code, workspaceDir, timeoutMs, networkAccess, credentials } = opts;
+    const startTime = Date.now();
+
+    let shellCommand: string;
+    switch (language) {
+        case "bash":
+            shellCommand = code;
+            break;
+        case "python": {
+            const escaped = code.replace(/'/g, "'\\''");
+            shellCommand = `python3 -c '${escaped}'`;
+            break;
+        }
+        case "typescript": {
+            const scriptName = `.tmp_exec_${Date.now()}.ts`;
+            await writeFile(join(workspaceDir, scriptName), code, "utf-8");
+            shellCommand = `bun run ${scriptName}`;
+            break;
+        }
+        default:
+            throw new Error(`Unsupported language: ${language}`);
+    }
+
+    const dockerArgs = [
+        "run",
+        "--rm",
+        `--memory=${DOCKER_MEMORY_LIMIT}`,
+        `--cpus=${DOCKER_CPU_LIMIT}`,
+        `--network=${networkAccess ? "bridge" : "none"}`,
+        `-v`,
+        `${workspaceDir}:/workspace`,
+        `--workdir`,
+        `/workspace`
+    ];
+
+    for (const [key, value] of Object.entries(credentials)) {
+        dockerArgs.push("-e", `${key}=${value}`);
+    }
+
+    dockerArgs.push(SANDBOX_IMAGE, shellCommand);
+
+    return new Promise((resolve) => {
+        let stdout = "";
+        let stderr = "";
+        let timedOut = false;
+        let settled = false;
+
+        const child: ChildProcess = spawn("docker", dockerArgs, {
+            timeout: timeoutMs,
+            stdio: ["ignore", "pipe", "pipe"]
+        });
+
+        child.stdout?.on("data", (data: Buffer) => {
+            stdout += data.toString();
+            if (stdout.length > MAX_OUTPUT_SIZE * 2) {
+                stdout = stdout.slice(0, MAX_OUTPUT_SIZE * 2);
+            }
+        });
+
+        child.stderr?.on("data", (data: Buffer) => {
+            stderr += data.toString();
+            if (stderr.length > MAX_OUTPUT_SIZE * 2) {
+                stderr = stderr.slice(0, MAX_OUTPUT_SIZE * 2);
+            }
+        });
+
+        child.on("error", (err: Error) => {
+            if (settled) return;
+            settled = true;
+            if (err.message.includes("ETIMEDOUT") || err.message.includes("killed")) {
+                timedOut = true;
+            }
+            resolve({
+                stdout: truncate(stdout, MAX_OUTPUT_SIZE),
+                stderr: truncate(
+                    stderr +
+                        (timedOut
+                            ? `\nProcess timed out after ${timeoutMs}ms`
+                            : `\nProcess error: ${err.message}`),
+                    MAX_OUTPUT_SIZE
+                ),
+                exitCode: timedOut ? 124 : 1,
+                durationMs: Date.now() - startTime,
+                timedOut
+            });
+        });
+
+        child.on("close", (exitCode: number | null) => {
+            if (settled) return;
+            settled = true;
+            resolve({
+                stdout: truncate(stdout, MAX_OUTPUT_SIZE),
+                stderr: truncate(stderr, MAX_OUTPUT_SIZE),
+                exitCode: exitCode ?? 1,
+                durationMs: Date.now() - startTime,
+                timedOut
+            });
+        });
+    });
+}
+
+/**
+ * Fallback: execute code via child_process (no Docker).
+ */
+async function executeWithChildProcess(opts: {
+    language: string;
+    code: string;
+    workspaceDir: string;
+    timeoutMs: number;
+}): Promise<{
+    stdout: string;
+    stderr: string;
+    exitCode: number;
+    durationMs: number;
+    timedOut: boolean;
+}> {
+    const { language, code, workspaceDir, timeoutMs } = opts;
+    const startTime = Date.now();
+
+    let command: string;
+    let args: string[];
+
+    switch (language) {
+        case "bash": {
+            command = "/bin/bash";
+            args = ["-c", code];
+            break;
+        }
+        case "python": {
+            const scriptPath = join(workspaceDir, `.tmp_exec_${Date.now()}.py`);
+            await writeFile(scriptPath, code, "utf-8");
+            command = "python3";
+            args = [scriptPath];
+            break;
+        }
+        case "typescript": {
+            const scriptPath = join(workspaceDir, `.tmp_exec_${Date.now()}.ts`);
+            await writeFile(scriptPath, code, "utf-8");
+            command = "bun";
+            args = ["run", scriptPath];
+            break;
+        }
+        default:
+            throw new Error(`Unsupported language: ${language}`);
+    }
+
+    return new Promise((resolve) => {
+        let stdout = "";
+        let stderr = "";
+        let timedOut = false;
+        let settled = false;
+
+        const child: ChildProcess = spawn(command, args, {
+            cwd: workspaceDir,
+            env: buildSafeEnv() as NodeJS.ProcessEnv,
+            timeout: timeoutMs,
+            stdio: ["ignore", "pipe", "pipe"]
+        });
+
+        child.stdout?.on("data", (data: Buffer) => {
+            stdout += data.toString();
+            if (stdout.length > MAX_OUTPUT_SIZE * 2) {
+                stdout = stdout.slice(0, MAX_OUTPUT_SIZE * 2);
+            }
+        });
+
+        child.stderr?.on("data", (data: Buffer) => {
+            stderr += data.toString();
+            if (stderr.length > MAX_OUTPUT_SIZE * 2) {
+                stderr = stderr.slice(0, MAX_OUTPUT_SIZE * 2);
+            }
+        });
+
+        child.on("error", (err: Error) => {
+            if (settled) return;
+            settled = true;
+            if (err.message.includes("ETIMEDOUT") || err.message.includes("killed")) {
+                timedOut = true;
+            }
+            resolve({
+                stdout: truncate(stdout, MAX_OUTPUT_SIZE),
+                stderr: truncate(
+                    stderr +
+                        (timedOut
+                            ? `\nProcess timed out after ${timeoutMs}ms`
+                            : `\nProcess error: ${err.message}`),
+                    MAX_OUTPUT_SIZE
+                ),
+                exitCode: timedOut ? 124 : 1,
+                durationMs: Date.now() - startTime,
+                timedOut
+            });
+        });
+
+        child.on("close", (exitCode: number | null) => {
+            if (settled) return;
+            settled = true;
+            resolve({
+                stdout: truncate(stdout, MAX_OUTPUT_SIZE),
+                stderr: truncate(stderr, MAX_OUTPUT_SIZE),
+                exitCode: exitCode ?? 1,
+                durationMs: Date.now() - startTime,
+                timedOut
+            });
+        });
+    });
+}
+
 // ─── execute-code ────────────────────────────────────────────────────────────
 
 export const executeCodeTool = createTool({
     id: "execute-code",
     description:
-        "Execute code (bash, Python, or TypeScript) in a sandboxed environment. " +
+        "Execute code (bash, Python, or TypeScript) in a Docker-isolated sandbox. " +
         "Returns stdout, stderr, and exit code. Files written during execution persist " +
         "in the agent's workspace directory. Use for data analysis, scripting, " +
-        "testing approaches, or building reusable scripts.",
+        "infrastructure provisioning, or building apps. " +
+        "Set networkAccess=true when you need to call external APIs or deploy. " +
+        "Set injectCredentials to inject cloud provider tokens (e.g., ['digitalocean', 'supabase']).",
     inputSchema: z.object({
         language: z.enum(["bash", "python", "typescript"]).describe("Language to execute"),
         code: z.string().describe("The code to execute"),
@@ -116,108 +410,64 @@ export const executeCodeTool = createTool({
         agentId: z
             .string()
             .optional()
-            .describe("Agent ID for workspace isolation. Defaults to 'default'.")
+            .describe("Agent ID for workspace isolation. Defaults to 'default'."),
+        networkAccess: z
+            .boolean()
+            .optional()
+            .describe(
+                "Enable outbound network access. Default false (isolated). " +
+                    "Set true when calling APIs, deploying, installing packages, etc."
+            ),
+        injectCredentials: z
+            .array(z.string())
+            .optional()
+            .describe(
+                "Cloud provider keys whose credentials should be injected as env vars. " +
+                    "E.g., ['digitalocean', 'supabase']. Credentials are fetched from " +
+                    "IntegrationConnection and decrypted at runtime."
+            )
     }),
     outputSchema: z.object({
         stdout: z.string(),
         stderr: z.string(),
         exitCode: z.number(),
         durationMs: z.number(),
-        timedOut: z.boolean()
+        timedOut: z.boolean(),
+        executionMode: z.string()
     }),
-    execute: async ({ language, code, timeout, agentId }) => {
+    execute: async ({ language, code, timeout, agentId, networkAccess, injectCredentials }) => {
         const effectiveAgentId = agentId || "default";
         const workspaceDir = await ensureWorkspaceDir(effectiveAgentId);
         const timeoutMs = Math.min((timeout || 30) * 1000, MAX_TIMEOUT_MS);
+        const useNetwork = networkAccess ?? false;
+        const providerKeys = injectCredentials ?? [];
 
-        let command: string;
-        let args: string[];
+        const credentials = providerKeys.length ? await resolveCredentials(providerKeys) : {};
 
-        switch (language) {
-            case "bash": {
-                command = "/bin/bash";
-                args = ["-c", code];
-                break;
-            }
-            case "python": {
-                // Write to temp file in workspace
-                const scriptPath = join(workspaceDir, `.tmp_exec_${Date.now()}.py`);
-                await writeFile(scriptPath, code, "utf-8");
-                command = "python3";
-                args = [scriptPath];
-                break;
-            }
-            case "typescript": {
-                const scriptPath = join(workspaceDir, `.tmp_exec_${Date.now()}.ts`);
-                await writeFile(scriptPath, code, "utf-8");
-                command = "bun";
-                args = ["run", scriptPath];
-                break;
-            }
+        if (isDockerAvailable()) {
+            const result = await executeInDocker({
+                language,
+                code,
+                workspaceDir,
+                timeoutMs,
+                networkAccess: useNetwork,
+                credentials
+            });
+            return { ...result, executionMode: "docker" };
         }
 
-        const startTime = Date.now();
+        if (providerKeys.length && Object.keys(credentials).length) {
+            const env = buildSafeEnv();
+            Object.assign(env, credentials);
+        }
 
-        return new Promise((resolve) => {
-            let stdout = "";
-            let stderr = "";
-            let timedOut = false;
-            let settled = false;
-
-            const child: ChildProcess = spawn(command, args, {
-                cwd: workspaceDir,
-                env: buildSafeEnv() as NodeJS.ProcessEnv,
-                timeout: timeoutMs,
-                stdio: ["ignore", "pipe", "pipe"]
-            });
-
-            child.stdout?.on("data", (data: Buffer) => {
-                stdout += data.toString();
-                if (stdout.length > MAX_OUTPUT_SIZE * 2) {
-                    stdout = stdout.slice(0, MAX_OUTPUT_SIZE * 2);
-                }
-            });
-
-            child.stderr?.on("data", (data: Buffer) => {
-                stderr += data.toString();
-                if (stderr.length > MAX_OUTPUT_SIZE * 2) {
-                    stderr = stderr.slice(0, MAX_OUTPUT_SIZE * 2);
-                }
-            });
-
-            child.on("error", (err: Error) => {
-                if (settled) return;
-                settled = true;
-                if (err.message.includes("ETIMEDOUT") || err.message.includes("killed")) {
-                    timedOut = true;
-                }
-                resolve({
-                    stdout: truncate(stdout, MAX_OUTPUT_SIZE),
-                    stderr: truncate(
-                        stderr +
-                            (timedOut
-                                ? `\nProcess timed out after ${timeoutMs}ms`
-                                : `\nProcess error: ${err.message}`),
-                        MAX_OUTPUT_SIZE
-                    ),
-                    exitCode: timedOut ? 124 : 1,
-                    durationMs: Date.now() - startTime,
-                    timedOut
-                });
-            });
-
-            child.on("close", (exitCode: number | null) => {
-                if (settled) return;
-                settled = true;
-                resolve({
-                    stdout: truncate(stdout, MAX_OUTPUT_SIZE),
-                    stderr: truncate(stderr, MAX_OUTPUT_SIZE),
-                    exitCode: exitCode ?? 1,
-                    durationMs: Date.now() - startTime,
-                    timedOut
-                });
-            });
+        const result = await executeWithChildProcess({
+            language,
+            code,
+            workspaceDir,
+            timeoutMs
         });
+        return { ...result, executionMode: "child_process" };
     }
 });
 
@@ -256,7 +506,6 @@ export const writeWorkspaceFileTool = createTool({
 
         const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath);
 
-        // Ensure parent directory exists
         const parentDir = join(resolvedPath, "..");
         await mkdir(parentDir, { recursive: true });
 

@@ -4,7 +4,9 @@ export const sandboxToolDefinitions: McpToolDefinition[] = [
     {
         name: "execute-code",
         description:
-            "Execute code (bash, Python, or TypeScript) in a sandboxed environment. Returns stdout, stderr, and exit code.",
+            "Execute code (bash, Python, or TypeScript) in a Docker-isolated sandbox. " +
+            "Returns stdout, stderr, and exit code. Set networkAccess=true for API calls/deploys. " +
+            "Set injectCredentials to inject cloud provider tokens.",
         inputSchema: {
             type: "object",
             properties: {
@@ -21,6 +23,17 @@ export const sandboxToolDefinitions: McpToolDefinition[] = [
                 agentId: {
                     type: "string",
                     description: "Agent ID for workspace isolation. Defaults to 'default'."
+                },
+                networkAccess: {
+                    type: "boolean",
+                    description:
+                        "Enable outbound network access. Default false (isolated). Set true for API calls, deploying, installing packages."
+                },
+                injectCredentials: {
+                    type: "array",
+                    items: { type: "string" },
+                    description:
+                        "Cloud provider keys to inject as env vars (e.g., ['digitalocean', 'supabase']). Credentials fetched from IntegrationConnection."
                 }
             },
             required: ["language", "code"]
@@ -31,7 +44,8 @@ export const sandboxToolDefinitions: McpToolDefinition[] = [
     {
         name: "write-workspace-file",
         description:
-            "Write a file to the agent's persistent workspace. Files survive between runs.",
+            "Write a file to the agent's persistent workspace. Files survive between runs. " +
+            "HTML files viewable at /api/workspace/{agentId}/{path}.",
         inputSchema: {
             type: "object",
             properties: {

@@ -40,7 +40,12 @@ export const canvasCreateTool = createTool({
         category: z.string().optional().describe("Category (e.g., 'dashboard', 'report', 'form')")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug, title, description, schemaJson, tags, category }) => {
+    execute: async ({ slug, title, description, schemaJson, tags, category }, context) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reqCtx = context?.requestContext as Record<string, any> | undefined;
+        const ownerId = reqCtx?.userId || null;
+        const workspaceId = reqCtx?.workspaceId || null;
+
         const canvas = await prisma.canvas.create({
             data: {
                 slug,
@@ -50,12 +55,15 @@ export const canvasCreateTool = createTool({
                 dataQueries: (schemaJson.dataQueries as Prisma.InputJsonValue) ?? Prisma.JsonNull,
                 tags: tags ?? [],
                 category,
+                ...(workspaceId ? { workspaceId } : {}),
+                ...(ownerId ? { ownerId, createdBy: ownerId } : {}),
                 version: 1,
                 versions: {
                     create: {
                         version: 1,
                         schemaJson: schemaJson as Prisma.InputJsonValue,
-                        changelog: "Initial version"
+                        changelog: "Initial version",
+                        ...(ownerId ? { createdBy: ownerId } : {})
                     }
                 }
             }
@@ -133,7 +141,11 @@ export const canvasUpdateTool = createTool({
         isPublished: z.boolean().optional()
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ slug, schemaJson, changelog, versionLabel, ...rest }) => {
+    execute: async ({ slug, schemaJson, changelog, versionLabel, ...rest }, context) => {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const reqCtx = context?.requestContext as Record<string, any> | undefined;
+        const userId = reqCtx?.userId || null;
+
         const existing = await prisma.canvas.findUnique({ where: { slug } });
         if (!existing) {
             throw new Error(`Canvas "${slug}" not found`);
@@ -161,7 +173,8 @@ export const canvasUpdateTool = createTool({
                     version: newVersion,
                     schemaJson: schemaJson as Prisma.InputJsonValue,
                     changelog: changelog || `Updated to version ${newVersion}`,
-                    versionLabel: versionLabel || null
+                    versionLabel: versionLabel || null,
+                    ...(userId ? { createdBy: userId } : {})
                 }
             });
         }

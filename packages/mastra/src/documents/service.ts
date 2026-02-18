@@ -28,6 +28,8 @@ export interface CreateDocumentInput {
     type?: "USER" | "SYSTEM";
     createdBy?: string;
     chunkOptions?: ChunkOptions;
+    /** Behavior when a document with the same slug already exists. */
+    onConflict?: "error" | "skip" | "update";
 }
 
 export interface UpdateDocumentInput {
@@ -121,14 +123,29 @@ async function embedDocumentAsync(
 export async function createDocument(input: CreateDocumentInput) {
     const contentType = input.contentType || "markdown";
     const slug = validateSlug(input.slug);
+    const onConflict = input.onConflict || "error";
 
-    // Check for duplicate slug
     const existing = await prisma.document.findUnique({ where: { slug } });
+
     if (existing) {
+        if (onConflict === "skip") {
+            return existing;
+        }
+        if (onConflict === "update") {
+            return updateDocument(existing.id, {
+                name: input.name,
+                content: input.content,
+                description: input.description,
+                contentType: input.contentType,
+                category: input.category,
+                tags: input.tags,
+                metadata: input.metadata,
+                chunkOptions: input.chunkOptions
+            });
+        }
         throw new Error(`Document with slug "${slug}" already exists`);
     }
 
-    // Create Prisma record immediately (embedding runs async below)
     const document = await prisma.document.create({
         data: {
             slug,
@@ -138,7 +155,6 @@ export async function createDocument(input: CreateDocumentInput) {
             contentType,
             vectorIds: [],
             chunkCount: 0,
-            // embeddedAt stays null until async embedding completes
             category: input.category,
             tags: input.tags || [],
             metadata: (input.metadata || {}) as Prisma.InputJsonValue,
@@ -148,8 +164,6 @@ export async function createDocument(input: CreateDocumentInput) {
         }
     });
 
-    // Fire-and-forget: run RAG embedding in background
-    // The .catch ensures unhandled-rejection never crashes the process
     embedDocumentAsync(document.id, slug, input.content, {
         type: contentType,
         sourceName: input.name,

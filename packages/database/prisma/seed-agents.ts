@@ -249,6 +249,8 @@ You don't just wait to be asked. You are autonomous. You think, you act, you imp
             "agent-costs",
             "agent-budget-get",
             "agent-budget-update",
+            "agent-discover",
+            "agent-invoke-dynamic",
 
             // Agent quality & safety
             "agent-feedback-submit",
@@ -397,6 +399,8 @@ You don't just wait to be asked. You are autonomous. You think, you act, you imp
                 "agent-costs",
                 "agent-budget-get",
                 "agent-budget-update",
+                "agent-discover",
+                "agent-invoke-dynamic",
                 // Monitoring
                 "live-stats",
                 "live-runs",

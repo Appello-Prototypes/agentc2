@@ -21,6 +21,16 @@ export const documentToolDefinitions: McpToolDefinition[] = [
                     type: "array",
                     items: { type: "string" },
                     description: "Tags for categorization"
+                },
+                workspaceId: {
+                    type: "string",
+                    description: "Workspace to associate the document with"
+                },
+                onConflict: {
+                    type: "string",
+                    enum: ["error", "skip", "update"],
+                    description:
+                        "Behavior when slug already exists: error (default), skip, or update"
                 }
             },
             required: ["slug", "name", "content"]
@@ -111,7 +121,7 @@ export const documentToolDefinitions: McpToolDefinition[] = [
 ];
 
 export const documentToolRoutes: McpToolRoute[] = [
-    { kind: "registry", name: "document-create" },
+    { kind: "registry", name: "document-create", applyDefaults: true },
     { kind: "registry", name: "document-read" },
     { kind: "registry", name: "document-update" },
     { kind: "registry", name: "document-delete" },

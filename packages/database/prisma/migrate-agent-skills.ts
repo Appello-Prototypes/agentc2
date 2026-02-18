@@ -41,6 +41,7 @@ const agentSkillConfigs: AgentSkillConfig[] = [
             "platform-organization",
             "platform-webhooks",
             "platform-goals",
+            "agent-collaboration",
             "web-research",
             "bim-engineering",
             "email-management",

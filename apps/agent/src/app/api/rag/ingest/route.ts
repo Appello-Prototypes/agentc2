@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { ingestDocument, type ChunkOptions } from "@repo/mastra/rag";
+import { createDocumentRecord, type CreateDocumentInput } from "@repo/mastra/documents";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
@@ -9,18 +9,41 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { content, type, sourceId, sourceName, chunkOptions } = await req.json();
+        const {
+            content,
+            type,
+            sourceId,
+            sourceName,
+            chunkOptions,
+            description,
+            category,
+            tags,
+            workspaceId,
+            onConflict
+        } = await req.json();
 
         if (!content) {
             return NextResponse.json({ error: "Content is required" }, { status: 400 });
         }
 
-        const result = await ingestDocument(content, {
-            type: type || "text",
-            sourceId,
-            sourceName,
-            chunkOptions: chunkOptions as ChunkOptions
-        });
+        const slug = sourceId || `doc-${Date.now()}`;
+        const name = sourceName || slug;
+
+        const input: CreateDocumentInput = {
+            slug,
+            name,
+            content,
+            description,
+            contentType: type || "markdown",
+            category,
+            tags,
+            workspaceId,
+            chunkOptions,
+            onConflict: onConflict || "skip",
+            createdBy: session.user.id
+        };
+
+        const result = await createDocumentRecord(input);
 
         return NextResponse.json(result);
     } catch (error) {

@@ -24,6 +24,14 @@ export async function adminSignIn(
     return { success: true };
 }
 
+/**
+ * Initiate Google SSO by redirecting to the server-side OAuth endpoint.
+ */
+export function adminSignInWithGoogle(callbackUrl?: string): void {
+    const params = callbackUrl ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : "";
+    window.location.href = `/admin/api/auth/google${params}`;
+}
+
 export async function adminSignOut(): Promise<void> {
     await fetch("/admin/api/auth/logout", {
         method: "POST",

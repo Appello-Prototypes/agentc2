@@ -141,6 +141,9 @@ model Organization {
     federationReceived  FederationAgreement[] @relation("FederationResponder")
     federationExposures FederationExposure[]
 
+    // Infrastructure
+    provisionedResources ProvisionedResource[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -1040,6 +1043,18 @@ model MastraThread {
 
     @@index([resourceId, createdAt(sort: Desc)], map: "mastra_threads_resourceid_createdat_idx")
     @@map("mastra_threads")
+    @@ignore
+}
+
+// RAG Vector Store - Managed by @mastra/pg PgVector, NOT by Prisma.
+// Declared here with @@ignore so `prisma db push` does not drop the table.
+model RagDocument {
+    id        Int                          @id @default(autoincrement())
+    vectorId  String                       @unique @map("vector_id")
+    embedding Unsupported("vector(1536)")?
+    metadata  Json?                        @default("{}")
+
+    @@map("rag_documents")
     @@ignore
 }
 
@@ -4217,4 +4232,29 @@ model FederationMessage {
     @@index([agreementId, conversationId, createdAt])
     @@index([sourceOrgId, createdAt])
     @@map("federation_message")
+}
+
+// ─── Infrastructure Provisioning ─────────────────────────────────────────────
+
+model ProvisionedResource {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    agentId        String?
+    runId          String?
+    provider       String // "digitalocean", "supabase", "custom"
+    resourceType   String // "droplet", "database", "domain", "ssh-key", "app"
+    externalId     String // Provider's resource ID
+    name           String
+    metadata       Json? // IP address, connection strings, specs, region
+    status         String       @default("active") // "active", "destroyed", "error"
+    monthlyCostUsd Float?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+    destroyedAt    DateTime?
+
+    @@index([organizationId, status])
+    @@index([provider, resourceType])
+    @@index([agentId])
+    @@map("provisioned_resource")
 }

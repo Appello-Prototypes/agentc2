@@ -531,6 +531,37 @@ You can create and track goals.
         tags: ["goals", "tracking"],
         tools: ["goal-create", "goal-list", "goal-get"],
         type: "SYSTEM"
+    },
+    {
+        slug: "agent-collaboration",
+        name: "Agent Collaboration",
+        description:
+            "Discover other agents and dynamically invoke them for collaboration. Enables self-organizing multi-agent workflows without pre-configured networks.",
+        instructions: `## Agent Collaboration
+
+You can discover and invoke other agents dynamically to collaborate on complex tasks.
+
+### Discovery:
+- **agent-discover**: Find available agents by capability. Returns each agent's slug, name, description, model, tools, and a specialty summary. Use keyword filtering to narrow results.
+
+### Dynamic Invocation:
+- **agent-invoke-dynamic**: Invoke any agent by slug with a message and get back its response. The target agent runs with full tool access.
+
+### Collaboration Pattern:
+1. Use agent-discover to find agents that can help with a sub-task
+2. Evaluate which agent best fits the need based on description, tools, and specialty
+3. Use agent-invoke-dynamic to delegate the sub-task
+4. Synthesize the response into your overall answer
+
+### Best practices:
+- Be specific in your message to the target agent — provide clear context and a focused task
+- Use the exclude parameter in agent-discover to filter out your own slug
+- Prefer agents whose specialty summary aligns with the sub-task
+- Avoid invoking the same agent recursively`,
+        category: "operations",
+        tags: ["collaboration", "discovery", "multi-agent", "self-organization"],
+        tools: ["agent-discover", "agent-invoke-dynamic"],
+        type: "SYSTEM"
     }
 ];
 

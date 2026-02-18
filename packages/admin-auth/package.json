@@ -7,11 +7,14 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/auth-client.ts",
+    "./google": "./src/google.ts",
+    "./rate-limit": "./src/rate-limit.ts",
     "./permissions": "./src/permissions.ts"
   },
   "dependencies": {
     "@repo/database": "workspace:*",
-    "bcryptjs": "^2.4.3"
+    "bcryptjs": "^2.4.3",
+    "google-auth-library": "^10.5.0"
   },
   "devDependencies": {
     "@repo/typescript-config": "workspace:*",

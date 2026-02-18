@@ -15,7 +15,9 @@ import {
     Textarea,
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
     Switch,
@@ -127,6 +129,7 @@ interface ModelInfo {
     provider: string;
     name: string;
     displayName: string;
+    category: string;
 }
 
 interface ToolInfo {
@@ -164,6 +167,7 @@ export default function ConfigurePage() {
     // Available tools, models, and scorers from API
     const [availableTools, setAvailableTools] = useState<ToolInfo[]>([]);
     const [availableModels, setAvailableModels] = useState<ModelInfo[]>([]);
+    const [modelsLoading, setModelsLoading] = useState(true);
     const [availableScorers, setAvailableScorers] = useState<ScorerInfo[]>([]);
     const [toolsLoading, setToolsLoading] = useState(true);
     const [toolCategoryOrder, setToolCategoryOrder] = useState<string[]>([]);
@@ -258,7 +262,36 @@ export default function ConfigurePage() {
         }
     }, []);
 
-    // Fetch available tools, models, and scorers
+    // Fetch models separately so dropdowns load instantly (not blocked by MCP)
+    const fetchModels = useCallback(async () => {
+        try {
+            setModelsLoading(true);
+            const res = await fetch(`${getApiBase()}/api/models`, {
+                credentials: "include"
+            });
+            const data = await res.json();
+            if (data.success && data.models) {
+                const CATEGORY_ORDER: Record<string, number> = {
+                    flagship: 0,
+                    fast: 1,
+                    reasoning: 2,
+                    "open-source": 3,
+                    legacy: 4
+                };
+                const sorted = (data.models as ModelInfo[]).sort((a, b) => {
+                    if (a.provider !== b.provider) return 0;
+                    return (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99);
+                });
+                setAvailableModels(sorted);
+            }
+        } catch (err) {
+            console.error("Failed to fetch models:", err);
+        } finally {
+            setModelsLoading(false);
+        }
+    }, []);
+
+    // Fetch available tools and scorers
     const fetchToolsAndScorers = useCallback(async () => {
         try {
             setToolsLoading(true);
@@ -268,7 +301,6 @@ export default function ConfigurePage() {
             const data = await res.json();
             if (data.success) {
                 setAvailableTools(data.tools || []);
-                setAvailableModels(data.models || []);
                 setAvailableScorers(data.scorers || []);
                 setToolCategoryOrder(data.toolCategoryOrder || []);
                 setServerErrors(data.serverErrors ?? {});
@@ -592,12 +624,14 @@ export default function ConfigurePage() {
 
     useEffect(() => {
         fetchAgent();
+        fetchModels();
         fetchToolsAndScorers();
         fetchAgentsAndWorkflows();
         fetchSkills();
         fetchAiProviderStatus();
     }, [
         fetchAgent,
+        fetchModels,
         fetchToolsAndScorers,
         fetchAgentsAndWorkflows,
         fetchSkills,
@@ -1384,15 +1418,48 @@ export default function ConfigurePage() {
                                             </SelectValue>
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {availableModels
-                                                .filter(
+                                            {(() => {
+                                                const providerModels = availableModels.filter(
                                                     (m) => m.provider === formData.modelProvider
-                                                )
-                                                .map((m) => (
-                                                    <SelectItem key={m.name} value={m.name}>
-                                                        {m.displayName}
-                                                    </SelectItem>
-                                                ))}
+                                                );
+                                                const categoryLabels: Record<string, string> = {
+                                                    flagship: "Flagship",
+                                                    fast: "Fast",
+                                                    reasoning: "Reasoning",
+                                                    "open-source": "Open Source",
+                                                    legacy: "Legacy"
+                                                };
+                                                const categoryOrder = [
+                                                    "flagship",
+                                                    "fast",
+                                                    "reasoning",
+                                                    "open-source",
+                                                    "legacy"
+                                                ];
+                                                const grouped = new Map<string, ModelInfo[]>();
+                                                for (const m of providerModels) {
+                                                    const cat = m.category || "flagship";
+                                                    if (!grouped.has(cat)) grouped.set(cat, []);
+                                                    grouped.get(cat)!.push(m);
+                                                }
+                                                return categoryOrder
+                                                    .filter((cat) => grouped.has(cat))
+                                                    .map((cat) => (
+                                                        <SelectGroup key={cat}>
+                                                            <SelectLabel>
+                                                                {categoryLabels[cat] ?? cat}
+                                                            </SelectLabel>
+                                                            {grouped.get(cat)!.map((m) => (
+                                                                <SelectItem
+                                                                    key={m.name}
+                                                                    value={m.name}
+                                                                >
+                                                                    {m.displayName}
+                                                                </SelectItem>
+                                                            ))}
+                                                        </SelectGroup>
+                                                    ));
+                                            })()}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -1859,19 +1926,61 @@ export default function ConfigurePage() {
                                                         </SelectValue>
                                                     </SelectTrigger>
                                                     <SelectContent>
-                                                        {availableModels
-                                                            .filter(
-                                                                (m) =>
-                                                                    m.provider === fastModelProvider
-                                                            )
-                                                            .map((m) => (
-                                                                <SelectItem
-                                                                    key={m.name}
-                                                                    value={m.name}
-                                                                >
-                                                                    {m.displayName}
-                                                                </SelectItem>
-                                                            ))}
+                                                        {(() => {
+                                                            const provModels =
+                                                                availableModels.filter(
+                                                                    (m) =>
+                                                                        m.provider ===
+                                                                        fastModelProvider
+                                                                );
+                                                            const catLabels: Record<
+                                                                string,
+                                                                string
+                                                            > = {
+                                                                flagship: "Flagship",
+                                                                fast: "Fast",
+                                                                reasoning: "Reasoning",
+                                                                "open-source": "Open Source",
+                                                                legacy: "Legacy"
+                                                            };
+                                                            const catOrder = [
+                                                                "flagship",
+                                                                "fast",
+                                                                "reasoning",
+                                                                "open-source",
+                                                                "legacy"
+                                                            ];
+                                                            const grouped = new Map<
+                                                                string,
+                                                                ModelInfo[]
+                                                            >();
+                                                            for (const m of provModels) {
+                                                                const cat =
+                                                                    m.category || "flagship";
+                                                                if (!grouped.has(cat))
+                                                                    grouped.set(cat, []);
+                                                                grouped.get(cat)!.push(m);
+                                                            }
+                                                            return catOrder
+                                                                .filter((cat) => grouped.has(cat))
+                                                                .map((cat) => (
+                                                                    <SelectGroup key={cat}>
+                                                                        <SelectLabel>
+                                                                            {catLabels[cat] ?? cat}
+                                                                        </SelectLabel>
+                                                                        {grouped
+                                                                            .get(cat)!
+                                                                            .map((m) => (
+                                                                                <SelectItem
+                                                                                    key={m.name}
+                                                                                    value={m.name}
+                                                                                >
+                                                                                    {m.displayName}
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                    </SelectGroup>
+                                                                ));
+                                                        })()}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
@@ -1974,20 +2083,61 @@ export default function ConfigurePage() {
                                                         <SelectItem value="none">
                                                             None (use primary)
                                                         </SelectItem>
-                                                        {availableModels
-                                                            .filter(
-                                                                (m) =>
-                                                                    m.provider ===
-                                                                    escalationModelProvider
-                                                            )
-                                                            .map((m) => (
-                                                                <SelectItem
-                                                                    key={m.name}
-                                                                    value={m.name}
-                                                                >
-                                                                    {m.displayName}
-                                                                </SelectItem>
-                                                            ))}
+                                                        {(() => {
+                                                            const provModels =
+                                                                availableModels.filter(
+                                                                    (m) =>
+                                                                        m.provider ===
+                                                                        escalationModelProvider
+                                                                );
+                                                            const catLabels: Record<
+                                                                string,
+                                                                string
+                                                            > = {
+                                                                flagship: "Flagship",
+                                                                fast: "Fast",
+                                                                reasoning: "Reasoning",
+                                                                "open-source": "Open Source",
+                                                                legacy: "Legacy"
+                                                            };
+                                                            const catOrder = [
+                                                                "flagship",
+                                                                "fast",
+                                                                "reasoning",
+                                                                "open-source",
+                                                                "legacy"
+                                                            ];
+                                                            const grouped = new Map<
+                                                                string,
+                                                                ModelInfo[]
+                                                            >();
+                                                            for (const m of provModels) {
+                                                                const cat =
+                                                                    m.category || "flagship";
+                                                                if (!grouped.has(cat))
+                                                                    grouped.set(cat, []);
+                                                                grouped.get(cat)!.push(m);
+                                                            }
+                                                            return catOrder
+                                                                .filter((cat) => grouped.has(cat))
+                                                                .map((cat) => (
+                                                                    <SelectGroup key={cat}>
+                                                                        <SelectLabel>
+                                                                            {catLabels[cat] ?? cat}
+                                                                        </SelectLabel>
+                                                                        {grouped
+                                                                            .get(cat)!
+                                                                            .map((m) => (
+                                                                                <SelectItem
+                                                                                    key={m.name}
+                                                                                    value={m.name}
+                                                                                >
+                                                                                    {m.displayName}
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                    </SelectGroup>
+                                                                ));
+                                                        })()}
                                                     </SelectContent>
                                                 </Select>
                                             </div>
