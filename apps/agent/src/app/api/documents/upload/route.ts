@@ -5,6 +5,11 @@ import { createDocumentRecord, type CreateDocumentInput } from "@repo/mastra/doc
 import { authenticateRequest } from "@/lib/api-auth";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { PDFParse } from "pdf-parse";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+
+const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_CONTENT_CHARS = 500_000;
 
 /**
  * Map file extension to the contentType expected by the document service.
@@ -65,6 +70,10 @@ export async function POST(request: NextRequest) {
         if (!userId) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
+        const rate = await checkRateLimit(`documents:${userId}`, RATE_LIMIT_POLICIES.uploads);
+        if (!rate.allowed) {
+            return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+        }
 
         // --- Parse multipart form data ---
         const formData = await request.formData();
@@ -74,6 +83,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { error: "A file is required in the 'file' field" },
                 { status: 400 }
+            );
+        }
+        if (file.size > MAX_UPLOAD_BYTES) {
+            return NextResponse.json(
+                { error: `File exceeds size limit of ${MAX_UPLOAD_BYTES} bytes` },
+                { status: 413 }
             );
         }
 
@@ -129,8 +144,13 @@ export async function POST(request: NextRequest) {
             .split(",")
             .map((t) => t.trim())
             .filter(Boolean);
-        const contentTypeOverride = formData.get("contentType") as string | null;
-        const contentType = contentTypeOverride || extensionToContentType(ext);
+        const contentType = extensionToContentType(ext);
+        if (content.length > MAX_CONTENT_CHARS) {
+            return NextResponse.json(
+                { error: "Extracted content exceeds processing size limit" },
+                { status: 413 }
+            );
+        }
 
         const workspaceId = (await getDefaultWorkspaceIdForUser(userId)) || undefined;
 

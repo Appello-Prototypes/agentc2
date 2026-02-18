@@ -7,6 +7,11 @@ import { inngest } from "@/lib/inngest";
 import { auditLog } from "@/lib/audit-log";
 import { resolveRunSource, resolveRunTriggerType } from "@/lib/unified-triggers";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { enforceInputGuardrails, enforceOutputGuardrails } from "@repo/mastra/guardrails";
+import { requireAgentAccess, requireAuth } from "@/lib/authz";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+import { enforceCsrf } from "@/lib/security/http-security";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -61,8 +66,37 @@ function formatToolResultPreview(result: unknown, maxLength = 500): string {
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const csrf = enforceCsrf(request);
+        if (csrf.response) {
+            return csrf.response;
+        }
         const { id } = await params;
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
+        const rate = await checkRateLimit(
+            `invoke:${authResult.context.organizationId}:${authResult.context.userId}:${id}`,
+            RATE_LIMIT_POLICIES.invoke
+        );
+        if (!rate.allowed) {
+            return NextResponse.json(
+                { success: false, error: "Rate limit exceeded" },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
+        if (!body || typeof body !== "object") {
+            return NextResponse.json(
+                { success: false, error: "Invalid request payload" },
+                { status: 400 }
+            );
+        }
 
         const {
             input,
@@ -264,6 +298,29 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         );
 
         try {
+            // Enforce input guardrails before execution
+            const inputCheck = await enforceInputGuardrails(record.id, input, {
+                runId: runHandle.runId,
+                tenantId: record.tenantId || undefined
+            });
+            if (inputCheck.blocked) {
+                await runHandle.fail(
+                    new Error(
+                        `Guardrail blocked: ${inputCheck.violations.map((v) => v.message).join("; ")}`
+                    )
+                );
+                return NextResponse.json(
+                    {
+                        success: false,
+                        run_id: runHandle.runId,
+                        status: "blocked",
+                        error: "Input blocked by guardrail policy",
+                        violations: inputCheck.violations
+                    },
+                    { status: 403 }
+                );
+            }
+
             // Execute agent with timeout
             const startTime = Date.now();
             const controller = new AbortController();
@@ -413,6 +470,34 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     });
                 } catch (e) {
                     console.warn("[Agent Invoke] Failed to record trigger event:", e);
+                }
+            }
+
+            // Enforce output guardrails after execution
+            if (response.text) {
+                const outputCheck = await enforceOutputGuardrails(record.id, response.text, {
+                    runId: runHandle.runId,
+                    tenantId: record.tenantId || undefined
+                });
+                if (outputCheck.blocked) {
+                    return NextResponse.json({
+                        success: true,
+                        run_id: runHandle.runId,
+                        status: "redacted",
+                        output: "[Response redacted by guardrail policy. The agent produced content that violates organization safety rules.]",
+                        violations: outputCheck.violations,
+                        usage: usage
+                            ? {
+                                  prompt_tokens: usage.promptTokens,
+                                  completion_tokens: usage.completionTokens,
+                                  total_tokens: usage.totalTokens
+                              }
+                            : null,
+                        cost_usd: costUsd,
+                        duration_ms: durationMs,
+                        model: `${record.modelProvider}/${record.modelName}`,
+                        source
+                    });
                 }
             }
 

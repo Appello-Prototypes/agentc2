@@ -16,8 +16,8 @@ const columns = [
     {
         title: "Developers",
         links: [
-            { label: "Documentation", href: "#" },
-            { label: "API Reference", href: "#" },
+            { label: "Documentation", href: "/docs" },
+            { label: "API Reference", href: "/docs/api-reference/agents" },
             { label: "GitHub", href: "https://github.com" },
             { label: "Status", href: "#" }
         ]
@@ -25,8 +25,8 @@ const columns = [
     {
         title: "Company",
         links: [
-            { label: "About", href: "#" },
-            { label: "Blog", href: "#" },
+            { label: "About", href: "/about" },
+            { label: "Blog", href: "/blog" },
             { label: "Careers", href: "#" },
             { label: "Contact", href: "mailto:hello@agentc2.com" }
         ]

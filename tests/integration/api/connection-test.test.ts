@@ -6,7 +6,7 @@ import { createMockParams, createMockRequest, parseResponse } from "../../utils/
 const prismaMock = mockDeep<PrismaClient>();
 const getSessionMock = vi.fn();
 const getUserOrganizationIdMock = vi.fn();
-const getMcpToolsMock = vi.fn();
+const testMcpServerMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -28,8 +28,8 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
-vi.mock("@repo/mastra", () => ({
-    getMcpTools: getMcpToolsMock
+vi.mock("@repo/mastra/mcp", () => ({
+    testMcpServer: testMcpServerMock
 }));
 
 describe("Integration connection test API", () => {
@@ -126,10 +126,12 @@ describe("Integration connection test API", () => {
             isDefault: true
         } as never);
         prismaMock.integrationConnection.update.mockResolvedValue({} as never);
-        getMcpToolsMock.mockResolvedValue({
-            hubspot_toolA: {},
-            hubspot_toolB: {},
-            other_tool: {}
+        testMcpServerMock.mockResolvedValue({
+            success: true,
+            toolCount: 2,
+            sampleTools: ["hubspot_toolA", "hubspot_toolB"],
+            totalMs: 10,
+            phases: []
         });
 
         const response = await POST(

@@ -357,6 +357,22 @@ export const inngest = new Inngest({
                 childCampaignId: string;
             };
         };
+        // Workflow Async Execution Events
+        "workflow/execute.async": {
+            data: {
+                workflowRunId: string;
+                workflowId: string;
+                workflowSlug: string;
+                input: Record<string, unknown>;
+                pipelineRunId?: string;
+            };
+        };
+        // Dark Factory Pipeline Stats Events
+        "pipeline/stats.rollup": {
+            data: {
+                date?: string;
+            };
+        };
         // Gmail Processing Events
         "gmail/message.process": {
             data: {

@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import { agentResolver } from "@repo/mastra/agents";
+import { headers } from "next/headers";
+import { auth } from "@repo/auth";
+import { prisma } from "@repo/database";
 import { getRecentCalls } from "./_webhook-log";
 
 /** Default agent slug for ElevenLabs requests */
@@ -11,6 +14,20 @@ const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-age
  * Returns debug information about recent webhook calls
  */
 export async function GET() {
+    const session = await auth.api.getSession({
+        headers: await headers()
+    });
+    if (!session?.user) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+    const membership = await prisma.membership.findFirst({
+        where: { userId: session.user.id },
+        select: { role: true }
+    });
+    if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+
     // Check ngrok status
     let ngrokStatus = { running: false, url: null as string | null };
     try {

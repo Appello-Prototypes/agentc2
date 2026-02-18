@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { createHash } from "crypto";
-import { consumeAuthCode, validateClientCredentials } from "@/lib/mcp-oauth";
+import { consumeAuthCode, issueAccessToken, validateClientCredentials } from "@/lib/mcp-oauth";
 
 export const dynamic = "force-dynamic";
 
@@ -172,11 +172,11 @@ export async function POST(request: NextRequest): Promise<Response> {
             );
         }
 
-        // Issue access token = the MCP API key itself, so the MCP endpoint
-        // can validate it against the same DB credential
+        // Issue a short-lived opaque access token instead of returning the client secret.
+        const accessToken = issueAccessToken(validation.organizationId);
         return new Response(
             JSON.stringify({
-                access_token: clientSecret,
+                access_token: accessToken,
                 token_type: "Bearer",
                 expires_in: 86400,
                 scope: "mcp"
@@ -212,9 +212,10 @@ export async function POST(request: NextRequest): Promise<Response> {
             });
         }
 
+        const accessToken = issueAccessToken(validation.organizationId);
         return new Response(
             JSON.stringify({
-                access_token: clientSecret,
+                access_token: accessToken,
                 token_type: "Bearer",
                 expires_in: 86400,
                 scope: "mcp"

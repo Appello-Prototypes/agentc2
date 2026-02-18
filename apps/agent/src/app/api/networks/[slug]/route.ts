@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra/networks";
+import {
+    createChangeLog,
+    detectScalarChange,
+    detectJsonChange,
+    type FieldChange
+} from "@/lib/changelog";
 
 async function findNetwork(slug: string) {
     return prisma.network.findFirst({
@@ -105,6 +111,26 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             updateData.topologyJson = nextTopology;
         }
 
+        // Detect all field-level changes for changelog
+        const fieldChanges: FieldChange[] = [];
+        const sc = detectScalarChange;
+        const jc = detectJsonChange;
+        const checks = [
+            sc("name", existing.name, body.name),
+            sc("description", existing.description, body.description),
+            sc("instructions", existing.instructions, body.instructions),
+            sc("modelProvider", existing.modelProvider, body.modelProvider),
+            sc("modelName", existing.modelName, body.modelName),
+            sc("temperature", existing.temperature, body.temperature),
+            sc("maxSteps", existing.maxSteps, body.maxSteps),
+            sc("isPublished", existing.isPublished, body.isPublished),
+            sc("isActive", existing.isActive, body.isActive),
+            jc("memoryConfig", existing.memoryConfig, body.memoryConfig)
+        ];
+        for (const c of checks) {
+            if (c) fieldChanges.push(c);
+        }
+
         const topologyChanged =
             shouldAutoGenerate ||
             (body.topologyJson !== undefined &&
@@ -114,13 +140,37 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             body.primitives !== undefined &&
             JSON.stringify(existing.primitives) !== JSON.stringify(body.primitives);
 
+        if (topologyChanged) {
+            fieldChanges.push({
+                field: "topologyJson",
+                action: "modified",
+                before: existing.topologyJson,
+                after: nextTopology
+            });
+        }
+        if (primitivesChanged) {
+            fieldChanges.push({
+                field: "primitives",
+                action: "modified",
+                before: existing.primitives.map((p) => ({
+                    type: p.primitiveType,
+                    agent: p.agent?.slug,
+                    workflow: p.workflow?.slug,
+                    toolId: p.toolId
+                })),
+                after: body.primitives
+            });
+        }
+
+        let nextVersion = existing.version;
+
         if (topologyChanged || primitivesChanged) {
             const lastVersion = await prisma.networkVersion.findFirst({
                 where: { networkId: existing.id },
                 orderBy: { version: "desc" },
                 select: { version: true }
             });
-            const nextVersion = (lastVersion?.version || 0) + 1;
+            nextVersion = (lastVersion?.version || 0) + 1;
             updateData.version = nextVersion;
 
             await prisma.networkVersion.create({
@@ -139,6 +189,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             where: { id: existing.id },
             data: updateData
         });
+
+        if (fieldChanges.length > 0) {
+            createChangeLog({
+                entityType: "network",
+                entityId: existing.id,
+                entitySlug: existing.slug,
+                version: nextVersion,
+                action: "update",
+                changes: fieldChanges,
+                reason: body.changeReason || undefined,
+                createdBy: body.createdBy || undefined
+            }).catch((err) => console.error("[ChangeLog] Network write failed:", err));
+        }
 
         if (Array.isArray(body.primitives)) {
             await prisma.networkPrimitive.deleteMany({

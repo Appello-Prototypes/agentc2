@@ -163,7 +163,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const agentRecord = await prisma.agent.findFirst({
             where: {
                 slug: id,
-                isPublic: true,
+                visibility: "PUBLIC",
                 publicToken: token,
                 isActive: true
             },

@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, DM_Sans } from "next/font/google";
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
+import { organizationJsonLd, softwareApplicationJsonLd } from "@/lib/seo";
+import { GoogleAnalytics } from "@/components/analytics/google-analytics";
 
 const dmSans = DM_Sans({ subsets: ["latin"], variable: "--font-sans" });
 
@@ -35,6 +37,14 @@ export const metadata: Metadata = {
         url: "https://agentc2.ai",
         siteName: "AgentC2",
         type: "website"
+    },
+    twitter: {
+        card: "summary_large_image",
+        title: "AgentC2 - Your AI Workforce, Orchestrated",
+        description:
+            "Build and deploy AI agents that connect to your tools at scale with workflows, guardrails, and enterprise controls.",
+        images: ["https://agentc2.ai/opengraph-image"],
+        site: "@agentc2ai"
     }
 };
 
@@ -50,7 +60,18 @@ export default function RootLayout({
             suppressHydrationWarning
         >
             <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{ __html: JSON.stringify(organizationJsonLd()) }}
+                />
+                <script
+                    type="application/ld+json"
+                    dangerouslySetInnerHTML={{
+                        __html: JSON.stringify(softwareApplicationJsonLd())
+                    }}
+                />
                 <AppProvidersWrapper>{children}</AppProvidersWrapper>
+                <GoogleAnalytics />
             </body>
         </html>
     );

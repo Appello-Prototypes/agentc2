@@ -97,6 +97,7 @@ interface Agent {
     modelName: string;
     isActive: boolean;
     type: "SYSTEM" | "USER" | "DEMO";
+    visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     toolCount?: number;
     memoryEnabled?: boolean;
     scorers?: string[];
@@ -299,6 +300,16 @@ function AgentCardView({ agent, onClick }: { agent: Agent; onClick: () => void }
                                 SYSTEM
                             </Badge>
                         )}
+                        {agent.visibility === "ORGANIZATION" && (
+                            <Badge variant="outline" className="text-xs">
+                                Org
+                            </Badge>
+                        )}
+                        {agent.visibility === "PUBLIC" && (
+                            <Badge variant="outline" className="text-xs">
+                                Public
+                            </Badge>
+                        )}
                         {agent.healthScore && (
                             <div
                                 className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${
@@ -441,6 +452,16 @@ function AgentListView({ agent, onClick }: { agent: Agent; onClick: () => void }
                                 SYSTEM
                             </Badge>
                         )}
+                        {agent.visibility === "ORGANIZATION" && (
+                            <Badge variant="outline" className="text-xs">
+                                Org
+                            </Badge>
+                        )}
+                        {agent.visibility === "PUBLIC" && (
+                            <Badge variant="outline" className="text-xs">
+                                Public
+                            </Badge>
+                        )}
                     </div>
                     <p className="text-muted-foreground mt-1 truncate text-sm">
                         {agent.description || "No description"}
@@ -511,6 +532,7 @@ function AgentTableView({
                         <TableHead>Name</TableHead>
                         <TableHead>Model</TableHead>
                         <TableHead>Type</TableHead>
+                        <TableHead>Visibility</TableHead>
                         <TableHead className="text-right">Runs</TableHead>
                         <TableHead className="text-right">Success</TableHead>
                         <TableHead className="text-right">Latency</TableHead>
@@ -540,6 +562,24 @@ function AgentTableView({
                             <TableCell>
                                 <Badge variant="outline" className="text-xs">
                                     {agent.type}
+                                </Badge>
+                            </TableCell>
+                            <TableCell>
+                                <Badge
+                                    variant="outline"
+                                    className={`text-xs ${
+                                        agent.visibility === "PUBLIC"
+                                            ? "border-blue-300 text-blue-600"
+                                            : agent.visibility === "ORGANIZATION"
+                                              ? "border-amber-300 text-amber-600"
+                                              : ""
+                                    }`}
+                                >
+                                    {agent.visibility === "ORGANIZATION"
+                                        ? "Org"
+                                        : agent.visibility === "PUBLIC"
+                                          ? "Public"
+                                          : "Private"}
                                 </Badge>
                             </TableCell>
                             <TableCell className="text-right">{agent.stats.runs}</TableCell>
@@ -669,6 +709,7 @@ export default function AgentsPage() {
     const [runsLoading, setRunsLoading] = useState(false);
     const [searchQuery, setSearchQuery] = useState("");
     const [typeFilter, setTypeFilter] = useState<string>("all");
+    const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string>("all");
     const [viewMode, setViewMode] = useState<ViewMode>("grid");
     const [activeTab, setActiveTab] = useState("agents");
@@ -732,6 +773,10 @@ export default function AgentsPage() {
         }
         // Type filter
         if (typeFilter !== "all" && agent.type !== typeFilter) {
+            return false;
+        }
+        // Visibility filter
+        if (visibilityFilter !== "all" && agent.visibility !== visibilityFilter) {
             return false;
         }
         // Status filter
@@ -926,6 +971,20 @@ export default function AgentsPage() {
                                 </SelectContent>
                             </Select>
                             <Select
+                                value={visibilityFilter}
+                                onValueChange={(v) => setVisibilityFilter(v ?? "all")}
+                            >
+                                <SelectTrigger className="w-40">
+                                    <SelectValue placeholder="Visibility" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Visibility</SelectItem>
+                                    <SelectItem value="PRIVATE">Private</SelectItem>
+                                    <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                                    <SelectItem value="PUBLIC">Public</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <Select
                                 value={statusFilter}
                                 onValueChange={(v) => setStatusFilter(v ?? "all")}
                             >
@@ -970,6 +1029,7 @@ export default function AgentsPage() {
                                                 onClick={() => {
                                                     setSearchQuery("");
                                                     setTypeFilter("all");
+                                                    setVisibilityFilter("all");
                                                     setStatusFilter("all");
                                                 }}
                                             >

@@ -11,8 +11,11 @@ const DEFAULT_AGENT_SLUG = process.env.ELEVENLABS_DEFAULT_AGENT_SLUG || "mcp-age
 function validateWebhookSecret(request: NextRequest): boolean {
     const webhookSecret = process.env.ELEVENLABS_WEBHOOK_SECRET;
 
-    // If no secret configured, allow all requests (development mode)
+    // Fail closed in production; allow unsecured requests only in local development.
     if (!webhookSecret) {
+        if (process.env.NODE_ENV === "production") {
+            return false;
+        }
         console.warn(
             "ELEVENLABS_WEBHOOK_SECRET not configured - allowing unauthenticated requests"
         );

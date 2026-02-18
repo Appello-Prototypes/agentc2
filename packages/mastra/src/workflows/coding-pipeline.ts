@@ -1,8 +1,14 @@
 /**
- * Coding Pipeline Workflow Definitions
+ * Coding Pipeline Workflow Definitions (Dark Factory)
  *
  * Standard and internal variants of the autonomous coding pipeline.
- * These definitions can be seeded into the database or created via API.
+ * These definitions are seeded into the database and executed by the
+ * DB workflow runtime (executeWorkflowDefinition).
+ *
+ * Key Dark Factory features:
+ * - lookup-pipeline-config: Loads per-org PipelinePolicy and per-repo RepositoryConfig
+ * - Risk-gated branch steps: Auto-approve plan/PR when risk is below org threshold
+ * - Dynamic build commands: Uses RepositoryConfig.installCommand/buildCommand instead of hardcoded bun commands
  */
 
 import type { WorkflowDefinition } from "./builder/types";
@@ -22,6 +28,20 @@ export const CODING_PIPELINE_DEFINITION: WorkflowDefinition = {
                 sourceId: "{{ input.sourceId }}",
                 repository: "{{ input.repository }}",
                 organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "lookup-pipeline-config",
+            type: "tool",
+            name: "Load pipeline policy and repo config",
+            description:
+                "Loads per-org risk thresholds and per-repo build commands from the database",
+            config: {
+                toolId: "lookup-pipeline-config"
+            },
+            inputMapping: {
+                organizationId: "{{ input.organizationId }}",
+                repositoryUrl: "{{ input.repository }}"
             }
         },
         {
@@ -75,7 +95,7 @@ Return a JSON analysis with:
                 promptTemplate: `Based on the following ticket and codebase analysis, create a detailed implementation plan.
 
 Ticket: {{ steps.ingest-ticket.title }}
-Description: {{ steps.ingest-ticket.description }}
+Description: {{ steps.ingest-ticket.title }}
 Repository: {{ input.repository }}
 Analysis: {{ steps.analyze-codebase }}
 
@@ -118,41 +138,76 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
         {
             id: "update-status-plan",
             type: "tool",
-            name: "Update pipeline status",
+            name: "Update pipeline status with risk level",
             config: {
                 toolId: "update-pipeline-status"
             },
             inputMapping: {
                 pipelineRunId: "{{ input.pipelineRunId }}",
-                status: "awaiting_plan_approval"
+                status: "awaiting_plan_approval",
+                riskLevel: "{{ steps.classify-risk.riskLevel }}"
             }
         },
         {
-            id: "approve-plan",
-            type: "human",
-            name: "Review and approve implementation plan",
-            description: "Human reviews the implementation plan before coding begins",
+            id: "plan-approval-gate",
+            type: "branch",
+            name: "Risk-gated plan approval",
+            description:
+                "Auto-approve if Dark Factory is enabled and risk is below threshold, otherwise require human approval",
             config: {
-                prompt: "Review the implementation plan and approve or reject it.",
-                formSchema: {
-                    approved: { type: "boolean", description: "Approve this plan?" },
-                    feedback: {
-                        type: "string",
-                        description: "Optional feedback or modifications"
+                branches: [
+                    {
+                        id: "auto-approve-plan",
+                        condition:
+                            "steps['lookup-pipeline-config'].policy.enabled && helpers.riskBelow(steps['classify-risk'].riskLevel, steps['lookup-pipeline-config'].policy.autoApprovePlanBelow)",
+                        steps: [
+                            {
+                                id: "auto-approve-plan-status",
+                                type: "tool",
+                                name: "Log auto-approval of plan",
+                                config: {
+                                    toolId: "update-pipeline-status"
+                                },
+                                inputMapping: {
+                                    pipelineRunId: "{{ input.pipelineRunId }}",
+                                    status: "coding"
+                                }
+                            }
+                        ]
                     }
-                }
-            }
-        },
-        {
-            id: "update-status-coding",
-            type: "tool",
-            name: "Update pipeline status to coding",
-            config: {
-                toolId: "update-pipeline-status"
-            },
-            inputMapping: {
-                pipelineRunId: "{{ input.pipelineRunId }}",
-                status: "coding"
+                ],
+                defaultBranch: [
+                    {
+                        id: "human-approve-plan",
+                        type: "human",
+                        name: "Review and approve implementation plan",
+                        config: {
+                            prompt: "Review the implementation plan and approve or reject it. Risk level: {{ steps.classify-risk.riskLevel }}",
+                            formSchema: {
+                                approved: {
+                                    type: "boolean",
+                                    description: "Approve this plan?"
+                                },
+                                feedback: {
+                                    type: "string",
+                                    description: "Optional feedback or modifications"
+                                }
+                            }
+                        }
+                    },
+                    {
+                        id: "human-approve-plan-status",
+                        type: "tool",
+                        name: "Update status after human approval",
+                        config: {
+                            toolId: "update-pipeline-status"
+                        },
+                        inputMapping: {
+                            pipelineRunId: "{{ input.pipelineRunId }}",
+                            status: "coding"
+                        }
+                    }
+                ]
             }
         },
         {
@@ -199,10 +254,122 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
             }
         },
         {
-            id: "verify-build",
+            id: "provision-build-env",
             type: "tool",
-            name: "Verify branch builds successfully",
-            description: "Run type-check, lint, and build against the generated branch",
+            name: "Provision build environment",
+            description:
+                "Spin up an ephemeral droplet in the customer's DO account for build verification",
+            config: {
+                toolId: "provision-compute"
+            },
+            inputMapping: {
+                region: "nyc3",
+                size: "medium",
+                ttlMinutes: 60,
+                pipelineRunId: "{{ input.pipelineRunId }}",
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "remote-clone",
+            type: "tool",
+            name: "Clone repository on build server",
+            description: "Git clone the branch on the remote droplet",
+            config: {
+                toolId: "remote-execute"
+            },
+            inputMapping: {
+                resourceId: "{{ steps.provision-build-env.resourceId }}",
+                command:
+                    "git clone --branch {{ steps.poll-cursor.branchName }} --single-branch {{ input.repository }} /workspace/repo",
+                workingDir: "/workspace",
+                timeout: 120,
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "remote-install",
+            type: "tool",
+            name: "Install dependencies on build server",
+            config: {
+                toolId: "remote-execute"
+            },
+            inputMapping: {
+                resourceId: "{{ steps.provision-build-env.resourceId }}",
+                command:
+                    "source /root/.bashrc && {{ steps.lookup-pipeline-config.repoConfig.installCommand }}",
+                workingDir: "/workspace/repo",
+                timeout: 300,
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "remote-build",
+            type: "tool",
+            name: "Run build verification on build server",
+            description: "Verify the code compiles and passes checks on isolated compute",
+            config: {
+                toolId: "remote-execute"
+            },
+            inputMapping: {
+                resourceId: "{{ steps.provision-build-env.resourceId }}",
+                command:
+                    "source /root/.bashrc && {{ steps.lookup-pipeline-config.repoConfig.buildCommand }}",
+                workingDir: "/workspace/repo",
+                timeout: 600,
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "run-scenarios",
+            type: "tool",
+            name: "Run behavioral scenarios",
+            description: "Execute non-holdout scenarios against the built codebase",
+            config: {
+                toolId: "run-scenarios"
+            },
+            inputMapping: {
+                repositoryUrl: "{{ input.repository }}",
+                organizationId: "{{ input.organizationId }}",
+                pipelineRunId: "{{ input.pipelineRunId }}",
+                includeHoldout: false,
+                resourceId: "{{ steps.provision-build-env.resourceId }}"
+            }
+        },
+        {
+            id: "run-holdout-scenarios",
+            type: "tool",
+            name: "Run holdout scenarios",
+            description: "Execute hidden holdout scenarios to prevent AI overfitting",
+            config: {
+                toolId: "run-scenarios"
+            },
+            inputMapping: {
+                repositoryUrl: "{{ input.repository }}",
+                organizationId: "{{ input.organizationId }}",
+                pipelineRunId: "{{ input.pipelineRunId }}",
+                includeHoldout: true,
+                resourceId: "{{ steps.provision-build-env.resourceId }}"
+            }
+        },
+        {
+            id: "teardown-build-env",
+            type: "tool",
+            name: "Tear down build environment",
+            description: "Destroy the ephemeral droplet after verification completes",
+            config: {
+                toolId: "teardown-compute"
+            },
+            inputMapping: {
+                resourceId: "{{ steps.provision-build-env.resourceId }}",
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "verify-checks",
+            type: "tool",
+            name: "Wait for GitHub CI checks",
+            description: "Also wait for any GitHub Actions checks on the branch",
             config: {
                 toolId: "wait-for-checks"
             },
@@ -211,6 +378,23 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
                 ref: "{{ steps.poll-cursor.branchName }}",
                 maxWaitMinutes: 15,
                 organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "calculate-trust",
+            type: "tool",
+            name: "Calculate trust score",
+            description:
+                "Combine scenario, holdout, CI, and build results into a single trust score",
+            config: {
+                toolId: "calculate-trust-score"
+            },
+            inputMapping: {
+                pipelineRunId: "{{ input.pipelineRunId }}",
+                scenarioPassRate: "{{ steps.run-scenarios.passRate }}",
+                holdoutPassRate: "{{ steps.run-holdout-scenarios.passRate }}",
+                ciPassed: true,
+                buildPassed: true
             }
         },
         {
@@ -226,19 +410,68 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
             }
         },
         {
-            id: "review-pr",
-            type: "human",
-            name: "Review pull request",
-            description: "Human reviews the generated code changes",
+            id: "pr-review-gate",
+            type: "branch",
+            name: "Risk-gated PR review",
+            description:
+                "Auto-approve PR if Dark Factory is enabled and risk is below threshold, otherwise require human review",
             config: {
-                prompt: "Review the generated code changes and approve or request modifications.",
-                formSchema: {
-                    approved: { type: "boolean", description: "Approve this PR?" },
-                    feedback: {
-                        type: "string",
-                        description: "Optional feedback"
+                branches: [
+                    {
+                        id: "auto-approve-pr",
+                        condition:
+                            "steps['lookup-pipeline-config'].policy.enabled && helpers.riskBelow(steps['classify-risk'].riskLevel, steps['lookup-pipeline-config'].policy.autoApprovePrBelow)",
+                        steps: [
+                            {
+                                id: "auto-approve-pr-status",
+                                type: "tool",
+                                name: "Log auto-approval of PR",
+                                config: {
+                                    toolId: "update-pipeline-status"
+                                },
+                                inputMapping: {
+                                    pipelineRunId: "{{ input.pipelineRunId }}",
+                                    status: "merged"
+                                }
+                            }
+                        ]
                     }
-                }
+                ],
+                defaultBranch: [
+                    {
+                        id: "human-review-pr",
+                        type: "human",
+                        name: "Review pull request",
+                        config: {
+                            prompt: "Review the generated code changes and approve or request modifications. Risk level: {{ steps.classify-risk.riskLevel }}",
+                            formSchema: {
+                                approved: {
+                                    type: "boolean",
+                                    description: "Approve this PR?"
+                                },
+                                feedback: {
+                                    type: "string",
+                                    description: "Optional feedback"
+                                }
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        {
+            id: "merge-pr",
+            type: "tool",
+            name: "Merge pull request",
+            description: "Merge the PR via GitHub API using squash merge",
+            config: {
+                toolId: "merge-pull-request"
+            },
+            inputMapping: {
+                repository: "{{ input.repository }}",
+                prNumber: "{{ steps.poll-cursor.prNumber }}",
+                mergeMethod: "squash",
+                organizationId: "{{ input.organizationId }}"
             }
         },
         {
@@ -252,13 +485,42 @@ Respond with ONLY a JSON object: { "riskLevel": "trivial|low|medium|high|critica
                 pipelineRunId: "{{ input.pipelineRunId }}",
                 status: "merged"
             }
+        },
+        {
+            id: "await-deployment",
+            type: "tool",
+            name: "Wait for deployment to complete",
+            description: "Poll the deployment workflow on main branch after merge",
+            config: {
+                toolId: "await-deploy"
+            },
+            inputMapping: {
+                repository: "{{ input.repository }}",
+                branch: "main",
+                maxWaitMinutes: 30,
+                organizationId: "{{ input.organizationId }}"
+            }
+        },
+        {
+            id: "update-status-deployed",
+            type: "tool",
+            name: "Update pipeline status to deployed",
+            config: {
+                toolId: "update-pipeline-status"
+            },
+            inputMapping: {
+                pipelineRunId: "{{ input.pipelineRunId }}",
+                status: "deployed"
+            }
         }
     ]
 };
 
+// Internal variant: uses agentc2-developer for planning with CLAUDE.md standards
 export const CODING_PIPELINE_INTERNAL_DEFINITION: WorkflowDefinition = {
     steps: [
-        ...CODING_PIPELINE_DEFINITION.steps.slice(0, 3),
+        // First 4 steps identical (ingest, config lookup, status, analyze)
+        ...CODING_PIPELINE_DEFINITION.steps.slice(0, 4),
         {
             id: "plan-implementation",
             type: "agent",
@@ -286,28 +548,32 @@ Create a step-by-step implementation plan. Be extremely specific about file path
                 outputFormat: "json"
             }
         },
-        ...CODING_PIPELINE_DEFINITION.steps.slice(4)
+        // Remaining steps identical (risk classify through PR review gate)
+        ...CODING_PIPELINE_DEFINITION.steps.slice(5)
     ]
 };
 
 export const CODING_PIPELINE_WORKFLOW_SEED = {
     slug: "coding-pipeline",
-    name: "Autonomous Coding Pipeline",
+    name: "Autonomous Coding Pipeline (Dark Factory)",
     description:
         "Orchestrates the full coding lifecycle: ticket analysis → planning → " +
-        "Cursor Cloud Agent coding → verification → QA → human review → deployment. " +
-        "Supports SupportTicket, BacklogTask, and GitHub Issue triggers.",
-    maxSteps: 20,
+        "risk classification → risk-gated approval → Cursor Cloud Agent coding → " +
+        "build verification → CI checks → risk-gated PR review. " +
+        "Supports per-org PipelinePolicy for auto-approval thresholds and " +
+        "per-repo RepositoryConfig for custom build commands. " +
+        "Triggers: SupportTicket, BacklogTask, GitHub Issue.",
+    maxSteps: 25,
     definitionJson: CODING_PIPELINE_DEFINITION
 };
 
 export const CODING_PIPELINE_INTERNAL_WORKFLOW_SEED = {
     slug: "coding-pipeline-internal",
-    name: "Internal Coding Pipeline (Self-Development)",
+    name: "Internal Coding Pipeline (Self-Development, Dark Factory)",
     description:
         "Stricter variant of the coding pipeline for AgentC2 self-development. " +
-        "Uses deep codebase knowledge, enforces CLAUDE.md standards, and " +
-        "includes deployment verification to Digital Ocean.",
+        "Uses agentc2-developer agent with deep codebase knowledge, " +
+        "enforces CLAUDE.md standards, and supports Dark Factory auto-approval.",
     maxSteps: 25,
     definitionJson: CODING_PIPELINE_INTERNAL_DEFINITION
 };

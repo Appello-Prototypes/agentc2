@@ -702,6 +702,17 @@ export class AgentResolver {
             // Non-critical: continue without recommendations
         }
 
+        // Bind org context to workspace/sandbox tools so they use org-scoped paths
+        if (organizationId) {
+            const { bindWorkspaceContext } = await import("../tools/sandbox-tools");
+            for (const toolKey of Object.keys(tools)) {
+                tools[toolKey] = bindWorkspaceContext(tools[toolKey], {
+                    organizationId,
+                    agentId: record.slug
+                });
+            }
+        }
+
         // Get scorers from registry (synchronous)
         const scorers = getScorersByNames(record.scorers);
 
@@ -1258,9 +1269,10 @@ export class AgentResolver {
      * - All SYSTEM agents (core platform agents)
      * - All DEMO agents (examples & templates)
      * - User's own agents
+     * - Organization-shared agents (same org via workspace)
      * - Public agents from other users
      */
-    async listForUser(userId?: string): Promise<AgentRecordWithTools[]> {
+    async listForUser(userId?: string, organizationId?: string): Promise<AgentRecordWithTools[]> {
         if (userId) {
             return prisma.agent.findMany({
                 where: {
@@ -1269,7 +1281,15 @@ export class AgentResolver {
                         { type: "SYSTEM" },
                         { type: "DEMO" },
                         { ownerId: userId },
-                        { isPublic: true }
+                        { visibility: "PUBLIC" },
+                        ...(organizationId
+                            ? [
+                                  {
+                                      visibility: "ORGANIZATION" as const,
+                                      workspace: { organizationId }
+                                  }
+                              ]
+                            : [])
                     ]
                 },
                 include: { tools: true, workspace: { select: { organizationId: true } } },
@@ -1281,7 +1301,7 @@ export class AgentResolver {
         return prisma.agent.findMany({
             where: {
                 isActive: true,
-                OR: [{ type: "SYSTEM" }, { type: "DEMO" }, { isPublic: true }]
+                OR: [{ type: "SYSTEM" }, { type: "DEMO" }, { visibility: "PUBLIC" }]
             },
             include: { tools: true, workspace: { select: { organizationId: true } } },
             orderBy: [{ type: "asc" }, { name: "asc" }]

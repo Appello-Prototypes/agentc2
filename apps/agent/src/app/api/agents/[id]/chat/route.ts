@@ -27,6 +27,10 @@ import {
 import { calculateCost } from "@/lib/cost-calculator";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
+import { requireAgentAccess, requireAuth } from "@/lib/authz";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+import { enforceCsrf } from "@/lib/security/http-security";
 
 function formatToolResultPreview(result: unknown, maxLength = 500): string {
     if (typeof result === "string") {
@@ -175,7 +179,37 @@ async function runEvaluationsAsync(
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     const { id } = await params;
     try {
+        const csrf = enforceCsrf(request);
+        if (csrf.response) {
+            return csrf.response;
+        }
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
+
+        const rate = await checkRateLimit(
+            `chat:${authResult.context.organizationId}:${authResult.context.userId}:${id}`,
+            RATE_LIMIT_POLICIES.chat
+        );
+        if (!rate.allowed) {
+            return NextResponse.json(
+                { success: false, error: "Rate limit exceeded" },
+                { status: 429 }
+            );
+        }
+
         const body = await request.json();
+        if (!body || typeof body !== "object" || !Array.isArray(body.messages)) {
+            return NextResponse.json(
+                { success: false, error: "Invalid payload: messages[] is required" },
+                { status: 400 }
+            );
+        }
         const {
             threadId,
             requestContext,
@@ -509,6 +543,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // Use maxSteps from database record or default to 5 (matches production)
         const maxSteps = record?.maxSteps ?? 5;
+
+        // Enforce input guardrails before starting the stream
+        if (agentId && lastUserMessage) {
+            const { enforceInputGuardrails } = await import("@repo/mastra/guardrails");
+            const inputCheck = await enforceInputGuardrails(agentId, lastUserMessage, {
+                tenantId: record?.tenantId || undefined
+            });
+            if (inputCheck.blocked) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: "Input blocked by guardrail policy",
+                        violations: inputCheck.violations
+                    },
+                    { status: 403 }
+                );
+            }
+        }
 
         // Collect output and tool calls for recording
         let fullOutput = "";
@@ -852,6 +904,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 promptTokens,
                                 completionTokens
                             );
+
+                            // Post-stream output guardrail check (flag only -- tokens already sent)
+                            if (agentId && capturedFullOutput) {
+                                try {
+                                    const { enforceOutputGuardrails } =
+                                        await import("@repo/mastra/guardrails");
+                                    await enforceOutputGuardrails(agentId, capturedFullOutput, {
+                                        runId: capturedRun?.runId,
+                                        tenantId: record?.tenantId || undefined
+                                    });
+                                } catch (e) {
+                                    console.warn("[Agent Chat] Output guardrail check failed:", e);
+                                }
+                            }
 
                             // Add final response step for time travel
                             capturedExecutionSteps.push({

@@ -72,7 +72,7 @@ interface StoredAgent {
     scorers?: string[];
     type?: "SYSTEM" | "USER" | "DEMO";
     ownerId?: string | null;
-    isPublic?: boolean;
+    visibility?: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     metadata: Record<string, unknown> | null;
     isActive: boolean;
     version?: number;
@@ -174,8 +174,7 @@ function AgentManagePageContent() {
         },
         scorers: [] as string[],
         isActive: true,
-        isPublic: false,
-        // Extended thinking configuration
+        visibility: "PRIVATE" as "PRIVATE" | "ORGANIZATION" | "PUBLIC",
         extendedThinking: false,
         thinkingBudget: 10000
     });
@@ -361,7 +360,7 @@ function AgentManagePageContent() {
             },
             scorers: [],
             isActive: true,
-            isPublic: false,
+            visibility: "PRIVATE" as "PRIVATE" | "ORGANIZATION" | "PUBLIC",
             extendedThinking: false,
             thinkingBudget: 10000
         });
@@ -410,7 +409,10 @@ function AgentManagePageContent() {
                 },
                 scorers: fullAgent.scorers || [],
                 isActive: fullAgent.isActive,
-                isPublic: fullAgent.isPublic ?? false,
+                visibility: (fullAgent.visibility ?? "PRIVATE") as
+                    | "PRIVATE"
+                    | "ORGANIZATION"
+                    | "PUBLIC",
                 extendedThinking,
                 thinkingBudget
             });
@@ -972,11 +974,25 @@ function AgentManagePageContent() {
                     <Label>Active</Label>
                 </div>
                 <div className="flex items-center gap-2">
-                    <Switch
-                        checked={formData.isPublic}
-                        onCheckedChange={(c) => setFormData((p) => ({ ...p, isPublic: c }))}
-                    />
-                    <Label>Public</Label>
+                    <Label>Visibility</Label>
+                    <Select
+                        value={formData.visibility}
+                        onValueChange={(v) =>
+                            setFormData((p) => ({
+                                ...p,
+                                visibility: v as "PRIVATE" | "ORGANIZATION" | "PUBLIC"
+                            }))
+                        }
+                    >
+                        <SelectTrigger className="w-[160px]">
+                            <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="PRIVATE">Private</SelectItem>
+                            <SelectItem value="ORGANIZATION">Organization</SelectItem>
+                            <SelectItem value="PUBLIC">Public</SelectItem>
+                        </SelectContent>
+                    </Select>
                 </div>
             </div>
 
@@ -1340,9 +1356,16 @@ function AgentManagePageContent() {
                                                                 ? "Active"
                                                                 : "Inactive"}
                                                         </Badge>
-                                                        {selectedAgent.isPublic && (
-                                                            <Badge variant="outline">Public</Badge>
-                                                        )}
+                                                        {selectedAgent.visibility &&
+                                                            selectedAgent.visibility !==
+                                                                "PRIVATE" && (
+                                                                <Badge variant="outline">
+                                                                    {selectedAgent.visibility ===
+                                                                    "ORGANIZATION"
+                                                                        ? "Org"
+                                                                        : "Public"}
+                                                                </Badge>
+                                                            )}
                                                     </div>
                                                 </div>
                                             </div>

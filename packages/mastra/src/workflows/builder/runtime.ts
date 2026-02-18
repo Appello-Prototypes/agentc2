@@ -77,6 +77,9 @@ function getEnvContext(): Record<string, string> {
     return curated;
 }
 
+/** Risk level ordering for Dark Factory pipeline decisions. */
+const RISK_LEVELS = ["trivial", "low", "medium", "high", "critical"] as const;
+
 /** Returns date/time helper functions available inside templates. */
 function getHelpers() {
     const now = new Date();
@@ -91,7 +94,15 @@ function getHelpers() {
         },
         todayStart: () => `${todayStr}T00:00:00.000Z`,
         todayEnd: () => `${todayStr}T23:59:59.999Z`,
-        json: (val: unknown) => JSON.stringify(val)
+        json: (val: unknown) => JSON.stringify(val),
+        riskBelow: (...args: unknown[]): unknown => {
+            const actual = String(args[0] ?? "");
+            const threshold = String(args[1] ?? "");
+            const actualIdx = RISK_LEVELS.indexOf(actual as (typeof RISK_LEVELS)[number]);
+            const thresholdIdx = RISK_LEVELS.indexOf(threshold as (typeof RISK_LEVELS)[number]);
+            if (actualIdx === -1 || thresholdIdx === -1) return false;
+            return actualIdx < thresholdIdx;
+        }
     };
 }
 

@@ -11,7 +11,7 @@ import { getUserMembership } from "@/lib/organization";
  * 1. STANDALONE_DEMO=true (explicit override)
  */
 function isStandaloneDeployment(): boolean {
-    return process.env.STANDALONE_DEMO === "true";
+    return process.env.STANDALONE_DEMO === "true" && process.env.NODE_ENV !== "production";
 }
 
 /**
@@ -37,9 +37,15 @@ async function proxy(request: NextRequest) {
         return NextResponse.next();
     }
 
-    // In standalone mode, allow public access to demos
+    // In standalone mode, allow public access only to demo and auth pages.
     if (isStandaloneDeployment()) {
-        return NextResponse.next();
+        const publicStandalonePrefixes = ["/demos", "/embed", "/embed-v2", "/login", "/signup"];
+        const isPublicStandalone = publicStandalonePrefixes.some((prefix) =>
+            request.nextUrl.pathname.startsWith(prefix)
+        );
+        if (isPublicStandalone) {
+            return NextResponse.next();
+        }
     }
 
     try {

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getUserOrganizationId } from "@/lib/organization";
+import { validateAccessToken } from "@/lib/mcp-oauth";
 
 /**
  * Authenticate an API request via API key or session cookie.
@@ -27,6 +28,17 @@ export async function authenticateRequest(
         : null;
 
     if (apiKey) {
+        const oauthToken = validateAccessToken(apiKey);
+        if (oauthToken) {
+            const membership = await prisma.membership.findFirst({
+                where: { organizationId: oauthToken.organizationId },
+                select: { userId: true }
+            });
+            if (membership) {
+                return { userId: membership.userId, organizationId: oauthToken.organizationId };
+            }
+        }
+
         const orgSlugHeader = request!.headers.get("x-organization-slug")?.trim();
 
         const resolveOrgContext = async (orgSlug: string) => {

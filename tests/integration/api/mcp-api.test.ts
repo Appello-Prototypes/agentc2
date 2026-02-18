@@ -49,7 +49,7 @@ describe("MCP Gateway API", () => {
                 modelProvider: "anthropic",
                 modelName: "claude-sonnet-4-20250514",
                 isActive: true,
-                isPublic: true,
+                visibility: "PUBLIC",
                 maxSteps: 5,
                 requiresApproval: false,
                 version: 1,

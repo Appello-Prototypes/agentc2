@@ -5276,12 +5276,43 @@ export const asyncInvokeFunction = inngest.createFunction(
 
                 const startTime = Date.now();
 
+                // Enforce input guardrails
+                const { enforceInputGuardrails, enforceOutputGuardrails } =
+                    await import("@repo/mastra/guardrails");
+                const inputCheck = await enforceInputGuardrails(record.id, input, {
+                    runId,
+                    tenantId: record.tenantId || undefined
+                });
+                if (inputCheck.blocked) {
+                    return {
+                        success: false,
+                        error: `Guardrail blocked: ${inputCheck.violations.map((v) => v.message).join("; ")}`,
+                        durationMs: Date.now() - startTime
+                    };
+                }
+
                 try {
                     const response = await agent.generate(input, {
                         maxSteps: maxSteps ?? record.maxSteps ?? 5
                     });
 
                     const durationMs = Date.now() - startTime;
+
+                    // Enforce output guardrails
+                    if (response.text) {
+                        const outputCheck = await enforceOutputGuardrails(
+                            record.id,
+                            response.text,
+                            { runId, tenantId: record.tenantId || undefined }
+                        );
+                        if (outputCheck.blocked) {
+                            return {
+                                success: false,
+                                error: `Output guardrail blocked: ${outputCheck.violations.map((v) => v.message).join("; ")}`,
+                                durationMs
+                            };
+                        }
+                    }
 
                     // Extract usage
                     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -7563,6 +7594,374 @@ const integrationTokenRefreshFunction = inngest.createFunction(
     }
 );
 
+/**
+ * Async Workflow Execution
+ *
+ * Executes workflow runs that were queued for background processing.
+ * Mirrors the logic in /api/workflows/[slug]/execute/route.ts but runs
+ * asynchronously via Inngest for non-blocking, retryable execution.
+ *
+ * Used by the coding pipeline dispatch route to fire-and-forget workflow runs.
+ */
+export const asyncWorkflowExecuteFunction = inngest.createFunction(
+    {
+        id: "workflow-execute-async",
+        retries: 2,
+        concurrency: { limit: 3 }
+    },
+    { event: "workflow/execute.async" },
+    async ({ event, step }) => {
+        const { workflowRunId, workflowId, input, pipelineRunId } = event.data;
+
+        console.log(`[Inngest] Executing async workflow run: ${workflowRunId}`);
+
+        // Step 1: Update run status to RUNNING
+        await step.run("update-status-running", async () => {
+            await prisma.workflowRun.update({
+                where: { id: workflowRunId },
+                data: { status: "RUNNING" }
+            });
+        });
+
+        // Step 2: Load workflow and execute
+        const result = await step.run("execute-workflow", async () => {
+            const workflow = await prisma.workflow.findUnique({
+                where: { id: workflowId }
+            });
+
+            if (!workflow) {
+                throw new Error(`Workflow not found: ${workflowId}`);
+            }
+
+            const { executeWorkflowDefinition } = await import("@repo/mastra/workflows");
+            type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
+
+            return await executeWorkflowDefinition({
+                definition: workflow.definitionJson as unknown as WorkflowDefinition,
+                input,
+                requestContext: {}
+            });
+        });
+
+        // Step 3: Save step results
+        await step.run("save-steps", async () => {
+            if (!result.steps || result.steps.length === 0) return;
+
+            function mapStepStatus(status: "completed" | "failed" | "suspended") {
+                if (status === "failed") return "FAILED";
+                if (status === "suspended") return "RUNNING";
+                return "COMPLETED";
+            }
+
+            await prisma.workflowRunStep.createMany({
+                data: result.steps.map(
+                    (s: {
+                        stepId: string;
+                        stepType: string;
+                        stepName?: string;
+                        status: "completed" | "failed" | "suspended";
+                        input?: unknown;
+                        output?: unknown;
+                        error?: unknown;
+                        iterationIndex?: number;
+                        startedAt?: string | Date;
+                        completedAt?: string | Date;
+                        durationMs?: number;
+                    }) => ({
+                        runId: workflowRunId,
+                        stepId: s.stepId,
+                        stepType: s.stepType,
+                        stepName: s.stepName ?? s.stepId,
+                        status: mapStepStatus(s.status),
+                        inputJson: s.input as Prisma.InputJsonValue,
+                        outputJson: s.output as Prisma.InputJsonValue,
+                        errorJson: s.error as Prisma.InputJsonValue,
+                        iterationIndex: s.iterationIndex,
+                        startedAt: s.startedAt,
+                        completedAt: s.completedAt,
+                        durationMs: s.durationMs
+                    })
+                )
+            });
+        });
+
+        // Step 4: Update final status
+        await step.run("update-final-status", async () => {
+            const durationMs = result.steps
+                ? result.steps.reduce(
+                      (sum: number, s: { durationMs?: number }) => sum + (s.durationMs || 0),
+                      0
+                  )
+                : 0;
+
+            if (result.status === "suspended") {
+                await prisma.workflowRun.update({
+                    where: { id: workflowRunId },
+                    data: {
+                        suspendedAt: new Date(),
+                        suspendedStep: result.suspended?.stepId,
+                        suspendDataJson: result.suspended?.data
+                            ? (result.suspended.data as Prisma.InputJsonValue)
+                            : Prisma.DbNull,
+                        durationMs
+                    }
+                });
+
+                if (pipelineRunId) {
+                    await prisma.codingPipelineRun
+                        .update({
+                            where: { id: pipelineRunId },
+                            data: { status: "awaiting_plan_approval" }
+                        })
+                        .catch(() => {});
+                }
+
+                console.log(
+                    `[Inngest] Workflow ${workflowRunId} suspended at step: ${result.suspended?.stepId}`
+                );
+                return { status: "suspended", suspendedStep: result.suspended?.stepId };
+            }
+
+            const finalStatus = result.status === "failed" ? "FAILED" : "COMPLETED";
+            await prisma.workflowRun.update({
+                where: { id: workflowRunId },
+                data: {
+                    status: finalStatus,
+                    outputJson: result.output as Prisma.InputJsonValue,
+                    completedAt: new Date(),
+                    durationMs
+                }
+            });
+
+            if (pipelineRunId) {
+                await prisma.codingPipelineRun
+                    .update({
+                        where: { id: pipelineRunId },
+                        data: {
+                            status: finalStatus === "COMPLETED" ? "merged" : "failed"
+                        }
+                    })
+                    .catch(() => {});
+            }
+
+            console.log(
+                `[Inngest] Workflow ${workflowRunId} completed with status: ${finalStatus}`
+            );
+            return { status: finalStatus };
+        });
+    }
+);
+
+/**
+ * Remote Compute TTL Cleanup
+ *
+ * Runs every 5 minutes. Destroys droplets and SSH keys for ProvisionedResources
+ * whose TTL has expired. Prevents orphaned infrastructure in customer DO accounts.
+ */
+export const remoteComputeCleanupFunction = inngest.createFunction(
+    {
+        id: "remote-compute-cleanup",
+        retries: 2
+    },
+    { cron: "*/5 * * * *" },
+    async ({ step }) => {
+        const expiredResources = await step.run("find-expired-resources", async () => {
+            const active = await prisma.provisionedResource.findMany({
+                where: {
+                    status: "active",
+                    provider: "digitalocean",
+                    resourceType: "droplet"
+                }
+            });
+
+            return active.filter((r) => {
+                const meta = r.metadata as Record<string, unknown> | null;
+                if (!meta?.expiresAt) return false;
+                return new Date(meta.expiresAt as string) < new Date();
+            });
+        });
+
+        if (expiredResources.length === 0) {
+            return { cleaned: 0 };
+        }
+
+        console.log(
+            `[RemoteCompute] Found ${expiredResources.length} expired droplet(s) to clean up`
+        );
+
+        let cleaned = 0;
+        let errors = 0;
+
+        for (const resource of expiredResources) {
+            await step.run(`cleanup-${resource.id}`, async () => {
+                try {
+                    const { resolveDoToken, doFetch } =
+                        await import("@repo/mastra/tools/remote-compute-helpers");
+
+                    const token = await resolveDoToken(resource.organizationId);
+                    const metadata = resource.metadata as Record<string, unknown>;
+
+                    // Destroy droplet
+                    try {
+                        await doFetch(token, "DELETE", `/droplets/${resource.externalId}`);
+                    } catch (err) {
+                        console.warn(
+                            `[RemoteCompute] Failed to delete droplet ${resource.externalId}:`,
+                            err
+                        );
+                    }
+
+                    // Destroy SSH key
+                    const sshKeyId = metadata?.sshKeyId as number | undefined;
+                    if (sshKeyId) {
+                        try {
+                            await doFetch(token, "DELETE", `/account/keys/${sshKeyId}`);
+                        } catch (err) {
+                            console.warn(
+                                `[RemoteCompute] Failed to delete SSH key ${sshKeyId}:`,
+                                err
+                            );
+                        }
+                    }
+
+                    // Update record
+                    const cleanedMeta = { ...metadata };
+                    delete cleanedMeta.privateKey;
+                    cleanedMeta.destroyedBy = "ttl-cleanup";
+
+                    await prisma.provisionedResource.update({
+                        where: { id: resource.id },
+                        data: {
+                            status: "destroyed",
+                            destroyedAt: new Date(),
+                            metadata: cleanedMeta as Prisma.InputJsonValue
+                        }
+                    });
+
+                    cleaned++;
+                    console.log(
+                        `[RemoteCompute] Cleaned up expired droplet ${resource.name} ` +
+                            `(org: ${resource.organizationId})`
+                    );
+                } catch (err) {
+                    errors++;
+                    console.error(
+                        `[RemoteCompute] Failed to clean up ${resource.id}:`,
+                        err instanceof Error ? err.message : err
+                    );
+                }
+            });
+        }
+
+        return { cleaned, errors, total: expiredResources.length };
+    }
+);
+
+/**
+ * Pipeline Stats Rollup (Dark Factory)
+ *
+ * Daily cron that aggregates coding pipeline run metrics per organization
+ * into PipelineDailyStats for the Dark Factory dashboard.
+ */
+export const pipelineStatsRollupFunction = inngest.createFunction(
+    {
+        id: "pipeline-stats-rollup",
+        retries: 2
+    },
+    { cron: "0 1 * * *" },
+    async ({ step }) => {
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const dateStr = yesterday.toISOString().split("T")[0];
+        const dayStart = new Date(`${dateStr}T00:00:00.000Z`);
+        const dayEnd = new Date(`${dateStr}T23:59:59.999Z`);
+
+        const runs = await step.run("fetch-daily-runs", async () => {
+            return prisma.codingPipelineRun.findMany({
+                where: {
+                    createdAt: { gte: dayStart, lte: dayEnd }
+                },
+                select: {
+                    organizationId: true,
+                    status: true,
+                    trustScore: true,
+                    createdAt: true,
+                    updatedAt: true
+                }
+            });
+        });
+
+        const byOrg = new Map<string, Array<(typeof runs)[number]>>();
+        for (const run of runs) {
+            const orgId = run.organizationId || "__platform__";
+            if (!byOrg.has(orgId)) byOrg.set(orgId, []);
+            byOrg.get(orgId)!.push(run);
+        }
+
+        let upserted = 0;
+
+        for (const [orgId, orgRuns] of byOrg.entries()) {
+            await step.run(`upsert-stats-${orgId}`, async () => {
+                const total = orgRuns.length;
+                const deployed = orgRuns.filter((r) => r.status === "deployed").length;
+                const failed = orgRuns.filter((r) => r.status === "failed").length;
+                const merged = orgRuns.filter((r) => r.status === "merged").length;
+                const autoApproved = deployed + merged;
+                const humanApproved = total - autoApproved - failed;
+
+                const trustScores = orgRuns
+                    .filter((r) => r.trustScore !== null)
+                    .map((r) => r.trustScore!);
+                const avgTrust =
+                    trustScores.length > 0
+                        ? trustScores.reduce((a, b) => a + b, 0) / trustScores.length
+                        : null;
+
+                const durations = orgRuns
+                    .filter((r) => r.updatedAt && r.createdAt)
+                    .map((r) => new Date(r.updatedAt).getTime() - new Date(r.createdAt).getTime());
+                const avgDuration =
+                    durations.length > 0
+                        ? Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+                        : null;
+
+                await prisma.pipelineDailyStats.upsert({
+                    where: {
+                        organizationId_date: {
+                            organizationId: orgId,
+                            date: dayStart
+                        }
+                    },
+                    update: {
+                        totalRuns: total,
+                        autoApproved,
+                        humanApproved,
+                        failed,
+                        deployed,
+                        avgTrustScore: avgTrust,
+                        avgDurationMs: avgDuration
+                    },
+                    create: {
+                        organizationId: orgId,
+                        date: dayStart,
+                        totalRuns: total,
+                        autoApproved,
+                        humanApproved,
+                        failed,
+                        deployed,
+                        avgTrustScore: avgTrust,
+                        avgDurationMs: avgDuration
+                    }
+                });
+
+                upserted++;
+            });
+        }
+
+        return { date: dateStr, organizations: byOrg.size, upserted };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -7620,5 +8019,11 @@ export const inngestFunctions = [
     // Integration lifecycle
     integrationHealthCheckFunction,
     integrationToolRediscoveryFunction,
-    integrationTokenRefreshFunction
+    integrationTokenRefreshFunction,
+    // Remote Compute cleanup
+    remoteComputeCleanupFunction,
+    // Async workflow execution (coding pipeline)
+    asyncWorkflowExecuteFunction,
+    // Dark Factory pipeline stats
+    pipelineStatsRollupFunction
 ];

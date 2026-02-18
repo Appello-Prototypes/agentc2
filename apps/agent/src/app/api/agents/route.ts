@@ -54,18 +54,22 @@ export async function GET(request: NextRequest) {
             // Support both API key and session cookie authentication
             const apiAuth = await authenticateRequest(request);
             let userId = apiAuth?.userId;
+            let organizationId = apiAuth?.organizationId;
 
             if (!userId) {
                 const session = await auth.api.getSession({
                     headers: await headers()
                 });
                 userId = session?.user?.id;
+                if (userId && !organizationId) {
+                    organizationId = (await getUserOrganizationId(userId)) ?? undefined;
+                }
             }
 
             // Use new Agent model via AgentResolver
             const agents = systemOnly
                 ? await agentResolver.listSystem()
-                : await agentResolver.listForUser(userId);
+                : await agentResolver.listForUser(userId, organizationId);
 
             // When ?detail=capabilities, include pinned/discoverable skill breakdown
             const detailMode = searchParams.get("detail");
@@ -313,7 +317,7 @@ export async function POST(request: NextRequest) {
                     type: "USER",
                     tenantId: organizationId,
                     workspaceId,
-                    isPublic: body.isPublic ?? false,
+                    visibility: body.visibility ?? "PRIVATE",
                     metadata: body.metadata ?? Prisma.DbNull,
                     isActive: body.isActive ?? true
                 },

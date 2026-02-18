@@ -351,8 +351,7 @@ export async function updateChannelBinding(
         ...(data.channelName !== undefined ? { channelName: data.channelName } : {}),
         ...(data.channelMetadata !== undefined
             ? {
-                  channelMetadata:
-                      (data.channelMetadata as Prisma.InputJsonValue) ?? undefined
+                  channelMetadata: (data.channelMetadata as Prisma.InputJsonValue) ?? undefined
               }
             : {}),
         ...(data.replyMode !== undefined ? { replyMode: data.replyMode } : {}),

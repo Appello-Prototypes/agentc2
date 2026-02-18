@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
+import { inngest } from "@/lib/inngest";
 
 export async function POST(request: NextRequest) {
     try {
@@ -87,6 +88,24 @@ export async function POST(request: NextRequest) {
         await prisma.codingPipelineRun.update({
             where: { id: pipelineRun.id },
             data: { workflowRunId: workflowRun.id }
+        });
+
+        await inngest.send({
+            name: "workflow/execute.async",
+            data: {
+                workflowRunId: workflowRun.id,
+                workflowId: workflow.id,
+                workflowSlug: workflow.slug,
+                input: {
+                    sourceType,
+                    sourceId,
+                    repository,
+                    branch: branch || "main",
+                    pipelineRunId: pipelineRun.id,
+                    organizationId: authResult.organizationId
+                },
+                pipelineRunId: pipelineRun.id
+            }
         });
 
         if (sourceType === "support_ticket") {

@@ -14,6 +14,7 @@
     "./tools/outlook-mail": "./src/tools/outlook-mail.ts",
     "./tools/outlook-calendar": "./src/tools/outlook-calendar.ts",
     "./tools/dropbox": "./src/tools/dropbox.ts",
+    "./tools/remote-compute-helpers": "./src/tools/remote-compute-helpers.ts",
     "./mcp": "./src/mcp/index.ts",
     "./scorers": "./src/scorers/index.ts",
     "./scorers/registry": "./src/scorers/registry.ts",
@@ -67,6 +68,7 @@
     "pg": "^8.18.0",
     "pino": "^9.6.0",
     "qrcode-terminal": "^0.12.0",
+    "ssh2": "^1.17.0",
     "twilio": "^5.5.1",
     "web-ifc": "^0.0.74",
     "zod": "^3.25.0"
@@ -78,6 +80,7 @@
     "@mastra/core": "^1.2.0",
     "@repo/typescript-config": "workspace:*",
     "@types/qrcode-terminal": "^0.12.2",
+    "@types/ssh2": "^1.15.5",
     "typescript": "^5.0.0"
   }
 }

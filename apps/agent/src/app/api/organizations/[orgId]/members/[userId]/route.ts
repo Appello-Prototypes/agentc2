@@ -83,9 +83,22 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { role } = body;
+        const { role, permissions } = body as {
+            role?: string;
+            permissions?: string[];
+        };
 
-        if (!role || !VALID_ROLES.includes(role)) {
+        const VALID_PERMISSIONS = ["guardrail_override"];
+
+        // At least one field must be provided
+        if (!role && permissions === undefined) {
+            return NextResponse.json(
+                { success: false, error: "Must provide role or permissions" },
+                { status: 400 }
+            );
+        }
+
+        if (role && !VALID_ROLES.includes(role)) {
             return NextResponse.json(
                 {
                     success: false,
@@ -93,6 +106,19 @@ export async function PATCH(
                 },
                 { status: 400 }
             );
+        }
+
+        if (permissions) {
+            const invalid = permissions.filter((p) => !VALID_PERMISSIONS.includes(p));
+            if (invalid.length > 0) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `Invalid permissions: ${invalid.join(", ")}. Valid: ${VALID_PERMISSIONS.join(", ")}`
+                    },
+                    { status: 400 }
+                );
+            }
         }
 
         // Only owner can assign owner role
@@ -103,10 +129,15 @@ export async function PATCH(
             );
         }
 
-        // Update role
+        // Build update data
+        const updateData: { role?: string; permissions?: string[] } = {};
+        if (role) updateData.role = role;
+        if (permissions !== undefined) updateData.permissions = permissions;
+
+        // Update membership
         const updatedMembership = await prisma.membership.update({
             where: { id: targetMembership.id },
-            data: { role }
+            data: updateData
         });
 
         // If transferring ownership, demote current owner to admin
@@ -119,11 +150,17 @@ export async function PATCH(
 
         // Audit log
         await auditLog.create({
-            action: "MEMBER_ROLE_UPDATE",
+            action: permissions !== undefined ? "MEMBER_PERMISSIONS_UPDATE" : "MEMBER_ROLE_UPDATE",
             entityType: "Membership",
             entityId: targetMembership.id,
             userId: session.user.id,
-            metadata: { targetUserId: userId, newRole: role, oldRole: targetMembership.role }
+            metadata: {
+                targetUserId: userId,
+                ...(role ? { newRole: role, oldRole: targetMembership.role } : {}),
+                ...(permissions !== undefined
+                    ? { newPermissions: permissions, oldPermissions: targetMembership.permissions }
+                    : {})
+            }
         });
 
         return NextResponse.json({
@@ -131,7 +168,8 @@ export async function PATCH(
             membership: {
                 id: updatedMembership.id,
                 userId: updatedMembership.userId,
-                role: updatedMembership.role
+                role: updatedMembership.role,
+                permissions: updatedMembership.permissions
             }
         });
     } catch (error) {

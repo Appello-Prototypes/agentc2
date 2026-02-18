@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-const faqs = [
+export const landingFaqs = [
     {
         question: "What is AgentC2?",
         answer: "AgentC2 is an enterprise AI agent platform that lets businesses build, deploy, and orchestrate intelligent agents at scale. Unlike consumer chatbots, AgentC2 agents connect to your business systems (CRM, project management, email, knowledge bases), run autonomously on schedules and triggers, and come with full observability, traceability, and governance controls."
@@ -45,7 +45,7 @@ export function FaqSection() {
                 </h2>
 
                 <div className="divide-border/60 divide-y">
-                    {faqs.map((faq, i) => (
+                    {landingFaqs.map((faq, i) => (
                         <div key={faq.question} className="py-5">
                             <button
                                 onClick={() => setOpenIndex(openIndex === i ? null : i)}

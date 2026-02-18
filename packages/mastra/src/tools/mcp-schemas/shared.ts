@@ -151,7 +151,7 @@ export const agentCreateInputSchema: JsonSchema = {
         tenantId: { type: "string" },
         workspaceId: { type: "string" },
         ownerId: { type: "string" },
-        isPublic: { type: "boolean" },
+        visibility: { type: "string", enum: ["PRIVATE", "ORGANIZATION", "PUBLIC"] },
         requiresApproval: { type: "boolean" },
         maxSpendUsd: { type: "number" },
         metadata: { type: "object", additionalProperties: true },

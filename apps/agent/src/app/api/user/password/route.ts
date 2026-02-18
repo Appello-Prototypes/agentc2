@@ -3,6 +3,8 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { compare, hash } from "bcryptjs";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
 /**
  * POST /api/user/password
@@ -18,6 +20,16 @@ export async function POST(request: NextRequest) {
         if (!session?.user) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
+        const rate = await checkRateLimit(
+            `password-change:${session.user.id}`,
+            RATE_LIMIT_POLICIES.auth
+        );
+        if (!rate.allowed) {
+            return NextResponse.json(
+                { success: false, error: "Rate limit exceeded" },
+                { status: 429 }
+            );
+        }
 
         const body = await request.json();
         const { currentPassword, newPassword } = body;
@@ -29,9 +41,17 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        if (newPassword.length < 8) {
+        const hasLength = newPassword.length >= 12;
+        const hasUpper = /[A-Z]/.test(newPassword);
+        const hasLower = /[a-z]/.test(newPassword);
+        const hasNumber = /\d/.test(newPassword);
+        const hasSymbol = /[^A-Za-z0-9]/.test(newPassword);
+        if (!(hasLength && hasUpper && hasLower && hasNumber && hasSymbol)) {
             return NextResponse.json(
-                { success: false, error: "Password must be at least 8 characters" },
+                {
+                    success: false,
+                    error: "Password must be at least 12 characters and include uppercase, lowercase, number, and symbol"
+                },
                 { status: 400 }
             );
         }

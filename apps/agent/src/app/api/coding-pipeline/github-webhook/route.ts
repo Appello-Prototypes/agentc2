@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { inngest } from "@/lib/inngest";
 import crypto from "crypto";
 
 const PIPELINE_LABEL = "agentc2-autofix";
@@ -110,6 +111,17 @@ export async function POST(request: NextRequest) {
         await prisma.codingPipelineRun.update({
             where: { id: pipelineRun.id },
             data: { workflowRunId: workflowRun.id }
+        });
+
+        await inngest.send({
+            name: "workflow/execute.async",
+            data: {
+                workflowRunId: workflowRun.id,
+                workflowId: workflow.id,
+                workflowSlug: workflow.slug,
+                input: workflowRun.inputJson as Record<string, unknown>,
+                pipelineRunId: pipelineRun.id
+            }
         });
 
         return NextResponse.json({

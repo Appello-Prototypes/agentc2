@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
+import { userHasPermission } from "@/lib/organization";
 
 /**
  * GET /api/agents/[id]/guardrails
@@ -29,8 +31,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             where: { agentId: agent.id }
         });
 
+        // Check if the current user can toggle bypassOrgGuardrails
+        let canOverrideGuardrails = false;
+        const authContext = await authenticateRequest(request);
+        if (authContext) {
+            canOverrideGuardrails = await userHasPermission(
+                authContext.userId,
+                authContext.organizationId,
+                "guardrail_override"
+            );
+        }
+
         return NextResponse.json({
             success: true,
+            canOverrideGuardrails,
             guardrailConfig: guardrailPolicy
                 ? {
                       id: guardrailPolicy.id,
@@ -85,6 +99,31 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 { success: false, error: `Agent '${id}' not found` },
                 { status: 404 }
             );
+        }
+
+        // Guard: bypassOrgGuardrails requires guardrail_override permission
+        if (configJson.bypassOrgGuardrails) {
+            const authContext = await authenticateRequest(request);
+            if (!authContext) {
+                return NextResponse.json(
+                    { success: false, error: "Authentication required to set guardrail override" },
+                    { status: 401 }
+                );
+            }
+            const hasPermission = await userHasPermission(
+                authContext.userId,
+                authContext.organizationId,
+                "guardrail_override"
+            );
+            if (!hasPermission) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: "You do not have permission to bypass org guardrails. Requires guardrail_override permission."
+                    },
+                    { status: 403 }
+                );
+            }
         }
 
         // Get existing policy for version increment

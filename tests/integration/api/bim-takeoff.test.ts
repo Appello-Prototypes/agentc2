@@ -15,7 +15,7 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/mastra/bim", () => ({
     computeTakeoff: computeTakeoffMock
 }));
 

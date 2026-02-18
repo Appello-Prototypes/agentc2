@@ -5,9 +5,20 @@ import { inngest } from "@/lib/inngest";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { getDemoSession } from "@/lib/standalone-auth";
 
+const MAX_BIM_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+
 function getExtension(filename: string) {
     const parts = filename.toLowerCase().split(".");
     return parts.length > 1 ? parts.pop() || "" : "";
+}
+
+function sanitizeFilename(filename: string): string {
+    return (
+        filename
+            .replace(/[^a-zA-Z0-9._-]/g, "_")
+            .replace(/^_+/, "")
+            .slice(0, 120) || "upload"
+    );
 }
 
 function detectSourceFormat(filename: string, explicit?: string | null) {
@@ -59,6 +70,12 @@ export async function POST(request: NextRequest) {
             if (!file) {
                 return NextResponse.json({ error: "File is required" }, { status: 400 });
             }
+            if (file.size > MAX_BIM_UPLOAD_BYTES) {
+                return NextResponse.json(
+                    { error: `File exceeds size limit of ${MAX_BIM_UPLOAD_BYTES} bytes` },
+                    { status: 413 }
+                );
+            }
 
             const modelName = (formData.get("modelName") as string | null) || file.name;
             const sourceFormat = detectSourceFormat(
@@ -78,7 +95,7 @@ export async function POST(request: NextRequest) {
             const buffer = Buffer.from(await file.arrayBuffer());
             const checksum = createHash("sha256").update(buffer).digest("hex");
 
-            const uploadKey = `bim/${Date.now()}_${file.name}`;
+            const uploadKey = `bim/${Date.now()}_${sanitizeFilename(file.name)}`;
             const uploadResult = await uploadBimObject({
                 key: uploadKey,
                 body: buffer,

@@ -73,6 +73,7 @@ export type AuditAction =
     | "MEMBERSHIP_DELETE"
     // Member Management
     | "MEMBER_ROLE_UPDATE"
+    | "MEMBER_PERMISSIONS_UPDATE"
     | "MEMBER_REMOVE"
     // Invites
     | "INVITE_CREATE"

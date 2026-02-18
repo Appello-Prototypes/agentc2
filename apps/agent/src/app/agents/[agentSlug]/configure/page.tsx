@@ -77,7 +77,7 @@ interface Agent {
     routingConfig?: RoutingConfig | null;
     scorers: string[];
     isActive: boolean;
-    isPublic: boolean;
+    visibility: "PRIVATE" | "ORGANIZATION" | "PUBLIC";
     publicToken: string | null;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     metadata: Record<string, any> | null;
@@ -578,7 +578,7 @@ export default function ConfigurePage() {
                 routingConfig: agentData.routingConfig ?? null,
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
-                isPublic: agentData.isPublic ?? false,
+                visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
                 metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
@@ -839,7 +839,7 @@ export default function ConfigurePage() {
                 routingConfig: agentData.routingConfig ?? null,
                 scorers: agentData.scorers || [],
                 isActive: agentData.isActive ?? true,
-                isPublic: agentData.isPublic ?? false,
+                visibility: agentData.visibility ?? "PRIVATE",
                 publicToken: agentData.publicToken ?? null,
                 metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
@@ -1059,18 +1059,29 @@ export default function ConfigurePage() {
                                     <Label>Active</Label>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <Switch
-                                        checked={formData.isPublic}
-                                        onCheckedChange={(checked) =>
-                                            handleChange("isPublic", checked)
+                                    <Label>Visibility</Label>
+                                    <Select
+                                        value={formData.visibility}
+                                        onValueChange={(value) =>
+                                            handleChange("visibility", value as Agent["visibility"])
                                         }
-                                    />
-                                    <Label>Public</Label>
+                                    >
+                                        <SelectTrigger className="w-[160px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="PRIVATE">Private</SelectItem>
+                                            <SelectItem value="ORGANIZATION">
+                                                Organization
+                                            </SelectItem>
+                                            <SelectItem value="PUBLIC">Public</SelectItem>
+                                        </SelectContent>
+                                    </Select>
                                 </div>
                             </div>
 
                             {/* Public Embed Settings Panel */}
-                            {formData.isPublic && (
+                            {formData.visibility === "PUBLIC" && (
                                 <div className="space-y-4 rounded-lg border p-4">
                                     <h4 className="text-sm font-medium">Public Embed Settings</h4>
 

@@ -2,6 +2,14 @@ import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { recordActivity } from "@repo/mastra/activity/service";
+import {
+    createChangeLog,
+    detectScalarChange,
+    detectJsonChange,
+    detectArrayChange,
+    type FieldChange
+} from "@/lib/changelog";
+import { requireAgentAccess, requireAuth, requireOrgRole } from "@/lib/authz";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -15,6 +23,14 @@ const USE_DB_AGENTS = process.env.FEATURE_DB_AGENTS !== "false";
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
 
         if (USE_DB_AGENTS) {
             // Try to find by slug first, then by id
@@ -98,6 +114,21 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const roleResult = await requireOrgRole(
+            authResult.context.userId,
+            authResult.context.organizationId
+        );
+        if (roleResult.response) {
+            return roleResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
         const body = await request.json();
 
         if (USE_DB_AGENTS) {
@@ -210,10 +241,9 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             if (body.memoryConfig !== undefined) updateData.memoryConfig = body.memoryConfig;
             if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
             if (body.scorers !== undefined) updateData.scorers = body.scorers;
-            if (body.isPublic !== undefined) {
-                updateData.isPublic = body.isPublic;
-                // Auto-generate publicToken when making public and no token exists
-                if (body.isPublic && !existing.publicToken) {
+            if (body.visibility !== undefined) {
+                updateData.visibility = body.visibility;
+                if (body.visibility === "PUBLIC" && !existing.publicToken) {
                     updateData.publicToken = randomUUID();
                 }
             }
@@ -387,10 +417,8 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                     `Status: ${existing.isActive ? "active" : "inactive"} → ${body.isActive ? "active" : "inactive"}`
                 );
             }
-            if (body.isPublic !== undefined && body.isPublic !== existing.isPublic) {
-                changes.push(
-                    `Visibility: ${existing.isPublic ? "public" : "private"} → ${body.isPublic ? "public" : "private"}`
-                );
+            if (body.visibility !== undefined && body.visibility !== existing.visibility) {
+                changes.push(`Visibility: ${existing.visibility} → ${body.visibility}`);
             }
 
             // Determine if there are actual data changes beyond what the change descriptions cover
@@ -452,7 +480,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                         skillSlug: s.skill.slug,
                         skillVersion: s.skill.version
                     })),
-                    isPublic: existing.isPublic,
+                    visibility: existing.visibility,
                     isActive: existing.isActive,
                     metadata: existing.metadata
                 };
@@ -481,6 +509,57 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                         data: { ...updateData, version: nextVersion }
                     })
                 ]);
+
+                // Write structured changelog entry
+                const fieldChanges: FieldChange[] = [];
+                const sc = detectScalarChange;
+                const jc = detectJsonChange;
+                const ac = detectArrayChange;
+
+                const scalarChecks = [
+                    sc("name", existing.name, body.name),
+                    sc("description", existing.description, body.description),
+                    sc("instructions", existing.instructions, body.instructions),
+                    sc("modelProvider", existing.modelProvider, body.modelProvider),
+                    sc("modelName", existing.modelName, body.modelName),
+                    sc("temperature", existing.temperature, body.temperature),
+                    sc("maxTokens", existing.maxTokens, body.maxTokens),
+                    sc("maxSteps", existing.maxSteps, body.maxSteps),
+                    sc("memoryEnabled", existing.memoryEnabled, body.memoryEnabled),
+                    sc("visibility", existing.visibility, body.visibility),
+                    sc("isActive", existing.isActive, body.isActive),
+                    jc("memoryConfig", existing.memoryConfig, body.memoryConfig),
+                    jc("routingConfig", existing.routingConfig, body.routingConfig),
+                    jc("metadata", existing.metadata, body.metadata),
+                    jc("modelConfig", existing.modelConfig, updateData.modelConfig)
+                ];
+                for (const c of scalarChecks) {
+                    if (c) fieldChanges.push(c);
+                }
+
+                fieldChanges.push(
+                    ...ac(
+                        "tools",
+                        existing.tools.map((t) => t.toolId),
+                        body.tools
+                    ),
+                    ...ac("scorers", existing.scorers || [], body.scorers),
+                    ...ac("subAgents", existing.subAgents || [], body.subAgents),
+                    ...ac("workflows", existing.workflows || [], body.workflows)
+                );
+
+                if (fieldChanges.length > 0) {
+                    createChangeLog({
+                        entityType: "agent",
+                        entityId: existing.id,
+                        entitySlug: existing.slug,
+                        version: nextVersion,
+                        action: "update",
+                        changes: fieldChanges,
+                        reason: body.changeReason || undefined,
+                        createdBy: body.createdBy || undefined
+                    }).catch((err) => console.error("[ChangeLog] Agent write failed:", err));
+                }
             } else {
                 // No version-worthy changes, but still apply any updateData
                 if (Object.keys(updateData).length > 0) {
@@ -594,6 +673,21 @@ export async function DELETE(
 ) {
     try {
         const { id } = await params;
+        const authResult = await requireAuth(request);
+        if (authResult.response) {
+            return authResult.response;
+        }
+        const roleResult = await requireOrgRole(
+            authResult.context.userId,
+            authResult.context.organizationId
+        );
+        if (roleResult.response) {
+            return roleResult.response;
+        }
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) {
+            return accessResult.response;
+        }
 
         if (USE_DB_AGENTS) {
             // Find agent by slug or id

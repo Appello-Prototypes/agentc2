@@ -24,7 +24,7 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/mastra/mcp", () => ({
     getMcpTools: getMcpToolsMock
 }));
 
@@ -77,9 +77,11 @@ describe("Integration connection actions API", () => {
             }
         } as never);
         getMcpToolsMock.mockResolvedValue({
-            hubspot_toolA: { description: "A", parameters: { type: "object" } },
-            hubspot_toolB: { description: "B", parameters: { type: "object" } },
-            other_tool: { description: "C", parameters: { type: "object" } }
+            tools: {
+                hubspot_toolA: { description: "A", parameters: { type: "object" } },
+                hubspot_toolB: { description: "B", parameters: { type: "object" } },
+                other_tool: { description: "C", parameters: { type: "object" } }
+            }
         });
 
         const response = await GET(

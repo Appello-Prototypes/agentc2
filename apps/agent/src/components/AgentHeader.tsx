@@ -18,7 +18,8 @@ const navItems = [
     { label: "Automations", href: "/triggers" },
     { label: "Knowledge", href: "/knowledge" },
     { label: "Skills", href: "/skills" },
-    { label: "Integrations", href: "/mcp" }
+    { label: "Integrations", href: "/mcp" },
+    { label: "Support", href: "/support" }
 ];
 
 export function AgentHeader() {

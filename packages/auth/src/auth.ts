@@ -51,7 +51,7 @@ export const auth = betterAuth({
     }),
     emailAndPassword: {
         enabled: true,
-        requireEmailVerification: false
+        requireEmailVerification: isProduction
     },
     socialProviders: {
         ...(googleClientId && googleClientSecret
@@ -79,8 +79,8 @@ export const auth = betterAuth({
             : {})
     },
     session: {
-        expiresIn: 60 * 60 * 24 * 7, // 7 days
-        updateAge: 60 * 60 * 24, // Update every 24 hours
+        expiresIn: 60 * 60 * 24, // 24 hours
+        updateAge: 60 * 60 * 6, // Update every 6 hours
         cookieCache: {
             enabled: true,
             maxAge: 60 * 5 // 5 minutes

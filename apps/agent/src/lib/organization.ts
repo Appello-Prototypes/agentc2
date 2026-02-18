@@ -23,3 +23,16 @@ export async function getDefaultWorkspaceIdForUser(userId: string) {
 
     return workspace?.id ?? null;
 }
+
+export async function userHasPermission(
+    userId: string,
+    organizationId: string,
+    permission: string
+): Promise<boolean> {
+    const membership = await prisma.membership.findUnique({
+        where: { userId_organizationId: { userId, organizationId } }
+    });
+    if (!membership) return false;
+    if (membership.role === "owner") return true;
+    return membership.permissions.includes(permission);
+}

@@ -49,6 +49,15 @@ agentc2.ai {
         reverse_proxy localhost:3000
     }
 
+    # Public docs and blog pages — route to frontend app (no auth required)
+    @public_content {
+        path /docs /docs/* /blog /blog/*
+    }
+
+    handle @public_content {
+        reverse_proxy localhost:3000
+    }
+
     # Frontend static assets (namespaced via assetPrefix: '/_home')
     @frontend_assets {
         path /_home/*

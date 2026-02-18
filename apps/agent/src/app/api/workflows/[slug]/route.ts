@@ -1,5 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import {
+    createChangeLog,
+    detectScalarChange,
+    detectJsonChange,
+    type FieldChange
+} from "@/lib/changelog";
 
 async function findWorkflow(slug: string) {
     return prisma.workflow.findFirst({
@@ -70,9 +76,32 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.isPublished !== undefined) updateData.isPublished = body.isPublished;
         if (body.isActive !== undefined) updateData.isActive = body.isActive;
 
+        // Detect all field-level changes for changelog
+        const fieldChanges: FieldChange[] = [];
+        const sc = detectScalarChange;
+        const jc = detectJsonChange;
+        const checks = [
+            sc("name", existing.name, body.name),
+            sc("description", existing.description, body.description),
+            sc("maxSteps", existing.maxSteps, body.maxSteps),
+            sc("timeout", existing.timeout, body.timeout),
+            sc("isPublished", existing.isPublished, body.isPublished),
+            sc("isActive", existing.isActive, body.isActive),
+            jc("definitionJson", existing.definitionJson, body.definitionJson),
+            jc("inputSchemaJson", existing.inputSchemaJson, body.inputSchemaJson),
+            jc("outputSchemaJson", existing.outputSchemaJson, body.outputSchemaJson),
+            jc("retryConfig", existing.retryConfig, body.retryConfig)
+        ];
+        for (const c of checks) {
+            if (c) fieldChanges.push(c);
+        }
+
         const definitionChanged =
             body.definitionJson !== undefined &&
             JSON.stringify(existing.definitionJson) !== JSON.stringify(body.definitionJson);
+
+        const hasAnyChange = fieldChanges.length > 0;
+        let nextVersion = existing.version;
 
         if (definitionChanged) {
             const lastVersion = await prisma.workflowVersion.findFirst({
@@ -80,7 +109,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
                 orderBy: { version: "desc" },
                 select: { version: true }
             });
-            const nextVersion = (lastVersion?.version || 0) + 1;
+            nextVersion = (lastVersion?.version || 0) + 1;
             updateData.version = nextVersion;
 
             await prisma.workflowVersion.create({
@@ -98,6 +127,19 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             where: { id: existing.id },
             data: updateData
         });
+
+        if (hasAnyChange) {
+            createChangeLog({
+                entityType: "workflow",
+                entityId: existing.id,
+                entitySlug: existing.slug,
+                version: nextVersion,
+                action: "update",
+                changes: fieldChanges,
+                reason: body.changeReason || undefined,
+                createdBy: body.createdBy || undefined
+            }).catch((err) => console.error("[ChangeLog] Workflow write failed:", err));
+        }
 
         return NextResponse.json({
             success: true,

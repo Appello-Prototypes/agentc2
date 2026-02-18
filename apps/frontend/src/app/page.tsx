@@ -1,7 +1,17 @@
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
+import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { headers } from "next/headers";
+import { buildPageMetadata } from "@/lib/seo";
+
+export const metadata: Metadata = buildPageMetadata({
+    title: "AgentC2 - AI Agent Orchestration Platform",
+    description:
+        "Build, deploy, and orchestrate production AI agents with workflows, MCP integrations, guardrails, evaluations, and observability.",
+    path: "/",
+    keywords: ["AI agent orchestration platform", "AI agent platform", "multi-agent orchestration"]
+});
 
 export default async function HomePage() {
     const session = await auth.api.getSession({
@@ -15,15 +25,16 @@ export default async function HomePage() {
     // Fetch the welcome agent's public token for the embed
     const welcomeAgent = await prisma.agent.findFirst({
         where: { slug: "welcome" },
-        select: { publicToken: true, isPublic: true }
+        select: { publicToken: true, visibility: true }
     });
 
-    const token = welcomeAgent?.isPublic ? welcomeAgent.publicToken : null;
+    const token = welcomeAgent?.visibility === "PUBLIC" ? welcomeAgent.publicToken : null;
 
     if (!token) {
         // Fallback: show a simple message if welcome agent isn't configured
         return (
             <main className="relative flex h-dvh w-full items-center justify-center bg-black text-white">
+                <h1 className="sr-only">AgentC2 AI Agent Orchestration Platform</h1>
                 <p className="text-muted-foreground text-sm">AgentC2 is loading...</p>
                 <footer className="absolute right-0 bottom-0 left-0 flex items-center justify-between px-4 py-2">
                     <span className="text-muted-foreground text-[11px]">
@@ -62,6 +73,7 @@ export default async function HomePage() {
 
     return (
         <main className="relative h-dvh w-full bg-black">
+            <h1 className="sr-only">AgentC2 AI Agent Orchestration Platform</h1>
             <iframe
                 src={`${agentBase}/embed/welcome?token=${token}&internal=true`}
                 className="h-full w-full border-0"

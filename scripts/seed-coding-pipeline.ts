@@ -216,12 +216,108 @@ async function seedWorkflow(seed: {
     return workflow;
 }
 
+async function seedPipelinePolicy() {
+    console.log("Seeding pipeline policy for Appello...");
+
+    const org = await prisma.organization.findFirst({
+        where: { slug: "appello" }
+    });
+
+    if (!org) {
+        console.log("  Skipped: No 'appello' organization found. Create it first.");
+        return;
+    }
+
+    const policy = await prisma.pipelinePolicy.upsert({
+        where: { organizationId: org.id },
+        update: {
+            enabled: true,
+            autoApprovePlanBelow: "medium",
+            autoApprovePrBelow: "low",
+            allowedRepos: ["https://github.com/acme/mastra-experiment"]
+        },
+        create: {
+            organizationId: org.id,
+            enabled: true,
+            autoApprovePlanBelow: "medium",
+            autoApprovePrBelow: "low",
+            allowedRepos: ["https://github.com/acme/mastra-experiment"]
+        }
+    });
+
+    console.log(`  Upserted PipelinePolicy for ${org.slug} (${policy.id})`);
+    console.log(`    enabled: ${policy.enabled}`);
+    console.log(`    autoApprovePlanBelow: ${policy.autoApprovePlanBelow}`);
+    console.log(`    autoApprovePrBelow: ${policy.autoApprovePrBelow}`);
+}
+
+async function seedRepositoryConfig() {
+    console.log("Seeding repository config for mastra-experiment...");
+
+    const org = await prisma.organization.findFirst({
+        where: { slug: "appello" }
+    });
+
+    if (!org) {
+        console.log("  Skipped: No 'appello' organization found. Create it first.");
+        return;
+    }
+
+    const repoUrl = "https://github.com/acme/mastra-experiment";
+
+    const repo = await prisma.repositoryConfig.upsert({
+        where: {
+            organizationId_repositoryUrl: {
+                organizationId: org.id,
+                repositoryUrl: repoUrl
+            }
+        },
+        update: {
+            name: "mastra-experiment",
+            baseBranch: "main",
+            installCommand: "bun install",
+            buildCommand: "bun run type-check && bun run lint && bun run build",
+            testCommand: null,
+            codingAgentSlug: "agentc2-developer",
+            codingStandards:
+                "Turborepo monorepo. TypeScript 5, Next.js 16, React 19, Prisma 6. " +
+                "4-space indent, no semicolons, double quotes. " +
+                "Import order: React/Next -> External packages -> Internal packages (@repo/*) -> Relative imports. " +
+                "Pre-push: bun run type-check && bun run lint && bun run build. " +
+                "See CLAUDE.md for full details."
+        },
+        create: {
+            organizationId: org.id,
+            repositoryUrl: repoUrl,
+            name: "mastra-experiment",
+            baseBranch: "main",
+            installCommand: "bun install",
+            buildCommand: "bun run type-check && bun run lint && bun run build",
+            testCommand: null,
+            codingAgentSlug: "agentc2-developer",
+            codingStandards:
+                "Turborepo monorepo. TypeScript 5, Next.js 16, React 19, Prisma 6. " +
+                "4-space indent, no semicolons, double quotes. " +
+                "Import order: React/Next -> External packages -> Internal packages (@repo/*) -> Relative imports. " +
+                "Pre-push: bun run type-check && bun run lint && bun run build. " +
+                "See CLAUDE.md for full details."
+        }
+    });
+
+    console.log(`  Upserted RepositoryConfig for ${repoUrl} (${repo.id})`);
+    console.log(`    installCommand: ${repo.installCommand}`);
+    console.log(`    buildCommand: ${repo.buildCommand}`);
+    console.log(`    codingAgentSlug: ${repo.codingAgentSlug}`);
+}
+
 async function main() {
-    console.log("=== Seeding Coding Pipeline ===\n");
+    console.log("=== Seeding Coding Pipeline (Dark Factory) ===\n");
 
     await seedAgent();
     await seedWorkflow(CODING_PIPELINE_WORKFLOW_SEED);
     await seedWorkflow(CODING_PIPELINE_INTERNAL_WORKFLOW_SEED);
+    await seedPipelinePolicy();
+    await seedRepositoryConfig();
 
     console.log("\n=== Done ===");
     await prisma.$disconnect();

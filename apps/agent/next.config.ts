@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import { config } from "dotenv";
 import { resolve } from "path";
 import { createHeadersConfig, sharedEnv, devIndicators } from "@repo/next-config";
+import { WORKSPACE_CSP } from "./src/lib/workspace-csp";
 
 // Load environment variables from root .env file
 config({ path: resolve(__dirname, "../../.env") });
@@ -17,6 +18,21 @@ const nextConfig: NextConfig = {
 
         return [
             ...baseHeaders,
+            {
+                source: "/:path*",
+                headers: [
+                    { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+                    {
+                        key: "Permissions-Policy",
+                        value: "camera=(), microphone=(), geolocation=()"
+                    },
+                    { key: "X-Frame-Options", value: "SAMEORIGIN" },
+                    {
+                        key: "Strict-Transport-Security",
+                        value: "max-age=31536000; includeSubDomains; preload"
+                    }
+                ]
+            },
             // Relax framing restrictions for /embed/* so pages can be iframed
             // by the landing page (same origin) and third-party sites.
             {
@@ -31,23 +47,13 @@ const nextConfig: NextConfig = {
                     }
                 ]
             },
-            // Workspace-served HTML files need a relaxed CSP so agent-generated
-            // dashboards can load external CDN scripts (Chart.js, etc.)
+            // Workspace-served HTML files — CSP defined in src/lib/workspace-csp.ts
             {
                 source: "/api/workspace/:path*",
                 headers: [
                     {
                         key: "Content-Security-Policy",
-                        value: [
-                            "default-src 'self'",
-                            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com",
-                            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com",
-                            "font-src 'self' data: https://fonts.gstatic.com",
-                            "img-src 'self' data: https:",
-                            "connect-src 'self' https:",
-                            "media-src 'self' data: blob:",
-                            "frame-ancestors 'self'"
-                        ].join("; ")
+                        value: WORKSPACE_CSP
                     }
                 ]
             }
@@ -94,7 +100,10 @@ const nextConfig: NextConfig = {
         // Crypto
         "bcryptjs",
         // AWS (pulled in by BIM storage)
-        "@aws-sdk/client-s3"
+        "@aws-sdk/client-s3",
+        // SSH (used by remote-compute-tools)
+        "ssh2",
+        "cpu-features"
     ],
     webpack: (config, { isServer }) => {
         if (isServer) {
@@ -102,7 +111,8 @@ const nextConfig: NextConfig = {
                 ...config.resolve.alias,
                 "@img/sharp-libvips-dev/include": false,
                 "@img/sharp-libvips-dev/cplusplus": false,
-                "@img/sharp-wasm32/versions": false
+                "@img/sharp-wasm32/versions": false,
+                "cpu-features": false
             };
         }
 

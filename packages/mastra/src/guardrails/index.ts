@@ -16,6 +16,7 @@ import { prisma } from "@repo/database";
 import { recordActivity } from "../activity/service";
 
 export interface GuardrailConfig {
+    bypassOrgGuardrails?: boolean;
     input?: {
         maxLength?: number;
         blockPII?: boolean;
@@ -62,6 +63,22 @@ const INJECTION_PATTERNS = [
     /<<\s*SYS\s*>>/i
 ];
 
+const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
+    input: {
+        maxLength: 50_000,
+        blockPII: false,
+        blockPromptInjection: true,
+        blockedPatterns: []
+    },
+    output: {
+        maxLength: 100_000,
+        blockPII: false,
+        blockToxicity: false,
+        blockedPatterns: []
+    },
+    execution: {}
+};
+
 function containsPII(text: string): boolean {
     return PII_PATTERNS.some((pattern) => pattern.test(text));
 }
@@ -83,14 +100,93 @@ function matchesBlockedPatterns(text: string, patterns: string[]): string | null
 }
 
 /**
- * Load guardrail config for an agent from the database.
+ * Merge two guardrail configs.  Org config is the "floor" -- agents can add
+ * restrictions but never weaken org-level policy.
+ *
+ *  - blockedPatterns: union (both apply)
+ *  - Boolean flags (blockPII, blockPromptInjection, blockToxicity): OR -- if
+ *    org says true, agent cannot override to false
+ *  - Numeric limits (maxLength, maxDurationMs, maxToolCalls, maxCostUsd):
+ *    minimum wins (the more restrictive limit applies)
  */
-async function loadGuardrailConfig(agentId: string): Promise<GuardrailConfig | null> {
-    const policy = await prisma.guardrailPolicy.findUnique({
-        where: { agentId }
-    });
-    if (!policy?.configJson) return null;
-    return policy.configJson as unknown as GuardrailConfig;
+function mergeGuardrailConfigs(org: GuardrailConfig, agent: GuardrailConfig): GuardrailConfig {
+    const mergePatterns = (a?: string[], b?: string[]): string[] | undefined => {
+        if (!a && !b) return undefined;
+        const set = new Set([...(a || []), ...(b || [])]);
+        return [...set];
+    };
+
+    const stricterNum = (a?: number, b?: number): number | undefined => {
+        if (a == null && b == null) return undefined;
+        if (a == null) return b;
+        if (b == null) return a;
+        return Math.min(a, b);
+    };
+
+    const orBool = (a?: boolean, b?: boolean): boolean | undefined => {
+        if (a == null && b == null) return undefined;
+        return !!(a || b);
+    };
+
+    return {
+        input: {
+            maxLength: stricterNum(org.input?.maxLength, agent.input?.maxLength),
+            blockPII: orBool(org.input?.blockPII, agent.input?.blockPII),
+            blockPromptInjection: orBool(
+                org.input?.blockPromptInjection,
+                agent.input?.blockPromptInjection
+            ),
+            blockedPatterns: mergePatterns(org.input?.blockedPatterns, agent.input?.blockedPatterns)
+        },
+        output: {
+            maxLength: stricterNum(org.output?.maxLength, agent.output?.maxLength),
+            blockPII: orBool(org.output?.blockPII, agent.output?.blockPII),
+            blockToxicity: orBool(org.output?.blockToxicity, agent.output?.blockToxicity),
+            blockedPatterns: mergePatterns(
+                org.output?.blockedPatterns,
+                agent.output?.blockedPatterns
+            )
+        },
+        execution: {
+            maxDurationMs: stricterNum(
+                org.execution?.maxDurationMs,
+                agent.execution?.maxDurationMs
+            ),
+            maxToolCalls: stricterNum(org.execution?.maxToolCalls, agent.execution?.maxToolCalls),
+            maxCostUsd: stricterNum(org.execution?.maxCostUsd, agent.execution?.maxCostUsd)
+        }
+    };
+}
+
+/**
+ * Load guardrail config for an agent from the database, merging with any
+ * org-level guardrail policy so that org policies act as a baseline floor.
+ */
+async function loadGuardrailConfig(opts: {
+    agentId: string;
+    tenantId?: string;
+}): Promise<GuardrailConfig | null> {
+    const [agentPolicy, orgPolicy] = await Promise.all([
+        prisma.guardrailPolicy.findUnique({ where: { agentId: opts.agentId } }),
+        opts.tenantId
+            ? prisma.orgGuardrailPolicy.findUnique({
+                  where: { organizationId: opts.tenantId }
+              })
+            : null
+    ]);
+
+    const agentConfig = agentPolicy?.configJson
+        ? (agentPolicy.configJson as unknown as GuardrailConfig)
+        : null;
+    const orgConfig = orgPolicy?.configJson
+        ? (orgPolicy.configJson as unknown as GuardrailConfig)
+        : null;
+
+    if (!orgConfig && !agentConfig) return DEFAULT_GUARDRAIL_CONFIG;
+    if (!orgConfig) return agentConfig;
+    if (agentConfig?.bypassOrgGuardrails) return agentConfig;
+    if (!agentConfig) return orgConfig;
+    return mergeGuardrailConfigs(orgConfig, agentConfig);
 }
 
 /**
@@ -142,7 +238,7 @@ export async function enforceInputGuardrails(
     input: string,
     options?: { runId?: string; tenantId?: string }
 ): Promise<GuardrailResult> {
-    const config = await loadGuardrailConfig(agentId);
+    const config = await loadGuardrailConfig({ agentId, tenantId: options?.tenantId });
     if (!config?.input) {
         return { blocked: false, violations: [] };
     }
@@ -216,7 +312,7 @@ export async function enforceOutputGuardrails(
     output: string,
     options?: { runId?: string; tenantId?: string }
 ): Promise<GuardrailResult> {
-    const config = await loadGuardrailConfig(agentId);
+    const config = await loadGuardrailConfig({ agentId, tenantId: options?.tenantId });
     if (!config?.output) {
         return { blocked: false, violations: [] };
     }
@@ -278,8 +374,9 @@ export async function enforceOutputGuardrails(
  * Returns the execution limits that should be applied during runtime.
  */
 export async function getExecutionLimits(
-    agentId: string
+    agentId: string,
+    tenantId?: string
 ): Promise<GuardrailConfig["execution"] | null> {
-    const config = await loadGuardrailConfig(agentId);
+    const config = await loadGuardrailConfig({ agentId, tenantId });
     return config?.execution || null;
 }

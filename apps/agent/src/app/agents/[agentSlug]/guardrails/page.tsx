@@ -105,6 +105,8 @@ export default function GuardrailsPage() {
     });
     const [activeTab, setActiveTab] = useState("input");
     const [hasChanges, setHasChanges] = useState(false);
+    const [canOverrideGuardrails, setCanOverrideGuardrails] = useState(false);
+    const [bypassOrgGuardrails, setBypassOrgGuardrails] = useState(false);
 
     const fetchGuardrails = useCallback(async () => {
         try {
@@ -123,8 +125,15 @@ export default function GuardrailsPage() {
             ]);
 
             // Handle guardrail config
-            if (configResult.success && configResult.guardrailConfig?.configJson) {
-                setConfig(configResult.guardrailConfig.configJson as GuardrailConfig);
+            if (configResult.success) {
+                if (configResult.guardrailConfig?.configJson) {
+                    setConfig(configResult.guardrailConfig.configJson as GuardrailConfig);
+                    setBypassOrgGuardrails(
+                        !!(configResult.guardrailConfig.configJson as Record<string, unknown>)
+                            .bypassOrgGuardrails
+                    );
+                }
+                setCanOverrideGuardrails(!!configResult.canOverrideGuardrails);
             }
 
             // Handle events
@@ -167,10 +176,13 @@ export default function GuardrailsPage() {
     const saveConfig = async () => {
         try {
             setSaving(true);
+            const payload = bypassOrgGuardrails
+                ? { ...config, bypassOrgGuardrails: true }
+                : { ...config };
             const response = await fetch(`${getApiBase()}/api/agents/${agentSlug}/guardrails`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ configJson: config })
+                body: JSON.stringify({ configJson: payload })
             });
 
             const result = await response.json();
@@ -276,6 +288,40 @@ export default function GuardrailsPage() {
                                 implemented in the agent execution pipeline.
                             </p>
                         </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Org Guardrail Override (super admin only) */}
+            {canOverrideGuardrails && (
+                <Card
+                    className={
+                        bypassOrgGuardrails
+                            ? "border-red-500 bg-red-50 dark:bg-red-950/20"
+                            : "border-border"
+                    }
+                >
+                    <CardContent className="flex items-center justify-between py-4">
+                        <div>
+                            <p className="font-medium">Override Org-Wide Guardrails</p>
+                            <p className="text-muted-foreground text-sm">
+                                When enabled, this agent will bypass the organization-level
+                                guardrail policy. Only users with the{" "}
+                                <code>guardrail_override</code> permission can toggle this.
+                            </p>
+                            {bypassOrgGuardrails && (
+                                <p className="mt-1 text-sm font-medium text-red-600">
+                                    This agent is currently exempt from org-wide guardrails.
+                                </p>
+                            )}
+                        </div>
+                        <Switch
+                            checked={bypassOrgGuardrails}
+                            onCheckedChange={(checked) => {
+                                setBypassOrgGuardrails(checked);
+                                setHasChanges(true);
+                            }}
+                        />
                     </CardContent>
                 </Card>
             )}

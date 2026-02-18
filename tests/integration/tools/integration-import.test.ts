@@ -25,9 +25,11 @@ describe("integration-import tools (integration)", () => {
         const { getIntegrationProviders, getMcpTools } =
             await import("../../../packages/mastra/src/mcp/client");
 
-        vi.mocked(getIntegrationProviders).mockResolvedValue(undefined);
+        vi.mocked(getIntegrationProviders).mockResolvedValue([]);
         vi.mocked(getMcpTools).mockResolvedValue({
-            slack_list_channels: {}
+            tools: {
+                slack_list_channels: {}
+            }
         } as never);
 
         prismaMock.membership.findFirst.mockResolvedValue({

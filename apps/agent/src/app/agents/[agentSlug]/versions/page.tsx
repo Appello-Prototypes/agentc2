@@ -26,6 +26,7 @@ import {
     VersionTrendChart
 } from "./components";
 import type { AgentVersion, VersionSnapshot, VersionStats } from "./components";
+import { ChangelogTimeline } from "@/components/changelog";
 
 interface ApiVersionResponse {
     id: string;
@@ -549,6 +550,9 @@ export default function VersionsPage() {
                     />
                 </CardContent>
             </Card>
+
+            {/* Changelog / Audit Trail */}
+            <ChangelogTimeline entityType="agent" entityId={agentSlug} title="Audit Trail" />
 
             {/* Version Detail Sheet */}
             <VersionDetailSheet

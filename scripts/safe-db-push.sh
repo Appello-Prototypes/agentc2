@@ -19,7 +19,12 @@ fi
 
 echo "▶ Running pre-flight schema diff..."
 
-DIFF=$(cd packages/database && dotenv -e ../../.env -- bun run --bun prisma migrate diff \
+# Source .env so DATABASE_URL is available without dotenv-cli
+if [ -f .env ]; then
+    set -a; source .env; set +a
+fi
+
+DIFF=$(cd packages/database && bun run --bun prisma migrate diff \
     --from-schema-datasource ./prisma/schema.prisma \
     --to-schema-datamodel ./prisma/schema.prisma 2>&1) || true
 
@@ -40,7 +45,7 @@ if [ -n "$DROPPED" ]; then
     echo "  → See RagDocument / MastraAiSpan models for examples."
     echo ""
     echo "If you truly want to drop these tables, run:"
-    echo "  cd packages/database && dotenv -e ../../.env -- bunx prisma db push --accept-data-loss"
+    echo "  cd packages/database && bunx prisma db push --accept-data-loss"
     echo ""
     exit 1
 fi
@@ -50,4 +55,4 @@ echo ""
 echo "▶ Applying schema changes with prisma db push..."
 
 cd packages/database
-dotenv -e ../../.env -- bun run --bun prisma db push "$@"
+bun run --bun prisma db push "$@"

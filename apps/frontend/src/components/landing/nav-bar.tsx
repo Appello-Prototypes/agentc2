@@ -64,6 +64,18 @@ export function NavBar() {
                         FAQ
                     </Link>
                     <Link
+                        href="/docs"
+                        className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                    >
+                        Docs
+                    </Link>
+                    <Link
+                        href="/blog"
+                        className="text-muted-foreground hover:text-foreground text-sm transition-colors"
+                    >
+                        Blog
+                    </Link>
+                    <Link
                         href="/privacy"
                         className="text-muted-foreground hover:text-foreground text-sm transition-colors"
                     >
@@ -146,6 +158,20 @@ export function NavBar() {
                             onClick={() => setMobileOpen(false)}
                         >
                             FAQ
+                        </Link>
+                        <Link
+                            href="/docs"
+                            className="text-foreground text-sm font-medium"
+                            onClick={() => setMobileOpen(false)}
+                        >
+                            Docs
+                        </Link>
+                        <Link
+                            href="/blog"
+                            className="text-foreground text-sm font-medium"
+                            onClick={() => setMobileOpen(false)}
+                        >
+                            Blog
                         </Link>
                         <Link
                             href="/privacy"

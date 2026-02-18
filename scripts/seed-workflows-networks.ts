@@ -146,7 +146,7 @@ async function ensureAssistantAgent() {
             memoryEnabled: false,
             memoryConfig: null,
             scorers: [],
-            isPublic: true,
+            visibility: "PUBLIC",
             isActive: true
         }
     });

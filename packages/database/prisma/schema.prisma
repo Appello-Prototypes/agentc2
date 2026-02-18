@@ -101,6 +101,7 @@ model Organization {
     maxWorkspaces   Int?
     maxRunsPerMonth Int?
     maxSeats        Int?
+    maxStorageBytes BigInt? // Workspace file storage quota (null = unlimited)
 
     // Billing reference
     stripeCustomerId String? @unique
@@ -146,6 +147,16 @@ model Organization {
 
     // Agent Instances
     agentInstances AgentInstance[]
+
+    // Org-wide guardrail policy
+    orgGuardrailPolicy OrgGuardrailPolicy?
+
+    // Dark Factory
+    pipelinePolicy    PipelinePolicy?
+    repositoryConfigs RepositoryConfig[]
+
+    // Storage tracking
+    workspaceStorageUsage WorkspaceStorageUsage[]
 
     @@index([slug])
     @@index([status])
@@ -196,6 +207,7 @@ model Membership {
     organizationId        String
     organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
     role                  String       @default("member") // "owner", "admin", "member", "viewer"
+    permissions           String[]     @default([]) // Granular permissions: "guardrail_override", etc.
     onboardingCompletedAt DateTime?
     onboardingStep        String?
 
@@ -571,6 +583,12 @@ enum AgentType {
     DEMO // Example/demo agents, discoverable but not production
 }
 
+enum AgentVisibility {
+    PRIVATE // Only the owner can see this agent
+    ORGANIZATION // Anyone in the same organization can use this agent
+    PUBLIC // Anyone can access this agent (embed, API, etc.)
+}
+
 // Run Status Enum
 enum RunStatus {
     QUEUED
@@ -697,14 +715,14 @@ model Agent {
     scorers String[] @default([])
 
     // Permissions/tenancy
-    type        AgentType  @default(USER)
+    type        AgentType       @default(USER)
     tenantId    String? // Multi-tenant isolation (legacy, use workspaceId)
     workspaceId String?
-    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+    workspace   Workspace?      @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
     ownerId     String?
-    owner       User?      @relation(fields: [ownerId], references: [id])
-    isPublic    Boolean    @default(false)
-    publicToken String?    @unique // Token for public embed access
+    owner       User?           @relation(fields: [ownerId], references: [id])
+    visibility  AgentVisibility @default(PRIVATE)
+    publicToken String?         @unique // Token for public embed access
 
     // Policies
     requiresApproval Boolean @default(false) // Require human approval for runs
@@ -767,6 +785,7 @@ model Agent {
     outputActions          OutputAction[]
     federationExposures    FederationExposure[]
     instances              AgentInstance[]
+    storageUsage           WorkspaceStorageUsage[]
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -774,7 +793,25 @@ model Agent {
     @@index([ownerId])
     @@index([tenantId])
     @@index([type])
+    @@index([visibility])
     @@map("agent")
+}
+
+// Workspace file storage tracking per agent per org
+model WorkspaceStorageUsage {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    agentId        String
+    agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    totalBytes     BigInt       @default(0)
+    fileCount      Int          @default(0)
+    lastWriteAt    DateTime?
+    updatedAt      DateTime     @updatedAt
+
+    @@unique([organizationId, agentId])
+    @@index([organizationId])
+    @@map("workspace_storage_usage")
 }
 
 // Agent-Tool Junction Table
@@ -1651,6 +1688,21 @@ model GuardrailEvent {
     @@index([agentId, createdAt])
     @@index([tenantId])
     @@map("guardrail_event")
+}
+
+// Org-wide Guardrail Policy - Organization-level guardrail baseline
+model OrgGuardrailPolicy {
+    id             String       @id @default(cuid())
+    organizationId String       @unique
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    configJson     Json
+    version        Int          @default(1)
+    createdBy      String?
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@index([organizationId])
+    @@map("org_guardrail_policy")
 }
 
 // Agent Stats Daily - Daily KPI rollups
@@ -4318,6 +4370,9 @@ model CodingPipelineRun {
     // Cost tracking
     totalCostUsd Float?
 
+    // Trust score for autonomous merge decisions
+    trustScore Float?
+
     // Lifecycle
     status    String   @default("running") // running, awaiting_plan_approval, coding, verifying, awaiting_pr_review, merged, deployed, failed
     createdAt DateTime @default(now())
@@ -4328,4 +4383,117 @@ model CodingPipelineRun {
     @@index([status])
     @@index([createdAt])
     @@map("coding_pipeline_run")
+}
+
+// Dark Factory: per-org autonomy configuration
+model PipelinePolicy {
+    id                   String       @id @default(cuid())
+    organizationId       String       @unique
+    organization         Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    enabled              Boolean      @default(false)
+    autoApprovePlanBelow String       @default("medium") // trivial < low < medium < high < critical
+    autoApprovePrBelow   String       @default("low")
+    allowedRepos         String[]     @default([])
+    createdAt            DateTime     @default(now())
+    updatedAt            DateTime     @updatedAt
+
+    @@map("pipeline_policy")
+}
+
+// Dark Factory: per-org, per-repo build configuration
+model RepositoryConfig {
+    id              String       @id @default(cuid())
+    organizationId  String
+    organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    repositoryUrl   String
+    name            String?
+    baseBranch      String       @default("main")
+    installCommand  String       @default("bun install")
+    buildCommand    String       @default("bun run type-check && bun run lint && bun run build")
+    testCommand     String?
+    codingStandards String?      @db.Text
+    codingAgentSlug String?
+    metadata        Json?
+    createdAt       DateTime     @default(now())
+    updatedAt       DateTime     @updatedAt
+
+    scenarios PipelineScenario[]
+
+    @@unique([organizationId, repositoryUrl])
+    @@index([organizationId])
+    @@map("repository_config")
+}
+
+// Dark Factory: behavioral scenario definitions per repo
+model PipelineScenario {
+    id                 String                @id @default(cuid())
+    repositoryConfig   RepositoryConfig      @relation(fields: [repositoryConfigId], references: [id], onDelete: Cascade)
+    repositoryConfigId String
+    name               String
+    description        String?               @db.Text
+    prompt             String                @db.Text
+    expectedOutcome    String?               @db.Text
+    isHoldout          Boolean               @default(false)
+    isActive           Boolean               @default(true)
+    createdAt          DateTime              @default(now())
+    updatedAt          DateTime              @updatedAt
+    runs               PipelineScenarioRun[]
+
+    @@index([repositoryConfigId, isActive])
+    @@map("pipeline_scenario")
+}
+
+// Dark Factory: scenario execution results
+model PipelineScenarioRun {
+    id            String           @id @default(cuid())
+    scenario      PipelineScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+    scenarioId    String
+    pipelineRunId String?
+    passed        Boolean
+    output        String?          @db.Text
+    durationMs    Int?
+    createdAt     DateTime         @default(now())
+
+    @@index([scenarioId])
+    @@index([pipelineRunId])
+    @@map("pipeline_scenario_run")
+}
+
+// Dark Factory: daily pipeline autonomy metrics
+model PipelineDailyStats {
+    id             String   @id @default(cuid())
+    organizationId String
+    date           DateTime @db.Date
+    totalRuns      Int      @default(0)
+    autoApproved   Int      @default(0)
+    humanApproved  Int      @default(0)
+    failed         Int      @default(0)
+    deployed       Int      @default(0)
+    avgTrustScore  Float?
+    avgDurationMs  Int?
+    createdAt      DateTime @default(now())
+
+    @@unique([organizationId, date])
+    @@index([organizationId])
+    @@map("pipeline_daily_stats")
+}
+
+// Unified Change Log for auditable history across agents, workflows, networks
+model ChangeLog {
+    id         String   @id @default(cuid())
+    entityType String // "agent", "workflow", "network"
+    entityId   String
+    entitySlug String?
+    version    Int
+    action     String // "create", "update", "rollback", "delete"
+    changes    Json // Structured array of field-level diffs
+    summary    String?  @db.Text
+    reason     String?  @db.Text
+    createdBy  String?
+    createdAt  DateTime @default(now())
+
+    @@index([entityType, entityId])
+    @@index([entityId, version])
+    @@index([createdAt])
+    @@map("change_log")
 }

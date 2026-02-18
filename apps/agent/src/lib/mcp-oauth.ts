@@ -7,6 +7,7 @@
 
 import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
+import { randomBytes } from "crypto";
 
 // ── Auth Code Store ─────────────────────────────────────────────
 
@@ -72,6 +73,52 @@ export function consumeAuthCode(code: string): AuthCodeEntry | null {
 }
 
 export { AUTH_CODE_TTL_MS };
+
+// ── Access Token Store ───────────────────────────────────────────
+
+interface AccessTokenEntry {
+    organizationId: string;
+    expiresAt: number;
+}
+
+const ACCESS_TOKEN_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_ACCESS_TOKENS = 5000;
+const accessTokens = new Map<string, AccessTokenEntry>();
+
+function cleanupExpiredAccessTokens() {
+    const now = Date.now();
+    for (const [token, entry] of accessTokens.entries()) {
+        if (entry.expiresAt < now) {
+            accessTokens.delete(token);
+        }
+    }
+}
+
+export function issueAccessToken(organizationId: string): string {
+    cleanupExpiredAccessTokens();
+    if (accessTokens.size >= MAX_ACCESS_TOKENS) {
+        const oldest = accessTokens.keys().next().value;
+        if (oldest) accessTokens.delete(oldest);
+    }
+
+    const token = `mcp_at_${randomBytes(32).toString("base64url")}`;
+    accessTokens.set(token, {
+        organizationId,
+        expiresAt: Date.now() + ACCESS_TOKEN_TTL_MS
+    });
+    return token;
+}
+
+export function validateAccessToken(token: string): { organizationId: string } | null {
+    if (!token) return null;
+    const entry = accessTokens.get(token);
+    if (!entry) return null;
+    if (entry.expiresAt < Date.now()) {
+        accessTokens.delete(token);
+        return null;
+    }
+    return { organizationId: entry.organizationId };
+}
 
 // ── Client Credential Validation ────────────────────────────────
 

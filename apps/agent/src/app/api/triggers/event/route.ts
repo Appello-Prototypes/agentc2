@@ -22,7 +22,7 @@ export async function POST(request: NextRequest) {
 
         const forwardedFor = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim();
         const clientId = forwardedFor || request.headers.get("x-real-ip") || "unknown";
-        const rate = checkRateLimit(`event:${clientId}`, { windowMs: 60000, max: 120 });
+        const rate = await checkRateLimit(`event:${clientId}`, { windowMs: 60000, max: 120 });
         if (!rate.allowed) {
             return NextResponse.json(
                 { success: false, error: "Rate limit exceeded" },

@@ -25,6 +25,9 @@ import { infraToolDefinitions, infraToolRoutes } from "./infra";
 import { backlogToolDefinitions, backlogToolRoutes } from "./backlog";
 import { outputActionToolDefinitions, outputActionToolRoutes } from "./output-actions";
 import { codingPipelineToolDefinitions, codingPipelineToolRoutes } from "./coding-pipeline";
+import { remoteComputeToolDefinitions, remoteComputeToolRoutes } from "./remote-compute";
+import { supportToolDefinitions, supportToolRoutes } from "./support";
+import { orgGuardrailToolDefinitions, orgGuardrailToolRoutes } from "./org-guardrails";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -57,7 +60,10 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...infraToolDefinitions,
     ...backlogToolDefinitions,
     ...outputActionToolDefinitions,
-    ...codingPipelineToolDefinitions
+    ...codingPipelineToolDefinitions,
+    ...remoteComputeToolDefinitions,
+    ...supportToolDefinitions,
+    ...orgGuardrailToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -87,5 +93,8 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...infraToolRoutes,
     ...backlogToolRoutes,
     ...outputActionToolRoutes,
-    ...codingPipelineToolRoutes
+    ...codingPipelineToolRoutes,
+    ...remoteComputeToolRoutes,
+    ...supportToolRoutes,
+    ...orgGuardrailToolRoutes
 ];

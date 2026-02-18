@@ -85,6 +85,7 @@ export async function GET(
                     image: null
                 },
                 role: m.role,
+                permissions: m.permissions,
                 createdAt: m.createdAt
             })),
             total: memberships.length

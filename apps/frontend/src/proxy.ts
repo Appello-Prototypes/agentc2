@@ -40,6 +40,7 @@ export default proxy;
  * - Public root page (/)
  * - Sign up page (/signup)
  * - Public legal pages (/terms, /privacy, /security)
+ * - Public docs and blog pages (/docs/*, /blog/*)
  * - Auth API endpoints (/api/auth/*)
  * - Static assets (_next/*, favicon.ico, etc.)
  * - Files with extensions (robots.txt, manifest.json, images, etc.)
@@ -53,12 +54,14 @@ export const config = {
          * - /terms (Terms of Service)
          * - /privacy (Privacy Policy)
          * - /security (Security Policy)
+         * - /docs/* (documentation pages)
+         * - /blog/* (blog pages)
          * - /api/auth/* (Better Auth endpoints)
          * - _next/static (static files)
          * - _next/image (image optimization files)
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|about|terms$|privacy$|security$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
+        "/((?!api/auth|about|terms$|privacy$|security$|docs(?:/.*)?$|blog(?:/.*)?$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };

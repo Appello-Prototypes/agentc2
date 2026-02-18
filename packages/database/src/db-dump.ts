@@ -166,6 +166,11 @@ const tables: TableDef[] = [
 // Mastra-managed tables (not in Prisma schema)
 const mastraTables = ["mastra_message", "mastra_thread", "mastra_resource"];
 const ragTable = "rag_documents";
+const allowedTableSql = new Set([
+    ...tables.map((t) => t.sql),
+    ...mastraTables.map((t) => `"${t}"`),
+    ragTable
+]);
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -179,6 +184,9 @@ interface TableResult {
 }
 
 async function getCount(sql: string): Promise<number> {
+    if (!allowedTableSql.has(sql)) {
+        throw new Error(`Table is not allowlisted: ${sql}`);
+    }
     const result = (await prisma.$queryRawUnsafe(
         `SELECT count(*)::int as c FROM ${sql}`
     )) as Array<{ c: number }>;
@@ -187,6 +195,9 @@ async function getCount(sql: string): Promise<number> {
 
 async function getSamples(sql: string, limit: number): Promise<Record<string, unknown>[]> {
     if (limit <= 0) return [];
+    if (!allowedTableSql.has(sql)) {
+        throw new Error(`Table is not allowlisted: ${sql}`);
+    }
     const rows = (await prisma.$queryRawUnsafe(`SELECT * FROM ${sql} LIMIT ${limit}`)) as Record<
         string,
         unknown

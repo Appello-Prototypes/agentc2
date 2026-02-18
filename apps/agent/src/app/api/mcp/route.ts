@@ -4,6 +4,11 @@ import { prisma } from "@repo/database";
 import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/mastra/tools";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
+import { resolveRequiredToolAccess, type AccessLevel } from "@/lib/security/access-matrix";
+import { validateAccessToken } from "@/lib/mcp-oauth";
+import { enforceCsrf, getCorsHeaders } from "@/lib/security/http-security";
 
 /**
  * MCP Server Gateway
@@ -36,6 +41,17 @@ async function authenticateRequest(
         request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
     if (apiKey) {
+        const oauthToken = validateAccessToken(apiKey);
+        if (oauthToken) {
+            const membership = await prisma.membership.findFirst({
+                where: { organizationId: oauthToken.organizationId },
+                select: { userId: true }
+            });
+            if (membership) {
+                return { userId: membership.userId, organizationId: oauthToken.organizationId };
+            }
+        }
+
         const orgSlugHeader = request.headers.get("x-organization-slug")?.trim();
         const resolveOrgContext = async (orgSlug: string) => {
             const org = await prisma.organization.findUnique({
@@ -118,6 +134,36 @@ async function authenticateRequest(
     return { userId: session.user.id, organizationId };
 }
 
+async function hasRequiredToolAccess(
+    userId: string,
+    organizationId: string,
+    requiredAccess: AccessLevel
+): Promise<boolean> {
+    if (requiredAccess === "public") return true;
+    const membership = await prisma.membership.findUnique({
+        where: {
+            userId_organizationId: {
+                userId,
+                organizationId
+            }
+        },
+        select: { role: true }
+    });
+    if (!membership) {
+        // Organization context is already resolved by authentication; allow baseline member-level
+        // access, but keep admin/owner operations denied without an explicit membership role.
+        return requiredAccess === "authenticated" || requiredAccess === "member";
+    }
+    if (requiredAccess === "authenticated" || requiredAccess === "member") return true;
+    if (requiredAccess === "admin") {
+        return membership.role === "admin" || membership.role === "owner";
+    }
+    if (requiredAccess === "owner") {
+        return membership.role === "owner";
+    }
+    return false;
+}
+
 /**
  * GET /api/mcp
  *
@@ -159,7 +205,7 @@ export async function GET(request: NextRequest) {
                 modelProvider: true,
                 modelName: true,
                 isActive: true,
-                isPublic: true,
+                visibility: true,
                 maxSteps: true,
                 requiresApproval: true,
                 version: true,
@@ -245,7 +291,8 @@ export async function GET(request: NextRequest) {
                 agent_name: agent.name,
                 model: `${agent.modelProvider}/${agent.modelName}`,
                 is_active: agent.isActive,
-                is_public: agent.isPublic,
+                visibility: agent.visibility,
+                is_public: agent.visibility === "PUBLIC",
                 requires_approval: agent.requiresApproval,
                 max_steps: agent.maxSteps,
                 workspace: agent.workspace?.slug,
@@ -445,14 +492,35 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
     try {
+        const csrf = enforceCsrf(request);
+        if (csrf.response) {
+            return csrf.response;
+        }
+
         const authResult = await authenticateRequest(request);
         if (!authResult) {
             return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
         }
 
         const { userId, organizationId } = authResult;
+        const rate = await checkRateLimit(
+            `mcp:${organizationId}:${userId}`,
+            RATE_LIMIT_POLICIES.mcp
+        );
+        if (!rate.allowed) {
+            return NextResponse.json(
+                { success: false, error: "Rate limit exceeded" },
+                { status: 429 }
+            );
+        }
 
         const body = await request.json();
+        if (!body || typeof body !== "object") {
+            return NextResponse.json(
+                { success: false, error: "Invalid request payload" },
+                { status: 400 }
+            );
+        }
         const { method, tool, params } = body;
 
         // Validate request
@@ -474,6 +542,15 @@ export async function POST(request: NextRequest) {
             return NextResponse.json(
                 { success: false, error: "Missing tool name" },
                 { status: 400 }
+            );
+        }
+
+        const requiredAccess = resolveRequiredToolAccess(tool);
+        const canUseTool = await hasRequiredToolAccess(userId, organizationId, requiredAccess);
+        if (!canUseTool) {
+            return NextResponse.json(
+                { success: false, error: "Insufficient permissions for tool" },
+                { status: 403 }
             );
         }
 
@@ -649,6 +726,39 @@ export async function POST(request: NextRequest) {
                 }
 
                 try {
+                    const toolInputSchema = (
+                        registryTool as {
+                            inputSchema?: {
+                                safeParse?: (v: unknown) => {
+                                    success: boolean;
+                                    error?: {
+                                        issues?: Array<{
+                                            path: Array<string | number>;
+                                            message: string;
+                                        }>;
+                                    };
+                                    data?: unknown;
+                                };
+                            };
+                        }
+                    ).inputSchema;
+                    if (toolInputSchema?.safeParse) {
+                        const parsed = toolInputSchema.safeParse(scopedParams);
+                        if (!parsed.success) {
+                            return NextResponse.json(
+                                {
+                                    success: false,
+                                    error: "Invalid tool params",
+                                    issues:
+                                        parsed.error?.issues?.map((issue) => ({
+                                            path: issue.path.join("."),
+                                            message: issue.message
+                                        })) || []
+                                },
+                                { status: 400 }
+                            );
+                        }
+                    }
                     const result = await registryTool.execute(scopedParams);
                     return NextResponse.json({ success: true, result });
                 } catch (error) {
@@ -1079,4 +1189,12 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+export async function OPTIONS(request: NextRequest) {
+    const origin = request.headers.get("origin");
+    return new NextResponse(null, {
+        status: 204,
+        headers: getCorsHeaders(origin)
+    });
 }

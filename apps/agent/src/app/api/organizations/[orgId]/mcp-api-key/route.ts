@@ -32,6 +32,12 @@ async function getOrgAndMembership(userId: string, orgId: string) {
     return { organization, membership };
 }
 
+function maskApiKey(value: string | null): string | null {
+    if (!value) return null;
+    const suffix = value.slice(-4);
+    return `••••••••••••${suffix}`;
+}
+
 export async function GET(request: Request, { params }: { params: Promise<{ orgId: string }> }) {
     try {
         const session = await auth.api.getSession({
@@ -76,9 +82,18 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgI
                 ? (credentialPayload as { apiKey?: string }).apiKey || null
                 : null;
 
+        await auditLog.create({
+            action: "CREDENTIAL_ACCESS",
+            entityType: "ToolCredential",
+            entityId: credential?.id || `${organization.id}:${TOOL_ID}`,
+            userId: session.user.id,
+            metadata: { organizationId: organization.id, toolId: TOOL_ID }
+        });
+
         return NextResponse.json({
             success: true,
-            apiKey,
+            apiKeyMasked: maskApiKey(apiKey),
+            hasApiKey: !!apiKey,
             isActive: credential?.isActive ?? false,
             createdAt: credential?.createdAt ?? null,
             updatedAt: credential?.updatedAt ?? null

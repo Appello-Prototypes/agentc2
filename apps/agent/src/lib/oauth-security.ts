@@ -9,7 +9,7 @@
  * route can validate the round-trip without server-side storage.
  */
 
-import { createHmac, randomBytes, createHash } from "crypto";
+import { createHmac, randomBytes, createHash, timingSafeEqual } from "crypto";
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -64,11 +64,10 @@ function hmacSign(data: string): string {
 
 function hmacVerify(data: string, signature: string): boolean {
     const expected = hmacSign(data);
-    // Constant-time comparison
-    if (expected.length !== signature.length) return false;
-    const a = Buffer.from(expected);
-    const b = Buffer.from(signature);
-    return a.length === b.length && a.every((byte, i) => byte === b[i]);
+    const expectedBuffer = Buffer.from(expected, "utf8");
+    const signatureBuffer = Buffer.from(signature, "utf8");
+    if (expectedBuffer.length !== signatureBuffer.length) return false;
+    return timingSafeEqual(expectedBuffer, signatureBuffer);
 }
 
 /**

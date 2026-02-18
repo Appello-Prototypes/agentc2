@@ -8,7 +8,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { PrismaClient, AgentType } from "@prisma/client";
+import { PrismaClient, AgentType, AgentVisibility } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
@@ -1149,7 +1149,7 @@ When the moment is right (after you've shown value, answered a question well, or
         memoryConfig: null,
         scorers: ["relevancy", "completeness"],
         maxSteps: 10,
-        isPublic: true,
+        visibility: AgentVisibility.PUBLIC,
         metadata: {
             publicEmbed: {
                 greeting:
@@ -1396,7 +1396,7 @@ AgentC2 is NOT another chatbot. It's a platform where AI agents connect to your 
         memoryConfig: null,
         scorers: ["relevancy", "completeness"],
         maxSteps: 10,
-        isPublic: true,
+        visibility: AgentVisibility.PUBLIC,
         metadata: {
             publicEmbed: {
                 greeting:
@@ -1419,6 +1419,90 @@ AgentC2 is NOT another chatbot. It's a platform where AI agents connect to your 
                 maxMessagesPerSession: 20
             }
         }
+    },
+    {
+        slug: "support-desk",
+        name: "Support Desk",
+        description:
+            "Manages support tickets for bug reports, feature requests, improvements, and questions. Submit, track, and comment on tickets that roll up to the platform admin team.",
+        instructions: `You are the Support Desk agent. You help users manage support tickets — bug reports, feature requests, improvements, and general questions.
+
+## Your Purpose
+You are the primary interface between organization users and the platform support team. You make it easy for users to report issues, request features, track their submissions, and communicate with the admin team — all through natural conversation.
+
+## Capabilities
+You have four tools at your disposal:
+
+1. **submit-support-ticket** — Create new tickets (BUG, FEATURE_REQUEST, IMPROVEMENT, or QUESTION)
+2. **list-my-tickets** — List the user's submitted tickets with optional filters by status or type
+3. **view-ticket-details** — View full details of a specific ticket including the comment thread
+4. **comment-on-ticket** — Add a reply to an existing ticket
+
+## How to Handle Requests
+
+### Bug Reports
+When a user reports a bug:
+- Ask clarifying questions to get: what happened, what they expected, and steps to reproduce
+- Choose type BUG
+- Write a clear, descriptive title
+- Include all details in the description: steps to reproduce, expected behavior, actual behavior, any error messages
+- Suggest relevant tags (e.g., "ui", "api", "performance", "auth", "data")
+
+### Feature Requests
+When a user requests a feature:
+- Understand the use case — ask WHY they want it, not just WHAT
+- Choose type FEATURE_REQUEST
+- Write a title that captures the feature concisely
+- Describe the desired functionality and the problem it solves
+- Suggest tags like "ux", "automation", "integration", "reporting"
+
+### Improvements
+When a user suggests an enhancement to something that already exists:
+- Choose type IMPROVEMENT
+- Distinguish from feature requests — improvements enhance existing functionality
+- Reference the current behavior and the desired change
+
+### Questions
+For general questions about the platform:
+- Choose type QUESTION
+- These are for questions the support team should answer, not things you can answer yourself
+- If you can answer the question directly, do so without creating a ticket
+
+## Interaction Style
+- Be efficient and helpful — don't over-ask if the user has provided enough detail
+- Always confirm the ticket was submitted with the ticket number
+- When listing tickets, present them in a clean, readable format
+- When viewing ticket details, highlight any new admin responses the user may not have seen
+- If a ticket is marked WAITING_ON_CUSTOMER, proactively let the user know the support team is waiting for their response
+
+## Important Rules
+- You cannot change ticket status, priority, or assignment — that is admin-only
+- You cannot see internal admin notes — only user-visible comments
+- You cannot comment on CLOSED tickets — inform the user they need to submit a new ticket
+- Always use the user's context (userId, organizationId) which is injected automatically`,
+        modelProvider: "anthropic",
+        modelName: "claude-sonnet-4-20250514",
+        tools: [
+            "submit-support-ticket",
+            "list-my-tickets",
+            "view-ticket-details",
+            "comment-on-ticket"
+        ],
+        memoryEnabled: true,
+        memoryConfig: {
+            lastMessages: 20,
+            semanticRecall: { topK: 5, messageRange: 50 },
+            workingMemory: { enabled: false }
+        },
+        scorers: ["relevancy", "completeness"],
+        maxSteps: 5,
+        metadata: {
+            category: "support",
+            slack: {
+                displayName: "Support Desk",
+                iconEmoji: ":ticket:"
+            }
+        }
     }
 ];
 
@@ -1429,7 +1513,7 @@ async function seedAgents() {
     let updated = 0;
 
     for (const agentData of systemAgents) {
-        const { tools, type: agentType, isPublic, ...agentFields } = agentData;
+        const { tools, type: agentType, visibility, ...agentFields } = agentData;
         const resolvedType = agentType ?? AgentType.SYSTEM;
 
         // Find existing agent by slug (slug is not standalone unique, uses compound with workspaceId)
@@ -1439,7 +1523,7 @@ async function seedAgents() {
 
         // Auto-generate publicToken for public agents
         const publicToken =
-            isPublic && !existing?.publicToken
+            visibility === AgentVisibility.PUBLIC && !existing?.publicToken
                 ? randomUUID()
                 : (existing?.publicToken ?? undefined);
 
@@ -1447,7 +1531,7 @@ async function seedAgents() {
             ...agentFields,
             type: resolvedType,
             isActive: true,
-            isPublic: isPublic ?? false,
+            visibility: visibility ?? AgentVisibility.PRIVATE,
             ...(publicToken ? { publicToken } : {})
         };
 

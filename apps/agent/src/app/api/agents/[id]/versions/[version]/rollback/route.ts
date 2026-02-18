@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
+import { createChangeLog } from "@/lib/changelog";
 
 /**
  * POST /api/agents/[id]/versions/[version]/rollback
@@ -86,7 +87,10 @@ export async function POST(
                     : Prisma.JsonNull,
                 maxSteps: (snapshot.maxSteps as number) ?? agent.maxSteps,
                 scorers: (snapshot.scorers as string[]) || [],
-                isPublic: (snapshot.isPublic as boolean) ?? agent.isPublic,
+                visibility: ((snapshot.visibility as string) ?? agent.visibility) as
+                    | "PRIVATE"
+                    | "ORGANIZATION"
+                    | "PUBLIC",
                 metadata: snapshot.metadata
                     ? (snapshot.metadata as Prisma.InputJsonValue)
                     : Prisma.JsonNull
@@ -161,6 +165,26 @@ export async function POST(
                 source: "SYSTEM"
             }
         });
+
+        // Write structured changelog entry for rollback
+        createChangeLog({
+            entityType: "agent",
+            entityId: agent.id,
+            entitySlug: agent.slug,
+            version: newVersion,
+            action: "rollback",
+            changes: [
+                {
+                    field: "version",
+                    action: "modified",
+                    before: agent.version,
+                    after: targetVersion
+                }
+            ],
+            summary: `Rolled back from v${agent.version} to v${targetVersion}`,
+            reason: reason || undefined,
+            createdBy
+        }).catch((err) => console.error("[ChangeLog] Rollback write failed:", err));
 
         // Create audit log
         await prisma.auditLog.create({

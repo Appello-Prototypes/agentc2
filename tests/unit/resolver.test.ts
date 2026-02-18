@@ -179,7 +179,7 @@ describe("AgentResolver Logic", () => {
             await prismaMock.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { isPublic: true }]
+                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -188,7 +188,7 @@ describe("AgentResolver Logic", () => {
             expect(prismaMock.agent.findMany).toHaveBeenCalledWith({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { isPublic: true }]
+                    OR: [{ type: "SYSTEM" }, { ownerId: "user-123" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -202,7 +202,7 @@ describe("AgentResolver Logic", () => {
             await prismaMock.agent.findMany({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { isPublic: true }]
+                    OR: [{ type: "SYSTEM" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
@@ -211,7 +211,7 @@ describe("AgentResolver Logic", () => {
             expect(prismaMock.agent.findMany).toHaveBeenCalledWith({
                 where: {
                     isActive: true,
-                    OR: [{ type: "SYSTEM" }, { isPublic: true }]
+                    OR: [{ type: "SYSTEM" }, { visibility: "PUBLIC" }]
                 },
                 include: { tools: true },
                 orderBy: [{ type: "asc" }, { name: "asc" }]

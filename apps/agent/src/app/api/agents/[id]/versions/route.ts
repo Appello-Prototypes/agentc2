@@ -328,7 +328,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             scorers: agent.scorers,
             tools: agent.tools.map((t) => ({ toolId: t.toolId, config: t.config })),
             skills: agent.skills.map((s) => ({ skillId: s.skillId, pinned: s.pinned })),
-            isPublic: agent.isPublic,
+            visibility: agent.visibility,
             metadata: agent.metadata
         };
 

@@ -26,6 +26,7 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
+    Switch,
     Input
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
@@ -40,6 +41,7 @@ interface Member {
         image: string | null;
     };
     role: string;
+    permissions: string[];
     createdAt: string;
 }
 
@@ -158,6 +160,45 @@ export default function MembersSettingsPage() {
         }
     };
 
+    const handleTogglePermission = async (userId: string, permission: string, enabled: boolean) => {
+        setError(null);
+        setSuccess(null);
+
+        const member = members.find((m) => m.userId === userId);
+        if (!member) return;
+
+        const currentPerms = member.permissions || [];
+        const newPerms = enabled
+            ? [...currentPerms, permission]
+            : currentPerms.filter((p) => p !== permission);
+
+        try {
+            const res = await fetch(
+                `${getApiBase()}/api/organizations/${organizationId}/members/${userId}`,
+                {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ permissions: newPerms })
+                }
+            );
+
+            const data = await res.json();
+            if (data.success) {
+                setMembers((prev) =>
+                    prev.map((m) => (m.userId === userId ? { ...m, permissions: newPerms } : m))
+                );
+                setSuccess(
+                    `${enabled ? "Granted" : "Revoked"} guardrail override for ${member.user.name}`
+                );
+            } else {
+                setError(data.error || "Failed to update permissions");
+            }
+        } catch (err) {
+            console.error("Failed to update permissions:", err);
+            setError("Failed to update permissions");
+        }
+    };
+
     const getInitials = (name: string) => {
         return name
             .split(" ")
@@ -264,6 +305,11 @@ export default function MembersSettingsPage() {
                                 <TableRow>
                                     <TableHead>Member</TableHead>
                                     <TableHead>Role</TableHead>
+                                    {canManageMembers && (
+                                        <TableHead className="text-center">
+                                            Guardrail Override
+                                        </TableHead>
+                                    )}
                                     <TableHead>Joined</TableHead>
                                     {canManageMembers && (
                                         <TableHead className="text-right">Actions</TableHead>
@@ -351,6 +397,23 @@ export default function MembersSettingsPage() {
                                                     </Badge>
                                                 )}
                                             </TableCell>
+                                            {canManageMembers && (
+                                                <TableCell className="text-center">
+                                                    <Switch
+                                                        checked={(
+                                                            member.permissions || []
+                                                        ).includes("guardrail_override")}
+                                                        onCheckedChange={(checked) =>
+                                                            handleTogglePermission(
+                                                                member.userId,
+                                                                "guardrail_override",
+                                                                checked
+                                                            )
+                                                        }
+                                                        disabled={!canManageMembers}
+                                                    />
+                                                </TableCell>
+                                            )}
                                             <TableCell className="text-muted-foreground">
                                                 {formatDate(member.createdAt)}
                                             </TableCell>

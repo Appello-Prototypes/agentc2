@@ -41,7 +41,13 @@
     "test:e2e:playwright:debug": "playwright test --debug"
   },
   "overrides": {
-    "@mastra/core": "^1.2.0"
+    "@mastra/core": "^1.2.0",
+    "next": "16.1.5",
+    "storybook": "8.6.15",
+    "axios": "^1.13.5",
+    "fast-xml-parser": "^5.3.6",
+    "ajv": "^8.18.0",
+    "qs": "^6.14.2"
   },
   "devDependencies": {
     "@faker-js/faker": "^10.2.0",

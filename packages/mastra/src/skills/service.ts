@@ -425,7 +425,7 @@ async function createAgentVersionForSkillChange(agentId: string, changeDescripti
             skillVersion: s.skill.version,
             pinned: s.pinned
         })),
-        isPublic: agent.isPublic,
+        visibility: agent.visibility,
         isActive: agent.isActive,
         metadata: agent.metadata
     };

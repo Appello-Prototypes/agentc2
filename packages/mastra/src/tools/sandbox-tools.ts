@@ -19,8 +19,8 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { spawn, execSync, type ChildProcess } from "child_process";
-import { mkdir, writeFile, readFile, stat, readdir } from "fs/promises";
-import { join, normalize, isAbsolute } from "path";
+import { mkdir, writeFile, readFile, stat, readdir, realpath } from "fs/promises";
+import { join, normalize, isAbsolute, extname, resolve } from "path";
 
 const WORKSPACE_ROOT = process.env.AGENT_WORKSPACE_ROOT || "/var/lib/agentc2/workspaces";
 const SANDBOX_IMAGE = process.env.SANDBOX_DOCKER_IMAGE || "agentc2-sandbox";
@@ -30,6 +30,41 @@ const MAX_OUTPUT_SIZE = 100_000; // 100KB of stdout/stderr
 
 const DOCKER_MEMORY_LIMIT = process.env.SANDBOX_MEMORY_LIMIT || "512m";
 const DOCKER_CPU_LIMIT = process.env.SANDBOX_CPU_LIMIT || "1.0";
+const ALLOW_UNSANDBOXED_FALLBACK =
+    process.env.SANDBOX_ALLOW_UNSANDBOXED_FALLBACK === "true" &&
+    process.env.NODE_ENV !== "production";
+
+const ALLOWED_WRITE_EXTENSIONS = new Set([
+    ".html",
+    ".htm",
+    ".css",
+    ".json",
+    ".csv",
+    ".txt",
+    ".md",
+    ".svg",
+    ".png",
+    ".jpg",
+    ".jpeg",
+    ".gif",
+    ".webp",
+    ".py",
+    ".ts",
+    ".js",
+    ".sh",
+    ".sql",
+    ".xml",
+    ".yaml",
+    ".yml",
+    ".pdf",
+    ".log",
+    ".toml",
+    ".ini",
+    ".cfg",
+    ".env",
+    ".r",
+    ".rb"
+]);
 
 /**
  * Secrets that should NEVER be passed to child processes (fallback mode only)
@@ -83,30 +118,45 @@ function buildSafeEnv(): Record<string, string> {
     return safe;
 }
 
-function resolveWorkspacePath(agentId: string, relativePath: string): string {
-    if (isAbsolute(relativePath)) {
+function resolveWorkspacePath(
+    agentId: string,
+    relativePath: string,
+    organizationId?: string
+): string {
+    const decoded = decodeURIComponent(relativePath);
+    if (isAbsolute(decoded)) {
         throw new Error("Absolute paths are not allowed. Use relative paths within the workspace.");
     }
 
-    const normalized = normalize(relativePath);
-    if (normalized.startsWith("..") || normalized.includes("/../")) {
+    const normalized = normalize(decoded);
+    if (
+        normalized.startsWith("..") ||
+        normalized.includes("/../") ||
+        normalized.includes("\\..\\") ||
+        normalized.includes("/..\\") ||
+        normalized.includes("\\../")
+    ) {
         throw new Error("Directory traversal is not allowed.");
     }
 
-    const workspaceDir = join(WORKSPACE_ROOT, agentId);
-    const resolved = join(workspaceDir, normalized);
-
-    if (!resolved.startsWith(workspaceDir)) {
+    const workspaceDir = organizationId
+        ? join(WORKSPACE_ROOT, organizationId, agentId)
+        : join(WORKSPACE_ROOT, agentId);
+    const resolvedPath = resolve(workspaceDir, normalized);
+    const workspacePrefix = workspaceDir.endsWith("/") ? workspaceDir : `${workspaceDir}/`;
+    if (resolvedPath !== workspaceDir && !resolvedPath.startsWith(workspacePrefix)) {
         throw new Error("Path escapes the agent workspace.");
     }
 
-    return resolved;
+    return resolvedPath;
 }
 
-async function ensureWorkspaceDir(agentId: string): Promise<string> {
-    const dir = join(WORKSPACE_ROOT, agentId);
+async function ensureWorkspaceDir(agentId: string, organizationId?: string): Promise<string> {
+    const dir = organizationId
+        ? join(WORKSPACE_ROOT, organizationId, agentId)
+        : join(WORKSPACE_ROOT, agentId);
     await mkdir(dir, { recursive: true });
-    return dir;
+    return realpath(dir);
 }
 
 function truncate(text: string, maxLen: number): string {
@@ -411,6 +461,10 @@ export const executeCodeTool = createTool({
             .string()
             .optional()
             .describe("Agent ID for workspace isolation. Defaults to 'default'."),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for multi-tenant workspace isolation. Injected at runtime."),
         networkAccess: z
             .boolean()
             .optional()
@@ -435,9 +489,17 @@ export const executeCodeTool = createTool({
         timedOut: z.boolean(),
         executionMode: z.string()
     }),
-    execute: async ({ language, code, timeout, agentId, networkAccess, injectCredentials }) => {
+    execute: async ({
+        language,
+        code,
+        timeout,
+        agentId,
+        organizationId,
+        networkAccess,
+        injectCredentials
+    }) => {
         const effectiveAgentId = agentId || "default";
-        const workspaceDir = await ensureWorkspaceDir(effectiveAgentId);
+        const workspaceDir = await ensureWorkspaceDir(effectiveAgentId, organizationId);
         const timeoutMs = Math.min((timeout || 30) * 1000, MAX_TIMEOUT_MS);
         const useNetwork = networkAccess ?? false;
         const providerKeys = injectCredentials ?? [];
@@ -454,6 +516,12 @@ export const executeCodeTool = createTool({
                 credentials
             });
             return { ...result, executionMode: "docker" };
+        }
+
+        if (!ALLOW_UNSANDBOXED_FALLBACK) {
+            throw new Error(
+                "Docker sandbox is unavailable and unsandboxed fallback is disabled. Enable Docker or explicitly set SANDBOX_ALLOW_UNSANDBOXED_FALLBACK=true in non-production environments."
+            );
         }
 
         if (providerKeys.length && Object.keys(credentials).length) {
@@ -488,15 +556,26 @@ export const writeWorkspaceFileTool = createTool({
         agentId: z
             .string()
             .optional()
-            .describe("Agent ID for workspace isolation. Defaults to 'default'.")
+            .describe("Agent ID for workspace isolation. Defaults to 'default'."),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for multi-tenant workspace isolation. Injected at runtime.")
     }),
     outputSchema: z.object({
         success: z.boolean(),
         path: z.string(),
         size: z.number()
     }),
-    execute: async ({ path: relativePath, content, agentId }) => {
+    execute: async ({ path: relativePath, content, agentId, organizationId }) => {
         const effectiveAgentId = agentId || "default";
+
+        const ext = extname(relativePath).toLowerCase();
+        if (!ext || !ALLOWED_WRITE_EXTENSIONS.has(ext)) {
+            throw new Error(
+                `File extension "${ext}" is not allowed. Permitted extensions: ${[...ALLOWED_WRITE_EXTENSIONS].join(", ")}`
+            );
+        }
 
         if (content.length > MAX_FILE_SIZE) {
             throw new Error(
@@ -504,13 +583,37 @@ export const writeWorkspaceFileTool = createTool({
             );
         }
 
-        const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath);
+        // Enforce org storage quota if organizationId is available
+        if (organizationId) {
+            await enforceStorageQuota(organizationId, content.length);
+        }
+
+        const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath, organizationId);
+
+        // Check if file already exists (for delta tracking)
+        let previousSize = 0;
+        try {
+            const existing = await stat(resolvedPath);
+            previousSize = existing.size;
+        } catch {
+            // File doesn't exist yet
+        }
 
         const parentDir = join(resolvedPath, "..");
         await mkdir(parentDir, { recursive: true });
 
         await writeFile(resolvedPath, content, "utf-8");
         const stats = await stat(resolvedPath);
+
+        // Update storage usage tracking
+        if (organizationId) {
+            await updateStorageUsage(
+                organizationId,
+                effectiveAgentId,
+                stats.size - previousSize,
+                previousSize === 0 ? 1 : 0
+            );
+        }
 
         return {
             success: true,
@@ -534,15 +637,19 @@ export const readWorkspaceFileTool = createTool({
         agentId: z
             .string()
             .optional()
-            .describe("Agent ID for workspace isolation. Defaults to 'default'.")
+            .describe("Agent ID for workspace isolation. Defaults to 'default'."),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for multi-tenant workspace isolation. Injected at runtime.")
     }),
     outputSchema: z.object({
         content: z.string(),
         size: z.number()
     }),
-    execute: async ({ path: relativePath, agentId }) => {
+    execute: async ({ path: relativePath, agentId, organizationId }) => {
         const effectiveAgentId = agentId || "default";
-        const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath);
+        const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath, organizationId);
 
         try {
             const content = await readFile(resolvedPath, "utf-8");
@@ -571,7 +678,11 @@ export const listWorkspaceFilesTool = createTool({
         agentId: z
             .string()
             .optional()
-            .describe("Agent ID for workspace isolation. Defaults to 'default'.")
+            .describe("Agent ID for workspace isolation. Defaults to 'default'."),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for multi-tenant workspace isolation. Injected at runtime.")
     }),
     outputSchema: z.object({
         files: z.array(
@@ -582,11 +693,14 @@ export const listWorkspaceFilesTool = createTool({
             })
         )
     }),
-    execute: async ({ path: relativePath, agentId }) => {
+    execute: async ({ path: relativePath, agentId, organizationId }) => {
         const effectiveAgentId = agentId || "default";
-        const targetDir = relativePath
-            ? resolveWorkspacePath(effectiveAgentId, relativePath)
+        const baseDir = organizationId
+            ? join(WORKSPACE_ROOT, organizationId, effectiveAgentId)
             : join(WORKSPACE_ROOT, effectiveAgentId);
+        const targetDir = relativePath
+            ? resolveWorkspacePath(effectiveAgentId, relativePath, organizationId)
+            : baseDir;
 
         try {
             await mkdir(targetDir, { recursive: true });
@@ -622,3 +736,113 @@ export const listWorkspaceFilesTool = createTool({
         }
     }
 });
+
+// ─── Storage quota enforcement ───────────────────────────────────────────────
+
+async function enforceStorageQuota(organizationId: string, newContentSize: number): Promise<void> {
+    try {
+        const { prisma } = await import("@repo/database");
+
+        const org = await prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { maxStorageBytes: true }
+        });
+
+        if (!org?.maxStorageBytes) return;
+
+        const usage = await prisma.workspaceStorageUsage.aggregate({
+            where: { organizationId },
+            _sum: { totalBytes: true }
+        });
+
+        const currentBytes = Number(usage._sum.totalBytes ?? 0);
+        const limitBytes = Number(org.maxStorageBytes);
+
+        if (currentBytes + newContentSize > limitBytes) {
+            const usedMB = (currentBytes / 1_048_576).toFixed(1);
+            const limitMB = (limitBytes / 1_048_576).toFixed(1);
+            throw new Error(
+                `Workspace storage quota exceeded (${usedMB} MB / ${limitMB} MB). ` +
+                    `Delete old files or request a quota increase.`
+            );
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message.includes("quota exceeded")) throw err;
+        console.warn("[Sandbox] Storage quota check failed (non-blocking):", err);
+    }
+}
+
+async function updateStorageUsage(
+    organizationId: string,
+    agentId: string,
+    bytesDelta: number,
+    fileCountDelta: number
+): Promise<void> {
+    try {
+        const { prisma } = await import("@repo/database");
+
+        // Resolve agent DB id from slug
+        const agent = await prisma.agent.findFirst({
+            where: { slug: agentId },
+            select: { id: true }
+        });
+
+        if (!agent) return;
+
+        await prisma.workspaceStorageUsage.upsert({
+            where: {
+                organizationId_agentId: {
+                    organizationId,
+                    agentId: agent.id
+                }
+            },
+            create: {
+                organizationId,
+                agentId: agent.id,
+                totalBytes: BigInt(Math.max(0, bytesDelta)),
+                fileCount: Math.max(0, fileCountDelta),
+                lastWriteAt: new Date()
+            },
+            update: {
+                totalBytes: { increment: BigInt(bytesDelta) },
+                fileCount: { increment: fileCountDelta },
+                lastWriteAt: new Date()
+            }
+        });
+    } catch (err) {
+        console.warn("[Sandbox] Storage usage update failed (non-blocking):", err);
+    }
+}
+
+// ─── Workspace tool binding ──────────────────────────────────────────────────
+
+const WORKSPACE_TOOL_IDS = new Set([
+    "execute-code",
+    "write-workspace-file",
+    "read-workspace-file",
+    "list-workspace-files"
+]);
+
+/**
+ * Wraps a sandbox tool with pre-bound organizationId and agentId so the LLM
+ * doesn't need to provide them. Called by the agent resolver at hydration time.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export function bindWorkspaceContext(
+    tool: any,
+    context: { organizationId: string; agentId: string }
+) {
+    if (!tool?.id || !WORKSPACE_TOOL_IDS.has(tool.id)) return tool;
+
+    const originalExecute = tool.execute;
+    return {
+        ...tool,
+        execute: (input: Record<string, unknown>) => {
+            return originalExecute({
+                ...input,
+                organizationId: input.organizationId || context.organizationId,
+                agentId: input.agentId || context.agentId
+            });
+        }
+    };
+}

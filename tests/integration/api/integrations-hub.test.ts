@@ -10,6 +10,7 @@ const getIntegrationProvidersMock = vi.fn();
 const getMcpToolsMock = vi.fn();
 const invalidateMcpCacheForOrgMock = vi.fn();
 const invalidateMcpToolsCacheForOrgMock = vi.fn();
+const resetMcpClientsMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -31,11 +32,24 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/mastra/mcp", () => ({
     getIntegrationProviders: getIntegrationProvidersMock,
     getMcpTools: getMcpToolsMock,
     invalidateMcpCacheForOrg: invalidateMcpCacheForOrgMock,
+    resetMcpClients: resetMcpClientsMock
+}));
+
+vi.mock("@repo/mastra/tools", () => ({
     invalidateMcpToolsCacheForOrg: invalidateMcpToolsCacheForOrgMock
+}));
+
+vi.mock("@repo/mastra/agents/model-registry", () => ({
+    clearModelCache: vi.fn()
+}));
+
+vi.mock("@repo/mastra", () => ({
+    deprovisionIntegration: vi.fn().mockResolvedValue({ success: true }),
+    hasBlueprint: vi.fn().mockReturnValue(false)
 }));
 
 describe("Integrations Hub API", () => {

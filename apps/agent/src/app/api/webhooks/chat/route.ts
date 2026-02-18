@@ -54,16 +54,6 @@ export async function POST(request: NextRequest) {
         const userThreadId = threadId || `webhook-wizard-${userId}-${Date.now()}`;
         const resourceId = userId;
 
-        // Resolve the webhook-wizard agent from the database
-        const { agent, record, source } = await agentResolver.resolve({
-            slug: WEBHOOK_WIZARD_SLUG,
-            requestContext: { userId }
-        });
-
-        console.log(
-            `[Webhook Chat] Resolved agent '${WEBHOOK_WIZARD_SLUG}' from ${source} for user ${userId} (org: ${organizationId})`
-        );
-
         // Extract last user message
         const lastUserMessage = messages
             ?.filter((m: { role: string }) => m.role === "user")
@@ -82,6 +72,16 @@ export async function POST(request: NextRequest) {
                 { status: 400 }
             );
         }
+
+        // Resolve the webhook-wizard agent only after validating input payload.
+        const { agent, record, source } = await agentResolver.resolve({
+            slug: WEBHOOK_WIZARD_SLUG,
+            requestContext: { userId }
+        });
+
+        console.log(
+            `[Webhook Chat] Resolved agent '${WEBHOOK_WIZARD_SLUG}' from ${source} for user ${userId} (org: ${organizationId})`
+        );
 
         // Start recording the run (fire-and-forget to avoid blocking the stream).
         const agentId = record?.id || null;

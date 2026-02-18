@@ -290,6 +290,15 @@ import {
     dispatchCodingPipelineTool,
     updatePipelineStatusTool
 } from "./coding-pipeline-tools";
+import { lookupPipelineConfigTool } from "./pipeline-config-tools";
+import { mergePullRequestTool, awaitDeployTool } from "./merge-deploy-tools";
+import { runScenariosTool, calculateTrustScoreTool } from "./scenario-tools";
+import {
+    provisionComputeTool,
+    remoteExecuteTool,
+    remoteFileTransferTool,
+    teardownComputeTool
+} from "./remote-compute-tools";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getMcpTools } from "../mcp/client";
@@ -334,6 +343,17 @@ export const toolCategoryMap: Record<string, string> = {
     "ingest-ticket": "Coding Pipeline",
     "dispatch-coding-pipeline": "Coding Pipeline",
     "update-pipeline-status": "Coding Pipeline",
+    "lookup-pipeline-config": "Coding Pipeline",
+    "merge-pull-request": "Coding Pipeline",
+    "await-deploy": "Coding Pipeline",
+    "run-scenarios": "Coding Pipeline",
+    "calculate-trust-score": "Coding Pipeline",
+
+    // Remote Compute
+    "provision-compute": "Remote Compute",
+    "remote-execute": "Remote Compute",
+    "remote-file-transfer": "Remote Compute",
+    "teardown-compute": "Remote Compute",
     "backlog-get": "Backlog",
     "backlog-add-task": "Backlog",
     "backlog-list-tasks": "Backlog",
@@ -572,6 +592,7 @@ export const toolCategoryMap: Record<string, string> = {
 export const toolCategoryOrder: string[] = [
     "Utilities",
     "Code Execution",
+    "Remote Compute",
     "Backlog",
     "Agent Management",
     "Agent Quality & Runs",
@@ -688,6 +709,17 @@ export const toolRegistry: Record<string, any> = {
     "ingest-ticket": ingestTicketTool,
     "dispatch-coding-pipeline": dispatchCodingPipelineTool,
     "update-pipeline-status": updatePipelineStatusTool,
+    "lookup-pipeline-config": lookupPipelineConfigTool,
+    "merge-pull-request": mergePullRequestTool,
+    "await-deploy": awaitDeployTool,
+    "run-scenarios": runScenariosTool,
+    "calculate-trust-score": calculateTrustScoreTool,
+
+    // Remote Compute
+    "provision-compute": provisionComputeTool,
+    "remote-execute": remoteExecuteTool,
+    "remote-file-transfer": remoteFileTransferTool,
+    "teardown-compute": teardownComputeTool,
 
     // Backlog tools
     "backlog-get": backlogGetTool,

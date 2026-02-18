@@ -21,7 +21,7 @@ export const mockAgent = {
     memoryConfig: null,
     maxSteps: 5,
     scorers: [],
-    isPublic: false,
+    visibility: "PRIVATE",
     metadata: null,
     version: 1,
     createdAt: new Date("2024-01-01"),

@@ -3,14 +3,36 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
     resolve: {
-        alias: {
-            "@repo/database": path.resolve(__dirname, "packages/database/src/index.ts"),
-            "@repo/auth": path.resolve(__dirname, "packages/auth/src/index.ts"),
-            "@repo/mastra": path.resolve(__dirname, "packages/mastra/src/index.ts"),
-            "@": path.resolve(__dirname, "apps/agent/src"),
-            "@mastra/mcp": path.resolve(__dirname, "tests/mocks/mastra-mcp.ts"),
-            "next/headers": path.resolve(__dirname, "tests/mocks/next-headers.ts")
-        }
+        alias: [
+            {
+                find: /^@repo\/mastra\/(.+)$/,
+                replacement: path.resolve(__dirname, "packages/mastra/src/$1")
+            },
+            {
+                find: "@repo/database",
+                replacement: path.resolve(__dirname, "packages/database/src/index.ts")
+            },
+            {
+                find: "@repo/auth",
+                replacement: path.resolve(__dirname, "packages/auth/src/index.ts")
+            },
+            {
+                find: "@repo/mastra",
+                replacement: path.resolve(__dirname, "packages/mastra/src/index.ts")
+            },
+            {
+                find: "@",
+                replacement: path.resolve(__dirname, "apps/agent/src")
+            },
+            {
+                find: "@mastra/mcp",
+                replacement: path.resolve(__dirname, "tests/mocks/mastra-mcp.ts")
+            },
+            {
+                find: "next/headers",
+                replacement: path.resolve(__dirname, "tests/mocks/next-headers.ts")
+            }
+        ]
     },
     test: {
         globals: true,

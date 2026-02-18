@@ -14,7 +14,7 @@ export interface VersionSnapshot {
     scorers?: string[];
     tools?: Array<{ toolId: string; config?: Record<string, unknown> }>;
     skills?: Array<{ skillId: string; pinned?: boolean }>;
-    isPublic?: boolean;
+    visibility?: string;
     metadata?: Record<string, unknown>;
 }
 

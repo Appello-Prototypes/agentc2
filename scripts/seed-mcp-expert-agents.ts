@@ -111,7 +111,7 @@ async function seedMcpExpertAgents() {
                 maxSteps: spec.maxSteps,
                 scorers: spec.scorers,
                 type: AgentType.USER,
-                isPublic: true,
+                visibility: "PUBLIC",
                 isActive: true,
                 metadata: spec.metadata
             },
@@ -131,7 +131,7 @@ async function seedMcpExpertAgents() {
                 maxSteps: spec.maxSteps,
                 scorers: spec.scorers,
                 type: AgentType.USER,
-                isPublic: true,
+                visibility: "PUBLIC",
                 isActive: true,
                 metadata: spec.metadata
             }

@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const agent = await prisma.agent.findFirst({
             where: {
                 slug: id,
-                isPublic: true,
+                visibility: "PUBLIC",
                 publicToken: token,
                 isActive: true
             },

@@ -1321,7 +1321,7 @@ export async function POST(request: NextRequest) {
     // Get the raw body for signature verification
     const body = await request.text();
 
-    // In development, skip signature verification if no secret configured
+    // Fail closed in production when signing secret is missing.
     if (signingSecret) {
         const signature = request.headers.get("x-slack-signature");
         const timestamp = request.headers.get("x-slack-request-timestamp");
@@ -1331,6 +1331,12 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
         }
     } else {
+        if (process.env.NODE_ENV === "production") {
+            return NextResponse.json(
+                { error: "Slack signing secret is not configured" },
+                { status: 503 }
+            );
+        }
         console.warn("[Slack] SLACK_SIGNING_SECRET not configured - skipping verification");
     }
 

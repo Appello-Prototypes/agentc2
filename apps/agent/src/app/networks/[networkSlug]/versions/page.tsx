@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { ChangelogTimeline } from "@/components/changelog";
 
 interface NetworkVersion {
     id: string;
@@ -27,22 +28,26 @@ export default function NetworkVersionsPage() {
     }, [networkSlug]);
 
     return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Network versions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-                {versions.length === 0 ? (
-                    <div className="text-muted-foreground">No versions yet.</div>
-                ) : (
-                    versions.map((version) => (
-                        <div key={version.id} className="flex justify-between">
-                            <div>v{version.version}</div>
-                            <div className="text-muted-foreground">{version.description}</div>
-                        </div>
-                    ))
-                )}
-            </CardContent>
-        </Card>
+        <div className="space-y-6">
+            <Card>
+                <CardHeader>
+                    <CardTitle>Network versions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3 text-sm">
+                    {versions.length === 0 ? (
+                        <div className="text-muted-foreground">No versions yet.</div>
+                    ) : (
+                        versions.map((version) => (
+                            <div key={version.id} className="flex justify-between">
+                                <div>v{version.version}</div>
+                                <div className="text-muted-foreground">{version.description}</div>
+                            </div>
+                        ))
+                    )}
+                </CardContent>
+            </Card>
+
+            <ChangelogTimeline entityType="network" entityId={networkSlug} title="Audit Trail" />
+        </div>
     );
 }

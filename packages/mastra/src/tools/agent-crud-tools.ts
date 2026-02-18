@@ -52,7 +52,7 @@ const agentCreateSchema = z
         tenantId: z.string().optional().nullable(),
         workspaceId: z.string().optional().nullable(),
         ownerId: z.string().optional().nullable(),
-        isPublic: z.boolean().optional(),
+        visibility: z.enum(["PRIVATE", "ORGANIZATION", "PUBLIC"]).optional(),
         requiresApproval: z.boolean().optional(),
         maxSpendUsd: z.number().optional().nullable(),
         metadata: z.record(z.any()).optional().nullable(),
@@ -194,7 +194,7 @@ const buildAgentSnapshot = (agent: {
     workflows: string[];
     scorers: string[];
     tools: { toolId: string; config: unknown }[];
-    isPublic: boolean;
+    visibility: string;
     isActive: boolean;
     requiresApproval: boolean;
     maxSpendUsd: number | null;
@@ -216,7 +216,7 @@ const buildAgentSnapshot = (agent: {
     workflows: agent.workflows,
     scorers: agent.scorers,
     tools: agent.tools.map((tool) => ({ toolId: tool.toolId, config: tool.config })),
-    isPublic: agent.isPublic,
+    visibility: agent.visibility,
     isActive: agent.isActive,
     requiresApproval: agent.requiresApproval,
     maxSpendUsd: agent.maxSpendUsd,
@@ -273,7 +273,7 @@ export const agentCreateTool = createTool({
                 tenantId: input.tenantId ?? null,
                 workspaceId: input.workspaceId ?? null,
                 ownerId: input.ownerId ?? null,
-                isPublic: input.isPublic ?? false,
+                visibility: input.visibility ?? "PRIVATE",
                 requiresApproval: input.requiresApproval ?? false,
                 maxSpendUsd: input.maxSpendUsd ?? null,
                 metadata:
@@ -453,7 +453,7 @@ export const agentUpdateTool = createTool({
             tenantId: payload.tenantId ?? existing.tenantId,
             workspaceId: payload.workspaceId ?? existing.workspaceId,
             ownerId: payload.ownerId ?? existing.ownerId,
-            isPublic: payload.isPublic ?? existing.isPublic,
+            visibility: payload.visibility ?? existing.visibility,
             requiresApproval: payload.requiresApproval ?? existing.requiresApproval,
             maxSpendUsd: payload.maxSpendUsd ?? existing.maxSpendUsd,
             metadata:
