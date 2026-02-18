@@ -181,7 +181,9 @@ jobs:
             echo ""
             echo "7a. Building sandbox Docker image (if changed)..."
             DOCKERFILE="packages/mastra/docker/Dockerfile.sandbox"
-            if [ -f "$DOCKERFILE" ]; then
+            if ! command -v docker >/dev/null 2>&1; then
+              echo "   Docker not installed — skipping sandbox image build."
+            elif [ -f "$DOCKERFILE" ]; then
               CURRENT_HASH=$(sha256sum "$DOCKERFILE" | cut -d' ' -f1)
               STORED_HASH=""
               if [ -f "/var/lib/agentc2/.sandbox-image-hash" ]; then
