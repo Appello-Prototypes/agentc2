@@ -1033,9 +1033,19 @@ export default function UnifiedChatPage() {
 
     // ── Render message parts ─────────────────────────────────────────────
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const renderPart = (part: any, index: number) => {
+    const renderPart = (part: any, index: number, message?: { id: string }) => {
         if (part.type === "text") {
-            return <MessageResponse key={index}>{part.text}</MessageResponse>;
+            const isLastMsg = message?.id === messages[messages.length - 1]?.id;
+            const animating = isLastMsg && (isStreaming || isSubmitted);
+            return (
+                <MessageResponse
+                    key={index}
+                    isAnimating={animating}
+                    caret={animating ? "block" : undefined}
+                >
+                    {part.text}
+                </MessageResponse>
+            );
         }
         if (part.type === "file") {
             const isImage = part.mediaType?.startsWith("image/");
@@ -1322,7 +1332,9 @@ export default function UnifiedChatPage() {
                                 <Message key={message.id} from={message.role}>
                                     <MessageContent>
                                         {message.parts && message.parts.length > 0 ? (
-                                            message.parts.map(renderPart)
+                                            message.parts.map((part, idx) =>
+                                                renderPart(part, idx, message)
+                                            )
                                         ) : message.role === "assistant" &&
                                           (isStreaming || isSubmitted) &&
                                           message.id === messages[messages.length - 1]?.id ? (
