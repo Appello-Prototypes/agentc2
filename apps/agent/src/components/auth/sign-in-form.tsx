@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@repo/auth/client";
 import { GOOGLE_OAUTH_SCOPES } from "@repo/auth/google-scopes";
+import { MICROSOFT_OAUTH_SCOPES } from "@repo/auth/microsoft-scopes";
 import { Button, Input, Field, FieldError, FieldLabel } from "@repo/ui";
 import Link from "next/link";
 
@@ -26,6 +27,17 @@ function GoogleLogo({ className }: { className?: string }) {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                 fill="#EA4335"
             />
+        </svg>
+    );
+}
+
+function MicrosoftLogo({ className }: { className?: string }) {
+    return (
+        <svg className={className} viewBox="0 0 21 21" fill="none">
+            <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+            <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+            <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+            <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
         </svg>
     );
 }
@@ -73,16 +85,18 @@ export function SignInForm() {
         }
     };
 
-    const handleGoogleSignIn = async () => {
+    const handleSocialSignIn = async (provider: "google" | "microsoft") => {
         setError("");
         setSocialLoading(true);
 
         try {
+            const scopes =
+                provider === "google" ? [...GOOGLE_OAUTH_SCOPES] : [...MICROSOFT_OAUTH_SCOPES];
             await signIn.social({
-                provider: "google",
+                provider,
                 callbackURL: callbackUrl,
                 errorCallbackURL: "/login?error=no_account",
-                scopes: [...GOOGLE_OAUTH_SCOPES]
+                scopes
             });
         } catch (err) {
             setError("An unexpected error occurred");
@@ -93,18 +107,31 @@ export function SignInForm() {
 
     return (
         <div className="space-y-4">
-            {/* Google sign-in - primary CTA */}
-            <Button
-                type="button"
-                variant="outline"
-                size="lg"
-                className="relative w-full justify-center gap-3 border-slate-200 py-5 text-sm font-medium shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-900"
-                onClick={handleGoogleSignIn}
-                disabled={loading || socialLoading}
-            >
-                <GoogleLogo className="size-5" />
-                {socialLoading ? "Connecting to Google..." : "Continue with Google"}
-            </Button>
+            {/* Social sign-in buttons */}
+            <div className="space-y-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="relative w-full justify-center gap-3 border-slate-200 py-5 text-sm font-medium shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                    onClick={() => handleSocialSignIn("google")}
+                    disabled={loading || socialLoading}
+                >
+                    <GoogleLogo className="size-5" />
+                    {socialLoading ? "Connecting..." : "Continue with Google"}
+                </Button>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="relative w-full justify-center gap-3 border-slate-200 py-5 text-sm font-medium shadow-sm transition-all hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:border-slate-600 dark:hover:bg-slate-900"
+                    onClick={() => handleSocialSignIn("microsoft")}
+                    disabled={loading || socialLoading}
+                >
+                    <MicrosoftLogo className="size-5" />
+                    {socialLoading ? "Connecting..." : "Continue with Microsoft"}
+                </Button>
+            </div>
 
             {/* Divider */}
             <div className="relative py-1">

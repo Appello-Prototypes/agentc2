@@ -4,7 +4,12 @@ import { google } from "googleapis";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getUserOrganizationId } from "@/lib/organization";
-import { getGmailOAuthClient, GMAIL_REQUIRED_SCOPES, saveGmailCredentials } from "@/lib/gmail";
+import {
+    getGmailOAuthClient,
+    GMAIL_REQUIRED_SCOPES,
+    saveGmailCredentials,
+    syncSiblingGoogleConnections
+} from "@/lib/gmail";
 
 const parseScopes = (scope?: string | null) =>
     new Set(
@@ -92,12 +97,24 @@ export async function POST(request: Request) {
             );
         }
 
-        const saved = await saveGmailCredentials(organizationId, gmailAddress, {
+        const tokenPayload = {
             access_token: account.accessToken,
             refresh_token: account.refreshToken,
             expiry_date: account.accessTokenExpiresAt?.getTime(),
             scope: account.scope
-        });
+        };
+
+        const saved = await saveGmailCredentials(organizationId, gmailAddress, tokenPayload);
+
+        // Sync sibling Google services (Calendar, Drive)
+        try {
+            await syncSiblingGoogleConnections(organizationId, gmailAddress, tokenPayload);
+        } catch (err) {
+            console.warn(
+                "[Gmail Sync] Sibling sync failed (non-fatal):",
+                err instanceof Error ? err.message : err
+            );
+        }
 
         return NextResponse.json({
             success: true,

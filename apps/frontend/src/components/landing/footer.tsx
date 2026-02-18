@@ -8,7 +8,6 @@ const columns = [
             { label: "Agents", href: "#features" },
             { label: "Workflows", href: "#features" },
             { label: "Networks", href: "#features" },
-            { label: "Canvas", href: "#capabilities" },
             { label: "Knowledge", href: "#capabilities" },
             { label: "Integrations", href: "#features" },
             { label: "Pricing", href: "#pricing" }

@@ -10,6 +10,7 @@ export async function register() {
     if (process.env.NEXT_RUNTIME === "nodejs") {
         const { onPostBootstrap } = await import("@repo/auth");
         const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
+        const { syncMicrosoftFromAccount } = await import("@/lib/microsoft-sync");
         const { provisionOrgKeyPair } = await import("@repo/mastra/crypto");
 
         onPostBootstrap(async (userId, organizationId) => {
@@ -19,6 +20,16 @@ export async function register() {
                 console.log("[PostBootstrap] Gmail synced:", result.gmailAddress);
             } else if (!result.skipped) {
                 console.warn("[PostBootstrap] Gmail sync failed:", result.error);
+            }
+        });
+
+        onPostBootstrap(async (userId, organizationId) => {
+            console.log("[PostBootstrap] Syncing Microsoft for user:", userId);
+            const result = await syncMicrosoftFromAccount(userId, organizationId);
+            if (result.success) {
+                console.log("[PostBootstrap] Microsoft synced:", result.email, result.connections);
+            } else if (!result.skipped) {
+                console.warn("[PostBootstrap] Microsoft sync failed:", result.error);
             }
         });
 
@@ -32,6 +43,8 @@ export async function register() {
             }
         });
 
-        console.log("[Instrumentation] Post-bootstrap hooks registered (Gmail, KeyPair)");
+        console.log(
+            "[Instrumentation] Post-bootstrap hooks registered (Gmail, Microsoft, KeyPair)"
+        );
     }
 }

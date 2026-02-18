@@ -39,6 +39,13 @@ import {
     outlookCalendarUpdateEventTool
 } from "./outlook-calendar";
 import {
+    teamsListTeamsTool,
+    teamsListChannelsTool,
+    teamsSendChannelMessageTool,
+    teamsListChatsTool,
+    teamsSendChatMessageTool
+} from "./teams";
+import {
     dropboxListFilesTool,
     dropboxGetFileTool,
     dropboxUploadFileTool,
@@ -223,17 +230,6 @@ import {
     agentDetachSkillTool,
     skillGetVersionsTool
 } from "./skill-tools";
-import {
-    canvasCreateTool,
-    canvasReadTool,
-    canvasUpdateTool,
-    canvasUpdateDataTool,
-    canvasDeleteTool,
-    canvasListTool,
-    canvasQueryPreviewTool,
-    canvasListBlocksTool,
-    canvasExecuteQueriesTool
-} from "./canvas-tools";
 import { askQuestionsTool } from "./ask-questions";
 import { searchSkillsTool, activateSkillTool, listActiveSkillsTool } from "./skill-discovery-tools";
 import {
@@ -511,6 +507,13 @@ export const toolCategoryMap: Record<string, string> = {
     "outlook-calendar-create-event": "Email & Calendar",
     "outlook-calendar-update-event": "Email & Calendar",
 
+    // Microsoft Teams
+    "teams-list-teams": "Communication",
+    "teams-list-channels": "Communication",
+    "teams-send-channel-message": "Communication",
+    "teams-list-chats": "Communication",
+    "teams-send-chat-message": "Communication",
+
     // Google Drive
     "google-drive-search-files": "File Storage",
     "google-drive-read-file": "File Storage",
@@ -534,18 +537,7 @@ export const toolCategoryMap: Record<string, string> = {
     "submit-support-ticket": "Support",
     "list-my-tickets": "Support",
     "view-ticket-details": "Support",
-    "comment-on-ticket": "Support",
-
-    // Canvas
-    "canvas-create": "Canvas",
-    "canvas-read": "Canvas",
-    "canvas-update": "Canvas",
-    "canvas-update-data": "Canvas",
-    "canvas-delete": "Canvas",
-    "canvas-list": "Canvas",
-    "canvas-query-preview": "Canvas",
-    "canvas-list-blocks": "Canvas",
-    "canvas-execute-queries": "Canvas"
+    "comment-on-ticket": "Support"
 };
 
 /**
@@ -571,7 +563,6 @@ export const toolCategoryOrder: string[] = [
     "Email & Calendar",
     "File Storage",
     "BIM",
-    "Canvas",
     "Support"
 ];
 
@@ -888,23 +879,19 @@ export const toolRegistry: Record<string, any> = {
     "outlook-calendar-create-event": outlookCalendarCreateEventTool,
     "outlook-calendar-update-event": outlookCalendarUpdateEventTool,
 
+    // Microsoft Teams tools
+    "teams-list-teams": teamsListTeamsTool,
+    "teams-list-channels": teamsListChannelsTool,
+    "teams-send-channel-message": teamsSendChannelMessageTool,
+    "teams-list-chats": teamsListChatsTool,
+    "teams-send-chat-message": teamsSendChatMessageTool,
+
     // Dropbox tools
     "dropbox-list-files": dropboxListFilesTool,
     "dropbox-get-file": dropboxGetFileTool,
     "dropbox-upload-file": dropboxUploadFileTool,
     "dropbox-search-files": dropboxSearchFilesTool,
     "dropbox-get-sharing-links": dropboxGetSharingLinksTool,
-
-    // Canvas tools
-    "canvas-create": canvasCreateTool,
-    "canvas-read": canvasReadTool,
-    "canvas-update": canvasUpdateTool,
-    "canvas-update-data": canvasUpdateDataTool,
-    "canvas-delete": canvasDeleteTool,
-    "canvas-list": canvasListTool,
-    "canvas-query-preview": canvasQueryPreviewTool,
-    "canvas-list-blocks": canvasListBlocksTool,
-    "canvas-execute-queries": canvasExecuteQueriesTool,
 
     // Interactive UI tools
     "ask-questions": askQuestionsTool,

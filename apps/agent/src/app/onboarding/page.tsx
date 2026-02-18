@@ -406,7 +406,6 @@ export default function OnboardingPage() {
             "metrics-",
             "bim-",
             "webhook-",
-            "canvas-",
             "workspace-",
             "gmail-",
             "ask-questions"

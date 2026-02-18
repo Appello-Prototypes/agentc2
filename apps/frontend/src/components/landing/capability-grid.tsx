@@ -22,28 +22,6 @@ const capabilities = [
         )
     },
     {
-        title: "Canvas Dashboards",
-        description:
-            "Agents build executive dashboards from natural language. Charts, tables, KPIs, and forms \u2014 all powered by live data from your CRM, project tools, and business systems.",
-        icon: (
-            <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-            >
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-            </svg>
-        )
-    },
-    {
         title: "Knowledge Base (RAG)",
         description:
             "Ingest company policies, product docs, SOPs, and training materials. Agents search semantically and ground every response in your proprietary data \u2014 not the open internet.",

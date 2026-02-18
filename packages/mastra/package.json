@@ -26,7 +26,6 @@
     "./workflows": "./src/workflows/index.ts",
     "./orchestrator": "./src/orchestrator/index.ts",
     "./channels": "./src/channels/index.ts",
-    "./canvas": "./src/canvas/index.ts",
     "./integrations/mcp-oauth": "./src/integrations/mcp-oauth.ts",
     "./integrations": "./src/integrations/index.ts",
     "./activity": "./src/activity/index.ts",

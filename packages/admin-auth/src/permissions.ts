@@ -56,7 +56,10 @@ export type AdminAction =
     | "admin:list"
     | "admin:create"
     | "admin:update"
-    | "admin:delete";
+    | "admin:delete"
+    // Federation
+    | "federation:list"
+    | "federation:read";
 
 const ROLE_HIERARCHY: Record<AdminRole, number> = {
     viewer: 0,
@@ -118,7 +121,11 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
     "admin:list": "super_admin",
     "admin:create": "super_admin",
     "admin:update": "super_admin",
-    "admin:delete": "super_admin"
+    "admin:delete": "super_admin",
+
+    // Federation
+    "federation:list": "viewer",
+    "federation:read": "support_agent"
 };
 
 /**

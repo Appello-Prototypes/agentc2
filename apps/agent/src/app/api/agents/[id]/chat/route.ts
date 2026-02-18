@@ -416,13 +416,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         );
 
                         // Record trigger event (non-blocking, best-effort)
-                        const isCanvasChat = resourceId === "canvas-builder";
                         createTriggerEventRecord({
                             agentId,
                             workspaceId: record?.workspaceId || null,
                             runId: handle.runId,
-                            sourceType: isCanvasChat ? "canvas_chat" : "chat",
-                            eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
+                            sourceType: "chat",
+                            eventName: "chat.message",
                             entityType: "agent",
                             payload: { input: lastUserMessage },
                             metadata: {
@@ -480,13 +479,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         );
 
                         // Record trigger event (non-blocking, best-effort)
-                        const isCanvasChat = resourceId === "canvas-builder";
                         createTriggerEventRecord({
                             agentId,
                             workspaceId: record?.workspaceId || null,
                             runId: handle.runId,
-                            sourceType: isCanvasChat ? "canvas_chat" : "chat",
-                            eventName: isCanvasChat ? "canvas.chat.message" : "chat.message",
+                            sourceType: "chat",
+                            eventName: "chat.message",
                             entityType: "agent",
                             payload: { input: lastUserMessage },
                             metadata: {

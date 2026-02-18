@@ -63,6 +63,37 @@ function GmailSyncOnLogin() {
     return null;
 }
 
+function MicrosoftSyncOnLogin() {
+    const { session } = useSessionContext();
+    const lastSyncedKey = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (!session?.user?.id) {
+            return;
+        }
+
+        const syncKey = `ms:${session.user.id}`;
+        if (lastSyncedKey.current === syncKey) {
+            return;
+        }
+        lastSyncedKey.current = syncKey;
+
+        const syncMicrosoft = async () => {
+            try {
+                await fetch("/api/integrations/microsoft/sync?silent=true", {
+                    method: "POST"
+                });
+            } catch {
+                return;
+            }
+        };
+
+        void syncMicrosoft();
+    }, [session?.user?.id]);
+
+    return null;
+}
+
 export function AppProvidersWrapper({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
@@ -70,6 +101,7 @@ export function AppProvidersWrapper({ children }: { children: React.ReactNode })
     return (
         <AppProviders router={router} pathname={pathname}>
             <GmailSyncOnLogin />
+            <MicrosoftSyncOnLogin />
             {children}
         </AppProviders>
     );

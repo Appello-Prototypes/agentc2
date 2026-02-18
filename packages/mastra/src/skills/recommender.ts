@@ -143,11 +143,7 @@ export async function recommendSkills(
                     slug: "platform-workflow-execution",
                     boost: 3
                 },
-                {
-                    pattern: /\b(dashboard|canvas|chart|visualization)\b/i,
-                    slug: "platform-canvas-dashboards",
-                    boost: 4
-                },
+
                 {
                     pattern: /\b(document|knowledge|rag|search)\b/i,
                     slug: "platform-knowledge-management",

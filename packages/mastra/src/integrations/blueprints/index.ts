@@ -15,7 +15,7 @@ import { communicationBlueprints } from "./communication";
 import { financeBlueprints } from "./finance";
 import { marketingBlueprints } from "./marketing";
 import { designBlueprints } from "./design";
-import { dataBlueprints } from "./data";
+import { dataBlueprints, knowledgeBlueprints } from "./data";
 import { emailBlueprints } from "./email";
 import { automationBlueprints } from "./automation";
 
@@ -43,6 +43,7 @@ registerBlueprints(financeBlueprints);
 registerBlueprints(marketingBlueprints);
 registerBlueprints(designBlueprints);
 registerBlueprints(dataBlueprints);
+registerBlueprints(knowledgeBlueprints);
 registerBlueprints(emailBlueprints);
 registerBlueprints(automationBlueprints);
 

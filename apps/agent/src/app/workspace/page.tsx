@@ -64,6 +64,7 @@ import {
     ChainOfThoughtHeader,
     ChainOfThoughtContent,
     ChainOfThoughtStep,
+    ToolInvocationCard,
     type PromptInputMessage,
     type ToolActivity
 } from "@repo/ui";
@@ -72,7 +73,6 @@ import {
     RefreshCwIcon,
     SparklesIcon,
     ChevronDownIcon,
-    ChevronRightIcon,
     CopyIcon,
     LoaderIcon,
     SearchIcon,
@@ -82,7 +82,6 @@ import {
     XIcon,
     MicIcon,
     FileIcon,
-    LayoutGridIcon,
     MessageCircleIcon,
     ZapIcon,
     ClipboardListIcon,
@@ -95,43 +94,15 @@ import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/component
 import { ThinkingToggle } from "@/components/ThinkingToggle";
 import { TaskSuggestions } from "@/components/TaskSuggestions";
 import { InteractiveQuestions } from "@/components/InteractiveQuestions";
-import { CanvasPreviewCard } from "@/components/CanvasPreviewCard";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
-function CollapsibleToolCall({ toolName, hasResult }: { toolName: string; hasResult: boolean }) {
-    const [expanded, setExpanded] = useState(false);
-    const displayName = toolName.replace(/-/g, " ").replace(/_/g, " ");
-
-    if (!hasResult) {
-        return (
-            <div className="text-muted-foreground my-1 flex items-center gap-1.5 text-sm">
-                <LoaderIcon className="size-3.5 animate-spin" />
-                <span>Using {displayName}...</span>
-            </div>
-        );
-    }
-
-    return (
-        <button
-            onClick={() => setExpanded(!expanded)}
-            className="text-muted-foreground hover:text-foreground my-1 flex items-center gap-1 text-sm transition-colors"
-        >
-            {expanded ? (
-                <ChevronDownIcon className="size-3.5" />
-            ) : (
-                <ChevronRightIcon className="size-3.5" />
-            )}
-            <span>{displayName}</span>
-        </button>
-    );
-}
-
-function parseReasoningSteps(text: string): { label: string; description?: string }[] {
+function parseReasoningSteps(
+    text: string
+): { label: string; description?: string; status: "complete" | "active" | "pending" }[] {
     if (!text.trim()) return [];
 
-    // Split by double newlines (paragraphs) first
     const paragraphs = text
         .split(/\n{2,}/)
         .map((p) => p.trim())
@@ -142,37 +113,39 @@ function parseReasoningSteps(text: string): { label: string; description?: strin
             const lines = paragraph.split("\n").filter(Boolean);
             const label = lines[0] || paragraph.slice(0, 120);
             const rest = lines.slice(1).join("\n").trim();
-            return { label, description: rest || undefined };
+            return { label, description: rest || undefined, status: "complete" as const };
         });
     }
 
-    // Single paragraph -- split by sentences
     const sentences = text
         .split(/(?<=[.!?])\s+/)
         .map((s) => s.trim())
         .filter(Boolean);
 
     if (sentences.length > 1) {
-        return sentences.map((sentence) => ({ label: sentence }));
+        return sentences.map((sentence) => ({ label: sentence, status: "complete" as const }));
     }
 
-    // Fallback: single step with the full text
-    return [{ label: text.trim() }];
+    return [{ label: text.trim(), status: "complete" as const }];
 }
 
-function ReasoningDisplay({ text }: { text: string }) {
+function ReasoningDisplay({ text, isStreaming = false }: { text: string; isStreaming?: boolean }) {
     const steps = useMemo(() => parseReasoningSteps(text), [text]);
 
+    if (steps.length === 0 && !isStreaming) return null;
+
     return (
-        <ChainOfThought className="my-2">
-            <ChainOfThoughtHeader>Thought process</ChainOfThoughtHeader>
+        <ChainOfThought isStreaming={isStreaming} defaultOpen>
+            <ChainOfThoughtHeader>
+                {isStreaming ? "Thinking..." : "Thought process"}
+            </ChainOfThoughtHeader>
             <ChainOfThoughtContent>
                 {steps.map((step, i) => (
                     <ChainOfThoughtStep
                         key={i}
                         label={step.label}
                         description={step.description}
-                        status="complete"
+                        status={isStreaming && i === steps.length - 1 ? "active" : "complete"}
                     />
                 ))}
             </ChainOfThoughtContent>
@@ -309,7 +282,7 @@ function getGreeting(name?: string | null): string {
 
 // ─── Input mode types and sub-components ─────────────────────────────────────
 
-type InputMode = "knowledge-search" | "fetch-url" | "create-canvas" | null;
+type InputMode = "knowledge-search" | "fetch-url" | null;
 
 type InteractionMode = "ask" | "agent" | "plan";
 
@@ -328,12 +301,6 @@ const INPUT_MODE_CONFIG: Record<
         icon: GlobeIcon,
         placeholder: "Enter a URL to fetch...",
         prefix: "Fetch and summarize the content from this URL: "
-    },
-    "create-canvas": {
-        label: "Create Canvas",
-        icon: LayoutGridIcon,
-        placeholder: "Describe the dashboard or report you want to create...",
-        prefix: "Create a canvas: "
     }
 };
 
@@ -606,15 +573,6 @@ function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) =>
                         Fetch from URL
                     </PromptInputActionMenuItem>
 
-                    {/* Create Canvas -- sets inline input mode */}
-                    <PromptInputActionMenuItem
-                        onClick={() => {
-                            setInputMode("create-canvas");
-                        }}
-                    >
-                        <LayoutGridIcon className="mr-2 size-4 opacity-60" />
-                        Create canvas
-                    </PromptInputActionMenuItem>
                 </PromptInputActionMenuContent>
             </PromptInputActionMenu>
         </>
@@ -821,7 +779,7 @@ export default function UnifiedChatPage() {
         (message: PromptInputMessage) => {
             if (!message.text.trim() || !selectedAgentSlug) return;
 
-            // Apply input mode prefix (knowledge search, fetch URL, create canvas)
+            // Apply input mode prefix (knowledge search, fetch URL)
             let text = message.text;
             if (inputMode) {
                 const config = INPUT_MODE_CONFIG[inputMode];
@@ -1128,24 +1086,23 @@ export default function UnifiedChatPage() {
                 );
             }
 
-            // Canvas tools -- render inline preview card
-            if (toolName === "canvas-create" || toolName === "canvas-update") {
-                const toolInput = part.toolInvocation?.input || part.toolInvocation?.args || {};
-                const toolResult = part.toolInvocation?.result;
-                const canvasSlug = toolResult?.slug || toolInput?.slug || null;
-                const canvasTitle = toolResult?.title || toolInput?.title;
+            const toolInput = part.toolInvocation?.input || part.toolInvocation?.args;
+            const toolResult = hasResult ? part.toolInvocation?.result : undefined;
+            const toolError =
+                part.toolInvocation?.state === "output-error"
+                    ? part.toolInvocation?.errorText || "Tool execution failed"
+                    : undefined;
 
-                return (
-                    <CanvasPreviewCard
-                        key={callId}
-                        slug={canvasSlug}
-                        title={canvasTitle}
-                        hasResult={hasResult}
-                    />
-                );
-            }
-
-            return <CollapsibleToolCall key={index} toolName={toolName} hasResult={hasResult} />;
+            return (
+                <ToolInvocationCard
+                    key={callId}
+                    toolName={toolName}
+                    hasResult={hasResult}
+                    input={toolInput}
+                    result={toolResult}
+                    error={toolError}
+                />
+            );
         }
 
         // ── Custom data parts (AI SDK Elements) ────────────────────────

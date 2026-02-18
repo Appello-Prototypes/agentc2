@@ -171,6 +171,152 @@ export const saveGmailCredentials = async (
     } as StoredGmailCredentials & { connectionId: string };
 };
 
+/**
+ * Sync sibling Google service connections (Calendar, Drive) after Gmail is connected.
+ *
+ * When the user authenticates via Google SSO, all scopes (Gmail, Calendar, Drive)
+ * are granted in one consent. Gmail sync creates the Gmail IntegrationConnection,
+ * and this function creates matching connections for Calendar and Drive so they
+ * appear as "connected" in the Integrations Hub and trigger auto-provisioning.
+ */
+export const syncSiblingGoogleConnections = async (
+    organizationId: string,
+    gmailAddress: string,
+    tokens: {
+        access_token?: string | null;
+        refresh_token?: string | null;
+        expiry_date?: number | null;
+        scope?: string | null;
+        token_type?: string | null;
+    }
+): Promise<{ created: string[] }> => {
+    const scopeSet = new Set(
+        (tokens.scope || "")
+            .split(/[,\s]+/)
+            .map((v) => v.trim())
+            .filter(Boolean)
+    );
+
+    const siblings: { key: string; name: string; requiredScopes: string[] }[] = [
+        {
+            key: "google-calendar",
+            name: "Google Calendar",
+            requiredScopes: ["https://www.googleapis.com/auth/calendar.events"]
+        },
+        {
+            key: "google-drive",
+            name: "Google Drive",
+            requiredScopes: [
+                "https://www.googleapis.com/auth/drive.readonly",
+                "https://www.googleapis.com/auth/drive.file"
+            ]
+        }
+    ];
+
+    const created: string[] = [];
+
+    for (const sibling of siblings) {
+        const hasScopes = sibling.requiredScopes.every((s) => scopeSet.has(s));
+        if (!hasScopes) continue;
+
+        const provider = await prisma.integrationProvider.findUnique({
+            where: { key: sibling.key }
+        });
+        if (!provider) continue;
+
+        const credentialPayload: StoredGmailCredentials = {
+            gmailAddress,
+            ...(tokens.access_token ? { accessToken: tokens.access_token } : {}),
+            ...(tokens.refresh_token ? { refreshToken: tokens.refresh_token } : {}),
+            ...(tokens.expiry_date ? { expiryDate: tokens.expiry_date } : {}),
+            ...(tokens.scope ? { scope: tokens.scope } : {}),
+            ...(tokens.token_type ? { tokenType: tokens.token_type } : {})
+        };
+
+        const encryptedCreds = encryptCredentials(credentialPayload);
+
+        const existing = await prisma.integrationConnection.findFirst({
+            where: {
+                organizationId,
+                providerId: provider.id,
+                OR: [
+                    { metadata: { path: ["gmailAddress"], equals: gmailAddress } },
+                    { credentials: { path: ["gmailAddress"], equals: gmailAddress } }
+                ]
+            }
+        });
+
+        let connectionId: string;
+
+        if (existing) {
+            const existingCreds = decryptCredentials(existing.credentials);
+            const merged =
+                existingCreds && typeof existingCreds === "object"
+                    ? { ...existingCreds, ...credentialPayload, gmailAddress }
+                    : credentialPayload;
+            const enc = encryptCredentials(merged);
+
+            await prisma.integrationConnection.update({
+                where: { id: existing.id },
+                data: {
+                    credentials: enc ? JSON.parse(JSON.stringify(enc)) : null,
+                    isActive: true,
+                    metadata: {
+                        ...(existing.metadata && typeof existing.metadata === "object"
+                            ? (existing.metadata as Record<string, unknown>)
+                            : {}),
+                        gmailAddress
+                    }
+                }
+            });
+            connectionId = existing.id;
+        } else {
+            await prisma.integrationConnection.updateMany({
+                where: { organizationId, providerId: provider.id, scope: "org" },
+                data: { isDefault: false }
+            });
+            const conn = await prisma.integrationConnection.create({
+                data: {
+                    providerId: provider.id,
+                    organizationId,
+                    scope: "org",
+                    name: `${sibling.name} (${gmailAddress})`,
+                    isDefault: true,
+                    isActive: true,
+                    credentials: encryptedCreds ? JSON.parse(JSON.stringify(encryptedCreds)) : null,
+                    metadata: { gmailAddress }
+                }
+            });
+            connectionId = conn.id;
+        }
+
+        // Trigger auto-provisioning for the sibling
+        try {
+            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            if (hasBlueprint(sibling.key)) {
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true },
+                    select: { id: true }
+                });
+                if (workspace) {
+                    await provisionIntegration(connectionId, {
+                        workspaceId: workspace.id
+                    });
+                }
+            }
+        } catch (err) {
+            console.warn(
+                `[GmailSync] Failed to provision ${sibling.key}:`,
+                err instanceof Error ? err.message : err
+            );
+        }
+
+        created.push(sibling.key);
+    }
+
+    return { created };
+};
+
 export const getGmailClient = async (organizationId: string, gmailAddress: string) => {
     const provider = await getGmailProvider();
     if (!provider) {

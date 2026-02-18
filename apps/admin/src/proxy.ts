@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { validateAdminSession, getAdminTokenFromRequest } from "@repo/admin-auth";
 
+const ADMIN_URL = process.env.ADMIN_URL || "https://agentc2.ai/admin";
+
 /**
  * Admin portal proxy (middleware).
  * Validates admin sessions and protects all routes except login/api.
@@ -25,8 +27,7 @@ async function proxy(request: NextRequest) {
 }
 
 function redirectToLogin(request: NextRequest) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
+    const url = new URL(`${ADMIN_URL}/login`);
     url.searchParams.set("callbackUrl", request.nextUrl.pathname);
     return NextResponse.redirect(url);
 }

@@ -5,11 +5,15 @@ import { prisma } from "@repo/database";
 import { getAppUrl } from "./env";
 import { bootstrapUserOrganization } from "./bootstrap";
 import { GOOGLE_OAUTH_SCOPES } from "./google-scopes";
+import { MICROSOFT_OAUTH_SCOPES } from "./microsoft-scopes";
 
 const isProduction = process.env.NODE_ENV === "production";
 const appUrl = isProduction ? getAppUrl("http://localhost:3000") : "http://localhost:3001";
 const googleClientId = process.env.GOOGLE_CLIENT_ID;
 const googleClientSecret = process.env.GOOGLE_CLIENT_SECRET;
+const microsoftClientId = process.env.MICROSOFT_CLIENT_ID;
+const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET;
+const microsoftTenantId = process.env.MICROSOFT_TENANT_ID || "common";
 
 // Build trusted origins based on environment
 const trustedOrigins = [appUrl];
@@ -49,8 +53,8 @@ export const auth = betterAuth({
         enabled: true,
         requireEmailVerification: false
     },
-    socialProviders:
-        googleClientId && googleClientSecret
+    socialProviders: {
+        ...(googleClientId && googleClientSecret
             ? {
                   google: {
                       clientId: googleClientId,
@@ -61,7 +65,19 @@ export const auth = betterAuth({
                       disableImplicitSignUp: true
                   }
               }
-            : undefined,
+            : {}),
+        ...(microsoftClientId && microsoftClientSecret
+            ? {
+                  microsoft: {
+                      clientId: microsoftClientId,
+                      clientSecret: microsoftClientSecret,
+                      tenantId: microsoftTenantId,
+                      scope: [...MICROSOFT_OAUTH_SCOPES],
+                      disableImplicitSignUp: true
+                  }
+              }
+            : {})
+    },
     session: {
         expiresIn: 60 * 60 * 24 * 7, // 7 days
         updateAge: 60 * 60 * 24, // Update every 24 hours

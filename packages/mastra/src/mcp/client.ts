@@ -573,11 +573,10 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             oauthConfig: {
                 socialProvider: "google",
                 scopes: ["https://www.googleapis.com/auth/calendar.events"],
-                statusEndpoint: "/api/integrations/gmail/status",
-                syncEndpoint: "/api/integrations/gmail/sync"
+                siblingOf: "gmail"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Open OAuth Setup"
+            setupLabel: "Connect via Google Sign-In"
         }
     },
     {
@@ -598,11 +597,10 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                     "https://www.googleapis.com/auth/drive.readonly",
                     "https://www.googleapis.com/auth/drive.file"
                 ],
-                statusEndpoint: "/api/integrations/gmail/status",
-                syncEndpoint: "/api/integrations/gmail/sync"
+                siblingOf: "gmail"
             },
             setupUrl: "/mcp/gmail",
-            setupLabel: "Open OAuth Setup"
+            setupLabel: "Connect via Google Sign-In"
         }
     },
     {
@@ -624,7 +622,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 "User.Read"
             ],
             oauthConfig: {
-                provider: "microsoft",
+                socialProvider: "microsoft",
                 scopes: [
                     "Mail.Read",
                     "Mail.ReadWrite",
@@ -642,7 +640,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 callbackEndpoint: "/api/integrations/microsoft/callback"
             },
             setupUrl: "/mcp/microsoft",
-            setupLabel: "Connect Microsoft Account"
+            setupLabel: "Connect via Microsoft Sign-In"
         },
         triggersJson: {
             triggers: [
@@ -693,6 +691,60 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 {
                     key: "outlook-calendar-update-event",
                     description: "Update an existing calendar event"
+                }
+            ]
+        }
+    },
+    {
+        key: "microsoft-teams",
+        name: "Microsoft Teams",
+        description:
+            "Team collaboration — list teams and channels, send messages, manage chats via Microsoft Graph",
+        category: "communication",
+        authType: "oauth",
+        providerType: "oauth",
+        configJson: {
+            requiredScopes: [
+                "Team.ReadBasic.All",
+                "Channel.ReadBasic.All",
+                "ChannelMessage.Send",
+                "Chat.ReadWrite",
+                "User.Read"
+            ],
+            oauthConfig: {
+                socialProvider: "microsoft",
+                scopes: [
+                    "Team.ReadBasic.All",
+                    "Channel.ReadBasic.All",
+                    "ChannelMessage.Send",
+                    "Chat.ReadWrite"
+                ],
+                siblingOf: "microsoft"
+            },
+            setupUrl: "/mcp/microsoft",
+            setupLabel: "Connect via Microsoft Sign-In"
+        },
+        actionsJson: {
+            actions: [
+                {
+                    key: "teams-list-teams",
+                    description: "List teams the user is a member of"
+                },
+                {
+                    key: "teams-list-channels",
+                    description: "List channels in a team"
+                },
+                {
+                    key: "teams-send-channel-message",
+                    description: "Send a message to a Teams channel"
+                },
+                {
+                    key: "teams-list-chats",
+                    description: "List recent 1:1 and group chats"
+                },
+                {
+                    key: "teams-send-chat-message",
+                    description: "Send a message in a Teams chat"
                 }
             ]
         }

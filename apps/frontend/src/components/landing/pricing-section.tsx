@@ -38,7 +38,6 @@ const plans = {
                 "All MCP integrations",
                 "Workflows & networks",
                 "Voice agents",
-                "Canvas dashboards",
                 "Advanced analytics",
                 "Continuous learning"
             ]

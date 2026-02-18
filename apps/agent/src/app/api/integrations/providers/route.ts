@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/mastra/mcp";
-import { getBlueprint } from "@repo/mastra/integrations";
+import { getBlueprint, hasBlueprint } from "@repo/mastra/integrations";
 import { getConnectionMissingFields, getConnectionCredentials } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
 
@@ -179,6 +179,17 @@ export async function GET(request: NextRequest) {
                           ?.healthStatus as string | undefined)
                     : undefined;
 
+            // Resolve tool count: for MCP providers use provisioned count if available,
+            // for static providers use blueprint definition.
+            const isMcp = provider.providerType === "mcp" || provider.providerType === "custom";
+            const blueprint = getBlueprint(provider.key);
+            let toolCount: number | null;
+            if (isMcp) {
+                toolCount = provSkill ? provSkill.tools.length : null;
+            } else {
+                toolCount = blueprint?.skill.staticTools?.length ?? 0;
+            }
+
             return {
                 id: provider.id,
                 key: provider.key,
@@ -190,10 +201,9 @@ export async function GET(request: NextRequest) {
                 maturityLevel: provider.maturityLevel,
                 status,
                 connections: connectionDetails,
-                toolCount:
-                    provider.providerType === "mcp" || provider.providerType === "custom"
-                        ? null
-                        : (getBlueprint(provider.key)?.skill.staticTools?.length ?? 0),
+                toolCount,
+                toolDiscovery: blueprint?.skill.toolDiscovery ?? (isMcp ? "dynamic" : null),
+                hasBlueprint: hasBlueprint(provider.key),
                 actions: provider.actionsJson,
                 triggers: provider.triggersJson,
                 config: provider.configJson,

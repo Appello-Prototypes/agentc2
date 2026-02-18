@@ -75,19 +75,22 @@ export async function provisionIntegration(
 
         // 3. Discover tools from MCP server
         let toolIds: string[] = [];
+        let discoveryStatus: "complete" | "failed" | "pending" = "pending";
         if (blueprint.skill.toolDiscovery === "dynamic") {
             try {
                 const organizationId = connection.organizationId;
                 toolIds = await discoverMcpTools(organizationId, connection.provider.key);
+                discoveryStatus = toolIds.length > 0 ? "complete" : "failed";
             } catch (err) {
                 console.warn(
                     `[Provisioner] Tool discovery failed for ${connection.provider.key}:`,
                     err instanceof Error ? err.message : err
                 );
-                // Continue without tools — background job will retry
+                discoveryStatus = "failed";
             }
         } else if (blueprint.skill.staticTools) {
             toolIds = blueprint.skill.staticTools;
+            discoveryStatus = "complete";
         }
 
         // 4. Upsert Skill
@@ -95,7 +98,8 @@ export async function provisionIntegration(
             blueprint,
             workspaceId,
             userId,
-            toolIds
+            toolIds,
+            discoveryStatus
         );
 
         // 5. Upsert Agent (unless skipped)
@@ -150,7 +154,8 @@ async function upsertSkill(
     blueprint: IntegrationBlueprint,
     workspaceId: string,
     userId: string | undefined,
-    toolIds: string[]
+    toolIds: string[],
+    discoveryStatus: "complete" | "failed" | "pending" = "complete"
 ): Promise<{ skill: { id: string; slug: string }; created: boolean }> {
     const { skill: bp } = blueprint;
 
@@ -173,6 +178,7 @@ async function upsertSkill(
                     ...((existing.metadata as Record<string, unknown>) || {}),
                     blueprintVersion: blueprint.version,
                     lastToolSync: new Date().toISOString(),
+                    discoveryStatus,
                     provisionedBy: "auto-provisioner"
                 } satisfies Prisma.InputJsonValue
             }
@@ -200,6 +206,7 @@ async function upsertSkill(
                 blueprintVersion: blueprint.version,
                 providerKey: blueprint.providerKey,
                 lastToolSync: new Date().toISOString(),
+                discoveryStatus,
                 provisionedBy: "auto-provisioner"
             } satisfies Prisma.InputJsonValue
         }
@@ -718,19 +725,35 @@ export async function rediscoverToolsForConnection(
  * @returns Array of tool IDs matching the provider
  */
 async function discoverMcpTools(organizationId: string, providerKey: string): Promise<string[]> {
-    try {
-        const { definitions: allTools } = await listMcpToolDefinitions(organizationId);
-        if (!allTools || allTools.length === 0) return [];
+    const retryDelays = [0, 2000, 5000];
 
-        // Filter tools belonging to this provider
-        // MCP tool IDs follow the pattern "providerKey_toolName"
-        const prefix = `${providerKey}_`;
-        return allTools.filter((t) => t.name.startsWith(prefix)).map((t) => t.name);
-    } catch (error) {
-        console.warn(
-            `[Provisioner] MCP tool discovery failed for ${providerKey}:`,
-            error instanceof Error ? error.message : error
-        );
-        return [];
+    for (let attempt = 0; attempt < retryDelays.length; attempt++) {
+        try {
+            if (retryDelays[attempt] > 0) {
+                await new Promise((resolve) => setTimeout(resolve, retryDelays[attempt]));
+            }
+
+            const { definitions: allTools } = await listMcpToolDefinitions(organizationId);
+            if (!allTools || allTools.length === 0) {
+                if (attempt < retryDelays.length - 1) continue;
+                return [];
+            }
+
+            const prefix = `${providerKey}_`;
+            const matched = allTools.filter((t) => t.name.startsWith(prefix)).map((t) => t.name);
+
+            if (matched.length === 0 && attempt < retryDelays.length - 1) continue;
+            return matched;
+        } catch (error) {
+            if (attempt === retryDelays.length - 1) {
+                console.warn(
+                    `[Provisioner] MCP tool discovery failed for ${providerKey} after ${retryDelays.length} attempts:`,
+                    error instanceof Error ? error.message : error
+                );
+                return [];
+            }
+        }
     }
+
+    return [];
 }

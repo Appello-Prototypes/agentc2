@@ -4,13 +4,23 @@ import { useControllableState } from "@radix-ui/react-use-controllable-state";
 import { Badge } from "../badge";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "../collapsible";
 import { cn } from "../../lib/utils";
-import { BrainIcon, ChevronDownIcon, DotIcon, type LucideIcon } from "lucide-react";
+import {
+    BrainIcon,
+    ChevronDownIcon,
+    DotIcon,
+    SearchIcon,
+    LightbulbIcon,
+    CheckCircle2Icon,
+    CircleDashedIcon,
+    type LucideIcon
+} from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
 import { createContext, memo, useContext, useMemo } from "react";
 
 interface ChainOfThoughtContextValue {
     isOpen: boolean;
     setIsOpen: (open: boolean) => void;
+    isStreaming: boolean;
 }
 
 const ChainOfThoughtContext = createContext<ChainOfThoughtContextValue | null>(null);
@@ -27,6 +37,7 @@ export type ChainOfThoughtProps = ComponentProps<"div"> & {
     open?: boolean;
     defaultOpen?: boolean;
     onOpenChange?: (open: boolean) => void;
+    isStreaming?: boolean;
 };
 
 export const ChainOfThought = memo(
@@ -35,6 +46,7 @@ export const ChainOfThought = memo(
         open,
         defaultOpen = false,
         onOpenChange,
+        isStreaming = false,
         children,
         ...props
     }: ChainOfThoughtProps) => {
@@ -44,11 +56,23 @@ export const ChainOfThought = memo(
             onChange: onOpenChange
         });
 
-        const chainOfThoughtContext = useMemo(() => ({ isOpen, setIsOpen }), [isOpen, setIsOpen]);
+        const chainOfThoughtContext = useMemo(
+            () => ({ isOpen, setIsOpen, isStreaming }),
+            [isOpen, setIsOpen, isStreaming]
+        );
 
         return (
             <ChainOfThoughtContext.Provider value={chainOfThoughtContext}>
-                <div className={cn("not-prose max-w-prose space-y-4", className)} {...props}>
+                <div
+                    className={cn(
+                        "not-prose my-3 overflow-hidden rounded-lg border",
+                        isStreaming
+                            ? "border-primary/20 bg-primary/[0.02]"
+                            : "bg-muted/20 border-border/50",
+                        className
+                    )}
+                    {...props}
+                >
                     {children}
                 </div>
             </ChainOfThoughtContext.Provider>
@@ -60,22 +84,47 @@ export type ChainOfThoughtHeaderProps = ComponentProps<typeof CollapsibleTrigger
 
 export const ChainOfThoughtHeader = memo(
     ({ className, children, ...props }: ChainOfThoughtHeaderProps) => {
-        const { isOpen, setIsOpen } = useChainOfThought();
+        const { isOpen, setIsOpen, isStreaming } = useChainOfThought();
 
         return (
             <Collapsible onOpenChange={setIsOpen} open={isOpen}>
                 <CollapsibleTrigger
                     className={cn(
-                        "text-muted-foreground hover:text-foreground flex w-full items-center gap-2 text-sm transition-colors",
+                        "hover:bg-muted/40 flex w-full items-center gap-2.5 px-3 py-2.5 text-sm transition-colors",
                         className
                     )}
                     {...props}
                 >
-                    <BrainIcon className="size-4" />
-                    <span className="flex-1 text-left">{children ?? "Chain of Thought"}</span>
+                    <div
+                        className={cn(
+                            "flex size-6 shrink-0 items-center justify-center rounded-md",
+                            isStreaming ? "bg-primary/15" : "bg-muted"
+                        )}
+                    >
+                        <BrainIcon
+                            className={cn(
+                                "size-3.5",
+                                isStreaming ? "text-primary animate-pulse" : "text-muted-foreground"
+                            )}
+                        />
+                    </div>
+                    <span
+                        className={cn(
+                            "flex-1 text-left font-medium",
+                            isStreaming ? "text-foreground" : "text-muted-foreground"
+                        )}
+                    >
+                        {children ?? "Thought process"}
+                    </span>
+                    {isStreaming && (
+                        <Badge variant="secondary" className="gap-1 text-[10px]">
+                            <CircleDashedIcon className="size-2.5 animate-spin" />
+                            Thinking
+                        </Badge>
+                    )}
                     <ChevronDownIcon
                         className={cn(
-                            "size-4 transition-transform",
+                            "text-muted-foreground size-4 transition-transform",
                             isOpen ? "rotate-180" : "rotate-0"
                         )}
                     />
@@ -95,37 +144,58 @@ export type ChainOfThoughtStepProps = ComponentProps<"div"> & {
 export const ChainOfThoughtStep = memo(
     ({
         className,
-        icon: Icon = DotIcon,
+        icon: Icon,
         label,
         description,
         status = "complete",
         children,
         ...props
     }: ChainOfThoughtStepProps) => {
-        const statusStyles = {
-            complete: "text-muted-foreground",
-            active: "text-foreground",
-            pending: "text-muted-foreground/50"
-        };
+        const resolvedIcon = Icon || (status === "complete" ? CheckCircle2Icon : DotIcon);
+        const ResolvedIcon = resolvedIcon;
 
         return (
             <div
                 className={cn(
-                    "flex gap-2 text-sm",
-                    statusStyles[status],
-                    "fade-in-0 slide-in-from-top-2 animate-in",
+                    "relative flex gap-2.5 py-1.5 text-sm",
+                    "animate-in fade-in-0 slide-in-from-left-2 duration-300",
                     className
                 )}
                 {...props}
             >
-                <div className="relative mt-0.5">
-                    <Icon className="size-4" />
-                    <div className="bg-border absolute top-7 bottom-0 left-1/2 -mx-px w-px" />
+                {/* Timeline connector */}
+                <div className="relative flex flex-col items-center">
+                    <div
+                        className={cn(
+                            "relative z-10 flex size-5 shrink-0 items-center justify-center rounded-full",
+                            status === "complete" && "bg-primary/10 text-primary",
+                            status === "active" && "bg-primary/20 text-primary",
+                            status === "pending" && "bg-muted text-muted-foreground/50"
+                        )}
+                    >
+                        <ResolvedIcon
+                            className={cn("size-3", status === "active" && "animate-pulse")}
+                        />
+                    </div>
+                    <div className="bg-border/50 absolute top-6 bottom-0 w-px" />
                 </div>
-                <div className="flex-1 space-y-2 overflow-hidden">
-                    <div>{label}</div>
+
+                {/* Content */}
+                <div className="min-w-0 flex-1 pb-1">
+                    <div
+                        className={cn(
+                            "leading-snug",
+                            status === "complete" && "text-foreground/80",
+                            status === "active" && "text-foreground font-medium",
+                            status === "pending" && "text-muted-foreground/50"
+                        )}
+                    >
+                        {label}
+                    </div>
                     {description && (
-                        <div className="text-muted-foreground text-xs">{description}</div>
+                        <div className="text-muted-foreground mt-1 text-xs leading-relaxed">
+                            {description}
+                        </div>
                     )}
                     {children}
                 </div>
@@ -138,7 +208,7 @@ export type ChainOfThoughtSearchResultsProps = ComponentProps<"div">;
 
 export const ChainOfThoughtSearchResults = memo(
     ({ className, ...props }: ChainOfThoughtSearchResultsProps) => (
-        <div className={cn("flex flex-wrap items-center gap-2", className)} {...props} />
+        <div className={cn("mt-1.5 flex flex-wrap items-center gap-1.5", className)} {...props} />
     )
 );
 
@@ -151,6 +221,7 @@ export const ChainOfThoughtSearchResult = memo(
             variant="secondary"
             {...props}
         >
+            <SearchIcon className="size-2.5" />
             {children}
         </Badge>
     )
@@ -160,19 +231,29 @@ export type ChainOfThoughtContentProps = ComponentProps<typeof CollapsibleConten
 
 export const ChainOfThoughtContent = memo(
     ({ className, children, ...props }: ChainOfThoughtContentProps) => {
-        const { isOpen } = useChainOfThought();
+        const { isOpen, isStreaming } = useChainOfThought();
 
         return (
             <Collapsible open={isOpen}>
                 <CollapsibleContent
                     className={cn(
-                        "mt-2 space-y-3",
+                        "border-t px-3 pt-2 pb-3",
                         "data-[state=closed]:fade-out-0 data-[state=closed]:slide-out-to-top-2 data-[state=open]:slide-in-from-top-2 text-popover-foreground data-[state=closed]:animate-out data-[state=open]:animate-in outline-none",
                         className
                     )}
                     {...props}
                 >
-                    {children}
+                    <div className="space-y-0.5">{children}</div>
+                    {isStreaming && (
+                        <div className="mt-2 flex items-center gap-2 pl-7">
+                            <div className="flex gap-1">
+                                <span className="bg-primary/40 size-1.5 animate-bounce rounded-full [animation-delay:0ms]" />
+                                <span className="bg-primary/40 size-1.5 animate-bounce rounded-full [animation-delay:150ms]" />
+                                <span className="bg-primary/40 size-1.5 animate-bounce rounded-full [animation-delay:300ms]" />
+                            </div>
+                            <span className="text-muted-foreground text-xs">Reasoning...</span>
+                        </div>
+                    )}
                 </CollapsibleContent>
             </Collapsible>
         );

@@ -1,5 +1,79 @@
 import type { IntegrationBlueprint } from "./types";
 
+export const knowledgeBlueprints: IntegrationBlueprint[] = [
+    {
+        providerKey: "youtube-transcript",
+        version: 1,
+        skill: {
+            slug: "youtube-transcript-expert",
+            name: "YouTube Transcript Expert",
+            description: "Extract and analyze transcripts from YouTube videos",
+            instructions: `You are a YouTube transcript expert. Help users extract, search, and analyze captions and transcripts from YouTube videos.
+
+Key capabilities:
+- Extract full transcripts from YouTube videos by URL or ID
+- Select specific languages for multilingual videos
+- Filter out ad segments from transcripts
+- Summarize video content from transcript text
+
+Best practices:
+- Always verify the video URL is valid before extraction
+- Check available languages if primary language fails
+- Use timestamps to reference specific parts of the video`,
+            category: "Knowledge",
+            tags: ["knowledge", "youtube", "transcript", "video"],
+            toolDiscovery: "dynamic"
+        },
+        agent: {
+            slug: "youtube-transcript-agent",
+            name: "YouTube Transcript Agent",
+            description: "AI agent for extracting and analyzing YouTube video transcripts",
+            instructions: `You are a YouTube transcript specialist. Help users extract transcripts from videos, summarize content, and find specific information within video captions.`,
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.3,
+            memoryEnabled: true,
+            additionalTools: [],
+            metadata: {
+                slack: { displayName: "YouTube Agent", iconEmoji: ":movie_camera:" }
+            }
+        }
+    },
+    {
+        providerKey: "supadata",
+        version: 1,
+        skill: {
+            slug: "supadata-expert",
+            name: "Supadata Expert",
+            description: "Reliable YouTube transcript extraction with AI fallback",
+            instructions: `You are a Supadata expert. Help users extract transcripts from YouTube videos using the Supadata API, which provides reliable transcript extraction with AI-powered fallback for videos without native captions.
+
+Key capabilities:
+- Extract transcripts from any YouTube video
+- AI fallback for videos without captions
+- Multi-language transcript support
+- Structured transcript data with timestamps`,
+            category: "Knowledge",
+            tags: ["knowledge", "supadata", "youtube", "transcript", "api"],
+            toolDiscovery: "dynamic"
+        },
+        agent: {
+            slug: "supadata-agent",
+            name: "Supadata Agent",
+            description: "AI agent for Supadata transcript extraction API",
+            instructions: `You are a Supadata specialist. Help users extract and analyze YouTube video transcripts using the Supadata API.`,
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.3,
+            memoryEnabled: true,
+            additionalTools: [],
+            metadata: {
+                slack: { displayName: "Supadata Agent", iconEmoji: ":speech_balloon:" }
+            }
+        }
+    }
+];
+
 export const dataBlueprints: IntegrationBlueprint[] = [
     {
         providerKey: "google-bigquery",

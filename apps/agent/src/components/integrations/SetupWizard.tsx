@@ -617,7 +617,8 @@ function AlreadyConnectedView({
     onDisconnect,
     testing,
     testResult,
-    disconnecting
+    disconnecting,
+    apiBase
 }: {
     provider: IntegrationProvider;
     onTest: () => void;
@@ -625,8 +626,51 @@ function AlreadyConnectedView({
     testing: boolean;
     testResult: string | null;
     disconnecting: boolean;
+    apiBase: string;
 }) {
     const activeConns = provider.connections.filter((c) => c.isActive);
+    const [editingConnId, setEditingConnId] = useState<string | null>(null);
+    const [credValues, setCredValues] = useState<Record<string, string>>({});
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
+
+    const requiredFields = getRequiredFields(provider);
+    const fieldDefs = getFieldDefinitions(provider);
+
+    const handleStartEdit = (connId: string) => {
+        const initial: Record<string, string> = {};
+        requiredFields.forEach((f) => (initial[f] = ""));
+        setCredValues(initial);
+        setSaveError(null);
+        setEditingConnId(connId);
+    };
+
+    const handleSaveCredentials = async (connId: string) => {
+        const allFilled = requiredFields.every((f) => (credValues[f] || "").trim().length > 0);
+        if (!allFilled) return;
+
+        setSaving(true);
+        setSaveError(null);
+        try {
+            const response = await fetch(`${apiBase}/api/integrations/connections/${connId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ credentials: credValues })
+            });
+            const data = await response.json();
+            if (!data.success) {
+                setSaveError(data.error || "Failed to update credentials");
+                return;
+            }
+            window.location.reload();
+        } catch (err) {
+            setSaveError(err instanceof Error ? err.message : "Failed to save credentials");
+        } finally {
+            setSaving(false);
+        }
+    };
+
+    const allFilled = requiredFields.every((f) => (credValues[f] || "").trim().length > 0);
 
     return (
         <div className="space-y-6">
@@ -644,23 +688,117 @@ function AlreadyConnectedView({
             <div className="space-y-2">
                 <Label className="text-xs tracking-wider uppercase">Active Connections</Label>
                 {activeConns.map((conn) => (
-                    <div
-                        key={conn.id}
-                        className="flex items-center justify-between rounded-lg border px-4 py-3"
-                    >
-                        <div>
-                            <div className="text-sm font-medium">{conn.name}</div>
-                            <div className="text-muted-foreground text-xs">
-                                {conn.scope === "org" ? "Organization" : "Personal"}
-                                {conn.isDefault ? " · Default" : ""}
+                    <div key={conn.id} className="space-y-0">
+                        <div className="flex items-center justify-between rounded-lg border px-4 py-3">
+                            <div>
+                                <div className="text-sm font-medium">{conn.name}</div>
+                                <div className="text-muted-foreground text-xs">
+                                    {conn.scope === "org" ? "Organization" : "Personal"}
+                                    {conn.isDefault ? " · Default" : ""}
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                {!conn.connected && editingConnId !== conn.id && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleStartEdit(conn.id)}
+                                    >
+                                        <ShieldCheckIcon className="mr-1.5 h-3.5 w-3.5" />
+                                        Authenticate
+                                    </Button>
+                                )}
+                                <Badge
+                                    variant="outline"
+                                    className={
+                                        conn.connected ? "text-green-600" : "text-yellow-600"
+                                    }
+                                >
+                                    {conn.connected ? "Ready" : "Needs Auth"}
+                                </Badge>
                             </div>
                         </div>
-                        <Badge
-                            variant="outline"
-                            className={conn.connected ? "text-green-600" : "text-yellow-600"}
-                        >
-                            {conn.connected ? "Ready" : "Needs Auth"}
-                        </Badge>
+
+                        {/* Inline credentials form for this connection */}
+                        {editingConnId === conn.id && (
+                            <div className="border-border ml-4 space-y-4 border-l-2 py-4 pl-4">
+                                <p className="text-muted-foreground text-sm">
+                                    Provide credentials for this connection. They are encrypted and
+                                    stored securely.
+                                </p>
+
+                                {saveError && (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-400">
+                                        {saveError}
+                                    </div>
+                                )}
+
+                                {requiredFields.map((field) => {
+                                    const def = fieldDefs[field] || {};
+                                    const label = def.label || field;
+                                    const description = def.description || "";
+                                    const placeholder = def.placeholder || "";
+                                    const inputType =
+                                        def.type === "password"
+                                            ? "password"
+                                            : def.type === "url"
+                                              ? "url"
+                                              : "text";
+
+                                    return (
+                                        <div key={field} className="space-y-1.5">
+                                            <Label htmlFor={`edit-${conn.id}-${field}`}>
+                                                {label}
+                                            </Label>
+                                            <Input
+                                                id={`edit-${conn.id}-${field}`}
+                                                type={inputType}
+                                                placeholder={placeholder}
+                                                value={credValues[field] || ""}
+                                                onChange={(e) =>
+                                                    setCredValues((prev) => ({
+                                                        ...prev,
+                                                        [field]: e.target.value
+                                                    }))
+                                                }
+                                                autoComplete="off"
+                                                className="font-mono text-sm"
+                                            />
+                                            {description && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {description}
+                                                </p>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        disabled={!allFilled || saving}
+                                        onClick={() => handleSaveCredentials(conn.id)}
+                                    >
+                                        {saving ? (
+                                            <>
+                                                <Loader2Icon className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                                                Saving...
+                                            </>
+                                        ) : (
+                                            "Save Credentials"
+                                        )}
+                                    </Button>
+                                    <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => setEditingConnId(null)}
+                                        disabled={saving}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
                     </div>
                 ))}
             </div>
@@ -1046,6 +1184,7 @@ export function SetupWizard({ providerKey }: { providerKey: string }) {
                                 testing={testing}
                                 testResult={testResult}
                                 disconnecting={disconnecting}
+                                apiBase={apiBase}
                             />
                         </CardContent>
                     </Card>

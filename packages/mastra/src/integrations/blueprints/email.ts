@@ -176,6 +176,50 @@ Best practices:
         }
     },
     {
+        providerKey: "microsoft-teams",
+        version: 1,
+        skill: {
+            slug: "teams-expert",
+            name: "Microsoft Teams Expert",
+            description: "Expert knowledge for Microsoft Teams collaboration",
+            instructions: `You are a Microsoft Teams expert. Help users collaborate via Teams channels and chats.
+
+Key capabilities:
+- List teams and channels the user belongs to
+- Send messages to channels and chats
+- View recent chat conversations
+
+Best practices:
+- Confirm the target team and channel before sending messages
+- Use HTML content type for formatted messages
+- Keep channel messages concise and relevant`,
+            category: "Communication",
+            tags: ["teams", "microsoft", "collaboration", "messaging"],
+            toolDiscovery: "static",
+            staticTools: [
+                "teams-list-teams",
+                "teams-list-channels",
+                "teams-send-channel-message",
+                "teams-list-chats",
+                "teams-send-chat-message"
+            ]
+        },
+        agent: {
+            slug: "teams-agent",
+            name: "Microsoft Teams Agent",
+            description: "AI agent for Microsoft Teams collaboration",
+            instructions: `You are a Microsoft Teams specialist. Help users manage team conversations, send messages, and collaborate across channels and chats.`,
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.3,
+            memoryEnabled: true,
+            additionalTools: [],
+            metadata: {
+                slack: { displayName: "Teams Agent", iconEmoji: ":speech_balloon:" }
+            }
+        }
+    },
+    {
         providerKey: "dropbox",
         version: 2,
         skill: {

@@ -285,7 +285,7 @@ export function ConnectToolsTab() {
     const generateMcpConfig = useCallback(() => {
         const config = {
             mcpServers: {
-                "Mastra Agents": {
+                AgentC2: {
                     command: nodePath || "/usr/local/bin/node",
                     args: [serverScriptPath || "~/mastra-mcp-server/index.js"],
                     env: {
@@ -627,7 +627,7 @@ await server.connect(transport);
                                         <span className="text-muted-foreground font-medium">
                                             Name:
                                         </span>
-                                        <span>Mastra Agents</span>
+                                        <span>AgentC2</span>
                                     </div>
                                     <div className="grid grid-cols-[120px_1fr] gap-2">
                                         <span className="text-muted-foreground font-medium">

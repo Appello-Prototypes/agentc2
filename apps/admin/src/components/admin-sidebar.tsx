@@ -12,7 +12,8 @@ import {
     Settings,
     Shield,
     ClipboardList,
-    Bug
+    Bug,
+    Globe2
 } from "lucide-react";
 
 const navItems = [
@@ -23,6 +24,7 @@ const navItems = [
     { href: "/waitlist", label: "Waitlist", icon: ClipboardList },
     { href: "/flags", label: "Feature Flags", icon: Flag },
     { href: "/observability", label: "Observability", icon: Activity },
+    { href: "/federation", label: "Federation", icon: Globe2 },
     { href: "/audit", label: "Audit Log", icon: FileText },
     { href: "/settings", label: "Admin Users", icon: Settings }
 ];

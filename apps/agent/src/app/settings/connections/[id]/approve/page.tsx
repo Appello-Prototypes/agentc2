@@ -197,7 +197,13 @@ export default function ApproveConnectionPage({ params }: { params: Promise<{ id
                         &larr; Back
                     </Button>
                 </Link>
-                <h2 className="text-xl font-semibold">Review Connection Request</h2>
+                <div>
+                    <h2 className="text-xl font-semibold">Review Connection Request</h2>
+                    <p className="text-muted-foreground text-sm">
+                        {connection.partnerOrg.slug} &middot; Requested{" "}
+                        {new Date(connection.createdAt).toLocaleDateString()}
+                    </p>
+                </div>
             </div>
 
             {error && (
@@ -206,117 +212,116 @@ export default function ApproveConnectionPage({ params }: { params: Promise<{ id
                 </Alert>
             )}
 
-            {/* Requester Profile */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">
-                        Connection Request from {connection.partnerOrg.name}
-                    </CardTitle>
-                    <CardDescription>
-                        {connection.partnerOrg.slug} &middot; Requested{" "}
-                        {new Date(connection.createdAt).toLocaleDateString()}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    <div className="flex items-center gap-3">
-                        <div className="bg-muted flex size-12 items-center justify-center rounded-full text-lg font-medium">
-                            {connection.partnerOrg.name.charAt(0)}
+            <div className="grid items-start gap-0 md:grid-cols-[1fr_auto_1fr]">
+                {/* Left: What they're sharing */}
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-center gap-3">
+                            <div className="bg-muted flex size-10 items-center justify-center rounded-full text-sm font-medium">
+                                {connection.partnerOrg.name.charAt(0)}
+                            </div>
+                            <div>
+                                <CardTitle className="text-base">
+                                    {connection.partnerOrg.name} is sharing
+                                </CardTitle>
+                                <CardDescription>
+                                    Agents that will be available to you
+                                </CardDescription>
+                            </div>
                         </div>
-                        <div>
-                            <p className="font-medium">{connection.partnerOrg.name}</p>
+                    </CardHeader>
+                    <CardContent>
+                        {connection.partnerExposures.length === 0 ? (
                             <p className="text-muted-foreground text-sm">
-                                {connection.partnerOrg.slug}
+                                No agents shared yet — they can add agents after you accept.
                             </p>
-                        </div>
-                    </div>
-                </CardContent>
-            </Card>
-
-            {/* What They're Sharing */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Agents They Want to Share</CardTitle>
-                    <CardDescription>
-                        These agents will be available to you once you accept
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {connection.partnerExposures.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                            No agents shared yet — they can add agents after you accept.
-                        </p>
-                    ) : (
-                        <div className="space-y-2">
-                            {connection.partnerExposures.map((exp) => (
-                                <div
-                                    key={exp.id}
-                                    className="flex items-center justify-between rounded-lg border p-3"
-                                >
-                                    <div>
-                                        <p className="text-sm font-medium">{exp.agent.name}</p>
-                                        {exp.agent.description && (
-                                            <p className="text-muted-foreground line-clamp-1 text-xs">
-                                                {exp.agent.description}
-                                            </p>
-                                        )}
-                                    </div>
-                                    <Badge variant="secondary">Offered</Badge>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
-
-            {/* Your Response -- Agent Picker */}
-            <Card>
-                <CardHeader>
-                    <CardTitle className="text-base">Your Agents to Share Back</CardTitle>
-                    <CardDescription>
-                        Choose which of your agents {connection.partnerOrg.name} can access
-                    </CardDescription>
-                </CardHeader>
-                <CardContent>
-                    {agents.length === 0 ? (
-                        <p className="text-muted-foreground text-sm">
-                            No agents available to share.
-                        </p>
-                    ) : (
-                        <div className="space-y-2">
-                            {agents.map((agent) => {
-                                const key = agent.id || agent.slug;
-                                return (
-                                    <label
-                                        key={key}
-                                        className="hover:bg-accent/50 flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors"
+                        ) : (
+                            <div className="space-y-2">
+                                {connection.partnerExposures.map((exp) => (
+                                    <div
+                                        key={exp.id}
+                                        className="flex items-center justify-between rounded-lg border p-3"
                                     >
-                                        <div className="min-w-0 flex-1">
-                                            <p className="text-sm font-medium">{agent.name}</p>
-                                            {agent.description && (
-                                                <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
-                                                    {agent.description}
+                                        <div>
+                                            <p className="text-sm font-medium">{exp.agent.name}</p>
+                                            {exp.agent.description && (
+                                                <p className="text-muted-foreground line-clamp-1 text-xs">
+                                                    {exp.agent.description}
                                                 </p>
                                             )}
                                         </div>
-                                        <Switch
-                                            checked={selectedAgentIds.includes(key)}
-                                            onCheckedChange={(checked) =>
-                                                setSelectedAgentIds((prev) =>
-                                                    checked
-                                                        ? [...prev, key]
-                                                        : prev.filter((x) => x !== key)
-                                                )
-                                            }
-                                        />
-                                    </label>
-                                );
-                            })}
-                        </div>
-                    )}
-                </CardContent>
-            </Card>
+                                        <Badge variant="secondary">Offered</Badge>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
 
-            {/* Accept / Decline */}
+                {/* Center: Handshake divider */}
+                <div className="hidden flex-col items-center justify-center px-6 py-12 md:flex">
+                    <div className="bg-border h-16 w-px" />
+                    <div className="bg-muted text-muted-foreground my-3 flex size-12 items-center justify-center rounded-full text-lg">
+                        &harr;
+                    </div>
+                    <p className="text-muted-foreground mb-3 text-xs font-medium">Handshake</p>
+                    <div className="bg-border h-16 w-px" />
+                </div>
+                <div className="bg-border my-4 flex h-px items-center justify-center md:hidden">
+                    <span className="bg-background text-muted-foreground px-3 text-xs font-medium">
+                        &harr; Handshake
+                    </span>
+                </div>
+
+                {/* Right: Your agents to share */}
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">You will share</CardTitle>
+                        <CardDescription>
+                            Choose which agents {connection.partnerOrg.name} can access
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {agents.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No agents available to share.
+                            </p>
+                        ) : (
+                            <div className="space-y-2">
+                                {agents.map((agent) => {
+                                    const key = agent.id || agent.slug;
+                                    return (
+                                        <label
+                                            key={key}
+                                            className="hover:bg-accent/50 flex cursor-pointer items-center justify-between rounded-lg border p-3 transition-colors"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <p className="text-sm font-medium">{agent.name}</p>
+                                                {agent.description && (
+                                                    <p className="text-muted-foreground mt-0.5 line-clamp-1 text-xs">
+                                                        {agent.description}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <Switch
+                                                checked={selectedAgentIds.includes(key)}
+                                                onCheckedChange={(checked) =>
+                                                    setSelectedAgentIds((prev) =>
+                                                        checked
+                                                            ? [...prev, key]
+                                                            : prev.filter((x) => x !== key)
+                                                    )
+                                                }
+                                            />
+                                        </label>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
             <div className="flex justify-end gap-3">
                 <Button variant="outline" onClick={handleDecline} disabled={submitting}>
                     Decline

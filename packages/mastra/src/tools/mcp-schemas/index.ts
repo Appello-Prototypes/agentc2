@@ -19,7 +19,6 @@ import { workflowConfigToolDefinitions, workflowConfigToolRoutes } from "./workf
 import { workflowOpsToolDefinitions, workflowOpsToolRoutes } from "./workflow-ops";
 import { documentToolDefinitions, documentToolRoutes } from "./documents";
 import { skillToolDefinitions, skillToolRoutes } from "./skills";
-import { canvasToolDefinitions, canvasToolRoutes } from "./canvas";
 import { campaignToolDefinitions, campaignToolRoutes } from "./campaigns";
 import { sandboxToolDefinitions, sandboxToolRoutes } from "./sandbox";
 import { infraToolDefinitions, infraToolRoutes } from "./infra";
@@ -52,7 +51,6 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...integrationToolDefinitions,
     ...documentToolDefinitions,
     ...skillToolDefinitions,
-    ...canvasToolDefinitions,
     ...campaignToolDefinitions,
     ...sandboxToolDefinitions,
     ...infraToolDefinitions,
@@ -82,7 +80,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...integrationToolRoutes,
     ...documentToolRoutes,
     ...skillToolRoutes,
-    ...canvasToolRoutes,
     ...campaignToolRoutes,
     ...sandboxToolRoutes,
     ...infraToolRoutes,

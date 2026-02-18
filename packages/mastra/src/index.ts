@@ -270,26 +270,6 @@ export {
     type ListSkillsInput
 } from "./skills";
 
-// Canvas
-export {
-    CanvasSchemaSpec,
-    DataQuerySchema,
-    CanvasComponentSchema,
-    BLOCK_TYPES,
-    executeCanvasQueries,
-    executeSingleQuery,
-    resolveExpression,
-    resolveExpressions
-} from "./canvas";
-export type {
-    DataQuery,
-    CanvasComponent,
-    BlockTypeInfo,
-    QueryExecutionResult,
-    QueryExecutionOptions,
-    ExpressionContext
-} from "./canvas";
-
 // BIM
 export {
     ingestBimModel,

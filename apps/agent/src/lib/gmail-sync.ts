@@ -8,7 +8,12 @@
 
 import { prisma } from "@repo/database";
 import { google } from "googleapis";
-import { getGmailOAuthClient, GMAIL_REQUIRED_SCOPES, saveGmailCredentials } from "@/lib/gmail";
+import {
+    getGmailOAuthClient,
+    GMAIL_REQUIRED_SCOPES,
+    saveGmailCredentials,
+    syncSiblingGoogleConnections
+} from "@/lib/gmail";
 
 const parseScopes = (scope?: string | null) =>
     new Set(
@@ -94,12 +99,33 @@ export async function syncGmailFromAccount(
         }
 
         // Save credentials to IntegrationConnection (encrypted, org-scoped)
-        const saved = await saveGmailCredentials(organizationId, gmailAddress, {
+        const tokenPayload = {
             access_token: account.accessToken,
             refresh_token: account.refreshToken,
             expiry_date: account.accessTokenExpiresAt?.getTime(),
             scope: account.scope
-        });
+        };
+
+        const saved = await saveGmailCredentials(organizationId, gmailAddress, tokenPayload);
+
+        // Sync sibling Google services (Calendar, Drive) that share the same OAuth tokens
+        try {
+            const siblingResult = await syncSiblingGoogleConnections(
+                organizationId,
+                gmailAddress,
+                tokenPayload
+            );
+            if (siblingResult.created.length > 0) {
+                console.log(
+                    `[GmailSync] Synced sibling connections: ${siblingResult.created.join(", ")}`
+                );
+            }
+        } catch (err) {
+            console.warn(
+                "[GmailSync] Sibling sync failed (non-fatal):",
+                err instanceof Error ? err.message : err
+            );
+        }
 
         return {
             success: true,

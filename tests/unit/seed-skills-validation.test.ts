@@ -123,14 +123,6 @@ const KNOWN_TOOLS = [
     "skill-detach-tool",
     "agent-attach-skill",
     "agent-detach-skill",
-    "canvas-create",
-    "canvas-read",
-    "canvas-update",
-    "canvas-delete",
-    "canvas-list",
-    "canvas-query-preview",
-    "canvas-list-blocks",
-    "canvas-execute-queries",
     "integration-import-mcp-json",
     "integration-mcp-config",
     "integration-connection-test",
@@ -311,20 +303,6 @@ const SKILL_DEFINITIONS = [
             "skill-detach-tool",
             "agent-attach-skill",
             "agent-detach-skill"
-        ]
-    },
-    {
-        slug: "platform-canvas-dashboards",
-        category: "builder",
-        tools: [
-            "canvas-create",
-            "canvas-read",
-            "canvas-update",
-            "canvas-delete",
-            "canvas-list",
-            "canvas-query-preview",
-            "canvas-list-blocks",
-            "canvas-execute-queries"
         ]
     },
     {

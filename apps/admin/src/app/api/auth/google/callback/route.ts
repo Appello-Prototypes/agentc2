@@ -10,13 +10,15 @@ import {
     clearLoginRateLimit
 } from "@repo/admin-auth";
 
+const ADMIN_URL = process.env.ADMIN_URL || "https://agentc2.ai/admin";
+
 export async function GET(request: NextRequest) {
     const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
     const userAgent = request.headers.get("user-agent") || undefined;
 
     const rateLimit = checkLoginRateLimit(ip);
     if (!rateLimit.allowed) {
-        return redirectWithError(request, "Too many login attempts. Please try again later.");
+        return redirectWithError("Too many login attempts. Please try again later.");
     }
 
     const code = request.nextUrl.searchParams.get("code");
@@ -24,18 +26,23 @@ export async function GET(request: NextRequest) {
     const error = request.nextUrl.searchParams.get("error");
 
     if (error) {
-        return redirectWithError(request, "Google sign-in was cancelled or denied.");
+        return redirectWithError("Google sign-in was cancelled or denied.");
     }
 
     if (!code || !state) {
         recordFailedLogin(ip);
-        return redirectWithError(request, "Invalid OAuth callback parameters.");
+        return redirectWithError("Invalid OAuth callback parameters.");
     }
 
     const storedState = request.cookies.get("admin-oauth-state")?.value;
     if (!storedState || storedState !== state || !verifyOAuthState(state)) {
+        console.error("[Admin Google SSO] State mismatch:", {
+            hasStoredState: !!storedState,
+            hasUrlState: !!state,
+            match: storedState === state
+        });
         recordFailedLogin(ip);
-        return redirectWithError(request, "Invalid security token. Please try signing in again.");
+        return redirectWithError("Invalid security token. Please try signing in again.");
     }
 
     try {
@@ -51,12 +58,10 @@ export async function GET(request: NextRequest) {
         clearLoginRateLimit(ip, googleUser.email);
 
         const callbackUrl = request.cookies.get("admin-oauth-callback")?.value || "/";
+        const redirectPath = callbackUrl.startsWith("/") ? callbackUrl : `/${callbackUrl}`;
+        const redirectTarget = new URL(`${ADMIN_URL}${redirectPath}`);
 
-        const redirectUrl = request.nextUrl.clone();
-        redirectUrl.pathname = callbackUrl;
-        redirectUrl.search = "";
-
-        const response = NextResponse.redirect(redirectUrl);
+        const response = NextResponse.redirect(redirectTarget);
 
         response.cookies.set(ADMIN_COOKIE_NAME, token, {
             httpOnly: true,
@@ -74,18 +79,16 @@ export async function GET(request: NextRequest) {
         recordFailedLogin(ip);
 
         if (err instanceof AdminAuthError) {
-            return redirectWithError(request, err.message);
+            return redirectWithError(err.message);
         }
 
         console.error("[Admin Google SSO] Callback error:", err);
-        return redirectWithError(request, "Google sign-in failed. Please try again.");
+        return redirectWithError("Google sign-in failed. Please try again.");
     }
 }
 
-function redirectWithError(request: NextRequest, message: string) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    url.search = "";
+function redirectWithError(message: string) {
+    const url = new URL(`${ADMIN_URL}/login`);
     url.searchParams.set("error", message);
 
     const response = NextResponse.redirect(url);

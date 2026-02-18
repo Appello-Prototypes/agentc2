@@ -204,6 +204,51 @@ export {
     type QueueTodo
 } from "./queue";
 
+// Tool Invocation Card
+export { ToolInvocationCard, type ToolInvocationCardProps } from "./tool-invocation-card";
+
+// Artifact
+export {
+    Artifact,
+    ArtifactHeader,
+    ArtifactTitle,
+    ArtifactDescription,
+    ArtifactActions,
+    ArtifactAction,
+    ArtifactCopyButton,
+    ArtifactClose,
+    ArtifactContent,
+    type ArtifactProps,
+    type ArtifactHeaderProps,
+    type ArtifactTitleProps,
+    type ArtifactDescriptionProps,
+    type ArtifactActionsProps,
+    type ArtifactActionProps,
+    type ArtifactCopyButtonProps,
+    type ArtifactCloseProps,
+    type ArtifactContentProps
+} from "./artifact";
+
+// Terminal
+export {
+    Terminal,
+    TerminalHeader,
+    TerminalTitle,
+    TerminalStatus,
+    TerminalActions,
+    TerminalCopyButton,
+    TerminalClearButton,
+    TerminalContent,
+    type TerminalProps,
+    type TerminalHeaderProps,
+    type TerminalTitleProps,
+    type TerminalStatusProps,
+    type TerminalActionsProps,
+    type TerminalCopyButtonProps,
+    type TerminalClearButtonProps,
+    type TerminalContentProps
+} from "./terminal";
+
 // Code Block
 export {
     CodeBlock,

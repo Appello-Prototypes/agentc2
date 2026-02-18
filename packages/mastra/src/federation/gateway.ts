@@ -33,6 +33,7 @@ export async function processInvocation(
         conversationId: string
     ) => Promise<{
         response: string;
+        runId?: string;
         inputTokens?: number;
         outputTokens?: number;
         costUsd?: number;
@@ -124,6 +125,7 @@ export async function processInvocation(
     // 7. Invoke the target agent
     let agentResponse: {
         response: string;
+        runId?: string;
         inputTokens?: number;
         outputTokens?: number;
         costUsd?: number;
@@ -184,6 +186,7 @@ export async function processInvocation(
             inputTokens: agentResponse.inputTokens,
             outputTokens: agentResponse.outputTokens,
             costUsd: agentResponse.costUsd,
+            runId: agentResponse.runId,
             policyResult: "approved"
         }
     });

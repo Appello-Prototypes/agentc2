@@ -409,39 +409,6 @@ You can manage skills — composable competency bundles that group tools, instru
         type: "SYSTEM"
     },
     {
-        slug: "platform-canvas-dashboards",
-        name: "Canvas & Dashboards",
-        description:
-            "Build interactive dashboards and data views with data queries, charts, KPIs, and tables.",
-        instructions: `## Canvas & Dashboards
-
-You can create, read, update, and delete interactive canvases (dashboards/reports).
-
-### Building canvases:
-- Use canvas-list-blocks to see available component types (charts, KPIs, tables, etc.)
-- Use canvas-query-preview to test data queries before adding them
-- Use canvas-create to build the canvas with components and data bindings
-- Use canvas-execute-queries to verify data flows after creation
-
-### Canvas structure:
-- schemaJson: { title, components[], dataQueries[], layout, theme }
-- Components reference dataQueries by ID for data binding
-- Data queries support: mcp, sql, rag, static, api sources`,
-        category: "builder",
-        tags: ["canvas", "dashboards", "visualization"],
-        tools: [
-            "canvas-create",
-            "canvas-read",
-            "canvas-update",
-            "canvas-delete",
-            "canvas-list",
-            "canvas-query-preview",
-            "canvas-list-blocks",
-            "canvas-execute-queries"
-        ],
-        type: "SYSTEM"
-    },
-    {
         slug: "platform-integrations",
         name: "Integration Management",
         description:

@@ -64,7 +64,9 @@ type IntegrationProvider = {
     maturityLevel?: string;
     status: ProviderStatus;
     connections: ConnectionSummary[];
-    toolCount?: number;
+    toolCount?: number | null;
+    toolDiscovery?: "dynamic" | "static" | null;
+    hasBlueprint?: boolean;
     actions?: Record<string, unknown> | null;
     triggers?: Record<string, unknown> | null;
     config?: Record<string, unknown> | null;
@@ -147,6 +149,37 @@ function DiagStatusIcon({ status }: { status: string }) {
     return <MinusCircleIcon className="text-muted-foreground h-3.5 w-3.5" />;
 }
 
+function ToolCountBadge({
+    toolCount,
+    toolDiscovery
+}: {
+    toolCount?: number | null;
+    toolDiscovery?: "dynamic" | "static" | null;
+}) {
+    if (toolDiscovery === "dynamic" && (toolCount === null || toolCount === undefined)) {
+        return (
+            <Badge variant="secondary" className="text-[10px]">
+                MCP
+            </Badge>
+        );
+    }
+    if (typeof toolCount === "number" && toolCount > 0) {
+        return (
+            <Badge variant="secondary" className="text-[10px]">
+                {toolCount} tools
+            </Badge>
+        );
+    }
+    if (toolDiscovery === "static" && typeof toolCount === "number") {
+        return (
+            <Badge variant="secondary" className="text-[10px]">
+                {toolCount} tools
+            </Badge>
+        );
+    }
+    return null;
+}
+
 function HealthIndicator({ status }: { status: string | null | undefined }) {
     if (!status) return null;
     const config =
@@ -171,14 +204,28 @@ function HealthIndicator({ status }: { status: string | null | undefined }) {
 
 function ConnectedPlatformCard({
     provider,
-    diagnostics
+    diagnostics,
+    onRefreshTools
 }: {
     provider: IntegrationProvider;
     diagnostics?: DiagnosticsResult["integrations"][string] | null;
+    onRefreshTools?: (providerKey: string) => void;
 }) {
     const activeConns = provider.connections.filter((c) => c.isActive);
+    const showRefresh =
+        provider.toolDiscovery === "dynamic" &&
+        provider.provisioned?.skill &&
+        provider.provisioned.skill.toolCount === 0;
+
+    const borderClass =
+        provider.healthStatus === "unhealthy"
+            ? "border-red-500/40"
+            : provider.status === "missing_auth"
+              ? "border-yellow-500/40"
+              : "";
+
     return (
-        <Card>
+        <Card className={borderClass}>
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
@@ -191,6 +238,10 @@ function ConnectedPlatformCard({
                         </CardDescription>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
+                        <ToolCountBadge
+                            toolCount={provider.provisioned?.skill?.toolCount ?? provider.toolCount}
+                            toolDiscovery={provider.toolDiscovery}
+                        />
                         <CategoryBadge category={provider.category} />
                         <AuthBadge authType={provider.authType} />
                     </div>
@@ -234,7 +285,11 @@ function ConnectedPlatformCard({
                                     </span>
                                     <span className="text-muted-foreground">
                                         <WrenchIcon className="inline h-2.5 w-2.5" />{" "}
-                                        {provider.provisioned.skill.toolCount} tools
+                                        {provider.provisioned.skill.toolCount > 0
+                                            ? `${provider.provisioned.skill.toolCount} tools`
+                                            : provider.toolDiscovery === "dynamic"
+                                              ? "MCP tools"
+                                              : "0 tools"}
                                     </span>
                                     {provider.provisioned.skill.deactivated && (
                                         <Badge
@@ -298,6 +353,16 @@ function ConnectedPlatformCard({
                     >
                         Manage
                     </Link>
+                    {showRefresh && onRefreshTools && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => onRefreshTools(provider.key)}
+                        >
+                            <RefreshCwIcon className="mr-1 h-3 w-3" />
+                            Refresh Tools
+                        </Button>
+                    )}
                     {provider.provisioned?.agent?.isActive && (
                         <Link
                             href={`/agents/${provider.provisioned.agent.slug}/overview`}
@@ -338,12 +403,31 @@ function AvailablePlatformCard({ provider }: { provider: IntegrationProvider }) 
                         </CardDescription>
                     </div>
                     <div className="flex shrink-0 items-center gap-1.5">
+                        <ToolCountBadge
+                            toolCount={provider.toolCount}
+                            toolDiscovery={provider.toolDiscovery}
+                        />
                         <CategoryBadge category={provider.category} />
                         <AuthBadge authType={provider.authType} />
                     </div>
                 </div>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-2">
+                {provider.hasBlueprint && (
+                    <div className="flex items-center gap-3 text-xs">
+                        <span className="text-muted-foreground flex items-center gap-1">
+                            <SparklesIcon className="h-2.5 w-2.5" />
+                            Skill
+                        </span>
+                        <span className="text-muted-foreground flex items-center gap-1">
+                            <BotIcon className="h-2.5 w-2.5" />
+                            Agent
+                        </span>
+                        <span className="text-muted-foreground text-[10px]">
+                            auto-provisioned on connect
+                        </span>
+                    </div>
+                )}
                 <Link
                     href={`/mcp/providers/${provider.key}`}
                     className={buttonVariants({ variant: "default", size: "sm" })}
@@ -373,6 +457,20 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
     const [diagLoading, setDiagLoading] = useState(true);
 
     const apiBase = getApiBase();
+
+    const handleRefreshTools = useCallback(
+        async (providerKey: string) => {
+            try {
+                await fetch(`${apiBase}/api/integrations/providers/${providerKey}/tools`, {
+                    method: "POST"
+                });
+                window.location.reload();
+            } catch {
+                /* noop */
+            }
+        },
+        [apiBase]
+    );
 
     // Fetch channel diagnostics
     const fetchDiagnostics = useCallback(async () => {
@@ -424,17 +522,6 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
         return diagnostics.integrations[channelKey] || null;
     };
 
-    // Group available providers by category
-    const groupedAvailable = availableProviders.reduce(
-        (acc, p) => {
-            const cat = p.category || "other";
-            if (!acc[cat]) acc[cat] = [];
-            acc[cat].push(p);
-            return acc;
-        },
-        {} as Record<string, IntegrationProvider[]>
-    );
-
     const categoryOrder = [
         "productivity",
         "communication",
@@ -449,11 +536,35 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
         "automation"
     ];
 
-    const sortedCategories = Object.keys(groupedAvailable).sort((a, b) => {
+    const sortByCategory = (a: string, b: string) => {
         const ai = categoryOrder.indexOf(a);
         const bi = categoryOrder.indexOf(b);
         return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    });
+    };
+
+    // Group connected providers by category
+    const groupedConnected = connectedProviders.reduce(
+        (acc, p) => {
+            const cat = p.category || "other";
+            if (!acc[cat]) acc[cat] = [];
+            acc[cat].push(p);
+            return acc;
+        },
+        {} as Record<string, IntegrationProvider[]>
+    );
+    const sortedConnectedCategories = Object.keys(groupedConnected).sort(sortByCategory);
+
+    // Group available providers by category
+    const groupedAvailable = availableProviders.reduce(
+        (acc, p) => {
+            const cat = p.category || "other";
+            if (!acc[cat]) acc[cat] = [];
+            acc[cat].push(p);
+            return acc;
+        },
+        {} as Record<string, IntegrationProvider[]>
+    );
+    const sortedCategories = Object.keys(groupedAvailable).sort(sortByCategory);
 
     return (
         <div className="space-y-6">
@@ -488,14 +599,39 @@ export function PlatformsTab({ providers }: { providers: IntegrationProvider[] }
                             get started.
                         </CardContent>
                     </Card>
-                ) : (
+                ) : sortedConnectedCategories.length === 1 ? (
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                        {connectedProviders.map((provider) => (
-                            <ConnectedPlatformCard
-                                key={provider.id}
-                                provider={provider}
-                                diagnostics={getDiagnostics(provider.key)}
-                            />
+                        {connectedProviders
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((provider) => (
+                                <ConnectedPlatformCard
+                                    key={provider.id}
+                                    provider={provider}
+                                    diagnostics={getDiagnostics(provider.key)}
+                                    onRefreshTools={handleRefreshTools}
+                                />
+                            ))}
+                    </div>
+                ) : (
+                    <div className="space-y-5">
+                        {sortedConnectedCategories.map((category) => (
+                            <div key={category}>
+                                <h4 className="text-muted-foreground mb-3 text-xs font-medium tracking-wider uppercase">
+                                    {category}
+                                </h4>
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                    {groupedConnected[category]
+                                        .sort((a, b) => a.name.localeCompare(b.name))
+                                        .map((provider) => (
+                                            <ConnectedPlatformCard
+                                                key={provider.id}
+                                                provider={provider}
+                                                diagnostics={getDiagnostics(provider.key)}
+                                                onRefreshTools={handleRefreshTools}
+                                            />
+                                        ))}
+                                </div>
+                            </div>
                         ))}
                     </div>
                 )}

@@ -36,7 +36,6 @@ const agentSkillConfigs: AgentSkillConfig[] = [
             "platform-simulations",
             "platform-knowledge-management",
             "platform-skill-management",
-            "platform-canvas-dashboards",
             "platform-integrations",
             "platform-organization",
             "platform-webhooks",
@@ -67,12 +66,6 @@ const agentSkillConfigs: AgentSkillConfig[] = [
         discoverableSlugs: []
     },
 
-    // canvas-builder: Focused builder
-    {
-        agentSlug: "canvas-builder",
-        pinnedSlugs: ["platform-canvas-dashboards", "core-utilities"],
-        discoverableSlugs: []
-    },
 
     // skill-builder: Focused builder
     {

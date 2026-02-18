@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getMcpToolsForServer } from "@repo/mastra/mcp";
+import { rediscoverToolsForConnection } from "@repo/mastra/integrations";
 import { getUserOrganizationId } from "@/lib/organization";
 import { resolveConnectionServerId } from "@/lib/integrations";
 
@@ -106,6 +107,84 @@ export async function GET(
             {
                 success: false,
                 error: error instanceof Error ? error.message : "Failed to list provider tools"
+            },
+            { status: 500 }
+        );
+    }
+}
+
+/**
+ * POST /api/integrations/providers/[providerKey]/tools
+ *
+ * Trigger manual tool re-discovery for a provider's active connections.
+ */
+export async function POST(
+    _request: Request,
+    { params }: { params: Promise<{ providerKey: string }> }
+) {
+    try {
+        const session = await auth.api.getSession({
+            headers: await headers()
+        });
+        if (!session?.user) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
+        const organizationId = await getUserOrganizationId(session.user.id);
+        if (!organizationId) {
+            return NextResponse.json(
+                { success: false, error: "Organization membership required" },
+                { status: 403 }
+            );
+        }
+
+        const { providerKey } = await params;
+        const provider = await prisma.integrationProvider.findFirst({
+            where: { key: providerKey, isActive: true }
+        });
+        if (!provider) {
+            return NextResponse.json(
+                { success: false, error: "Provider not found" },
+                { status: 404 }
+            );
+        }
+
+        const connections = await prisma.integrationConnection.findMany({
+            where: {
+                organizationId,
+                providerId: provider.id,
+                isActive: true,
+                OR: [{ scope: "org" }, { scope: "user", userId: session.user.id }]
+            }
+        });
+
+        if (connections.length === 0) {
+            return NextResponse.json(
+                { success: false, error: "No active connections for this provider" },
+                { status: 404 }
+            );
+        }
+
+        const results = [];
+        for (const connection of connections) {
+            const result = await rediscoverToolsForConnection(connection.id);
+            if (result) {
+                results.push(result);
+            }
+        }
+
+        return NextResponse.json({
+            success: true,
+            providerKey: provider.key,
+            rediscovery: results
+        });
+    } catch (error) {
+        console.error("[Integrations Providers] Tool rediscovery error:", error);
+        return NextResponse.json(
+            {
+                success: false,
+                error:
+                    error instanceof Error ? error.message : "Failed to rediscover provider tools"
             },
             { status: 500 }
         );
