@@ -1160,6 +1160,33 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "cursor",
+        name: "Cursor Cloud Agent",
+        description:
+            "Autonomous coding agent — launch cloud agents to write code, fix bugs, and create PRs on GitHub repositories",
+        category: "developer",
+        authType: "apiKey",
+        providerType: "custom",
+        configJson: {
+            requiredFields: ["CURSOR_API_KEY"],
+            fieldDefinitions: {
+                CURSOR_API_KEY: {
+                    label: "Cursor API key",
+                    description:
+                        "Get from Cursor Dashboard > Integrations (cursor.com/dashboard?tab=integrations)",
+                    placeholder: "cur_...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Cursor", "cursor"],
+                envAliases: {
+                    CURSOR_API_KEY: "CURSOR_API_KEY"
+                }
+            }
+        }
+    },
+    {
         key: "netlify",
         name: "Netlify",
         description: "Web deployment — sites, deploys, forms, functions, and DNS management",

@@ -66,7 +66,6 @@ const agentSkillConfigs: AgentSkillConfig[] = [
         discoverableSlugs: []
     },
 
-
     // skill-builder: Focused builder
     {
         agentSlug: "skill-builder",

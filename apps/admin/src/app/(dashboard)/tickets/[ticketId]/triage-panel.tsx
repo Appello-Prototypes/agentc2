@@ -10,6 +10,7 @@ interface TriageTicket {
     priority: string;
     assignedToId: string | null;
     tags: string[];
+    pipelineRunId?: string | null;
     triagedAt: string | null;
     resolvedAt: string | null;
     closedAt: string | null;
@@ -35,6 +36,10 @@ export function TicketTriagePanel({
     const [status, setStatus] = useState(ticket.status);
     const [priority, setPriority] = useState(ticket.priority);
     const [assignedToId, setAssignedToId] = useState(ticket.assignedToId ?? "");
+    const [showPipelineModal, setShowPipelineModal] = useState(false);
+    const [pipelineRepo, setPipelineRepo] = useState("");
+    const [pipelineDispatching, setPipelineDispatching] = useState(false);
+    const [pipelineRunId, setPipelineRunId] = useState(ticket.pipelineRunId ?? null);
 
     async function handleUpdate(updates: Record<string, unknown>) {
         setSaving(true);
@@ -65,6 +70,34 @@ export function TicketTriagePanel({
     async function handleAssign(newAssigneeId: string) {
         setAssignedToId(newAssigneeId);
         await handleUpdate({ assignedToId: newAssigneeId || null });
+    }
+
+    async function handleDispatchPipeline() {
+        if (!pipelineRepo.trim()) return;
+        setPipelineDispatching(true);
+        try {
+            const agentBaseUrl = process.env.NEXT_PUBLIC_AGENT_URL || "http://localhost:3001";
+            const agentPath = agentBaseUrl.includes("localhost") ? "" : "/agent";
+            const res = await fetch(`${agentBaseUrl}${agentPath}/api/coding-pipeline/dispatch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sourceType: "support_ticket",
+                    sourceId: ticket.id,
+                    repository: pipelineRepo.trim(),
+                    variant: "standard"
+                })
+            });
+            const data = await res.json();
+            if (data.success && data.pipelineRunId) {
+                setPipelineRunId(data.pipelineRunId);
+                setShowPipelineModal(false);
+                setStatus("IN_PROGRESS");
+                router.refresh();
+            }
+        } finally {
+            setPipelineDispatching(false);
+        }
     }
 
     const statuses = ["NEW", "TRIAGED", "IN_PROGRESS", "WAITING_ON_CUSTOMER", "RESOLVED", "CLOSED"];
@@ -174,6 +207,58 @@ export function TicketTriagePanel({
                         >
                             Close
                         </button>
+                    )}
+                </div>
+
+                {/* Coding Pipeline */}
+                <div className="border-border space-y-2 border-t pt-4">
+                    <p className="text-muted-foreground text-xs font-medium">Coding Pipeline</p>
+                    {pipelineRunId ? (
+                        <div className="rounded-md bg-blue-500/10 px-3 py-2 text-sm text-blue-500">
+                            Pipeline dispatched
+                            <span className="mt-1 block text-xs opacity-70">
+                                Run: {pipelineRunId.slice(0, 12)}...
+                            </span>
+                        </div>
+                    ) : (
+                        <>
+                            <button
+                                onClick={() => setShowPipelineModal(true)}
+                                disabled={saving || status === "RESOLVED" || status === "CLOSED"}
+                                className="w-full rounded-md bg-purple-500/10 px-3 py-2 text-sm font-medium text-purple-500 transition-colors hover:bg-purple-500/20 disabled:opacity-50"
+                            >
+                                Dispatch to Coding Pipeline
+                            </button>
+                            {showPipelineModal && (
+                                <div className="bg-background border-border space-y-3 rounded-md border p-3">
+                                    <label className="text-muted-foreground block text-xs font-medium">
+                                        Target Repository
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={pipelineRepo}
+                                        onChange={(e) => setPipelineRepo(e.target.value)}
+                                        placeholder="https://github.com/org/repo"
+                                        className="border-input bg-background w-full rounded-md border px-3 py-2 text-sm"
+                                    />
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={handleDispatchPipeline}
+                                            disabled={pipelineDispatching || !pipelineRepo.trim()}
+                                            className="flex-1 rounded-md bg-purple-500 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-600 disabled:opacity-50"
+                                        >
+                                            {pipelineDispatching ? "Dispatching..." : "Dispatch"}
+                                        </button>
+                                        <button
+                                            onClick={() => setShowPipelineModal(false)}
+                                            className="rounded-md bg-gray-500/10 px-3 py-2 text-sm font-medium text-gray-500 transition-colors hover:bg-gray-500/20"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

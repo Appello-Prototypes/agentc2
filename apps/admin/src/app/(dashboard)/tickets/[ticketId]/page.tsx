@@ -163,6 +163,8 @@ export default async function TicketDetailPage({
                             priority: ticket.priority,
                             assignedToId: ticket.assignedToId,
                             tags: ticket.tags,
+                            pipelineRunId:
+                                (ticket as { pipelineRunId?: string | null }).pipelineRunId ?? null,
                             triagedAt: ticket.triagedAt?.toISOString() ?? null,
                             resolvedAt: ticket.resolvedAt?.toISOString() ?? null,
                             closedAt: ticket.closedAt?.toISOString() ?? null,

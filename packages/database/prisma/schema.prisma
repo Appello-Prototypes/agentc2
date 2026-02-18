@@ -144,6 +144,9 @@ model Organization {
     // Infrastructure
     provisionedResources ProvisionedResource[]
 
+    // Agent Instances
+    agentInstances AgentInstance[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -763,6 +766,7 @@ model Agent {
     backlog                Backlog?
     outputActions          OutputAction[]
     federationExposures    FederationExposure[]
+    instances              AgentInstance[]
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -3060,6 +3064,93 @@ model SlackEventDedup {
 }
 
 // ==============================
+// Agent Instances — Channel-Agnostic Isolated Agent Contexts
+// ==============================
+
+// AgentInstance - A runtime instantiation of an agent template bound to a specific context
+// (deal, customer, project). Owns its own memory namespace, RAG scope, and instruction overrides.
+// The parent Agent provides the template (instructions, model, tools); the instance provides
+// the per-deal/customer context layer. One agent template can serve N instances.
+model AgentInstance {
+    id             String       @id @default(cuid())
+    agentId        String
+    agent          Agent        @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    // Identity
+    name String // "Owens Insulation Deal Manager"
+    slug String // "owens-insulation"
+
+    // Context binding (what this instance is "about")
+    contextType      String? // "deal", "customer", "project"
+    contextId        String? // External ID (HubSpot deal ID, Jira project key, etc.)
+    contextData      Json? // Cached context for template injection
+    contextRefreshAt DateTime? // When context was last refreshed from source
+
+    // Instance-specific overrides (layered on top of agent template)
+    instructionOverrides String? @db.Text // Appended to agent template instructions
+    memoryNamespace      String  @unique // Cross-channel memory scope (default: "instance-{id}")
+    ragCollectionId      String? // Scoped RAG document collection
+    temperatureOverride  Float? // Override agent template temperature
+    maxStepsOverride     Int? // Override agent template maxSteps
+
+    metadata Json?
+    isActive Boolean @default(true)
+    version  Int     @default(1)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    createdBy String?
+
+    // Relations
+    channelBindings InstanceChannelBinding[]
+
+    @@unique([organizationId, slug])
+    @@index([agentId])
+    @@index([contextType, contextId])
+    @@index([organizationId])
+    @@map("agent_instance")
+}
+
+// InstanceChannelBinding - Links an AgentInstance to a specific communication channel endpoint.
+// Enables the same instance to be reached via Slack, email, WhatsApp, web embed, or voice.
+// Memory is shared across all channel bindings for a given instance.
+model InstanceChannelBinding {
+    id         String        @id @default(cuid())
+    instanceId String
+    instance   AgentInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+    // Channel endpoint
+    channelType       String // "slack", "email", "whatsapp", "web", "voice"
+    channelIdentifier String // Slack channel ID, email address, phone number, embed token
+    channelName       String? // Display name (#deal-owens, owens@agentc2.ai, etc.)
+    channelMetadata   Json? // Channel-specific config (Slack teamId, etc.)
+
+    // Per-channel behavior overrides
+    replyMode      String? // "thread", "channel", "ephemeral" (null = use default)
+    responseLength String? // "concise", "standard", "detailed"
+    richFormatting Boolean? // Slack Block Kit / email HTML / etc.
+
+    // Triggers (beyond default @mention behavior)
+    triggerOnAllMessages Boolean  @default(false) // Respond to every message (no @mention needed)
+    triggerKeywords      String[] @default([]) // Keywords that trigger response
+    triggerOnFileUpload  Boolean  @default(false) // Trigger on file uploads
+
+    // Access control
+    allowedUserIds String[] @default([]) // Empty = everyone allowed
+    blockedUserIds String[] @default([])
+
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([channelType, channelIdentifier])
+    @@index([instanceId])
+    @@map("instance_channel_binding")
+}
+
+// ==============================
 // Agent Scorecard & Calibration Models
 // ==============================
 
@@ -3816,6 +3907,9 @@ model BacklogTask {
     result      String?   @db.Text
     completedAt DateTime?
 
+    // Coding Pipeline
+    pipelineRunId String?
+
     createdAt DateTime @default(now())
     updatedAt DateTime @updatedAt
 
@@ -3944,6 +4038,9 @@ model SupportTicket {
     triagedAt  DateTime?
     resolvedAt DateTime?
     closedAt   DateTime?
+
+    // Coding Pipeline
+    pipelineRunId String?
 
     // Comments
     comments SupportTicketComment[]
@@ -4189,4 +4286,46 @@ model ProvisionedResource {
     @@index([provider, resourceType])
     @@index([agentId])
     @@map("provisioned_resource")
+}
+
+// ─── Coding Pipeline ─────────────────────────────────────────────────────────
+
+model CodingPipelineRun {
+    id             String  @id @default(cuid())
+    workflowRunId  String? // Links to WorkflowRun
+    organizationId String?
+
+    // Source ticket/task/issue
+    sourceType String // "support_ticket", "backlog_task", "github_issue", "manual"
+    sourceId   String
+
+    // Repository context
+    repository   String
+    baseBranch   String  @default("main")
+    targetBranch String?
+
+    // Cursor Cloud Agent
+    cursorAgentId String?
+
+    // Pull Request
+    prNumber Int?
+    prUrl    String?
+
+    // Governance
+    riskLevel String? // "trivial", "low", "medium", "high", "critical"
+    variant   String  @default("standard") // "standard" or "internal"
+
+    // Cost tracking
+    totalCostUsd Float?
+
+    // Lifecycle
+    status    String   @default("running") // running, awaiting_plan_approval, coding, verifying, awaiting_pr_review, merged, deployed, failed
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([organizationId, status])
+    @@index([sourceType, sourceId])
+    @@index([status])
+    @@index([createdAt])
+    @@map("coding_pipeline_run")
 }

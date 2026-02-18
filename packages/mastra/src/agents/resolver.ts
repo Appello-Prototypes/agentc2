@@ -357,9 +357,17 @@ export class AgentResolver {
         const enrichedContext = await this.enrichContextWithSlackChannels(record, context || {});
 
         // Interpolate instructions if template exists
-        const instructions = record.instructionsTemplate
+        let instructions = record.instructionsTemplate
             ? this.interpolateInstructions(record.instructionsTemplate, enrichedContext)
             : record.instructions;
+
+        // Append instance-specific instruction overrides if present
+        const instanceCtx = enrichedContext.metadata?._instanceContext as
+            | Record<string, unknown>
+            | undefined;
+        if (instanceCtx?.instructionOverrides) {
+            instructions = instructions + "\n\n" + String(instanceCtx.instructionOverrides);
+        }
 
         // Build memory if enabled
         const memory = record.memoryEnabled
@@ -961,7 +969,32 @@ export class AgentResolver {
                 if (channelMap && parts[2] in channelMap) {
                     return channelMap[parts[2]];
                 }
-                // Keep placeholder if channel not configured
+                return match;
+            }
+
+            // Handle instance.* patterns (e.g., {{instance.name}}, {{instance.context.companyName}})
+            if (parts[0] === "instance") {
+                const instanceCtx = normalized.metadata?._instanceContext as
+                    | Record<string, unknown>
+                    | undefined;
+                if (!instanceCtx) return match;
+
+                if (parts.length === 2) {
+                    const value = instanceCtx[parts[1]];
+                    if (value !== undefined && value !== null) return String(value);
+                    return match;
+                }
+                // instance.context.fieldName — drill into contextData
+                if (parts.length === 3 && parts[1] === "context") {
+                    const contextData = instanceCtx.contextData as
+                        | Record<string, unknown>
+                        | undefined;
+                    if (contextData && parts[2] in contextData) {
+                        const value = contextData[parts[2]];
+                        if (value !== undefined && value !== null) return String(value);
+                    }
+                    return match;
+                }
                 return match;
             }
 

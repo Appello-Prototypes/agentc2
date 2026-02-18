@@ -1,8 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Separator } from "@repo/ui";
 import { formatRelativeTime } from "@/components/run-detail-utils";
+import { getApiBase } from "@/lib/utils";
 import type { BacklogTask } from "../page";
 
 interface TaskDetailProps {
@@ -34,6 +36,34 @@ function getPriorityLevel(priority: number): string {
 
 export default function TaskDetail({ task, agentSlug, onStatusChange, onDelete }: TaskDetailProps) {
     const router = useRouter();
+    const [showPipelineModal, setShowPipelineModal] = useState(false);
+    const [pipelineRepo, setPipelineRepo] = useState("");
+    const [pipelineDispatching, setPipelineDispatching] = useState(false);
+
+    async function handleDispatchPipeline() {
+        if (!task || !pipelineRepo.trim()) return;
+        setPipelineDispatching(true);
+        try {
+            const base = getApiBase();
+            const res = await fetch(`${base}/api/coding-pipeline/dispatch`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    sourceType: "backlog_task",
+                    sourceId: task.id,
+                    repository: pipelineRepo.trim(),
+                    variant: "standard"
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setShowPipelineModal(false);
+                onStatusChange(task.id, "IN_PROGRESS");
+            }
+        } finally {
+            setPipelineDispatching(false);
+        }
+    }
 
     if (!task) {
         return (
@@ -191,6 +221,53 @@ export default function TaskDetail({ task, agentSlug, onStatusChange, onDelete }
 
             {/* Footer actions */}
             <div className="space-y-2 border-t px-4 py-3">
+                {/* Coding Pipeline */}
+                {(task.status === "PENDING" || task.status === "IN_PROGRESS") && (
+                    <>
+                        {!showPipelineModal ? (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="w-full border-purple-500/30 text-purple-500 hover:bg-purple-500/10"
+                                onClick={() => setShowPipelineModal(true)}
+                            >
+                                Dispatch to Coding Pipeline
+                            </Button>
+                        ) : (
+                            <div className="bg-muted/50 space-y-2 rounded-md border p-3">
+                                <label className="text-muted-foreground block text-xs font-medium">
+                                    Target Repository
+                                </label>
+                                <input
+                                    type="text"
+                                    value={pipelineRepo}
+                                    onChange={(e) => setPipelineRepo(e.target.value)}
+                                    placeholder="https://github.com/org/repo"
+                                    className="border-input bg-background w-full rounded-md border px-3 py-1.5 text-sm"
+                                />
+                                <div className="flex gap-2">
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        className="flex-1"
+                                        disabled={pipelineDispatching || !pipelineRepo.trim()}
+                                        onClick={handleDispatchPipeline}
+                                    >
+                                        {pipelineDispatching ? "Dispatching..." : "Dispatch"}
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowPipelineModal(false)}
+                                    >
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+                    </>
+                )}
+
                 {task.agentRunId && (
                     <Button
                         variant="outline"

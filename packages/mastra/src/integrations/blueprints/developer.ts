@@ -240,6 +240,60 @@ Key capabilities:
         }
     },
     {
+        providerKey: "cursor",
+        version: 1,
+        skill: {
+            slug: "cursor-expert",
+            name: "Cursor Cloud Agent Expert",
+            description: "Expert knowledge for dispatching and managing Cursor Cloud coding agents",
+            instructions: `You are a Cursor Cloud Agent expert. Help users dispatch autonomous coding tasks to Cursor Cloud Agents and manage the full coding pipeline.
+
+Key capabilities:
+- Launch Cursor Cloud Agents on GitHub repositories with detailed implementation prompts
+- Monitor agent status and progress through polling
+- Send follow-up instructions to refine agent work
+- Retrieve conversation history for audit and debugging
+- Orchestrate the full ticket-to-deployment coding pipeline
+
+Best practices:
+- Write detailed, specific prompts that include file paths, coding standards, and test expectations
+- Always specify the base branch to avoid conflicts
+- Monitor agent status with exponential backoff to avoid rate limiting
+- Review generated branches before creating pull requests
+- Use follow-up instructions to fix build failures rather than restarting
+- Track costs per coding task for budget management`,
+            category: "Developer Tools",
+            tags: ["developer", "cursor", "coding", "automation", "ci-cd"],
+            toolDiscovery: "dynamic"
+        },
+        agent: {
+            slug: "cursor-agent",
+            name: "Cursor Coding Agent",
+            description: "AI agent that dispatches coding tasks to Cursor Cloud Agents",
+            instructions:
+                "You are a Cursor Cloud Agent specialist. Help users dispatch coding tasks, " +
+                "monitor progress, and manage the autonomous coding pipeline. Always provide " +
+                "detailed implementation prompts and verify results before creating pull requests.",
+            modelProvider: "openai",
+            modelName: "gpt-4o",
+            temperature: 0.3,
+            memoryEnabled: true,
+            additionalTools: [
+                "cursor-launch-agent",
+                "cursor-get-status",
+                "cursor-add-followup",
+                "cursor-get-conversation",
+                "cursor-poll-until-done"
+            ],
+            metadata: {
+                slack: {
+                    displayName: "Cursor Agent",
+                    iconEmoji: ":computer:"
+                }
+            }
+        }
+    },
+    {
         providerKey: "netlify",
         version: 1,
         skill: {

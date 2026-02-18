@@ -24,6 +24,7 @@ import { sandboxToolDefinitions, sandboxToolRoutes } from "./sandbox";
 import { infraToolDefinitions, infraToolRoutes } from "./infra";
 import { backlogToolDefinitions, backlogToolRoutes } from "./backlog";
 import { outputActionToolDefinitions, outputActionToolRoutes } from "./output-actions";
+import { codingPipelineToolDefinitions, codingPipelineToolRoutes } from "./coding-pipeline";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -55,7 +56,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...sandboxToolDefinitions,
     ...infraToolDefinitions,
     ...backlogToolDefinitions,
-    ...outputActionToolDefinitions
+    ...outputActionToolDefinitions,
+    ...codingPipelineToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -84,5 +86,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...sandboxToolRoutes,
     ...infraToolRoutes,
     ...backlogToolRoutes,
-    ...outputActionToolRoutes
+    ...outputActionToolRoutes,
+    ...codingPipelineToolRoutes
 ];

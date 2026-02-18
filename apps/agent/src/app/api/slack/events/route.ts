@@ -15,6 +15,7 @@ import {
     getBotUserIdForInstallation,
     type SlackInstallationContext
 } from "@/lib/slack-tokens";
+import { lookupChannelBinding, isUserAllowed, type InstanceContext } from "@/lib/agent-instances";
 
 /**
  * Hardcoded last-resort fallback when neither the database nor the env var
@@ -981,9 +982,23 @@ async function processMessage(
     installation?: SlackInstallationContext | null,
     agentSlug?: string
 ): Promise<ProcessMessageResult> {
-    const slug = agentSlug || installation?.defaultAgentSlug || FALLBACK_AGENT_SLUG;
     const teamId = installation?.teamId || process.env.SLACK_TEAM_ID || "unknown";
     const slackThreadId = buildSlackThreadId(teamId, channelId, threadTs);
+
+    // Look up instance channel binding for this Slack channel
+    let instanceBinding: InstanceContext | null = null;
+    try {
+        instanceBinding = await lookupChannelBinding("slack", channelId);
+    } catch (e) {
+        console.warn("[Slack] Failed to look up channel binding:", e);
+    }
+
+    // Agent slug resolution: explicit directive > instance binding > installation default > fallback
+    const slug =
+        agentSlug ||
+        instanceBinding?.agentSlug ||
+        installation?.defaultAgentSlug ||
+        FALLBACK_AGENT_SLUG;
 
     console.log(`\n${"=".repeat(60)}`);
     console.log(`[Slack] Processing message at ${new Date().toISOString()}`);
@@ -991,7 +1006,20 @@ async function processMessage(
     console.log(`[Slack] Channel: ${channelId}`);
     console.log(`[Slack] Thread: ${threadTs}`);
     console.log(`[Slack] Agent: ${slug}`);
+    if (instanceBinding) {
+        console.log(
+            `[Slack] Instance: ${instanceBinding.instanceSlug} (${instanceBinding.instanceName})`
+        );
+    }
     console.log(`[Slack] Message: ${text}`);
+
+    // Instance-level access control
+    if (instanceBinding && !isUserAllowed(instanceBinding, userId)) {
+        return {
+            text: "You don't have access to interact with this agent instance.",
+            identity: {}
+        };
+    }
 
     // Rate limiting: check per-user messages per minute
     if (installation?.connectionId) {
@@ -1004,6 +1032,32 @@ async function processMessage(
         }
     }
 
+    // Build request context metadata, enriched with instance context when available
+    const requestMetadata: Record<string, unknown> = {
+        platform: "slack",
+        channelId,
+        threadTs
+    };
+    if (instanceBinding) {
+        requestMetadata._instanceContext = {
+            instanceId: instanceBinding.instanceId,
+            instanceName: instanceBinding.instanceName,
+            instanceSlug: instanceBinding.instanceSlug,
+            contextType: instanceBinding.contextType,
+            contextId: instanceBinding.contextId,
+            contextData: instanceBinding.contextData,
+            instructionOverrides: instanceBinding.instructionOverrides,
+            memoryNamespace: instanceBinding.memoryNamespace
+        };
+    }
+
+    // Memory: use instance namespace when available (cross-channel awareness)
+    // Thread-level sub-scoping still applies within the instance
+    const memoryThread = instanceBinding
+        ? `${instanceBinding.memoryNamespace}-${threadTs}`
+        : slackThreadId;
+    const memoryResource = instanceBinding ? instanceBinding.memoryNamespace : userId;
+
     // Resolve the agent
     let agentId: string;
     let agent;
@@ -1015,13 +1069,9 @@ async function processMessage(
             slug,
             requestContext: {
                 userId,
-                metadata: {
-                    platform: "slack",
-                    channelId,
-                    threadTs
-                }
+                metadata: requestMetadata
             },
-            threadId: slackThreadId
+            threadId: memoryThread
         });
 
         agent = resolved.agent;
@@ -1134,15 +1184,23 @@ async function processMessage(
         });
     }
 
-    // Start recording the run
+    // Start recording the run (include instance ID for auditing)
     const run = await startRun({
         agentId,
         agentSlug: slug,
         input: text,
         source: "slack",
         userId,
-        threadId: slackThreadId,
-        sessionId: channelId
+        threadId: memoryThread,
+        sessionId: channelId,
+        ...(instanceBinding
+            ? {
+                  metadata: {
+                      instanceId: instanceBinding.instanceId,
+                      instanceSlug: instanceBinding.instanceSlug
+                  }
+              }
+            : {})
     });
 
     // Record trigger event for unified triggers dashboard
@@ -1164,13 +1222,15 @@ async function processMessage(
 
     try {
         // Build generate options with memory persistence when enabled
+        // Instance bindings override memory namespace for cross-channel awareness
+        const effectiveMaxSteps = instanceBinding?.maxStepsOverride ?? record?.maxSteps ?? 5;
         const generateOptions = {
-            maxSteps: record?.maxSteps ?? 5,
+            maxSteps: effectiveMaxSteps,
             ...(record?.memoryEnabled
                 ? {
                       memory: {
-                          thread: slackThreadId,
-                          resource: userId
+                          thread: memoryThread,
+                          resource: memoryResource
                       }
                   }
                 : {})

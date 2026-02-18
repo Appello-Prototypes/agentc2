@@ -277,6 +277,19 @@ import {
     networkValidateTool,
     networkDesignerChatTool
 } from "./network-config-tools";
+import {
+    cursorLaunchAgentTool,
+    cursorGetStatusTool,
+    cursorAddFollowupTool,
+    cursorGetConversationTool,
+    cursorPollUntilDoneTool
+} from "./cursor-tools";
+import { verifyBranchTool, waitForChecksTool } from "./verify-tools";
+import {
+    ingestTicketTool,
+    dispatchCodingPipelineTool,
+    updatePipelineStatusTool
+} from "./coding-pipeline-tools";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getMcpTools } from "../mcp/client";
@@ -309,6 +322,18 @@ export const toolCategoryMap: Record<string, string> = {
     "track-resource": "Infrastructure",
     "list-resources": "Infrastructure",
     "destroy-resource": "Infrastructure",
+
+    // Coding Pipeline
+    "cursor-launch-agent": "Coding Pipeline",
+    "cursor-get-status": "Coding Pipeline",
+    "cursor-add-followup": "Coding Pipeline",
+    "cursor-get-conversation": "Coding Pipeline",
+    "cursor-poll-until-done": "Coding Pipeline",
+    "verify-branch": "Coding Pipeline",
+    "wait-for-checks": "Coding Pipeline",
+    "ingest-ticket": "Coding Pipeline",
+    "dispatch-coding-pipeline": "Coding Pipeline",
+    "update-pipeline-status": "Coding Pipeline",
     "backlog-get": "Backlog",
     "backlog-add-task": "Backlog",
     "backlog-list-tasks": "Backlog",
@@ -647,6 +672,22 @@ export const toolRegistry: Record<string, any> = {
     "track-resource": trackResourceTool,
     "list-resources": listResourcesTool,
     "destroy-resource": destroyResourceTool,
+
+    // Coding Pipeline (Cursor Cloud Agent)
+    "cursor-launch-agent": cursorLaunchAgentTool,
+    "cursor-get-status": cursorGetStatusTool,
+    "cursor-add-followup": cursorAddFollowupTool,
+    "cursor-get-conversation": cursorGetConversationTool,
+    "cursor-poll-until-done": cursorPollUntilDoneTool,
+
+    // Verification
+    "verify-branch": verifyBranchTool,
+    "wait-for-checks": waitForChecksTool,
+
+    // Pipeline orchestration
+    "ingest-ticket": ingestTicketTool,
+    "dispatch-coding-pipeline": dispatchCodingPipelineTool,
+    "update-pipeline-status": updatePipelineStatusTool,
 
     // Backlog tools
     "backlog-get": backlogGetTool,

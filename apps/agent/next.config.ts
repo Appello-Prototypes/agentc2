@@ -30,6 +30,26 @@ const nextConfig: NextConfig = {
                         value: "frame-ancestors *"
                     }
                 ]
+            },
+            // Workspace-served HTML files need a relaxed CSP so agent-generated
+            // dashboards can load external CDN scripts (Chart.js, etc.)
+            {
+                source: "/api/workspace/:path*",
+                headers: [
+                    {
+                        key: "Content-Security-Policy",
+                        value: [
+                            "default-src 'self'",
+                            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com",
+                            "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+                            "font-src 'self' data: https://fonts.gstatic.com",
+                            "img-src 'self' data: https:",
+                            "connect-src 'self' https:",
+                            "media-src 'self' data: blob:",
+                            "frame-ancestors 'self'"
+                        ].join("; ")
+                    }
+                ]
             }
         ];
     },

@@ -572,7 +572,6 @@ function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) =>
                         <GlobeIcon className="mr-2 size-4 opacity-60" />
                         Fetch from URL
                     </PromptInputActionMenuItem>
-
                 </PromptInputActionMenuContent>
             </PromptInputActionMenu>
         </>

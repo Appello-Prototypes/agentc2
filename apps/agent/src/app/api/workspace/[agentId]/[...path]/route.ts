@@ -91,14 +91,29 @@ export async function GET(
         const ext = extname(filePath).toLowerCase();
         const contentType = MIME_TYPES[ext] || "application/octet-stream";
 
+        const responseHeaders: Record<string, string> = {
+            "Content-Type": contentType,
+            "Content-Length": String(content.length),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "X-Content-Type-Options": "nosniff"
+        };
+
+        if (ext === ".html" || ext === ".htm") {
+            responseHeaders["Content-Security-Policy"] = [
+                "default-src 'self'",
+                "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com",
+                "style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://unpkg.com https://cdnjs.cloudflare.com https://fonts.googleapis.com",
+                "font-src 'self' data: https://fonts.gstatic.com",
+                "img-src 'self' data: https:",
+                "connect-src 'self' https:",
+                "media-src 'self' data: blob:",
+                "frame-ancestors 'self'"
+            ].join("; ");
+        }
+
         return new NextResponse(content, {
             status: 200,
-            headers: {
-                "Content-Type": contentType,
-                "Content-Length": String(content.length),
-                "Cache-Control": "no-cache, no-store, must-revalidate",
-                "X-Content-Type-Options": "nosniff"
-            }
+            headers: responseHeaders
         });
     } catch (error) {
         console.error("Workspace serve error:", error);

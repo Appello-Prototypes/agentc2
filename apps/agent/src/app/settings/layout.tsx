@@ -72,6 +72,14 @@ const settingsNavItems: SettingsNavItem[] = [
         requiresRole: ["owner", "admin"]
     },
     {
+        id: "instances",
+        label: "Agent Instances",
+        href: "/settings/instances",
+        icon: "git-branch",
+        description: "Channel-scoped agent instances",
+        requiresRole: ["owner", "admin"]
+    },
+    {
         id: "connections",
         label: "Connections",
         href: "/settings/connections",
