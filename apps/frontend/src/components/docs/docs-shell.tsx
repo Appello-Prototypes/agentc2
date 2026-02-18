@@ -52,8 +52,11 @@ export function DocsShell({
 
                 {pagesInCurrentSection.length > 0 ? (
                     <div className="mt-6 border-t pt-4">
-                        <p className="text-muted-foreground mb-2 text-xs font-semibold uppercase tracking-wide">
-                            {DOCS_SECTIONS.find((section) => section.slug === currentSection)?.title}
+                        <p className="text-muted-foreground mb-2 text-xs font-semibold tracking-wide uppercase">
+                            {
+                                DOCS_SECTIONS.find((section) => section.slug === currentSection)
+                                    ?.title
+                            }
                         </p>
                         <nav className="space-y-1">
                             {pagesInCurrentSection.map((page) => {

@@ -1,7 +1,7 @@
 /**
  * Seed Skills Validation Tests
  *
- * Validates the integrity of the 33 seeded skills:
+ * Validates the integrity of the seeded skills:
  * - Unique slugs
  * - Non-empty descriptions (required for search/discovery)
  * - Non-empty instructions
@@ -369,8 +369,8 @@ const SKILL_DEFINITIONS = [
 ];
 
 describe("Seed Skills Validation", () => {
-    it("should have exactly 33 skill definitions", () => {
-        expect(SKILL_DEFINITIONS).toHaveLength(33);
+    it("should have exactly 32 skill definitions", () => {
+        expect(SKILL_DEFINITIONS).toHaveLength(32);
     });
 
     it("should have all unique slugs", () => {
@@ -436,7 +436,7 @@ describe("Seed Skills Validation", () => {
             {} as Record<string, number>
         );
 
-        expect(byCat["builder"]).toBe(5);
+        expect(byCat["builder"]).toBe(4);
         expect(byCat["operations"]).toBe(9);
         expect(byCat["integration"]).toBe(11);
         expect(byCat["utility"]).toBe(3);

@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock database
 const mockPrismaProvisionedResource = {
+    count: vi.fn(),
     findUnique: vi.fn(),
     findMany: vi.fn(),
     create: vi.fn(),
@@ -65,6 +66,7 @@ vi.mock("../../packages/mastra/src/tools/remote-compute-helpers", () => ({
 
 beforeEach(() => {
     vi.clearAllMocks();
+    mockPrismaProvisionedResource.count.mockResolvedValue(0);
     mockResolveDoToken.mockResolvedValue("do-test-token-123");
     mockGenerateEphemeralSshKey.mockReturnValue({
         publicKey: "ssh-ed25519 AAAA mock-key",

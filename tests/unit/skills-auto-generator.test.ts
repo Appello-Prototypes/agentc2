@@ -26,7 +26,8 @@ describe("Skill Auto-Generator", () => {
                 createdAt: new Date("2024-01-01"),
                 updatedAt: new Date("2024-01-01")
             };
-            prismaMock.skill.upsert.mockResolvedValue(mockCreated as never);
+            prismaMock.skill.findFirst.mockResolvedValue(null);
+            prismaMock.skill.create.mockResolvedValue(mockCreated as never);
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
             prismaMock.skillTool.createMany.mockResolvedValue({ count: 2 } as never);
 
@@ -37,9 +38,9 @@ describe("Skill Auto-Generator", () => {
 
             expect(result.slug).toBe("mcp-crm-hubspot");
             expect(result.toolCount).toBe(2);
-            expect(prismaMock.skill.upsert).toHaveBeenCalledWith(
+            expect(prismaMock.skill.create).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    where: { slug: "mcp-crm-hubspot" }
+                    data: expect.objectContaining({ slug: "mcp-crm-hubspot" })
                 })
             );
         });
@@ -52,7 +53,8 @@ describe("Skill Auto-Generator", () => {
                 createdAt: new Date("2024-01-01"),
                 updatedAt: new Date("2024-01-01")
             };
-            prismaMock.skill.upsert.mockResolvedValue(mockCreated as never);
+            prismaMock.skill.findFirst.mockResolvedValue(null);
+            prismaMock.skill.create.mockResolvedValue(mockCreated as never);
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
             prismaMock.skillTool.createMany.mockResolvedValue({ count: 1 } as never);
 
@@ -71,7 +73,8 @@ describe("Skill Auto-Generator", () => {
                 createdAt: new Date("2024-01-01"),
                 updatedAt: new Date("2024-01-01")
             };
-            prismaMock.skill.upsert.mockResolvedValue(mockCreated as never);
+            prismaMock.skill.findFirst.mockResolvedValue(null);
+            prismaMock.skill.create.mockResolvedValue(mockCreated as never);
             prismaMock.skillTool.deleteMany.mockResolvedValue({ count: 0 } as never);
 
             const result = await generateSkillForMcpServer("hubspot", []);

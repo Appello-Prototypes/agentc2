@@ -49,12 +49,15 @@ export default async function DocsDetailPage({ params }: DocsPageProps) {
     }
 
     const section = DOCS_SECTIONS.find((candidate) => candidate.slug === page.section);
-    const sectionPages = DOCS_PAGES.filter((candidate) => candidate.section === page.section).sort((a, b) =>
-        a.slug.localeCompare(b.slug)
+    const sectionPages = DOCS_PAGES.filter((candidate) => candidate.section === page.section).sort(
+        (a, b) => a.slug.localeCompare(b.slug)
     );
     const pageIndex = sectionPages.findIndex((candidate) => candidate.slug === page.slug);
     const previousPage = pageIndex > 0 ? sectionPages[pageIndex - 1] : undefined;
-    const nextPage = pageIndex >= 0 && pageIndex < sectionPages.length - 1 ? sectionPages[pageIndex + 1] : undefined;
+    const nextPage =
+        pageIndex >= 0 && pageIndex < sectionPages.length - 1
+            ? sectionPages[pageIndex + 1]
+            : undefined;
 
     const breadcrumb = [
         { name: "Docs", path: "/docs" },

@@ -14,14 +14,17 @@ describe("Coding Pipeline Workflow Definitions", () => {
 
             const stepIds = steps.map((s) => s.id);
             expect(stepIds).toContain("ingest-ticket");
+            expect(stepIds).toContain("lookup-pipeline-config");
             expect(stepIds).toContain("analyze-codebase");
             expect(stepIds).toContain("plan-implementation");
             expect(stepIds).toContain("classify-risk");
-            expect(stepIds).toContain("approve-plan");
+            expect(stepIds).toContain("plan-approval-gate");
             expect(stepIds).toContain("dispatch-cursor");
             expect(stepIds).toContain("poll-cursor");
-            expect(stepIds).toContain("verify-build");
-            expect(stepIds).toContain("review-pr");
+            expect(stepIds).toContain("provision-build-env");
+            expect(stepIds).toContain("verify-checks");
+            expect(stepIds).toContain("pr-review-gate");
+            expect(stepIds).toContain("merge-pr");
         });
 
         it("has correct step types", () => {
@@ -29,31 +32,49 @@ describe("Coding Pipeline Workflow Definitions", () => {
             const stepMap = Object.fromEntries(steps.map((s) => [s.id, s]));
 
             expect(stepMap["ingest-ticket"].type).toBe("tool");
+            expect(stepMap["lookup-pipeline-config"].type).toBe("tool");
             expect(stepMap["analyze-codebase"].type).toBe("agent");
             expect(stepMap["plan-implementation"].type).toBe("agent");
             expect(stepMap["classify-risk"].type).toBe("agent");
-            expect(stepMap["approve-plan"].type).toBe("human");
+            expect(stepMap["plan-approval-gate"].type).toBe("branch");
             expect(stepMap["dispatch-cursor"].type).toBe("tool");
             expect(stepMap["poll-cursor"].type).toBe("tool");
-            expect(stepMap["verify-build"].type).toBe("tool");
-            expect(stepMap["review-pr"].type).toBe("human");
+            expect(stepMap["verify-checks"].type).toBe("tool");
+            expect(stepMap["pr-review-gate"].type).toBe("branch");
         });
 
-        it("has two human approval gates", () => {
-            const humanSteps = CODING_PIPELINE_DEFINITION.steps.filter((s) => s.type === "human");
-            expect(humanSteps).toHaveLength(2);
-            expect(humanSteps[0].id).toBe("approve-plan");
-            expect(humanSteps[1].id).toBe("review-pr");
+        it("has two branch-based approval gates with human fallback", () => {
+            const planGate = CODING_PIPELINE_DEFINITION.steps.find(
+                (s) => s.id === "plan-approval-gate"
+            );
+            const prGate = CODING_PIPELINE_DEFINITION.steps.find((s) => s.id === "pr-review-gate");
+
+            expect(planGate?.type).toBe("branch");
+            expect(prGate?.type).toBe("branch");
+            expect(
+                planGate?.config?.defaultBranch?.some((s: { type?: string }) => s.type === "human")
+            ).toBe(true);
+            expect(
+                prGate?.config?.defaultBranch?.some((s: { type?: string }) => s.type === "human")
+            ).toBe(true);
         });
 
         it("has tool steps that reference valid tools", () => {
             const toolSteps = CODING_PIPELINE_DEFINITION.steps.filter((s) => s.type === "tool");
             const expectedTools = [
                 "ingest-ticket",
+                "lookup-pipeline-config",
                 "update-pipeline-status",
                 "cursor-launch-agent",
                 "cursor-poll-until-done",
-                "wait-for-checks"
+                "provision-compute",
+                "remote-execute",
+                "run-scenarios",
+                "teardown-compute",
+                "wait-for-checks",
+                "calculate-trust-score",
+                "merge-pull-request",
+                "await-deploy"
             ];
 
             for (const step of toolSteps) {
@@ -96,7 +117,7 @@ describe("Coding Pipeline Workflow Definitions", () => {
         it("standard seed has correct metadata", () => {
             expect(CODING_PIPELINE_WORKFLOW_SEED.slug).toBe("coding-pipeline");
             expect(CODING_PIPELINE_WORKFLOW_SEED.name).toContain("Coding Pipeline");
-            expect(CODING_PIPELINE_WORKFLOW_SEED.maxSteps).toBe(20);
+            expect(CODING_PIPELINE_WORKFLOW_SEED.maxSteps).toBe(25);
         });
 
         it("internal seed has correct metadata", () => {

@@ -9,6 +9,10 @@ export default defineConfig({
                 replacement: path.resolve(__dirname, "packages/mastra/src/$1")
             },
             {
+                find: /^@repo\/auth\/(.+)$/,
+                replacement: path.resolve(__dirname, "packages/auth/src/$1")
+            },
+            {
                 find: "@repo/database",
                 replacement: path.resolve(__dirname, "packages/database/src/index.ts")
             },

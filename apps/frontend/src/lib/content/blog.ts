@@ -259,8 +259,32 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["networks/overview", "networks/topology", "guides/multi-agent-orchestration"],
         sections: [
             {
-                heading: "Overview",
-                paragraphs: ["This article explains network topology design and routing controls."]
+                heading: "Why multi-agent networks matter",
+                paragraphs: [
+                    "Single-agent systems are effective for narrow tasks, but complex operations usually require specialization, routing, and handoff quality controls. Multi-agent networks let you separate responsibilities so one node focuses on triage, another on research, and another on execution.",
+                    "The value of a network is not just parallelism. It is clarity of decision boundaries. When each node has explicit inputs, outputs, and escalation rules, the overall system becomes easier to reason about, test, and improve."
+                ]
+            },
+            {
+                heading: "Topology design patterns",
+                paragraphs: [
+                    "A practical starting pattern is router -> specialist -> verifier. The router classifies intent, specialists handle domain work, and a verifier checks quality or policy compliance before action. This pattern keeps autonomy high while preserving control.",
+                    "Another pattern is planner -> workers -> synthesizer. The planner decomposes goals into steps, workers execute focused tasks, and the synthesizer produces the final response. Use this for research-heavy or synthesis-heavy workloads where intermediate artifacts matter."
+                ]
+            },
+            {
+                heading: "Operational controls for network reliability",
+                paragraphs: [
+                    "Network quality depends on observability. You need traces for each handoff, confidence scores at routing points, and clear fallback behavior when confidence is low or a dependency fails. Without these controls, networks can fail silently and degrade trust.",
+                    "Version each topology change and compare outcomes over representative traffic. If a new route increases latency or cost without quality gains, roll back quickly. Treat topology changes as production releases, not one-off experiments."
+                ]
+            },
+            {
+                heading: "How AgentC2 implements network orchestration",
+                paragraphs: [
+                    "AgentC2 stores network primitives and versions in the database, executes runs with trace visibility, and supports AI-assisted topology design. This removes a large amount of custom control-plane engineering while preserving explicit routing behavior.",
+                    "Use the docs for network overview, topology, and guides together. The best results come from combining route design, guardrails, and evaluation into one disciplined rollout workflow."
+                ]
             }
         ]
     },
@@ -278,8 +302,32 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["skills/overview", "skills/progressive-disclosure", "skills/creating-skills"],
         sections: [
             {
-                heading: "Overview",
-                paragraphs: ["This article explains skills composition, governance, and reuse."]
+                heading: "What makes skills different from prompts",
+                paragraphs: [
+                    "A skill is more than an instruction snippet. In AgentC2, skills package behavior, context, and tool assumptions into versioned capability units that can be attached to agents. This creates reuse without copy-paste drift.",
+                    "Prompt-only reuse tends to fail at scale because teams fork text and lose governance. Skills reduce that entropy by giving shared capability a lifecycle, ownership, and audit trail."
+                ]
+            },
+            {
+                heading: "Composable capability architecture",
+                paragraphs: [
+                    "Composable skills allow teams to combine capabilities intentionally. For example, a customer support agent can attach a triage skill, a knowledge retrieval skill, and an escalation skill rather than embedding everything in one monolithic instruction block.",
+                    "This composition model improves maintainability. When one capability changes, you update one skill version and promote it through controlled rollout instead of rewriting every agent."
+                ]
+            },
+            {
+                heading: "Progressive disclosure and runtime activation",
+                paragraphs: [
+                    "Progressive disclosure means capabilities activate when context indicates they are relevant, rather than always exposing every skill. This reduces tool noise, token overhead, and prompt complexity in long conversations.",
+                    "The practical impact is better precision. Agents stay focused on the active task while still having access to richer capability when needed."
+                ]
+            },
+            {
+                heading: "Governance and rollout strategy",
+                paragraphs: [
+                    "Treat skill changes like product releases: version, test, compare, then promote. Attach quality checks to high-impact skills and monitor downstream agent behavior after updates.",
+                    "AgentC2’s skill and version model supports this discipline directly, making capability reuse a governance advantage instead of an operational risk."
+                ]
             }
         ]
     },
@@ -297,8 +345,32 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["agents/budgets-and-costs", "platform/observability", "agents/evaluations"],
         sections: [
             {
-                heading: "Overview",
-                paragraphs: ["This article explains budget policy and optimization playbooks."]
+                heading: "The cost control problem in production agents",
+                paragraphs: [
+                    "Cost issues rarely come from one bad call. They come from unbounded loops, overpowered default models, unnecessary tool chatter, and low-signal retries. Teams that skip cost controls usually discover spend problems after trust has already eroded.",
+                    "A strong cost strategy starts with visibility. You need per-run, per-agent, and per-model breakdowns to see where spend is concentrated and where optimization will actually move outcomes."
+                ]
+            },
+            {
+                heading: "Budget policy design",
+                paragraphs: [
+                    "Set budget thresholds at the agent level and align them to business value. High-value workflows can justify higher spend ceilings, while routine automation should have tighter limits and stricter fallback behavior.",
+                    "Add hard stops for runaway behavior and explicit escalation paths when budgets are exceeded. Cost control should fail safely, not silently."
+                ]
+            },
+            {
+                heading: "Optimization playbook",
+                paragraphs: [
+                    "Optimize in order: retrieval quality, prompt scope, tool-call frequency, then model tier. Many teams jump straight to model downgrades and hurt quality. Better retrieval and cleaner prompts often reduce spend while improving output.",
+                    "Use evaluation and trace data to validate every optimization. A cheaper run that causes rework is usually more expensive in total operational cost."
+                ]
+            },
+            {
+                heading: "How AgentC2 supports cost operations",
+                paragraphs: [
+                    "AgentC2 includes budget policy controls, cost event tracking, model-level metrics, and run-level observability. This gives teams enough granularity to tie spend decisions to quality outcomes.",
+                    "Use cost docs together with evaluation and guardrails docs so optimization remains aligned with reliability and risk constraints."
+                ]
             }
         ]
     },
@@ -316,8 +388,32 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["platform/deployment", "agents/guardrails", "agents/version-control"],
         sections: [
             {
-                heading: "Overview",
-                paragraphs: ["This article gives a production release checklist and go-live gate."]
+                heading: "Production readiness starts before go-live",
+                paragraphs: [
+                    "Deployment is not a single event. It is the end of a controlled sequence: capability definition, risk assessment, validation, and release governance. Teams that skip pre-release structure often create avoidable incidents.",
+                    "A production checklist should be explicit about ownership, rollback authority, and success criteria. If these are unclear, delay release until they are resolved."
+                ]
+            },
+            {
+                heading: "Pre-release checklist",
+                paragraphs: [
+                    "Validate agent configuration, tools, and memory assumptions against representative scenarios. Run evaluations, review trace quality, and confirm guardrail behavior for unsafe or ambiguous inputs.",
+                    "Confirm operational baselines: expected latency, expected cost, and acceptable failure thresholds. Document these baselines so post-release changes can be compared objectively."
+                ]
+            },
+            {
+                heading: "Release gates and rollback",
+                paragraphs: [
+                    "Use versioned releases with explicit promotion gates. For high-risk updates, require human approval and staged rollout rather than full traffic cutover.",
+                    "Rollback should be immediate and rehearsed. The best rollback plan is one that has already been tested before a real incident."
+                ]
+            },
+            {
+                heading: "Post-release monitoring",
+                paragraphs: [
+                    "The first 24 to 72 hours after release should include focused monitoring of traces, quality metrics, policy violations, and spend deltas. Treat this as part of deployment, not optional follow-up.",
+                    "When regressions appear, capture findings and feed them into learning and evaluation workflows so each release improves the next."
+                ]
             }
         ]
     },
@@ -335,8 +431,32 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["workflows/human-in-the-loop", "agents/guardrails", "platform/security"],
         sections: [
             {
-                heading: "Overview",
-                paragraphs: ["This article explains approval patterns and escalation paths."]
+                heading: "Why human approval still matters",
+                paragraphs: [
+                    "Autonomy is powerful, but not every action should be autonomous. Human-in-the-loop controls are essential when actions are irreversible, customer-visible, or compliance-sensitive.",
+                    "The goal is not to slow everything down. It is to insert decision checkpoints where the cost of error is high and recoverability is low."
+                ]
+            },
+            {
+                heading: "Approval workflow patterns",
+                paragraphs: [
+                    "A practical pattern is classify -> draft -> approve -> execute. The agent prepares context and recommendation, but execution waits for explicit approval on high-risk paths.",
+                    "Use confidence or risk thresholds to determine when approval is required. Low-risk actions can proceed automatically while high-risk actions are gated."
+                ]
+            },
+            {
+                heading: "Escalation, timeout, and ownership",
+                paragraphs: [
+                    "Approval systems fail when ownership is unclear. Define who approves which class of action, how long they have, and what the fallback is when no response arrives.",
+                    "Timeout behavior should be explicit. In most enterprise flows, timeout should default to no-op or safe fallback, not auto-execute."
+                ]
+            },
+            {
+                heading: "Implementing HITL in AgentC2",
+                paragraphs: [
+                    "AgentC2 workflows support approval gates, and guardrail policy can route sensitive actions into these checkpoints. Combine this with trace and audit data so every approval decision is reviewable.",
+                    "Treat HITL as a product feature, not a patch. Good approval UX improves adoption because teams trust what the system will and will not do."
+                ]
             }
         ]
     },
@@ -354,9 +474,31 @@ export const BLOG_POSTS: BlogPost[] = [
         relatedDocs: ["agents/evaluations", "agents/learning", "platform/observability"],
         sections: [
             {
-                heading: "Overview",
+                heading: "Evaluation is an operating system, not a single metric",
                 paragraphs: [
-                    "This article covers scorecards, scorers, and continuous improvement loops."
+                    "Teams often ask for one quality score, but production evaluation is multi-dimensional. You need relevance, correctness, policy compliance, latency, and cost represented together.",
+                    "A robust evaluation system links these dimensions to business outcomes. Otherwise optimization becomes local and can degrade what users actually care about."
+                ]
+            },
+            {
+                heading: "Designing scorecards and scorers",
+                paragraphs: [
+                    "Start with a scorecard that reflects your real quality contract, then add scorers that can detect regressions against that contract. Keep scorer definitions stable enough to compare versions over time.",
+                    "Do not overfit to one dataset. Include representative scenarios across easy, typical, and failure-prone cases to avoid false confidence."
+                ]
+            },
+            {
+                heading: "Closing the loop with learning",
+                paragraphs: [
+                    "Evaluation creates signal; learning converts signal into change proposals. The closed loop is: evaluate runs, generate hypotheses, test candidate changes, then promote winners through controlled release.",
+                    "This loop only works when traceability is strong. You must be able to connect score changes to exact configuration changes."
+                ]
+            },
+            {
+                heading: "AgentC2 evaluation workflow",
+                paragraphs: [
+                    "AgentC2 combines evaluation entities, run telemetry, and learning mechanisms to support this lifecycle end-to-end. That reduces manual glue code and keeps optimization inside one operational plane.",
+                    "Use evaluation docs with observability and version-control docs for best results. Improvement is fastest when measurement and release controls are integrated."
                 ]
             }
         ]

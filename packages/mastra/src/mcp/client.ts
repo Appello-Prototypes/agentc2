@@ -76,7 +76,11 @@ export function invalidateMcpCacheForOrg(organizationId: string) {
             orgMcpClients.delete(key);
         }
     }
-    perServerToolsCache.delete(organizationId);
+    for (const key of perServerToolsCache.keys()) {
+        if (key === organizationId || key.startsWith(`${organizationId}:`)) {
+            perServerToolsCache.delete(key);
+        }
+    }
 }
 
 export function resetMcpClients() {

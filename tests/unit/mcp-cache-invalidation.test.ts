@@ -18,8 +18,42 @@ describe("MCP cache invalidation", () => {
     it("invalidates MCP client cache for an org", async () => {
         (global as { mcpClient?: unknown }).mcpClient = undefined;
 
-        prismaMock.integrationConnection.findMany.mockResolvedValue([] as never);
+        prismaMock.integrationConnection.findMany.mockResolvedValue([
+            {
+                id: "conn-1",
+                organizationId: "org-1",
+                isDefault: true,
+                isActive: true,
+                scope: "org",
+                userId: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+                credentials: {},
+                metadata: null,
+                provider: {
+                    id: "provider-1",
+                    key: "custom-http",
+                    name: "Custom HTTP",
+                    description: null,
+                    category: "integration",
+                    authType: "custom",
+                    providerType: "custom",
+                    configJson: {
+                        transport: "http",
+                        url: "https://example.com/mcp",
+                        headerMapping: {}
+                    },
+                    actionsJson: null,
+                    triggersJson: null,
+                    maturityLevel: "alpha",
+                    isActive: true,
+                    createdAt: new Date(),
+                    updatedAt: new Date()
+                }
+            }
+        ] as never);
         prismaMock.toolCredential.findMany.mockResolvedValue([] as never);
+        prismaMock.integrationProvider.findMany.mockResolvedValue([] as never);
 
         const { getMcpTools, invalidateMcpCacheForOrg } =
             await import("../../packages/mastra/src/mcp/client");

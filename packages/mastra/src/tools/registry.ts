@@ -299,6 +299,7 @@ import {
     remoteFileTransferTool,
     teardownComputeTool
 } from "./remote-compute-tools";
+import { platformDocsTool } from "./platform-docs-tool";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { getMcpTools } from "../mcp/client";
@@ -529,6 +530,7 @@ export const toolCategoryMap: Record<string, string> = {
     "campaign-write-plan": "Campaigns",
     "campaign-write-aar": "Campaigns",
     "tool-registry-list": "Utilities",
+    "platform-docs": "Platform Documentation",
     "workspace-intent-recommendation": "Organization",
 
     // Email & Calendar
@@ -849,6 +851,7 @@ export const toolRegistry: Record<string, any> = {
 
     // Tool introspection
     "tool-registry-list": toolRegistryListTool,
+    "platform-docs": platformDocsTool,
 
     // Workspace intent tools
     "workspace-intent-recommendation": workspaceIntentRecommendationTool,

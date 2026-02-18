@@ -28,6 +28,7 @@ import { codingPipelineToolDefinitions, codingPipelineToolRoutes } from "./codin
 import { remoteComputeToolDefinitions, remoteComputeToolRoutes } from "./remote-compute";
 import { supportToolDefinitions, supportToolRoutes } from "./support";
 import { orgGuardrailToolDefinitions, orgGuardrailToolRoutes } from "./org-guardrails";
+import { platformDocsToolDefinitions, platformDocsToolRoutes } from "./platform-docs";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -63,7 +64,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...codingPipelineToolDefinitions,
     ...remoteComputeToolDefinitions,
     ...supportToolDefinitions,
-    ...orgGuardrailToolDefinitions
+    ...orgGuardrailToolDefinitions,
+    ...platformDocsToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -96,5 +98,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...codingPipelineToolRoutes,
     ...remoteComputeToolRoutes,
     ...supportToolRoutes,
-    ...orgGuardrailToolRoutes
+    ...orgGuardrailToolRoutes,
+    ...platformDocsToolRoutes
 ];
