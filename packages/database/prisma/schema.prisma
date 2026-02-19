@@ -158,6 +158,11 @@ model Organization {
     // Storage tracking
     workspaceStorageUsage WorkspaceStorageUsage[]
 
+    // Budget & Billing
+    subscription    OrgSubscription?
+    orgBudgetPolicy OrgBudgetPolicy?
+    budgetAlerts    BudgetAlert[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -1588,18 +1593,23 @@ model CostEvent {
     agentId          String
     agent            Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId         String?
+    userId           String?
     provider         String
     modelName        String
     promptTokens     Int?
     completionTokens Int?
     totalTokens      Int?
     costUsd          Float?
+    platformCostUsd  Float?
+    billedCostUsd    Float?
+    markupMultiplier Float?
     createdAt        DateTime      @default(now())
 
     @@index([runId])
     @@index([turnId])
     @@index([agentId, createdAt])
     @@index([tenantId])
+    @@index([userId, createdAt])
     @@map("cost_event")
 }
 
@@ -4491,6 +4501,156 @@ model PipelineDailyStats {
     @@unique([organizationId, date])
     @@index([organizationId])
     @@map("pipeline_daily_stats")
+}
+
+// ==============================
+// Budget Management & Pricing Models
+// ==============================
+
+// Pricing Plan - Admin-managed plan definitions
+model PricingPlan {
+    id          String  @id @default(cuid())
+    slug        String  @unique
+    name        String
+    description String? @db.Text
+    isActive    Boolean @default(true)
+    sortOrder   Int     @default(0)
+
+    monthlyPriceUsd Float
+    annualPriceUsd  Float?
+    perSeatPricing  Boolean @default(false)
+
+    includedCreditsUsd Float   @default(0)
+    markupMultiplier   Float   @default(2.0)
+    overageEnabled     Boolean @default(false)
+    overageMarkup      Float?
+
+    maxAgents       Int?
+    maxSeats        Int?
+    maxRunsPerMonth Int?
+    maxWorkspaces   Int?
+    maxStorageBytes BigInt?
+    maxIntegrations Int?
+
+    features Json?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    subscriptions OrgSubscription[]
+
+    @@map("pricing_plan")
+}
+
+// Org Subscription - Links an organization to a pricing plan
+model OrgSubscription {
+    id             String       @id @default(cuid())
+    organizationId String       @unique
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    planId         String
+    plan           PricingPlan  @relation(fields: [planId], references: [id])
+
+    status             String    @default("active")
+    billingCycle       String    @default("monthly")
+    currentPeriodStart DateTime  @default(now())
+    currentPeriodEnd   DateTime
+    trialEndsAt        DateTime?
+    canceledAt         DateTime?
+
+    stripeSubscriptionId String? @unique
+    stripeCustomerId     String?
+
+    includedCreditsUsd Float @default(0)
+    usedCreditsUsd     Float @default(0)
+
+    overageSpendLimitUsd Float?
+    overageAccruedUsd    Float  @default(0)
+
+    seatCount Int @default(1)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([organizationId])
+    @@index([planId])
+    @@map("org_subscription")
+}
+
+// Org Budget Policy - Organization-level budget controls
+model OrgBudgetPolicy {
+    id             String       @id @default(cuid())
+    organizationId String       @unique
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    enabled         Boolean @default(false)
+    monthlyLimitUsd Float?
+    alertAtPct      Float?  @default(80)
+    hardLimit       Boolean @default(true)
+
+    defaultUserBudgetUsd Float?
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@map("org_budget_policy")
+}
+
+// User Budget Policy - Per-user budget within an organization
+model UserBudgetPolicy {
+    id             String @id @default(cuid())
+    userId         String
+    organizationId String
+
+    enabled         Boolean @default(false)
+    monthlyLimitUsd Float?
+    alertAtPct      Float?  @default(80)
+    hardLimit       Boolean @default(true)
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([userId, organizationId])
+    @@index([userId])
+    @@index([organizationId])
+    @@map("user_budget_policy")
+}
+
+// Platform Markup - Per-model markup rates (admin-managed)
+model PlatformMarkup {
+    id              String   @id @default(cuid())
+    provider        String
+    modelName       String
+    inputCostPer1M  Float
+    outputCostPer1M Float
+    defaultMarkup   Float    @default(2.0)
+    isActive        Boolean  @default(true)
+    createdAt       DateTime @default(now())
+    updatedAt       DateTime @updatedAt
+
+    @@unique([provider, modelName])
+    @@map("platform_markup")
+}
+
+// Budget Alert - Alert history for budget thresholds
+model BudgetAlert {
+    id              String        @id @default(cuid())
+    organizationId  String?
+    organization    Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    userId          String?
+    agentId         String?
+    level           String
+    type            String
+    percentUsed     Float
+    currentSpendUsd Float
+    limitUsd        Float
+    message         String        @db.Text
+    acknowledged    Boolean       @default(false)
+    createdAt       DateTime      @default(now())
+
+    @@index([organizationId, createdAt])
+    @@index([userId, createdAt])
+    @@index([agentId, createdAt])
+    @@map("budget_alert")
 }
 
 // Unified Change Log for auditable history across agents, workflows, networks

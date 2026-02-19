@@ -122,8 +122,7 @@ const SECTION_SEEDS: SectionSeed[] = [
             "elevenlabs",
             "firecrawl",
             "fathom",
-            "justcall",
-            "building-custom"
+            "justcall"
         ]
     },
     {
@@ -148,20 +147,32 @@ const SECTION_SEEDS: SectionSeed[] = [
         pages: ["overview", "creating-campaigns", "templates", "after-action-reviews"]
     },
     {
+        section: "mcp",
+        defaultPrimaryKeyword: "MCP developer access",
+        defaultSecondaryKeywords: ["AgentC2 MCP server", "AI agent MCP tools"],
+        defaultPageType: "tutorial",
+        pages: [
+            "overview",
+            "getting-started",
+            "cursor-setup",
+            "claude-setup",
+            "tool-reference",
+            "common-patterns"
+        ]
+    },
+    {
+        section: "workspace",
+        defaultPrimaryKeyword: "AgentC2 workspace",
+        defaultSecondaryKeywords: ["AI agent workspace", "agent chat interface"],
+        defaultPageType: "how-to",
+        pages: ["overview", "chatting", "managing-agents", "integrations", "runs", "teams"]
+    },
+    {
         section: "platform",
         defaultPrimaryKeyword: "enterprise AI agent platform",
         defaultSecondaryKeywords: ["multi-tenant AI platform", "AI agent observability"],
         defaultPageType: "concept",
-        pages: [
-            "multi-tenancy",
-            "authentication",
-            "security",
-            "observability",
-            "federation",
-            "triggers-and-schedules",
-            "background-jobs",
-            "deployment"
-        ]
+        pages: ["multi-tenancy", "observability", "federation", "triggers-and-schedules"]
     },
     {
         section: "api-reference",
@@ -169,6 +180,7 @@ const SECTION_SEEDS: SectionSeed[] = [
         defaultSecondaryKeywords: ["agent API", "workflow API"],
         defaultPageType: "reference",
         pages: [
+            "authentication",
             "agents",
             "workflows",
             "networks",
@@ -204,24 +216,17 @@ const SECTION_CONTEXT: Record<
         dataModel: string;
         apiSurface: string;
         operations: string;
-        implementationPaths: string[];
     }
 > = {
     "getting-started": {
         architecture:
-            "AgentC2 is a monorepo platform where frontend experience, orchestration runtime, and database-backed configuration work together. The architecture is intentionally split between a public marketing/docs frontend and the agent runtime application, with shared packages for auth, database, and UI.",
+            "AgentC2 is a platform where a frontend experience, orchestration runtime, and database-backed configuration work together. The architecture separates the public marketing/docs frontend from the agent runtime application.",
         dataModel:
-            "The core data model is database-driven, not code-only. Agent definitions, versions, tools, and operational metrics are persisted in Prisma models so behavior can be audited, compared, and rolled back safely.",
+            "The core data model is database-driven, not code-only. Agent definitions, versions, tools, and operational metrics are persisted so behavior can be audited, compared, and rolled back safely.",
         apiSurface:
             "Public and authenticated APIs are separated by route intent. Docs should call out which endpoints are operational control surfaces versus public consumption surfaces, and how this impacts onboarding and deployment.",
         operations:
-            "Operations start with simple local runs and expand into versioned releases, evaluation, cost monitoring, and policy controls. The expected workflow is iterative: configure, test, observe, improve.",
-        implementationPaths: [
-            "apps/frontend/src/app",
-            "apps/agent/src/app",
-            "packages/database/prisma/schema.prisma",
-            "packages/mastra/src/agents/resolver.ts"
-        ]
+            "Operations start with simple local runs and expand into versioned releases, evaluation, cost monitoring, and policy controls. The expected workflow is iterative: configure, test, observe, improve."
     },
     agents: {
         architecture:
@@ -231,13 +236,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "The `/api/agents/*` namespace covers CRUD, invocation, chat, versioning, costs, learning, simulation, and guardrails. A good docs page should map user intent to exact endpoint families and expected payload shapes.",
         operations:
-            "Production operation requires version discipline, budget controls, and guardrail policy layering. You should treat every agent update as a release candidate with validation and post-release monitoring.",
-        implementationPaths: [
-            "apps/agent/src/app/api/agents",
-            "packages/mastra/src/agents/resolver.ts",
-            "packages/mastra/src/guardrails",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Production operation requires version discipline, budget controls, and guardrail policy layering. You should treat every agent update as a release candidate with validation and post-release monitoring."
     },
     skills: {
         architecture:
@@ -247,12 +246,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "The `/api/skills/*` routes provide discovery, versioning, recommendation, and activation surfaces. Docs should explain when to build a new skill versus extending an existing one.",
         operations:
-            "Operationally, skills improve governance because teams can centralize policy-sensitive behavior in one place and propagate updates through controlled version references.",
-        implementationPaths: [
-            "packages/mastra/src/skills/service.ts",
-            "apps/agent/src/app/api/skills",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Operationally, skills improve governance because teams can centralize policy-sensitive behavior in one place and propagate updates through controlled version references."
     },
     workflows: {
         architecture:
@@ -262,12 +256,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "The `/api/workflows/*` routes expose generation, validation, execution, and run history. Docs should connect each control-flow concept to the runtime semantics teams will observe.",
         operations:
-            "In production, workflows should include failure handling, clear step contracts, and observability checks. Human approval steps are mandatory where actions are irreversible or externally visible.",
-        implementationPaths: [
-            "packages/mastra/src/workflows",
-            "packages/mastra/src/workflows/builder/runtime.ts",
-            "apps/agent/src/app/api/workflows"
-        ]
+            "In production, workflows should include failure handling, clear step contracts, and observability checks. Human approval steps are mandatory where actions are irreversible or externally visible."
     },
     networks: {
         architecture:
@@ -277,11 +266,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "The `/api/networks/*` endpoints support lifecycle management, generation, execution, versions, traces, and metrics. Docs should help users pick network boundaries and fallback strategy.",
         operations:
-            "A stable network requires route confidence checks, fallback behavior, and visibility into handoff quality. Observability should be reviewed after every topology change.",
-        implementationPaths: [
-            "apps/agent/src/app/api/networks",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "A stable network requires route confidence checks, fallback behavior, and visibility into handoff quality. Observability should be reviewed after every topology change."
     },
     integrations: {
         architecture:
@@ -291,13 +276,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "Integration APIs live under `/api/integrations/*` plus MCP execution routes. Docs should specify setup flow, required scopes, failure modes, and how to validate connectivity.",
         operations:
-            "Operations include credential rotation, scope minimization, token refresh behavior, and safe fallback when a provider is degraded. Teams should routinely test critical integrations.",
-        implementationPaths: [
-            "apps/agent/src/app/api/integrations",
-            "apps/agent/src/app/api/mcp",
-            "packages/mastra/src/tools/mcp-schemas",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Operations include credential rotation, scope minimization, token refresh behavior, and safe fallback when a provider is degraded. Teams should routinely test critical integrations."
     },
     channels: {
         architecture:
@@ -307,12 +286,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "Channel endpoints and webhook routes define how external systems deliver events and receive responses. Docs should include provider setup, webhook validation, and retry behaviors.",
         operations:
-            "Channel operations require identity mapping, message threading continuity, and strong webhook verification. Observability should track latency and failure rate per channel.",
-        implementationPaths: [
-            "apps/agent/src/app/api/slack",
-            "apps/agent/src/app/api/channels",
-            "apps/agent/src/app/embed"
-        ]
+            "Channel operations require identity mapping, message threading continuity, and strong webhook verification. Observability should track latency and failure rate per channel."
     },
     knowledge: {
         architecture:
@@ -322,13 +296,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "Knowledge APIs span ingestion, query, document management, and retrieval-oriented operations. Docs should explain how retrieval quality is evaluated and tuned.",
         operations:
-            "Operations include ingestion validation, chunk strategy tuning, and relevance evaluation over real workloads. Knowledge drift should be addressed with routine refresh cycles.",
-        implementationPaths: [
-            "apps/agent/src/app/api/rag",
-            "apps/agent/src/app/api/documents",
-            "packages/mastra/src/rag",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Operations include ingestion validation, chunk strategy tuning, and relevance evaluation over real workloads. Knowledge drift should be addressed with routine refresh cycles."
     },
     campaigns: {
         architecture:
@@ -338,38 +306,47 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "Campaign APIs provide lifecycle management, export, and execution controls. Docs should focus on how campaigns connect to skills, workflows, and quality gates.",
         operations:
-            "Operationally, campaigns require clear ownership, defined success criteria, and structured after-action reviews so lessons turn into system improvements.",
-        implementationPaths: [
-            "apps/agent/src/app/api/campaigns",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Operationally, campaigns require clear ownership, defined success criteria, and structured after-action reviews so lessons turn into system improvements."
+    },
+    workspace: {
+        architecture:
+            "The workspace is the primary user-facing interface for AgentC2. It provides a browser-based environment where non-technical users can chat with agents, manage configurations, connect integrations, review run history, and collaborate with team members.",
+        dataModel:
+            "Workspace interactions are backed by organizations, memberships, agent configurations, integration connections, and run records. Users interact with these through the UI without needing to understand the underlying data structures.",
+        apiSurface:
+            "Workspace pages are served at /workspace after authentication. Users navigate between Chat, Agents, Integrations, Knowledge, Runs, and Team sections using the sidebar. All actions are performed through the graphical interface.",
+        operations:
+            "Day-to-day operations include chatting with agents, reviewing run outputs, adjusting agent instructions, connecting new integrations, inviting team members, and monitoring costs. The workspace is designed for iterative improvement — observe results, adjust settings, and test again."
+    },
+    mcp: {
+        architecture:
+            "The MCP developer access layer exposes the full AgentC2 platform as a set of MCP tools accessible from Cursor, Claude, and any MCP-compatible client. It uses Streamable HTTP transport with OAuth 2.1 authentication, scoped per organization.",
+        dataModel:
+            "MCP API keys are organization-scoped credentials stored in the database. Each key maps to an organization slug and grants tool-level access to all platform primitives within that org boundary.",
+        apiSurface:
+            "The MCP server endpoint at /agent/api/mcp/server/{orgSlug} serves 202 tools covering agents, workflows, networks, knowledge, skills, integrations, and org management. Clients discover tools via the tools/list protocol method.",
+        operations:
+            "Operations include API key lifecycle management, client configuration across multiple IDE and AI assistant environments, and monitoring tool usage patterns to ensure security and cost controls are respected."
     },
     platform: {
         architecture:
-            "Platform capabilities cover multi-tenancy, auth, security, observability, federation, triggering, and deployment controls. These are the trust and governance foundations behind every agent behavior.",
+            "Platform capabilities cover multi-tenancy, observability, federation, and triggering controls. These are the trust and governance foundations behind every agent behavior.",
         dataModel:
             "Organization, Workspace, Membership, GuardrailPolicy, AuditLog, metric aggregates, and federation models establish ownership boundaries and operational accountability.",
         apiSurface:
             "Platform APIs include organization management, policy controls, activity feeds, and infrastructure-level operations. Docs should map administrative actions to operational consequences.",
         operations:
-            "Production operations include tenant isolation checks, policy audits, release controls, and incident response workflows. Platform docs should be explicit about decision rights and escalation paths.",
-        implementationPaths: [
-            "apps/agent/src/app/api/organizations",
-            "apps/agent/src/app/api/activity",
-            "packages/auth",
-            "packages/database/prisma/schema.prisma"
-        ]
+            "Production operations include tenant isolation checks, policy audits, release controls, and incident response workflows. Platform docs should be explicit about decision rights and escalation paths."
     },
     "api-reference": {
         architecture:
             "The API surface is broad and intentionally resource-oriented. Reference docs should emphasize route organization by domain and include practical request/response expectations.",
         dataModel:
-            "Most API contracts map directly to Prisma-backed entities or orchestration runtime events. Understanding model relationships improves API usage and debugging.",
+            "Most API contracts map directly to database-backed entities or orchestration runtime events. Understanding model relationships improves API usage and debugging.",
         apiSurface:
             "Reference sections should cover authentication assumptions, HTTP methods, path parameters, payload structure, error handling, and idempotency considerations.",
         operations:
-            "API operations should include rate-awareness, retry guidance, and monitoring of non-2xx responses. Teams should define client-side guardrails before scaling usage.",
-        implementationPaths: ["apps/agent/src/app/api", "packages/database/prisma/schema.prisma"]
+            "API operations should include rate-awareness, retry guidance, and monitoring of non-2xx responses. Teams should define client-side guardrails before scaling usage."
     },
     guides: {
         architecture:
@@ -379,8 +356,7 @@ const SECTION_CONTEXT: Record<
         apiSurface:
             "Where relevant, guides should include direct API equivalents for every UI action so teams can automate setup and deployment workflows.",
         operations:
-            "Each guide should finish with production hardening: guardrails, evaluation, monitoring, rollback strategy, and ownership expectations.",
-        implementationPaths: ["apps/agent/src/app", "apps/agent/src/app/api", "packages/mastra/src"]
+            "Each guide should finish with production hardening: guardrails, evaluation, monitoring, rollback strategy, and ownership expectations."
     }
 };
 
@@ -393,10 +369,6 @@ const PAGE_FOCUS_OVERRIDES: Record<string, string> = {
         "This page should explain MCP architecture, host-client-server boundaries, and how AgentC2 wraps MCP with org-level credential and policy controls.",
     "workflows/human-in-the-loop":
         "This page should provide approval-step patterns for sensitive actions and describe escalation and timeout behavior.",
-    "platform/security":
-        "This page must call out credential encryption, scope minimization, token lifecycle handling, and operational audit expectations.",
-    "platform/deployment":
-        "This page should provide a concrete deployment checklist, rollback plan, and verification gate before production cutover.",
     "guides/migrate-from-langchain":
         "This guide should map LangChain and LangGraph concepts to AgentC2 concepts with migration sequencing and risk controls."
 };
@@ -485,8 +457,6 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
     fathom: "Define transcript reliability assumptions and review workflow for actions generated from meeting content.",
     justcall:
         "Document communication compliance boundaries and opt-in safeguards for call and messaging automation.",
-    "building-custom":
-        "Provide a build checklist for custom connectors: auth model, scope model, error handling, and observability instrumentation.",
     whatsapp:
         "Clarify message delivery constraints, template requirements, and conversation state continuity.",
     telegram:
@@ -507,20 +477,12 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
         "Describe AAR structure, signal extraction, and how findings feed back into agent and workflow improvements.",
     "multi-tenancy":
         "Clarify tenant isolation boundaries, cross-workspace assumptions, and admin control surfaces.",
-    authentication:
-        "Document identity lifecycle, session behavior, and role-based access checks for operational safety.",
-    security:
-        "Cover encryption, key management assumptions, credential scope minimization, and incident response readiness.",
     observability:
         "Define the observability model from run traces to aggregate metrics and decision-ready operational dashboards.",
     federation:
         "Explain cross-org trust boundaries, policy enforcement, and auditability requirements for federated interactions.",
     "triggers-and-schedules":
         "Document event contracts, schedule reliability expectations, and duplicate-trigger handling.",
-    "background-jobs":
-        "Explain event-driven processing semantics, retry behavior, and idempotency requirements for asynchronous operations.",
-    deployment:
-        "Provide release sequencing, cutover checks, rollback criteria, and post-deploy verification requirements.",
     agents: "Reference should include route groups, required fields, common error modes, and safe invocation patterns.",
     workflows:
         "Reference should include step payload conventions and run lifecycle endpoints for debugging workflow execution.",
@@ -550,7 +512,23 @@ const PAGE_SLUG_GUIDANCE: Record<string, string> = {
     "production-guardrails":
         "Guide should provide policy layering templates and incident-response-ready guardrail checks.",
     "migrate-from-langchain":
-        "Guide should map concepts and provide phased migration strategy with rollback safeguards."
+        "Guide should map concepts and provide phased migration strategy with rollback safeguards.",
+    chatting:
+        "Explain how to use the chat interface to talk to agents, understand tool activity, manage conversation history, and provide feedback to improve agent quality.",
+    "managing-agents":
+        "Walk users through creating, configuring, and testing agents using the workspace UI, including model selection, instruction writing, tool attachment, versioning, and guardrails.",
+    runs: "Show users how to find, read, and use run history to understand agent behavior, verify outputs, monitor costs, and improve agent performance over time.",
+    teams: "Explain organization structure, workspace separation, role-based permissions, and how to invite, manage, and remove team members.",
+    "getting-started":
+        "Walk the reader through API key generation, credential setup, and first tool verification in under 5 minutes.",
+    "cursor-setup":
+        "Provide step-by-step Node.js proxy setup, mcp.json configuration, and troubleshooting for common Cursor MCP issues.",
+    "claude-setup":
+        "Cover Claude CoWork, Claude Desktop, and Claude Code setup using remote Streamable HTTP with OAuth authentication.",
+    "tool-reference":
+        "Provide a categorized listing of all 202 MCP tools with names and descriptions, organized by domain.",
+    "common-patterns":
+        "Show conversational recipes that chain multiple MCP tools to accomplish real development and operations tasks."
 };
 
 const SECTION_PAGE_GUIDANCE: Record<string, string> = {
@@ -604,7 +582,6 @@ function buildRichBody(
         context.dataModel,
         context.apiSurface,
         pageTypeNarrative,
-        `Implementation in this area is grounded in concrete code paths: ${context.implementationPaths.join(", ")}. When reading this page, treat those modules as the source of truth for behavior. Any ambiguity should be resolved by checking the relevant route handlers, schema models, and orchestration runtime components before making architecture decisions.`,
         context.operations,
         pageGuidance ??
             `For ${title.toLowerCase()}, include concrete examples, expected operator decisions, and validation checkpoints so teams can apply this capability without guessing.`,
@@ -630,7 +607,6 @@ const launchPrioritySlugs = new Set<string>([
     "workflows/overview",
     "networks/overview",
     "platform/observability",
-    "platform/security",
     "guides/multi-agent-orchestration"
 ]);
 

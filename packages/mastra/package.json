@@ -33,7 +33,8 @@
     "./activity/service": "./src/activity/service.ts",
     "./crypto": "./src/crypto/index.ts",
     "./audit": "./src/audit/index.ts",
-    "./federation": "./src/federation/index.ts"
+    "./federation": "./src/federation/index.ts",
+    "./budget": "./src/budget/index.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

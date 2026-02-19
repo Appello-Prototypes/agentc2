@@ -9,8 +9,7 @@ relatedSlugs:
         "integrations/model-context-protocol",
         "integrations/hubspot",
         "integrations/slack",
-        "agents/tools",
-        "platform/security"
+        "agents/tools"
     ]
 pageType: "concept"
 ctaLabel: "Explore Integrations in AgentC2"
@@ -57,7 +56,7 @@ MCP tools are namespaced with the server name (e.g., `hubspot_hubspot-get-contac
 | **Microsoft Outlook** | Communication | Mail and Calendar via Microsoft Graph API       |
 | **Dropbox**           | Productivity  | File storage, sharing, search via Dropbox OAuth |
 
-OAuth integrations store encrypted tokens in the `IntegrationConnection` model and automatically refresh expired tokens. Each organization can have multiple connections (e.g., different Gmail accounts).
+OAuth integrations store encrypted tokens and automatically refresh them when they expire. Each organization can have multiple connections (e.g., different Gmail accounts).
 
 <Callout type="tip">
     OAuth integrations use AES-256-GCM encryption for token storage. The `CREDENTIAL_ENCRYPTION_KEY`
@@ -75,58 +74,30 @@ OAuth integrations store encrypted tokens in the `IntegrationConnection` model a
 
 Channel integrations combine MCP tools (for reading/writing messages) with webhook handlers (for receiving events). Agents maintain separate conversation threads per channel thread.
 
-## IntegrationProvider and IntegrationConnection models
+## Providers and connections
 
-AgentC2 uses two database models to manage integrations:
+AgentC2 manages integrations through two concepts:
 
-### IntegrationProvider
+### Integration providers
 
-The `IntegrationProvider` model defines available integration types:
+Providers define the available integration types on the platform. Each provider specifies its authentication method (`apiKey`, `oauth`, or `webhook`), category (CRM, communication, productivity, etc.), and the tools it exposes. Providers are pre-configured by the platform.
 
-```typescript
-{
-    id: string;
-    key: string; // Unique identifier (e.g., "hubspot", "gmail")
-    name: string; // Display name
-    category: string; // "crm", "communication", "web", etc.
-    authType: string; // "apiKey", "oauth", "none", "webhook"
-    providerType: string; // "mcp", "oauth", "webhook", "custom"
-    configJson: Json; // Required fields, OAuth config, MCP server URL
-    actionsJson: Json; // Cached action metadata
-    triggersJson: Json; // Cached trigger metadata
-}
-```
+### Integration connections
 
-Providers are seeded at platform startup and define what integrations are available to all organizations.
+Connections are organization-specific instances of a provider. For example, your organization might have a "Production HubSpot" connection and a "Sandbox HubSpot" connection, both using the HubSpot provider. Each connection stores:
 
-### IntegrationConnection
+- **Name** — A display name (e.g., "Production HubSpot")
+- **Scope** — Organization-wide (`org`) or user-specific (`user`)
+- **Credentials** — Encrypted API keys or OAuth tokens
+- **Status** — Active/inactive state, last tested timestamp, and error details
+- **Default flag** — Whether this is the default connection for the provider
 
-The `IntegrationConnection` model stores organization-specific connection instances:
-
-```typescript
-{
-  id: string
-  providerId: string       // Foreign key to IntegrationProvider
-  organizationId: string  // Scoped to organization
-  userId: string?         // Optional user-scoped connection
-  scope: string           // "org" or "user"
-  name: string            // Display name (e.g., "Production HubSpot")
-  isDefault: boolean      // Default connection for this provider
-  isActive: boolean       // Whether connection is active
-  credentials: Json?      // Encrypted API keys or OAuth tokens
-  metadata: Json?         // Additional connection metadata
-  lastUsedAt: DateTime?
-  lastTestedAt: DateTime?
-  errorMessage: string?   // Last error if connection failed
-}
-```
-
-Each organization can have multiple connections per provider (e.g., "Production HubSpot" and "Sandbox HubSpot"). The `isDefault` flag determines which connection is used when no specific connection is specified.
+You can mark a connection as the default so agents automatically use it when no specific connection is specified.
 
 <Callout type="warning">
-    When an `IntegrationConnection` is deleted, all related data (email threads, calendar events,
-    webhook subscriptions) is cascaded. Use `isActive: false` to temporarily disable a connection
-    instead of deleting it.
+    When a connection is deleted, all related data (email threads, calendar events, webhook
+    subscriptions) is removed. Use the `isActive` flag to temporarily disable a connection instead
+    of deleting it.
 </Callout>
 
 ## How to choose an integration approach
@@ -276,17 +247,7 @@ Integration events log:
 
 ### Credential encryption
 
-OAuth tokens are encrypted at rest using AES-256-GCM:
-
-```bash
-# Generate encryption key
-openssl rand -hex 32
-
-# Set in environment
-CREDENTIAL_ENCRYPTION_KEY="..."
-```
-
-API keys for MCP integrations are stored in `IntegrationConnection.credentials` as JSON. In production, consider encrypting these as well.
+All OAuth tokens and sensitive credentials are encrypted at rest using AES-256-GCM. API keys for MCP integrations are also stored securely within connection credentials.
 
 ### Scope isolation
 
@@ -295,16 +256,7 @@ API keys for MCP integrations are stored in `IntegrationConnection.credentials` 
 
 ### Token refresh
 
-OAuth integrations automatically refresh expired tokens:
-
-```typescript
-// Automatic refresh on API call
-const token = await getOAuthToken(connectionId);
-// If expired, refresh token is used to get new access token
-// New tokens are encrypted and stored
-```
-
-Failed refresh attempts set `isActive: false` and `errorMessage` with details.
+OAuth integrations automatically refresh expired tokens when an API call is made. If a refresh fails, the connection is marked inactive with error details so you can re-authenticate.
 
 ## Common patterns
 
@@ -336,24 +288,10 @@ Agents can specify which connection to use via tool configuration, or the defaul
 
 ### OAuth sibling providers
 
-Google integrations (Gmail, Calendar, Drive) share OAuth credentials:
-
-```typescript
-// Single Google OAuth connection enables all three
-{
-  providerKey: "gmail",
-  // Automatically enables:
-  // - gmail tools (gmail-search-emails, gmail-send-email)
-  // - google-calendar tools (google-calendar-list-events)
-  // - google-drive tools (google-drive-search-files)
-}
-```
-
-Microsoft Outlook similarly enables both Mail and Calendar tools from one OAuth connection.
+Google integrations (Gmail, Calendar, Drive) share OAuth credentials. A single Google OAuth connection automatically enables tools for all three services — email, calendar, and drive. Similarly, a Microsoft Outlook connection enables both Mail and Calendar tools from one OAuth flow.
 
 ## Next steps
 
 - **[Model Context Protocol](/docs/integrations/model-context-protocol)** — Learn how MCP works and how AgentC2 wraps it
 - **[HubSpot Integration](/docs/integrations/hubspot)** — Set up CRM integration
 - **[Slack Integration](/docs/integrations/slack)** — Configure team messaging
-- **[Building Custom Integrations](/docs/integrations/building-custom)** — Create your own MCP server or OAuth integration

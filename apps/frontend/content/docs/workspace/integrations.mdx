@@ -1,0 +1,150 @@
+---
+title: "Connecting Integrations"
+description: "Connect external tools like HubSpot, Slack, Gmail, and more to your AgentC2 workspace. Give your agents access to real-world data and actions."
+section: "workspace"
+order: 4
+primaryKeyword: "AgentC2 integrations"
+relatedSlugs: ["workspace/managing-agents", "workspace/overview", "workspace/runs"]
+pageType: "how-to"
+ctaLabel: "Connect Integrations"
+ctaHref: "/workspace"
+---
+
+# Connecting Integrations
+
+Integrations let your agents interact with the tools your team already uses. When you connect a service like HubSpot, Gmail, or Slack, your agents gain the ability to look up data, send messages, search files, and perform actions in those systems — all from within a conversation.
+
+## Getting to the Integrations Hub
+
+1. Open the sidebar in your workspace
+2. Click **Integrations**
+3. You'll see a list of all available integrations along with their connection status
+
+## Available Integrations
+
+AgentC2 supports a wide range of services across different categories:
+
+### CRM & Sales
+
+- **HubSpot** — Contacts, companies, deals, and pipeline management
+
+### Project Management
+
+- **Jira** — Issues, sprints, and project tracking
+
+### Communication
+
+- **Slack** — Channels, messages, and team communication
+- **JustCall** — Phone calls and SMS messaging
+
+### Email
+
+- **Gmail** — Read, send, and manage email
+- **Microsoft Outlook** — Mail and calendar management
+
+### File Storage
+
+- **Google Drive** — Search, read, and manage files (Docs, Sheets, Slides)
+- **Dropbox** — File storage, search, and sharing
+
+### Calendar
+
+- **Google Calendar** — View and manage calendar events
+
+### Development
+
+- **GitHub** — Repositories, issues, pull requests, and code
+
+### Web & Research
+
+- **Firecrawl** — Web scraping and content extraction
+
+### Meetings
+
+- **Fathom** — Meeting recordings, transcripts, and summaries
+
+### Voice
+
+- **ElevenLabs** — Text-to-speech and voice capabilities
+
+## How to Connect an Integration
+
+There are two types of integrations, and each connects a little differently:
+
+### API Key Integrations (HubSpot, Jira, Firecrawl, etc.)
+
+These services use an API key to authenticate:
+
+1. Click on the integration you want to connect
+2. Enter your **API key** (you'll find this in the external service's settings — usually under "API" or "Developer" settings)
+3. Click **Connect**
+4. The status should change to show a green indicator, meaning you're connected
+
+### OAuth Integrations (Gmail, Google Drive, Dropbox, etc.)
+
+These services use a secure sign-in flow:
+
+1. Click on the integration you want to connect
+2. Click the **Connect** button
+3. A popup window will open asking you to sign in to the service and grant permission
+4. Authorize the connection
+5. The popup will close automatically, and you'll see a green indicator confirming the connection
+
+That's all there is to it. No passwords are stored — OAuth integrations use secure tokens that can be revoked at any time.
+
+## Checking Connection Status
+
+Each integration shows a status indicator:
+
+- **Green** — Connected and working
+- **Red** — There's a problem (expired token, invalid key, or service error)
+- **Gray** — Not yet connected
+
+You can check all your connections at a glance from the Integrations Hub.
+
+## Disconnecting an Integration
+
+If you need to remove a connection:
+
+1. Go to the **Integrations Hub**
+2. Find the integration you want to disconnect
+3. Click on it to open its settings
+4. Click **Disconnect**
+
+Disconnecting an integration removes the agent's ability to use that service's tools. Any agents that had those tools attached will no longer be able to access them.
+
+## What Happens When You Connect
+
+When you successfully connect an integration, here's what changes:
+
+1. The integration's **tools become available** in your workspace
+2. Any agent that has those tools attached can now use them in conversations
+3. You can see which tools came from which integration in the agent's tool settings
+
+For example, connecting HubSpot makes tools like "Search Contacts," "Get Company Details," and "Create Deal" available. You then choose which of these tools to give to specific agents.
+
+## Troubleshooting
+
+### "API Key Invalid"
+
+Double-check that you copied the full API key from the external service. Some services have multiple key types — make sure you're using the right one (usually labeled "API Key" or "Access Token").
+
+### "OAuth Token Expired"
+
+OAuth tokens can expire over time. To fix this:
+
+1. Go to the integration's settings
+2. Click **Disconnect**
+3. Click **Connect** again to re-authorize
+
+### "Integration Connected But Tools Not Showing"
+
+After connecting an integration, you still need to attach its tools to specific agents. Go to the agent's settings, open the Tools tab, and enable the tools you want.
+
+### "Connection Keeps Failing"
+
+Check that the external service is operational and that your account has the necessary permissions. Some services require admin-level access to generate API keys.
+
+## For Developers: MCP Access
+
+If you're a developer who wants to connect to AgentC2's tools from your own coding environment (like Cursor or Claude), check out the [MCP Developer Access](/docs/mcp/overview) documentation. This provides a way to use all of AgentC2's capabilities directly from your IDE.

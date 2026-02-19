@@ -35,7 +35,7 @@ A workflow in AgentC2 is a database-driven process definition that:
 - **Handles errors** — Retry policies, error handling, and rollback capabilities
 - **Enables human-in-the-loop** — Approval gates, suspend/resume, and human decision points
 
-Workflows are stored in PostgreSQL and executed via the workflow engine, providing full observability, version control, and production-ready automation.
+The workflow engine provides full observability, version control, and production-ready automation.
 
 <Callout type="info">
     **Workflows vs Agents vs Networks**: Use **workflows** for deterministic, step-by-step
@@ -165,42 +165,24 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/execute \
   }'
 ```
 
-## Workflow model fields
+## Workflow properties
 
-The `Workflow` model in PostgreSQL contains these fields:
+Each workflow has the following key properties that you configure via the API:
 
-| Field              | Type     | Required | Description                                     |
-| ------------------ | -------- | -------- | ----------------------------------------------- |
-| `id`               | string   | ✅ Yes   | Unique CUID identifier                          |
-| `slug`             | string   | ✅ Yes   | URL-safe identifier (unique)                    |
-| `name`             | string   | ✅ Yes   | Display name for the workflow                   |
-| `description`      | string   | ❌ No    | Human-readable description                      |
-| `definitionJson`   | JSON     | ✅ Yes   | Workflow definition (steps, edges, viewport)    |
-| `compiledJson`     | JSON     | ❌ No    | Compiled representation (cached)                |
-| `compiledAt`       | DateTime | ❌ No    | When workflow was last compiled                 |
-| `compiledHash`     | string   | ❌ No    | Hash of definition for cache invalidation       |
-| `inputSchemaJson`  | JSON     | ❌ No    | Input schema (JSON Schema format)               |
-| `outputSchemaJson` | JSON     | ❌ No    | Output schema (JSON Schema format)              |
-| `maxSteps`         | number   | ✅ Yes   | Maximum steps allowed (default: 50)             |
-| `timeout`          | number   | ❌ No    | Maximum execution time in seconds               |
-| `retryConfig`      | JSON     | ❌ No    | Retry configuration (`{ maxRetries, backoff }`) |
-| `isPublished`      | boolean  | ✅ Yes   | Whether workflow is published (default: false)  |
-| `isActive`         | boolean  | ✅ Yes   | Whether workflow is active (default: true)      |
-| `version`          | number   | ✅ Yes   | Current version number (starts at 1)            |
-| `workspaceId`      | string   | ❌ No    | Workspace isolation (null for SYSTEM workflows) |
-| `type`             | string   | ✅ Yes   | `"USER"` or `"SYSTEM"`                          |
-| `createdAt`        | DateTime | ✅ Yes   | Creation timestamp                              |
-| `updatedAt`        | DateTime | ✅ Yes   | Last update timestamp                           |
-| `createdBy`        | string   | ❌ No    | User ID who created the workflow                |
+- **`slug`** — A unique, URL-safe identifier for the workflow (e.g., `support-triage`)
+- **`name`** — A human-readable display name
+- **`description`** — An optional summary of what the workflow does
+- **`definitionJson`** — The workflow definition containing steps, edges, and control flow
+- **`inputSchemaJson`** / **`outputSchemaJson`** — Optional JSON Schema definitions for type-safe input and output validation
+- **`maxSteps`** — Maximum number of steps allowed per execution (default: 50)
+- **`timeout`** — Maximum execution time in seconds
+- **`retryConfig`** — Retry configuration with `maxRetries` and `backoff` settings
+- **`isPublished`** — Whether the workflow is available for production execution
+- **`isActive`** — Whether the workflow is enabled
+- **`version`** — Auto-incremented version number, starting at 1
+- **`type`** — Either `"USER"` (custom) or `"SYSTEM"` (platform-provided)
 
-### Relations
-
-Workflows have several relations:
-
-- **`versions`** — `WorkflowVersion[]` — Version history snapshots
-- **`runs`** — `WorkflowRun[]` — Execution records
-- **`networkPrimitives`** — `NetworkPrimitive[]` — Networks that use this workflow
-- **`testCases`** — `WorkflowTestCase[]` — Test cases for validation
+Workflows also track their **version history**, **execution runs**, **network associations**, and **test cases**, all managed through the API.
 
 ## Simple example
 

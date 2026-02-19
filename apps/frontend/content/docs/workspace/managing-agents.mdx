@@ -1,0 +1,125 @@
+---
+title: "Managing Agents"
+description: "Create, configure, and manage AI agents in the AgentC2 workspace. Choose models, write instructions, attach tools, and set guardrails."
+section: "workspace"
+order: 3
+primaryKeyword: "AgentC2 agent management"
+relatedSlugs: ["workspace/chatting", "workspace/integrations", "workspace/runs"]
+pageType: "how-to"
+ctaLabel: "Manage Agents"
+ctaHref: "/workspace"
+---
+
+# Managing Agents
+
+Agents are the core of AgentC2. Each agent is an AI assistant configured for a specific job — answering customer questions, researching topics, drafting content, managing your CRM, or whatever your team needs. This page walks you through creating and configuring agents entirely from the workspace UI.
+
+## Creating a New Agent
+
+1. Go to the **Agents** section in the sidebar
+2. Click **+ New Agent**
+3. Give your agent a **name** — pick something descriptive so your team knows what it does (e.g., "Sales Assistant," "Research Helper," "HR FAQ Bot")
+4. Write **instructions** that tell the agent who it is and what it should do (more on this below)
+5. Choose a **model** (the AI brain behind the agent)
+6. Click **Save**
+
+Your agent is now ready to test in the chat.
+
+## Choosing a Model
+
+The model is the AI engine that powers your agent. AgentC2 supports several options, and each has different strengths:
+
+| Model             | Best For                              | Trade-offs                                                  |
+| ----------------- | ------------------------------------- | ----------------------------------------------------------- |
+| **GPT-4o**        | General-purpose tasks, fast responses | Good balance of speed, quality, and cost                    |
+| **GPT-4o Mini**   | Simple tasks, high volume             | Fastest and cheapest, but less capable on complex reasoning |
+| **Claude Sonnet** | Nuanced writing, careful analysis     | Strong reasoning, slightly slower                           |
+| **Claude Haiku**  | Quick tasks, cost-sensitive use       | Fast and affordable, good for straightforward work          |
+
+If you're not sure which to pick, **GPT-4o** is a solid default for most use cases. You can always change the model later and compare results.
+
+## Writing Good Instructions
+
+Instructions are the most important part of your agent's configuration. They tell the agent what it is, how it should behave, and what it should and shouldn't do.
+
+Here's what makes instructions effective:
+
+- **Define the role clearly** — "You are a customer support agent for Acme Corp. You help customers with billing questions, account issues, and product information."
+- **Set boundaries** — "Never share internal pricing structures. If a customer asks about enterprise plans, direct them to the sales team."
+- **Describe the tone** — "Be friendly and professional. Use simple language. Avoid jargon."
+- **Give examples if helpful** — "When a customer asks about refunds, first check their order status, then explain our 30-day refund policy."
+- **List what not to do** — "Do not make promises about future features. Do not provide legal advice."
+
+Think of instructions like onboarding a new team member. The clearer you are about expectations, the better the agent performs.
+
+## Attaching Tools
+
+Tools give your agent the ability to interact with external services. To attach tools:
+
+1. Open your agent's settings page
+2. Go to the **Tools** tab
+3. Browse the available tools — these come from the integrations your team has connected
+4. Toggle on the tools you want this agent to use
+5. Save your changes
+
+For example, if you want your sales assistant to look up contacts in HubSpot and check calendars in Google Calendar, enable those specific tools. Only give agents the tools they actually need — this keeps things focused and reduces unnecessary actions.
+
+## Adding Skills
+
+Skills are pre-built bundles of capability that you can attach to an agent. Think of them like "add-on packs" that give your agent expertise in a specific area without you needing to write detailed instructions for everything.
+
+To add a skill:
+
+1. Go to your agent's settings
+2. Open the **Skills** tab
+3. Browse available skills
+4. Click **Add** on the ones you want
+
+Skills are maintained by your team's administrators and can be shared across multiple agents.
+
+## Testing Your Agent
+
+Before sharing an agent with your team, test it:
+
+1. Open the agent's page
+2. Click **Test in Chat** (or open the Chat section and select the agent)
+3. Try different types of questions and scenarios
+4. Check that the agent follows its instructions, uses tools correctly, and gives appropriate responses
+
+Testing a few edge cases — unusual questions, off-topic requests, things the agent shouldn't answer — helps you catch issues early.
+
+## Version Control
+
+Every time you change an agent's configuration, AgentC2 can save a snapshot of how the agent was set up. This means:
+
+- **Roll back safely** — If a change makes the agent worse, you can restore a previous version
+- **Compare versions** — See what changed between two versions side by side
+- **Track history** — Know who changed what and when
+
+To save a version, look for the **Save Version** button when editing an agent. Give it a brief note describing what you changed (e.g., "Updated tone to be more formal" or "Added CRM lookup tools").
+
+## Budget Controls
+
+Budget controls let you set spending limits on how much an agent can cost to run. AI models charge based on usage, and budget controls help you avoid surprises:
+
+- **Set a monthly limit** — The agent will stop responding (or switch to a cheaper model) when the limit is reached
+- **Set per-conversation limits** — Cap how much any single conversation can cost
+- **View current spending** — See how much each agent has cost so far this month
+
+Budget settings are found in the agent's **Settings** tab under **Budget & Costs**.
+
+## Guardrails
+
+Guardrails are safety rules that control what your agent can and cannot do. They run automatically on every message:
+
+- **Input guardrails** — Check what the user sends before the agent processes it (e.g., block prompt injection attempts, filter inappropriate content)
+- **Output guardrails** — Check what the agent says before the user sees it (e.g., prevent sharing sensitive data, ensure compliance with your policies)
+
+To configure guardrails:
+
+1. Open the agent's settings
+2. Go to the **Guardrails** tab
+3. Enable or adjust the rules you want active
+4. Save your changes
+
+Guardrails work alongside the agent's instructions to provide an extra layer of safety. They're especially important for agents that interact with customers or handle sensitive information.

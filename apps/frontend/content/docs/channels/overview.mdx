@@ -153,26 +153,19 @@ ELEVENLABS_WEBHOOK_SECRET="..."
 # No special env vars required (uses API tokens)
 ```
 
-### Database configuration
+### Channel binding configuration
 
-Channel bindings are stored in `InstanceChannelBinding`:
+When you bind an agent to a channel via the API, you configure the following properties:
 
-```prisma
-model InstanceChannelBinding {
-    id                   String
-    instanceId           String // Agent instance ID
-    channelType          String // "slack", "whatsapp", "telegram", "voice", "web"
-    channelIdentifier    String // Channel ID, phone number, token, etc.
-    channelName          String? // Display name
-    channelMetadata      Json? // Platform-specific config
-    replyMode            String? // "thread", "channel", "ephemeral"
-    responseLength       String? // "concise", "standard", "detailed"
-    richFormatting       Boolean? // Platform-specific formatting
-    triggerOnAllMessages Boolean // Respond to every message
-    triggerKeywords      String[] // Keywords that trigger response
-    isActive             Boolean
-}
-```
+- **`channelType`** — The platform: `"slack"`, `"whatsapp"`, `"telegram"`, `"voice"`, or `"web"`
+- **`channelIdentifier`** — The platform-specific target (channel ID, phone number, embed token, etc.)
+- **`channelName`** — An optional display name for the binding
+- **`replyMode`** — How the agent responds: `"thread"`, `"channel"`, or `"ephemeral"`
+- **`responseLength`** — Response verbosity: `"concise"`, `"standard"`, or `"detailed"`
+- **`richFormatting`** — Whether to use platform-specific formatting (Block Kit, markdown, etc.)
+- **`triggerOnAllMessages`** — Whether the agent responds to every message or only targeted ones
+- **`triggerKeywords`** — Keywords that trigger the agent to respond
+- **`isActive`** — Whether the binding is currently active
 
 ## Conversation memory
 

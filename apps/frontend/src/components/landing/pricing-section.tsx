@@ -7,24 +7,25 @@ import { buttonVariants, cn } from "@repo/ui";
 const plans = {
     individual: [
         {
-            name: "Free",
+            name: "Starter",
             price: "$0",
             period: "forever",
-            description: "For individuals getting started with AI agents.",
+            description: "For individuals exploring AI agents.",
             cta: "Get Started Free",
             ctaVariant: "outline" as const,
             href: "/signup",
             features: [
-                "1 agent",
-                "100 runs / month",
-                "Community support",
+                "2 agents",
+                "$10 included usage credits",
+                "200 runs / month",
                 "3 MCP integrations",
+                "Community support",
                 "Basic analytics"
             ]
         },
         {
             name: "Pro",
-            price: "$49",
+            price: "$79",
             period: "/ month",
             description: "For professionals building production agents.",
             cta: "Start Pro Trial",
@@ -32,52 +33,58 @@ const plans = {
             href: "/signup?plan=pro",
             popular: true,
             features: [
-                "Unlimited agents",
-                "10,000 runs / month",
-                "Priority support",
+                "$60 included usage credits",
+                "10 agents",
+                "5,000 runs / month",
+                "3 seats included",
                 "All MCP integrations",
                 "Workflows & networks",
                 "Voice agents",
-                "Advanced analytics",
-                "Continuous learning"
+                "Per-agent budget controls",
+                "Priority email support",
+                "On-demand overage at 2x rate"
             ]
         },
         {
-            name: "Max",
-            price: "$149",
+            name: "Business",
+            price: "$199",
             period: "/ month",
-            description: "Maximum power for heavy workloads.",
-            cta: "Start Max Trial",
+            description: "For teams deploying agents at scale.",
+            cta: "Start Business Trial",
             ctaVariant: "outline" as const,
-            href: "/signup?plan=max",
+            href: "/signup?plan=business",
             features: [
-                "Everything in Pro",
-                "100,000 runs / month",
-                "Dedicated support",
-                "Custom model providers",
+                "$150 pooled usage credits",
+                "Unlimited agents",
+                "25,000 runs / month",
+                "Unlimited seats",
+                "Full budget hierarchy (org → user → agent)",
+                "Role-based access control",
                 "Advanced guardrails",
-                "Budget controls",
-                "Priority processing",
-                "SLA guarantee"
+                "Usage analytics & margin tracking",
+                "On-demand overage at 1.5x rate",
+                "Priority support"
             ]
         }
     ],
     team: [
         {
-            name: "Team",
-            price: "$29",
+            name: "Teams",
+            price: "$49",
             period: "/ user / month",
-            description: "For teams deploying agents across departments.",
+            description: "For organizations deploying agents across departments.",
             cta: "Start Team Trial",
             ctaVariant: "outline" as const,
             href: "/signup?plan=team",
             features: [
                 "Everything in Pro",
-                "5 team members included",
+                "$60 credits per user",
                 "Shared workspaces",
+                "Centralized billing",
                 "Role-based access control",
                 "Team analytics & cost allocation",
-                "Shared agent and skills library",
+                "Org-wide budget controls",
+                "Per-user budget limits",
                 "Full audit logs & traceability"
             ]
         },
@@ -91,15 +98,16 @@ const plans = {
             href: "mailto:sales@agentc2.com",
             popular: true,
             features: [
-                "Everything in Team",
-                "Unlimited members",
+                "Everything in Teams",
+                "Pooled usage credits",
+                "Negotiated markup rates",
+                "Unlimited runs & agents",
                 "SSO / SAML authentication",
                 "Custom MCP integrations",
+                "Invoice / PO billing",
                 "Dedicated infrastructure",
-                "On-premise deployment option",
                 "99.99% uptime SLA",
-                "Dedicated account manager",
-                "Custom onboarding & training"
+                "Dedicated account manager"
             ]
         },
         {
@@ -114,6 +122,7 @@ const plans = {
                 "Everything in Enterprise",
                 "Multi-region deployment",
                 "Custom compliance (SOC 2, HIPAA)",
+                "On-premise deployment option",
                 "Professional services & integration",
                 "Architecture review & optimization",
                 "Priority engineering support"
@@ -136,9 +145,13 @@ export function PricingSection() {
                 <h2 className="text-foreground mb-4 text-center text-3xl font-bold tracking-tight md:text-4xl">
                     Plans that scale with your business
                 </h2>
-                <p className="text-muted-foreground mx-auto mb-10 max-w-2xl text-center text-lg">
-                    Start with a free trial. Scale to enterprise with dedicated infrastructure, SSO,
-                    and custom SLAs.
+                <p className="text-muted-foreground mx-auto mb-4 max-w-2xl text-center text-lg">
+                    Start free. Scale to enterprise with dedicated infrastructure, SSO, and custom
+                    SLAs.
+                </p>
+                <p className="text-muted-foreground mx-auto mb-10 max-w-2xl text-center text-sm">
+                    Every plan includes usage credits for AI model calls. Go beyond your credits
+                    with on-demand usage at transparent rates.
                 </p>
 
                 {/* Toggle */}
@@ -229,6 +242,14 @@ export function PricingSection() {
                             </ul>
                         </div>
                     ))}
+                </div>
+
+                {/* Usage note */}
+                <div className="mt-8 text-center">
+                    <p className="text-muted-foreground text-sm">
+                        Annual billing: 17% discount (2 months free). All plans include transparent
+                        usage-based pricing beyond included credits.
+                    </p>
                 </div>
             </div>
         </section>

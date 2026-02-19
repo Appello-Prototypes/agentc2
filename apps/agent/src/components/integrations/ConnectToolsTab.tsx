@@ -212,16 +212,14 @@ export function ConnectToolsTab() {
                 setMcpApiKeyActive(false);
                 if (res.status !== 403) {
                     setMcpApiKeyError(
-                        data.error || "Failed to load MCP API key. Please try refreshing."
+                        data.error || "Failed to load API key. Please try refreshing."
                     );
                 }
             }
         } catch {
             setMcpApiKey("");
             setMcpApiKeyActive(false);
-            setMcpApiKeyError(
-                "Unable to load MCP API key. Check your connection and try refreshing."
-            );
+            setMcpApiKeyError("Unable to load API key. Check your connection and try refreshing.");
         } finally {
             setMcpApiKeyLoading(false);
         }
@@ -246,10 +244,10 @@ export function ConnectToolsTab() {
                 setMcpApiKeyActive(true);
                 setShowMcpApiKey(true);
             } else {
-                setMcpApiKeyError(data.error || "Failed to generate MCP API key");
+                setMcpApiKeyError(data.error || "Failed to generate API key");
             }
         } catch {
-            setMcpApiKeyError("Failed to generate MCP API key");
+            setMcpApiKeyError("Failed to generate API key");
         } finally {
             setMcpApiKeyLoading(false);
         }
@@ -270,10 +268,10 @@ export function ConnectToolsTab() {
                 setMcpApiKeyActive(false);
                 setShowMcpApiKey(false);
             } else {
-                setMcpApiKeyError(data.error || "Failed to revoke MCP API key");
+                setMcpApiKeyError(data.error || "Failed to revoke API key");
             }
         } catch {
-            setMcpApiKeyError("Failed to revoke MCP API key");
+            setMcpApiKeyError("Failed to revoke API key");
         } finally {
             setMcpApiKeyLoading(false);
         }
@@ -476,7 +474,7 @@ await server.connect(transport);
                             </CollapsibleTrigger>
                             <CollapsibleContent className="mt-3 space-y-2 pl-8">
                                 <p className="text-muted-foreground text-sm">
-                                    Use the <strong>Organization MCP Access</strong> section below
+                                    Use the <strong>Organization API Access</strong> section below
                                     to generate or view your API key and org slug.
                                 </p>
                             </CollapsibleContent>
@@ -598,7 +596,7 @@ await server.connect(transport);
                             </CollapsibleTrigger>
                             <CollapsibleContent className="mt-3 space-y-2 pl-8">
                                 <p className="text-muted-foreground text-sm">
-                                    Use the <strong>Organization MCP Access</strong> section below.
+                                    Use the <strong>Organization API Access</strong> section below.
                                     The API key is used as the <strong>OAuth Client Secret</strong>{" "}
                                     in Claude.
                                 </p>
@@ -698,7 +696,7 @@ await server.connect(transport);
             {/* ── Organization MCP Access (shared) ──────────────────── */}
             <Card>
                 <CardHeader>
-                    <CardTitle>Organization MCP Access</CardTitle>
+                    <CardTitle>Organization API Access</CardTitle>
                     <CardDescription>
                         Your organization slug and API key are used by both Cursor and Claude
                         CoWork.
@@ -730,7 +728,7 @@ await server.connect(transport);
 
                     <div className="space-y-2">
                         <div className="flex items-center gap-2">
-                            <Label className="text-xs">MCP API Key</Label>
+                            <Label className="text-xs">API Key</Label>
                             <Badge variant={mcpApiKeyActive ? "default" : "secondary"}>
                                 {mcpApiKeyActive ? "Active" : "Inactive"}
                             </Badge>
@@ -739,7 +737,7 @@ await server.connect(transport);
                             <Input
                                 value={mcpApiKey}
                                 type={showMcpApiKey ? "text" : "password"}
-                                placeholder="No MCP API key generated yet"
+                                placeholder="No API key generated yet"
                                 disabled
                                 className="bg-muted min-w-0 flex-1 text-xs sm:min-w-[200px]"
                             />
@@ -789,7 +787,7 @@ await server.connect(transport);
                                 </>
                             ) : (
                                 <p className="text-muted-foreground text-xs">
-                                    Only organization owners or admins can manage MCP API keys.
+                                    Only organization owners or admins can manage API keys.
                                 </p>
                             )}
                         </div>
@@ -801,7 +799,7 @@ await server.connect(transport);
                                     <AlertDialogMedia className="bg-orange-500/20">
                                         <AlertTriangleIcon className="h-4 w-4 text-orange-500" />
                                     </AlertDialogMedia>
-                                    <AlertDialogTitle>Rotate MCP API Key?</AlertDialogTitle>
+                                    <AlertDialogTitle>Rotate API Key?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                         This will generate a new API key and{" "}
                                         <strong>immediately invalidate the current key</strong> for
@@ -832,7 +830,7 @@ await server.connect(transport);
                                     <AlertDialogMedia className="bg-destructive/20">
                                         <AlertTriangleIcon className="text-destructive h-4 w-4" />
                                     </AlertDialogMedia>
-                                    <AlertDialogTitle>Revoke MCP API Key?</AlertDialogTitle>
+                                    <AlertDialogTitle>Revoke API Key?</AlertDialogTitle>
                                     <AlertDialogDescription>
                                         This will permanently deactivate the current API key for
                                         everyone in the <strong>{organization?.name}</strong>{" "}

@@ -415,6 +415,21 @@ export type {
     AgreementSummary
 } from "./federation";
 
+// Budget management
+export {
+    BudgetEnforcementService,
+    budgetEnforcement,
+    calculateMarkup,
+    calculateBilledCost,
+    getPlatformMarkupRate
+} from "./budget";
+export type {
+    BudgetCheckResult,
+    BudgetCheckContext,
+    BudgetViolation,
+    MarkupResult
+} from "./budget";
+
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";
 export type { Mastra } from "@mastra/core/mastra";

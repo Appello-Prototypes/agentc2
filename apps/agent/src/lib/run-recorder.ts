@@ -32,6 +32,7 @@
 import { prisma, Prisma, RunStatus, RunTriggerType } from "@repo/database";
 import { inngest } from "./inngest";
 import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
+import { calculateBilledCost } from "@repo/mastra/budget";
 
 /**
  * Source of the agent run (which production channel)
@@ -401,19 +402,54 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                     completeOptions.modelProvider &&
                     completeOptions.modelName
                 ) {
+                    let markupResult: {
+                        platformCostUsd: number;
+                        billedCostUsd: number;
+                        markupMultiplier: number;
+                    } | null = null;
+                    try {
+                        const sub = options.tenantId
+                            ? await tx.orgSubscription.findUnique({
+                                  where: { organizationId: options.tenantId },
+                                  include: { plan: { select: { markupMultiplier: true } } }
+                              })
+                            : null;
+                        markupResult = await calculateBilledCost(
+                            completeOptions.costUsd,
+                            completeOptions.modelProvider,
+                            completeOptions.modelName,
+                            sub?.plan?.markupMultiplier
+                        );
+                    } catch {
+                        // Markup calculation failure should not block cost tracking
+                    }
+
                     await tx.costEvent.create({
                         data: {
                             runId: run.id,
                             agentId: options.agentId,
                             tenantId: options.tenantId,
+                            userId: options.userId,
                             provider: completeOptions.modelProvider,
                             modelName: completeOptions.modelName,
                             promptTokens: completeOptions.promptTokens,
                             completionTokens: completeOptions.completionTokens,
                             totalTokens,
-                            costUsd: completeOptions.costUsd
+                            costUsd: completeOptions.costUsd,
+                            platformCostUsd: markupResult?.platformCostUsd ?? null,
+                            billedCostUsd: markupResult?.billedCostUsd ?? null,
+                            markupMultiplier: markupResult?.markupMultiplier ?? null
                         }
                     });
+
+                    // Update subscription credit usage
+                    if (options.tenantId && markupResult) {
+                        await updateSubscriptionCredits(
+                            tx,
+                            options.tenantId,
+                            markupResult.billedCostUsd
+                        );
+                    }
                 }
 
                 // Create evaluation record if scores provided
@@ -986,20 +1022,55 @@ function buildTurnMethods(
                     completeOptions.modelProvider &&
                     completeOptions.modelName
                 ) {
+                    let markupResult: {
+                        platformCostUsd: number;
+                        billedCostUsd: number;
+                        markupMultiplier: number;
+                    } | null = null;
+                    try {
+                        const sub = tenantId
+                            ? await tx.orgSubscription.findUnique({
+                                  where: { organizationId: tenantId },
+                                  include: { plan: { select: { markupMultiplier: true } } }
+                              })
+                            : null;
+                        markupResult = await calculateBilledCost(
+                            completeOptions.costUsd,
+                            completeOptions.modelProvider,
+                            completeOptions.modelName,
+                            sub?.plan?.markupMultiplier
+                        );
+                    } catch {
+                        // Non-blocking
+                    }
+
+                    const runRecord = await tx.agentRun.findUnique({
+                        where: { id: runId },
+                        select: { userId: true }
+                    });
+
                     await tx.costEvent.create({
                         data: {
                             runId,
                             turnId,
                             agentId,
                             tenantId,
+                            userId: runRecord?.userId ?? null,
                             provider: completeOptions.modelProvider,
                             modelName: completeOptions.modelName,
                             promptTokens: completeOptions.promptTokens,
                             completionTokens: completeOptions.completionTokens,
                             totalTokens,
-                            costUsd: completeOptions.costUsd
+                            costUsd: completeOptions.costUsd,
+                            platformCostUsd: markupResult?.platformCostUsd ?? null,
+                            billedCostUsd: markupResult?.billedCostUsd ?? null,
+                            markupMultiplier: markupResult?.markupMultiplier ?? null
                         }
                     });
+
+                    if (tenantId && markupResult) {
+                        await updateSubscriptionCredits(tx, tenantId, markupResult.billedCostUsd);
+                    }
                 }
             });
 
@@ -1379,4 +1450,37 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
     });
 
     return true;
+}
+
+/**
+ * Update subscription credit usage when a CostEvent is recorded.
+ * Increments usedCreditsUsd; if credits are exhausted, spills into overageAccruedUsd.
+ */
+async function updateSubscriptionCredits(
+    tx: Prisma.TransactionClient,
+    organizationId: string,
+    billedAmount: number
+): Promise<void> {
+    const sub = await tx.orgSubscription.findUnique({
+        where: { organizationId }
+    });
+    if (!sub || sub.status !== "active") return;
+
+    const remaining = Math.max(0, sub.includedCreditsUsd - sub.usedCreditsUsd);
+
+    if (billedAmount <= remaining) {
+        await tx.orgSubscription.update({
+            where: { id: sub.id },
+            data: { usedCreditsUsd: { increment: billedAmount } }
+        });
+    } else {
+        const overageAmount = billedAmount - remaining;
+        await tx.orgSubscription.update({
+            where: { id: sub.id },
+            data: {
+                usedCreditsUsd: sub.includedCreditsUsd,
+                overageAccruedUsd: { increment: overageAmount }
+            }
+        });
+    }
 }

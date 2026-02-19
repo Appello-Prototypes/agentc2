@@ -47,28 +47,13 @@ The continuous learning system follows a closed-loop cycle that transforms obser
     minutes) or on a scheduled basis (every 6 hours).
 </Callout>
 
-## LearningSession Model
+## Learning Sessions
 
-Each learning cycle is orchestrated by a `LearningSession` that tracks the entire process from signal collection to promotion:
-
-```typescript
-interface LearningSession {
-    id: string;
-    agentId: string;
-    status: LearningSessionStatus;
-    runCount: number; // Number of runs analyzed
-    datasetHash: string; // SHA256 hash for reproducibility
-    baselineVersion: number; // Agent version at start
-    scorerConfig: object; // Scorer configuration used
-    thresholdsJson: object; // Gating thresholds for A/B test
-    createdAt: Date;
-    completedAt?: Date;
-}
-```
+Each learning cycle is tracked as a **learning session** that progresses through collection, analysis, proposal generation, experimentation, and promotion. Sessions record how many runs were analyzed, which scorers were used, and the baseline agent version at the time of the session.
 
 ### Session Status Flow
 
-Learning sessions progress through these statuses:
+Sessions progress through these statuses:
 
 | Status              | Description                       | Next Actions                           |
 | ------------------- | --------------------------------- | -------------------------------------- |
@@ -288,44 +273,18 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/learning/ls_
     the version control system.
 </Callout>
 
-## Inngest Event Flow
+## What Happens During a Learning Session
 
-The learning system uses Inngest for asynchronous event processing. Events flow through the system as follows:
+When a learning session runs, the platform performs the following steps automatically:
 
-### Event Sequence
+1. **Collect runs** — Gathers agent runs matching your criteria (date range, run count) and creates a reproducible dataset snapshot
+2. **Extract signals** — Analyzes run traces, evaluation scores, and user feedback to identify patterns such as recurring failures, low scores, or tool errors
+3. **Generate proposals** — Uses AI to produce specific improvement proposals with risk classifications and candidate agent versions
+4. **Run experiments** — Executes parallel A/B tests comparing the baseline agent against candidates, collecting metrics and scores
+5. **Request approval** — For medium and high-risk proposals, sends a notification to reviewers and waits for approval or rejection
+6. **Promote** — Applies approved changes by creating a new agent version with the updated configuration
 
-1. **`learning/session.start`** — Triggered when a new learning session is created
-    - Collects runs matching criteria
-    - Creates `LearningDataset` snapshot
-    - Transitions to `ANALYZING` status
-
-2. **`learning/signals.extract`** — Extracts signals from collected runs
-    - Analyzes run traces, scores, feedback
-    - Creates `LearningSignal` records
-    - Identifies patterns and correlations
-    - Transitions to `PROPOSING` status
-
-3. **`learning/proposals.generate`** — Generates improvement proposals
-    - Uses AI to analyze signals and generate proposals
-    - Creates `LearningProposal` records with risk classification
-    - Builds candidate agent versions
-    - Transitions to `TESTING` status
-
-4. **`learning/experiment.run`** — Runs A/B experiments
-    - Executes parallel conversations with baseline and candidate
-    - Collects metrics and scores
-    - Compares results against success criteria
-    - Transitions to `AWAITING_APPROVAL` or `APPROVED` status
-
-5. **`learning/approval.request`** — Requests human approval (for medium/high risk)
-    - Sends notification to reviewers
-    - Waits for approval or rejection
-    - On approval, transitions to `APPROVED` status
-
-6. **Promotion** — Applies changes to production agent
-    - Creates new agent version
-    - Updates agent configuration
-    - Transitions to `PROMOTED` status
+Each step transitions the session to the next status automatically. You can monitor progress at any point via the API.
 
 ### Monitoring Learning Sessions
 

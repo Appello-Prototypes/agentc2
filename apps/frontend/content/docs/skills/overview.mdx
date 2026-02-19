@@ -28,7 +28,7 @@ A skill is a database-driven primitive that packages three types of knowledge:
 - **Tools** — External capabilities the skill requires (e.g., `send-email`, `search-contacts`, `format-calendar-event`)
 - **Documents** — Reference materials, examples, or context documents that inform the skill's behavior
 
-Skills are stored in PostgreSQL and attached to agents via the `AgentSkill` junction table. When an agent resolves, it loads all attached skills and merges their instructions, tools, and documents into its runtime configuration.
+When an agent resolves, it loads all attached skills and merges their instructions, tools, and documents into its runtime configuration.
 
 <Callout type="info">
     **Skills vs Agents**: Skills define *what* an agent can do (capabilities), while agents define
@@ -127,36 +127,20 @@ curl -X POST https://agentc2.ai/agent/api/skills/email-drafting/versions \
 
 Agents automatically inherit skills when resolving. The agent resolver merges skill instructions, tools, and documents into the agent's runtime configuration.
 
-## Skill model fields
+## Skill properties
 
-The `Skill` model in PostgreSQL contains these fields:
+Each skill has the following key properties that you configure via the API:
 
-| Field          | Type     | Required | Description                                                             |
-| -------------- | -------- | -------- | ----------------------------------------------------------------------- |
-| `id`           | string   | ✅ Yes   | Unique CUID identifier                                                  |
-| `slug`         | string   | ✅ Yes   | URL-safe identifier (unique per workspace)                              |
-| `name`         | string   | ✅ Yes   | Display name for the skill                                              |
-| `description`  | string   | ❌ No    | Human-readable description                                              |
-| `instructions` | string   | ✅ Yes   | Procedural knowledge (how to perform the task)                          |
-| `examples`     | string   | ❌ No    | Reference outputs or patterns                                           |
-| `category`     | string   | ❌ No    | Category for organization (e.g., "communication", "crm", "development") |
-| `tags`         | string[] | ❌ No    | Array of tags for filtering and discovery                               |
-| `metadata`     | JSON     | ❌ No    | Custom JSON metadata                                                    |
-| `workspaceId`  | string   | ❌ No    | Workspace isolation (null for SYSTEM skills)                            |
-| `version`      | number   | ✅ Yes   | Current version number (starts at 1)                                    |
-| `type`         | string   | ✅ Yes   | `"USER"` or `"SYSTEM"`                                                  |
-| `createdAt`    | DateTime | ✅ Yes   | Creation timestamp                                                      |
-| `updatedAt`    | DateTime | ✅ Yes   | Last update timestamp                                                   |
-| `createdBy`    | string   | ❌ No    | User ID who created the skill                                           |
+- **`slug`** — A unique, URL-safe identifier for the skill (e.g., `email-drafting`)
+- **`name`** — A human-readable display name
+- **`instructions`** — The procedural knowledge that defines how to perform the task
+- **`description`** — An optional summary of what the skill does
+- **`examples`** — Optional reference outputs or patterns for the skill to follow
+- **`category`** / **`tags`** — Used for organizing and discovering skills
+- **`version`** — Auto-incremented version number, starting at 1
+- **`type`** — Either `"USER"` (custom) or `"SYSTEM"` (platform-provided)
 
-### Relations
-
-Skills have several relations:
-
-- **`documents`** — `SkillDocument[]` — Reference documents attached to the skill
-- **`tools`** — `SkillTool[]` — Tools required by the skill
-- **`agents`** — `AgentSkill[]` — Agents that have this skill attached
-- **`versions`** — `SkillVersion[]` — Version history snapshots
+Skills also track their attached **documents**, **tools**, **agents**, and **version history**, all of which are managed through the API.
 
 ## Skill types
 

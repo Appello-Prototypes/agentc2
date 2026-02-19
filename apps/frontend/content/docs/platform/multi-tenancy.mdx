@@ -4,8 +4,7 @@ description: "AgentC2's multi-tenant architecture: organizations, workspaces, te
 section: "platform"
 order: 1
 primaryKeyword: "multi-tenant AI platform"
-relatedSlugs:
-    ["platform/authentication", "platform/security", "platform/federation", "agents/overview"]
+relatedSlugs: ["platform/federation", "agents/overview"]
 pageType: "concept"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -95,19 +94,7 @@ All platform operations enforce tenant isolation at the database level:
 
 ### API-level enforcement
 
-Every API request validates tenant boundaries:
-
-```typescript
-// Example: Agent resolution with tenant check
-const agent = await prisma.agent.findFirst({
-    where: {
-        id: agentId,
-        workspace: {
-            organizationId: userOrganizationId // Enforced by auth middleware
-        }
-    }
-});
-```
+Every API request validates tenant boundaries. The platform's authentication middleware automatically verifies that the requesting user belongs to the organization that owns the requested resource. If a user attempts to access an agent, document, or integration outside their organization, the request is rejected.
 
 ### Cross-workspace assumptions
 
@@ -191,43 +178,19 @@ Platform administrators can manage organizations via admin APIs:
 - **Domain-based join** — Auto-join via `OrganizationDomain` mapping
 - **Role assignment** — Assign roles and granular permissions
 
-## Database schema reference
+## Key properties
 
-### Organization fields
+### Organizations
 
-| Field              | Type    | Description                                                         |
-| ------------------ | ------- | ------------------------------------------------------------------- |
-| `id`               | string  | CUID identifier                                                     |
-| `slug`             | string  | URL-safe identifier (unique)                                        |
-| `name`             | string  | Display name                                                        |
-| `status`           | string  | `"active"`, `"trial"`, `"suspended"`, `"past_due"`, `"deactivated"` |
-| `maxAgents`        | int?    | Agent quota limit                                                   |
-| `maxWorkspaces`    | int?    | Workspace quota limit                                               |
-| `maxRunsPerMonth`  | int?    | Monthly run quota                                                   |
-| `maxSeats`         | int?    | User seat limit                                                     |
-| `maxStorageBytes`  | bigint? | File storage quota                                                  |
-| `stripeCustomerId` | string? | Stripe customer ID                                                  |
+Each organization has a unique slug, a display name, and a lifecycle status (`active`, `trial`, `suspended`, `past_due`, or `deactivated`). Organizations also carry configurable quotas for agents, workspaces, monthly runs, user seats, and storage.
 
-### Workspace fields
+### Workspaces
 
-| Field            | Type    | Description                                  |
-| ---------------- | ------- | -------------------------------------------- |
-| `id`             | string  | CUID identifier                              |
-| `organizationId` | string  | Parent organization                          |
-| `slug`           | string  | URL-safe identifier (within org)             |
-| `name`           | string  | Display name                                 |
-| `environment`    | string  | `"development"`, `"staging"`, `"production"` |
-| `isDefault`      | boolean | Default workspace flag                       |
+Workspaces belong to an organization and are identified by a slug (unique within the org). Each workspace is assigned an environment (`development`, `staging`, or `production`) and one workspace per organization is marked as the default.
 
-### Membership fields
+### Memberships
 
-| Field            | Type     | Description                                  |
-| ---------------- | -------- | -------------------------------------------- |
-| `id`             | string   | CUID identifier                              |
-| `userId`         | string   | User ID (from Better Auth)                   |
-| `organizationId` | string   | Organization ID                              |
-| `role`           | string   | `"owner"`, `"admin"`, `"member"`, `"viewer"` |
-| `permissions`    | string[] | Granular permission array                    |
+A membership links a user to an organization with a role (`owner`, `admin`, `member`, or `viewer`) and an optional list of granular permissions for fine-grained access control.
 
 ## Best practices
 
@@ -239,7 +202,5 @@ Platform administrators can manage organizations via admin APIs:
 
 ## Related topics
 
-- **[Authentication](/docs/platform/authentication)** — How user sessions map to organizations
-- **[Security](/docs/platform/security)** — Tenant isolation and credential encryption
 - **[Federation](/docs/platform/federation)** — Cross-organization trust boundaries
 - **[Agents Overview](/docs/agents/overview)** — How agents are scoped to workspaces

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
-import { Users, Bot, Plug, BarChart3, FileText, Flag, History } from "lucide-react";
+import { Users, Bot, Plug, BarChart3, FileText, Flag, History, CreditCard } from "lucide-react";
 
 export default async function TenantDetailLayout({
     children,
@@ -35,6 +35,7 @@ export default async function TenantDetailLayout({
         { href: `/tenants/${orgSlug}/agents`, label: "Agents", icon: Bot },
         { href: `/tenants/${orgSlug}/integrations`, label: "Integrations", icon: Plug },
         { href: `/tenants/${orgSlug}/usage`, label: "Usage", icon: BarChart3 },
+        { href: `/tenants/${orgSlug}/billing`, label: "Billing", icon: CreditCard },
         { href: `/tenants/${orgSlug}/audit-log`, label: "Audit Log", icon: FileText },
         { href: `/tenants/${orgSlug}/flags`, label: "Flags", icon: Flag },
         { href: `/tenants/${orgSlug}/lifecycle`, label: "Lifecycle", icon: History }

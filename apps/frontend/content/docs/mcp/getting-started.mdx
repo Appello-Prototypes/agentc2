@@ -1,0 +1,122 @@
+---
+title: "MCP Quick Start"
+description: "Generate an API key and connect to AgentC2 from any MCP-compatible client in under 5 minutes."
+section: "mcp"
+order: 2
+primaryKeyword: "MCP quick start"
+secondaryKeywords: ["AgentC2 API key", "MCP setup guide"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+relatedSlugs: ["mcp/overview", "mcp/cursor-setup", "mcp/claude-setup"]
+---
+
+# MCP Quick Start
+
+This guide walks you through generating an API key and connecting to the AgentC2 MCP server. You'll have tools available in your AI assistant in under 5 minutes.
+
+## Prerequisites
+
+- An AgentC2 account with at least one workspace
+- One of: Cursor IDE, Claude Desktop, Claude Code, or Claude CoWork
+
+## Step 1: Log in to your workspace
+
+Open [agentc2.ai](https://agentc2.ai) and log in. Navigate to any workspace where you have admin or member access.
+
+## Step 2: Open the Integrations Hub
+
+Go to the **Integrations** page in your workspace sidebar, or navigate directly to `/workspace/integrations`. This page lists all available integration providers and active connections.
+
+Look for the **Organization MCP Access** section at the top of the page. This section shows your organization's MCP endpoint and API key status.
+
+## Step 3: Generate an API key
+
+In the Organization MCP Access section:
+
+1. Click **Generate** to create a new MCP API key
+2. Copy the generated key immediately — it is only shown once
+3. Note your **organization slug** displayed in the same section (e.g., `my-company`)
+
+Your MCP endpoint is:
+
+```
+https://agentc2.ai/agent/api/mcp/server/{your-org-slug}
+```
+
+<Callout type="warning">
+    Store your API key securely. It grants full access to your organization's AgentC2 workspace via
+    MCP tools. If compromised, regenerate it immediately from the same Integrations Hub page.
+</Callout>
+
+### API alternative
+
+You can also generate keys programmatically:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/organizations/{orgId}/mcp-api-key \
+  -H "Authorization: Bearer $SESSION_TOKEN" \
+  -H "Content-Type: application/json"
+```
+
+This requires an authenticated session (cookie-based auth from the AgentC2 web app). The response includes the API key and organization slug.
+
+## Step 4: Note your credentials
+
+You need two values for client configuration:
+
+| Value                 | Where to find it                     | Example            |
+| --------------------- | ------------------------------------ | ------------------ |
+| **Organization slug** | Integrations Hub, MCP Access section | `my-company`       |
+| **MCP API key**       | Generated in Step 3                  | `mcp_k1_abc123...` |
+
+## Step 5: Choose your client
+
+Follow the setup guide for your preferred client:
+
+- **[Cursor IDE](/docs/mcp/cursor-setup)** — Uses a local Node.js proxy script that translates stdio to the AgentC2 API
+- **[Claude CoWork / Claude Desktop / Claude Code](/docs/mcp/claude-setup)** — Connects directly via remote Streamable HTTP
+
+## Step 6: Verify the connection
+
+Once configured, test the connection by asking your AI assistant:
+
+> "What MCP tools do you have available?"
+
+Your assistant should list tools across agent management, workflow management, network management, knowledge/RAG, skill management, integration management, and organization management. If you see 200+ tools, you're connected.
+
+### Quick verification commands
+
+Try these to confirm everything works:
+
+> "List all agents in my workspace"
+
+This calls the `agent_discover` tool and returns your configured agents.
+
+> "Show my organization's workspaces"
+
+This calls `org_workspaces_list` and confirms organization-scoped access.
+
+## Troubleshooting
+
+### No tools appear
+
+- Verify your API key is correct and has not been regenerated since you configured the client
+- Check that your organization slug matches exactly (case-sensitive)
+- Ensure the MCP server URL includes the `/agent` path prefix: `https://agentc2.ai/agent/api/mcp/server/{slug}`
+
+### Authentication errors
+
+- API keys are organization-scoped. If you switched organizations, generate a new key for the target org
+- For the API endpoint, ensure you're using session auth (cookie), not the MCP API key
+
+### Connection timeout
+
+- The AgentC2 MCP server uses Streamable HTTP. Ensure your client supports this transport
+- For Cursor, verify Node.js is installed and the proxy script path is correct
+
+## Next steps
+
+- **[Tool Reference](/docs/mcp/tool-reference)** — Browse all available tools by category
+- **[Common Patterns](/docs/mcp/common-patterns)** — Learn common workflows and recipes

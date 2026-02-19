@@ -1,0 +1,129 @@
+---
+title: "API Authentication"
+description: "Authenticate with the AgentC2 REST API using bearer tokens or session cookies. Generate API keys, manage access, and secure your integrations."
+section: "api-reference"
+order: 0
+primaryKeyword: "API authentication"
+relatedSlugs: ["api-reference/agents", "mcp/getting-started", "workspace/integrations"]
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+---
+
+## Authentication methods
+
+AgentC2 supports two authentication methods:
+
+### Bearer token (API key)
+
+For programmatic access from scripts, CI/CD, MCP clients, or third-party integrations.
+
+```bash
+curl https://agentc2.ai/agent/api/agents \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "X-Organization-Slug: your-org-slug"
+```
+
+Or using the X-API-Key header:
+
+```bash
+curl https://agentc2.ai/agent/api/agents \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -H "X-Organization-Slug: your-org-slug"
+```
+
+Both are equivalent. The `X-Organization-Slug` header tells the API which organization context to use.
+
+### Session cookie
+
+For browser-based access. When you log in to the AgentC2 workspace, a session cookie is automatically set and sent with subsequent requests. No additional configuration needed.
+
+## Generating an API key
+
+### Via the workspace UI
+
+1. Log in to your AgentC2 workspace
+2. Navigate to **Integrations Hub** (sidebar)
+3. Scroll to the **Organization API Access** section
+4. Click **Generate API Key**
+5. Copy the key immediately -- it won't be shown again in full
+6. Note your **Organization Slug** (displayed in the same section)
+
+### Via the API
+
+If you already have an authenticated session (e.g., from a browser):
+
+```bash
+# Generate a new API key
+curl -X POST https://agentc2.ai/agent/api/organizations/{orgId}/mcp-api-key \
+  --cookie "better-auth.session_token=..."
+```
+
+Response:
+
+```json
+{
+    "success": true,
+    "apiKey": "ak_..."
+}
+```
+
+## Managing API keys
+
+### Rotating a key
+
+Generate a new key to replace the existing one. The old key is immediately invalidated.
+
+### Revoking a key
+
+```bash
+curl -X DELETE https://agentc2.ai/agent/api/organizations/{orgId}/mcp-api-key \
+  --cookie "better-auth.session_token=..."
+```
+
+### Who can manage keys
+
+Only organization **owners** and **admins** can generate, rotate, or revoke API keys.
+
+## Required headers
+
+| Header                | Required           | Description                         |
+| --------------------- | ------------------ | ----------------------------------- |
+| `Authorization`       | Yes (or X-API-Key) | `Bearer YOUR_API_KEY`               |
+| `X-Organization-Slug` | Yes (with API key) | Your organization's slug identifier |
+| `Content-Type`        | For POST/PUT       | `application/json`                  |
+
+## Error responses
+
+| Status             | Meaning                                   |
+| ------------------ | ----------------------------------------- |
+| `401 Unauthorized` | Missing or invalid API key / session      |
+| `403 Forbidden`    | Valid auth but insufficient permissions   |
+| `404 Not Found`    | Resource doesn't exist or not in your org |
+
+### Example error response
+
+```json
+{
+    "error": "Unauthorized",
+    "message": "Invalid API key or session"
+}
+```
+
+## Security best practices
+
+- Store API keys in environment variables, never in code
+- Rotate keys periodically (monthly recommended)
+- Use the minimum permissions needed
+- Revoke keys immediately if compromised
+- Each organization has one active API key at a time
+
+## Using with MCP clients
+
+The same API key used for REST API access also works for MCP client connections (Cursor, Claude, etc.). See the [MCP Developer Access](/docs/mcp/overview) documentation for setup instructions.
+
+## Related topics
+
+- **[MCP Quick Start](/docs/mcp/getting-started)** -- Connect via MCP clients
+- **[Agents API](/docs/api-reference/agents)** -- Agent endpoints reference
+- **[Workspace Integrations](/docs/workspace/integrations)** -- Connect integrations via UI

@@ -16,51 +16,11 @@ AgentC2 provides comprehensive observability through agent run traces, step-by-s
 
 ## Run traces
 
-Every agent execution creates an `AgentTrace` record that captures the complete execution context:
-
-### Trace structure
-
-```typescript
-// Database model: AgentTrace
-{
-  id: "trace_123",
-  runId: "run_456", // Links to AgentRun
-  agentId: "agent_789",
-  tenantId: "org_abc",
-  status: "COMPLETED", // RUNNING, COMPLETED, FAILED, CANCELLED
-  inputText: "What is the weather in San Francisco?",
-  outputText: "The weather in San Francisco is...",
-  durationMs: 2341,
-  stepsJson: [ /* step details */ ],
-  modelJson: { provider: "openai", model: "gpt-4o", temperature: 0.7 },
-  tokensJson: { input: 45, output: 120, total: 165 },
-  scoresJson: { quality: 0.92, safety: 1.0, relevance: 0.88 },
-  instructionsHash: "sha256:...",
-  instructionsSnapshot: "You are a helpful assistant..."
-}
-```
+Every agent execution creates a **trace** that captures the complete execution context, including the input, output, model configuration, token usage, evaluation scores, duration, and status (`RUNNING`, `COMPLETED`, `FAILED`, or `CANCELLED`).
 
 ### Trace steps
 
-Each trace contains detailed step-by-step execution logs in `AgentTraceStep`:
-
-```typescript
-// Database model: AgentTraceStep
-{
-  id: "step_001",
-  traceId: "trace_123",
-  stepNumber: 1,
-  type: "llm", // "llm" | "tool" | "memory" | "guardrail"
-  content: {
-    prompt: "...",
-    response: "...",
-    model: "gpt-4o",
-    tokens: { input: 45, output: 120 }
-  },
-  timestamp: "2026-02-18T12:00:00Z",
-  durationMs: 1234
-}
-```
+Each trace contains a sequence of **steps** representing the individual operations the agent performed. Steps are ordered by execution sequence and each records its type, content, timestamp, and duration.
 
 ### Step types
 
@@ -73,59 +33,24 @@ Each trace contains detailed step-by-step execution logs in `AgentTraceStep`:
 
 ## Querying traces
 
-Traces can be queried via API or database:
-
-### API endpoint
+Traces can be queried via the REST API with filters for status, date range, and agent:
 
 ```bash
 # List traces for an agent
 curl https://agentc2.ai/agent/api/agents/research-assistant/traces?limit=50 \
   -H "Authorization: Bearer $TOKEN"
 
-# Get specific trace
+# Get specific trace with all steps
 curl https://agentc2.ai/agent/api/traces/trace_123 \
   -H "Authorization: Bearer $TOKEN"
 
 # Query with filters
 curl "https://agentc2.ai/agent/api/traces?status=FAILED&startDate=2026-02-01&endDate=2026-02-18" \
   -H "Authorization: Bearer $TOKEN"
-```
 
-### Database queries
-
-```typescript
-// Find traces by status
-const failedTraces = await prisma.agentTrace.findMany({
-    where: {
-        agentId: "agent_123",
-        status: "FAILED",
-        createdAt: {
-            gte: new Date("2026-02-01"),
-            lte: new Date("2026-02-18")
-        }
-    },
-    include: {
-        steps: {
-            orderBy: { stepNumber: "asc" }
-        }
-    }
-});
-
-// Find traces with tool calls
-const tracesWithTools = await prisma.agentTrace.findMany({
-    where: {
-        agentId: "agent_123",
-        steps: {
-            some: {
-                type: "tool"
-            }
-        }
-    },
-    include: {
-        steps: true,
-        toolCalls: true
-    }
-});
+# Filter traces that include tool calls
+curl "https://agentc2.ai/agent/api/traces?stepType=tool&agentSlug=research-assistant" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Aggregate metrics
@@ -134,56 +59,33 @@ The platform aggregates metrics across runs for dashboards and analytics:
 
 ### Cost metrics
 
-| Metric              | Description                  | Calculation                                                |
-| ------------------- | ---------------------------- | ---------------------------------------------------------- |
-| **Total tokens**    | Sum of input + output tokens | `SUM(tokensJson->>'total')`                                |
-| **Total cost**      | Cost in USD                  | `SUM(tokens * model_rate)`                                 |
-| **Average latency** | Mean duration per run        | `AVG(durationMs)`                                          |
-| **P95 latency**     | 95th percentile duration     | `PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY durationMs)` |
+- **Total tokens** — Sum of input and output tokens across all runs
+- **Total cost** — Estimated cost in USD based on token usage and model rates
+- **Average latency** — Mean response time per run
+- **P95 latency** — 95th percentile response time (useful for SLA monitoring)
 
 ### Quality metrics
 
-| Metric                    | Description               | Source                              |
-| ------------------------- | ------------------------- | ----------------------------------- |
-| **Average quality score** | Mean evaluation score     | `AVG(scoresJson->>'quality')`       |
-| **Failure rate**          | Percentage of failed runs | `COUNT(status='FAILED') / COUNT(*)` |
-| **Guardrail blocks**      | Number of blocked outputs | `COUNT(guardrail blocks)`           |
+- **Average quality score** — Mean evaluation score across runs
+- **Failure rate** — Percentage of runs that ended with an error
+- **Guardrail blocks** — Number of outputs blocked by guardrail policies
 
 ### Usage metrics
 
-| Metric            | Description                | Calculation                         |
-| ----------------- | -------------------------- | ----------------------------------- |
-| **Runs per day**  | Daily run count            | `COUNT(*) GROUP BY DATE(createdAt)` |
-| **Active agents** | Agents with runs in period | `COUNT(DISTINCT agentId)`           |
-| **Tool usage**    | Most-used tools            | `COUNT(*) GROUP BY toolKey`         |
+- **Runs per day** — Daily run volume, useful for capacity planning
+- **Active agents** — Number of distinct agents with runs in the selected period
+- **Tool usage** — Breakdown of which tools are called most frequently
 
-### Querying metrics
+### Querying metrics via API
 
-```typescript
-// Daily cost aggregation
-const dailyCosts = await prisma.$queryRaw`
-  SELECT 
-    DATE(created_at) as date,
-    SUM((tokens_json->>'total')::int) as total_tokens,
-    SUM((tokens_json->>'total')::int * 0.00001) as cost_usd
-  FROM agent_trace
-  WHERE agent_id = ${agentId}
-    AND created_at >= NOW() - INTERVAL '30 days'
-  GROUP BY DATE(created_at)
-  ORDER BY date DESC
-`;
+```bash
+# Get daily cost breakdown for an agent (last 30 days)
+curl "https://agentc2.ai/agent/api/agents/research-assistant/metrics/cost?period=30d" \
+  -H "Authorization: Bearer $TOKEN"
 
-// Tool usage statistics
-const toolUsage = await prisma.agentToolCall.groupBy({
-    by: ["toolKey"],
-    where: {
-        trace: {
-            agentId: agentId,
-            createdAt: { gte: thirtyDaysAgo }
-        }
-    },
-    _count: { id: true }
-});
+# Get tool usage statistics
+curl "https://agentc2.ai/agent/api/agents/research-assistant/metrics/tools?period=30d" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Cost dashboards
@@ -215,23 +117,18 @@ curl https://agentc2.ai/agent/api/organizations/acme-corp/metrics/cost \
 
 ### Budget alerts
 
-Organizations can set budget thresholds:
+Organizations can set budget thresholds to receive notifications before spending limits are reached:
 
-```typescript
-// Set monthly budget
-await prisma.organization.update({
-    where: { id: organizationId },
-    data: {
-        metadata: {
-            ...existingMetadata,
-            budget: {
-                monthlyLimit: 10000, // $10,000/month
-                alertThreshold: 0.8, // Alert at 80%
-                alertEmail: "admin@acme.com"
-            }
-        }
-    }
-});
+```bash
+# Set monthly budget and alert threshold
+curl -X PATCH https://agentc2.ai/agent/api/organizations/acme-corp/budget \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "monthlyLimit": 10000,
+    "alertThreshold": 0.8,
+    "alertEmail": "admin@acme.com"
+  }'
 ```
 
 When budget thresholds are exceeded, the platform:
@@ -251,20 +148,15 @@ Organizations receive health scores based on multiple factors:
 
 ### Health score calculation
 
-```typescript
-// Health score factors (0-100 scale)
-const healthScore = {
-    reliability: calculateReliability(), // Based on failure rate
-    performance: calculatePerformance(), // Based on latency P95
-    quality: calculateQuality(), // Based on evaluation scores
-    security: calculateSecurity(), // Based on security incidents
-    compliance: calculateCompliance() // Based on guardrail violations
-};
+Health scores are computed on a 0–100 scale from five weighted factors:
 
-// Weighted average
-const overallScore =
-    reliability * 0.3 + performance * 0.2 + quality * 0.2 + security * 0.15 + compliance * 0.15;
-```
+- **Reliability (30%)** — Based on failure rate across agent runs
+- **Performance (20%)** — Based on P95 latency
+- **Quality (20%)** — Based on average evaluation scores
+- **Security (15%)** — Based on security incident frequency
+- **Compliance (15%)** — Based on guardrail violation rate
+
+The overall score is a weighted average of these factors.
 
 ### Health score thresholds
 
@@ -307,21 +199,17 @@ Configure alert thresholds for proactive monitoring:
 
 ### Alert configuration
 
-```typescript
-// Set alert thresholds
-await prisma.organization.update({
-    where: { id: organizationId },
-    data: {
-        metadata: {
-            alerts: {
-                failureRate: { threshold: 0.05, enabled: true }, // 5% failure rate
-                latencyP95: { threshold: 5000, enabled: true }, // 5s P95 latency
-                costSpike: { threshold: 1.5, enabled: true }, // 1.5x average cost
-                qualityDrop: { threshold: 0.1, enabled: true } // 10% quality drop
-            }
-        }
-    }
-});
+```bash
+# Configure alert thresholds for an organization
+curl -X PATCH https://agentc2.ai/agent/api/organizations/acme-corp/alerts \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "failureRate": { "threshold": 0.05, "enabled": true },
+    "latencyP95": { "threshold": 5000, "enabled": true },
+    "costSpike": { "threshold": 1.5, "enabled": true },
+    "qualityDrop": { "threshold": 0.1, "enabled": true }
+  }'
 ```
 
 ### Alert delivery
@@ -340,90 +228,42 @@ Traces provide complete execution context for debugging:
 
 #### 1. Failed runs
 
-```typescript
-// Find failed runs with error details
-const failedTrace = await prisma.agentTrace.findFirst({
-    where: {
-        agentId: "agent_123",
-        status: "FAILED"
-    },
-    include: {
-        steps: {
-            orderBy: { stepNumber: "asc" }
-        }
-    }
-});
+Retrieve failed traces to inspect the error. The last step in the trace typically contains the error message and context.
 
-// Check last step for error
-const lastStep = failedTrace.steps[failedTrace.steps.length - 1];
-console.log("Error:", lastStep.content.error);
+```bash
+# Get recent failed traces
+curl "https://agentc2.ai/agent/api/agents/research-assistant/traces?status=FAILED&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 #### 2. Slow runs
 
-```typescript
-// Find slow runs (P95+)
-const slowTraces = await prisma.agentTrace.findMany({
-    where: {
-        agentId: "agent_123",
-        durationMs: { gte: 5000 } // >5s
-    },
-    include: { steps: true },
-    orderBy: { durationMs: "desc" },
-    take: 10
-});
+Filter traces by minimum duration to find slow runs, then inspect step-level durations to identify bottlenecks (e.g., a slow tool call or a large LLM response).
 
-// Analyze step durations
-for (const trace of slowTraces) {
-    const slowSteps = trace.steps.filter((s) => s.durationMs > 1000);
-    console.log(`Trace ${trace.id}: slow steps:`, slowSteps);
-}
+```bash
+# Get the 10 slowest traces from the last 7 days
+curl "https://agentc2.ai/agent/api/agents/research-assistant/traces?minDurationMs=5000&sort=durationMs:desc&limit=10" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 #### 3. Tool execution issues
 
-```typescript
-// Find traces with tool failures
-const toolFailures = await prisma.agentToolCall.findMany({
-    where: {
-        trace: { agentId: "agent_123" },
-        outputJson: {
-            path: ["error"],
-            not: null
-        }
-    },
-    include: { trace: true }
-});
+Filter for traces that contain tool-type steps with errors. The response includes the tool key, input, and error details so you can identify patterns across failures.
 
-// Analyze tool error patterns
-const errorPatterns = toolFailures.reduce((acc, call) => {
-    const tool = call.toolKey;
-    acc[tool] = (acc[tool] || 0) + 1;
-    return acc;
-}, {});
+```bash
+# Get traces with tool failures
+curl "https://agentc2.ai/agent/api/agents/research-assistant/traces?stepType=tool&hasErrors=true" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 #### 4. Guardrail violations
 
-```typescript
-// Find guardrail blocks
-const guardrailBlocks = await prisma.agentTraceStep.findMany({
-    where: {
-        trace: { agentId: "agent_123" },
-        type: "guardrail",
-        content: {
-            path: ["blocked"],
-            equals: true
-        }
-    },
-    include: { trace: true }
-});
+Query for traces where a guardrail step blocked the output. Each result includes the guardrail ID, the reason for blocking, and the original input.
 
-// Analyze blocked content
-for (const step of guardrailBlocks) {
-    console.log("Blocked:", step.content.reason);
-    console.log("Input:", step.trace.inputText);
-}
+```bash
+# Get traces with guardrail blocks
+curl "https://agentc2.ai/agent/api/agents/research-assistant/traces?stepType=guardrail&blocked=true" \
+  -H "Authorization: Bearer $TOKEN"
 ```
 
 ## Monitoring guidance

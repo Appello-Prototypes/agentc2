@@ -1,129 +1,91 @@
 ---
 title: "Architecture"
-description: "Understand AgentC2's monorepo structure, service boundaries, and data flow."
+description: "Understand how AgentC2 processes requests, executes agents, and returns results."
 section: "getting-started"
 order: 3
 primaryKeyword: "AI agent platform architecture"
-secondaryKeywords: ["agent framework architecture", "monorepo structure"]
+secondaryKeywords: ["agent framework architecture", "platform overview"]
 searchIntent: "informational"
 pageType: "concept"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
-relatedSlugs:
-    ["getting-started/key-concepts", "getting-started/introduction", "platform/deployment"]
+relatedSlugs: ["getting-started/key-concepts", "getting-started/introduction"]
 ---
 
 # Architecture
 
-AgentC2 is a monorepo platform built on Bun, Next.js 16, and Mastra. This page explains how the system is organized, how requests flow through it, and where the key code lives.
+AgentC2 is a managed platform for building, deploying, and orchestrating AI agents. This page explains how the system is organized from a user's perspective — how requests flow through the platform and how the major components interact.
 
-## System overview
+## How you interact with AgentC2
 
-The platform runs as three Next.js applications behind a Caddy reverse proxy, with shared packages for database, auth, UI, and the Mastra agent framework:
+There are three primary ways to work with the platform:
 
-```
-┌─────────────────────────────────────────────────────┐
-│                   Caddy (HTTPS)                     │
-│  agentc2.ai/* → Agent App (3001)                    │
-│  agentc2.ai/docs, /blog → Frontend (3000)           │
-│  agentc2.ai/admin → Admin Portal (3003)             │
-└─────────────┬──────────────┬──────────────┬─────────┘
-              │              │              │
-    ┌─────────▼──┐   ┌──────▼───┐   ┌──────▼───┐
-    │ Agent App  │   │ Frontend │   │  Admin   │
-    │ port 3001  │   │ port 3000│   │ port 3003│
-    │ API + Chat │   │ Docs,Blog│   │ Settings │
-    │ Webhooks   │   │ Landing  │   │ Tickets  │
-    └─────┬──────┘   └──────────┘   └──────────┘
-          │
-    ┌─────▼──────────────────────────┐
-    │       Shared Packages          │
-    │  @repo/mastra  (agents, tools) │
-    │  @repo/database (Prisma)       │
-    │  @repo/auth    (Better Auth)   │
-    │  @repo/ui      (shadcn/ui)     │
-    └─────┬──────────────────────────┘
-          │
-    ┌─────▼──────┐    ┌─────────────┐
-    │ PostgreSQL │    │   Inngest   │
-    │ (Supabase) │    │ (Jobs/Events│
-    └────────────┘    └─────────────┘
-```
-
-## Monorepo structure
-
-```
-/
-├── apps/
-│   ├── agent/         # Primary app: API routes, chat, webhooks (port 3001)
-│   ├── frontend/      # Public site: landing, docs, blog (port 3000)
-│   ├── admin/         # Admin portal: settings, tickets (port 3003)
-│   ├── inngest/       # Inngest dev server launcher (port 8288)
-│   └── ngrok/         # ngrok tunnel management for webhooks
-│
-├── packages/
-│   ├── mastra/        # Core: agents, tools, workflows, MCP, RAG
-│   ├── database/      # Prisma schema and generated client
-│   ├── auth/          # Better Auth configuration
-│   ├── ui/            # Shared UI components (shadcn/ui)
-│   ├── next-config/   # Shared Next.js configuration
-│   └── typescript-config/  # Shared TypeScript configs
-```
+- **Workspace UI** — A web-based interface for building agents, running workflows, reviewing traces, and managing settings
+- **REST API** — Programmatic access to all platform capabilities including agent execution, configuration, and metrics
+- **MCP clients** — Connect external tools and IDEs to AgentC2 agents via the Model Context Protocol
 
 ## Request flow
 
-When a user sends a message to an agent, the request flows through these layers:
+When you send a message to an agent — whether from the UI, API, or an MCP client — the request follows this path:
 
-1. **Caddy** receives the HTTPS request and routes it to the Agent App on port 3001
-2. **Next.js middleware** validates the session cookie via Better Auth
-3. **API route handler** (`/api/agents/[id]/chat`) parses the request body
-4. **Agent Resolver** loads the agent definition from PostgreSQL, hydrates it with tools and memory, and builds a Mastra `Agent` instance
-5. **Mastra Agent** calls the configured LLM (OpenAI or Anthropic), executes any tool calls, and streams the response
-6. **Run Recorder** writes the run trace, token usage, and cost to the database
-7. **Evaluations** run asynchronously via Inngest to score the response
+<Steps>
+    <Step title="Authenticate">
+        The platform verifies your identity and resolves your organization and workspace context.
+        API requests use bearer tokens; the UI uses session cookies.
+    </Step>
+    <Step title="Resolve agent">
+        The agent definition is loaded from the platform, including its instructions, model
+        configuration, attached tools, memory settings, and guardrails.
+    </Step>
+    <Step title="Execute">
+        The agent calls the configured LLM (OpenAI or Anthropic), executes any tool calls (MCP
+        integrations, native tools, or custom functions), and applies memory recall if enabled.
+        Guardrails enforce input/output policies at each step.
+    </Step>
+    <Step title="Trace and evaluate">
+        Every execution is recorded as a trace with step-level detail — LLM calls, tool executions,
+        memory operations, and guardrail checks. Evaluation scorers run asynchronously to measure
+        quality, safety, and relevance.
+    </Step>
+    <Step title="Return result">
+        The response is streamed back to the caller. Token usage and cost are tracked for billing
+        and budget enforcement.
+    </Step>
+</Steps>
 
-## Key packages
+## Core components
 
-### @repo/mastra
+### Agent runtime
 
-The core agent framework package. Contains:
+The agent runtime is responsible for loading agent definitions, orchestrating LLM calls, executing tools, and managing conversation memory. Agents are fully configuration-driven — you define behavior through the platform rather than writing code.
 
-- **Agent Resolver** (`src/agents/resolver.ts`) -- Database-first agent loading with tool hydration, memory configuration, and budget enforcement
-- **Tool Registry** (`src/tools/registry.ts`) -- Central registry for 145+ tools from MCP servers and native implementations
-- **MCP Client** (`src/mcp/client.ts`) -- Connects to external MCP servers (HubSpot, Jira, Slack, GitHub, etc.)
-- **Workflows** (`src/workflows/`) -- Graph-based workflow engine with branching, looping, and human approval
-- **RAG** (`src/rag/`) -- Document ingestion, chunking, embedding, and retrieval
-- **Guardrails** (`src/guardrails/`) -- Input/output policy enforcement
+### Tool ecosystem
 
-### @repo/database
+AgentC2 connects to external services through MCP (Model Context Protocol) servers and native integrations. Available tool categories include:
 
-Prisma 6 schema with 50+ models covering agents, workflows, networks, skills, campaigns, integrations, audit logs, and cost tracking. All agent definitions are database-driven.
+- **CRM** — HubSpot (contacts, companies, deals, pipeline)
+- **Project management** — Jira (issues, sprints, tracking)
+- **Communication** — Slack, Gmail, Microsoft Outlook
+- **Web** — Firecrawl (scraping), Playwright (browser automation)
+- **Productivity** — Google Drive, Dropbox, GitHub, Google Calendar
+- **Automation** — Custom workflow triggers and webhooks
 
-### @repo/auth
+### Workflows and networks
 
-Better Auth configuration for session-based authentication with cross-app cookie sharing via Caddy.
+Beyond single-agent execution, the platform supports **workflows** (multi-step orchestrations with branching, looping, and human approval gates) and **networks** (multi-agent systems where agents collaborate, delegate, and coordinate).
 
-## Database architecture
+### Observability
 
-Agent definitions are fully database-driven. The core entity relationships:
+Every agent run generates a complete trace. The platform provides dashboards for cost tracking, quality trends, performance metrics, and health scoring. See [Observability](/docs/platform/observability) for details.
 
-- **Agent** → has many **AgentTool**, **AgentSkill**, **AgentVersion**, **AgentRun**
-- **AgentRun** → has many **AgentTrace** (step-level telemetry)
-- **Workflow** → has many **WorkflowVersion**, **WorkflowRun** → **WorkflowRunStep**
-- **Network** → has many **NetworkPrimitive**, **NetworkVersion**, **NetworkRun**
-- **IntegrationProvider** → has many **IntegrationConnection** (OAuth tokens, encrypted)
+### RAG pipeline
 
-This design means you can version, audit, and roll back any agent configuration change through the database.
+Documents can be ingested, chunked, embedded, and retrieved for context-augmented responses. Agents with RAG enabled automatically search relevant documents during execution.
 
-## Environment
+## Multi-tenancy
 
-Key environment variables:
+All resources are scoped to organizations and workspaces. Tenant isolation is enforced at every layer — agents, documents, traces, and integrations are never shared across organization boundaries. See [Multi-Tenancy](/docs/platform/multi-tenancy) for the full model.
 
-| Variable                    | Purpose                                    |
-| --------------------------- | ------------------------------------------ |
-| `DATABASE_URL`              | PostgreSQL connection string               |
-| `OPENAI_API_KEY`            | OpenAI API key for GPT models              |
-| `ANTHROPIC_API_KEY`         | Anthropic API key for Claude models        |
-| `BETTER_AUTH_SECRET`        | Auth encryption key                        |
-| `INNGEST_EVENT_KEY`         | Background job event publishing            |
-| `CREDENTIAL_ENCRYPTION_KEY` | AES-256-GCM key for OAuth token encryption |
+## Environment variables
+
+When integrating with AgentC2 via API, the only credential you need is your **API token**, generated from the workspace settings page. All infrastructure configuration (LLM provider keys, database connections, MCP credentials) is managed by the platform.

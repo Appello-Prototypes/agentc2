@@ -17,6 +17,7 @@ import { TOOL_OAUTH_REQUIREMENTS } from "../tools/oauth-requirements";
 import { getScorersByNames } from "../scorers/registry";
 import { getThreadSkillState } from "../skills/thread-state";
 import { recordActivity } from "../activity/service";
+import { budgetEnforcement } from "../budget";
 import { resolveModelForOrg } from "./model-provider";
 import { resolveModelAlias } from "./model-registry";
 
@@ -299,8 +300,11 @@ export class AgentResolver {
         });
 
         if (record) {
-            // Enforce hard budget limit before running the agent
-            await this.checkBudgetLimit(record.id);
+            // Enforce hard budget limit before running the agent (full hierarchy)
+            await this.checkBudgetLimit(record.id, {
+                userId: requestContext?.userId,
+                organizationId: record.workspace?.organizationId
+            });
 
             const result = await this.hydrate(record, requestContext, threadId, loadAllSkills);
             return { ...result, record, source: "database" };
@@ -788,38 +792,30 @@ export class AgentResolver {
      */
 
     /**
-     * Check if an agent has exceeded its hard budget limit.
-     * Throws BudgetExceededError if the agent's monthly spend >= the configured limit with hardLimit enabled.
-     * Called before hydration to reject runs early without incurring tool/skill loading costs.
+     * Check the full budget enforcement hierarchy before allowing a run.
+     * Checks subscription credits → org budget → user budget → agent budget.
+     * Throws BudgetExceededError if any level with hardLimit blocks the run.
      */
-    private async checkBudgetLimit(agentId: string): Promise<void> {
-        const budgetPolicy = await prisma.budgetPolicy.findUnique({
-            where: { agentId }
+    private async checkBudgetLimit(
+        agentId: string,
+        ctx?: { userId?: string | null; organizationId?: string | null }
+    ): Promise<void> {
+        const result = await budgetEnforcement.check({
+            agentId,
+            userId: ctx?.userId,
+            organizationId: ctx?.organizationId
         });
 
-        if (!budgetPolicy?.enabled || !budgetPolicy.hardLimit || !budgetPolicy.monthlyLimitUsd) {
-            return;
-        }
+        if (!result.allowed && result.violations.length > 0) {
+            const top = result.violations[0];
+            const startOfMonth = new Date();
+            startOfMonth.setDate(1);
+            startOfMonth.setHours(0, 0, 0, 0);
 
-        const startOfMonth = new Date();
-        startOfMonth.setDate(1);
-        startOfMonth.setHours(0, 0, 0, 0);
-
-        const costEvents = await prisma.costEvent.findMany({
-            where: {
-                agentId,
-                createdAt: { gte: startOfMonth }
-            },
-            select: { costUsd: true }
-        });
-
-        const currentMonthCost = costEvents.reduce((sum, e) => sum + (e.costUsd || 0), 0);
-
-        if (currentMonthCost >= budgetPolicy.monthlyLimitUsd) {
             throw new BudgetExceededError({
                 agentId,
-                currentSpendUsd: Math.round(currentMonthCost * 100) / 100,
-                monthlyLimitUsd: budgetPolicy.monthlyLimitUsd,
+                currentSpendUsd: Math.round(top.currentSpendUsd * 100) / 100,
+                monthlyLimitUsd: top.limitUsd,
                 periodStart: startOfMonth.toISOString(),
                 periodEnd: new Date().toISOString()
             });

@@ -72,11 +72,10 @@ Chunks are embedded into vectors:
 
 ### 4. Store
 
-Vectors are stored in PostgreSQL:
+Vectors are stored in a high-performance vector database:
 
-- **Table**: `rag_documents` (managed by `@mastra/pg`)
-- **Indexing**: pgvector HNSW index for fast similarity search
-- **Metadata**: Document ID, chunk index, source metadata
+- **Indexing**: HNSW (Hierarchical Navigable Small World) index for fast similarity search
+- **Metadata**: Document ID, chunk index, and source metadata are stored alongside each vector
 
 ### 5. Retrieve
 
@@ -110,36 +109,19 @@ RAG is ideal when:
     knowledge. Agents can use both simultaneously.
 </Callout>
 
-## Document model
+## Document properties
 
-Documents are stored in the `Document` table:
+Each document you create via the API has the following key properties:
 
-| Field         | Type     | Description                                     |
-| ------------- | -------- | ----------------------------------------------- |
-| `id`          | string   | Unique document ID                              |
-| `slug`        | string   | URL-safe identifier                             |
-| `name`        | string   | Display name                                    |
-| `description` | string   | Human-readable description                      |
-| `content`     | text     | Document content (markdown/text)                |
-| `contentType` | string   | Content type (`"markdown"`, `"text"`, `"html"`) |
-| `vectorIds`   | string[] | Vector IDs for chunks                           |
-| `chunkCount`  | number   | Number of chunks                                |
-| `embeddedAt`  | datetime | When document was last embedded                 |
-| `category`    | string   | Document category                               |
-| `tags`        | string[] | Document tags                                   |
-| `metadata`    | JSON     | Custom metadata                                 |
-| `workspaceId` | string   | Workspace ownership                             |
+- **`slug`** — A unique, URL-safe identifier (e.g., `product-docs`)
+- **`name`** — A human-readable display name
+- **`content`** — The document body (markdown, plain text, or HTML)
+- **`contentType`** — The format of the content: `"markdown"`, `"text"`, or `"html"`
+- **`description`** — An optional summary
+- **`category`** / **`tags`** — Used for organizing and filtering documents
+- **`metadata`** — Custom key-value metadata
 
-## RagDocument model
-
-Vector chunks are stored in `rag_documents` (managed by pgvector):
-
-| Field       | Type         | Description                                   |
-| ----------- | ------------ | --------------------------------------------- |
-| `id`        | integer      | Auto-increment ID                             |
-| `vectorId`  | string       | Unique vector identifier                      |
-| `embedding` | vector(1536) | Embedding vector                              |
-| `metadata`  | JSON         | Chunk metadata (documentId, chunkIndex, etc.) |
+After ingestion, the platform automatically tracks the number of chunks generated and their embedding status. You can query this information via the documents API.
 
 ## RAG pipeline flow
 
@@ -165,8 +147,8 @@ After ingestion, the system automatically:
 
 1. **Chunks** the content into semantic chunks
 2. **Embeds** chunks into vectors
-3. **Stores** vectors in `rag_documents`
-4. **Updates** document `vectorIds` and `chunkCount`
+3. **Stores** vectors in the vector index
+4. **Updates** the document's embedding status and chunk count
 
 ### Query
 
@@ -250,18 +232,15 @@ curl -X PATCH https://agentc2.ai/agent/api/agents/research-agent \
 
 ## Performance considerations
 
-### Embedding model
+### Embedding
 
-- **Model**: OpenAI `text-embedding-3-small`
-- **Dimensions**: 1536
-- **Cost**: ~$0.02 per 1M tokens
+- **Model**: OpenAI `text-embedding-3-small` (1536 dimensions)
 - **Latency**: ~100-200ms per batch
 
 ### Vector search
 
-- **Index**: HNSW (Hierarchical Navigable Small World)
 - **Similarity**: Cosine similarity
-- **Latency**: under 10ms for top-K search
+- **Latency**: Under 10ms for top-K search
 - **Scalability**: Supports millions of vectors
 
 ### Chunking strategy

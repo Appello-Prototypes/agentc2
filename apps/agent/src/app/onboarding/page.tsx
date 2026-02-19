@@ -577,6 +577,26 @@ export default function OnboardingPage() {
     const handleFinish = async (navigateTo?: string) => {
         const success = await completeOnboarding();
         if (success) {
+            // Check for a pending plan upgrade from the pricing page
+            const pendingPlan = sessionStorage.getItem("pendingPlanSlug");
+            if (pendingPlan && pendingPlan !== "starter") {
+                sessionStorage.removeItem("pendingPlanSlug");
+                try {
+                    const res = await fetch(`${getApiBase()}/api/stripe/checkout`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        credentials: "include",
+                        body: JSON.stringify({ planSlug: pendingPlan })
+                    });
+                    const data = await res.json();
+                    if (data.success && data.url) {
+                        window.location.href = data.url;
+                        return;
+                    }
+                } catch {
+                    // Fall through to default redirect
+                }
+            }
             window.location.href = navigateTo || "/workspace";
         } else {
             setCreateError("Failed to complete onboarding. Please try again.");
@@ -706,6 +726,27 @@ export default function OnboardingPage() {
                     onboardingPath,
                     connectedDuringOnboarding: connectedIntegrations
                 });
+
+                // Check for a pending plan upgrade from the pricing page
+                const pendingPlan = sessionStorage.getItem("pendingPlanSlug");
+                if (pendingPlan && pendingPlan !== "starter") {
+                    sessionStorage.removeItem("pendingPlanSlug");
+                    try {
+                        const checkoutRes = await fetch(`${getApiBase()}/api/stripe/checkout`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            credentials: "include",
+                            body: JSON.stringify({ planSlug: pendingPlan })
+                        });
+                        const checkoutData = await checkoutRes.json();
+                        if (checkoutData.success && checkoutData.url) {
+                            window.location.href = checkoutData.url;
+                            return;
+                        }
+                    } catch {
+                        // Fall through to default redirect
+                    }
+                }
 
                 // Redirect to the CoWork chat with the new agent
                 const agentSlug = result.agent?.slug;

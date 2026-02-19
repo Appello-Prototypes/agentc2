@@ -13,13 +13,15 @@ import {
     Shield,
     ClipboardList,
     Bug,
-    Globe2
+    Globe2,
+    CreditCard
 } from "lucide-react";
 
 const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/tenants", label: "Tenants", icon: Building2 },
     { href: "/users", label: "Users", icon: Users },
+    { href: "/plans", label: "Plans & Pricing", icon: CreditCard },
     { href: "/tickets", label: "Tickets", icon: Bug },
     { href: "/waitlist", label: "Waitlist", icon: ClipboardList },
     { href: "/flags", label: "Feature Flags", icon: Flag },

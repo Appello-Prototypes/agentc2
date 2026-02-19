@@ -1,0 +1,173 @@
+---
+title: "Connect from Claude"
+description: "Set up AgentC2 MCP access from Claude CoWork, Claude Desktop, and Claude Code using remote Streamable HTTP."
+section: "mcp"
+order: 4
+primaryKeyword: "Claude MCP setup"
+secondaryKeywords: ["Claude Desktop MCP", "Claude CoWork MCP", "Claude Code MCP"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Start Building in AgentC2"
+ctaHref: "/signup"
+relatedSlugs: ["mcp/overview", "mcp/getting-started", "mcp/tool-reference"]
+---
+
+# Connect from Claude
+
+Claude clients (CoWork, Desktop, and Code) support remote MCP servers over Streamable HTTP, so they connect directly to the AgentC2 MCP endpoint without a local proxy script. This guide covers setup for all three clients.
+
+## Prerequisites
+
+- An AgentC2 API key and organization slug ([generate one](/docs/mcp/getting-started))
+- One of: Claude CoWork, Claude Desktop, or Claude Code
+
+## Claude CoWork
+
+Claude CoWork supports remote MCP connectors with OAuth authentication built in.
+
+### Step 1: Open Connectors
+
+In Claude CoWork, navigate to **Connectors** (or **Integrations**, depending on your version) in the sidebar or settings menu.
+
+### Step 2: Add a custom connector
+
+Click **Add Custom Connector** and fill in the following:
+
+| Field                   | Value                                                     |
+| ----------------------- | --------------------------------------------------------- |
+| **Name**                | AgentC2                                                   |
+| **Remote MCP URL**      | `https://agentc2.ai/agent/api/mcp/server/{your-org-slug}` |
+| **OAuth Client ID**     | `{your-org-slug}`                                         |
+| **OAuth Client Secret** | `{your-api-key}`                                          |
+
+Replace `{your-org-slug}` with your organization slug and `{your-api-key}` with your MCP API key.
+
+### Step 3: Connect
+
+Click **Connect**. The OAuth flow auto-approves — there is no manual consent screen. Once connected, AgentC2's 202 tools appear in Claude's tool list.
+
+### Step 4: Verify
+
+Start a new conversation and ask:
+
+> "What MCP tools do you have available?"
+
+Claude should list tools across agent management, workflows, networks, knowledge, skills, integrations, and org management.
+
+<Callout type="tip">
+    Claude CoWork may group MCP tools under the connector name. Look for "AgentC2" in the tools
+    panel to see all available tools.
+</Callout>
+
+## Claude Desktop
+
+Claude Desktop supports remote MCP servers via its configuration file.
+
+### Step 1: Locate the config file
+
+The Claude Desktop configuration file is at:
+
+| OS          | Path                                                              |
+| ----------- | ----------------------------------------------------------------- |
+| **macOS**   | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| **Windows** | `%APPDATA%\Claude\claude_desktop_config.json`                     |
+| **Linux**   | `~/.config/Claude/claude_desktop_config.json`                     |
+
+Create the file if it doesn't exist.
+
+### Step 2: Add the MCP server
+
+Add the AgentC2 server to the `mcpServers` object:
+
+```json
+{
+    "mcpServers": {
+        "AgentC2": {
+            "url": "https://agentc2.ai/agent/api/mcp/server/{your-org-slug}",
+            "oauth": {
+                "client_id": "{your-org-slug}",
+                "client_secret": "{your-api-key}"
+            }
+        }
+    }
+}
+```
+
+Replace the placeholders with your organization slug and API key.
+
+### Step 3: Restart Claude Desktop
+
+Quit and reopen Claude Desktop. It reads the MCP configuration on startup and connects to configured servers.
+
+### Step 4: Verify
+
+Open a new conversation and ask:
+
+> "List all agents in my AgentC2 workspace"
+
+Claude should call the `agent_discover` tool and return your agents.
+
+## Claude Code
+
+Claude Code (the CLI tool) supports remote MCP server configuration.
+
+### Step 1: Add the MCP server
+
+Use the Claude Code settings command to add the AgentC2 MCP server:
+
+```bash
+claude mcp add AgentC2 \
+  --transport http \
+  --url "https://agentc2.ai/agent/api/mcp/server/{your-org-slug}" \
+  --oauth-client-id "{your-org-slug}" \
+  --oauth-client-secret "{your-api-key}"
+```
+
+Or add it manually to your Claude Code MCP configuration file (location depends on your Claude Code version — check `claude mcp list` for the config path).
+
+### Step 2: Verify
+
+Start a new Claude Code session and ask:
+
+> "What MCP tools do you have available?"
+
+You should see the full set of AgentC2 tools.
+
+<Callout type="info">
+    Claude Code's MCP configuration persists across sessions. You only need to configure the server
+    once.
+</Callout>
+
+## Troubleshooting
+
+### OAuth errors across all clients
+
+**Symptom**: Connection fails with authentication or OAuth errors.
+
+- Verify your API key has not been regenerated since you configured the client
+- The `client_id` must exactly match your organization slug (case-sensitive)
+- The `client_secret` is your MCP API key, not your session token or password
+
+### Tools don't appear after connecting
+
+- Some Claude clients cache the tool list. Try disconnecting and reconnecting the MCP server
+- Verify the URL includes the `/agent` path prefix and your org slug: `https://agentc2.ai/agent/api/mcp/server/{slug}`
+- Check that your organization has active agents, workflows, or other resources — tools are always available regardless of resource count, but it helps confirm connectivity
+
+### "Transport not supported" error
+
+- Ensure your Claude client version supports Streamable HTTP (MCP spec 2025-03-26)
+- Claude Desktop versions before January 2026 may not support remote MCP — update to the latest version
+
+### Rate limiting
+
+The AgentC2 MCP server applies standard rate limits. If you hit rate limits during heavy automation:
+
+- Space out tool calls in your prompts
+- Use batch-style prompts that achieve more in fewer tool invocations
+- Contact your organization admin to review rate limit settings
+
+## Next steps
+
+- **[Tool Reference](/docs/mcp/tool-reference)** — Browse all available tools by category
+- **[Common Patterns](/docs/mcp/common-patterns)** — Recipes for common development workflows

@@ -1266,6 +1266,70 @@ export const budgetCheckFunction = inngest.createFunction(
 );
 
 // ==============================
+// Subscription Credit Reset
+// ==============================
+
+/**
+ * Monthly subscription credit reset (cron).
+ * Runs on the 1st of each month at 00:05 UTC.
+ * Resets usedCreditsUsd and overageAccruedUsd for active subscriptions
+ * whose billing period has ended.
+ */
+export const subscriptionCreditResetFunction = inngest.createFunction(
+    {
+        id: "subscription-credit-reset",
+        retries: 2
+    },
+    { cron: "5 0 1 * *" },
+    async ({ step }) => {
+        const result = await step.run("reset-expired-periods", async () => {
+            const now = new Date();
+
+            const expired = await prisma.orgSubscription.findMany({
+                where: {
+                    status: "active",
+                    currentPeriodEnd: { lte: now }
+                },
+                include: { plan: true }
+            });
+
+            let resetCount = 0;
+
+            for (const sub of expired) {
+                const periodStart = new Date(now);
+                const periodEnd = new Date(now);
+
+                if (sub.billingCycle === "annual") {
+                    periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+                } else {
+                    periodEnd.setMonth(periodEnd.getMonth() + 1);
+                }
+
+                await prisma.orgSubscription.update({
+                    where: { id: sub.id },
+                    data: {
+                        usedCreditsUsd: 0,
+                        overageAccruedUsd: 0,
+                        includedCreditsUsd: sub.plan.includedCreditsUsd,
+                        currentPeriodStart: periodStart,
+                        currentPeriodEnd: periodEnd
+                    }
+                });
+
+                resetCount++;
+            }
+
+            return { total: expired.length, reset: resetCount };
+        });
+
+        console.log(
+            `[Inngest] Subscription credit reset: ${result.reset}/${result.total} subscriptions`
+        );
+        return result;
+    }
+);
+
+// ==============================
 // Closed-Loop Learning Functions
 // ==============================
 
@@ -8100,6 +8164,7 @@ export const inngestFunctions = [
     evaluationCompletedFunction,
     guardrailEventFunction,
     budgetCheckFunction,
+    subscriptionCreditResetFunction,
     // Agent Invocation
     asyncInvokeFunction,
     // Scheduler

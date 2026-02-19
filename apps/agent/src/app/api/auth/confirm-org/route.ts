@@ -129,6 +129,37 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Auto-create a Starter (free) subscription for the new org
+        if (result.organization?.id) {
+            try {
+                const starterPlan = await prisma.pricingPlan.findFirst({
+                    where: { slug: "starter", isActive: true }
+                });
+
+                if (starterPlan) {
+                    const now = new Date();
+                    const periodEnd = new Date(now);
+                    periodEnd.setMonth(periodEnd.getMonth() + 1);
+
+                    await prisma.orgSubscription.upsert({
+                        where: { organizationId: result.organization.id },
+                        update: {},
+                        create: {
+                            organizationId: result.organization.id,
+                            planId: starterPlan.id,
+                            status: "active",
+                            billingCycle: "monthly",
+                            includedCreditsUsd: starterPlan.includedCreditsUsd,
+                            currentPeriodStart: now,
+                            currentPeriodEnd: periodEnd
+                        }
+                    });
+                }
+            } catch (subError) {
+                console.warn("[Confirm Org] Failed to create starter subscription:", subError);
+            }
+        }
+
         return NextResponse.json(result);
     } catch (error) {
         console.error("[Confirm Org] Error:", error);

@@ -48,6 +48,14 @@ const settingsNavItems: SettingsNavItem[] = [
         requiresRole: ["owner", "admin"]
     },
     {
+        id: "billing",
+        label: "Billing & Budget",
+        href: "/settings/billing",
+        icon: "dollar",
+        description: "Plans, budgets, and usage controls",
+        requiresRole: ["owner", "admin"]
+    },
+    {
         id: "members",
         label: "Members",
         href: "/settings/members",

@@ -64,6 +64,10 @@ export function SignUpForm({ requireInviteCode = false }: SignUpFormProps) {
         if (invite) {
             setInviteCode(invite);
         }
+        const plan = searchParams.get("plan");
+        if (plan) {
+            sessionStorage.setItem("pendingPlanSlug", plan);
+        }
     }, [searchParams]);
 
     const handleSocialSignUp = async (provider: "google" | "microsoft") => {
