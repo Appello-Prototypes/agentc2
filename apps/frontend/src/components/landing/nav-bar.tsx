@@ -26,7 +26,7 @@ export function NavBar() {
         >
             <nav className="mx-auto flex h-16 max-w-7xl items-center justify-between px-6">
                 {/* Logo */}
-                <Link href="/" className="flex items-center gap-2">
+                <Link href="/" className="relative z-10 flex shrink-0 items-center gap-2 pl-2">
                     <Image
                         src="/c2-icon.png"
                         alt="AgentC2"
@@ -62,18 +62,6 @@ export function NavBar() {
                         className="text-muted-foreground hover:text-foreground text-sm transition-colors"
                     >
                         FAQ
-                    </Link>
-                    <Link
-                        href="/docs"
-                        className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-                    >
-                        Docs
-                    </Link>
-                    <Link
-                        href="/blog"
-                        className="text-muted-foreground hover:text-foreground text-sm transition-colors"
-                    >
-                        Blog
                     </Link>
                     <Link
                         href="/privacy"
@@ -158,20 +146,6 @@ export function NavBar() {
                             onClick={() => setMobileOpen(false)}
                         >
                             FAQ
-                        </Link>
-                        <Link
-                            href="/docs"
-                            className="text-foreground text-sm font-medium"
-                            onClick={() => setMobileOpen(false)}
-                        >
-                            Docs
-                        </Link>
-                        <Link
-                            href="/blog"
-                            className="text-foreground text-sm font-medium"
-                            onClick={() => setMobileOpen(false)}
-                        >
-                            Blog
                         </Link>
                         <Link
                             href="/privacy"

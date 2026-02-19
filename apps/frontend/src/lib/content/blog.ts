@@ -1016,7 +1016,10 @@ export const BLOG_POSTS: BlogPost[] = [
         author,
         readMinutes: 14,
         relatedDocs: ["agents/evaluations", "agents/learning", "platform/observability"],
-        relatedPosts: ["self-improving-ai-agents-with-learning", "reduce-ai-agent-hallucinations-production"],
+        relatedPosts: [
+            "self-improving-ai-agents-with-learning",
+            "reduce-ai-agent-hallucinations-production"
+        ],
         faqItems: [
             {
                 question: "What metrics should I track for AI agent performance?",
@@ -1699,7 +1702,11 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-02-25",
         author,
         readMinutes: 16,
-        relatedDocs: ["knowledge/overview", "knowledge/document-ingestion", "knowledge/vector-search"],
+        relatedDocs: [
+            "knowledge/overview",
+            "knowledge/document-ingestion",
+            "knowledge/vector-search"
+        ],
         relatedPosts: [
             "reduce-ai-agent-hallucinations-production",
             "build-ai-customer-support-agent"
@@ -1884,10 +1891,7 @@ export const BLOG_POSTS: BlogPost[] = [
         author,
         readMinutes: 14,
         relatedDocs: ["agents/overview", "networks/overview", "platform/security"],
-        relatedPosts: [
-            "agentc2-vs-langgraph-vs-crewai",
-            "best-ai-agent-platform-enterprise-2026"
-        ],
+        relatedPosts: ["agentc2-vs-langgraph-vs-crewai", "best-ai-agent-platform-enterprise-2026"],
         faqItems: [
             {
                 question: "Is AutoGen free to use?",
@@ -2236,11 +2240,7 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-03",
         author,
         readMinutes: 13,
-        relatedDocs: [
-            "integrations/jira",
-            "integrations/model-context-protocol",
-            "agents/tools"
-        ],
+        relatedDocs: ["integrations/jira", "integrations/model-context-protocol", "agents/tools"],
         relatedPosts: [
             "ai-agent-project-management-automation",
             "model-context-protocol-mcp-guide"
@@ -2322,15 +2322,8 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-10",
         author,
         readMinutes: 13,
-        relatedDocs: [
-            "integrations/gmail",
-            "workflows/human-in-the-loop",
-            "agents/guardrails"
-        ],
-        relatedPosts: [
-            "human-in-the-loop-ai-approval-workflows",
-            "ai-agent-automate-data-entry"
-        ],
+        relatedDocs: ["integrations/gmail", "workflows/human-in-the-loop", "agents/guardrails"],
+        relatedPosts: ["human-in-the-loop-ai-approval-workflows", "ai-agent-automate-data-entry"],
         faqItems: [
             {
                 question: "Can the AI agent read all my emails?",
@@ -2482,11 +2475,7 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-17",
         author,
         readMinutes: 11,
-        relatedDocs: [
-            "integrations/dropbox",
-            "knowledge/document-ingestion",
-            "workflows/overview"
-        ],
+        relatedDocs: ["integrations/dropbox", "knowledge/document-ingestion", "workflows/overview"],
         relatedPosts: [
             "ai-agent-google-drive-knowledge-base",
             "build-ai-research-assistant-citations"
@@ -2642,11 +2631,7 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-03",
         author,
         readMinutes: 13,
-        relatedDocs: [
-            "agents/overview",
-            "integrations/jira",
-            "agents/guardrails"
-        ],
+        relatedDocs: ["agents/overview", "integrations/jira", "agents/guardrails"],
         relatedPosts: [
             "build-ai-customer-support-agent",
             "human-in-the-loop-ai-approval-workflows"
@@ -2728,11 +2713,7 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-03",
         author,
         readMinutes: 13,
-        relatedDocs: [
-            "knowledge/overview",
-            "agents/guardrails",
-            "workflows/human-in-the-loop"
-        ],
+        relatedDocs: ["knowledge/overview", "agents/guardrails", "workflows/human-in-the-loop"],
         relatedPosts: [
             "rag-retrieval-augmented-generation-ai-agents",
             "human-in-the-loop-ai-approval-workflows"
@@ -2814,18 +2795,12 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-10",
         author,
         readMinutes: 11,
-        relatedDocs: [
-            "workflows/overview",
-            "integrations/slack",
-            "integrations/google-drive"
-        ],
-        relatedPosts: [
-            "multi-agent-networks-orchestrating-ai-teams",
-            "build-ai-slack-bot-agent"
-        ],
+        relatedDocs: ["workflows/overview", "integrations/slack", "integrations/google-drive"],
+        relatedPosts: ["multi-agent-networks-orchestrating-ai-teams", "build-ai-slack-bot-agent"],
         faqItems: [
             {
-                question: "Can the onboarding agent handle different workflows for different departments?",
+                question:
+                    "Can the onboarding agent handle different workflows for different departments?",
                 answer: "Yes. The agent's workflow engine supports conditional branching based on department, role, location, and any other metadata from your HRIS. Engineering hires might get GitHub and AWS access while marketing hires get HubSpot and Canva access, all orchestrated by the same agent with department-specific workflow templates."
             },
             {
@@ -2888,11 +2863,7 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-10",
         author,
         readMinutes: 11,
-        relatedDocs: [
-            "integrations/overview",
-            "agents/guardrails",
-            "platform/observability"
-        ],
+        relatedDocs: ["integrations/overview", "agents/guardrails", "platform/observability"],
         relatedPosts: [
             "ai-agent-cost-management-llm-spend-control",
             "reduce-ai-agent-hallucinations-production"
@@ -2907,7 +2878,8 @@ export const BLOG_POSTS: BlogPost[] = [
                 answer: "Validation guardrails check every record before it is written to the target system. Records that fail validation (missing required fields, invalid formats, out-of-range values) are quarantined in an error queue for human review. The agent continues processing valid records and generates a summary report of all quarantined items with the specific validation failures."
             },
             {
-                question: "Can the agent handle large data volumes without hitting API rate limits?",
+                question:
+                    "Can the agent handle large data volumes without hitting API rate limits?",
                 answer: "Yes. The agent includes built-in rate limiting and batching logic that respects the API limits of both source and target systems. Records are processed in configurable batch sizes with appropriate delays between batches. For very large migrations, the workflow can be configured to run during off-peak hours and resume from the last successful checkpoint if interrupted."
             }
         ],
@@ -3048,15 +3020,8 @@ export const BLOG_POSTS: BlogPost[] = [
         updatedAt: "2026-03-17",
         author,
         readMinutes: 13,
-        relatedDocs: [
-            "integrations/jira",
-            "integrations/slack",
-            "workflows/overview"
-        ],
-        relatedPosts: [
-            "build-ai-slack-bot-agent",
-            "connect-ai-agent-to-hubspot-crm"
-        ],
+        relatedDocs: ["integrations/jira", "integrations/slack", "workflows/overview"],
+        relatedPosts: ["build-ai-slack-bot-agent", "connect-ai-agent-to-hubspot-crm"],
         faqItems: [
             {
                 question: "Can the PM agent work with tools other than Jira and Slack?",
@@ -3121,13 +3086,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Practical strategies for identifying and eliminating wasteful API spending in AI agent systems, from model routing and budget caps to trace-driven cost optimization.",
         category: "pain-point",
         primaryKeyword: "stop AI agent high API costs",
-        secondaryKeywords: ["reduce AI API costs", "AI agent cost optimization", "LLM API spending control"],
+        secondaryKeywords: [
+            "reduce AI API costs",
+            "AI agent cost optimization",
+            "LLM API spending control"
+        ],
         publishedAt: "2026-03-24",
         updatedAt: "2026-03-24",
         author,
         readMinutes: 13,
         relatedDocs: ["agents/budgets-and-costs", "platform/observability", "agents/evaluations"],
-        relatedPosts: ["ai-agent-cost-management-llm-spend-control", "ai-agent-evaluation-how-to-measure-performance"],
+        relatedPosts: [
+            "ai-agent-cost-management-llm-spend-control",
+            "ai-agent-evaluation-how-to-measure-performance"
+        ],
         faqItems: [
             {
                 question: "What is the biggest driver of AI agent API costs?",
@@ -3196,13 +3168,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "A comprehensive guide to the security risks introduced by AI agents in enterprise environments, covering prompt injection, credential management, data leakage, audit trails, and architecture patterns for secure deployment.",
         category: "pain-point",
         primaryKeyword: "AI agent security risks enterprise",
-        secondaryKeywords: ["AI agent data security", "enterprise AI security best practices", "LLM security vulnerabilities"],
+        secondaryKeywords: [
+            "AI agent data security",
+            "enterprise AI security best practices",
+            "LLM security vulnerabilities"
+        ],
         publishedAt: "2026-03-24",
         updatedAt: "2026-03-24",
         author,
         readMinutes: 14,
         relatedDocs: ["platform/security", "agents/guardrails", "integrations/overview"],
-        relatedPosts: ["guardrails-for-production-ai-agents", "deploying-ai-agents-to-production-checklist"],
+        relatedPosts: [
+            "guardrails-for-production-ai-agents",
+            "deploying-ai-agents-to-production-checklist"
+        ],
         faqItems: [
             {
                 question: "What is the most common AI agent security vulnerability?",
@@ -3283,7 +3262,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "A practical guide to diagnosing and fixing AI agent issues using traces, tool call analysis, and systematic debugging workflows when agent responses are wrong, slow, or inconsistent.",
         category: "pain-point",
         primaryKeyword: "debug AI agent responses troubleshooting",
-        secondaryKeywords: ["AI agent debugging", "troubleshoot AI agent errors", "AI agent trace analysis"],
+        secondaryKeywords: [
+            "AI agent debugging",
+            "troubleshoot AI agent errors",
+            "AI agent trace analysis"
+        ],
         publishedAt: "2026-03-31",
         updatedAt: "2026-03-31",
         author,
@@ -3358,7 +3341,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "A guide to building AI agent systems that handle PII, credentials, and regulated data safely, covering data classification, redaction guardrails, encryption, audit logging, and regulatory compliance.",
         category: "pain-point",
         primaryKeyword: "AI agent sensitive data handling compliance",
-        secondaryKeywords: ["AI data privacy compliance", "GDPR AI agents", "PII handling AI agents"],
+        secondaryKeywords: [
+            "AI data privacy compliance",
+            "GDPR AI agents",
+            "PII handling AI agents"
+        ],
         publishedAt: "2026-03-31",
         updatedAt: "2026-03-31",
         author,
@@ -3433,7 +3420,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "A detailed comparison of AgentC2 and OpenAI's Assistants API across architecture philosophy, out-of-the-box capabilities, model flexibility, governance, cost, and scaling to help teams choose the right approach.",
         category: "comparison",
         primaryKeyword: "AgentC2 vs OpenAI Assistants API",
-        secondaryKeywords: ["OpenAI Assistants alternative", "AI agent platform vs API", "OpenAI API vs agent platform"],
+        secondaryKeywords: [
+            "OpenAI Assistants alternative",
+            "AI agent platform vs API",
+            "OpenAI API vs agent platform"
+        ],
         publishedAt: "2026-04-07",
         updatedAt: "2026-04-07",
         author,
@@ -3520,7 +3511,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "A production-focused comparison of seven leading AI agent frameworks—AgentC2, LangGraph, CrewAI, AutoGen, OpenAI Assistants, Semantic Kernel, and more—ranked across governance, scalability, integrations, and developer experience.",
         category: "comparison",
         primaryKeyword: "AI agent framework comparison 2026",
-        secondaryKeywords: ["compare AI agent frameworks", "AI agent framework rankings", "production AI frameworks"],
+        secondaryKeywords: [
+            "compare AI agent frameworks",
+            "AI agent framework rankings",
+            "production AI frameworks"
+        ],
         publishedAt: "2026-04-07",
         updatedAt: "2026-04-07",
         author,
@@ -3623,20 +3618,28 @@ export const BLOG_POSTS: BlogPost[] = [
             "A decision framework for engineering leaders evaluating whether to build custom AI agent infrastructure or buy a platform, covering hidden costs, hybrid approaches, team maturity assessment, and total cost of ownership.",
         category: "comparison",
         primaryKeyword: "build vs buy AI agent infrastructure",
-        secondaryKeywords: ["build AI agent platform", "buy AI agent solution", "AI agent build or buy decision"],
+        secondaryKeywords: [
+            "build AI agent platform",
+            "buy AI agent solution",
+            "AI agent build or buy decision"
+        ],
         publishedAt: "2026-04-14",
         updatedAt: "2026-04-14",
         author,
         readMinutes: 14,
         relatedDocs: ["agents/overview", "platform/security", "platform/deployment"],
-        relatedPosts: ["best-ai-agent-platform-enterprise-2026", "deploying-ai-agents-to-production-checklist"],
+        relatedPosts: [
+            "best-ai-agent-platform-enterprise-2026",
+            "deploying-ai-agents-to-production-checklist"
+        ],
         faqItems: [
             {
                 question: "How long does it take to build AI agent infrastructure from scratch?",
                 answer: "A minimal production-ready agent platform (core agent loop, tool integration, basic observability, deployment pipeline) takes 3-6 months for a dedicated team of 2-3 engineers. Adding enterprise features (RBAC, audit logging, multi-tenancy, evaluation, continuous learning) adds another 6-12 months. Most teams underestimate this timeline by 2-3x."
             },
             {
-                question: "What is the ongoing maintenance cost of custom-built agent infrastructure?",
+                question:
+                    "What is the ongoing maintenance cost of custom-built agent infrastructure?",
                 answer: "Plan for 1-2 full-time engineers dedicated to infrastructure maintenance, including dependency updates, security patches, provider API changes, scaling issues, and new feature development. This does not include the engineers building agent logic on top of the infrastructure."
             },
             {
@@ -3698,13 +3701,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to implement short-term and long-term conversation memory in AI agents, including semantic recall, multi-turn context management, and memory across multi-agent handoffs.",
         category: "technical",
         primaryKeyword: "implement conversation memory AI agents",
-        secondaryKeywords: ["AI agent memory management", "long-term memory for AI agents", "conversation context AI"],
+        secondaryKeywords: [
+            "AI agent memory management",
+            "long-term memory for AI agents",
+            "conversation context AI"
+        ],
         publishedAt: "2026-04-14",
         updatedAt: "2026-04-14",
         author,
         readMinutes: 14,
         relatedDocs: ["agents/memory", "agents/overview", "networks/overview"],
-        relatedPosts: ["multi-agent-networks-orchestrating-ai-teams", "reduce-ai-agent-hallucinations-production"],
+        relatedPosts: [
+            "multi-agent-networks-orchestrating-ai-teams",
+            "reduce-ai-agent-hallucinations-production"
+        ],
         faqItems: [
             {
                 question: "How much memory should an AI agent retain?",
@@ -3781,13 +3791,24 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to build complex AI agent workflows with conditional branching, approval gates, parallel execution, and error handling patterns for production environments.",
         category: "technical",
         primaryKeyword: "AI agent workflow branching approval gates",
-        secondaryKeywords: ["AI workflow builder", "conditional AI agent workflows", "approval gates AI workflows"],
+        secondaryKeywords: [
+            "AI workflow builder",
+            "conditional AI agent workflows",
+            "approval gates AI workflows"
+        ],
         publishedAt: "2026-04-21",
         updatedAt: "2026-04-21",
         author,
         readMinutes: 14,
-        relatedDocs: ["workflows/overview", "workflows/control-flow", "workflows/human-in-the-loop"],
-        relatedPosts: ["human-in-the-loop-ai-approval-workflows", "multi-agent-networks-orchestrating-ai-teams"],
+        relatedDocs: [
+            "workflows/overview",
+            "workflows/control-flow",
+            "workflows/human-in-the-loop"
+        ],
+        relatedPosts: [
+            "human-in-the-loop-ai-approval-workflows",
+            "multi-agent-networks-orchestrating-ai-teams"
+        ],
         faqItems: [
             {
                 question: "What is the difference between a workflow and a network?",
@@ -3864,13 +3885,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Compare vector search and keyword search for AI agent knowledge bases, understand their strengths and limitations, and learn how hybrid search combines both for optimal retrieval.",
         category: "technical",
         primaryKeyword: "vector search vs keyword search AI agents",
-        secondaryKeywords: ["semantic search vs keyword search", "vector database for AI agents", "hybrid search AI"],
+        secondaryKeywords: [
+            "semantic search vs keyword search",
+            "vector database for AI agents",
+            "hybrid search AI"
+        ],
         publishedAt: "2026-04-21",
         updatedAt: "2026-04-21",
         author,
         readMinutes: 13,
         relatedDocs: ["knowledge/vector-search", "knowledge/hybrid-search", "knowledge/overview"],
-        relatedPosts: ["rag-retrieval-augmented-generation-ai-agents", "ai-agent-google-drive-knowledge-base"],
+        relatedPosts: [
+            "rag-retrieval-augmented-generation-ai-agents",
+            "ai-agent-google-drive-knowledge-base"
+        ],
         faqItems: [
             {
                 question: "Is vector search always better than keyword search?",
@@ -3939,13 +3967,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to design, run, and evaluate A/B tests for AI agent configurations, including traffic splitting, variant management, and statistical significance for agent optimization.",
         category: "technical",
         primaryKeyword: "A/B test AI agent configuration production",
-        secondaryKeywords: ["AI agent experiment", "compare AI agent versions", "AI agent optimization testing"],
+        secondaryKeywords: [
+            "AI agent experiment",
+            "compare AI agent versions",
+            "AI agent optimization testing"
+        ],
         publishedAt: "2026-04-28",
         updatedAt: "2026-04-28",
         author,
         readMinutes: 13,
         relatedDocs: ["agents/learning", "agents/evaluations", "agents/version-control"],
-        relatedPosts: ["self-improving-ai-agents-with-learning", "ai-agent-evaluation-how-to-measure-performance"],
+        relatedPosts: [
+            "self-improving-ai-agents-with-learning",
+            "ai-agent-evaluation-how-to-measure-performance"
+        ],
         faqItems: [
             {
                 question: "How many interactions do I need for a statistically significant result?",
@@ -4014,13 +4049,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to implement comprehensive observability for production AI agents, including distributed tracing, structured logging, quality alerting, and cost monitoring at scale.",
         category: "technical",
         primaryKeyword: "AI agent observability tracing production",
-        secondaryKeywords: ["AI agent monitoring", "LLM tracing", "AI agent logging best practices"],
+        secondaryKeywords: [
+            "AI agent monitoring",
+            "LLM tracing",
+            "AI agent logging best practices"
+        ],
         publishedAt: "2026-04-28",
         updatedAt: "2026-04-28",
         author,
         readMinutes: 14,
         relatedDocs: ["platform/observability", "agents/evaluations", "agents/budgets-and-costs"],
-        relatedPosts: ["debug-ai-agent-responses", "ai-agent-evaluation-how-to-measure-performance"],
+        relatedPosts: [
+            "debug-ai-agent-responses",
+            "ai-agent-evaluation-how-to-measure-performance"
+        ],
         faqItems: [
             {
                 question: "What is the difference between tracing and logging for AI agents?",
@@ -4101,7 +4143,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to build an AI agent governance framework that satisfies compliance requirements, including policy layers, audit trails, explainability, and regulatory alignment.",
         category: "pillar",
         primaryKeyword: "AI agent governance framework compliance",
-        secondaryKeywords: ["AI governance enterprise", "responsible AI agent framework", "AI agent compliance requirements"],
+        secondaryKeywords: [
+            "AI governance enterprise",
+            "responsible AI agent framework",
+            "AI agent compliance requirements"
+        ],
         publishedAt: "2026-05-05",
         updatedAt: "2026-05-05",
         author,
@@ -4188,7 +4234,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to measure AI agent ROI beyond time-saved metrics, including direct cost reduction, quality improvement measurement, stakeholder communication, and ongoing ROI tracking.",
         category: "educational",
         primaryKeyword: "AI agent ROI measurement business value",
-        secondaryKeywords: ["AI agent business case", "measure AI agent value", "AI agent cost benefit analysis"],
+        secondaryKeywords: [
+            "AI agent business case",
+            "measure AI agent value",
+            "AI agent cost benefit analysis"
+        ],
         publishedAt: "2026-05-05",
         updatedAt: "2026-05-05",
         author,
@@ -4263,7 +4313,11 @@ export const BLOG_POSTS: BlogPost[] = [
             "A practical decision framework for choosing between AI agents and traditional automation, covering use case complexity, the hybrid approach, and migration paths from scripts to agents.",
         category: "educational",
         primaryKeyword: "AI agents vs traditional automation when to use",
-        secondaryKeywords: ["AI agents vs RPA", "AI agents vs workflow automation", "when to use AI agent"],
+        secondaryKeywords: [
+            "AI agents vs RPA",
+            "AI agents vs workflow automation",
+            "when to use AI agent"
+        ],
         publishedAt: "2026-05-12",
         updatedAt: "2026-05-12",
         author,
@@ -4284,7 +4338,8 @@ export const BLOG_POSTS: BlogPost[] = [
                 answer: "Migrate incrementally, not all at once. Start by identifying the steps in your existing automation where human judgment is currently required or where the automation fails most often. Replace those specific steps with AI agent calls while keeping the rest of the automation unchanged. This minimizes risk and provides a clear comparison between automated and agent-powered performance for each step."
             },
             {
-                question: "What is the cost difference between AI agents and traditional automation?",
+                question:
+                    "What is the cost difference between AI agents and traditional automation?",
                 answer: "Traditional automation has near-zero marginal cost per execution—scripts run on existing infrastructure with minimal compute overhead. AI agents incur LLM API costs per execution, typically $0.01-0.50 per interaction depending on model and complexity. The cost difference is offset when agents handle tasks that would otherwise require human labor, where the alternative cost is $5-50 per interaction."
             }
         ],
@@ -4338,13 +4393,20 @@ export const BLOG_POSTS: BlogPost[] = [
             "Learn how to architect multi-tenant AI agent platforms with proper data isolation, credential separation, per-tenant customization, cost allocation, and secure multi-customer operations.",
         category: "technical",
         primaryKeyword: "AI agent multi-tenancy architecture",
-        secondaryKeywords: ["multi-tenant AI agent platform", "AI SaaS multi-tenancy", "AI agent white label"],
+        secondaryKeywords: [
+            "multi-tenant AI agent platform",
+            "AI SaaS multi-tenancy",
+            "AI agent white label"
+        ],
         publishedAt: "2026-05-12",
         updatedAt: "2026-05-12",
         author,
         readMinutes: 13,
         relatedDocs: ["platform/multi-tenancy", "platform/security", "agents/budgets-and-costs"],
-        relatedPosts: ["ai-agent-security-risks-enterprise", "ai-agent-governance-framework-compliance"],
+        relatedPosts: [
+            "ai-agent-security-risks-enterprise",
+            "ai-agent-governance-framework-compliance"
+        ],
         faqItems: [
             {
                 question: "What is the difference between multi-tenancy and multi-instance?",

@@ -189,13 +189,11 @@ export async function GET(request: NextRequest) {
                                 agentId: policy.agent.id,
                                 agentSlug: policy.agent.slug,
                                 agentName: policy.agent.name,
-                                currentSpendUsd:
-                                    Math.round(currentSpend * 100) / 100,
+                                currentSpendUsd: Math.round(currentSpend * 100) / 100,
                                 monthlyLimitUsd: policy.monthlyLimitUsd,
-                                percentUsed:
-                                    Math.round(
-                                        (currentSpend / policy.monthlyLimitUsd) * 100
-                                    )
+                                percentUsed: Math.round(
+                                    (currentSpend / policy.monthlyLimitUsd) * 100
+                                )
                             });
                         }
                     }

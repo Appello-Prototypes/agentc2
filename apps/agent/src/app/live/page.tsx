@@ -591,7 +591,7 @@ export default function LiveDashboardPage() {
                     <div className="relative rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
                         <button
                             onClick={() => setBudgetBannerDismissed(true)}
-                            className="text-muted-foreground hover:text-foreground absolute right-3 top-3 text-sm"
+                            className="text-muted-foreground hover:text-foreground absolute top-3 right-3 text-sm"
                             aria-label="Dismiss"
                         >
                             <HugeiconsIcon icon={icons.cancel!} className="size-4" />

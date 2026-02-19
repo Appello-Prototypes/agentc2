@@ -636,8 +636,11 @@ export class AgentResolver {
             });
         }
 
-        // Append skill instructions to agent instructions
-        let finalInstructions = instructions;
+        // Inject agent identity so the LLM knows its own slug/ID for self-referencing tools
+        let finalInstructions =
+            instructions +
+            `\n\n---\n# Agent Identity\nslug: ${record.slug}\nid: ${record.id}\nname: ${record.name}\n`;
+
         if (skillInstructions) {
             finalInstructions += `\n\n---\n# Skills & Domain Knowledge\n${skillInstructions}`;
         }

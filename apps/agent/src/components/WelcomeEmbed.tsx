@@ -152,10 +152,9 @@ function TermsFooter() {
     );
 }
 
-/** Resolve the CTA destination based on invite-only mode. */
+/** Resolve the CTA destination — returns a relative path to avoid SSR/client origin mismatch. */
 function getCtaHref(path: string) {
-    const origin = typeof window !== "undefined" ? window.location.origin : "https://agentc2.ai";
-    return `${origin}${path}`;
+    return path;
 }
 
 const isInviteOnlyClient =
@@ -539,21 +538,21 @@ function WelcomeNavBar() {
     const ctaLabel = isInviteOnlyClient ? "Join Waitlist" : "Sign up";
 
     return (
-        <nav className="flex items-center justify-between px-4 py-3 sm:px-6">
-            <div className="flex items-center gap-[2px]">
+        <nav className="flex h-[60px] items-center justify-between px-4 sm:px-6">
+            <div className="flex h-9 items-center gap-[2px] pl-12">
                 <span className="text-foreground text-base font-semibold">Agent</span>
                 <AgentC2Logo size={26} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex h-9 items-center gap-2">
                 <a
                     href={loginHref}
-                    className="text-foreground/70 hover:text-foreground inline-flex min-h-[36px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
+                    className="text-foreground/70 hover:text-foreground inline-flex h-9 items-center rounded-full px-4 text-sm font-medium transition-colors"
                 >
                     Log in
                 </a>
                 <a
                     href={ctaHref}
-                    className="inline-flex min-h-[36px] items-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
+                    className="inline-flex h-9 items-center rounded-full bg-white px-4 text-sm font-medium text-black transition-colors hover:bg-white/90"
                 >
                     {ctaLabel}
                 </a>

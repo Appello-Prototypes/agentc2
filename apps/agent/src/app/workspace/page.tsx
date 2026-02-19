@@ -651,7 +651,10 @@ export default function UnifiedChatPage() {
         session?.user?.id
     ]);
 
-    const { messages, setMessages, sendMessage, status, stop } = useChat({ transport });
+    const { messages, setMessages, sendMessage, status, stop } = useChat({
+        transport,
+        id: threadId
+    });
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
     const isBusy = isStreaming || isSubmitted;

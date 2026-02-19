@@ -5319,9 +5319,10 @@ export const asyncInvokeFunction = inngest.createFunction(
                             resolveError.message.includes("budget exceeded"));
                     return {
                         success: false,
-                        error: resolveError instanceof Error
-                            ? resolveError.message
-                            : String(resolveError),
+                        error:
+                            resolveError instanceof Error
+                                ? resolveError.message
+                                : String(resolveError),
                         errorCode: isBudget ? "BUDGET_EXCEEDED" : "RESOLVE_ERROR",
                         durationMs: Date.now() - startTime
                     };
@@ -5338,8 +5339,7 @@ export const asyncInvokeFunction = inngest.createFunction(
 
                 // Enforce input guardrails
                 try {
-                    const { enforceInputGuardrails } =
-                        await import("@repo/mastra/guardrails");
+                    const { enforceInputGuardrails } = await import("@repo/mastra/guardrails");
                     const inputCheck = await enforceInputGuardrails(record.id, input, {
                         runId,
                         tenantId: record.tenantId || undefined
@@ -5355,17 +5355,17 @@ export const asyncInvokeFunction = inngest.createFunction(
                 } catch (guardrailError) {
                     return {
                         success: false,
-                        error: guardrailError instanceof Error
-                            ? guardrailError.message
-                            : String(guardrailError),
+                        error:
+                            guardrailError instanceof Error
+                                ? guardrailError.message
+                                : String(guardrailError),
                         errorCode: "GUARDRAIL_ERROR",
                         durationMs: Date.now() - startTime
                     };
                 }
 
                 try {
-                    const { enforceOutputGuardrails } =
-                        await import("@repo/mastra/guardrails");
+                    const { enforceOutputGuardrails } = await import("@repo/mastra/guardrails");
 
                     const response = await agent.generate(input, {
                         maxSteps: maxSteps ?? record.maxSteps ?? 5
