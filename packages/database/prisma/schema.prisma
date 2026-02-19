@@ -1250,6 +1250,9 @@ model AgentRun {
     // Skills active at run time [{skillId, skillSlug, skillVersion}]
     skillsJson Json?
 
+    // Failure classification for budget/guardrail/error reporting
+    failureReason String? // "BUDGET_EXCEEDED", "GUARDRAIL_BLOCKED", "EXECUTION_ERROR", etc.
+
     // Production channel tracking
     source      String? // "slack", "whatsapp", "voice", "telegram", "elevenlabs", "api", "test"
     triggerType RunTriggerType @default(API)

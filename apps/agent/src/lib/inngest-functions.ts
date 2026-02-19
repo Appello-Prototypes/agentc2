@@ -5212,6 +5212,41 @@ export const asyncInvokeFunction = inngest.createFunction(
         retries: 2,
         concurrency: {
             limit: 5
+        },
+        onFailure: async ({ event, error }) => {
+            const runId = event.data.event.data?.runId;
+            if (!runId) return;
+
+            const errorMessage = error.message || String(error);
+            const isBudgetError =
+                errorMessage.includes("budget exceeded") ||
+                errorMessage.includes("BUDGET_EXCEEDED");
+
+            console.error(
+                `[Inngest] asyncInvoke permanently failed for run ${runId}: ${errorMessage}`
+            );
+
+            await prisma.agentRun.update({
+                where: { id: runId },
+                data: {
+                    status: "FAILED",
+                    outputText: isBudgetError
+                        ? `Budget exceeded: ${errorMessage}`
+                        : `Error: ${errorMessage}`,
+                    completedAt: new Date(),
+                    failureReason: isBudgetError ? "BUDGET_EXCEEDED" : "EXECUTION_ERROR"
+                }
+            });
+
+            await prisma.agentTrace.updateMany({
+                where: { runId },
+                data: {
+                    status: "FAILED",
+                    outputText: isBudgetError
+                        ? `Budget exceeded: ${errorMessage}`
+                        : `Error: ${errorMessage}`
+                }
+            });
         }
     },
     { event: "agent/invoke.async" },
@@ -5239,6 +5274,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                 success: boolean;
                 output?: string;
                 error?: string;
+                errorCode?: string;
                 durationMs: number;
                 promptTokens?: number;
                 completionTokens?: number;
@@ -5261,37 +5297,76 @@ export const asyncInvokeFunction = inngest.createFunction(
                     timestamp: string;
                 }>;
             }> => {
-                const { agentResolver } = await import("@repo/mastra");
+                const { agentResolver, BudgetExceededError } = await import("@repo/mastra");
                 const { calculateCost } = await import("./cost-calculator");
                 const { extractToolCalls } = await import("./run-recorder");
 
-                const { agent, record } = await agentResolver.resolve({
-                    slug: agentSlug,
-                    requestContext: context
-                });
-
-                if (!record) {
-                    throw new Error(`Agent '${agentSlug}' not found`);
-                }
-
                 const startTime = Date.now();
 
-                // Enforce input guardrails
-                const { enforceInputGuardrails, enforceOutputGuardrails } =
-                    await import("@repo/mastra/guardrails");
-                const inputCheck = await enforceInputGuardrails(record.id, input, {
-                    runId,
-                    tenantId: record.tenantId || undefined
-                });
-                if (inputCheck.blocked) {
+                let agent;
+                let record;
+                try {
+                    const resolved = await agentResolver.resolve({
+                        slug: agentSlug,
+                        requestContext: context
+                    });
+                    agent = resolved.agent;
+                    record = resolved.record;
+                } catch (resolveError) {
+                    const isBudget =
+                        resolveError instanceof BudgetExceededError ||
+                        (resolveError instanceof Error &&
+                            resolveError.message.includes("budget exceeded"));
                     return {
                         success: false,
-                        error: `Guardrail blocked: ${inputCheck.violations.map((v) => v.message).join("; ")}`,
+                        error: resolveError instanceof Error
+                            ? resolveError.message
+                            : String(resolveError),
+                        errorCode: isBudget ? "BUDGET_EXCEEDED" : "RESOLVE_ERROR",
+                        durationMs: Date.now() - startTime
+                    };
+                }
+
+                if (!record) {
+                    return {
+                        success: false,
+                        error: `Agent '${agentSlug}' not found`,
+                        errorCode: "AGENT_NOT_FOUND",
+                        durationMs: Date.now() - startTime
+                    };
+                }
+
+                // Enforce input guardrails
+                try {
+                    const { enforceInputGuardrails } =
+                        await import("@repo/mastra/guardrails");
+                    const inputCheck = await enforceInputGuardrails(record.id, input, {
+                        runId,
+                        tenantId: record.tenantId || undefined
+                    });
+                    if (inputCheck.blocked) {
+                        return {
+                            success: false,
+                            error: `Guardrail blocked: ${inputCheck.violations.map((v) => v.message).join("; ")}`,
+                            errorCode: "GUARDRAIL_BLOCKED",
+                            durationMs: Date.now() - startTime
+                        };
+                    }
+                } catch (guardrailError) {
+                    return {
+                        success: false,
+                        error: guardrailError instanceof Error
+                            ? guardrailError.message
+                            : String(guardrailError),
+                        errorCode: "GUARDRAIL_ERROR",
                         durationMs: Date.now() - startTime
                     };
                 }
 
                 try {
+                    const { enforceOutputGuardrails } =
+                        await import("@repo/mastra/guardrails");
+
                     const response = await agent.generate(input, {
                         maxSteps: maxSteps ?? record.maxSteps ?? 5
                     });
@@ -5459,13 +5534,19 @@ export const asyncInvokeFunction = inngest.createFunction(
                     }
                 });
             } else {
+                const isBudget = result.errorCode === "BUDGET_EXCEEDED";
+                const outputMsg = isBudget
+                    ? `Budget exceeded: ${result.error}`
+                    : `Error: ${result.error || "Unknown error"}`;
+
                 await prisma.agentRun.update({
                     where: { id: runId },
                     data: {
                         status: "FAILED",
-                        outputText: `Error: ${result.error || "Unknown error"}`,
+                        outputText: outputMsg,
                         durationMs: result.durationMs,
-                        completedAt: new Date()
+                        completedAt: new Date(),
+                        failureReason: result.errorCode || "EXECUTION_ERROR"
                     }
                 });
 
@@ -5473,7 +5554,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                     where: { runId },
                     data: {
                         status: "FAILED",
-                        outputText: `Error: ${result.error || "Unknown error"}`,
+                        outputText: outputMsg,
                         durationMs: result.durationMs
                     }
                 });
@@ -6655,51 +6736,100 @@ export const agentTriggerFireFunction = inngest.createFunction(
 );
 
 /**
- * Idle Conversation Finalizer
+ * Idle Run Finalizer
  *
  * Scheduled cron function that runs every 15 minutes to finalize
- * conversation runs that have been idle for > 30 minutes.
- * Safety net for cases where the frontend's sendBeacon on tab close fails.
+ * runs that have been stuck in RUNNING/QUEUED for too long.
+ *
+ * Handles two categories:
+ * 1. Conversation runs (turnCount > 0) idle for > 30 minutes -> COMPLETED
+ * 2. Non-conversation runs (turnCount = 0) stuck for > 15 minutes -> FAILED
+ *    (these are async invokes, event triggers, etc. that should finish in seconds)
  */
 const idleConversationFinalizerFunction = inngest.createFunction(
     {
         id: "idle-conversation-finalizer",
         retries: 1
     },
-    { cron: "*/15 * * * *" }, // Every 15 minutes
+    { cron: "*/15 * * * *" },
     async ({ step }) => {
         const thirtyMinutesAgo = new Date(Date.now() - 30 * 60 * 1000);
+        const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000);
 
-        const idleRuns = await step.run("find-idle-runs", async () => {
+        // Part 1: Conversation runs idle for > 30 minutes
+        const idleConversationRuns = await step.run("find-idle-conversation-runs", async () => {
             return prisma.agentRun.findMany({
                 where: {
                     status: "RUNNING",
-                    turnCount: { gt: 0 }, // Only conversation runs, not legacy
+                    turnCount: { gt: 0 },
                     createdAt: { lt: thirtyMinutesAgo }
                 },
                 select: { id: true, agentId: true, turnCount: true }
             });
         });
 
-        if (idleRuns.length === 0) {
-            return { finalized: 0 };
-        }
-
-        let finalized = 0;
-        for (const run of idleRuns) {
-            await step.run(`finalize-${run.id}`, async () => {
+        let conversationFinalized = 0;
+        for (const run of idleConversationRuns) {
+            await step.run(`finalize-conv-${run.id}`, async () => {
                 const { finalizeConversationRun } = await import("@/lib/run-recorder");
                 const success = await finalizeConversationRun(run.id);
-                if (success) finalized++;
+                if (success) conversationFinalized++;
                 return success;
             });
         }
 
+        // Part 2: Non-conversation runs (async invokes, events, etc.) stuck for > 15 minutes
+        const stuckAsyncRuns = await step.run("find-stuck-async-runs", async () => {
+            return prisma.agentRun.findMany({
+                where: {
+                    status: { in: ["RUNNING", "QUEUED"] },
+                    turnCount: 0,
+                    createdAt: { lt: fifteenMinutesAgo }
+                },
+                select: { id: true, agentId: true },
+                take: 200
+            });
+        });
+
+        let asyncFailed = 0;
+        if (stuckAsyncRuns.length > 0) {
+            await step.run("fail-stuck-async-runs", async () => {
+                const result = await prisma.agentRun.updateMany({
+                    where: {
+                        id: { in: stuckAsyncRuns.map((r) => r.id) },
+                        status: { in: ["RUNNING", "QUEUED"] }
+                    },
+                    data: {
+                        status: "FAILED",
+                        outputText: "Run timed out: exceeded maximum execution time",
+                        completedAt: new Date(),
+                        failureReason: "TIMEOUT"
+                    }
+                });
+                asyncFailed = result.count;
+
+                await prisma.agentTrace.updateMany({
+                    where: {
+                        runId: { in: stuckAsyncRuns.map((r) => r.id) },
+                        status: { in: ["RUNNING", "QUEUED"] }
+                    },
+                    data: {
+                        status: "FAILED",
+                        outputText: "Run timed out: exceeded maximum execution time"
+                    }
+                });
+            });
+        }
+
         console.log(
-            `[IdleConversationFinalizer] Finalized ${finalized}/${idleRuns.length} idle conversation runs`
+            `[IdleRunFinalizer] Finalized ${conversationFinalized} conversation runs, failed ${asyncFailed} stuck async runs`
         );
 
-        return { finalized, total: idleRuns.length };
+        return {
+            conversationFinalized,
+            asyncFailed,
+            total: idleConversationRuns.length + stuckAsyncRuns.length
+        };
     }
 );
 

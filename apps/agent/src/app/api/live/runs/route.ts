@@ -102,7 +102,7 @@ export async function GET(request: NextRequest) {
             : { ...baseWhere };
 
         // Fetch runs with agent info
-        const [runs, counts] = await Promise.all([
+        const [runs, counts, budgetAlerts] = await Promise.all([
             prisma.agentRun.findMany({
                 where,
                 include: {
@@ -147,7 +147,63 @@ export async function GET(request: NextRequest) {
                 prisma.agentRun.count({ where: { ...baseWhere, status: "COMPLETED" } }),
                 prisma.agentRun.count({ where: { ...baseWhere, status: "FAILED" } }),
                 prisma.agentRun.count({ where: { ...baseWhere, status: "CANCELLED" } })
-            ])
+            ]),
+            // Check for agents with exceeded budgets
+            (async () => {
+                try {
+                    const startOfMonth = new Date();
+                    startOfMonth.setDate(1);
+                    startOfMonth.setHours(0, 0, 0, 0);
+
+                    const policies = await prisma.budgetPolicy.findMany({
+                        where: { enabled: true, hardLimit: true },
+                        include: {
+                            agent: { select: { id: true, slug: true, name: true } }
+                        }
+                    });
+
+                    const alerts: Array<{
+                        agentId: string;
+                        agentSlug: string;
+                        agentName: string;
+                        currentSpendUsd: number;
+                        monthlyLimitUsd: number;
+                        percentUsed: number;
+                    }> = [];
+
+                    for (const policy of policies) {
+                        if (!policy.monthlyLimitUsd || !policy.agent) continue;
+                        const costEvents = await prisma.costEvent.findMany({
+                            where: {
+                                agentId: policy.agentId ?? undefined,
+                                createdAt: { gte: startOfMonth }
+                            },
+                            select: { costUsd: true }
+                        });
+                        const currentSpend = costEvents.reduce(
+                            (sum, e) => sum + (e.costUsd || 0),
+                            0
+                        );
+                        if (currentSpend >= policy.monthlyLimitUsd) {
+                            alerts.push({
+                                agentId: policy.agent.id,
+                                agentSlug: policy.agent.slug,
+                                agentName: policy.agent.name,
+                                currentSpendUsd:
+                                    Math.round(currentSpend * 100) / 100,
+                                monthlyLimitUsd: policy.monthlyLimitUsd,
+                                percentUsed:
+                                    Math.round(
+                                        (currentSpend / policy.monthlyLimitUsd) * 100
+                                    )
+                            });
+                        }
+                    }
+                    return alerts;
+                } catch {
+                    return [];
+                }
+            })()
         ]);
 
         const [total, queued, running, completed, failed, cancelled] = counts;
@@ -207,7 +263,8 @@ export async function GET(request: NextRequest) {
                 return Array.isArray(run.trace?.stepsJson) ? run.trace.stepsJson.length : 0;
             })(),
             versionId: run.versionId || null,
-            versionNumber: run.versionId ? versionMap.get(run.versionId) || null : null
+            versionNumber: run.versionId ? versionMap.get(run.versionId) || null : null,
+            failureReason: run.failureReason || null
         }));
 
         return NextResponse.json({
@@ -221,6 +278,7 @@ export async function GET(request: NextRequest) {
                 failed,
                 cancelled
             },
+            budgetAlerts,
             pagination: {
                 limit,
                 offset,

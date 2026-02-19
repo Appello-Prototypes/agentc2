@@ -27,6 +27,7 @@ export {
     // Agent resolver for database-driven agents
     AgentResolver,
     agentResolver,
+    BudgetExceededError,
     // Model routing
     classifyComplexity,
     resolveRoutingDecision,

@@ -168,6 +168,7 @@ interface Run {
     stepCount: number;
     versionId: string | null;
     versionNumber: number | null;
+    failureReason: string | null;
 }
 
 interface RunCounts {
@@ -177,6 +178,15 @@ interface RunCounts {
     completed: number;
     failed: number;
     cancelled: number;
+}
+
+interface BudgetAlert {
+    agentId: string;
+    agentSlug: string;
+    agentName: string;
+    currentSpendUsd: number;
+    monthlyLimitUsd: number;
+    percentUsed: number;
 }
 
 // Interfaces re-exported from shared module (imported at top of file)
@@ -215,6 +225,8 @@ export default function LiveDashboardPage() {
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [autoRefresh, setAutoRefresh] = useState(true);
 
+    const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
+    const [budgetBannerDismissed, setBudgetBannerDismissed] = useState(false);
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
     const [runDetail, setRunDetail] = useState<RunDetail | null>(null);
     const [runDetailLoading, setRunDetailLoading] = useState(false);
@@ -304,6 +316,9 @@ export default function LiveDashboardPage() {
                 setRuns(data.runs);
                 setRunCounts(data.counts);
                 setLastUpdatedAt(new Date());
+                if (data.budgetAlerts?.length > 0) {
+                    setBudgetAlerts(data.budgetAlerts);
+                }
             }
         } catch (error) {
             console.error("Failed to fetch runs:", error);
@@ -571,6 +586,73 @@ export default function LiveDashboardPage() {
                         </Button>
                     </div>
                 </div>
+
+                {budgetAlerts.length > 0 && !budgetBannerDismissed && (
+                    <div className="relative rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                        <button
+                            onClick={() => setBudgetBannerDismissed(true)}
+                            className="text-muted-foreground hover:text-foreground absolute right-3 top-3 text-sm"
+                            aria-label="Dismiss"
+                        >
+                            <HugeiconsIcon icon={icons.cancel!} className="size-4" />
+                        </button>
+                        <div className="flex items-start gap-3">
+                            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-amber-500/10">
+                                <HugeiconsIcon
+                                    icon={icons["alert-diamond"]!}
+                                    className="size-5 text-amber-500"
+                                />
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <h3 className="text-sm font-semibold text-amber-600 dark:text-amber-400">
+                                    Budget Exceeded &mdash;{" "}
+                                    {budgetAlerts.length === 1
+                                        ? `${budgetAlerts[0]!.agentName} is paused`
+                                        : `${budgetAlerts.length} agents paused`}
+                                </h3>
+                                <p className="text-muted-foreground mt-0.5 text-xs">
+                                    {budgetAlerts.length === 1
+                                        ? `${budgetAlerts[0]!.agentName} has spent $${budgetAlerts[0]!.currentSpendUsd.toFixed(2)} of its $${budgetAlerts[0]!.monthlyLimitUsd} monthly limit. All new runs will fail until the budget is increased.`
+                                        : "The following agents have exceeded their monthly budget limits. New runs will fail until budgets are increased."}
+                                </p>
+                                {budgetAlerts.length > 1 && (
+                                    <div className="mt-2 space-y-1">
+                                        {budgetAlerts.map((alert) => (
+                                            <div
+                                                key={alert.agentId}
+                                                className="flex items-center gap-2 text-xs"
+                                            >
+                                                <span className="font-medium">
+                                                    {alert.agentName}
+                                                </span>
+                                                <span className="text-muted-foreground">
+                                                    ${alert.currentSpendUsd.toFixed(2)} / $
+                                                    {alert.monthlyLimitUsd}
+                                                </span>
+                                                <a
+                                                    href={`/agents/${alert.agentSlug}/costs`}
+                                                    className="text-primary hover:underline"
+                                                >
+                                                    Manage
+                                                </a>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                    {budgetAlerts.length === 1 && (
+                                        <a
+                                            href={`/agents/${budgetAlerts[0]!.agentSlug}/costs`}
+                                            className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors"
+                                        >
+                                            Increase Budget
+                                        </a>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-8">
                     <Card>
@@ -1036,13 +1118,24 @@ export default function LiveDashboardPage() {
                                                                     )}
                                                                 </TableCell>
                                                                 <TableCell>
-                                                                    <Badge
-                                                                        variant={getStatusBadgeVariant(
-                                                                            run.status
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Badge
+                                                                            variant={getStatusBadgeVariant(
+                                                                                run.status
+                                                                            )}
+                                                                        >
+                                                                            {run.status}
+                                                                        </Badge>
+                                                                        {run.failureReason ===
+                                                                            "BUDGET_EXCEEDED" && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                                            >
+                                                                                Budget
+                                                                            </Badge>
                                                                         )}
-                                                                    >
-                                                                        {run.status}
-                                                                    </Badge>
+                                                                    </div>
                                                                 </TableCell>
                                                                 <TableCell>
                                                                     {run.source ? (
