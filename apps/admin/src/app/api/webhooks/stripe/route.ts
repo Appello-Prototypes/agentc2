@@ -18,7 +18,6 @@ function computePeriodDates(sub: Stripe.Subscription): {
     const baseTs = anchor || startDate;
     const periodStart = new Date(baseTs * 1000);
 
-    // Find the current period end by stepping forward from anchor in monthly intervals
     const end = new Date(periodStart);
     while (end.getTime() / 1000 <= now) {
         end.setMonth(end.getMonth() + 1);
@@ -31,8 +30,11 @@ function computePeriodDates(sub: Stripe.Subscription): {
 /**
  * POST /api/webhooks/stripe
  *
- * Stripe webhook handler. Processes subscription lifecycle events
+ * Platform-level Stripe webhook handler. Processes subscription lifecycle events
  * to keep OrgSubscription records in sync with Stripe.
+ *
+ * Lives in the admin app because webhook secrets are a platform concern,
+ * not something individual tenants should configure.
  *
  * Events handled:
  * - checkout.session.completed  → Create OrgSubscription

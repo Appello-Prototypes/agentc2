@@ -120,6 +120,9 @@ export interface ResolveOptions {
      *  these substrings. System tools (campaign-write-*, agent-*, etc.) are
      *  always included. Use for campaign tasks to reduce token overhead. */
     toolFilter?: string[];
+    /** Override the agent's configured model. Used by model routing to swap
+     *  to a fast or escalation model based on input complexity. */
+    modelOverride?: { provider: string; name: string };
 }
 
 /**
@@ -724,13 +727,26 @@ export class AgentResolver {
         const scorers = getScorersByNames(record.scorers);
 
         // Resolve model — prefer org-scoped API key, fall back to string-based model router
-        const modelName = resolveModelName(record.modelProvider, record.modelName);
-        const resolvedModel = await resolveModelForOrg(
-            record.modelProvider,
-            modelName,
-            organizationId
-        );
-        const model = resolvedModel ?? `${record.modelProvider}/${modelName}`;
+        // When modelOverride is provided (from model routing), use that instead of the record's model
+        const modelOverride = this.currentResolveOptions?.modelOverride;
+        let model;
+        if (modelOverride) {
+            const overrideName = resolveModelName(modelOverride.provider, modelOverride.name);
+            const resolvedOverride = await resolveModelForOrg(
+                modelOverride.provider,
+                overrideName,
+                organizationId
+            );
+            model = resolvedOverride ?? `${modelOverride.provider}/${overrideName}`;
+        } else {
+            const modelName = resolveModelName(record.modelProvider, record.modelName);
+            const resolvedModel = await resolveModelForOrg(
+                record.modelProvider,
+                modelName,
+                organizationId
+            );
+            model = resolvedModel ?? `${record.modelProvider}/${modelName}`;
+        }
 
         const defaultOptions = this.buildDefaultOptions(record);
 

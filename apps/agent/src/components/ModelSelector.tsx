@@ -9,6 +9,7 @@ interface ModelOption {
     name: string;
     displayName: string;
     category?: string;
+    pricing?: { inputPer1M: number; outputPer1M: number };
 }
 
 export interface ModelOverride {
@@ -58,11 +59,13 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
                                     provider: string;
                                     displayName: string;
                                     category?: string;
+                                    pricing?: { inputPer1M: number; outputPer1M: number };
                                 }) => ({
                                     provider: m.provider,
                                     name: m.id,
                                     displayName: m.displayName,
-                                    category: m.category
+                                    category: m.category,
+                                    pricing: m.pricing
                                 })
                             )
                         );
@@ -151,7 +154,15 @@ export function ModelSelector({ value, agentDefault, onChange, disabled }: Model
                                 </div>
                                 {providerModels.map((m) => (
                                     <SelectItem key={m.name} value={m.name}>
-                                        {m.displayName}
+                                        <div className="flex w-full items-center justify-between gap-3">
+                                            <span>{m.displayName}</span>
+                                            {m.pricing && (
+                                                <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                                                    ${m.pricing.inputPer1M} / $
+                                                    {m.pricing.outputPer1M}
+                                                </span>
+                                            )}
+                                        </div>
                                     </SelectItem>
                                 ))}
                             </div>

@@ -72,8 +72,6 @@ interface UserBudgetData {
 
 interface UsageData {
     currentMonthBilledUsd: number;
-    currentMonthPlatformCostUsd: number;
-    margin: number;
     byAgent: Record<string, number>;
     byUser: Record<string, number>;
     period: { from: string; to: string };
@@ -636,30 +634,12 @@ export default function BillingBudgetPage() {
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div className="rounded-lg border p-4">
-                                <div className="text-muted-foreground text-xs font-medium uppercase">
-                                    Total Billed
-                                </div>
-                                <div className="mt-1 text-2xl font-bold">
-                                    ${state.usage.currentMonthBilledUsd.toFixed(2)}
-                                </div>
+                        <div className="rounded-lg border p-4">
+                            <div className="text-muted-foreground text-xs font-medium uppercase">
+                                Total Billed
                             </div>
-                            <div className="rounded-lg border p-4">
-                                <div className="text-muted-foreground text-xs font-medium uppercase">
-                                    Platform Cost
-                                </div>
-                                <div className="mt-1 text-2xl font-bold">
-                                    ${state.usage.currentMonthPlatformCostUsd.toFixed(2)}
-                                </div>
-                            </div>
-                            <div className="rounded-lg border p-4">
-                                <div className="text-muted-foreground text-xs font-medium uppercase">
-                                    Margin
-                                </div>
-                                <div className="mt-1 text-2xl font-bold text-green-600">
-                                    ${state.usage.margin.toFixed(2)}
-                                </div>
+                            <div className="mt-1 text-2xl font-bold">
+                                ${state.usage.currentMonthBilledUsd.toFixed(2)}
                             </div>
                         </div>
 

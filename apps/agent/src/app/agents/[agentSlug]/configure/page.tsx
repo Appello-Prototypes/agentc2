@@ -130,6 +130,7 @@ interface ModelInfo {
     name: string;
     displayName: string;
     category: string;
+    pricing?: { inputPer1M: number; outputPer1M: number };
 }
 
 interface ToolInfo {
@@ -152,6 +153,12 @@ interface ScorerInfo {
     id: string;
     name: string;
     description: string;
+}
+
+function formatPricing(pricing?: { inputPer1M: number; outputPer1M: number }): string | null {
+    if (!pricing) return null;
+    const fmt = (v: number) => (v < 1 ? `$${v}` : `$${v}`);
+    return `${fmt(pricing.inputPer1M)} / ${fmt(pricing.outputPer1M)}`;
 }
 
 export default function ConfigurePage() {
@@ -240,6 +247,16 @@ export default function ConfigurePage() {
     >({});
     const [aiProviderStatusLoading, setAiProviderStatusLoading] = useState(true);
 
+    // Budget state
+    const [budgetData, setBudgetData] = useState<{
+        enabled: boolean;
+        monthlyLimitUsd: number | null;
+        alertAtPct: number;
+        hardLimit: boolean;
+        currentMonthCost: number;
+        percentUsed: number;
+    } | null>(null);
+
     // Form state
     const [formData, setFormData] = useState<Partial<Agent>>({});
     const [hasChanges, setHasChanges] = useState(false);
@@ -262,6 +279,29 @@ export default function ConfigurePage() {
         }
     }, []);
 
+    // Fetch budget policy and current month usage
+    const fetchBudget = useCallback(async (agentId: string) => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/agents/${agentId}/budget`, {
+                credentials: "include"
+            });
+            if (!res.ok) return;
+            const data = await res.json();
+            if (data.success) {
+                setBudgetData({
+                    enabled: data.budgetPolicy?.enabled ?? false,
+                    monthlyLimitUsd: data.budgetPolicy?.monthlyLimitUsd ?? null,
+                    alertAtPct: data.budgetPolicy?.alertAtPct ?? 80,
+                    hardLimit: data.budgetPolicy?.hardLimit ?? false,
+                    currentMonthCost: data.usage?.currentMonthCost ?? 0,
+                    percentUsed: data.usage?.percentUsed ?? 0
+                });
+            }
+        } catch {
+            // Budget fetch is best-effort
+        }
+    }, []);
+
     // Fetch models separately so dropdowns load instantly (not blocked by MCP)
     const fetchModels = useCallback(async () => {
         try {
@@ -278,7 +318,22 @@ export default function ConfigurePage() {
                     "open-source": 3,
                     legacy: 4
                 };
-                const sorted = (data.models as ModelInfo[]).sort((a, b) => {
+                const mapped: ModelInfo[] = data.models.map(
+                    (m: {
+                        id: string;
+                        provider: string;
+                        displayName: string;
+                        category?: string;
+                        pricing?: { inputPer1M: number; outputPer1M: number };
+                    }) => ({
+                        provider: m.provider,
+                        name: m.id,
+                        displayName: m.displayName,
+                        category: m.category || "flagship",
+                        pricing: m.pricing
+                    })
+                );
+                const sorted = mapped.sort((a, b) => {
                     if (a.provider !== b.provider) return 0;
                     return (CATEGORY_ORDER[a.category] ?? 99) - (CATEGORY_ORDER[b.category] ?? 99);
                 });
@@ -603,15 +658,11 @@ export default function ConfigurePage() {
                 typeof modelConfig?.toolChoice === "string" ? modelConfig.toolChoice : "auto"
             );
 
-            // Extract routing config
+            // Routing config state is deferred to a useEffect that depends on
+            // availableModels being loaded (see below). Set only the mode here
+            // so the UI can render the correct tab state immediately.
             const rc = agentData.routingConfig as RoutingConfig | null;
             setRoutingMode(rc?.mode || "locked");
-            setFastModelProvider(rc?.fastModel?.provider || "openai");
-            setFastModelName(rc?.fastModel?.name || "gpt-4o-mini");
-            setEscalationModelProvider(rc?.escalationModel?.provider || "anthropic");
-            setEscalationModelName(rc?.escalationModel?.name || "");
-            setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
-            setBudgetAwareRouting(rc?.budgetAware ?? false);
 
             setAgent(transformedAgent);
             setFormData(transformedAgent);
@@ -638,13 +689,28 @@ export default function ConfigurePage() {
         fetchAiProviderStatus
     ]);
 
-    // Fetch scorecard when agent is loaded
+    // Fetch scorecard and budget when agent is loaded
     useEffect(() => {
         if (agent) {
             fetchScorecard();
             fetchScorecardTemplates();
+            fetchBudget(agent.id);
         }
-    }, [agent, fetchScorecard, fetchScorecardTemplates]);
+    }, [agent, fetchScorecard, fetchScorecardTemplates, fetchBudget]);
+
+    // Initialize routing config state once BOTH the agent AND models are loaded.
+    // This prevents the escalation/fast model dropdowns from showing raw IDs
+    // when the routing config loads before the model list is fetched.
+    useEffect(() => {
+        if (!agent || modelsLoading) return;
+        const rc = agent.routingConfig as RoutingConfig | null;
+        setFastModelProvider(rc?.fastModel?.provider || "openai");
+        setFastModelName(rc?.fastModel?.name || "gpt-4o-mini");
+        setEscalationModelProvider(rc?.escalationModel?.provider || "anthropic");
+        setEscalationModelName(rc?.escalationModel?.name || "");
+        setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
+        setBudgetAwareRouting(rc?.budgetAware ?? false);
+    }, [agent, modelsLoading]);
 
     // Group tools: built-in by category, MCP by server, federation by org
     const groupTools = (tools: ToolInfo[]): ToolGroup[] => {
@@ -1343,6 +1409,81 @@ export default function ConfigurePage() {
 
                 {/* Model Tab */}
                 <TabsContent value="model">
+                    {/* Budget Summary */}
+                    <Card className="mb-6">
+                        <CardContent className="py-4">
+                            {budgetData?.enabled && budgetData.monthlyLimitUsd ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-sm font-medium">
+                                                Monthly Budget
+                                            </span>
+                                            {budgetData.hardLimit && (
+                                                <Badge variant="outline" className="text-xs">
+                                                    Hard limit
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <a
+                                            href={`${getApiBase().replace(/\/agent$/, "")}/agent/agents/${agentSlug}/costs`}
+                                            className="text-primary text-sm hover:underline"
+                                        >
+                                            Manage Budget
+                                        </a>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <div className="flex items-baseline justify-between text-sm">
+                                            <span>
+                                                ${budgetData.currentMonthCost.toFixed(2)} / $
+                                                {budgetData.monthlyLimitUsd.toFixed(2)}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {budgetData.percentUsed.toFixed(0)}% used
+                                            </span>
+                                        </div>
+                                        <div className="bg-muted h-2 w-full overflow-hidden rounded-full">
+                                            <div
+                                                className={`h-full rounded-full transition-all ${
+                                                    budgetData.percentUsed >= 90
+                                                        ? "bg-destructive"
+                                                        : budgetData.percentUsed >=
+                                                            budgetData.alertAtPct
+                                                          ? "bg-amber-500"
+                                                          : "bg-primary"
+                                                }`}
+                                                style={{
+                                                    width: `${Math.min(budgetData.percentUsed, 100)}%`
+                                                }}
+                                            />
+                                        </div>
+                                        <p className="text-muted-foreground text-xs">
+                                            Alert at {budgetData.alertAtPct}%
+                                            {budgetData.hardLimit
+                                                ? " · Agent stops when budget exceeded"
+                                                : ""}
+                                        </p>
+                                    </div>
+                                </div>
+                            ) : (
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <span className="text-sm font-medium">Monthly Budget</span>
+                                        <p className="text-muted-foreground text-xs">
+                                            No budget limit configured
+                                        </p>
+                                    </div>
+                                    <a
+                                        href={`${getApiBase().replace(/\/agent$/, "")}/agent/agents/${agentSlug}/costs`}
+                                        className="text-primary text-sm hover:underline"
+                                    >
+                                        Set Budget
+                                    </a>
+                                </div>
+                            )}
+                        </CardContent>
+                    </Card>
+
                     <Card>
                         <CardHeader>
                             <CardTitle>Model Configuration</CardTitle>
@@ -1465,7 +1606,16 @@ export default function ConfigurePage() {
                                                                     key={m.name}
                                                                     value={m.name}
                                                                 >
-                                                                    {m.displayName}
+                                                                    <div className="flex w-full items-center justify-between gap-3">
+                                                                        <span>{m.displayName}</span>
+                                                                        {m.pricing && (
+                                                                            <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                                                                                {formatPricing(
+                                                                                    m.pricing
+                                                                                )}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </SelectItem>
                                                             ))}
                                                         </SelectGroup>
@@ -1473,6 +1623,9 @@ export default function ConfigurePage() {
                                             })()}
                                         </SelectContent>
                                     </Select>
+                                    <p className="text-muted-foreground text-[10px]">
+                                        Costs shown as input / output per 1M tokens
+                                    </p>
                                 </div>
                             </div>
 
@@ -1986,7 +2139,20 @@ export default function ConfigurePage() {
                                                                                     key={m.name}
                                                                                     value={m.name}
                                                                                 >
-                                                                                    {m.displayName}
+                                                                                    <div className="flex w-full items-center justify-between gap-3">
+                                                                                        <span>
+                                                                                            {
+                                                                                                m.displayName
+                                                                                            }
+                                                                                        </span>
+                                                                                        {m.pricing && (
+                                                                                            <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                                                                                                {formatPricing(
+                                                                                                    m.pricing
+                                                                                                )}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </SelectItem>
                                                                             ))}
                                                                     </SelectGroup>
@@ -2143,7 +2309,20 @@ export default function ConfigurePage() {
                                                                                     key={m.name}
                                                                                     value={m.name}
                                                                                 >
-                                                                                    {m.displayName}
+                                                                                    <div className="flex w-full items-center justify-between gap-3">
+                                                                                        <span>
+                                                                                            {
+                                                                                                m.displayName
+                                                                                            }
+                                                                                        </span>
+                                                                                        {m.pricing && (
+                                                                                            <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                                                                                                {formatPricing(
+                                                                                                    m.pricing
+                                                                                                )}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
                                                                                 </SelectItem>
                                                                             ))}
                                                                     </SelectGroup>

@@ -13,6 +13,7 @@ import {
     type RoutingConfig,
     type RoutingDecision
 } from "@repo/mastra/agents";
+import { budgetEnforcement } from "@repo/mastra";
 import { getScorersByNames } from "@repo/mastra/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
@@ -252,6 +253,91 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
         timing.orgResolve = Math.round(performance.now() - tOrg);
 
+        // ── Model Routing (pre-resolve) ─────────────────────────────────────
+        // Extract last user message text for routing classification BEFORE
+        // resolving the agent, so we can pass a modelOverride to resolve().
+        let routingDecision: RoutingDecision | null = null;
+        let modelOverrideForResolve: { provider: string; name: string } | undefined;
+
+        if (modelOverride && modelOverride.provider && modelOverride.name) {
+            modelOverrideForResolve = {
+                provider: modelOverride.provider,
+                name: modelOverride.name
+            };
+            console.log(
+                `[Agent Chat] Explicit model override: ${modelOverride.provider}/${modelOverride.name}`
+            );
+        } else {
+            const routingRecord = await prisma.agent.findFirst({
+                where: { OR: [{ slug: id }, { id }] },
+                select: {
+                    id: true,
+                    routingConfig: true,
+                    modelProvider: true,
+                    modelName: true,
+                    budgetPolicy: { select: { enabled: true, alertAtPct: true } }
+                }
+            });
+
+            if (routingRecord?.routingConfig) {
+                const rc = routingRecord.routingConfig as unknown as RoutingConfig;
+                if (rc.mode === "auto") {
+                    const lastMsg = messages
+                        ?.filter((m: { role: string }) => m.role === "user")
+                        .pop() as
+                        | { content?: string; parts?: Array<{ type: string; text?: string }> }
+                        | undefined;
+                    let inputForRouting = "";
+                    if (lastMsg?.parts && Array.isArray(lastMsg.parts)) {
+                        for (const part of lastMsg.parts) {
+                            if (part.type === "text" && part.text) inputForRouting = part.text;
+                        }
+                    } else if (lastMsg?.content) {
+                        inputForRouting = lastMsg.content;
+                    }
+
+                    if (inputForRouting) {
+                        let budgetExceeded = false;
+                        if (rc.budgetAware) {
+                            try {
+                                const budgetResult = await budgetEnforcement.check({
+                                    agentId: routingRecord.id,
+                                    userId: resourceId !== "test-user" ? resourceId : undefined,
+                                    organizationId: resolvedOrgId
+                                });
+                                const alertPct = routingRecord.budgetPolicy?.enabled
+                                    ? (routingRecord.budgetPolicy.alertAtPct ?? 80)
+                                    : 80;
+                                budgetExceeded = budgetResult.warnings.some(
+                                    (w) => w.level === "agent" && w.percentUsed >= alertPct
+                                );
+                            } catch (e) {
+                                console.warn("[Agent Chat] Budget check for routing failed:", e);
+                            }
+                        }
+
+                        routingDecision = resolveRoutingDecision(
+                            rc,
+                            {
+                                provider: routingRecord.modelProvider,
+                                name: routingRecord.modelName
+                            },
+                            inputForRouting,
+                            budgetExceeded
+                        );
+
+                        if (routingDecision && routingDecision.tier !== "PRIMARY") {
+                            modelOverrideForResolve = routingDecision.model;
+                        }
+
+                        console.log(
+                            `[Agent Chat] Model routing: ${routingDecision?.tier || "PRIMARY"} → ${modelOverrideForResolve ? `${modelOverrideForResolve.provider}/${modelOverrideForResolve.name}` : "primary"} (${routingDecision?.reason || "default"})`
+                        );
+                    }
+                }
+            }
+        }
+
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
         // This is the same path used by production channels (Slack, WhatsApp, Voice)
         const tResolve = performance.now();
@@ -260,55 +346,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             await agentResolver.resolve({
                 slug: id,
                 requestContext: enrichedRequestContext,
-                threadId: userThreadId
+                threadId: userThreadId,
+                modelOverride: modelOverrideForResolve
             });
         timing.agentResolve = Math.round(performance.now() - tResolve);
 
         console.log(
             `[Agent Chat] Received slug param: '${id}', resolved agent: '${record?.slug || id}' (${record?.name || "fallback"}) from ${source} (mode: ${runSource})`
         );
-
-        // ── Model Routing ───────────────────────────────────────────────────
-        // Note: Model routing and interaction mode previously tried to reconstruct
-        // the Agent via `new AgentClass(...)`, but Mastra's Agent doesn't expose its
-        // internal config. Reconstructing loses tools, memory, and skills.
-        // Instead, we log the routing decision and use the resolved agent as-is.
-        // The resolved agent from agentResolver already has the correct model.
-        let routingDecision: RoutingDecision | null = null;
-
-        if (modelOverride && modelOverride.provider && modelOverride.name) {
-            console.log(
-                `[Agent Chat] Model override requested: ${modelOverride.provider}/${modelOverride.name} (using resolved agent's model instead — override requires agent rebuild)`
-            );
-        } else if (record) {
-            const routingConfig = record.routingConfig as RoutingConfig | null;
-            if (routingConfig?.mode === "auto") {
-                const lastMsg = messages
-                    ?.filter((m: { role: string }) => m.role === "user")
-                    .pop() as
-                    | { content?: string; parts?: Array<{ type: string; text?: string }> }
-                    | undefined;
-                let inputForRouting = "";
-                if (lastMsg?.parts && Array.isArray(lastMsg.parts)) {
-                    for (const part of lastMsg.parts) {
-                        if (part.type === "text" && part.text) inputForRouting = part.text;
-                    }
-                } else if (lastMsg?.content) {
-                    inputForRouting = lastMsg.content;
-                }
-
-                if (inputForRouting) {
-                    routingDecision = resolveRoutingDecision(
-                        routingConfig,
-                        { provider: record.modelProvider, name: record.modelName },
-                        inputForRouting
-                    );
-                    console.log(
-                        `[Agent Chat] Model routing decision: ${routingDecision?.tier || "PRIMARY"} (${routingDecision?.reason || "default"})`
-                    );
-                }
-            }
-        }
 
         // Extract the last user message with all content parts (text + files/images)
         interface UserMessagePart {

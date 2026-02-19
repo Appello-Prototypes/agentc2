@@ -124,7 +124,6 @@ export async function GET(
                       overageEnabled: subscription.plan.overageEnabled,
                       overageSpendLimitUsd: subscription.overageSpendLimitUsd,
                       overageAccruedUsd: subscription.overageAccruedUsd,
-                      markupMultiplier: subscription.plan.markupMultiplier,
                       currentPeriodStart: subscription.currentPeriodStart,
                       currentPeriodEnd: subscription.currentPeriodEnd,
                       seatCount: subscription.seatCount,
@@ -159,8 +158,6 @@ export async function GET(
             })),
             usage: {
                 currentMonthBilledUsd: Math.round(totalCostUsd * 100) / 100,
-                currentMonthPlatformCostUsd: Math.round(totalPlatformCostUsd * 100) / 100,
-                margin: Math.round((totalCostUsd - totalPlatformCostUsd) * 100) / 100,
                 byAgent,
                 byUser,
                 period: {

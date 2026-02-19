@@ -40,9 +40,18 @@ agentc2.ai {
         }
     }
 
+    # SEO files — route to frontend app (sitemap.xml, robots.txt)
+    @seo_files {
+        path /sitemap.xml /robots.txt
+    }
+
+    handle @seo_files {
+        reverse_proxy localhost:3000
+    }
+
     # Public legal pages — route to frontend app (no auth required)
     @public_legal {
-        path /terms /privacy /security
+        path /terms /privacy /security /about
     }
 
     handle @public_legal {
