@@ -42,33 +42,33 @@ The platform automatically:
 
 1. **Discovers MCP tools** — Finds `hubspot-get-contact`, `hubspot-create-deal`, `hubspot-update-company`, etc.
 2. **Generates skill** — Creates a skill with:
-   - Slug: `hubspot-integration` (or `hubspot-{workspace-slug}`)
-   - Instructions: "How to use HubSpot CRM API: Use hubspot-get-contact to retrieve contact details, hubspot-create-deal to create deals..."
-   - Tools: All HubSpot MCP tools attached
-   - Type: `SYSTEM`
+    - Slug: `hubspot-integration` (or `hubspot-{workspace-slug}`)
+    - Instructions: "How to use HubSpot CRM API: Use hubspot-get-contact to retrieve contact details, hubspot-create-deal to create deals..."
+    - Tools: All HubSpot MCP tools attached
+    - Type: `SYSTEM`
 3. **Makes available** — Skill appears in your workspace and can be attached to agents
 
 ## MCP-to-skill mapping
 
 Each MCP server integration maps to one or more skills:
 
-| Integration | MCP Server | Auto-Generated Skill | Tools Included |
-|-------------|------------|----------------------|----------------|
-| **HubSpot** | `hubspot` | `hubspot-integration` | `hubspot-get-contact`, `hubspot-create-deal`, `hubspot-update-company`, etc. |
-| **Slack** | `slack` | `slack-integration` | `slack-send-message`, `slack-list-channels`, `slack-search-messages`, etc. |
-| **GitHub** | `github` | `github-integration` | `github-get-repo`, `github-create-issue`, `github-list-pulls`, etc. |
-| **Jira** | `jira` | `jira-integration` | `jira-get-issue`, `jira-create-issue`, `jira-update-sprint`, etc. |
-| **Firecrawl** | `firecrawl` | `firecrawl-integration` | `firecrawl-scrape-url`, `firecrawl-search`, etc. |
-| **Playwright** | `playwright` | `playwright-integration` | `playwright-navigate`, `playwright-click`, `playwright-screenshot`, etc. |
+| Integration    | MCP Server   | Auto-Generated Skill     | Tools Included                                                               |
+| -------------- | ------------ | ------------------------ | ---------------------------------------------------------------------------- |
+| **HubSpot**    | `hubspot`    | `hubspot-integration`    | `hubspot-get-contact`, `hubspot-create-deal`, `hubspot-update-company`, etc. |
+| **Slack**      | `slack`      | `slack-integration`      | `slack-send-message`, `slack-list-channels`, `slack-search-messages`, etc.   |
+| **GitHub**     | `github`     | `github-integration`     | `github-get-repo`, `github-create-issue`, `github-list-pulls`, etc.          |
+| **Jira**       | `jira`       | `jira-integration`       | `jira-get-issue`, `jira-create-issue`, `jira-update-sprint`, etc.            |
+| **Firecrawl**  | `firecrawl`  | `firecrawl-integration`  | `firecrawl-scrape-url`, `firecrawl-search`, etc.                             |
+| **Playwright** | `playwright` | `playwright-integration` | `playwright-navigate`, `playwright-click`, `playwright-screenshot`, etc.     |
 
 ### Multi-skill generation
 
 Some integrations generate multiple skills for different use cases:
 
-| Integration | Skills Generated | Purpose |
-|-------------|------------------|---------|
+| Integration   | Skills Generated                          | Purpose                                          |
+| ------------- | ----------------------------------------- | ------------------------------------------------ |
 | **Microsoft** | `microsoft-outlook`, `microsoft-calendar` | Separate skills for mail and calendar operations |
-| **Google** | `google-drive`, `google-gmail` | Separate skills for drive and Gmail operations |
+| **Google**    | `google-drive`, `google-gmail`            | Separate skills for drive and Gmail operations   |
 
 ## Skill structure
 
@@ -76,17 +76,17 @@ Auto-generated skills follow a consistent structure:
 
 ```json
 {
-  "id": "skill_hubspot_abc123",
-  "slug": "hubspot-integration",
-  "name": "HubSpot Integration",
-  "description": "HubSpot CRM integration with contact, company, and deal management",
-  "instructions": "How to use HubSpot CRM API:\n\n1. **Contacts**: Use hubspot-get-contact to retrieve contact details by ID or email\n2. **Companies**: Use hubspot-get-company to retrieve company information\n3. **Deals**: Use hubspot-create-deal to create deals, hubspot-update-deal to update pipeline stages\n4. **Search**: Use hubspot-search-contacts to find contacts by criteria\n\nBest practices:\n- Always verify contact exists before updating\n- Use batch operations for multiple updates\n- Respect rate limits (100 requests/second)",
-  "examples": "Example: Get contact by email\n\nTool: hubspot-get-contact\nArgs: { \"email\": \"user@example.com\" }\n\nExample: Create deal\n\nTool: hubspot-create-deal\nArgs: { \"name\": \"Q4 Enterprise Deal\", \"amount\": 50000, \"stage\": \"qualified\" }",
-  "category": "crm",
-  "tags": ["hubspot", "crm", "integration", "auto-generated"],
-  "type": "SYSTEM",
-  "workspaceId": "ws_abc123",
-  "version": 1
+    "id": "skill_hubspot_abc123",
+    "slug": "hubspot-integration",
+    "name": "HubSpot Integration",
+    "description": "HubSpot CRM integration with contact, company, and deal management",
+    "instructions": "How to use HubSpot CRM API:\n\n1. **Contacts**: Use hubspot-get-contact to retrieve contact details by ID or email\n2. **Companies**: Use hubspot-get-company to retrieve company information\n3. **Deals**: Use hubspot-create-deal to create deals, hubspot-update-deal to update pipeline stages\n4. **Search**: Use hubspot-search-contacts to find contacts by criteria\n\nBest practices:\n- Always verify contact exists before updating\n- Use batch operations for multiple updates\n- Respect rate limits (100 requests/second)",
+    "examples": "Example: Get contact by email\n\nTool: hubspot-get-contact\nArgs: { \"email\": \"user@example.com\" }\n\nExample: Create deal\n\nTool: hubspot-create-deal\nArgs: { \"name\": \"Q4 Enterprise Deal\", \"amount\": 50000, \"stage\": \"qualified\" }",
+    "category": "crm",
+    "tags": ["hubspot", "crm", "integration", "auto-generated"],
+    "type": "SYSTEM",
+    "workspaceId": "ws_abc123",
+    "version": 1
 }
 ```
 
@@ -119,7 +119,8 @@ Before auto-generated skills are made available, they undergo governance checks:
 - **Type marking** — Mark as `SYSTEM` type
 
 <Callout type="warning">
-If governance checks fail, the skill is not created and an error is logged. Check integration logs for details.
+    If governance checks fail, the skill is not created and an error is logged. Check integration
+    logs for details.
 </Callout>
 
 ## Using auto-generated skills
@@ -173,7 +174,8 @@ curl -X POST https://agentc2.ai/agent/api/skills/hubspot-integration/documents \
 ```
 
 <Callout type="info">
-Customizations to auto-generated skills create new versions. The original auto-generated version is preserved for rollback.
+    Customizations to auto-generated skills create new versions. The original auto-generated version
+    is preserved for rollback.
 </Callout>
 
 ## Skill refresh
@@ -230,7 +232,8 @@ Auto-generated skills have some limitations:
 4. **SYSTEM type** — Protected from deletion, but can be customized
 
 <Callout type="tip">
-For complex integration use cases, consider creating custom USER skills that combine auto-generated skills with your own instructions and documents.
+    For complex integration use cases, consider creating custom USER skills that combine
+    auto-generated skills with your own instructions and documents.
 </Callout>
 
 ## Next steps

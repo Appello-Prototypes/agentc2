@@ -370,7 +370,7 @@ Each simulated conversation is automatically scored by all configured scorers. T
 Identify patterns in conversations that scored poorly:
 
 ```bash
-# Get runs with quality score < 0.6
+# Get runs with quality score below 0.6
 curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?sessionId=sim_abc123&minQualityScore=0&maxQualityScore=0.6" \
   -H "Authorization: Bearer $TOKEN"
 ```

@@ -4,7 +4,8 @@ description: "Complete API reference for campaign CRUD operations, missions, tas
 section: "api-reference"
 order: 7
 primaryKeyword: "campaigns API reference"
-relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
+relatedSlugs:
+    ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
 pageType: "reference"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -34,11 +35,11 @@ List all campaigns for the authenticated user. Returns campaigns with their stat
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                    |
-| --------- | ------ | ------- | ------------------------------ |
+| Parameter | Type   | Default | Description                                                                        |
+| --------- | ------ | ------- | ---------------------------------------------------------------------------------- |
 | `status`  | string | —       | Filter by status (`"PLANNING"`, `"READY"`, `"RUNNING"`, `"COMPLETED"`, `"FAILED"`) |
-| `limit`   | number | `50`    | Maximum number of campaigns    |
-| `offset`  | number | `0`     | Number of campaigns to skip    |
+| `limit`   | number | `50`    | Maximum number of campaigns                                                        |
+| `offset`  | number | `0`     | Number of campaigns to skip                                                        |
 
 ### Example Request
 
@@ -83,10 +84,10 @@ curl "https://agentc2.ai/agent/api/campaigns?status=RUNNING&limit=10" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Campaign
 
@@ -96,13 +97,13 @@ Create a new campaign with specified intent and configuration. Campaigns orchest
 
 ### Request Body
 
-| Field         | Type   | Required | Description                    |
-| ------------- | ------ | -------- | ------------------------------ |
-| `name`        | string | ✅ Yes   | Display name for the campaign   |
-| `description` | string | ❌ No    | Human-readable description      |
-| `intent`      | string | ✅ Yes   | Campaign goal or objective      |
+| Field         | Type   | Required | Description                            |
+| ------------- | ------ | -------- | -------------------------------------- |
+| `name`        | string | ✅ Yes   | Display name for the campaign          |
+| `description` | string | ❌ No    | Human-readable description             |
+| `intent`      | string | ✅ Yes   | Campaign goal or objective             |
 | `status`      | string | ❌ No    | Initial status (default: `"PLANNING"`) |
-| `metadata`    | object | ❌ No    | Custom JSON metadata            |
+| `metadata`    | object | ❌ No    | Custom JSON metadata                   |
 
 ### Example Request
 
@@ -152,17 +153,17 @@ Get details for a specific campaign by ID. Returns full campaign configuration i
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Campaign ID      |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Campaign ID |
 
 ### Query Parameters
 
-| Parameter  | Type   | Default | Description                    |
-| ---------- | ------ | ------- | ------------------------------ |
-| `logLimit` | number | `50`    | Maximum number of logs to return |
-| `logOffset` | number | `0`     | Number of logs to skip          |
-| `logFilter` | string | —       | Filter logs by event type       |
+| Parameter   | Type   | Default | Description                      |
+| ----------- | ------ | ------- | -------------------------------- |
+| `logLimit`  | number | `50`    | Maximum number of logs to return |
+| `logOffset` | number | `0`     | Number of logs to skip           |
+| `logFilter` | string | —       | Filter logs by event type        |
 
 ### Example Request
 
@@ -209,7 +210,7 @@ curl "https://agentc2.ai/agent/api/campaigns/camp_abc123?logLimit=20" \
                 "id": "log_1",
                 "event": "mission_started",
                 "message": "Mission 'Email Campaign' started",
-                "metadata": {"missionId": "miss_1"},
+                "metadata": { "missionId": "miss_1" },
                 "createdAt": "2026-02-18T12:00:00.000Z"
             }
         ],
@@ -226,12 +227,12 @@ curl "https://agentc2.ai/agent/api/campaigns/camp_abc123?logLimit=20" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Campaign not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Campaign not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Update Status
 
@@ -241,27 +242,27 @@ Update campaign status or other fields. Supports status transitions and action-b
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Campaign ID      |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Campaign ID |
 
 ### Request Body
 
 For status updates:
 
-| Field   | Type   | Required | Description                    |
-| ------- | ------ | -------- | ------------------------------ |
-| `status` | string | ❌ No    | New status                     |
+| Field    | Type   | Required | Description                                   |
+| -------- | ------ | -------- | --------------------------------------------- |
+| `status` | string | ❌ No    | New status                                    |
 | `action` | string | ❌ No    | Action to perform (`"approve-mission"`, etc.) |
 
 For action-based updates (e.g., approve mission):
 
-| Field      | Type   | Required | Description                    |
-| ---------- | ------ | -------- | ------------------------------ |
-| `action`   | string | ✅ Yes   | `"approve-mission"`            |
-| `missionId` | string | ❌ No    | Mission ID to approve          |
-| `sequence` | number | ❌ No    | Mission sequence to approve    |
-| `notes`    | string | ❌ No    | Approval notes                 |
+| Field       | Type   | Required | Description                 |
+| ----------- | ------ | -------- | --------------------------- |
+| `action`    | string | ✅ Yes   | `"approve-mission"`         |
+| `missionId` | string | ❌ No    | Mission ID to approve       |
+| `sequence`  | number | ❌ No    | Mission sequence to approve |
+| `notes`     | string | ❌ No    | Approval notes              |
 
 ### Example Request
 
@@ -289,13 +290,13 @@ curl -X PATCH https://agentc2.ai/agent/api/campaigns/camp_abc123 \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_STATUS` | Invalid status transition       |
-| `400`  | `INVALID_ACTION` | Invalid action                   |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Campaign or mission not found     |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `INVALID_STATUS` | Invalid status transition         |
+| `400`  | `INVALID_ACTION` | Invalid action                    |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Campaign or mission not found     |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Missions
 
@@ -305,9 +306,9 @@ List all missions for a campaign. Returns missions with their status, tasks, and
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Campaign ID      |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Campaign ID |
 
 ### Example Request
 
@@ -345,11 +346,11 @@ curl https://agentc2.ai/agent/api/campaigns/camp_abc123/missions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Campaign not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Campaign not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Mission
 
@@ -359,19 +360,19 @@ Create a new mission within a campaign. Missions contain tasks that are executed
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Campaign ID      |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Campaign ID |
 
 ### Request Body
 
-| Field         | Type   | Required | Description                    |
-| ------------- | ------ | -------- | ------------------------------ |
-| `name`        | string | ✅ Yes   | Display name for the mission   |
-| `description` | string | ❌ No    | Human-readable description      |
-| `sequence`   | number | ❌ No    | Mission sequence (auto-assigned if omitted) |
-| `status`      | string | ❌ No    | Initial status (default: `"PENDING"`) |
-| `tasks`       | array  | ❌ No    | Array of task definitions       |
+| Field         | Type   | Required | Description                                 |
+| ------------- | ------ | -------- | ------------------------------------------- |
+| `name`        | string | ✅ Yes   | Display name for the mission                |
+| `description` | string | ❌ No    | Human-readable description                  |
+| `sequence`    | number | ❌ No    | Mission sequence (auto-assigned if omitted) |
+| `status`      | string | ❌ No    | Initial status (default: `"PENDING"`)       |
+| `tasks`       | array  | ❌ No    | Array of task definitions                   |
 
 ### Example Request
 
@@ -428,14 +429,14 @@ Export the after-action review (AAR) for a campaign as markdown. Includes campai
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Campaign ID      |
+| Parameter | Type   | Description |
+| --------- | ------ | ----------- |
+| `id`      | string | Campaign ID |
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                    |
-| --------- | ------ | ------- | ------------------------------ |
+| Parameter | Type   | Default      | Description                              |
+| --------- | ------ | ------------ | ---------------------------------------- |
 | `format`  | string | `"markdown"` | Export format (`"markdown"` or `"json"`) |
 
 ### Example Request
@@ -462,11 +463,13 @@ Campaign completed successfully. Generated 1,200 signups, exceeding the goal of 
 ## Missions
 
 ### Mission 1: Email Campaign
+
 - Status: COMPLETED
 - Output: Sent 500 welcome emails
 - Cost: $0.15
 
 ### Mission 2: Social Media Campaign
+
 - Status: COMPLETED
 - Output: Posted 10 social media updates
 - Cost: $0.08
@@ -506,25 +509,25 @@ For JSON format:
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Campaign not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Campaign not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Error Codes
 
 All endpoints may return these error codes:
 
-| Status | Error Code                | Description                        | Solution                          |
-| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
-| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
-| `400`  | `INVALID_STATUS`          | Invalid status value               | Use valid status values           |
-| `400`  | `INVALID_ACTION`          | Invalid action                     | Use supported actions             |
-| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
-| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
-| `404`  | `NOT_FOUND`               | Campaign or resource not found     | Check ID is correct               |
-| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+| Status | Error Code                | Description                        | Solution                         |
+| ------ | ------------------------- | ---------------------------------- | -------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields      |
+| `400`  | `INVALID_STATUS`          | Invalid status value               | Use valid status values          |
+| `400`  | `INVALID_ACTION`          | Invalid action                     | Use supported actions            |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header   |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access           |
+| `404`  | `NOT_FOUND`               | Campaign or resource not found     | Check ID is correct              |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support |
 
 ### Error Response Format
 

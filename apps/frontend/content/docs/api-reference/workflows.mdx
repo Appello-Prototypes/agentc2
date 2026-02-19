@@ -34,8 +34,8 @@ List all workflows accessible to the authenticated user. Returns both published 
 
 ### Query Parameters
 
-| Parameter   | Type    | Default | Description                    |
-| ----------- | ------- | ------- | ------------------------------ |
+| Parameter   | Type    | Default | Description                     |
+| ----------- | ------- | ------- | ------------------------------- |
 | `active`    | boolean | `true`  | Filter to active workflows only |
 | `published` | boolean | —       | Filter to published workflows   |
 
@@ -70,10 +70,10 @@ curl "https://agentc2.ai/agent/api/workflows?active=true" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Workflow
 
@@ -149,7 +149,7 @@ curl -X POST https://agentc2.ai/agent/api/workflows \
 | Status | Error Code                | Description                        |
 | ------ | ------------------------- | ---------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
-| `400`  | `INVALID_DEFINITION`     | Invalid workflow definition         |
+| `400`  | `INVALID_DEFINITION`      | Invalid workflow definition        |
 | `400`  | `INVALID_SLUG`            | Slug contains invalid characters   |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
 | `409`  | `SLUG_CONFLICT`           | Slug already exists                |
@@ -220,12 +220,12 @@ curl https://agentc2.ai/agent/api/workflows/support-triage \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Workflow not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Update Workflow
 
@@ -243,15 +243,15 @@ Update an existing workflow. Only USER-type workflows can be updated. All fields
 
 All fields are optional:
 
-| Field              | Type    | Required | Description                    |
-| ------------------ | ------- | -------- | ------------------------------ |
-| `name`             | string  | ❌ No    | Display name                   |
-| `description`      | string  | ❌ No    | Human-readable description     |
-| `definitionJson`   | JSON    | ❌ No    | Workflow definition             |
-| `inputSchemaJson`  | JSON    | ❌ No    | Input schema                   |
-| `outputSchemaJson` | JSON    | ❌ No    | Output schema                  |
-| `isPublished`      | boolean | ❌ No    | Whether workflow is published  |
-| `isActive`         | boolean | ❌ No    | Whether workflow is active     |
+| Field              | Type    | Required | Description                   |
+| ------------------ | ------- | -------- | ----------------------------- |
+| `name`             | string  | ❌ No    | Display name                  |
+| `description`      | string  | ❌ No    | Human-readable description    |
+| `definitionJson`   | JSON    | ❌ No    | Workflow definition           |
+| `inputSchemaJson`  | JSON    | ❌ No    | Input schema                  |
+| `outputSchemaJson` | JSON    | ❌ No    | Output schema                 |
+| `isPublished`      | boolean | ❌ No    | Whether workflow is published |
+| `isActive`         | boolean | ❌ No    | Whether workflow is active    |
 
 ### Example Request
 
@@ -282,13 +282,13 @@ curl -X PATCH https://agentc2.ai/agent/api/workflows/support-triage \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_DEFINITION` | Invalid workflow definition     |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot update SYSTEM workflow     |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code           | Description                       |
+| ------ | -------------------- | --------------------------------- |
+| `400`  | `INVALID_DEFINITION` | Invalid workflow definition       |
+| `401`  | `UNAUTHORIZED`       | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`          | Cannot update SYSTEM workflow     |
+| `404`  | `NOT_FOUND`          | Workflow not found                |
+| `500`  | `INTERNAL_ERROR`     | Server error                      |
 
 ## Delete Workflow
 
@@ -320,12 +320,12 @@ curl -X DELETE https://agentc2.ai/agent/api/workflows/support-triage \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot delete SYSTEM workflow      |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Cannot delete SYSTEM workflow     |
+| `404`  | `NOT_FOUND`      | Workflow not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Execute Workflow
 
@@ -341,8 +341,8 @@ Execute a workflow with the provided input. Returns a run ID and streams executi
 
 ### Request Body
 
-| Field  | Type   | Required | Description                    |
-| ------ | ------ | -------- | ------------------------------ |
+| Field   | Type   | Required | Description                      |
+| ------- | ------ | -------- | -------------------------------- |
 | `input` | object | ✅ Yes   | Input data matching input schema |
 
 ### Example Request
@@ -374,24 +374,24 @@ data: {"type":"workflow_complete","runId":"wf_run_abc123","output":{"priority":"
 
 ### Response Format
 
-| Field      | Type   | Description                                    |
-| ---------- | ------ | ---------------------------------------------- |
+| Field      | Type   | Description                                                                 |
+| ---------- | ------ | --------------------------------------------------------------------------- |
 | `type`     | string | `"step_start"`, `"step_progress"`, `"step_complete"`, `"workflow_complete"` |
-| `stepId`   | string | Step ID (for step events)                      |
-| `stepName` | string | Step name (for step events)                    |
-| `progress` | number | Progress percentage (0-100)                    |
-| `output`   | object | Step or workflow output                        |
-| `runId`    | string | Workflow run ID (for completion event)         |
+| `stepId`   | string | Step ID (for step events)                                                   |
+| `stepName` | string | Step name (for step events)                                                 |
+| `progress` | number | Progress percentage (0-100)                                                 |
+| `output`   | object | Step or workflow output                                                     |
+| `runId`    | string | Workflow run ID (for completion event)                                      |
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_INPUT` | Input does not match schema       |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded              |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code            | Description                       |
+| ------ | --------------------- | --------------------------------- |
+| `400`  | `INVALID_INPUT`       | Input does not match schema       |
+| `401`  | `UNAUTHORIZED`        | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`           | Workflow not found                |
+| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded               |
+| `500`  | `INTERNAL_ERROR`      | Server error                      |
 
 ## List Runs
 
@@ -407,11 +407,11 @@ List workflow execution runs with filtering and pagination. Returns historical r
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                                    |
-| --------- | ------ | ------- | ---------------------------------------------- |
-| `limit`   | number | `50`    | Maximum number of runs to return               |
-| `offset`  | number | `0`     | Number of runs to skip                         |
-| `status`  | string | —       | Filter by status (`"completed"`, `"failed"`)   |
+| Parameter | Type   | Default | Description                                  |
+| --------- | ------ | ------- | -------------------------------------------- |
+| `limit`   | number | `50`    | Maximum number of runs to return             |
+| `offset`  | number | `0`     | Number of runs to skip                       |
+| `status`  | string | —       | Filter by status (`"completed"`, `"failed"`) |
 
 ### Example Request
 
@@ -429,8 +429,8 @@ curl "https://agentc2.ai/agent/api/workflows/support-triage/runs?limit=10&status
         {
             "id": "wf_run_abc123",
             "workflowId": "wf_xyz789",
-            "input": {"ticket": "Customer cannot log in"},
-            "output": {"priority": "high", "category": "authentication"},
+            "input": { "ticket": "Customer cannot log in" },
+            "output": { "priority": "high", "category": "authentication" },
             "status": "completed",
             "durationMs": 2340,
             "createdAt": "2026-02-18T12:00:00.000Z"
@@ -444,11 +444,11 @@ curl "https://agentc2.ai/agent/api/workflows/support-triage/runs?limit=10&status
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Workflow not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Version
 
@@ -500,11 +500,11 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Workflow not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Validate Workflow
 
@@ -520,9 +520,9 @@ Validate a workflow definition without executing it. Checks for syntax errors, m
 
 ### Request Body
 
-| Field            | Type   | Required | Description                    |
-| ---------------- | ------ | -------- | ------------------------------ |
-| `definitionJson` | JSON   | ❌ No    | Workflow definition to validate (uses current if omitted) |
+| Field            | Type | Required | Description                                               |
+| ---------------- | ---- | -------- | --------------------------------------------------------- |
+| `definitionJson` | JSON | ❌ No    | Workflow definition to validate (uses current if omitted) |
 
 ### Example Request
 
@@ -545,20 +545,18 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-triage/validate \
     "success": true,
     "valid": true,
     "errors": [],
-    "warnings": [
-        "Step 'step_3' has no incoming edges"
-    ]
+    "warnings": ["Step 'step_3' has no incoming edges"]
 }
 ```
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_DEFINITION` | Invalid workflow definition     |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Workflow not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code           | Description                       |
+| ------ | -------------------- | --------------------------------- |
+| `400`  | `INVALID_DEFINITION` | Invalid workflow definition       |
+| `401`  | `UNAUTHORIZED`       | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`          | Workflow not found                |
+| `500`  | `INTERNAL_ERROR`     | Server error                      |
 
 ## Error Codes
 
@@ -567,8 +565,8 @@ All endpoints may return these error codes:
 | Status | Error Code                | Description                        | Solution                          |
 | ------ | ------------------------- | ---------------------------------- | --------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
-| `400`  | `INVALID_DEFINITION`     | Invalid workflow definition         | Check definition syntax           |
-| `400`  | `INVALID_INPUT`          | Input does not match schema         | Validate input against schema     |
+| `400`  | `INVALID_DEFINITION`      | Invalid workflow definition        | Check definition syntax           |
+| `400`  | `INVALID_INPUT`           | Input does not match schema        | Validate input against schema     |
 | `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
 | `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |

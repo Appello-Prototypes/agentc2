@@ -4,7 +4,13 @@ description: "Credential encryption with AES-256-GCM, token lifecycle management
 section: "platform"
 order: 3
 primaryKeyword: "security"
-relatedSlugs: ["platform/authentication", "platform/multi-tenancy", "platform/federation", "integrations/overview"]
+relatedSlugs:
+    [
+        "platform/authentication",
+        "platform/multi-tenancy",
+        "platform/federation",
+        "integrations/overview"
+    ]
 pageType: "concept"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -34,7 +40,8 @@ CREDENTIAL_ENCRYPTION_KEY="a1b2c3d4e5f6..." # 64-character hex string (32 bytes)
 ```
 
 <Callout type="warning">
-    **Never commit encryption keys**: Store `CREDENTIAL_ENCRYPTION_KEY` in `.env` only. Never commit to version control. Rotate keys periodically in production.
+    **Never commit encryption keys**: Store `CREDENTIAL_ENCRYPTION_KEY` in `.env` only. Never commit
+    to version control. Rotate keys periodically in production.
 </Callout>
 
 ### Encryption format
@@ -43,10 +50,10 @@ Encrypted credentials are stored as JSON payloads:
 
 ```json
 {
-  "__enc": "v1",
-  "iv": "base64-encoded-initialization-vector",
-  "tag": "base64-encoded-authentication-tag",
-  "data": "base64-encoded-ciphertext"
+    "__enc": "v1",
+    "iv": "base64-encoded-initialization-vector",
+    "tag": "base64-encoded-authentication-tag",
+    "data": "base64-encoded-ciphertext"
 }
 ```
 
@@ -54,48 +61,44 @@ Encrypted credentials are stored as JSON payloads:
 
 ```typescript
 // apps/agent/src/lib/credential-crypto.ts
-import { createCipheriv, randomBytes } from "crypto"
+import { createCipheriv, randomBytes } from "crypto";
 
 export const encryptCredentials = (value: Record<string, unknown>) => {
-  const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex")
-  const iv = randomBytes(12) // 12-byte IV for GCM
-  const cipher = createCipheriv("aes-256-gcm", key, iv)
-  
-  const plaintext = JSON.stringify(value)
-  const encrypted = Buffer.concat([
-    cipher.update(plaintext, "utf8"),
-    cipher.final()
-  ])
-  const tag = cipher.getAuthTag()
-  
-  return {
-    __enc: "v1",
-    iv: iv.toString("base64"),
-    tag: tag.toString("base64"),
-    data: encrypted.toString("base64")
-  }
-}
+    const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex");
+    const iv = randomBytes(12); // 12-byte IV for GCM
+    const cipher = createCipheriv("aes-256-gcm", key, iv);
+
+    const plaintext = JSON.stringify(value);
+    const encrypted = Buffer.concat([cipher.update(plaintext, "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+
+    return {
+        __enc: "v1",
+        iv: iv.toString("base64"),
+        tag: tag.toString("base64"),
+        data: encrypted.toString("base64")
+    };
+};
 ```
 
 ### Decryption
 
 ```typescript
 export const decryptCredentials = (value: EncryptedPayload) => {
-  const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex")
-  const iv = Buffer.from(value.iv, "base64")
-  const tag = Buffer.from(value.tag, "base64")
-  const encrypted = Buffer.from(value.data, "base64")
-  
-  const decipher = createDecipheriv("aes-256-gcm", key, iv)
-  decipher.setAuthTag(tag)
-  
-  const decrypted = Buffer.concat([
-    decipher.update(encrypted),
-    decipher.final()
-  ]).toString("utf8")
-  
-  return JSON.parse(decrypted)
-}
+    const key = Buffer.from(process.env.CREDENTIAL_ENCRYPTION_KEY!, "hex");
+    const iv = Buffer.from(value.iv, "base64");
+    const tag = Buffer.from(value.tag, "base64");
+    const encrypted = Buffer.from(value.data, "base64");
+
+    const decipher = createDecipheriv("aes-256-gcm", key, iv);
+    decipher.setAuthTag(tag);
+
+    const decrypted = Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+        "utf8"
+    );
+
+    return JSON.parse(decrypted);
+};
 ```
 
 ## Token lifecycle handling
@@ -109,18 +112,18 @@ Tokens are stored in `IntegrationConnection` model with encrypted `credentials` 
 ```typescript
 // Encrypt before storage
 const encrypted = encryptCredentials({
-  accessToken: "ya29.a0...",
-  refreshToken: "1//0g...",
-  expiresAt: "2026-02-19T12:00:00Z"
-})
+    accessToken: "ya29.a0...",
+    refreshToken: "1//0g...",
+    expiresAt: "2026-02-19T12:00:00Z"
+});
 
 await prisma.integrationConnection.create({
-  data: {
-    organizationId: "org_123",
-    integrationKey: "google",
-    credentials: encrypted
-  }
-})
+    data: {
+        organizationId: "org_123",
+        integrationKey: "google",
+        credentials: encrypted
+    }
+});
 ```
 
 ### Automatic token refresh
@@ -130,33 +133,33 @@ The platform automatically refreshes expired tokens:
 ```typescript
 // packages/mastra/src/tools/gmail/shared.ts
 async function getAccessToken(connectionId: string): Promise<string> {
-  const connection = await prisma.integrationConnection.findUnique({
-    where: { id: connectionId }
-  })
-  
-  const credentials = decryptCredentials(connection.credentials)
-  
-  // Check expiration
-  if (new Date(credentials.expiresAt) > new Date()) {
-    return credentials.accessToken
-  }
-  
-  // Refresh token
-  const refreshed = await refreshOAuthToken(credentials.refreshToken)
-  
-  // Update encrypted storage
-  await prisma.integrationConnection.update({
-    where: { id: connectionId },
-    data: {
-      credentials: encryptCredentials({
-        accessToken: refreshed.accessToken,
-        refreshToken: refreshed.refreshToken || credentials.refreshToken,
-        expiresAt: refreshed.expiresAt
-      })
+    const connection = await prisma.integrationConnection.findUnique({
+        where: { id: connectionId }
+    });
+
+    const credentials = decryptCredentials(connection.credentials);
+
+    // Check expiration
+    if (new Date(credentials.expiresAt) > new Date()) {
+        return credentials.accessToken;
     }
-  })
-  
-  return refreshed.accessToken
+
+    // Refresh token
+    const refreshed = await refreshOAuthToken(credentials.refreshToken);
+
+    // Update encrypted storage
+    await prisma.integrationConnection.update({
+        where: { id: connectionId },
+        data: {
+            credentials: encryptCredentials({
+                accessToken: refreshed.accessToken,
+                refreshToken: refreshed.refreshToken || credentials.refreshToken,
+                expiresAt: refreshed.expiresAt
+            })
+        }
+    });
+
+    return refreshed.accessToken;
 }
 ```
 
@@ -164,14 +167,15 @@ async function getAccessToken(connectionId: string): Promise<string> {
 
 Request only the minimum OAuth scopes required:
 
-| Integration | Scopes | Purpose |
-| ----------- | ------ | ------- |
-| **Google** | `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly` | Gmail read access only |
-| **Microsoft** | `User.Read`, `Mail.Read`, `Calendars.ReadWrite` | Outlook + Calendar |
-| **GitHub** | `repo`, `read:org` | Repository access |
+| Integration   | Scopes                                                               | Purpose                |
+| ------------- | -------------------------------------------------------------------- | ---------------------- |
+| **Google**    | `email`, `profile`, `https://www.googleapis.com/auth/gmail.readonly` | Gmail read access only |
+| **Microsoft** | `User.Read`, `Mail.Read`, `Calendars.ReadWrite`                      | Outlook + Calendar     |
+| **GitHub**    | `repo`, `read:org`                                                   | Repository access      |
 
 <Callout type="tip">
-    **Principle of least privilege**: Request only the scopes your integration needs. Users are more likely to approve minimal permission requests.
+    **Principle of least privilege**: Request only the scopes your integration needs. Users are more
+    likely to approve minimal permission requests.
 </Callout>
 
 ## Key rotation
@@ -181,40 +185,43 @@ Rotate `CREDENTIAL_ENCRYPTION_KEY` periodically in production:
 ### Rotation procedure
 
 1. **Generate new key**:
-   ```bash
-   openssl rand -hex 32
-   ```
+
+    ```bash
+    openssl rand -hex 32
+    ```
 
 2. **Re-encrypt credentials**:
-   ```typescript
-   // Migration script: decrypt with old key, encrypt with new key
-   const oldKey = process.env.OLD_CREDENTIAL_ENCRYPTION_KEY
-   const newKey = process.env.CREDENTIAL_ENCRYPTION_KEY
-   
-   const connections = await prisma.integrationConnection.findMany()
-   for (const conn of connections) {
-     const decrypted = decryptWithKey(conn.credentials, oldKey)
-     const reEncrypted = encryptWithKey(decrypted, newKey)
-     await prisma.integrationConnection.update({
-       where: { id: conn.id },
-       data: { credentials: reEncrypted }
-     })
-   }
-   ```
+
+    ```typescript
+    // Migration script: decrypt with old key, encrypt with new key
+    const oldKey = process.env.OLD_CREDENTIAL_ENCRYPTION_KEY;
+    const newKey = process.env.CREDENTIAL_ENCRYPTION_KEY;
+
+    const connections = await prisma.integrationConnection.findMany();
+    for (const conn of connections) {
+        const decrypted = decryptWithKey(conn.credentials, oldKey);
+        const reEncrypted = encryptWithKey(decrypted, newKey);
+        await prisma.integrationConnection.update({
+            where: { id: conn.id },
+            data: { credentials: reEncrypted }
+        });
+    }
+    ```
 
 3. **Update environment**:
-   ```bash
-   # Set new key in production
-   export CREDENTIAL_ENCRYPTION_KEY="new-key-here"
-   ```
+
+    ```bash
+    # Set new key in production
+    export CREDENTIAL_ENCRYPTION_KEY="new-key-here"
+    ```
 
 4. **Verify decryption**:
-   ```typescript
-   // Test decryption with new key
-   const test = await prisma.integrationConnection.findFirst()
-   const decrypted = decryptCredentials(test.credentials)
-   console.assert(decrypted.accessToken !== undefined)
-   ```
+    ```typescript
+    // Test decryption with new key
+    const test = await prisma.integrationConnection.findFirst();
+    const decrypted = decryptCredentials(test.credentials);
+    console.assert(decrypted.accessToken !== undefined);
+    ```
 
 ### Key versioning
 
@@ -248,23 +255,23 @@ OAuth providers issue refresh tokens for long-lived access:
 
 ```typescript
 async function refreshOAuthToken(refreshToken: string) {
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: process.env.GOOGLE_CLIENT_ID!,
-      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
-      refresh_token: refreshToken,
-      grant_type: "refresh_token"
-    })
-  })
-  
-  const data = await response.json()
-  return {
-    accessToken: data.access_token,
-    refreshToken: data.refresh_token || refreshToken, // May not be returned
-    expiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString()
-  }
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+            client_id: process.env.GOOGLE_CLIENT_ID!,
+            client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+            refresh_token: refreshToken,
+            grant_type: "refresh_token"
+        })
+    });
+
+    const data = await response.json();
+    return {
+        accessToken: data.access_token,
+        refreshToken: data.refresh_token || refreshToken, // May not be returned
+        expiresAt: new Date(Date.now() + data.expires_in * 1000).toISOString()
+    };
 }
 ```
 
@@ -279,16 +286,16 @@ All sensitive operations are logged:
 ```typescript
 // FederationAuditLog tracks cross-org interactions
 await prisma.federationAuditLog.create({
-  data: {
-    organizationId: "org_123",
-    actorType: "user",
-    actorId: userId,
-    action: "credential_access",
-    resourceType: "integration_connection",
-    resourceId: connectionId,
-    metadata: { integrationKey: "google" }
-  }
-})
+    data: {
+        organizationId: "org_123",
+        actorType: "user",
+        actorId: userId,
+        action: "credential_access",
+        resourceType: "integration_connection",
+        resourceId: connectionId,
+        metadata: { integrationKey: "google" }
+    }
+});
 ```
 
 ### Security monitoring
@@ -313,13 +320,13 @@ The platform enforces security headers via Caddy and Next.js middleware:
 
 ### HTTP security headers
 
-| Header | Value | Purpose |
-| ------ | ----- | ------- |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Force HTTPS (HSTS) |
-| `Content-Security-Policy` | `default-src 'self'` | Prevent XSS attacks |
-| `X-Frame-Options` | `DENY` | Prevent clickjacking |
-| `X-Content-Type-Options` | `nosniff` | Prevent MIME sniffing |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` | Control referrer leakage |
+| Header                      | Value                                 | Purpose                  |
+| --------------------------- | ------------------------------------- | ------------------------ |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains` | Force HTTPS (HSTS)       |
+| `Content-Security-Policy`   | `default-src 'self'`                  | Prevent XSS attacks      |
+| `X-Frame-Options`           | `DENY`                                | Prevent clickjacking     |
+| `X-Content-Type-Options`    | `nosniff`                             | Prevent MIME sniffing    |
+| `Referrer-Policy`           | `strict-origin-when-cross-origin`     | Control referrer leakage |
 
 ### Caddyfile configuration
 
@@ -331,7 +338,7 @@ agentc2.ai {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "strict-origin-when-cross-origin"
     }
-    
+
     reverse_proxy /agent* localhost:3001
     reverse_proxy * localhost:3000
 }
@@ -344,18 +351,18 @@ For stricter CSP, configure in Next.js:
 ```typescript
 // next.config.ts
 const securityHeaders = [
-  {
-    key: "Content-Security-Policy",
-    value: [
-      "default-src 'self'",
-      "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
-      "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https:",
-      "font-src 'self' data:",
-      "connect-src 'self' https://api.openai.com https://api.anthropic.com"
-    ].join("; ")
-  }
-]
+    {
+        key: "Content-Security-Policy",
+        value: [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-eval' 'unsafe-inline'", // Next.js requires unsafe-eval
+            "style-src 'self' 'unsafe-inline'",
+            "img-src 'self' data: https:",
+            "font-src 'self' data:",
+            "connect-src 'self' https://api.openai.com https://api.anthropic.com"
+        ].join("; ")
+    }
+];
 ```
 
 ## Best practices

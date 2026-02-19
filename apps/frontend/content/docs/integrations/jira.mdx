@@ -9,7 +9,8 @@ searchIntent: "informational"
 pageType: "how-to"
 ctaLabel: "Explore Integrations in AgentC2"
 ctaHref: "/workspace"
-relatedSlugs: ["integrations/overview", "integrations/model-context-protocol", "integrations/github"]
+relatedSlugs:
+    ["integrations/overview", "integrations/model-context-protocol", "integrations/github"]
 ---
 
 # Jira
@@ -44,25 +45,25 @@ curl https://agentc2.ai/agent/api/mcp/tools?server=jira \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JIRA_URL` | Yes | Your Jira Cloud instance URL |
-| `JIRA_USERNAME` | Yes | Email address for authentication |
-| `JIRA_API_TOKEN` | Yes | API token for authentication |
-| `JIRA_PROJECTS_FILTER` | No | Comma-separated project keys to limit scope |
+| Variable               | Required | Description                                 |
+| ---------------------- | -------- | ------------------------------------------- |
+| `JIRA_URL`             | Yes      | Your Jira Cloud instance URL                |
+| `JIRA_USERNAME`        | Yes      | Email address for authentication            |
+| `JIRA_API_TOKEN`       | Yes      | API token for authentication                |
+| `JIRA_PROJECTS_FILTER` | No       | Comma-separated project keys to limit scope |
 
 ## Available tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `jira-search-issues` | Search issues using JQL queries |
-| `jira-get-issue` | Get issue details by key |
-| `jira-create-issue` | Create a new issue |
-| `jira-update-issue` | Update issue fields |
-| `jira-transition-issue` | Move issue to a new status |
-| `jira-add-comment` | Add a comment to an issue |
-| `jira-list-projects` | List accessible projects |
-| `jira-get-sprint` | Get sprint details |
+| Tool Name               | Description                     |
+| ----------------------- | ------------------------------- |
+| `jira-search-issues`    | Search issues using JQL queries |
+| `jira-get-issue`        | Get issue details by key        |
+| `jira-create-issue`     | Create a new issue              |
+| `jira-update-issue`     | Update issue fields             |
+| `jira-transition-issue` | Move issue to a new status      |
+| `jira-add-comment`      | Add a comment to an issue       |
+| `jira-list-projects`    | List accessible projects        |
+| `jira-get-sprint`       | Get sprint details              |
 
 ## Common patterns
 
@@ -97,14 +98,15 @@ curl -X POST https://agentc2.ai/agent/api/agents/support-agent/chat \
 ```
 
 <Callout type="warning">
-Agents with Jira write access (create, update, transition) should have guardrails to prevent unintended ticket modifications. Consider using approval gates for issue creation in production.
+    Agents with Jira write access (create, update, transition) should have guardrails to prevent
+    unintended ticket modifications. Consider using approval gates for issue creation in production.
 </Callout>
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| Authentication failed | Verify JIRA_USERNAME matches your Atlassian email and API token is valid |
-| No issues returned | Check JIRA_PROJECTS_FILTER is set to the correct project key |
-| Permission denied on create | Ensure the API token user has create permission in the target project |
-| Transition failed | Verify the target status is valid for the issue's current workflow state |
+| Problem                     | Solution                                                                 |
+| --------------------------- | ------------------------------------------------------------------------ |
+| Authentication failed       | Verify JIRA_USERNAME matches your Atlassian email and API token is valid |
+| No issues returned          | Check JIRA_PROJECTS_FILTER is set to the correct project key             |
+| Permission denied on create | Ensure the API token user has create permission in the target project    |
+| Transition failed           | Verify the target status is valid for the issue's current workflow state |

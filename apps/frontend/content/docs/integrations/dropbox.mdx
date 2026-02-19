@@ -19,7 +19,8 @@ Dropbox integration enables agents to list files, read documents, upload files, 
 The Dropbox integration provides OAuth-native tools that agents can call during conversations. Agents can search for files, read document contents, upload new files, and generate sharing links—all while respecting Dropbox's API rate limits and file permissions.
 
 <Callout type="info">
-Dropbox integration uses OAuth2 with PKCE (Proof Key for Code Exchange) for secure authentication. Tokens are encrypted before storage and automatically refreshed when expired.
+    Dropbox integration uses OAuth2 with PKCE (Proof Key for Code Exchange) for secure
+    authentication. Tokens are encrypted before storage and automatically refreshed when expired.
 </Callout>
 
 ## Prerequisites
@@ -53,18 +54,21 @@ Dropbox integration uses OAuth2 with PKCE (Proof Key for Code Exchange) for secu
 Dropbox uses scope strings in the `scope` query parameter:
 
 Required scopes:
+
 - `files.metadata.read` - Read file and folder metadata
 - `files.content.read` - Read file contents
 - `files.content.write` - Write files
 - `sharing.read` - Read sharing information
 
 <Callout type="tip">
-Use `files.content.read` + `files.content.write` for full file access. Use `files.metadata.read` only if agents don't need file contents.
+    Use `files.content.read` + `files.content.write` for full file access. Use `files.metadata.read`
+    only if agents don't need file contents.
 </Callout>
 
 ### Step 4: Configure in AgentC2
 
 **Environment variables:**
+
 ```bash
 DROPBOX_APP_KEY="your-app-key"
 DROPBOX_APP_SECRET="your-app-secret"
@@ -72,6 +76,7 @@ CREDENTIAL_ENCRYPTION_KEY="..." # Generate with: openssl rand -hex 32
 ```
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **Dropbox** and click **Connect**
 3. Click **Connect via Dropbox Sign-In**
@@ -80,6 +85,7 @@ CREDENTIAL_ENCRYPTION_KEY="..." # Generate with: openssl rand -hex 32
 6. Tools are immediately available
 
 **Via API:**
+
 ```bash
 # Start OAuth flow
 curl https://agentc2.ai/api/integrations/dropbox/start \
@@ -112,25 +118,26 @@ curl -X POST https://agentc2.ai/agent/api/agents/file-assistant/tools \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `DROPBOX_APP_KEY` | Yes | Dropbox app key (OAuth client ID) |
-| `DROPBOX_APP_SECRET` | Yes | Dropbox app secret (OAuth client secret) |
-| `CREDENTIAL_ENCRYPTION_KEY` | Yes | AES-256-GCM encryption key (32-byte hex) |
+| Variable                    | Required | Description                              |
+| --------------------------- | -------- | ---------------------------------------- |
+| `DROPBOX_APP_KEY`           | Yes      | Dropbox app key (OAuth client ID)        |
+| `DROPBOX_APP_SECRET`        | Yes      | Dropbox app secret (OAuth client secret) |
+| `CREDENTIAL_ENCRYPTION_KEY` | Yes      | AES-256-GCM encryption key (32-byte hex) |
 
 <Callout type="warning">
-`CREDENTIAL_ENCRYPTION_KEY` must be set for production. Generate with `openssl rand -hex 32` and store securely. Losing this key means all encrypted tokens become unrecoverable.
+    `CREDENTIAL_ENCRYPTION_KEY` must be set for production. Generate with `openssl rand -hex 32` and
+    store securely. Losing this key means all encrypted tokens become unrecoverable.
 </Callout>
 
 ## Available tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `dropbox-list-files` | List files and folders in a directory |
-| `dropbox-get-file` | Read file contents |
-| `dropbox-upload-file` | Upload a file to Dropbox |
-| `dropbox-search-files` | Search files by name or content |
-| `dropbox-get-sharing-links` | Get sharing links for files/folders |
+| Tool Name                   | Description                           |
+| --------------------------- | ------------------------------------- |
+| `dropbox-list-files`        | List files and folders in a directory |
+| `dropbox-get-file`          | Read file contents                    |
+| `dropbox-upload-file`       | Upload a file to Dropbox              |
+| `dropbox-search-files`      | Search files by name or content       |
+| `dropbox-get-sharing-links` | Get sharing links for files/folders   |
 
 Tool names use the `dropbox-` prefix. Use the tools API to see the full list with parameter schemas.
 
@@ -220,7 +227,8 @@ Dropbox uses Unix-style paths:
 - **Files**: `/Documents/file.txt`
 
 <Callout type="warning">
-Path names are case-sensitive. Use exact paths as shown in Dropbox. Use `dropbox-list-files` to discover correct paths.
+    Path names are case-sensitive. Use exact paths as shown in Dropbox. Use `dropbox-list-files` to
+    discover correct paths.
 </Callout>
 
 ## File operations
@@ -229,13 +237,13 @@ Path names are case-sensitive. Use exact paths as shown in Dropbox. Use `dropbox
 
 ```typescript
 {
-  mode: "add" // Fail if file exists
+    mode: "add"; // Fail if file exists
 }
 {
-  mode: "overwrite" // Replace existing file
+    mode: "overwrite"; // Replace existing file
 }
 {
-  mode: "update" // Update if newer revision exists
+    mode: "update"; // Update if newer revision exists
 }
 ```
 
@@ -243,35 +251,38 @@ Path names are case-sensitive. Use exact paths as shown in Dropbox. Use `dropbox
 
 Dropbox supports various file types:
 
-| File Type | Read Format | Notes |
-|-----------|-------------|-------|
-| **Text files** | Plain text | `.txt`, `.md`, `.json`, etc. |
-| **Images** | Binary | `.jpg`, `.png`, `.gif`, etc. |
-| **Documents** | Binary or export | `.pdf`, `.docx`, etc. |
-| **Folders** | Metadata only | List contents, not readable |
+| File Type      | Read Format      | Notes                        |
+| -------------- | ---------------- | ---------------------------- |
+| **Text files** | Plain text       | `.txt`, `.md`, `.json`, etc. |
+| **Images**     | Binary           | `.jpg`, `.png`, `.gif`, etc. |
+| **Documents**  | Binary or export | `.pdf`, `.docx`, etc.        |
+| **Folders**    | Metadata only    | List contents, not readable  |
 
 <Callout type="tip">
-For Office documents (`.docx`, `.xlsx`, `.pptx`), Dropbox API returns binary content. Consider using Dropbox Paper API or converting to text format for agent processing.
+    For Office documents (`.docx`, `.xlsx`, `.pptx`), Dropbox API returns binary content. Consider
+    using Dropbox Paper API or converting to text format for agent processing.
 </Callout>
 
 ## Search queries
 
 Dropbox search supports various operators:
 
-| Query | Description |
-|-------|-------------|
-| `filename:budget` | Files with "budget" in filename |
-| `file_extension:pdf` | Files with PDF extension |
-| `content:meeting` | Files containing "meeting" in content |
-| `modified:2025-01-01` | Files modified on date |
+| Query                 | Description                           |
+| --------------------- | ------------------------------------- |
+| `filename:budget`     | Files with "budget" in filename       |
+| `file_extension:pdf`  | Files with PDF extension              |
+| `content:meeting`     | Files containing "meeting" in content |
+| `modified:2025-01-01` | Files modified on date                |
 
 Combine queries:
+
 ```
 filename:report file_extension:pdf modified:2025-01-01
 ```
 
 <Callout type="info">
-Content search requires Dropbox to index file contents. Not all file types are indexed (e.g., images, binary files). Use filename search for better results.
+    Content search requires Dropbox to index file contents. Not all file types are indexed (e.g.,
+    images, binary files). Use filename search for better results.
 </Callout>
 
 ## Sharing links
@@ -305,8 +316,8 @@ Dropbox tokens are automatically refreshed:
 // Automatic refresh on API call
 const token = await getDropboxToken(connectionId);
 if (token.expired) {
-  const newToken = await refreshDropboxToken(connectionId);
-  // New token encrypted and stored
+    const newToken = await refreshDropboxToken(connectionId);
+    // New token encrypted and stored
 }
 ```
 
@@ -316,11 +327,14 @@ Tokens are encrypted before storage:
 
 ```typescript
 // Encryption using AES-256-GCM
-const encrypted = encrypt(JSON.stringify({
-  access_token: "...",
-  refresh_token: "...",
-  expires_at: 1234567890
-}), CREDENTIAL_ENCRYPTION_KEY);
+const encrypted = encrypt(
+    JSON.stringify({
+        access_token: "...",
+        refresh_token: "...",
+        expires_at: 1234567890
+    }),
+    CREDENTIAL_ENCRYPTION_KEY
+);
 
 // Stored in IntegrationConnection.credentials
 connection.credentials = { encrypted };
@@ -328,18 +342,19 @@ connection.credentials = { encrypted };
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **"Invalid credentials"** | Verify `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` are correct. Check redirect URI matches Dropbox app settings. |
-| **"Token expired"** | Tokens are automatically refreshed. If refresh fails, user must re-authenticate via OAuth flow. |
+| Problem                        | Solution                                                                                                                              |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **"Invalid credentials"**      | Verify `DROPBOX_APP_KEY` and `DROPBOX_APP_SECRET` are correct. Check redirect URI matches Dropbox app settings.                       |
+| **"Token expired"**            | Tokens are automatically refreshed. If refresh fails, user must re-authenticate via OAuth flow.                                       |
 | **"Insufficient permissions"** | Ensure OAuth scopes include required permissions (`files.content.read`, `files.content.write`, etc.). Re-authorize if scopes changed. |
-| **"File not found"** | Verify file path is correct (case-sensitive). Use `dropbox-list-files` to discover correct paths. |
-| **"Rate limit exceeded"** | Dropbox API limits: 1,200 requests/hour. Implement exponential backoff for retries. |
-| **"Path not accessible"** | Check app type (Full Dropbox vs App folder). App folder apps can only access `/Apps/YourApp/` directory. |
+| **"File not found"**           | Verify file path is correct (case-sensitive). Use `dropbox-list-files` to discover correct paths.                                     |
+| **"Rate limit exceeded"**      | Dropbox API limits: 1,200 requests/hour. Implement exponential backoff for retries.                                                   |
+| **"Path not accessible"**      | Check app type (Full Dropbox vs App folder). App folder apps can only access `/Apps/YourApp/` directory.                              |
 
 ## Rate limiting
 
 Dropbox API rate limits:
+
 - **Per-app rate limit**: 1,200 requests per hour
 - **Per-user rate limit**: Varies by operation
 - **Throttling**: Returns `429 Too Many Requests` with `Retry-After` header
@@ -348,16 +363,16 @@ Handle rate limits:
 
 ```typescript
 async function callWithRetry(tool, args, retries = 3) {
-  try {
-    return await callTool(tool, args);
-  } catch (error) {
-    if (error.status === 429 && retries > 0) {
-      const retryAfter = error.headers['retry-after'] || 3600; // 1 hour default
-      await sleep(retryAfter * 1000);
-      return callWithRetry(tool, args, retries - 1);
+    try {
+        return await callTool(tool, args);
+    } catch (error) {
+        if (error.status === 429 && retries > 0) {
+            const retryAfter = error.headers["retry-after"] || 3600; // 1 hour default
+            await sleep(retryAfter * 1000);
+            return callWithRetry(tool, args, retries - 1);
+        }
+        throw error;
     }
-    throw error;
-  }
 }
 ```
 

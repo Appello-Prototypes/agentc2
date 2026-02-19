@@ -5,7 +5,14 @@ section: "knowledge"
 order: 3
 primaryKeyword: "vector search"
 relatedSlugs: ["knowledge/overview", "knowledge/document-ingestion", "knowledge/hybrid-search"]
-secondaryKeywords: ["semantic search", "vector embeddings", "similarity search", "cosine similarity", "embedding model"]
+secondaryKeywords:
+    [
+        "semantic search",
+        "vector embeddings",
+        "similarity search",
+        "cosine similarity",
+        "embedding model"
+    ]
 pageType: "reference"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -81,13 +88,13 @@ AgentC2 uses OpenAI's embedding model:
 
 ### Model details
 
-| Property | Value |
-|----------|-------|
-| **Model** | `text-embedding-3-small` |
-| **Dimensions** | 1536 |
-| **Max tokens** | 8191 |
-| **Cost** | ~$0.02 per 1M tokens |
-| **Latency** | ~100-200ms per batch |
+| Property       | Value                    |
+| -------------- | ------------------------ |
+| **Model**      | `text-embedding-3-small` |
+| **Dimensions** | 1536                     |
+| **Max tokens** | 8191                     |
+| **Cost**       | ~$0.02 per 1M tokens     |
+| **Latency**    | ~100-200ms per batch     |
 
 ### Embedding quality
 
@@ -109,6 +116,7 @@ similarity = (A · B) / (||A|| × ||B||)
 ```
 
 Where:
+
 - `A · B` is the dot product of vectors A and B
 - `||A||` and `||B||` are the magnitudes (L2 norms) of vectors A and B
 
@@ -120,15 +128,16 @@ Where:
 
 ### Similarity scores
 
-| Score Range | Interpretation |
-|-------------|----------------|
+| Score Range | Interpretation                                  |
+| ----------- | ----------------------------------------------- |
 | `0.9 - 1.0` | Very high similarity (nearly identical meaning) |
-| `0.7 - 0.9` | High similarity (related content) |
-| `0.5 - 0.7` | Moderate similarity (somewhat related) |
-| `0.0 - 0.5` | Low similarity (unrelated content) |
+| `0.7 - 0.9` | High similarity (related content)               |
+| `0.5 - 0.7` | Moderate similarity (somewhat related)          |
+| `0.0 - 0.5` | Low similarity (unrelated content)              |
 
 <Callout type="tip">
-Use `minScore: 0.7` to filter out low-relevance results. Adjust based on your use case: stricter (0.8+) for precision, looser (0.6+) for recall.
+    Use `minScore: 0.7` to filter out low-relevance results. Adjust based on your use case: stricter
+    (0.8+) for precision, looser (0.6+) for recall.
 </Callout>
 
 ## Query API
@@ -229,7 +238,8 @@ curl -X POST https://agentc2.ai/agent/api/rag/query \
 **Cons**: Slower, includes less relevant results
 
 <Callout type="info">
-Start with `topK: 5` and adjust based on your use case. For agent context injection, 3-5 chunks is usually sufficient.
+    Start with `topK: 5` and adjust based on your use case. For agent context injection, 3-5 chunks
+    is usually sufficient.
 </Callout>
 
 ## Tuning minScore

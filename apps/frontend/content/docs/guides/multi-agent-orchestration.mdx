@@ -5,7 +5,13 @@ section: "guides"
 order: 4
 primaryKeyword: "multi-agent orchestration tutorial"
 secondaryKeywords: ["multi-agent system", "agent networks", "agent delegation"]
-relatedSlugs: ["networks/overview", "networks/creating-networks", "networks/topology", "agents/creating-agents"]
+relatedSlugs:
+    [
+        "networks/overview",
+        "networks/creating-networks",
+        "networks/topology",
+        "agents/creating-agents"
+    ]
 pageType: "tutorial"
 ctaLabel: "Start Building in AgentC2"
 ctaHref: "/signup"
@@ -25,7 +31,8 @@ Before starting, ensure you have:
 - (Optional) Tools configured for research (Firecrawl, RAG)
 
 <Callout type="info">
-    Multi-agent systems excel when tasks require different expertise. This guide shows how to coordinate specialists while maintaining quality through verification.
+    Multi-agent systems excel when tasks require different expertise. This guide shows how to
+    coordinate specialists while maintaining quality through verification.
 </Callout>
 
 ## Architecture overview
@@ -89,12 +96,12 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key characteristics
 
-| Aspect | Value | Rationale |
-|--------|-------|-----------|
-| **Temperature** | 0.3 | Low for factual accuracy |
-| **Memory** | Disabled | Stateless—each research task is independent |
-| **Max Steps** | 20 | Multiple tool calls for thorough research |
-| **Tools** | web-fetch, rag-query | Access to web and document sources |
+| Aspect          | Value                | Rationale                                   |
+| --------------- | -------------------- | ------------------------------------------- |
+| **Temperature** | 0.3                  | Low for factual accuracy                    |
+| **Memory**      | Disabled             | Stateless—each research task is independent |
+| **Max Steps**   | 20                   | Multiple tool calls for thorough research   |
+| **Tools**       | web-fetch, rag-query | Access to web and document sources          |
 
 ## Step 2: Create the writer agent
 
@@ -125,12 +132,12 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key characteristics
 
-| Aspect | Value | Rationale |
-|--------|-------|-----------|
-| **Temperature** | 0.7 | Higher for creative writing |
-| **Memory** | Disabled | Stateless—works from provided research |
-| **Max Steps** | 10 | Fewer tool calls, more text generation |
-| **Tools** | None | Focuses on writing, not research |
+| Aspect          | Value    | Rationale                              |
+| --------------- | -------- | -------------------------------------- |
+| **Temperature** | 0.7      | Higher for creative writing            |
+| **Memory**      | Disabled | Stateless—works from provided research |
+| **Max Steps**   | 10       | Fewer tool calls, more text generation |
+| **Tools**       | None     | Focuses on writing, not research       |
 
 ## Step 3: Create the verifier agent
 
@@ -144,7 +151,7 @@ curl -X POST https://agentc2.ai/agent/api/agents \
     "name": "Verifier Agent",
     "slug": "verifier",
     "description": "Validates quality, completeness, and accuracy of agent outputs",
-    "instructions": "You are a quality verification specialist. Your role is to validate outputs from other agents.\n\n**Verification Checklist:**\n\n1. **Completeness**\n   - Does the output address all requirements?\n   - Are all questions answered?\n   - Is the scope appropriate?\n\n2. **Accuracy**\n   - Are facts correct?\n   - Are citations valid?\n   - Are claims supported?\n\n3. **Quality**\n   - Is the writing clear and engaging?\n   - Is the structure logical?\n   - Are there grammar or style issues?\n\n4. **Compliance**\n   - Does it meet specified guidelines?\n   - Are guardrails respected?\n   - Is the tone appropriate?\n\n**Output Format:**\n- Overall assessment: PASS / FAIL / NEEDS_REVISION\n- Score (0-100)\n- Specific issues found (if any)\n- Recommendations for improvement\n\n**Scoring:**\n- 90-100: Excellent, ready for use\n- 70-89: Good, minor improvements needed\n- 50-69: Needs revision\n- <50: Significant issues, requires rework",
+    "instructions": "You are a quality verification specialist. Your role is to validate outputs from other agents.\n\n**Verification Checklist:**\n\n1. **Completeness**\n   - Does the output address all requirements?\n   - Are all questions answered?\n   - Is the scope appropriate?\n\n2. **Accuracy**\n   - Are facts correct?\n   - Are citations valid?\n   - Are claims supported?\n\n3. **Quality**\n   - Is the writing clear and engaging?\n   - Is the structure logical?\n   - Are there grammar or style issues?\n\n4. **Compliance**\n   - Does it meet specified guidelines?\n   - Are guardrails respected?\n   - Is the tone appropriate?\n\n**Output Format:**\n- Overall assessment: PASS / FAIL / NEEDS_REVISION\n- Score (0-100)\n- Specific issues found (if any)\n- Recommendations for improvement\n\n**Scoring:**\n- 90-100: Excellent, ready for use\n- 70-89: Good, minor improvements needed\n- 50-69: Needs revision\n- Below 50: Significant issues, requires rework",
     "modelProvider": "openai",
     "modelName": "gpt-4o",
     "temperature": 0.2,
@@ -161,12 +168,12 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key characteristics
 
-| Aspect | Value | Rationale |
-|--------|-------|-----------|
-| **Temperature** | 0.2 | Very low for consistent, objective evaluation |
-| **Memory** | Disabled | Evaluates each output independently |
-| **Max Steps** | 5 | Minimal processing, focused evaluation |
-| **Tools** | None | Evaluates provided content only |
+| Aspect          | Value    | Rationale                                     |
+| --------------- | -------- | --------------------------------------------- |
+| **Temperature** | 0.2      | Very low for consistent, objective evaluation |
+| **Memory**      | Disabled | Evaluates each output independently           |
+| **Max Steps**   | 5        | Minimal processing, focused evaluation        |
+| **Tools**       | None     | Evaluates provided content only               |
 
 ## Step 4: Create the coordinator agent
 
@@ -200,15 +207,16 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key characteristics
 
-| Aspect | Value | Rationale |
-|--------|-------|-----------|
-| **SubAgents** | researcher, writer, verifier | Can delegate to these agents |
-| **Max Steps** | 30 | Multiple delegation rounds |
-| **Memory** | Enabled | Tracks conversation and delegation history |
-| **Temperature** | 0.5 | Balanced for routing decisions |
+| Aspect          | Value                        | Rationale                                  |
+| --------------- | ---------------------------- | ------------------------------------------ |
+| **SubAgents**   | researcher, writer, verifier | Can delegate to these agents               |
+| **Max Steps**   | 30                           | Multiple delegation rounds                 |
+| **Memory**      | Enabled                      | Tracks conversation and delegation history |
+| **Temperature** | 0.5                          | Balanced for routing decisions             |
 
 <Callout type="info">
-    The coordinator uses `subAgents` to delegate tasks. When it calls a sub-agent, that agent runs independently and returns results.
+    The coordinator uses `subAgents` to delegate tasks. When it calls a sub-agent, that agent runs
+    independently and returns results.
 </Callout>
 
 ## Step 5: Test individual agents
@@ -232,6 +240,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/researcher/chat \
 ```
 
 Verify:
+
 - ✅ Multiple sources consulted
 - ✅ Structured findings
 - ✅ Citations provided
@@ -253,6 +262,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/writer/chat \
 ```
 
 Verify:
+
 - ✅ Clear structure
 - ✅ Engaging prose
 - ✅ Citations included
@@ -274,6 +284,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/verifier/chat \
 ```
 
 Verify:
+
 - ✅ Objective assessment
 - ✅ Specific issues identified
 - ✅ Actionable recommendations
@@ -297,6 +308,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/coordinator/chat \
 ```
 
 Expected flow:
+
 1. Coordinator analyzes request
 2. Delegates to researcher for information gathering
 3. Receives research findings
@@ -315,6 +327,7 @@ curl https://agentc2.ai/agent/api/agents/coordinator/runs?limit=1 \
 ```
 
 Look for:
+
 - Sub-agent invocations
 - Handoff points
 - Data passed between agents
@@ -410,7 +423,8 @@ curl -X POST https://agentc2.ai/agent/api/networks \
 ```
 
 <Callout type="tip">
-    Networks provide explicit topology and routing rules, making delegation patterns clear and debuggable. Use networks for complex multi-agent workflows.
+    Networks provide explicit topology and routing rules, making delegation patterns clear and
+    debuggable. Use networks for complex multi-agent workflows.
 </Callout>
 
 ## Step 8: Test the network
@@ -431,6 +445,7 @@ curl -X POST https://agentc2.ai/agent/api/networks/research-writer-network/execu
 ```
 
 The network will:
+
 1. Route to researcher for information gathering
 2. Pass findings to writer
 3. Verify output quality
@@ -448,6 +463,7 @@ curl https://agentc2.ai/agent/api/networks/research-writer-network/runs?limit=50
 ```
 
 Metrics to track:
+
 - **Delegation success rate**: Successful handoffs / total handoffs
 - **Revision rate**: Verifier requests revision / total verifications
 - **End-to-end success**: Completed tasks / total tasks
@@ -462,6 +478,7 @@ curl https://agentc2.ai/agent/api/networks/research-writer-network/runs/run_abc1
 ```
 
 Look for:
+
 - Complete data transfer
 - Proper formatting
 - No information loss
@@ -490,7 +507,7 @@ curl -X PUT https://agentc2.ai/agent/api/agents/coordinator \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{
-    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Routing Confidence:**\n\nBefore delegating, assess:\n- Task complexity (simple/complex)\n- Required expertise (research/writing/verification)\n- Expected output quality\n\n**Confidence Levels:**\n- High (>0.8): Delegate directly\n- Medium (0.5-0.8): Delegate with detailed instructions\n- Low (<0.5): Break task into smaller parts\n\n**Optimization:**\n- For simple tasks: Skip unnecessary steps\n- For complex tasks: Use full pipeline\n- For urgent tasks: Parallelize where possible"
+    "instructions": "You are a coordinator agent that routes tasks to specialist agents.\n\n**Routing Confidence:**\n\nBefore delegating, assess:\n- Task complexity (simple/complex)\n- Required expertise (research/writing/verification)\n- Expected output quality\n\n**Confidence Levels:**\n- High (>0.8): Delegate directly\n- Medium (0.5-0.8): Delegate with detailed instructions\n- Low (under 0.5): Break task into smaller parts\n\n**Optimization:**\n- For simple tasks: Skip unnecessary steps\n- For complex tasks: Use full pipeline\n- For urgent tasks: Parallelize where possible"
   }'
 ```
 

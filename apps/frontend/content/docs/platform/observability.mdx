@@ -64,12 +64,12 @@ Each trace contains detailed step-by-step execution logs in `AgentTraceStep`:
 
 ### Step types
 
-| Step Type | Description | Content Structure |
-| --------- | ----------- | ----------------- |
-| **llm** | LLM call (prompt + response) | `{ prompt, response, model, tokens }` |
-| **tool** | Tool execution | `{ toolKey, input, output, durationMs }` |
-| **memory** | Memory operation (recall/store) | `{ operation, query, results }` |
-| **guardrail** | Guardrail check | `{ guardrailId, passed, blocked, reason }` |
+| Step Type     | Description                     | Content Structure                          |
+| ------------- | ------------------------------- | ------------------------------------------ |
+| **llm**       | LLM call (prompt + response)    | `{ prompt, response, model, tokens }`      |
+| **tool**      | Tool execution                  | `{ toolKey, input, output, durationMs }`   |
+| **memory**    | Memory operation (recall/store) | `{ operation, query, results }`            |
+| **guardrail** | Guardrail check                 | `{ guardrailId, passed, blocked, reason }` |
 
 ## Querying traces
 
@@ -96,36 +96,36 @@ curl "https://agentc2.ai/agent/api/traces?status=FAILED&startDate=2026-02-01&end
 ```typescript
 // Find traces by status
 const failedTraces = await prisma.agentTrace.findMany({
-  where: {
-    agentId: "agent_123",
-    status: "FAILED",
-    createdAt: {
-      gte: new Date("2026-02-01"),
-      lte: new Date("2026-02-18")
+    where: {
+        agentId: "agent_123",
+        status: "FAILED",
+        createdAt: {
+            gte: new Date("2026-02-01"),
+            lte: new Date("2026-02-18")
+        }
+    },
+    include: {
+        steps: {
+            orderBy: { stepNumber: "asc" }
+        }
     }
-  },
-  include: {
-    steps: {
-      orderBy: { stepNumber: "asc" }
-    }
-  }
-})
+});
 
 // Find traces with tool calls
 const tracesWithTools = await prisma.agentTrace.findMany({
-  where: {
-    agentId: "agent_123",
-    steps: {
-      some: {
-        type: "tool"
-      }
+    where: {
+        agentId: "agent_123",
+        steps: {
+            some: {
+                type: "tool"
+            }
+        }
+    },
+    include: {
+        steps: true,
+        toolCalls: true
     }
-  },
-  include: {
-    steps: true,
-    toolCalls: true
-  }
-})
+});
 ```
 
 ## Aggregate metrics
@@ -134,28 +134,28 @@ The platform aggregates metrics across runs for dashboards and analytics:
 
 ### Cost metrics
 
-| Metric | Description | Calculation |
-| ------ | ----------- | ----------- |
-| **Total tokens** | Sum of input + output tokens | `SUM(tokensJson->>'total')` |
-| **Total cost** | Cost in USD | `SUM(tokens * model_rate)` |
-| **Average latency** | Mean duration per run | `AVG(durationMs)` |
-| **P95 latency** | 95th percentile duration | `PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY durationMs)` |
+| Metric              | Description                  | Calculation                                                |
+| ------------------- | ---------------------------- | ---------------------------------------------------------- |
+| **Total tokens**    | Sum of input + output tokens | `SUM(tokensJson->>'total')`                                |
+| **Total cost**      | Cost in USD                  | `SUM(tokens * model_rate)`                                 |
+| **Average latency** | Mean duration per run        | `AVG(durationMs)`                                          |
+| **P95 latency**     | 95th percentile duration     | `PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY durationMs)` |
 
 ### Quality metrics
 
-| Metric | Description | Source |
-| ------ | ----------- | ------ |
-| **Average quality score** | Mean evaluation score | `AVG(scoresJson->>'quality')` |
-| **Failure rate** | Percentage of failed runs | `COUNT(status='FAILED') / COUNT(*)` |
-| **Guardrail blocks** | Number of blocked outputs | `COUNT(guardrail blocks)` |
+| Metric                    | Description               | Source                              |
+| ------------------------- | ------------------------- | ----------------------------------- |
+| **Average quality score** | Mean evaluation score     | `AVG(scoresJson->>'quality')`       |
+| **Failure rate**          | Percentage of failed runs | `COUNT(status='FAILED') / COUNT(*)` |
+| **Guardrail blocks**      | Number of blocked outputs | `COUNT(guardrail blocks)`           |
 
 ### Usage metrics
 
-| Metric | Description | Calculation |
-| ------ | ----------- | ----------- |
-| **Runs per day** | Daily run count | `COUNT(*) GROUP BY DATE(createdAt)` |
-| **Active agents** | Agents with runs in period | `COUNT(DISTINCT agentId)` |
-| **Tool usage** | Most-used tools | `COUNT(*) GROUP BY toolKey` |
+| Metric            | Description                | Calculation                         |
+| ----------------- | -------------------------- | ----------------------------------- |
+| **Runs per day**  | Daily run count            | `COUNT(*) GROUP BY DATE(createdAt)` |
+| **Active agents** | Agents with runs in period | `COUNT(DISTINCT agentId)`           |
+| **Tool usage**    | Most-used tools            | `COUNT(*) GROUP BY toolKey`         |
 
 ### Querying metrics
 
@@ -171,19 +171,19 @@ const dailyCosts = await prisma.$queryRaw`
     AND created_at >= NOW() - INTERVAL '30 days'
   GROUP BY DATE(created_at)
   ORDER BY date DESC
-`
+`;
 
 // Tool usage statistics
 const toolUsage = await prisma.agentToolCall.groupBy({
-  by: ["toolKey"],
-  where: {
-    trace: {
-      agentId: agentId,
-      createdAt: { gte: thirtyDaysAgo }
-    }
-  },
-  _count: { id: true }
-})
+    by: ["toolKey"],
+    where: {
+        trace: {
+            agentId: agentId,
+            createdAt: { gte: thirtyDaysAgo }
+        }
+    },
+    _count: { id: true }
+});
 ```
 
 ## Cost dashboards
@@ -220,18 +220,18 @@ Organizations can set budget thresholds:
 ```typescript
 // Set monthly budget
 await prisma.organization.update({
-  where: { id: organizationId },
-  data: {
-    metadata: {
-      ...existingMetadata,
-      budget: {
-        monthlyLimit: 10000, // $10,000/month
-        alertThreshold: 0.8, // Alert at 80%
-        alertEmail: "admin@acme.com"
-      }
+    where: { id: organizationId },
+    data: {
+        metadata: {
+            ...existingMetadata,
+            budget: {
+                monthlyLimit: 10000, // $10,000/month
+                alertThreshold: 0.8, // Alert at 80%
+                alertEmail: "admin@acme.com"
+            }
+        }
     }
-  }
-})
+});
 ```
 
 When budget thresholds are exceeded, the platform:
@@ -241,7 +241,8 @@ When budget thresholds are exceeded, the platform:
 3. **Enforces limits** — Blocks new runs if `enforceLimit: true`
 
 <Callout type="warning">
-    **Budget enforcement**: When `enforceLimit: true` and budget is exceeded, all agent runs are blocked until the budget is increased or the period resets.
+    **Budget enforcement**: When `enforceLimit: true` and budget is exceeded, all agent runs are
+    blocked until the budget is increased or the period resets.
 </Callout>
 
 ## Health scores
@@ -253,31 +254,26 @@ Organizations receive health scores based on multiple factors:
 ```typescript
 // Health score factors (0-100 scale)
 const healthScore = {
-  reliability: calculateReliability(),      // Based on failure rate
-  performance: calculatePerformance(),     // Based on latency P95
-  quality: calculateQuality(),             // Based on evaluation scores
-  security: calculateSecurity(),          // Based on security incidents
-  compliance: calculateCompliance()       // Based on guardrail violations
-}
+    reliability: calculateReliability(), // Based on failure rate
+    performance: calculatePerformance(), // Based on latency P95
+    quality: calculateQuality(), // Based on evaluation scores
+    security: calculateSecurity(), // Based on security incidents
+    compliance: calculateCompliance() // Based on guardrail violations
+};
 
 // Weighted average
-const overallScore = (
-  reliability * 0.3 +
-  performance * 0.2 +
-  quality * 0.2 +
-  security * 0.15 +
-  compliance * 0.15
-)
+const overallScore =
+    reliability * 0.3 + performance * 0.2 + quality * 0.2 + security * 0.15 + compliance * 0.15;
 ```
 
 ### Health score thresholds
 
-| Score Range | Status | Action |
-| ----------- | ------ | ------ |
-| 90-100 | **Excellent** | No action needed |
-| 70-89 | **Good** | Monitor trends |
-| 50-69 | **Fair** | Review metrics, optimize |
-| 0-49 | **Poor** | Immediate attention required |
+| Score Range | Status        | Action                       |
+| ----------- | ------------- | ---------------------------- |
+| 90-100      | **Excellent** | No action needed             |
+| 70-89       | **Good**      | Monitor trends               |
+| 50-69       | **Fair**      | Review metrics, optimize     |
+| 0-49        | **Poor**      | Immediate attention required |
 
 ### Health check API
 
@@ -314,18 +310,18 @@ Configure alert thresholds for proactive monitoring:
 ```typescript
 // Set alert thresholds
 await prisma.organization.update({
-  where: { id: organizationId },
-  data: {
-    metadata: {
-      alerts: {
-        failureRate: { threshold: 0.05, enabled: true },      // 5% failure rate
-        latencyP95: { threshold: 5000, enabled: true },       // 5s P95 latency
-        costSpike: { threshold: 1.5, enabled: true },          // 1.5x average cost
-        qualityDrop: { threshold: 0.1, enabled: true }         // 10% quality drop
-      }
+    where: { id: organizationId },
+    data: {
+        metadata: {
+            alerts: {
+                failureRate: { threshold: 0.05, enabled: true }, // 5% failure rate
+                latencyP95: { threshold: 5000, enabled: true }, // 5s P95 latency
+                costSpike: { threshold: 1.5, enabled: true }, // 1.5x average cost
+                qualityDrop: { threshold: 0.1, enabled: true } // 10% quality drop
+            }
+        }
     }
-  }
-})
+});
 ```
 
 ### Alert delivery
@@ -347,20 +343,20 @@ Traces provide complete execution context for debugging:
 ```typescript
 // Find failed runs with error details
 const failedTrace = await prisma.agentTrace.findFirst({
-  where: {
-    agentId: "agent_123",
-    status: "FAILED"
-  },
-  include: {
-    steps: {
-      orderBy: { stepNumber: "asc" }
+    where: {
+        agentId: "agent_123",
+        status: "FAILED"
+    },
+    include: {
+        steps: {
+            orderBy: { stepNumber: "asc" }
+        }
     }
-  }
-})
+});
 
 // Check last step for error
-const lastStep = failedTrace.steps[failedTrace.steps.length - 1]
-console.log("Error:", lastStep.content.error)
+const lastStep = failedTrace.steps[failedTrace.steps.length - 1];
+console.log("Error:", lastStep.content.error);
 ```
 
 #### 2. Slow runs
@@ -368,19 +364,19 @@ console.log("Error:", lastStep.content.error)
 ```typescript
 // Find slow runs (P95+)
 const slowTraces = await prisma.agentTrace.findMany({
-  where: {
-    agentId: "agent_123",
-    durationMs: { gte: 5000 } // >5s
-  },
-  include: { steps: true },
-  orderBy: { durationMs: "desc" },
-  take: 10
-})
+    where: {
+        agentId: "agent_123",
+        durationMs: { gte: 5000 } // >5s
+    },
+    include: { steps: true },
+    orderBy: { durationMs: "desc" },
+    take: 10
+});
 
 // Analyze step durations
 for (const trace of slowTraces) {
-  const slowSteps = trace.steps.filter(s => s.durationMs > 1000)
-  console.log(`Trace ${trace.id}: slow steps:`, slowSteps)
+    const slowSteps = trace.steps.filter((s) => s.durationMs > 1000);
+    console.log(`Trace ${trace.id}: slow steps:`, slowSteps);
 }
 ```
 
@@ -389,22 +385,22 @@ for (const trace of slowTraces) {
 ```typescript
 // Find traces with tool failures
 const toolFailures = await prisma.agentToolCall.findMany({
-  where: {
-    trace: { agentId: "agent_123" },
-    outputJson: {
-      path: ["error"],
-      not: null
-    }
-  },
-  include: { trace: true }
-})
+    where: {
+        trace: { agentId: "agent_123" },
+        outputJson: {
+            path: ["error"],
+            not: null
+        }
+    },
+    include: { trace: true }
+});
 
 // Analyze tool error patterns
 const errorPatterns = toolFailures.reduce((acc, call) => {
-  const tool = call.toolKey
-  acc[tool] = (acc[tool] || 0) + 1
-  return acc
-}, {})
+    const tool = call.toolKey;
+    acc[tool] = (acc[tool] || 0) + 1;
+    return acc;
+}, {});
 ```
 
 #### 4. Guardrail violations
@@ -412,21 +408,21 @@ const errorPatterns = toolFailures.reduce((acc, call) => {
 ```typescript
 // Find guardrail blocks
 const guardrailBlocks = await prisma.agentTraceStep.findMany({
-  where: {
-    trace: { agentId: "agent_123" },
-    type: "guardrail",
-    content: {
-      path: ["blocked"],
-      equals: true
-    }
-  },
-  include: { trace: true }
-})
+    where: {
+        trace: { agentId: "agent_123" },
+        type: "guardrail",
+        content: {
+            path: ["blocked"],
+            equals: true
+        }
+    },
+    include: { trace: true }
+});
 
 // Analyze blocked content
 for (const step of guardrailBlocks) {
-  console.log("Blocked:", step.content.reason)
-  console.log("Input:", step.trace.inputText)
+    console.log("Blocked:", step.content.reason);
+    console.log("Input:", step.trace.inputText);
 }
 ```
 

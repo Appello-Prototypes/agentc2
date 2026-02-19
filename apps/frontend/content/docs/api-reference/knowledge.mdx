@@ -34,16 +34,16 @@ Ingest a document into the RAG system. The document will be chunked, embedded, a
 
 ### Request Body
 
-| Field          | Type     | Required | Description                    |
-| -------------- | -------- | -------- | ------------------------------ |
-| `content`      | string   | ✅ Yes   | Document content               |
+| Field          | Type     | Required | Description                                                        |
+| -------------- | -------- | -------- | ------------------------------------------------------------------ |
+| `content`      | string   | ✅ Yes   | Document content                                                   |
 | `type`         | string   | ❌ No    | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
-| `sourceId`     | string   | ❌ No    | Source identifier              |
-| `sourceName`   | string   | ❌ No    | Source display name            |
-| `category`     | string   | ❌ No    | Document category              |
-| `tags`         | string[] | ❌ No    | Array of tags                  |
-| `metadata`     | object   | ❌ No    | Custom JSON metadata           |
-| `chunkOptions` | object   | ❌ No    | Chunking configuration         |
+| `sourceId`     | string   | ❌ No    | Source identifier                                                  |
+| `sourceName`   | string   | ❌ No    | Source display name                                                |
+| `category`     | string   | ❌ No    | Document category                                                  |
+| `tags`         | string[] | ❌ No    | Array of tags                                                      |
+| `metadata`     | object   | ❌ No    | Custom JSON metadata                                               |
+| `chunkOptions` | object   | ❌ No    | Chunking configuration                                             |
 
 ### Example Request
 
@@ -81,7 +81,7 @@ curl -X POST https://agentc2.ai/agent/api/rag/ingest \
 | Status | Error Code                | Description                        |
 | ------ | ------------------------- | ---------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
-| `400`  | `INVALID_CONTENT_TYPE`   | Invalid content type               |
+| `400`  | `INVALID_CONTENT_TYPE`    | Invalid content type               |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
 | `500`  | `INGESTION_ERROR`         | Document ingestion failed          |
 | `500`  | `INTERNAL_ERROR`          | Server error                       |
@@ -94,13 +94,13 @@ Query the RAG system for relevant document chunks. Returns semantically similar 
 
 ### Request Body
 
-| Field      | Type   | Required | Description                    |
-| ---------- | ------ | -------- | ------------------------------ |
-| `query`    | string | ✅ Yes   | Search query                   |
-| `topK`     | number | ❌ No    | Number of results (default: 5) |
+| Field      | Type   | Required | Description                             |
+| ---------- | ------ | -------- | --------------------------------------- |
+| `query`    | string | ✅ Yes   | Search query                            |
+| `topK`     | number | ❌ No    | Number of results (default: 5)          |
 | `minScore` | number | ❌ No    | Minimum similarity score (default: 0.7) |
-| `filters`  | object | ❌ No    | Metadata filters               |
-| `hybrid`   | object | ❌ No    | Hybrid search configuration    |
+| `filters`  | object | ❌ No    | Metadata filters                        |
+| `hybrid`   | object | ❌ No    | Hybrid search configuration             |
 
 ### Example Request
 
@@ -143,12 +143,12 @@ curl -X POST https://agentc2.ai/agent/api/rag/query \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `MISSING_QUERY` | Query is required                  |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `QUERY_ERROR`  | RAG query failed                   |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `MISSING_QUERY`  | Query is required                 |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `QUERY_ERROR`    | RAG query failed                  |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Documents
 
@@ -158,12 +158,12 @@ List all documents accessible to the authenticated user. Returns documents with 
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                    |
-| --------- | ------ | ------- | ------------------------------ |
-| `category` | string | —       | Filter by category             |
-| `tag`      | string | —       | Filter by tag                  |
-| `limit`    | number | `50`    | Maximum number of documents    |
-| `offset`   | number | `0`     | Number of documents to skip    |
+| Parameter  | Type   | Default | Description                 |
+| ---------- | ------ | ------- | --------------------------- |
+| `category` | string | —       | Filter by category          |
+| `tag`      | string | —       | Filter by tag               |
+| `limit`    | number | `50`    | Maximum number of documents |
+| `offset`   | number | `0`     | Number of documents to skip |
 
 ### Example Request
 
@@ -198,10 +198,10 @@ curl "https://agentc2.ai/agent/api/documents?category=documentation&limit=10" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Get Document
 
@@ -213,7 +213,7 @@ Get details for a specific document by ID or slug. Returns full document content
 
 | Parameter | Type   | Description         |
 | --------- | ------ | ------------------- |
-| `id`      | string | Document ID or slug  |
+| `id`      | string | Document ID or slug |
 
 ### Example Request
 
@@ -249,12 +249,12 @@ curl https://agentc2.ai/agent/api/documents/product-docs \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Document not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Document not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Delete Document
 
@@ -266,7 +266,7 @@ Delete a document from the RAG system. This will remove all associated chunks an
 
 | Parameter | Type   | Description         |
 | --------- | ------ | ------------------- |
-| `id`      | string | Document ID or slug  |
+| `id`      | string | Document ID or slug |
 
 ### Example Request
 
@@ -286,11 +286,11 @@ curl -X DELETE https://agentc2.ai/agent/api/documents/product-docs \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Document not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Document not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Versions
 
@@ -302,7 +302,7 @@ List all versions for a document. Returns version history with change notes and 
 
 | Parameter | Type   | Description         |
 | --------- | ------ | ------------------- |
-| `id`      | string | Document ID or slug  |
+| `id`      | string | Document ID or slug |
 
 ### Example Request
 
@@ -339,27 +339,27 @@ curl https://agentc2.ai/agent/api/documents/product-docs/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Document not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Document not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Error Codes
 
 All endpoints may return these error codes:
 
-| Status | Error Code                | Description                        | Solution                          |
-| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
-| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
-| `400`  | `MISSING_QUERY`           | Query is required                  | Provide query parameter           |
-| `400`  | `INVALID_CONTENT_TYPE`    | Invalid content type               | Use supported content types       |
-| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
-| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
-| `404`  | `NOT_FOUND`               | Document or resource not found     | Check ID/slug is correct          |
-| `500`  | `INGESTION_ERROR`         | Document ingestion failed          | Check document format             |
-| `500`  | `QUERY_ERROR`             | RAG query failed                   | Retry query                       |
-| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+| Status | Error Code                | Description                        | Solution                         |
+| ------ | ------------------------- | ---------------------------------- | -------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields      |
+| `400`  | `MISSING_QUERY`           | Query is required                  | Provide query parameter          |
+| `400`  | `INVALID_CONTENT_TYPE`    | Invalid content type               | Use supported content types      |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header   |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access           |
+| `404`  | `NOT_FOUND`               | Document or resource not found     | Check ID/slug is correct         |
+| `500`  | `INGESTION_ERROR`         | Document ingestion failed          | Check document format            |
+| `500`  | `QUERY_ERROR`             | RAG query failed                   | Retry query                      |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support |
 
 ### Error Response Format
 

@@ -19,7 +19,8 @@ ElevenLabs integration enables voice-enabled agents with premium text-to-speech 
 The ElevenLabs integration provides voice capabilities for agents, enabling them to speak responses aloud, conduct phone calls, and interact with users via voice interfaces. The integration supports both text-to-speech (TTS) for agent responses and conversational AI agents for real-time voice conversations with tool invocation.
 
 <Callout type="info">
-ElevenLabs integration supports both standalone TTS (for agent voice output) and conversational AI agents (for two-way voice conversations with MCP tool access).
+    ElevenLabs integration supports both standalone TTS (for agent voice output) and conversational
+    AI agents (for two-way voice conversations with MCP tool access).
 </Callout>
 
 ## Prerequisites
@@ -45,9 +46,9 @@ For conversational AI agents with tool invocation:
 1. Go to **Conversational AI** > **Agents**
 2. Click **Create Agent**
 3. Configure agent:
-   - Name: "AgentC2 Assistant"
-   - Voice: Select a voice
-   - Instructions: Agent behavior instructions
+    - Name: "AgentC2 Assistant"
+    - Voice: Select a voice
+    - Instructions: Agent behavior instructions
 4. Note the **Agent ID** (starts with `agent_`)
 
 ### Step 3: Configure webhook (for conversational AI)
@@ -60,6 +61,7 @@ For conversational AI agents with tool invocation:
 ### Step 4: Configure in AgentC2
 
 **Environment variables:**
+
 ```bash
 ELEVENLABS_API_KEY="sk_..."
 ELEVENLABS_AGENT_ID="agent_..." # For conversational AI
@@ -68,14 +70,16 @@ ELEVENLABS_MCP_WEBHOOK_URL="https://your-domain/agent/api/demos/live-agent-mcp/t
 ```
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **ElevenLabs** and configure:
-   - API Key
-   - Agent ID (if using conversational AI)
-   - Webhook Secret (if using webhooks)
+    - API Key
+    - Agent ID (if using conversational AI)
+    - Webhook Secret (if using webhooks)
 3. Test connection
 
 **Via API:**
+
 ```bash
 # Configure voice provider in agent
 curl -X PATCH https://agentc2.ai/agent/api/agents/voice-assistant \
@@ -92,15 +96,16 @@ curl -X PATCH https://agentc2.ai/agent/api/agents/voice-assistant \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `ELEVENLABS_API_KEY` | Yes | ElevenLabs API key (format: `sk_...`) |
-| `ELEVENLABS_AGENT_ID` | No | Conversational AI agent ID (format: `agent_...`) |
-| `ELEVENLABS_WEBHOOK_SECRET` | No | Webhook authentication secret (format: `wsec_...`) |
-| `ELEVENLABS_MCP_WEBHOOK_URL` | No | Webhook URL for tool invocation |
+| Variable                     | Required | Description                                        |
+| ---------------------------- | -------- | -------------------------------------------------- |
+| `ELEVENLABS_API_KEY`         | Yes      | ElevenLabs API key (format: `sk_...`)              |
+| `ELEVENLABS_AGENT_ID`        | No       | Conversational AI agent ID (format: `agent_...`)   |
+| `ELEVENLABS_WEBHOOK_SECRET`  | No       | Webhook authentication secret (format: `wsec_...`) |
+| `ELEVENLABS_MCP_WEBHOOK_URL` | No       | Webhook URL for tool invocation                    |
 
 <Callout type="tip">
-`ELEVENLABS_AGENT_ID` and webhook configuration are only needed for conversational AI agents with tool invocation. For standalone TTS, only `ELEVENLABS_API_KEY` is required.
+    `ELEVENLABS_AGENT_ID` and webhook configuration are only needed for conversational AI agents
+    with tool invocation. For standalone TTS, only `ELEVENLABS_API_KEY` is required.
 </Callout>
 
 ## Voice capabilities
@@ -134,12 +139,12 @@ curl -X PATCH https://agentc2.ai/agent/api/agents/voice-assistant \
 
 ### Voice quality settings
 
-| Parameter | Range | Description |
-|-----------|-------|-------------|
-| `stability` | 0.0 - 1.0 | Voice stability (lower = more variation) |
+| Parameter         | Range     | Description                                          |
+| ----------------- | --------- | ---------------------------------------------------- |
+| `stability`       | 0.0 - 1.0 | Voice stability (lower = more variation)             |
 | `similarityBoost` | 0.0 - 1.0 | Voice similarity to original (higher = more similar) |
-| `style` | 0.0 - 1.0 | Style exaggeration (for certain voices) |
-| `useSpeakerBoost` | boolean | Enhance speaker clarity |
+| `style`           | 0.0 - 1.0 | Style exaggeration (for certain voices)              |
+| `useSpeakerBoost` | boolean   | Enhance speaker clarity                              |
 
 ### Available voices
 
@@ -163,16 +168,16 @@ curl https://api.elevenlabs.io/v1/voices \
 ElevenLabs conversational AI agents can invoke MCP tools:
 
 1. **Configure tools in ElevenLabs dashboard**:
-   - Go to agent settings > **Tools**
-   - Add tool: Webhook URL + Secret
-   - Tool definitions are auto-discovered from AgentC2
+    - Go to agent settings > **Tools**
+    - Add tool: Webhook URL + Secret
+    - Tool definitions are auto-discovered from AgentC2
 
 2. **Tool execution flow**:
-   ```
-   User speaks → ElevenLabs agent → Determines tool needed
-   → Calls AgentC2 webhook → AgentC2 executes MCP tool
-   → Returns result → ElevenLabs agent → Speaks response
-   ```
+    ```
+    User speaks → ElevenLabs agent → Determines tool needed
+    → Calls AgentC2 webhook → AgentC2 executes MCP tool
+    → Returns result → ElevenLabs agent → Speaks response
+    ```
 
 ### Webhook configuration
 
@@ -188,26 +193,26 @@ Response format (ElevenLabs-compatible):
 
 ```json
 {
-  "tools": [
-    {
-      "name": "hubspot-get-contact",
-      "description": "Get contact details from HubSpot",
-      "parameters": {
-        "type": "object",
-        "properties": {
-          "contactId": {
-            "type": "string",
-            "description": "HubSpot contact ID"
-          }
+    "tools": [
+        {
+            "name": "hubspot-get-contact",
+            "description": "Get contact details from HubSpot",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "contactId": {
+                        "type": "string",
+                        "description": "HubSpot contact ID"
+                    }
+                }
+            },
+            "url": "https://your-domain/agent/api/demos/live-agent-mcp/tools",
+            "method": "POST",
+            "headers": {
+                "Authorization": "Bearer YOUR_WEBHOOK_SECRET"
+            }
         }
-      },
-      "url": "https://your-domain/agent/api/demos/live-agent-mcp/tools",
-      "method": "POST",
-      "headers": {
-        "Authorization": "Bearer YOUR_WEBHOOK_SECRET"
-      }
-    }
-  ]
+    ]
 }
 ```
 
@@ -219,7 +224,7 @@ AgentC2 validates webhook requests:
 // Validate webhook secret
 const webhookSecret = request.headers.get("Authorization");
 if (webhookSecret !== `Bearer ${ELEVENLABS_WEBHOOK_SECRET}`) {
-  return new Response("Unauthorized", { status: 401 });
+    return new Response("Unauthorized", { status: 401 });
 }
 ```
 
@@ -233,8 +238,8 @@ const textResponse = await agent.generate(userMessage);
 
 // ElevenLabs TTS converts to speech
 const audioStream = await elevenlabsTTS.generate(textResponse, {
-  voiceId: "21m00Tcm4TlvDq8ikWAM",
-  model: "eleven_multilingual_v2"
+    voiceId: "21m00Tcm4TlvDq8ikWAM",
+    model: "eleven_multilingual_v2"
 });
 
 // Stream audio to user
@@ -281,6 +286,7 @@ POST /agent/api/demos/live-agent-mcp/tools
 ### TTS latency
 
 ElevenLabs TTS latency:
+
 - **First chunk**: ~200-500ms (connection + generation)
 - **Subsequent chunks**: ~50-100ms (streaming)
 
@@ -290,16 +296,17 @@ Optimize for low latency:
 // Stream response as it's generated
 const stream = await agent.generateStream(userMessage);
 for await (const chunk of stream) {
-  // Convert chunk to speech immediately
-  const audioChunk = await elevenlabsTTS.generate(chunk);
-  // Send to user
-  sendAudioChunk(audioChunk);
+    // Convert chunk to speech immediately
+    const audioChunk = await elevenlabsTTS.generate(chunk);
+    // Send to user
+    sendAudioChunk(audioChunk);
 }
 ```
 
 ### Tool invocation latency
 
 Tool invocation adds latency:
+
 - **Webhook call**: ~50-100ms
 - **Tool execution**: Varies (HubSpot: ~200ms, Jira: ~300ms)
 - **Response processing**: ~50ms
@@ -307,19 +314,20 @@ Tool invocation adds latency:
 Total: ~300-450ms for simple tools
 
 <Callout type="tip">
-For voice interactions, keep tool calls simple and fast. Complex multi-step operations may feel slow in voice conversations.
+    For voice interactions, keep tool calls simple and fast. Complex multi-step operations may feel
+    slow in voice conversations.
 </Callout>
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **"Invalid API key"** | Verify `ELEVENLABS_API_KEY` is correct and not expired. Regenerate key in ElevenLabs dashboard if needed. |
-| **"Voice not found"** | Check `voiceId` exists. List available voices via API and verify voice ID format. |
+| Problem                             | Solution                                                                                                      |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------- |
+| **"Invalid API key"**               | Verify `ELEVENLABS_API_KEY` is correct and not expired. Regenerate key in ElevenLabs dashboard if needed.     |
+| **"Voice not found"**               | Check `voiceId` exists. List available voices via API and verify voice ID format.                             |
 | **"Webhook authentication failed"** | Verify `ELEVENLABS_WEBHOOK_SECRET` matches ElevenLabs agent configuration. Check Authorization header format. |
-| **"Tool execution timeout"** | Tool calls may timeout in voice context. Optimize tool execution or increase timeout limits. |
-| **"Audio quality issues"** | Adjust `stability` and `similarityBoost` parameters. Try different voice models or enable `useSpeakerBoost`. |
-| **"Rate limit exceeded"** | ElevenLabs limits API calls per tier. Upgrade plan or implement rate limiting/queuing. |
+| **"Tool execution timeout"**        | Tool calls may timeout in voice context. Optimize tool execution or increase timeout limits.                  |
+| **"Audio quality issues"**          | Adjust `stability` and `similarityBoost` parameters. Try different voice models or enable `useSpeakerBoost`.  |
+| **"Rate limit exceeded"**           | ElevenLabs limits API calls per tier. Upgrade plan or implement rate limiting/queuing.                        |
 
 ## Rate limiting
 
@@ -355,10 +363,10 @@ In voice context, explain errors clearly:
 
 ```typescript
 try {
-  const result = await callTool("hubspot-get-contact", { contactId });
-  return `Found contact: ${result.name}`;
+    const result = await callTool("hubspot-get-contact", { contactId });
+    return `Found contact: ${result.name}`;
 } catch (error) {
-  return "I couldn't find that contact. Could you check the contact ID?";
+    return "I couldn't find that contact. Could you check the contact ID?";
 }
 ```
 
@@ -370,8 +378,8 @@ Stream audio as it's generated:
 // Don't wait for full response
 const stream = agent.generateStream(message);
 for await (const chunk of stream) {
-  const audio = await elevenlabsTTS.generate(chunk);
-  sendAudio(audio); // Send immediately
+    const audio = await elevenlabsTTS.generate(chunk);
+    sendAudio(audio); // Send immediately
 }
 ```
 

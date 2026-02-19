@@ -34,9 +34,9 @@ List all available integration providers. Returns providers with their connectio
 
 ### Query Parameters
 
-| Parameter   | Type    | Default | Description                    |
-| ----------- | ------- | ------- | ------------------------------ |
-| `category`  | string  | —       | Filter by category             |
+| Parameter  | Type    | Default | Description                     |
+| ---------- | ------- | ------- | ------------------------------- |
+| `category` | string  | —       | Filter by category              |
 | `active`   | boolean | `true`  | Filter to active providers only |
 
 ### Example Request
@@ -81,10 +81,10 @@ curl "https://agentc2.ai/agent/api/integrations/providers?active=true" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Get Provider
 
@@ -94,9 +94,9 @@ Get details for a specific integration provider by key or ID. Returns provider c
 
 ### Path Parameters
 
-| Parameter | Type   | Description         |
-| --------- | ------ | ------------------- |
-| `id`      | string | Provider key or ID  |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
+| `id`      | string | Provider key or ID |
 
 ### Example Request
 
@@ -126,9 +126,9 @@ curl https://agentc2.ai/agent/api/integrations/providers/hubspot \
                 "inputSchema": {
                     "type": "object",
                     "properties": {
-                        "email": {"type": "string"},
-                        "firstName": {"type": "string"},
-                        "lastName": {"type": "string"}
+                        "email": { "type": "string" },
+                        "firstName": { "type": "string" },
+                        "lastName": { "type": "string" }
                     }
                 }
             }
@@ -159,11 +159,11 @@ curl https://agentc2.ai/agent/api/integrations/providers/hubspot \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Provider not found                 |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Provider not found                |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Connections
 
@@ -173,11 +173,11 @@ List all integration connections for the authenticated user's organization. Retu
 
 ### Query Parameters
 
-| Parameter    | Type   | Default | Description                    |
-| ------------ | ------ | ------- | ------------------------------ |
-| `providerId` | string | —       | Filter by provider ID           |
-| `active`     | boolean | `true`  | Filter to active connections only |
-| `scope`      | string | —       | Filter by scope (`"org"` or `"user"`) |
+| Parameter    | Type    | Default | Description                           |
+| ------------ | ------- | ------- | ------------------------------------- |
+| `providerId` | string  | —       | Filter by provider ID                 |
+| `active`     | boolean | `true`  | Filter to active connections only     |
+| `scope`      | string  | —       | Filter by scope (`"org"` or `"user"`) |
 
 ### Example Request
 
@@ -209,10 +209,10 @@ curl "https://agentc2.ai/agent/api/integrations/connections?active=true" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Connection
 
@@ -222,12 +222,12 @@ Create a new integration connection. For API key providers, include credentials 
 
 ### Request Body
 
-| Field        | Type   | Required | Description                    |
-| ------------ | ------ | -------- | ------------------------------ |
-| `providerId` | string | ✅ Yes   | Provider ID or key             |
-| `scope`      | string | ❌ No    | `"org"` or `"user"` (default: `"org"`) |
-| `isDefault`  | boolean | ❌ No    | Whether this is the default connection |
-| `credentials` | object | ❌ No    | Provider-specific credentials (for API key providers) |
+| Field         | Type    | Required | Description                                           |
+| ------------- | ------- | -------- | ----------------------------------------------------- |
+| `providerId`  | string  | ✅ Yes   | Provider ID or key                                    |
+| `scope`       | string  | ❌ No    | `"org"` or `"user"` (default: `"org"`)                |
+| `isDefault`   | boolean | ❌ No    | Whether this is the default connection                |
+| `credentials` | object  | ❌ No    | Provider-specific credentials (for API key providers) |
 
 ### Example Request
 
@@ -267,10 +267,10 @@ curl -X POST https://agentc2.ai/agent/api/integrations/connections \
 | Status | Error Code                | Description                        |
 | ------ | ------------------------- | ---------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
-| `400`  | `INVALID_CREDENTIALS`    | Invalid credentials                |
-| `400`  | `INVALID_PROVIDER`        | Provider not found                |
+| `400`  | `INVALID_CREDENTIALS`     | Invalid credentials                |
+| `400`  | `INVALID_PROVIDER`        | Provider not found                 |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
-| `409`  | `CONNECTION_EXISTS`       | Connection already exists         |
+| `409`  | `CONNECTION_EXISTS`       | Connection already exists          |
 | `500`  | `INTERNAL_ERROR`          | Server error                       |
 
 ## Delete Connection
@@ -281,9 +281,9 @@ Delete an integration connection. This will remove the connection and make its t
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `id`      | string | Connection ID    |
+| Parameter | Type   | Description   |
+| --------- | ------ | ------------- |
+| `id`      | string | Connection ID |
 
 ### Example Request
 
@@ -303,11 +303,11 @@ curl -X DELETE https://agentc2.ai/agent/api/integrations/connections/conn_abc123
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Connection not found               |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Connection not found              |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List MCP Tools
 
@@ -317,10 +317,10 @@ List all available MCP (Model Context Protocol) tools from connected integration
 
 ### Query Parameters
 
-| Parameter         | Type    | Default | Description                    |
-| ----------------- | ------- | ------- | ------------------------------ |
+| Parameter         | Type    | Default | Description                             |
+| ----------------- | ------- | ------- | --------------------------------------- |
 | `includeInactive` | boolean | `false` | Include tools from inactive connections |
-| `server`          | string  | —       | Filter by MCP server ID        |
+| `server`          | string  | —       | Filter by MCP server ID                 |
 
 ### Example Request
 
@@ -371,10 +371,10 @@ curl "https://agentc2.ai/agent/api/mcp/tools?includeInactive=false" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Execute MCP Tool
 
@@ -384,14 +384,14 @@ Execute an MCP tool with the provided arguments. The tool will be invoked throug
 
 ### Path Parameters
 
-| Parameter | Type   | Description      |
-| --------- | ------ | ---------------- |
-| `toolId`  | string | Tool name or ID  |
+| Parameter | Type   | Description     |
+| --------- | ------ | --------------- |
+| `toolId`  | string | Tool name or ID |
 
 ### Request Body
 
-| Field     | Type   | Required | Description                    |
-| --------- | ------ | -------- | ------------------------------ |
+| Field       | Type   | Required | Description                          |
+| ----------- | ------ | -------- | ------------------------------------ |
 | `arguments` | object | ✅ Yes   | Tool arguments matching input schema |
 
 ### Example Request
@@ -431,30 +431,30 @@ curl -X POST https://agentc2.ai/agent/api/mcp/tools/hubspot_hubspot-get-user-det
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_ARGUMENTS` | Arguments do not match schema   |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Tool not found                     |
-| `500`  | `TOOL_EXECUTION_ERROR` | Tool execution failed          |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code             | Description                       |
+| ------ | ---------------------- | --------------------------------- |
+| `400`  | `INVALID_ARGUMENTS`    | Arguments do not match schema     |
+| `401`  | `UNAUTHORIZED`         | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`            | Tool not found                    |
+| `500`  | `TOOL_EXECUTION_ERROR` | Tool execution failed             |
+| `500`  | `INTERNAL_ERROR`       | Server error                      |
 
 ## Error Codes
 
 All endpoints may return these error codes:
 
-| Status | Error Code                | Description                        | Solution                          |
-| ------ | ------------------------- | ---------------------------------- | --------------------------------- |
-| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
-| `400`  | `INVALID_CREDENTIALS`    | Invalid credentials                | Check credentials format          |
-| `400`  | `INVALID_PROVIDER`        | Provider not found                 | Check provider ID/key             |
-| `400`  | `INVALID_ARGUMENTS`       | Arguments do not match schema       | Validate arguments against schema |
-| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
-| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
-| `404`  | `NOT_FOUND`               | Resource not found                 | Check ID/key is correct           |
+| Status | Error Code                | Description                        | Solution                                |
+| ------ | ------------------------- | ---------------------------------- | --------------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields             |
+| `400`  | `INVALID_CREDENTIALS`     | Invalid credentials                | Check credentials format                |
+| `400`  | `INVALID_PROVIDER`        | Provider not found                 | Check provider ID/key                   |
+| `400`  | `INVALID_ARGUMENTS`       | Arguments do not match schema      | Validate arguments against schema       |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header          |
+| `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access                  |
+| `404`  | `NOT_FOUND`               | Resource not found                 | Check ID/key is correct                 |
 | `409`  | `CONNECTION_EXISTS`       | Connection already exists          | Use existing connection or delete first |
-| `500`  | `TOOL_EXECUTION_ERROR`    | Tool execution failed              | Check integration connection       |
-| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |
+| `500`  | `TOOL_EXECUTION_ERROR`    | Tool execution failed              | Check integration connection            |
+| `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support        |
 
 ### Error Response Format
 

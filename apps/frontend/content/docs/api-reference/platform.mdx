@@ -34,8 +34,8 @@ List all organizations the authenticated user is a member of. Returns organizati
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                    |
-| --------- | ------ | ------- | ------------------------------ |
+| Parameter | Type   | Default | Description                                            |
+| --------- | ------ | ------- | ------------------------------------------------------ |
 | `role`    | string | —       | Filter by user role (`"OWNER"`, `"ADMIN"`, `"MEMBER"`) |
 
 ### Example Request
@@ -67,10 +67,10 @@ curl "https://agentc2.ai/agent/api/organizations" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Organization
 
@@ -80,11 +80,11 @@ Create a new organization. The authenticated user will be set as the owner. A de
 
 ### Request Body
 
-| Field         | Type   | Required | Description                    |
-| ------------- | ------ | -------- | ------------------------------ |
-| `name`        | string | ✅ Yes   | Display name for the organization |
+| Field         | Type   | Required | Description                                     |
+| ------------- | ------ | -------- | ----------------------------------------------- |
+| `name`        | string | ✅ Yes   | Display name for the organization               |
 | `slug`        | string | ❌ No    | URL-safe identifier (auto-generated if omitted) |
-| `description` | string | ❌ No    | Human-readable description      |
+| `description` | string | ❌ No    | Human-readable description                      |
 
 ### Example Request
 
@@ -138,19 +138,19 @@ Get unified activity feed across all agents. Returns activity events with filter
 
 ### Query Parameters
 
-| Parameter   | Type   | Default | Description                    |
-| ----------- | ------ | ------- | ------------------------------ |
+| Parameter   | Type   | Default | Description                            |
+| ----------- | ------ | ------- | -------------------------------------- |
 | `type`      | string | —       | Filter by event type (comma-separated) |
-| `agentId`   | string | —       | Filter by agent ID             |
-| `agentSlug` | string | —       | Filter by agent slug            |
-| `source`    | string | —       | Filter by source               |
-| `status`    | string | —       | Filter by status                |
-| `from`      | string | —       | Start date (ISO string)        |
-| `to`        | string | —       | End date (ISO string)           |
-| `search`    | string | —       | Search in summary/detail        |
-| `tags`      | string | —       | Filter by tags (comma-separated) |
-| `cursor`    | string | —       | Pagination cursor               |
-| `limit`     | number | `50`    | Maximum results (max: 200)     |
+| `agentId`   | string | —       | Filter by agent ID                     |
+| `agentSlug` | string | —       | Filter by agent slug                   |
+| `source`    | string | —       | Filter by source                       |
+| `status`    | string | —       | Filter by status                       |
+| `from`      | string | —       | Start date (ISO string)                |
+| `to`        | string | —       | End date (ISO string)                  |
+| `search`    | string | —       | Search in summary/detail               |
+| `tags`      | string | —       | Filter by tags (comma-separated)       |
+| `cursor`    | string | —       | Pagination cursor                      |
+| `limit`     | number | `50`    | Maximum results (max: 200)             |
 
 ### Example Request
 
@@ -204,11 +204,11 @@ curl "https://agentc2.ai/agent/api/activity?type=agent_run&agentSlug=research-ag
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_DATE` | Invalid date format                |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `INVALID_DATE`   | Invalid date format               |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Audit Logs
 
@@ -218,15 +218,15 @@ Query audit logs with filtering and pagination. Returns audit trail of platform 
 
 ### Query Parameters
 
-| Parameter   | Type   | Default | Description                    |
-| ----------- | ------ | ------- | ------------------------------ |
+| Parameter    | Type   | Default | Description                                               |
+| ------------ | ------ | ------- | --------------------------------------------------------- |
 | `entityType` | string | —       | Filter by entity type (e.g., `"Agent"`, `"AgentVersion"`) |
-| `entityId`  | string | —       | Filter by entity ID             |
-| `action`    | string | —       | Filter by action type           |
-| `from`      | string | —       | Start date (ISO string)         |
-| `to`        | string | —       | End date (ISO string)           |
-| `limit`     | number | `50`    | Maximum results (max: 100)      |
-| `cursor`    | string | —       | Pagination cursor               |
+| `entityId`   | string | —       | Filter by entity ID                                       |
+| `action`     | string | —       | Filter by action type                                     |
+| `from`       | string | —       | Start date (ISO string)                                   |
+| `to`         | string | —       | End date (ISO string)                                     |
+| `limit`      | number | `50`    | Maximum results (max: 100)                                |
+| `cursor`     | string | —       | Pagination cursor                                         |
 
 ### Example Request
 
@@ -261,12 +261,12 @@ curl "https://agentc2.ai/agent/api/audit-logs?entityType=Agent&action=CREATE&lim
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_DATE` | Invalid date format                |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions (audit logs require admin access) |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                                                |
+| ------ | ---------------- | ---------------------------------------------------------- |
+| `400`  | `INVALID_DATE`   | Invalid date format                                        |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication                          |
+| `403`  | `FORBIDDEN`      | Insufficient permissions (audit logs require admin access) |
+| `500`  | `INTERNAL_ERROR` | Server error                                               |
 
 ## Get Health Check
 
@@ -324,9 +324,9 @@ curl https://agentc2.ai/agent/api/health \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
+| Status | Error Code            | Description                        |
+| ------ | --------------------- | ---------------------------------- |
+| `401`  | `UNAUTHORIZED`        | Missing or invalid authentication  |
 | `503`  | `SERVICE_UNAVAILABLE` | One or more services are unhealthy |
 
 ## Error Codes

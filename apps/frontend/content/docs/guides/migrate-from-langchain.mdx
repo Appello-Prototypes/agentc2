@@ -5,7 +5,14 @@ section: "guides"
 order: 8
 primaryKeyword: "migrate LangChain to AgentC2"
 secondaryKeywords: ["LangChain migration", "LangGraph migration", "agent framework migration"]
-relatedSlugs: ["agents/overview", "agents/creating-agents", "workflows/overview", "networks/overview", "agents/tools"]
+relatedSlugs:
+    [
+        "agents/overview",
+        "agents/creating-agents",
+        "workflows/overview",
+        "networks/overview",
+        "agents/tools"
+    ]
 pageType: "tutorial"
 ctaLabel: "Start Building in AgentC2"
 ctaHref: "/signup"
@@ -25,24 +32,25 @@ Before starting, ensure you have:
 - Access to your LangChain agents, tools, and chains
 
 <Callout type="info">
-    This guide covers migration from LangChain and LangGraph. AgentC2 provides similar capabilities with a database-driven, production-focused architecture.
+    This guide covers migration from LangChain and LangGraph. AgentC2 provides similar capabilities
+    with a database-driven, production-focused architecture.
 </Callout>
 
 ## Concept mapping
 
 Understanding how LangChain concepts map to AgentC2:
 
-| LangChain Concept | AgentC2 Equivalent | Notes |
-|-------------------|-------------------|-------|
-| **Agent** | **Agent** | Database-driven, versioned agents |
-| **Tool** | **Tool** (built-in, MCP, or skill) | Tools are standardized via MCP |
-| **Chain** | **Workflow** | Multi-step deterministic workflows |
-| **LangGraph** | **Network** | Multi-agent orchestration with topology |
-| **Memory** | **Memory** | Conversation memory with semantic recall |
-| **PromptTemplate** | **InstructionsTemplate** | Runtime variable resolution |
-| **LLMChain** | **Agent** (single-step) | Agents handle LLM calls |
-| **SequentialChain** | **Workflow** (sequential steps) | Workflows define step order |
-| **RouterChain** | **Network** (router topology) | Networks route to specialist agents |
+| LangChain Concept   | AgentC2 Equivalent                 | Notes                                    |
+| ------------------- | ---------------------------------- | ---------------------------------------- |
+| **Agent**           | **Agent**                          | Database-driven, versioned agents        |
+| **Tool**            | **Tool** (built-in, MCP, or skill) | Tools are standardized via MCP           |
+| **Chain**           | **Workflow**                       | Multi-step deterministic workflows       |
+| **LangGraph**       | **Network**                        | Multi-agent orchestration with topology  |
+| **Memory**          | **Memory**                         | Conversation memory with semantic recall |
+| **PromptTemplate**  | **InstructionsTemplate**           | Runtime variable resolution              |
+| **LLMChain**        | **Agent** (single-step)            | Agents handle LLM calls                  |
+| **SequentialChain** | **Workflow** (sequential steps)    | Workflows define step order              |
+| **RouterChain**     | **Network** (router topology)      | Networks route to specialist agents      |
 
 ## Architecture differences
 
@@ -74,6 +82,7 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 ```
 
 **Key differences:**
+
 - ✅ **Version control** — Agent versions tracked in database
 - ✅ **Multi-tenant** — Workspace isolation built-in
 - ✅ **Observability** — All runs traced automatically
@@ -190,14 +199,14 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key mappings
 
-| LangChain Setting | AgentC2 Equivalent |
-|-------------------|-------------------|
-| `llm` | `modelProvider` + `modelName` |
-| `temperature` | `temperature` |
-| `tools` | `tools` (array of tool IDs) |
-| `prompt` | `instructions` |
-| `memory` | `memoryEnabled` + `memoryConfig` |
-| `max_iterations` | `maxSteps` |
+| LangChain Setting | AgentC2 Equivalent               |
+| ----------------- | -------------------------------- |
+| `llm`             | `modelProvider` + `modelName`    |
+| `temperature`     | `temperature`                    |
+| `tools`           | `tools` (array of tool IDs)      |
+| `prompt`          | `instructions`                   |
+| `memory`          | `memoryEnabled` + `memoryConfig` |
+| `max_iterations`  | `maxSteps`                       |
 
 ### Migration steps
 
@@ -293,7 +302,7 @@ class ConditionalChain(Chain):
     def __init__(self, chain_a, chain_b):
         self.chain_a = chain_a
         self.chain_b = chain_b
-    
+
     def _call(self, inputs):
         if inputs["condition"]:
             return self.chain_a.run(inputs)
@@ -422,13 +431,13 @@ curl -X POST https://agentc2.ai/agent/api/networks \
 
 ### LangGraph state → AgentC2 network
 
-| LangGraph Concept | AgentC2 Equivalent |
-|-------------------|-------------------|
-| **State** | **Network input/output** |
-| **Node** | **Agent** (in network) |
-| **Edge** | **Network edge** |
-| **Conditional edge** | **Edge with condition** |
-| **State update** | **Agent output** |
+| LangGraph Concept    | AgentC2 Equivalent       |
+| -------------------- | ------------------------ |
+| **State**            | **Network input/output** |
+| **Node**             | **Agent** (in network)   |
+| **Edge**             | **Network edge**         |
+| **Conditional edge** | **Edge with condition**  |
+| **State update**     | **Agent output**         |
 
 ## Phase 5: Add governance
 

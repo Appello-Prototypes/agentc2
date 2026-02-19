@@ -5,7 +5,16 @@ section: "guides"
 order: 1
 primaryKeyword: "AI customer support agent"
 secondaryKeywords: ["customer support automation", "support ticket triage", "AI support chatbot"]
-relatedSlugs: ["agents/creating-agents", "agents/tools", "agents/memory", "agents/guardrails", "integrations/jira", "integrations/slack", "knowledge/overview"]
+relatedSlugs:
+    [
+        "agents/creating-agents",
+        "agents/tools",
+        "agents/memory",
+        "agents/guardrails",
+        "integrations/jira",
+        "integrations/slack",
+        "knowledge/overview"
+    ]
 pageType: "tutorial"
 ctaLabel: "Start Building in AgentC2"
 ctaHref: "/signup"
@@ -26,7 +35,8 @@ Before starting, ensure you have:
 - A knowledge base with support documentation (for RAG)
 
 <Callout type="info">
-    This guide builds a complete support system. You can start with a basic agent and add integrations incrementally. Each step includes both API and UI instructions.
+    This guide builds a complete support system. You can start with a basic agent and add
+    integrations incrementally. Each step includes both API and UI instructions.
 </Callout>
 
 ## Architecture overview
@@ -91,15 +101,16 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key configuration decisions
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| **Temperature** | 0.2 | Low temperature for consistent, deterministic categorization |
-| **Memory** | Disabled | Triage is stateless—each ticket is analyzed independently |
-| **Max Steps** | 3 | Minimal tool calls needed for classification |
-| **Scorers** | quality | Track categorization accuracy over time |
+| Setting         | Value    | Rationale                                                    |
+| --------------- | -------- | ------------------------------------------------------------ |
+| **Temperature** | 0.2      | Low temperature for consistent, deterministic categorization |
+| **Memory**      | Disabled | Triage is stateless—each ticket is analyzed independently    |
+| **Max Steps**   | 3        | Minimal tool calls needed for classification                 |
+| **Scorers**     | quality  | Track categorization accuracy over time                      |
 
 <Callout type="tip">
-    Start with a low temperature for triage to ensure consistent results. You can increase it later if you need more nuanced categorization.
+    Start with a low temperature for triage to ensure consistent results. You can increase it later
+    if you need more nuanced categorization.
 </Callout>
 
 ## Step 2: Create specialist agents
@@ -221,7 +232,9 @@ curl -X POST https://agentc2.ai/agent/api/rag/query \
 ```
 
 <Callout type="info">
-    RAG retrieval uses semantic search to find relevant documents even if the exact keywords don't match. This enables natural language queries like "I can't log in" to find password reset guides.
+    RAG retrieval uses semantic search to find relevant documents even if the exact keywords don't
+    match. This enables natural language queries like "I can't log in" to find password reset
+    guides.
 </Callout>
 
 ## Step 4: Add tools to specialist agents
@@ -294,7 +307,9 @@ curl -X PUT https://agentc2.ai/agent/api/agents/billing-support \
 ```
 
 <Callout type="tip">
-    Semantic recall allows agents to reference relevant messages from past conversations, even if they're not in the immediate context window. This is especially useful for support agents handling ongoing issues.
+    Semantic recall allows agents to reference relevant messages from past conversations, even if
+    they're not in the immediate context window. This is especially useful for support agents
+    handling ongoing issues.
 </Callout>
 
 ## Step 6: Add guardrails
@@ -384,7 +399,7 @@ curl -X POST https://agentc2.ai/agent/api/workflows \
             "condition": "{{triage.output.confidence}}",
             "branches": [
               {
-                "condition": "< 0.7",
+                "condition": "below 0.7",
                 "steps": [
                   {
                     "id": "escalate-low-confidence",
@@ -562,6 +577,7 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
 ```
 
 Expected flow:
+
 1. Triage agent categorizes as "account" with high confidence
 2. RAG system finds password reset guide
 3. Agent responds with step-by-step instructions
@@ -582,6 +598,7 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
 ```
 
 Expected flow:
+
 1. Triage agent categorizes as "billing" with high priority
 2. Routes to billing specialist agent
 3. Agent requests account verification
@@ -603,7 +620,8 @@ curl -X POST https://agentc2.ai/agent/api/workflows/support-router/execute \
 ```
 
 Expected flow:
-1. Triage agent has low confidence (< 0.7)
+
+1. Triage agent has low confidence (below 0.7)
 2. Workflow escalates directly to human support
 3. Slack notification sent to support team
 
@@ -619,6 +637,7 @@ curl https://agentc2.ai/agent/api/agents/support-triage/runs?limit=100 \
 ```
 
 Look for:
+
 - Consistent categorization
 - Appropriate priority assignment
 - Confidence scores correlating with accuracy
@@ -644,7 +663,9 @@ curl "https://agentc2.ai/agent/api/workflows/support-router/runs?status=complete
 Calculate escalation rate: `escalated_tickets / total_tickets`
 
 <Callout type="tip">
-    Aim for an escalation rate of 10-20% initially. Too high means your agents need better instructions or tools. Too low might mean you're auto-resolving issues that need human attention.
+    Aim for an escalation rate of 10-20% initially. Too high means your agents need better
+    instructions or tools. Too low might mean you're auto-resolving issues that need human
+    attention.
 </Callout>
 
 ## Step 10: Enable continuous learning
@@ -671,6 +692,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/billing-support/learning/enable
 ```
 
 The learning system will:
+
 1. Extract signals from successful and failed interactions
 2. Generate improvement proposals
 3. Run A/B experiments

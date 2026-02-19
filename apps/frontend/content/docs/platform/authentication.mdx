@@ -21,43 +21,48 @@ Better Auth is configured with PostgreSQL adapter, email/password authentication
 ```typescript
 // packages/auth/src/auth.ts
 export const auth = betterAuth({
-  database: prismaAdapter(prisma, {
-    provider: "postgresql"
-  }),
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification: isProduction
-  },
-  socialProviders: {
-    google: { /* ... */ },
-    microsoft: { /* ... */ }
-  },
-  session: {
-    expiresIn: 60 * 60 * 24, // 24 hours
-    updateAge: 60 * 60 * 6, // Update every 6 hours
-    cookieCache: {
-      enabled: true,
-      maxAge: 60 * 5 // 5 minutes
-    }
-  },
-  secret: process.env.BETTER_AUTH_SECRET!,
-  baseURL: process.env.NEXT_PUBLIC_APP_URL
-})
+    database: prismaAdapter(prisma, {
+        provider: "postgresql"
+    }),
+    emailAndPassword: {
+        enabled: true,
+        requireEmailVerification: isProduction
+    },
+    socialProviders: {
+        google: {
+            /* ... */
+        },
+        microsoft: {
+            /* ... */
+        }
+    },
+    session: {
+        expiresIn: 60 * 60 * 24, // 24 hours
+        updateAge: 60 * 60 * 6, // Update every 6 hours
+        cookieCache: {
+            enabled: true,
+            maxAge: 60 * 5 // 5 minutes
+        }
+    },
+    secret: process.env.BETTER_AUTH_SECRET!,
+    baseURL: process.env.NEXT_PUBLIC_APP_URL
+});
 ```
 
 ### Environment variables
 
-| Variable | Description | Example |
-| -------- | ----------- | ------- |
-| `BETTER_AUTH_SECRET` | Encryption key for sessions (32+ bytes) | Generated via `openssl rand -base64 32` |
-| `NEXT_PUBLIC_APP_URL` | Base URL for auth callbacks | `https://agentc2.ai` or `https://catalyst.localhost` |
-| `GOOGLE_CLIENT_ID` | Google OAuth client ID | _(optional)_ |
-| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | _(optional)_ |
-| `MICROSOFT_CLIENT_ID` | Microsoft OAuth client ID | _(optional)_ |
-| `MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret | _(optional)_ |
+| Variable                  | Description                             | Example                                              |
+| ------------------------- | --------------------------------------- | ---------------------------------------------------- |
+| `BETTER_AUTH_SECRET`      | Encryption key for sessions (32+ bytes) | Generated via `openssl rand -base64 32`              |
+| `NEXT_PUBLIC_APP_URL`     | Base URL for auth callbacks             | `https://agentc2.ai` or `https://catalyst.localhost` |
+| `GOOGLE_CLIENT_ID`        | Google OAuth client ID                  | _(optional)_                                         |
+| `GOOGLE_CLIENT_SECRET`    | Google OAuth client secret              | _(optional)_                                         |
+| `MICROSOFT_CLIENT_ID`     | Microsoft OAuth client ID               | _(optional)_                                         |
+| `MICROSOFT_CLIENT_SECRET` | Microsoft OAuth client secret           | _(optional)_                                         |
 
 <Callout type="warning">
-    **Generate secure secrets**: Always use cryptographically secure random values for `BETTER_AUTH_SECRET`. Never commit secrets to version control.
+    **Generate secure secrets**: Always use cryptographically secure random values for
+    `BETTER_AUTH_SECRET`. Never commit secrets to version control.
 </Callout>
 
 ## Session management
@@ -90,13 +95,13 @@ session: {
 
 Better Auth automatically configures secure cookies:
 
-| Property | Value | Purpose |
-| -------- | ----- | ------- |
-| `httpOnly` | `true` | Prevents JavaScript access (XSS protection) |
-| `secure` | `true` (production) | HTTPS only in production |
-| `sameSite` | `"lax"` | CSRF protection |
-| `path` | `"/"` | Available across all paths |
-| `maxAge` | 24 hours | Session expiration |
+| Property   | Value               | Purpose                                     |
+| ---------- | ------------------- | ------------------------------------------- |
+| `httpOnly` | `true`              | Prevents JavaScript access (XSS protection) |
+| `secure`   | `true` (production) | HTTPS only in production                    |
+| `sameSite` | `"lax"`             | CSRF protection                             |
+| `path`     | `"/"`               | Available across all paths                  |
+| `maxAge`   | 24 hours            | Session expiration                          |
 
 ## Cross-app cookie sharing
 
@@ -140,7 +145,8 @@ catalyst.localhost {
 ```
 
 <Callout type="tip">
-    **Local HTTPS**: Use `.localhost` domains for automatic DNS resolution to `127.0.0.1`. Caddy provides self-signed certificates for local HTTPS development.
+    **Local HTTPS**: Use `.localhost` domains for automatic DNS resolution to `127.0.0.1`. Caddy
+    provides self-signed certificates for local HTTPS development.
 </Callout>
 
 ## Role-based access control
@@ -151,29 +157,29 @@ Authentication integrates with the multi-tenant membership system:
 
 ```typescript
 // Resolve user's organization from session
-const session = await auth.api.getSession({ headers: request.headers })
+const session = await auth.api.getSession({ headers: request.headers });
 const membership = await prisma.membership.findFirst({
-  where: { userId: session.user.id },
-  include: { organization: true }
-})
+    where: { userId: session.user.id },
+    include: { organization: true }
+});
 ```
 
 ### Membership roles
 
-| Role | Permissions | API Access |
-| ---- | ----------- | ---------- |
-| **owner** | Full control, billing, deletion | All endpoints |
-| **admin** | Manage members, workspaces, agents | Most endpoints |
-| **member** | Create/edit agents, run workflows | Standard endpoints |
-| **viewer** | Read-only access | GET endpoints only |
+| Role       | Permissions                        | API Access         |
+| ---------- | ---------------------------------- | ------------------ |
+| **owner**  | Full control, billing, deletion    | All endpoints      |
+| **admin**  | Manage members, workspaces, agents | Most endpoints     |
+| **member** | Create/edit agents, run workflows  | Standard endpoints |
+| **viewer** | Read-only access                   | GET endpoints only |
 
 ### Permission checks
 
 ```typescript
 // Example: Check if user can manage agents
-const membership = await getMembership(userId, organizationId)
+const membership = await getMembership(userId, organizationId);
 if (membership.role !== "owner" && membership.role !== "admin") {
-  throw new Error("Insufficient permissions")
+    throw new Error("Insufficient permissions");
 }
 ```
 
@@ -186,10 +192,10 @@ API routes use authentication middleware to validate sessions:
 ```typescript
 // apps/frontend/src/middleware.ts
 export async function middleware(request: NextRequest) {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session && isProtectedRoute(request.nextUrl.pathname)) {
-    return NextResponse.redirect(new URL("/login", request.url))
-  }
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session && isProtectedRoute(request.nextUrl.pathname)) {
+        return NextResponse.redirect(new URL("/login", request.url));
+    }
 }
 ```
 
@@ -198,19 +204,19 @@ export async function middleware(request: NextRequest) {
 ```typescript
 // apps/agent/src/lib/api-auth.ts
 export async function authenticateRequest(
-  request?: NextRequest
+    request?: NextRequest
 ): Promise<{ userId: string; organizationId: string } | null> {
-  const session = await auth.api.getSession({ headers: request.headers })
-  if (!session) return null
-  
-  const membership = await prisma.membership.findFirst({
-    where: { userId: session.user.id },
-    include: { organization: true }
-  })
-  
-  return membership
-    ? { userId: session.user.id, organizationId: membership.organizationId }
-    : null
+    const session = await auth.api.getSession({ headers: request.headers });
+    if (!session) return null;
+
+    const membership = await prisma.membership.findFirst({
+        where: { userId: session.user.id },
+        include: { organization: true }
+    });
+
+    return membership
+        ? { userId: session.user.id, organizationId: membership.organizationId }
+        : null;
 }
 ```
 
@@ -223,15 +229,15 @@ Better Auth provides hooks for session lifecycle:
 ```typescript
 // Auto-create organization for new users
 auth.on("after.signIn", async ({ user }) => {
-  const existingMembership = await prisma.membership.findFirst({
-    where: { userId: user.id }
-  })
-  
-  if (!existingMembership) {
-    // Create default organization and workspace
-    await createDefaultOrganization(user.id)
-  }
-})
+    const existingMembership = await prisma.membership.findFirst({
+        where: { userId: user.id }
+    });
+
+    if (!existingMembership) {
+        // Create default organization and workspace
+        await createDefaultOrganization(user.id);
+    }
+});
 ```
 
 ### Session refresh

@@ -25,7 +25,8 @@ Before starting, ensure you have:
 - An existing agent you want to add voice to
 
 <Callout type="info">
-    Voice agents enable natural, real-time conversations. This guide covers both text-to-speech (TTS) for agent responses and full conversational AI agents with tool invocation.
+    Voice agents enable natural, real-time conversations. This guide covers both text-to-speech
+    (TTS) for agent responses and full conversational AI agents with tool invocation.
 </Callout>
 
 ## Architecture overview
@@ -68,10 +69,10 @@ Your voice-enabled agent will support:
 1. **Go to Conversational AI** > **Agents**
 2. **Click Create Agent**
 3. **Configure agent**:
-   - **Name**: "AgentC2 Voice Assistant"
-   - **Voice**: Select a voice (e.g., "Rachel", "Adam")
-   - **Instructions**: Basic agent behavior
-   - **Knowledge Base**: (Optional) Upload documents
+    - **Name**: "AgentC2 Voice Assistant"
+    - **Voice**: Select a voice (e.g., "Rachel", "Adam")
+    - **Instructions**: Basic agent behavior
+    - **Knowledge Base**: (Optional) Upload documents
 4. **Note the Agent ID** (starts with `agent_`)
 
 <Callout type="tip">
@@ -132,7 +133,8 @@ NGROK_DOMAIN="your-subdomain.ngrok-free.dev"
 ```
 
 <Callout type="warning">
-    Webhooks require HTTPS. Use ngrok for local development, or deploy to production for stable URLs.
+    Webhooks require HTTPS. Use ngrok for local development, or deploy to production for stable
+    URLs.
 </Callout>
 
 ## Step 4: Configure webhook endpoint
@@ -142,11 +144,13 @@ Set up the webhook endpoint that ElevenLabs will call:
 ### Verify webhook endpoint exists
 
 The endpoint should be at:
+
 ```
 POST /agent/api/demos/live-agent-mcp/tools
 ```
 
 This endpoint:
+
 - Receives tool invocation requests from ElevenLabs
 - Verifies webhook signature
 - Executes tools via your agent
@@ -179,9 +183,9 @@ In the ElevenLabs dashboard:
 1. **Go to your agent** settings
 2. **Navigate to Webhooks**
 3. **Add webhook**:
-   - **URL**: `https://your-domain.ngrok-free.dev/agent/api/demos/live-agent-mcp/tools`
-   - **Secret**: Your `ELEVENLABS_WEBHOOK_SECRET`
-   - **Events**: Select "tool_calls"
+    - **URL**: `https://your-domain.ngrok-free.dev/agent/api/demos/live-agent-mcp/tools`
+    - **Secret**: Your `ELEVENLABS_WEBHOOK_SECRET`
+    - **Events**: Select "tool_calls"
 4. **Save**
 
 ### Verify webhook configuration
@@ -191,7 +195,7 @@ ElevenLabs will send a verification request. Ensure your endpoint responds corre
 ```typescript
 // Endpoint should verify signature and return 200
 if (verifySignature(request, ELEVENLABS_WEBHOOK_SECRET)) {
-  return { status: "ok" };
+    return { status: "ok" };
 }
 ```
 
@@ -230,15 +234,16 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key configuration for voice
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| **Max Tokens** | 500 | Shorter responses for voice (2-3 sentences) |
-| **Temperature** | 0.7 | Natural, conversational tone |
-| **Memory** | Enabled | Remember conversation context |
-| **Max Steps** | 10 | Allow tool usage during conversation |
+| Setting         | Value   | Rationale                                   |
+| --------------- | ------- | ------------------------------------------- |
+| **Max Tokens**  | 500     | Shorter responses for voice (2-3 sentences) |
+| **Temperature** | 0.7     | Natural, conversational tone                |
+| **Memory**      | Enabled | Remember conversation context               |
+| **Max Steps**   | 10      | Allow tool usage during conversation        |
 
 <Callout type="tip">
-    Voice responses should be shorter than text responses. Users can't easily scan long voice messages, so keep it concise.
+    Voice responses should be shorter than text responses. Users can't easily scan long voice
+    messages, so keep it concise.
 </Callout>
 
 ## Step 7: Configure voice agent tools
@@ -268,12 +273,14 @@ curl -X POST https://agentc2.ai/agent/api/agents/voice-assistant/tools \
 ### Tool selection for voice
 
 Prefer tools that:
+
 - ✅ Return quick results (low latency)
 - ✅ Have simple, clear outputs
 - ✅ Don't require complex inputs
 - ✅ Work well with natural language
 
 Avoid tools that:
+
 - ❌ Require complex structured input
 - ❌ Have long execution times
 - ❌ Return large data structures
@@ -299,8 +306,8 @@ In ElevenLabs agent settings:
 1. **Enable interruption detection**
 2. **Set interruption sensitivity** (medium recommended)
 3. **Configure interruption behavior**:
-   - Stop current response
-   - Process new input immediately
+    - Stop current response
+    - Process new input immediately
 
 ## Step 9: Test voice conversation
 
@@ -316,19 +323,23 @@ Test your voice agent end-to-end:
 ### Test scenarios
 
 **Scenario 1: Simple query**
+
 - User: "What's the weather today?"
 - Agent: Uses web-fetch, responds with weather
 
 **Scenario 2: Tool usage**
+
 - User: "Calculate 15% tip on $50"
 - Agent: Uses calculator, responds with result
 
 **Scenario 3: Interruption**
+
 - Agent: "Let me look that up for you..."
 - User: "Actually, never mind"
 - Agent: "Sure, what can I help with instead?"
 
 **Scenario 4: Long response**
+
 - User: "Tell me about AI agents"
 - Agent: "AI agents are systems that... [pauses] Should I continue?"
 
@@ -401,7 +412,8 @@ curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
 ```
 
 <Callout type="tip">
-    Balance response quality with latency. Use faster models for simple queries, slower models for complex reasoning.
+    Balance response quality with latency. Use faster models for simple queries, slower models for
+    complex reasoning.
 </Callout>
 
 ## Step 12: Monitor voice agent performance
@@ -416,6 +428,7 @@ curl https://agentc2.ai/agent/api/agents/voice-assistant/runs?limit=100 \
 ```
 
 Track:
+
 - **Time to first token**: How quickly agent starts responding
 - **Total response time**: End-to-end latency
 - **Tool execution time**: Time spent in tools
@@ -450,6 +463,7 @@ curl -X PUT https://agentc2.ai/agent/api/agents/voice-assistant \
 ### Background noise
 
 Configure ElevenLabs to filter background noise:
+
 1. **Agent settings** > **Audio processing**
 2. **Enable noise reduction**
 3. **Set sensitivity** (medium recommended)

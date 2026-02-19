@@ -5,7 +5,15 @@ section: "guides"
 order: 3
 primaryKeyword: "AI sales agent"
 secondaryKeywords: ["CRM automation", "sales automation AI", "lead qualification agent"]
-relatedSlugs: ["agents/creating-agents", "integrations/hubspot", "integrations/gmail", "integrations/google-calendar", "agents/guardrails", "workflows/human-in-the-loop"]
+relatedSlugs:
+    [
+        "agents/creating-agents",
+        "integrations/hubspot",
+        "integrations/gmail",
+        "integrations/google-calendar",
+        "agents/guardrails",
+        "workflows/human-in-the-loop"
+    ]
 pageType: "tutorial"
 ctaLabel: "Start Building in AgentC2"
 ctaHref: "/signup"
@@ -26,7 +34,8 @@ Before starting, ensure you have:
 - Google Calendar access (for scheduling)
 
 <Callout type="warning">
-    Sales agents interact with real customers and prospects. Always use approval gates for outbound communications to prevent unauthorized outreach and maintain brand reputation.
+    Sales agents interact with real customers and prospects. Always use approval gates for outbound
+    communications to prevent unauthorized outreach and maintain brand reputation.
 </Callout>
 
 ## Architecture overview
@@ -64,11 +73,11 @@ Configure HubSpot for CRM access:
 
 1. **Get API token** — Go to HubSpot Settings > Integrations > Private Apps
 2. **Create private app** with scopes:
-   - `crm.objects.contacts.read`
-   - `crm.objects.contacts.write`
-   - `crm.objects.companies.read`
-   - `crm.objects.deals.read`
-   - `crm.objects.deals.write`
+    - `crm.objects.contacts.read`
+    - `crm.objects.contacts.write`
+    - `crm.objects.companies.read`
+    - `crm.objects.deals.read`
+    - `crm.objects.deals.write`
 3. **Copy access token** (starts with `pat-na1-`)
 
 ### Configure in AgentC2
@@ -79,13 +88,15 @@ HUBSPOT_ACCESS_TOKEN="pat-na1-..."
 ```
 
 Or configure via UI:
+
 1. Navigate to **Settings > Integrations**
 2. Find **HubSpot** and click **Connect**
 3. Enter your access token
 4. Test connection
 
 <Callout type="info">
-    HubSpot integration uses MCP tools, so the agent can access CRM data through standardized tool calls. No custom code needed.
+    HubSpot integration uses MCP tools, so the agent can access CRM data through standardized tool
+    calls. No custom code needed.
 </Callout>
 
 ## Step 2: Connect Gmail integration
@@ -102,12 +113,14 @@ Configure Gmail for email sending:
 ### Configure in AgentC2
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **Gmail** and click **Connect**
 3. Authorize with Google OAuth
 4. Grant permissions: `gmail.send`, `gmail.readonly`
 
 **Via API:**
+
 ```bash
 curl -X POST https://agentc2.ai/agent/api/integrations/gmail/connect \
   -H "Authorization: Bearer $TOKEN" \
@@ -125,12 +138,13 @@ Configure Google Calendar for meeting scheduling:
 
 1. **Enable Calendar API** — In the same Google Cloud project
 2. **Add Calendar scopes** to OAuth consent screen:
-   - `https://www.googleapis.com/auth/calendar.events`
-   - `https://www.googleapis.com/auth/calendar.readonly`
+    - `https://www.googleapis.com/auth/calendar.events`
+    - `https://www.googleapis.com/auth/calendar.readonly`
 
 ### Configure in AgentC2
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **Google Calendar** and click **Connect**
 3. Authorize with Google OAuth
@@ -224,7 +238,8 @@ curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/tools \
 ```
 
 <Callout type="warning">
-    The `gmail-send-message` tool should only be used after human approval. We'll set up approval gates in the next step.
+    The `gmail-send-message` tool should only be used after human approval. We'll set up approval
+    gates in the next step.
 </Callout>
 
 ## Step 7: Attach calendar tools
@@ -365,7 +380,8 @@ curl -X POST https://agentc2.ai/agent/api/workflows \
 ```
 
 <Callout type="info">
-    The human approval step suspends the workflow and sends a notification. A human reviewer can approve, reject, or modify the email draft before the workflow continues.
+    The human approval step suspends the workflow and sends a notification. A human reviewer can
+    approve, reject, or modify the email draft before the workflow continues.
 </Callout>
 
 ## Step 9: Test lead qualification
@@ -387,6 +403,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/chat \
 ```
 
 The agent should:
+
 1. Fetch contact from HubSpot
 2. Fetch associated company data
 3. Analyze engagement history
@@ -411,6 +428,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/sales-agent/chat \
 ```
 
 Verify the draft:
+
 - ✅ Personalized with company-specific details
 - ✅ References pain points
 - ✅ Clear value proposition
@@ -435,6 +453,7 @@ curl -X POST https://agentc2.ai/agent/api/workflows/sales-outreach-approval/exec
 ```
 
 The workflow will:
+
 1. Qualify the lead
 2. Draft an email
 3. Suspend and request approval
@@ -538,7 +557,8 @@ curl -X PUT https://agentc2.ai/agent/api/agents/sales-agent/guardrails \
 ```
 
 <Callout type="warning">
-    The `requireApprovalForEmail` guardrail blocks email sending unless explicitly approved. This ensures no emails are sent without human review.
+    The `requireApprovalForEmail` guardrail blocks email sending unless explicitly approved. This
+    ensures no emails are sent without human review.
 </Callout>
 
 ## Step 14: Monitor sales agent performance
@@ -553,6 +573,7 @@ curl "https://agentc2.ai/agent/api/workflows/sales-outreach-approval/runs?status
 ```
 
 Calculate:
+
 - Approval rate: `approved / total`
 - Average time to approval
 - Rejection reasons
@@ -565,6 +586,7 @@ curl https://agentc2.ai/agent/api/agents/sales-agent/runs?limit=100 \
 ```
 
 Review:
+
 - Quality score distribution
 - Correlation with conversion
 - False positives/negatives
@@ -572,6 +594,7 @@ Review:
 ### Email effectiveness
 
 Track in HubSpot:
+
 - Open rates
 - Reply rates
 - Meeting conversion rates

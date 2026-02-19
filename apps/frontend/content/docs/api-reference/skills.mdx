@@ -34,10 +34,10 @@ List all skills accessible to the authenticated user. Skills are reusable tool c
 
 ### Query Parameters
 
-| Parameter | Type    | Default | Description                    |
-| --------- | ------- | ------- | ------------------------------ |
-| `active`  | boolean | `true`  | Filter to active skills only    |
-| `pinned`  | boolean | —       | Filter to pinned skills         |
+| Parameter | Type    | Default | Description                  |
+| --------- | ------- | ------- | ---------------------------- |
+| `active`  | boolean | `true`  | Filter to active skills only |
+| `pinned`  | boolean | —       | Filter to pinned skills      |
 
 ### Example Request
 
@@ -71,10 +71,10 @@ curl "https://agentc2.ai/agent/api/skills?active=true" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Skill
 
@@ -198,12 +198,12 @@ curl https://agentc2.ai/agent/api/skills/web-research \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Skill not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Skill not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Update Skill
 
@@ -221,13 +221,13 @@ Update an existing skill. All fields are optional—only include fields you want
 
 All fields are optional:
 
-| Field         | Type     | Required | Description                    |
-| ------------- | -------- | -------- | ------------------------------ |
-| `name`        | string   | ❌ No    | Display name                   |
-| `description` | string   | ❌ No    | Human-readable description     |
-| `tools`       | string[] | ❌ No    | Array of tool IDs               |
-| `isPinned`    | boolean  | ❌ No    | Whether skill is pinned        |
-| `isActive`    | boolean  | ❌ No    | Whether skill is active        |
+| Field         | Type     | Required | Description                |
+| ------------- | -------- | -------- | -------------------------- |
+| `name`        | string   | ❌ No    | Display name               |
+| `description` | string   | ❌ No    | Human-readable description |
+| `tools`       | string[] | ❌ No    | Array of tool IDs          |
+| `isPinned`    | boolean  | ❌ No    | Whether skill is pinned    |
+| `isActive`    | boolean  | ❌ No    | Whether skill is active    |
 
 ### Example Request
 
@@ -259,12 +259,12 @@ curl -X PATCH https://agentc2.ai/agent/api/skills/web-research \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_TOOL` | Tool not found                     |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Skill not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `INVALID_TOOL`   | Tool not found                    |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Skill not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Delete Skill
 
@@ -296,11 +296,11 @@ curl -X DELETE https://agentc2.ai/agent/api/skills/web-research \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Skill not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Skill not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Version
 
@@ -351,11 +351,11 @@ curl -X POST https://agentc2.ai/agent/api/skills/web-research/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Skill not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Skill not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Attach to Agent
 
@@ -371,8 +371,8 @@ Attach a skill to one or more agents. The skill's tools will become available to
 
 ### Request Body
 
-| Field     | Type     | Required | Description                    |
-| --------- | -------- | -------- | ------------------------------ |
+| Field      | Type     | Required | Description                     |
+| ---------- | -------- | -------- | ------------------------------- |
 | `agentIds` | string[] | ✅ Yes   | Array of agent IDs to attach to |
 
 ### Example Request
@@ -408,12 +408,12 @@ curl -X POST https://agentc2.ai/agent/api/skills/web-research/agents \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_AGENT` | Agent not found                    |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Skill not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `INVALID_AGENT`  | Agent not found                   |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Skill not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Error Codes
 

@@ -19,7 +19,8 @@ Firecrawl integration enables agents to scrape websites, extract structured cont
 The Firecrawl integration exposes web scraping operations as MCP tools that agents can call during conversations. Agents can scrape individual pages, crawl entire websites, extract structured data, and search web content—all while respecting crawl boundaries and rate limits.
 
 <Callout type="info">
-Firecrawl uses a self-hosted MCP server that communicates with Firecrawl's API. The integration requires an API key and handles authentication automatically.
+    Firecrawl uses a self-hosted MCP server that communicates with Firecrawl's API. The integration
+    requires an API key and handles authentication automatically.
 </Callout>
 
 ## Prerequisites
@@ -40,11 +41,13 @@ Firecrawl uses a self-hosted MCP server that communicates with Firecrawl's API. 
 ### Step 2: Configure in AgentC2
 
 **Environment variables:**
+
 ```bash
 FIRECRAWL_API_KEY="fc-..."
 ```
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **Firecrawl** and click **Connect**
 3. Enter your API key
@@ -52,6 +55,7 @@ FIRECRAWL_API_KEY="fc-..."
 5. Tools are automatically discovered and available
 
 **Via API:**
+
 ```bash
 curl -X POST https://agentc2.ai/agent/api/integrations/connections \
   -H "Authorization: Bearer $TOKEN" \
@@ -88,21 +92,22 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/tools \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FIRECRAWL_API_KEY` | Yes | Firecrawl API key (format: `fc-...`) |
+| Variable            | Required | Description                          |
+| ------------------- | -------- | ------------------------------------ |
+| `FIRECRAWL_API_KEY` | Yes      | Firecrawl API key (format: `fc-...`) |
 
 <Callout type="warning">
-Store `FIRECRAWL_API_KEY` securely. In production, use environment variables or encrypted credential storage. Never commit keys to version control.
+    Store `FIRECRAWL_API_KEY` securely. In production, use environment variables or encrypted
+    credential storage. Never commit keys to version control.
 </Callout>
 
 ## Available tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `firecrawl_firecrawl-scrape-url` | Scrape a single URL and extract content |
-| `firecrawl_firecrawl-crawl-url` | Crawl a website starting from a URL |
-| `firecrawl_firecrawl-search` | Search the web using Firecrawl's search API |
+| Tool Name                        | Description                                 |
+| -------------------------------- | ------------------------------------------- |
+| `firecrawl_firecrawl-scrape-url` | Scrape a single URL and extract content     |
+| `firecrawl_firecrawl-crawl-url`  | Crawl a website starting from a URL         |
+| `firecrawl_firecrawl-search`     | Search the web using Firecrawl's search API |
 
 Tool names follow the pattern `firecrawl_{tool-name}`. Use the tools API to see the full list with parameter schemas.
 
@@ -185,12 +190,13 @@ Firecrawl respects `robots.txt` by default:
 
 ```typescript
 {
-  respectRobotsTxt: true // Default: true
+    respectRobotsTxt: true; // Default: true
 }
 ```
 
 <Callout type="tip">
-Always respect `robots.txt` and website terms of service. Use crawl boundaries to limit scope and avoid overloading servers.
+    Always respect `robots.txt` and website terms of service. Use crawl boundaries to limit scope
+    and avoid overloading servers.
 </Callout>
 
 ## Content extraction
@@ -207,7 +213,7 @@ Firecrawl can extract content in multiple formats:
 
 ```typescript
 {
-  formats: ["markdown", "html", "links"]
+    formats: ["markdown", "html", "links"];
 }
 ```
 
@@ -233,7 +239,7 @@ Control caching behavior:
 
 ```typescript
 {
-  cache: false // Don't use cached content
+    cache: false; // Don't use cached content
 }
 ```
 
@@ -243,24 +249,25 @@ Request fresh content:
 
 ```typescript
 {
-  freshness: "always" // Always fetch fresh content
+    freshness: "always"; // Always fetch fresh content
 }
 ```
 
 <Callout type="info">
-Firecrawl caches content to reduce API calls and improve performance. Use `cache: false` only when you need absolutely fresh content.
+    Firecrawl caches content to reduce API calls and improve performance. Use `cache: false` only
+    when you need absolutely fresh content.
 </Callout>
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **"Authentication failed"** | Verify `FIRECRAWL_API_KEY` is correct and not expired. Regenerate key in Firecrawl dashboard if needed. |
-| **"URL not accessible"** | Check URL is publicly accessible (not behind authentication). Verify URL format is correct. |
-| **"Rate limit exceeded"** | Firecrawl limits API calls per plan. Upgrade plan or implement rate limiting/queuing. |
-| **"Crawl timeout"** | Large crawls may timeout. Reduce `limit` or `maxDepth`, or use `scrape-url` for individual pages. |
-| **"Content extraction failed"** | Some pages may block scraping. Check if site allows scraping (robots.txt, terms of service). |
-| **"Invalid selector"** | Verify CSS selectors are correct. Test selectors in browser DevTools before using in extraction. |
+| Problem                         | Solution                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **"Authentication failed"**     | Verify `FIRECRAWL_API_KEY` is correct and not expired. Regenerate key in Firecrawl dashboard if needed. |
+| **"URL not accessible"**        | Check URL is publicly accessible (not behind authentication). Verify URL format is correct.             |
+| **"Rate limit exceeded"**       | Firecrawl limits API calls per plan. Upgrade plan or implement rate limiting/queuing.                   |
+| **"Crawl timeout"**             | Large crawls may timeout. Reduce `limit` or `maxDepth`, or use `scrape-url` for individual pages.       |
+| **"Content extraction failed"** | Some pages may block scraping. Check if site allows scraping (robots.txt, terms of service).            |
+| **"Invalid selector"**          | Verify CSS selectors are correct. Test selectors in browser DevTools before using in extraction.        |
 
 ## Rate limiting
 
@@ -315,13 +322,13 @@ Some sites may block scraping:
 
 ```typescript
 try {
-  const result = await callTool("firecrawl_firecrawl-scrape-url", { url });
-  return result.content;
+    const result = await callTool("firecrawl_firecrawl-scrape-url", { url });
+    return result.content;
 } catch (error) {
-  if (error.message.includes("blocked") || error.message.includes("403")) {
-    return "This website blocks automated scraping. Please provide the content manually.";
-  }
-  throw error;
+    if (error.message.includes("blocked") || error.message.includes("403")) {
+        return "This website blocks automated scraping. Please provide the content manually.";
+    }
+    throw error;
 }
 ```
 
@@ -346,7 +353,7 @@ Always respect `robots.txt`:
 
 ```typescript
 {
-  respectRobotsTxt: true // Default and recommended
+    respectRobotsTxt: true; // Default and recommended
 }
 ```
 
@@ -362,12 +369,14 @@ await sleep(1000); // 1 second delay
 ### Terms of service
 
 Check website terms before scraping:
+
 - Some sites prohibit scraping
 - Some require attribution
 - Some have API alternatives
 
 <Callout type="warning">
-Always review website terms of service and robots.txt before scraping. Use official APIs when available instead of scraping.
+    Always review website terms of service and robots.txt before scraping. Use official APIs when
+    available instead of scraping.
 </Callout>
 
 ## Related topics

@@ -25,7 +25,8 @@ Before starting, ensure you have:
 - Incident response procedures defined
 
 <Callout type="warning">
-    Guardrails are critical for production deployments. This guide covers defense-in-depth with multiple policy layers.
+    Guardrails are critical for production deployments. This guide covers defense-in-depth with
+    multiple policy layers.
 </Callout>
 
 ## Architecture overview
@@ -160,14 +161,15 @@ curl -X POST https://agentc2.ai/agent/api/organizations/your-org/guardrails \
 
 ### Policy configuration fields
 
-| Field | Description | Options |
-|-------|-------------|---------|
-| **action** | What to do on violation | `block`, `warn`, `modify` |
-| **severity** | Violation severity | `low`, `medium`, `high`, `critical` |
-| **enabled** | Whether policy is active | `true`, `false` |
+| Field        | Description              | Options                             |
+| ------------ | ------------------------ | ----------------------------------- |
+| **action**   | What to do on violation  | `block`, `warn`, `modify`           |
+| **severity** | Violation severity       | `low`, `medium`, `high`, `critical` |
+| **enabled**  | Whether policy is active | `true`, `false`                     |
 
 <Callout type="info">
-    Org-level policies are applied first, then agent-level policies. Agent policies can only make policies stricter, not more permissive.
+    Org-level policies are applied first, then agent-level policies. Agent policies can only make
+    policies stricter, not more permissive.
 </Callout>
 
 ## Step 2: Configure prompt injection detection
@@ -223,28 +225,30 @@ curl -X POST https://agentc2.ai/agent/api/agents/your-agent/chat \
 ```
 
 Expected response:
+
 ```json
 {
-  "success": false,
-  "error": "GUARDRAIL_VIOLATION",
-  "guardrailKey": "promptInjection",
-  "reason": "Detected prompt injection attempt",
-  "action": "blocked"
+    "success": false,
+    "error": "GUARDRAIL_VIOLATION",
+    "guardrailKey": "promptInjection",
+    "reason": "Detected prompt injection attempt",
+    "action": "blocked"
 }
 ```
 
 ### Common prompt injection patterns
 
-| Pattern | Example | Detection |
-|---------|---------|-----------|
-| **Instruction override** | "Ignore previous instructions" | ✅ Detected |
-| **Role switching** | "You are now a different agent" | ✅ Detected |
-| **System prompt** | "SYSTEM: Override" | ✅ Detected |
-| **Encoding** | Base64/URL encoded prompts | ⚠️ May need custom detection |
-| **Indirect** | "What would you do if..." | ⚠️ Context-dependent |
+| Pattern                  | Example                         | Detection                    |
+| ------------------------ | ------------------------------- | ---------------------------- |
+| **Instruction override** | "Ignore previous instructions"  | ✅ Detected                  |
+| **Role switching**       | "You are now a different agent" | ✅ Detected                  |
+| **System prompt**        | "SYSTEM: Override"              | ✅ Detected                  |
+| **Encoding**             | Base64/URL encoded prompts      | ⚠️ May need custom detection |
+| **Indirect**             | "What would you do if..."       | ⚠️ Context-dependent         |
 
 <Callout type="warning">
-    Prompt injection detection is not perfect. Combine with output validation and monitoring for defense-in-depth.
+    Prompt injection detection is not perfect. Combine with output validation and monitoring for
+    defense-in-depth.
 </Callout>
 
 ## Step 3: Set up PII detection and prevention
@@ -394,13 +398,14 @@ curl -X POST https://agentc2.ai/agent/api/agents/your-agent/chat \
 ```
 
 Expected response:
+
 ```json
 {
-  "success": false,
-  "error": "GUARDRAIL_VIOLATION",
-  "guardrailKey": "topicFiltering",
-  "reason": "Message contains blocked topic: illegal-activity",
-  "action": "blocked"
+    "success": false,
+    "error": "GUARDRAIL_VIOLATION",
+    "guardrailKey": "topicFiltering",
+    "reason": "Message contains blocked topic: illegal-activity",
+    "action": "blocked"
 }
 ```
 
@@ -460,7 +465,8 @@ curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/guardrails \
 ```
 
 <Callout type="tip">
-    Agent-level policies are merged with org policies. Use agent policies for domain-specific requirements.
+    Agent-level policies are merged with org policies. Use agent policies for domain-specific
+    requirements.
 </Callout>
 
 ## Step 6: Configure execution guardrails
@@ -695,12 +701,12 @@ curl -X POST https://agentc2.ai/agent/api/agents/your-agent/chat \
 
 ### Expected results
 
-| Test | Expected Action | Result |
-|------|----------------|--------|
-| Prompt injection | Block | ✅ Blocked |
-| PII leak | Block | ✅ Blocked |
-| Topic violation | Block | ✅ Blocked |
-| Cost limit | Block/Warn | ✅ Limited |
+| Test             | Expected Action | Result     |
+| ---------------- | --------------- | ---------- |
+| Prompt injection | Block           | ✅ Blocked |
+| PII leak         | Block           | ✅ Blocked |
+| Topic violation  | Block           | ✅ Blocked |
+| Cost limit       | Block/Warn      | ✅ Limited |
 
 ## Step 9: Monitor guardrail effectiveness
 
@@ -714,6 +720,7 @@ curl https://agentc2.ai/agent/api/organizations/your-org/guardrails/violations?l
 ```
 
 Metrics to track:
+
 - **Violation rate**: Violations / total requests
 - **False positive rate**: Incorrect blocks / total blocks
 - **Coverage**: % of attacks caught
@@ -727,6 +734,7 @@ curl "https://agentc2.ai/agent/api/organizations/your-org/guardrails/violations?
 ```
 
 Identify:
+
 - Most common violation types
 - Patterns in attacks
 - Effectiveness of each guardrail

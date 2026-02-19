@@ -5,7 +5,14 @@ section: "knowledge"
 order: 2
 primaryKeyword: "document ingestion"
 relatedSlugs: ["knowledge/overview", "knowledge/vector-search", "knowledge/api-reference"]
-secondaryKeywords: ["document upload", "RAG ingestion", "document chunking", "document embedding", "document versioning"]
+secondaryKeywords:
+    [
+        "document upload",
+        "RAG ingestion",
+        "document chunking",
+        "document embedding",
+        "document versioning"
+    ]
 pageType: "how-to"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -69,34 +76,34 @@ curl -X POST https://agentc2.ai/agent/api/documents \
 
 ### Request fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `slug` | string | ✅ Yes | URL-safe identifier (unique) |
-| `name` | string | ✅ Yes | Display name |
-| `description` | string | ❌ No | Human-readable description |
-| `content` | string | ✅ Yes | Document content |
-| `contentType` | string | ❌ No | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
-| `category` | string | ❌ No | Document category |
-| `tags` | string[] | ❌ No | Array of tags |
-| `metadata` | object | ❌ No | Custom JSON metadata |
-| `chunkOptions` | object | ❌ No | Chunking configuration |
+| Field          | Type     | Required | Description                                                        |
+| -------------- | -------- | -------- | ------------------------------------------------------------------ |
+| `slug`         | string   | ✅ Yes   | URL-safe identifier (unique)                                       |
+| `name`         | string   | ✅ Yes   | Display name                                                       |
+| `description`  | string   | ❌ No    | Human-readable description                                         |
+| `content`      | string   | ✅ Yes   | Document content                                                   |
+| `contentType`  | string   | ❌ No    | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
+| `category`     | string   | ❌ No    | Document category                                                  |
+| `tags`         | string[] | ❌ No    | Array of tags                                                      |
+| `metadata`     | object   | ❌ No    | Custom JSON metadata                                               |
+| `chunkOptions` | object   | ❌ No    | Chunking configuration                                             |
 
 ### Response
 
 ```json
 {
-  "id": "doc_abc123",
-  "slug": "product-docs",
-  "name": "Product Documentation",
-  "content": "# Product Guide\n\n...",
-  "contentType": "markdown",
-  "vectorIds": ["vec_1", "vec_2", "vec_3"],
-  "chunkCount": 3,
-  "embeddedAt": "2026-02-18T12:00:00.000Z",
-  "category": "documentation",
-  "tags": ["product", "guide"],
-  "version": 1,
-  "createdAt": "2026-02-18T12:00:00.000Z"
+    "id": "doc_abc123",
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "# Product Guide\n\n...",
+    "contentType": "markdown",
+    "vectorIds": ["vec_1", "vec_2", "vec_3"],
+    "chunkCount": 3,
+    "embeddedAt": "2026-02-18T12:00:00.000Z",
+    "category": "documentation",
+    "tags": ["product", "guide"],
+    "version": 1,
+    "createdAt": "2026-02-18T12:00:00.000Z"
 }
 ```
 
@@ -127,13 +134,13 @@ curl -X POST https://agentc2.ai/agent/api/rag/ingest \
 
 AgentC2 supports the following document formats:
 
-| Format | Content Type | Description |
-|--------|-------------|-------------|
-| **Markdown** | `markdown` | Markdown text with formatting |
-| **Plain Text** | `text` | Plain text without formatting |
-| **HTML** | `html` | HTML content (stripped of tags for embedding) |
-| **JSON** | `json` | JSON documents (stringified for embedding) |
-| **PDF** | `pdf` | PDF files (requires extraction, see upload endpoint) |
+| Format         | Content Type | Description                                          |
+| -------------- | ------------ | ---------------------------------------------------- |
+| **Markdown**   | `markdown`   | Markdown text with formatting                        |
+| **Plain Text** | `text`       | Plain text without formatting                        |
+| **HTML**       | `html`       | HTML content (stripped of tags for embedding)        |
+| **JSON**       | `json`       | JSON documents (stringified for embedding)           |
+| **PDF**        | `pdf`        | PDF files (requires extraction, see upload endpoint) |
 
 ### Format examples
 
@@ -245,7 +252,8 @@ curl -X POST https://agentc2.ai/agent/api/documents \
 - `chunkOverlap`: Overlap between chunks
 
 <Callout type="tip">
-Use **semantic chunking** for documents with clear structure (markdown, HTML). Use **fixed-size** for unstructured text. Use **recursive** for very long documents.
+    Use **semantic chunking** for documents with clear structure (markdown, HTML). Use
+    **fixed-size** for unstructured text. Use **recursive** for very long documents.
 </Callout>
 
 ## Metadata
@@ -392,12 +400,12 @@ done
 
 Common errors and solutions:
 
-| Status | Error | Solution |
-|--------|-------|----------|
-| `400` | Missing required fields | Include `slug`, `name`, `content` |
-| `400` | Invalid content type | Use supported content types |
-| `409` | Slug already exists | Use different slug or update existing |
-| `500` | Embedding failed | Check OpenAI API key configuration |
+| Status | Error                   | Solution                              |
+| ------ | ----------------------- | ------------------------------------- |
+| `400`  | Missing required fields | Include `slug`, `name`, `content`     |
+| `400`  | Invalid content type    | Use supported content types           |
+| `409`  | Slug already exists     | Use different slug or update existing |
+| `500`  | Embedding failed        | Check OpenAI API key configuration    |
 
 ## Next steps
 

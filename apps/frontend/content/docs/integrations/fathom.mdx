@@ -19,7 +19,8 @@ Fathom integration enables agents to access meeting recordings, transcripts, sum
 The Fathom integration exposes meeting operations as MCP tools that agents can call during conversations. Agents can search for meetings, retrieve transcripts, access summaries, extract action items, and query meeting content—all while respecting user permissions and meeting privacy.
 
 <Callout type="info">
-Fathom uses a self-hosted MCP server that communicates with Fathom's API. The integration requires an API key and handles authentication automatically.
+    Fathom uses a self-hosted MCP server that communicates with Fathom's API. The integration
+    requires an API key and handles authentication automatically.
 </Callout>
 
 ## Prerequisites
@@ -40,11 +41,13 @@ Fathom uses a self-hosted MCP server that communicates with Fathom's API. The in
 ### Step 2: Configure in AgentC2
 
 **Environment variables:**
+
 ```bash
 FATHOM_API_KEY="fathom_..."
 ```
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **Fathom** and click **Connect**
 3. Enter your API key
@@ -52,6 +55,7 @@ FATHOM_API_KEY="fathom_..."
 5. Tools are automatically discovered and available
 
 **Via API:**
+
 ```bash
 curl -X POST https://agentc2.ai/agent/api/integrations/connections \
   -H "Authorization: Bearer $TOKEN" \
@@ -88,23 +92,24 @@ curl -X POST https://agentc2.ai/agent/api/agents/meeting-assistant/tools \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `FATHOM_API_KEY` | Yes | Fathom API key (format: `fathom_...`) |
+| Variable         | Required | Description                           |
+| ---------------- | -------- | ------------------------------------- |
+| `FATHOM_API_KEY` | Yes      | Fathom API key (format: `fathom_...`) |
 
 <Callout type="warning">
-Store `FATHOM_API_KEY` securely. In production, use environment variables or encrypted credential storage. Never commit keys to version control.
+    Store `FATHOM_API_KEY` securely. In production, use environment variables or encrypted
+    credential storage. Never commit keys to version control.
 </Callout>
 
 ## Available tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `fathom_fathom-list-meetings` | List meetings with metadata (date, participants, duration) |
-| `fathom_fathom-get-meeting` | Get meeting details including transcript and summary |
-| `fathom_fathom-get-transcript` | Get full transcript of a meeting |
-| `fathom_fathom-get-summary` | Get AI-generated summary of a meeting |
-| `fathom_fathom-get-action-items` | Extract action items from a meeting |
+| Tool Name                        | Description                                                |
+| -------------------------------- | ---------------------------------------------------------- |
+| `fathom_fathom-list-meetings`    | List meetings with metadata (date, participants, duration) |
+| `fathom_fathom-get-meeting`      | Get meeting details including transcript and summary       |
+| `fathom_fathom-get-transcript`   | Get full transcript of a meeting                           |
+| `fathom_fathom-get-summary`      | Get AI-generated summary of a meeting                      |
+| `fathom_fathom-get-action-items` | Extract action items from a meeting                        |
 
 Tool names follow the pattern `fathom_{tool-name}`. Use the tools API to see the full list with parameter schemas.
 
@@ -260,6 +265,7 @@ Extract structured action items:
 ### User permissions
 
 Fathom respects user permissions:
+
 - Users can only access meetings they participated in
 - API keys are scoped to the user's account
 - Private meetings are not accessible via API
@@ -267,24 +273,26 @@ Fathom respects user permissions:
 ### Meeting privacy
 
 Some meetings may be private:
+
 - Check `isPrivate` flag in meeting metadata
 - Private meetings require explicit access
 - API may return `403 Forbidden` for inaccessible meetings
 
 <Callout type="warning">
-Always respect meeting privacy. Only access meetings the authenticated user has permission to view.
+    Always respect meeting privacy. Only access meetings the authenticated user has permission to
+    view.
 </Callout>
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **"Authentication failed"** | Verify `FATHOM_API_KEY` is correct and not expired. Regenerate key in Fathom settings if needed. |
-| **"Meeting not found"** | Verify meeting ID is correct. Check user has access to the meeting (participated or shared). |
-| **"Permission denied"** | User lacks permission to access meeting. Verify meeting is not private or restricted. |
-| **"Transcript not available"** | Some meetings may not have transcripts (recording failed, processing). Check meeting status. |
-| **"Rate limit exceeded"** | Fathom limits API calls per plan. Upgrade plan or implement rate limiting/queuing. |
-| **"Summary not generated"** | Summaries are generated asynchronously. Wait a few minutes after meeting ends, then retry. |
+| Problem                        | Solution                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------ |
+| **"Authentication failed"**    | Verify `FATHOM_API_KEY` is correct and not expired. Regenerate key in Fathom settings if needed. |
+| **"Meeting not found"**        | Verify meeting ID is correct. Check user has access to the meeting (participated or shared).     |
+| **"Permission denied"**        | User lacks permission to access meeting. Verify meeting is not private or restricted.            |
+| **"Transcript not available"** | Some meetings may not have transcripts (recording failed, processing). Check meeting status.     |
+| **"Rate limit exceeded"**      | Fathom limits API calls per plan. Upgrade plan or implement rate limiting/queuing.               |
+| **"Summary not generated"**    | Summaries are generated asynchronously. Wait a few minutes after meeting ends, then retry.       |
 
 ## Rate limiting
 
@@ -321,13 +329,13 @@ Some meetings may not have transcripts:
 
 ```typescript
 try {
-  const transcript = await callTool("fathom_fathom-get-transcript", { meetingId });
-  return transcript;
+    const transcript = await callTool("fathom_fathom-get-transcript", { meetingId });
+    return transcript;
 } catch (error) {
-  if (error.message.includes("not available")) {
-    return "Transcript is not available for this meeting. Summary may be available instead.";
-  }
-  throw error;
+    if (error.message.includes("not available")) {
+        return "Transcript is not available for this meeting. Summary may be available instead.";
+    }
+    throw error;
 }
 ```
 

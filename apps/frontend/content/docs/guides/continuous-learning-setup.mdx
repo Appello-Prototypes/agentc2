@@ -25,7 +25,8 @@ Before starting, ensure you have:
 - Understanding of agent evaluation metrics
 
 <Callout type="info">
-    Continuous learning enables agents to improve automatically from real-world usage. This guide covers the complete learning loop from signal extraction to production promotion.
+    Continuous learning enables agents to improve automatically from real-world usage. This guide
+    covers the complete learning loop from signal extraction to production promotion.
 </Callout>
 
 ## Architecture overview
@@ -91,7 +92,8 @@ Learning signals are metrics extracted from agent runs that indicate quality, su
 - **Toxicity** — Inappropriate content generation
 
 <Callout type="tip">
-    Start with 2-3 key signals that matter most for your use case. You can add more signals later as you refine your learning system.
+    Start with 2-3 key signals that matter most for your use case. You can add more signals later as
+    you refine your learning system.
 </Callout>
 
 ## Step 2: Enable learning on your agent
@@ -127,15 +129,15 @@ curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/enable \
 
 ### Configuration options
 
-| Setting | Description | Default |
-|--------|-------------|---------|
-| **signalExtraction.enabled** | Enable signal extraction from runs | `true` |
-| **signalExtraction.metrics** | Which metrics to track | `[]` |
-| **signalExtraction.thresholds** | Success thresholds for each metric | `{}` |
-| **proposalGeneration.frequency** | How often to generate proposals | `"weekly"` |
-| **proposalGeneration.minSignals** | Minimum signals before generating proposals | `50` |
-| **experimentConfig.trafficSplit** | Percentage of traffic for experiments | `0.1` (10%) |
-| **experimentConfig.minRuns** | Minimum runs before evaluating experiment | `100` |
+| Setting                           | Description                                 | Default     |
+| --------------------------------- | ------------------------------------------- | ----------- |
+| **signalExtraction.enabled**      | Enable signal extraction from runs          | `true`      |
+| **signalExtraction.metrics**      | Which metrics to track                      | `[]`        |
+| **signalExtraction.thresholds**   | Success thresholds for each metric          | `{}`        |
+| **proposalGeneration.frequency**  | How often to generate proposals             | `"weekly"`  |
+| **proposalGeneration.minSignals** | Minimum signals before generating proposals | `50`        |
+| **experimentConfig.trafficSplit** | Percentage of traffic for experiments       | `0.1` (10%) |
+| **experimentConfig.minRuns**      | Minimum runs before evaluating experiment   | `100`       |
 
 ## Step 3: Configure signal extraction
 
@@ -197,16 +199,17 @@ curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/signals \
 
 ### Signal configuration fields
 
-| Field | Description | Example |
-|-------|-------------|---------|
-| **name** | Unique signal identifier | `"responseQuality"` |
-| **source** | Where signal comes from (`scorer`, `metadata`, `metric`) | `"scorer"` |
-| **threshold** | Success threshold | `0.8` |
-| **weight** | Importance weight (0-1) | `1.0` |
-| **direction** | `higher` = better, `lower` = better | `"higher"` |
+| Field         | Description                                              | Example             |
+| ------------- | -------------------------------------------------------- | ------------------- |
+| **name**      | Unique signal identifier                                 | `"responseQuality"` |
+| **source**    | Where signal comes from (`scorer`, `metadata`, `metric`) | `"scorer"`          |
+| **threshold** | Success threshold                                        | `0.8`               |
+| **weight**    | Importance weight (0-1)                                  | `1.0`               |
+| **direction** | `higher` = better, `lower` = better                      | `"higher"`          |
 
 <Callout type="info">
-    Signals are extracted automatically after each agent run. The learning system aggregates signals over time to identify patterns.
+    Signals are extracted automatically after each agent run. The learning system aggregates signals
+    over time to identify patterns.
 </Callout>
 
 ## Step 4: Set up proposal generation
@@ -234,13 +237,13 @@ curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/proposals \
 
 ### Proposal types
 
-| Type | Description | Example |
-|------|-------------|---------|
-| **instruction-refinement** | Improve agent instructions | "Add guidance on handling edge cases" |
-| **tool-addition** | Add new tools | "Add calculator tool for math queries" |
-| **tool-removal** | Remove unused tools | "Remove unused web-fetch tool" |
-| **parameter-tuning** | Adjust model parameters | "Reduce temperature from 0.7 to 0.5" |
-| **memory-config** | Optimize memory settings | "Increase semantic recall topK to 10" |
+| Type                       | Description                | Example                                |
+| -------------------------- | -------------------------- | -------------------------------------- |
+| **instruction-refinement** | Improve agent instructions | "Add guidance on handling edge cases"  |
+| **tool-addition**          | Add new tools              | "Add calculator tool for math queries" |
+| **tool-removal**           | Remove unused tools        | "Remove unused web-fetch tool"         |
+| **parameter-tuning**       | Adjust model parameters    | "Reduce temperature from 0.7 to 0.5"   |
+| **memory-config**          | Optimize memory settings   | "Increase semantic recall topK to 10"  |
 
 ## Step 5: Configure A/B experiments
 
@@ -270,17 +273,18 @@ curl -X PUT https://agentc2.ai/agent/api/agents/your-agent/learning/experiments 
 
 ### Experiment configuration
 
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **trafficSplit** | Percentage of traffic for experiment variant | `0.1` (10%) |
-| **minRuns** | Minimum runs before evaluation | `100` |
-| **duration** | Experiment duration in seconds | `604800` (7 days) |
-| **successMetric** | Primary metric for evaluation | `"responseQuality"` |
-| **successThreshold** | Minimum improvement to consider success | `0.05` (5%) |
-| **minImprovement** | Minimum improvement to promote | `0.02` (2%) |
+| Setting              | Description                                  | Default             |
+| -------------------- | -------------------------------------------- | ------------------- |
+| **trafficSplit**     | Percentage of traffic for experiment variant | `0.1` (10%)         |
+| **minRuns**          | Minimum runs before evaluation               | `100`               |
+| **duration**         | Experiment duration in seconds               | `604800` (7 days)   |
+| **successMetric**    | Primary metric for evaluation                | `"responseQuality"` |
+| **successThreshold** | Minimum improvement to consider success      | `0.05` (5%)         |
+| **minImprovement**   | Minimum improvement to promote               | `0.02` (2%)         |
 
 <Callout type="warning">
-    Start with small traffic splits (5-10%) to minimize risk. Gradually increase as you gain confidence in the learning system.
+    Start with small traffic splits (5-10%) to minimize risk. Gradually increase as you gain
+    confidence in the learning system.
 </Callout>
 
 ## Step 6: Set up human approval gates
@@ -330,6 +334,7 @@ curl https://agentc2.ai/agent/api/agents/your-agent/learning/signals?limit=100 \
 ```
 
 Review:
+
 - Signal values over time
 - Success/failure patterns
 - Correlation between signals
@@ -342,6 +347,7 @@ curl https://agentc2.ai/agent/api/agents/your-agent/learning/proposals?status=pe
 ```
 
 Review:
+
 - Proposed changes
 - Expected impact
 - Evidence (signals supporting proposal)
@@ -354,6 +360,7 @@ curl https://agentc2.ai/agent/api/agents/your-agent/learning/experiments?status=
 ```
 
 Review:
+
 - Experiment progress
 - Current metrics
 - Projected outcomes
@@ -368,6 +375,7 @@ curl https://agentc2.ai/agent/api/agents/your-agent/learning/proposals/proposal_
 ```
 
 Proposal includes:
+
 - **Change description** — What will be modified
 - **Expected impact** — Predicted improvement
 - **Evidence** — Signals supporting the proposal
@@ -410,6 +418,7 @@ curl https://agentc2.ai/agent/api/agents/your-agent/learning/experiments/exp_abc
 ```
 
 Compare:
+
 - **Control group** (current agent) metrics
 - **Variant group** (proposed changes) metrics
 - **Statistical significance** (p-value)
@@ -418,9 +427,10 @@ Compare:
 ### Evaluate experiment success
 
 An experiment is successful if:
+
 - ✅ Variant performs better than control
 - ✅ Improvement exceeds `minImprovement` threshold
-- ✅ Statistical significance (p < 0.05)
+- ✅ Statistical significance (p-value below 0.05)
 - ✅ No regressions in other metrics
 
 ## Step 10: Promote winning experiments
@@ -454,6 +464,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/your-agent/learning/experiments
 ### Gradual rollout
 
 The system will:
+
 1. **10% rollout** — Deploy to 10% of traffic, monitor for 24 hours
 2. **25% rollout** — Increase to 25%, monitor for 24 hours
 3. **50% rollout** — Increase to 50%, monitor for 24 hours

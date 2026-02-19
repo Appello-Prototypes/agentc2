@@ -34,7 +34,8 @@ Federation uses a **bilateral trust model**:
 5. **Audit** — Complete audit trail of all federated interactions
 
 <Callout type="info">
-    **Federation vs Multi-Tenancy**: Multi-tenancy isolates organizations within a single platform. Federation enables controlled cross-organization collaboration with explicit trust boundaries.
+    **Federation vs Multi-Tenancy**: Multi-tenancy isolates organizations within a single platform.
+    Federation enables controlled cross-organization collaboration with explicit trust boundaries.
 </Callout>
 
 ## FederationAgreement model
@@ -72,12 +73,12 @@ The `FederationAgreement` model records bilateral trust relationships:
 
 ### Agreement lifecycle
 
-| Status | Description | Actions Allowed |
-| ------ | ----------- | --------------- |
-| **pending** | Awaiting responder approval | None |
-| **active** | Agreement approved, interactions allowed | All per policy |
-| **suspended** | Temporarily paused | None (can be resumed) |
-| **revoked** | Permanently terminated | None |
+| Status        | Description                              | Actions Allowed       |
+| ------------- | ---------------------------------------- | --------------------- |
+| **pending**   | Awaiting responder approval              | None                  |
+| **active**    | Agreement approved, interactions allowed | All per policy        |
+| **suspended** | Temporarily paused                       | None (can be resumed) |
+| **revoked**   | Permanently terminated                   | None                  |
 
 ### Creating agreements
 
@@ -112,14 +113,14 @@ Federation policies control what operations are allowed and what resources can b
 
 ### Allowed operations
 
-| Operation | Description | Example |
-| --------- | ----------- | ------- |
-| `agent.invoke` | Invoke agents from partner org | Cross-org agent calls |
-| `agent.read` | Read agent configuration | View partner agent details |
-| `document.read` | Read documents from partner org | Access shared knowledge |
-| `document.write` | Create/update documents | Collaborative document editing |
-| `workflow.execute` | Execute workflows | Cross-org workflow orchestration |
-| `trace.read` | Read execution traces | Debugging federated runs |
+| Operation          | Description                     | Example                          |
+| ------------------ | ------------------------------- | -------------------------------- |
+| `agent.invoke`     | Invoke agents from partner org  | Cross-org agent calls            |
+| `agent.read`       | Read agent configuration        | View partner agent details       |
+| `document.read`    | Read documents from partner org | Access shared knowledge          |
+| `document.write`   | Create/update documents         | Collaborative document editing   |
+| `workflow.execute` | Execute workflows               | Cross-org workflow orchestration |
+| `trace.read`       | Read execution traces           | Debugging federated runs         |
 
 ### Exposure controls
 
@@ -127,18 +128,20 @@ Limit what resources are exposed:
 
 ```json
 {
-  "exposureControls": {
-    "maxAgents": 5,                    // Maximum agents exposed
-    "maxRunsPerDay": 1000,             // Daily run quota
-    "allowedWorkspaces": ["prod"],     // Only prod workspace
-    "allowedAgentSlugs": [             // Specific agents only
-      "research-assistant",
-      "data-analyst"
-    ],
-    "blockedAgentSlugs": [             // Explicitly blocked
-      "internal-admin"
-    ]
-  }
+    "exposureControls": {
+        "maxAgents": 5, // Maximum agents exposed
+        "maxRunsPerDay": 1000, // Daily run quota
+        "allowedWorkspaces": ["prod"], // Only prod workspace
+        "allowedAgentSlugs": [
+            // Specific agents only
+            "research-assistant",
+            "data-analyst"
+        ],
+        "blockedAgentSlugs": [
+            // Explicitly blocked
+            "internal-admin"
+        ]
+    }
 }
 ```
 
@@ -149,24 +152,24 @@ All federated operations validate policies:
 ```typescript
 // Validate federation policy before operation
 async function validateFederationPolicy(
-  initiatorOrgId: string,
-  responderOrgId: string,
-  operation: string
+    initiatorOrgId: string,
+    responderOrgId: string,
+    operation: string
 ): Promise<boolean> {
-  const agreement = await prisma.federationAgreement.findFirst({
-    where: {
-      initiatorOrgId,
-      responderOrgId,
-      status: "active"
-    }
-  })
-  
-  if (!agreement) return false
-  
-  const policy = agreement.policyJson as FederationPolicy
-  const allowedOps = policy.allowedOperations || []
-  
-  return allowedOps.includes(operation)
+    const agreement = await prisma.federationAgreement.findFirst({
+        where: {
+            initiatorOrgId,
+            responderOrgId,
+            status: "active"
+        }
+    });
+
+    if (!agreement) return false;
+
+    const policy = agreement.policyJson as FederationPolicy;
+    const allowedOps = policy.allowedOperations || [];
+
+    return allowedOps.includes(operation);
 }
 ```
 
@@ -199,16 +202,16 @@ All federated interactions are logged in `FederationAuditLog`:
 
 ### Audit log fields
 
-| Field | Description | Example |
-| ----- | ----------- | ------- |
-| `actorType` | Who performed the action | `"federation_agent"` |
-| `actorId` | Actor identifier | `"agent_partner_456"` |
-| `action` | Operation performed | `"agent.invoke"` |
-| `resourceType` | Type of resource accessed | `"agent"`, `"document"` |
-| `resourceId` | Resource identifier | `"agent_research"` |
-| `targetOrgId` | Target organization | `"org_partner"` |
-| `agreementId` | Federation agreement used | `"fed_123"` |
-| `metadata` | Operation-specific details | `{ durationMs, tokensUsed }` |
+| Field          | Description                | Example                      |
+| -------------- | -------------------------- | ---------------------------- |
+| `actorType`    | Who performed the action   | `"federation_agent"`         |
+| `actorId`      | Actor identifier           | `"agent_partner_456"`        |
+| `action`       | Operation performed        | `"agent.invoke"`             |
+| `resourceType` | Type of resource accessed  | `"agent"`, `"document"`      |
+| `resourceId`   | Resource identifier        | `"agent_research"`           |
+| `targetOrgId`  | Target organization        | `"org_partner"`              |
+| `agreementId`  | Federation agreement used  | `"fed_123"`                  |
+| `metadata`     | Operation-specific details | `{ durationMs, tokensUsed }` |
 
 ### Querying audit logs
 
@@ -258,18 +261,16 @@ curl -X POST https://agentc2.ai/agent/api/federation/invoke \
 
 ```json
 {
-  "success": true,
-  "runId": "run_fed_123",
-  "output": {
-    "messages": [
-      { "role": "assistant", "content": "The latest AI trends include..." }
-    ]
-  },
-  "metadata": {
-    "durationMs": 2341,
-    "tokensUsed": 456,
-    "traceId": "trace_fed_123"
-  }
+    "success": true,
+    "runId": "run_fed_123",
+    "output": {
+        "messages": [{ "role": "assistant", "content": "The latest AI trends include..." }]
+    },
+    "metadata": {
+        "durationMs": 2341,
+        "tokensUsed": 456,
+        "traceId": "trace_fed_123"
+    }
 }
 ```
 
@@ -282,22 +283,22 @@ Control what resources are visible to federated partners:
 ```typescript
 // Mark agent as federated
 await prisma.agent.update({
-  where: { id: agentId },
-  data: {
-    metadata: {
-      ...existingMetadata,
-      federation: {
-        exposed: true,
-        exposedToOrgs: ["org_partner"],
-        exposurePolicy: {
-          allowInvoke: true,
-          allowRead: false, // Hide configuration
-          maxRunsPerDay: 100
+    where: { id: agentId },
+    data: {
+        metadata: {
+            ...existingMetadata,
+            federation: {
+                exposed: true,
+                exposedToOrgs: ["org_partner"],
+                exposurePolicy: {
+                    allowInvoke: true,
+                    allowRead: false, // Hide configuration
+                    maxRunsPerDay: 100
+                }
+            }
         }
-      }
     }
-  }
-})
+});
 ```
 
 ### Workspace exposure
@@ -305,17 +306,17 @@ await prisma.agent.update({
 ```typescript
 // Expose workspace to federation
 await prisma.workspace.update({
-  where: { id: workspaceId },
-  data: {
-    metadata: {
-      ...existingMetadata,
-      federation: {
-        exposed: true,
-        exposedToOrgs: ["org_partner"]
-      }
+    where: { id: workspaceId },
+    data: {
+        metadata: {
+            ...existingMetadata,
+            federation: {
+                exposed: true,
+                exposedToOrgs: ["org_partner"]
+            }
+        }
     }
-  }
-})
+});
 ```
 
 ### Document exposure
@@ -323,18 +324,18 @@ await prisma.workspace.update({
 ```typescript
 // Share document via federation
 await prisma.document.update({
-  where: { id: documentId },
-  data: {
-    metadata: {
-      ...existingMetadata,
-      federation: {
-        exposed: true,
-        exposedToOrgs: ["org_partner"],
-        accessLevel: "read" // "read" | "write"
-      }
+    where: { id: documentId },
+    data: {
+        metadata: {
+            ...existingMetadata,
+            federation: {
+                exposed: true,
+                exposedToOrgs: ["org_partner"],
+                accessLevel: "read" // "read" | "write"
+            }
+        }
     }
-  }
-})
+});
 ```
 
 ## Cryptographic verification
@@ -370,18 +371,18 @@ Federated requests are signed with the organization's private key:
 
 ```typescript
 // Sign federated request
-import { createSign } from "crypto"
+import { createSign } from "crypto";
 
-const sign = createSign("SHA256")
-sign.update(JSON.stringify(requestPayload))
-sign.end()
+const sign = createSign("SHA256");
+sign.update(JSON.stringify(requestPayload));
+sign.end();
 
-const signature = sign.sign(privateKey, "base64")
+const signature = sign.sign(privateKey, "base64");
 
 // Include signature in request headers
-headers["X-Federation-Signature"] = signature
-headers["X-Federation-Org"] = organizationSlug
-headers["X-Federation-Key-Version"] = "1"
+headers["X-Federation-Signature"] = signature;
+headers["X-Federation-Org"] = organizationSlug;
+headers["X-Federation-Key-Version"] = "1";
 ```
 
 ### Signature verification
@@ -390,16 +391,16 @@ Responders verify request signatures:
 
 ```typescript
 // Verify federated request signature
-import { createVerify } from "crypto"
+import { createVerify } from "crypto";
 
-const publicKey = await getOrganizationPublicKey(initiatorOrgSlug, keyVersion)
-const verify = createVerify("SHA256")
-verify.update(JSON.stringify(requestPayload))
-verify.end()
+const publicKey = await getOrganizationPublicKey(initiatorOrgSlug, keyVersion);
+const verify = createVerify("SHA256");
+verify.update(JSON.stringify(requestPayload));
+verify.end();
 
-const isValid = verify.verify(publicKey, signature, "base64")
+const isValid = verify.verify(publicKey, signature, "base64");
 if (!isValid) {
-  throw new Error("Invalid federation signature")
+    throw new Error("Invalid federation signature");
 }
 ```
 

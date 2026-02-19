@@ -19,7 +19,8 @@ JustCall integration enables agents to access phone call logs, SMS message histo
 The JustCall integration exposes communication operations as MCP tools that agents can call during conversations. Agents can search call logs, retrieve SMS messages, access call recordings, and query communication history—all while respecting user permissions and compliance requirements.
 
 <Callout type="info">
-JustCall uses a self-hosted MCP server that communicates with JustCall's API. The integration requires an auth token (API key:secret format) and handles authentication automatically.
+    JustCall uses a self-hosted MCP server that communicates with JustCall's API. The integration
+    requires an auth token (API key:secret format) and handles authentication automatically.
 </Callout>
 
 ## Prerequisites
@@ -35,22 +36,25 @@ JustCall uses a self-hosted MCP server that communicates with JustCall's API. Th
 1. Log in to [JustCall Dashboard](https://app.justcall.io)
 2. Navigate to **Settings** > **API**
 3. Generate API credentials:
-   - **API Key**: Your API key
-   - **API Secret**: Your API secret
+    - **API Key**: Your API key
+    - **API Secret**: Your API secret
 4. Format: `api_key:api_secret` (colon-separated)
 
 <Callout type="warning">
-JustCall auth token uses `api_key:api_secret` format. Store securely—never commit to version control.
+    JustCall auth token uses `api_key:api_secret` format. Store securely—never commit to version
+    control.
 </Callout>
 
 ### Step 2: Configure in AgentC2
 
 **Environment variables:**
+
 ```bash
 JUSTCALL_AUTH_TOKEN="api_key:api_secret"
 ```
 
 **Via UI:**
+
 1. Navigate to **Settings > Integrations**
 2. Find **JustCall** and click **Connect**
 3. Enter your auth token (format: `api_key:api_secret`)
@@ -58,6 +62,7 @@ JUSTCALL_AUTH_TOKEN="api_key:api_secret"
 5. Tools are automatically discovered and available
 
 **Via API:**
+
 ```bash
 curl -X POST https://agentc2.ai/agent/api/integrations/connections \
   -H "Authorization: Bearer $TOKEN" \
@@ -94,23 +99,24 @@ curl -X POST https://agentc2.ai/agent/api/agents/sales-assistant/tools \
 
 ## Environment variables
 
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `JUSTCALL_AUTH_TOKEN` | Yes | JustCall auth token (format: `api_key:api_secret`) |
+| Variable              | Required | Description                                        |
+| --------------------- | -------- | -------------------------------------------------- |
+| `JUSTCALL_AUTH_TOKEN` | Yes      | JustCall auth token (format: `api_key:api_secret`) |
 
 <Callout type="warning">
-Store `JUSTCALL_AUTH_TOKEN` securely. In production, use environment variables or encrypted credential storage. Never commit tokens to version control.
+    Store `JUSTCALL_AUTH_TOKEN` securely. In production, use environment variables or encrypted
+    credential storage. Never commit tokens to version control.
 </Callout>
 
 ## Available tools
 
-| Tool Name | Description |
-|-----------|-------------|
-| `justcall_justcall-get-call-logs` | Get call logs with metadata (date, duration, direction) |
-| `justcall_justcall-get-call-details` | Get detailed call information including recording URL |
-| `justcall_justcall-get-sms-messages` | Get SMS message history |
-| `justcall_justcall-send-sms` | Send SMS message (if supported) |
-| `justcall_justcall-search-communications` | Search calls and SMS by phone number, date, etc. |
+| Tool Name                                 | Description                                             |
+| ----------------------------------------- | ------------------------------------------------------- |
+| `justcall_justcall-get-call-logs`         | Get call logs with metadata (date, duration, direction) |
+| `justcall_justcall-get-call-details`      | Get detailed call information including recording URL   |
+| `justcall_justcall-get-sms-messages`      | Get SMS message history                                 |
+| `justcall_justcall-send-sms`              | Send SMS message (if supported)                         |
+| `justcall_justcall-search-communications` | Search calls and SMS by phone number, date, etc.        |
 
 Tool names follow the pattern `justcall_{tool-name}`. Use the tools API to see the full list with parameter schemas.
 
@@ -224,17 +230,20 @@ SMS messages include:
 ### TCPA compliance
 
 JustCall helps with TCPA (Telephone Consumer Protection Act) compliance:
+
 - Consent tracking
 - Do-not-call list management
 - Opt-out handling
 
 <Callout type="warning">
-Always ensure compliance with TCPA, GDPR, and local regulations when accessing or using communication data. Verify consent before accessing call logs or SMS.
+    Always ensure compliance with TCPA, GDPR, and local regulations when accessing or using
+    communication data. Verify consent before accessing call logs or SMS.
 </Callout>
 
 ### Data retention
 
 JustCall retains communication data per plan:
+
 - Check retention policies in JustCall settings
 - Export data before retention expires if needed
 - Respect user privacy and data protection regulations
@@ -242,20 +251,21 @@ JustCall retains communication data per plan:
 ### Access controls
 
 JustCall respects user permissions:
+
 - Users can only access communications they're authorized to view
 - API keys are scoped to the account
 - Team members may have restricted access
 
 ## Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
-| **"Authentication failed"** | Verify `JUSTCALL_AUTH_TOKEN` format is `api_key:api_secret`. Check credentials are correct and not expired. |
-| **"Call not found"** | Verify call ID is correct. Check user has access to the call (authorized team member). |
-| **"Permission denied"** | User lacks permission to access communication data. Verify API key has required scopes. |
-| **"Recording not available"** | Some calls may not have recordings (not enabled, failed). Check call status and recording settings. |
-| **"Rate limit exceeded"** | JustCall limits API calls per plan. Upgrade plan or implement rate limiting/queuing. |
-| **"Invalid phone number format"** | Use E.164 format: `+1234567890`. Include country code and no spaces or dashes. |
+| Problem                           | Solution                                                                                                    |
+| --------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| **"Authentication failed"**       | Verify `JUSTCALL_AUTH_TOKEN` format is `api_key:api_secret`. Check credentials are correct and not expired. |
+| **"Call not found"**              | Verify call ID is correct. Check user has access to the call (authorized team member).                      |
+| **"Permission denied"**           | User lacks permission to access communication data. Verify API key has required scopes.                     |
+| **"Recording not available"**     | Some calls may not have recordings (not enabled, failed). Check call status and recording settings.         |
+| **"Rate limit exceeded"**         | JustCall limits API calls per plan. Upgrade plan or implement rate limiting/queuing.                        |
+| **"Invalid phone number format"** | Use E.164 format: `+1234567890`. Include country code and no spaces or dashes.                              |
 
 ## Rate limiting
 
@@ -290,14 +300,14 @@ Not all calls have recordings:
 
 ```typescript
 try {
-  const call = await callTool("justcall_justcall-get-call-details", { callId });
-  if (call.recordingUrl) {
-    return `Call recording available: ${call.recordingUrl}`;
-  } else {
-    return "Call recording not available for this call.";
-  }
+    const call = await callTool("justcall_justcall-get-call-details", { callId });
+    if (call.recordingUrl) {
+        return `Call recording available: ${call.recordingUrl}`;
+    } else {
+        return "Call recording not available for this call.";
+    }
 } catch (error) {
-  return "Could not retrieve call details.";
+    return "Could not retrieve call details.";
 }
 ```
 

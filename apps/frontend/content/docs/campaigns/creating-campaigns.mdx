@@ -5,7 +5,14 @@ section: "campaigns"
 order: 2
 primaryKeyword: "create campaign"
 relatedSlugs: ["campaigns/overview", "campaigns/templates", "campaigns/after-action-reviews"]
-secondaryKeywords: ["campaign creation", "mission command", "task decomposition", "campaign API", "campaign execution"]
+secondaryKeywords:
+    [
+        "campaign creation",
+        "mission command",
+        "task decomposition",
+        "campaign API",
+        "campaign execution"
+    ]
 pageType: "how-to"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -54,20 +61,20 @@ curl -X POST https://agentc2.ai/agent/api/campaigns \
 
 ### Request fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | ✅ Yes | Display name for the campaign |
-| `intent` | string | ✅ Yes | Commander's intent (WHY) |
-| `endState` | string | ✅ Yes | Desired end state (WHAT) |
-| `description` | string | ❌ No | Additional context |
-| `constraints` | string[] | ❌ No | Must-do requirements |
-| `restraints` | string[] | ❌ No | Must-not-do requirements |
-| `requireApproval` | boolean | ❌ No | Pause for human review (default: `false`) |
-| `maxCostUsd` | number | ❌ No | Budget ceiling |
-| `timeoutMinutes` | number | ❌ No | Maximum execution time |
-| `templateId` | string | ❌ No | Template ID (for template-based campaigns) |
-| `parameterValues` | object | ❌ No | Parameter values (for template-based campaigns) |
-| `parentCampaignId` | string | ❌ No | Parent campaign ID (for sub-campaigns) |
+| Field              | Type     | Required | Description                                     |
+| ------------------ | -------- | -------- | ----------------------------------------------- |
+| `name`             | string   | ✅ Yes   | Display name for the campaign                   |
+| `intent`           | string   | ✅ Yes   | Commander's intent (WHY)                        |
+| `endState`         | string   | ✅ Yes   | Desired end state (WHAT)                        |
+| `description`      | string   | ❌ No    | Additional context                              |
+| `constraints`      | string[] | ❌ No    | Must-do requirements                            |
+| `restraints`       | string[] | ❌ No    | Must-not-do requirements                        |
+| `requireApproval`  | boolean  | ❌ No    | Pause for human review (default: `false`)       |
+| `maxCostUsd`       | number   | ❌ No    | Budget ceiling                                  |
+| `timeoutMinutes`   | number   | ❌ No    | Maximum execution time                          |
+| `templateId`       | string   | ❌ No    | Template ID (for template-based campaigns)      |
+| `parameterValues`  | object   | ❌ No    | Parameter values (for template-based campaigns) |
+| `parentCampaignId` | string   | ❌ No    | Parent campaign ID (for sub-campaigns)          |
 
 ### Response format
 
@@ -147,24 +154,24 @@ The `analysisOutput` field contains the decomposition:
 
 ```json
 {
-  "missions": [
-    {
-      "id": "mission_1",
-      "name": "Analyze Current Support Patterns",
-      "sequence": 1,
-      "tasks": [
+    "missions": [
         {
-          "id": "task_1",
-          "type": "ASSIGNED",
-          "name": "Query support database for ticket patterns",
-          "agentId": "research-agent-id",
-          "estimatedCostUsd": 5.00
+            "id": "mission_1",
+            "name": "Analyze Current Support Patterns",
+            "sequence": 1,
+            "tasks": [
+                {
+                    "id": "task_1",
+                    "type": "ASSIGNED",
+                    "name": "Query support database for ticket patterns",
+                    "agentId": "research-agent-id",
+                    "estimatedCostUsd": 5.0
+                }
+            ]
         }
-      ]
-    }
-  ],
-  "estimatedTotalCostUsd": 5000,
-  "estimatedDurationMinutes": 720
+    ],
+    "estimatedTotalCostUsd": 5000,
+    "estimatedDurationMinutes": 720
 }
 ```
 
@@ -198,11 +205,11 @@ Requirements that **must** be satisfied:
 
 ```json
 {
-  "constraints": [
-    "Must maintain data privacy",
-    "Must comply with existing SLAs",
-    "Must preserve customer relationships"
-  ]
+    "constraints": [
+        "Must maintain data privacy",
+        "Must comply with existing SLAs",
+        "Must preserve customer relationships"
+    ]
 }
 ```
 
@@ -214,11 +221,11 @@ Requirements that **must not** be violated:
 
 ```json
 {
-  "restraints": [
-    "Cannot exceed $10,000 budget",
-    "Cannot disrupt existing support workflows",
-    "Cannot reduce support team size"
-  ]
+    "restraints": [
+        "Cannot exceed $10,000 budget",
+        "Cannot disrupt existing support workflows",
+        "Cannot reduce support team size"
+    ]
 }
 ```
 
@@ -259,9 +266,9 @@ Response includes:
 
 ```json
 {
-  "maxCostUsd": 10000,
-  "totalCostUsd": 2500,
-  "remainingBudgetUsd": 7500
+    "maxCostUsd": 10000,
+    "totalCostUsd": 2500,
+    "remainingBudgetUsd": 7500
 }
 ```
 
@@ -351,13 +358,13 @@ curl https://agentc2.ai/agent/api/campaigns/{campaignId} \
 
 Common errors and solutions:
 
-| Status | Error | Solution |
-|--------|-------|----------|
-| `400` | Missing required fields | Include `name`, `intent`, `endState` |
-| `400` | Invalid intent/end state | Provide clear, specific intent and end state |
-| `400` | Budget exceeded | Increase `maxCostUsd` or reduce scope |
-| `403` | Approval required | Approve campaign before execution |
-| `500` | Analysis failed | Check agent availability and retry |
+| Status | Error                    | Solution                                     |
+| ------ | ------------------------ | -------------------------------------------- |
+| `400`  | Missing required fields  | Include `name`, `intent`, `endState`         |
+| `400`  | Invalid intent/end state | Provide clear, specific intent and end state |
+| `400`  | Budget exceeded          | Increase `maxCostUsd` or reduce scope        |
+| `403`  | Approval required        | Approve campaign before execution            |
+| `500`  | Analysis failed          | Check agent availability and retry           |
 
 ## Next steps
 

@@ -4,7 +4,8 @@ description: "AgentC2's multi-tenant architecture: organizations, workspaces, te
 section: "platform"
 order: 1
 primaryKeyword: "multi-tenant AI platform"
-relatedSlugs: ["platform/authentication", "platform/security", "platform/federation", "agents/overview"]
+relatedSlugs:
+    ["platform/authentication", "platform/security", "platform/federation", "agents/overview"]
 pageType: "concept"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -73,7 +74,9 @@ curl -X POST https://agentc2.ai/agent/api/workspaces \
 ```
 
 <Callout type="info">
-    **Workspace vs Organization**: Use **organizations** for tenant boundaries (billing, quotas, isolation). Use **workspaces** for environment separation (dev/staging/prod) within a single organization.
+    **Workspace vs Organization**: Use **organizations** for tenant boundaries (billing, quotas,
+    isolation). Use **workspaces** for environment separation (dev/staging/prod) within a single
+    organization.
 </Callout>
 
 ## Tenant isolation boundaries
@@ -82,13 +85,13 @@ All platform operations enforce tenant isolation at the database level:
 
 ### Data isolation
 
-| Resource Type | Isolation Boundary | Query Pattern |
-| ------------- | ------------------ | ------------ |
-| **Agents** | `workspaceId` → `organizationId` | Filter by workspace, verify org membership |
-| **Documents** | `workspaceId` → `organizationId` | RAG queries scoped to workspace |
-| **Runs** | `agentId` → `workspaceId` → `organizationId` | Traces isolated per tenant |
-| **Integrations** | `organizationId` | OAuth tokens encrypted per org |
-| **Schedules** | `workspaceId` → `organizationId` | Cron jobs scoped to workspace |
+| Resource Type    | Isolation Boundary                           | Query Pattern                              |
+| ---------------- | -------------------------------------------- | ------------------------------------------ |
+| **Agents**       | `workspaceId` → `organizationId`             | Filter by workspace, verify org membership |
+| **Documents**    | `workspaceId` → `organizationId`             | RAG queries scoped to workspace            |
+| **Runs**         | `agentId` → `workspaceId` → `organizationId` | Traces isolated per tenant                 |
+| **Integrations** | `organizationId`                             | OAuth tokens encrypted per org             |
+| **Schedules**    | `workspaceId` → `organizationId`             | Cron jobs scoped to workspace              |
 
 ### API-level enforcement
 
@@ -97,13 +100,13 @@ Every API request validates tenant boundaries:
 ```typescript
 // Example: Agent resolution with tenant check
 const agent = await prisma.agent.findFirst({
-  where: {
-    id: agentId,
-    workspace: {
-      organizationId: userOrganizationId // Enforced by auth middleware
+    where: {
+        id: agentId,
+        workspace: {
+            organizationId: userOrganizationId // Enforced by auth middleware
+        }
     }
-  }
-})
+});
 ```
 
 ### Cross-workspace assumptions
@@ -115,7 +118,8 @@ While workspaces provide isolation, some resources can be shared:
 - **Integrations** — OAuth connections scoped to organization, usable in any workspace
 
 <Callout type="warning">
-    **Never assume cross-tenant access**: Always verify `organizationId` matches the authenticated user's organization. Database queries should include tenant filters to prevent data leakage.
+    **Never assume cross-tenant access**: Always verify `organizationId` matches the authenticated
+    user's organization. Database queries should include tenant filters to prevent data leakage.
 </Callout>
 
 ## Membership and roles
@@ -124,12 +128,12 @@ The `Membership` model controls user access to organizations:
 
 ### Role hierarchy
 
-| Role | Permissions | Use Case |
-| ---- | ----------- | -------- |
-| **owner** | Full control, billing, deletion | Organization creator |
-| **admin** | Manage members, workspaces, agents | Team leads, technical admins |
-| **member** | Create/edit agents, run workflows | Regular users |
-| **viewer** | Read-only access | Auditors, stakeholders |
+| Role       | Permissions                        | Use Case                     |
+| ---------- | ---------------------------------- | ---------------------------- |
+| **owner**  | Full control, billing, deletion    | Organization creator         |
+| **admin**  | Manage members, workspaces, agents | Team leads, technical admins |
+| **member** | Create/edit agents, run workflows  | Regular users                |
+| **viewer** | Read-only access                   | Auditors, stakeholders       |
 
 ### Granular permissions
 
@@ -137,12 +141,8 @@ Beyond roles, `permissions` array supports fine-grained access:
 
 ```json
 {
-  "role": "member",
-  "permissions": [
-    "guardrail_override",
-    "budget_override",
-    "integration_manage"
-  ]
+    "role": "member",
+    "permissions": ["guardrail_override", "budget_override", "integration_manage"]
 }
 ```
 
@@ -195,39 +195,39 @@ Platform administrators can manage organizations via admin APIs:
 
 ### Organization fields
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `id` | string | CUID identifier |
-| `slug` | string | URL-safe identifier (unique) |
-| `name` | string | Display name |
-| `status` | string | `"active"`, `"trial"`, `"suspended"`, `"past_due"`, `"deactivated"` |
-| `maxAgents` | int? | Agent quota limit |
-| `maxWorkspaces` | int? | Workspace quota limit |
-| `maxRunsPerMonth` | int? | Monthly run quota |
-| `maxSeats` | int? | User seat limit |
-| `maxStorageBytes` | bigint? | File storage quota |
-| `stripeCustomerId` | string? | Stripe customer ID |
+| Field              | Type    | Description                                                         |
+| ------------------ | ------- | ------------------------------------------------------------------- |
+| `id`               | string  | CUID identifier                                                     |
+| `slug`             | string  | URL-safe identifier (unique)                                        |
+| `name`             | string  | Display name                                                        |
+| `status`           | string  | `"active"`, `"trial"`, `"suspended"`, `"past_due"`, `"deactivated"` |
+| `maxAgents`        | int?    | Agent quota limit                                                   |
+| `maxWorkspaces`    | int?    | Workspace quota limit                                               |
+| `maxRunsPerMonth`  | int?    | Monthly run quota                                                   |
+| `maxSeats`         | int?    | User seat limit                                                     |
+| `maxStorageBytes`  | bigint? | File storage quota                                                  |
+| `stripeCustomerId` | string? | Stripe customer ID                                                  |
 
 ### Workspace fields
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `id` | string | CUID identifier |
-| `organizationId` | string | Parent organization |
-| `slug` | string | URL-safe identifier (within org) |
-| `name` | string | Display name |
-| `environment` | string | `"development"`, `"staging"`, `"production"` |
-| `isDefault` | boolean | Default workspace flag |
+| Field            | Type    | Description                                  |
+| ---------------- | ------- | -------------------------------------------- |
+| `id`             | string  | CUID identifier                              |
+| `organizationId` | string  | Parent organization                          |
+| `slug`           | string  | URL-safe identifier (within org)             |
+| `name`           | string  | Display name                                 |
+| `environment`    | string  | `"development"`, `"staging"`, `"production"` |
+| `isDefault`      | boolean | Default workspace flag                       |
 
 ### Membership fields
 
-| Field | Type | Description |
-| ----- | ---- | ----------- |
-| `id` | string | CUID identifier |
-| `userId` | string | User ID (from Better Auth) |
-| `organizationId` | string | Organization ID |
-| `role` | string | `"owner"`, `"admin"`, `"member"`, `"viewer"` |
-| `permissions` | string[] | Granular permission array |
+| Field            | Type     | Description                                  |
+| ---------------- | -------- | -------------------------------------------- |
+| `id`             | string   | CUID identifier                              |
+| `userId`         | string   | User ID (from Better Auth)                   |
+| `organizationId` | string   | Organization ID                              |
+| `role`           | string   | `"owner"`, `"admin"`, `"member"`, `"viewer"` |
+| `permissions`    | string[] | Granular permission array                    |
 
 ## Best practices
 

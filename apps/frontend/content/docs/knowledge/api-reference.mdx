@@ -5,7 +5,8 @@ section: "knowledge"
 order: 5
 primaryKeyword: "knowledge API reference"
 relatedSlugs: ["knowledge/overview", "knowledge/document-ingestion", "knowledge/vector-search"]
-secondaryKeywords: ["RAG API", "document API", "knowledge API", "RAG endpoints", "document endpoints"]
+secondaryKeywords:
+    ["RAG API", "document API", "knowledge API", "RAG endpoints", "document endpoints"]
 pageType: "reference"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -32,17 +33,17 @@ Create a new document with automatic RAG embedding.
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `slug` | string | ✅ Yes | URL-safe identifier (unique) |
-| `name` | string | ✅ Yes | Display name |
-| `description` | string | ❌ No | Human-readable description |
-| `content` | string | ✅ Yes | Document content |
-| `contentType` | string | ❌ No | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
-| `category` | string | ❌ No | Document category |
-| `tags` | string[] | ❌ No | Array of tags |
-| `metadata` | object | ❌ No | Custom JSON metadata |
-| `chunkOptions` | object | ❌ No | Chunking configuration |
+| Field          | Type     | Required | Description                                                        |
+| -------------- | -------- | -------- | ------------------------------------------------------------------ |
+| `slug`         | string   | ✅ Yes   | URL-safe identifier (unique)                                       |
+| `name`         | string   | ✅ Yes   | Display name                                                       |
+| `description`  | string   | ❌ No    | Human-readable description                                         |
+| `content`      | string   | ✅ Yes   | Document content                                                   |
+| `contentType`  | string   | ❌ No    | `"markdown"`, `"text"`, `"html"`, `"json"` (default: `"markdown"`) |
+| `category`     | string   | ❌ No    | Document category                                                  |
+| `tags`         | string[] | ❌ No    | Array of tags                                                      |
+| `metadata`     | object   | ❌ No    | Custom JSON metadata                                               |
+| `chunkOptions` | object   | ❌ No    | Chunking configuration                                             |
 
 #### Example Request
 
@@ -64,18 +65,18 @@ curl -X POST https://agentc2.ai/agent/api/documents \
 
 ```json
 {
-  "id": "doc_abc123",
-  "slug": "product-docs",
-  "name": "Product Documentation",
-  "content": "# Product Guide\n\n...",
-  "contentType": "markdown",
-  "vectorIds": ["vec_1", "vec_2", "vec_3"],
-  "chunkCount": 3,
-  "embeddedAt": "2026-02-18T12:00:00.000Z",
-  "category": "documentation",
-  "tags": ["product", "guide"],
-  "version": 1,
-  "createdAt": "2026-02-18T12:00:00.000Z"
+    "id": "doc_abc123",
+    "slug": "product-docs",
+    "name": "Product Documentation",
+    "content": "# Product Guide\n\n...",
+    "contentType": "markdown",
+    "vectorIds": ["vec_1", "vec_2", "vec_3"],
+    "chunkCount": 3,
+    "embeddedAt": "2026-02-18T12:00:00.000Z",
+    "category": "documentation",
+    "tags": ["product", "guide"],
+    "version": 1,
+    "createdAt": "2026-02-18T12:00:00.000Z"
 }
 ```
 
@@ -87,8 +88,8 @@ Get details for a specific document.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Example Request
@@ -106,8 +107,8 @@ Update an existing document. Automatically re-embeds if content changes.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Request Body
@@ -134,8 +135,8 @@ Delete a document and all its vector chunks.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Example Request
@@ -153,12 +154,12 @@ List all documents accessible to the authenticated user.
 
 #### Query Parameters
 
-| Parameter | Type | Default | Description |
-|-----------|------|---------|-------------|
-| `category` | string | — | Filter by category |
-| `tag` | string | — | Filter by tag |
-| `limit` | number | `50` | Maximum number of documents |
-| `offset` | number | `0` | Number of documents to skip |
+| Parameter  | Type   | Default | Description                 |
+| ---------- | ------ | ------- | --------------------------- |
+| `category` | string | —       | Filter by category          |
+| `tag`      | string | —       | Filter by tag               |
+| `limit`    | number | `50`    | Maximum number of documents |
+| `offset`   | number | `0`     | Number of documents to skip |
 
 #### Example Request
 
@@ -177,13 +178,13 @@ Upload a file (PDF, images, text files) for ingestion.
 
 Multipart form data:
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `file` | file | ✅ Yes | File to upload |
-| `slug` | string | ✅ Yes | Document slug |
-| `name` | string | ✅ Yes | Display name |
-| `category` | string | ❌ No | Document category |
-| `tags` | string | ❌ No | Comma-separated tags |
+| Field      | Type   | Required | Description          |
+| ---------- | ------ | -------- | -------------------- |
+| `file`     | file   | ✅ Yes   | File to upload       |
+| `slug`     | string | ✅ Yes   | Document slug        |
+| `name`     | string | ✅ Yes   | Display name         |
+| `category` | string | ❌ No    | Document category    |
+| `tags`     | string | ❌ No    | Comma-separated tags |
 
 #### Example Request
 
@@ -204,15 +205,15 @@ Re-embed a document with new chunking strategy.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `chunkOptions` | object | ❌ No | New chunking configuration |
+| Field          | Type   | Required | Description                |
+| -------------- | ------ | -------- | -------------------------- |
+| `chunkOptions` | object | ❌ No    | New chunking configuration |
 
 #### Example Request
 
@@ -236,8 +237,8 @@ Get all vector chunks for a document.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Example Request
@@ -251,16 +252,16 @@ curl https://agentc2.ai/agent/api/documents/product-docs/chunks \
 
 ```json
 {
-  "documentId": "doc_abc123",
-  "documentSlug": "product-docs",
-  "chunkCount": 3,
-  "chunks": [
-    {
-      "chunkId": "vec_1",
-      "content": "To configure the product...",
-      "metadata": {"chunkIndex": 0}
-    }
-  ]
+    "documentId": "doc_abc123",
+    "documentSlug": "product-docs",
+    "chunkCount": 3,
+    "chunks": [
+        {
+            "chunkId": "vec_1",
+            "content": "To configure the product...",
+            "metadata": { "chunkIndex": 0 }
+        }
+    ]
 }
 ```
 
@@ -274,13 +275,13 @@ Query the RAG system for relevant document chunks.
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | ✅ Yes | Search query |
-| `topK` | number | ❌ No | Number of results (default: 5) |
-| `minScore` | number | ❌ No | Minimum similarity score (default: 0.7) |
-| `filters` | object | ❌ No | Metadata filters |
-| `hybrid` | object | ❌ No | Hybrid search configuration |
+| Field      | Type   | Required | Description                             |
+| ---------- | ------ | -------- | --------------------------------------- |
+| `query`    | string | ✅ Yes   | Search query                            |
+| `topK`     | number | ❌ No    | Number of results (default: 5)          |
+| `minScore` | number | ❌ No    | Minimum similarity score (default: 0.7) |
+| `filters`  | object | ❌ No    | Metadata filters                        |
+| `hybrid`   | object | ❌ No    | Hybrid search configuration             |
 
 #### Example Request
 
@@ -326,11 +327,11 @@ Generate a response using RAG context.
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `query` | string | ✅ Yes | User query |
-| `maxResults` | number | ❌ No | Maximum RAG results (default: 5) |
-| `generateResponse` | boolean | ❌ No | Generate LLM response (default: true) |
+| Field              | Type    | Required | Description                           |
+| ------------------ | ------- | -------- | ------------------------------------- |
+| `query`            | string  | ✅ Yes   | User query                            |
+| `maxResults`       | number  | ❌ No    | Maximum RAG results (default: 5)      |
+| `generateResponse` | boolean | ❌ No    | Generate LLM response (default: true) |
 
 #### Example Request
 
@@ -366,16 +367,16 @@ Simplified document ingestion for RAG.
 
 #### Request Body
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `content` | string | ✅ Yes | Document content |
-| `type` | string | ❌ No | Content type (default: `"markdown"`) |
-| `sourceId` | string | ❌ No | Source identifier |
-| `sourceName` | string | ❌ No | Source name |
-| `description` | string | ❌ No | Description |
-| `category` | string | ❌ No | Category |
-| `tags` | string[] | ❌ No | Tags |
-| `chunkOptions` | object | ❌ No | Chunking configuration |
+| Field          | Type     | Required | Description                          |
+| -------------- | -------- | -------- | ------------------------------------ |
+| `content`      | string   | ✅ Yes   | Document content                     |
+| `type`         | string   | ❌ No    | Content type (default: `"markdown"`) |
+| `sourceId`     | string   | ❌ No    | Source identifier                    |
+| `sourceName`   | string   | ❌ No    | Source name                          |
+| `description`  | string   | ❌ No    | Description                          |
+| `category`     | string   | ❌ No    | Category                             |
+| `tags`         | string[] | ❌ No    | Tags                                 |
+| `chunkOptions` | object   | ❌ No    | Chunking configuration               |
 
 #### Example Request
 
@@ -413,8 +414,8 @@ Delete a document from the RAG system.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Example Request
@@ -434,8 +435,8 @@ List all versions for a document.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
 
 #### Example Request
@@ -453,24 +454,24 @@ Get a specific document version.
 
 #### Path Parameters
 
-| Parameter | Type | Description |
-|-----------|------|-------------|
+| Parameter    | Type   | Description         |
+| ------------ | ------ | ------------------- |
 | `documentId` | string | Document slug or ID |
-| `version` | number | Version number |
+| `version`    | number | Version number      |
 
 ## Error Codes
 
 All endpoints may return these error codes:
 
-| Status | Error Code | Description | Solution |
-|--------|------------|-------------|----------|
-| `400` | `MISSING_REQUIRED_FIELDS` | Missing required fields | Include all required fields |
-| `400` | `INVALID_CONTENT_TYPE` | Invalid content type | Use supported content types |
-| `401` | `UNAUTHORIZED` | Missing or invalid authentication | Include `Authorization` header |
-| `404` | `NOT_FOUND` | Document not found | Check document ID/slug |
-| `409` | `SLUG_CONFLICT` | Slug already exists | Use different slug |
-| `500` | `EMBEDDING_FAILED` | Embedding failed | Check OpenAI API key |
-| `500` | `INTERNAL_ERROR` | Server error | Retry request or contact support |
+| Status | Error Code                | Description                       | Solution                         |
+| ------ | ------------------------- | --------------------------------- | -------------------------------- |
+| `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields           | Include all required fields      |
+| `400`  | `INVALID_CONTENT_TYPE`    | Invalid content type              | Use supported content types      |
+| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication | Include `Authorization` header   |
+| `404`  | `NOT_FOUND`               | Document not found                | Check document ID/slug           |
+| `409`  | `SLUG_CONFLICT`           | Slug already exists               | Use different slug               |
+| `500`  | `EMBEDDING_FAILED`        | Embedding failed                  | Check OpenAI API key             |
+| `500`  | `INTERNAL_ERROR`          | Server error                      | Retry request or contact support |
 
 ## Rate Limits
 

@@ -5,7 +5,8 @@ section: "campaigns"
 order: 4
 primaryKeyword: "after-action reviews"
 relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/templates"]
-secondaryKeywords: ["AAR", "after-action review", "lessons learned", "campaign analysis", "signal extraction"]
+secondaryKeywords:
+    ["AAR", "after-action review", "lessons learned", "campaign analysis", "signal extraction"]
 pageType: "how-to"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -33,79 +34,79 @@ AARs follow a standardized structure:
 
 ```json
 {
-  "campaignId": "camp_abc123",
-  "campaignName": "Support Optimization Campaign",
-  "executionSummary": {
-    "status": "COMPLETE",
-    "durationMinutes": 720,
-    "totalCostUsd": 4500,
-    "missionsCompleted": 5,
-    "missionsTotal": 7,
-    "tasksCompleted": 23,
-    "tasksTotal": 30,
-    "successRate": 0.77
-  },
-  "planVsActual": {
-    "estimatedCostUsd": 5000,
-    "actualCostUsd": 4500,
-    "costVariance": -0.10,
-    "estimatedDurationMinutes": 600,
-    "actualDurationMinutes": 720,
-    "durationVariance": 0.20,
-    "plannedMissions": 7,
-    "actualMissions": 7,
-    "plannedTasks": 30,
-    "actualTasks": 30
-  },
-  "successes": [
-    {
-      "mission": "Automated Ticket Routing",
-      "outcome": "Reduced average resolution time by 45%",
-      "keyFactors": ["Effective workflow design", "Proper agent assignment"]
-    }
-  ],
-  "failures": [
-    {
-      "mission": "Agent Training",
-      "issue": "Training materials were incomplete",
-      "impact": "Delayed mission completion by 2 days",
-      "rootCause": "Insufficient content preparation"
-    }
-  ],
-  "lessonsLearned": [
-    "Automated routing significantly improves efficiency",
-    "Training materials must be prepared before campaign start",
-    "Budget estimates were accurate within 10%"
-  ],
-  "recommendations": [
-    "Use automated routing workflow in future campaigns",
-    "Add training material preparation as a prerequisite task",
-    "Maintain current budget estimation methodology"
-  ],
-  "agentImprovements": [
-    {
-      "agentId": "support-agent-id",
-      "suggestion": "Add ticket categorization tool",
-      "rationale": "Would improve routing accuracy"
-    }
-  ],
-  "workflowImprovements": [
-    {
-      "workflowId": "ticket-routing-workflow-id",
-      "suggestion": "Add fallback routing for edge cases",
-      "rationale": "Would reduce manual intervention"
-    }
-  ],
-  "signals": [
-    {
-      "type": "performance",
-      "metric": "resolution_time",
-      "value": 0.45,
-      "direction": "improvement",
-      "significance": "high"
-    }
-  ],
-  "generatedAt": "2026-02-18T18:00:00.000Z"
+    "campaignId": "camp_abc123",
+    "campaignName": "Support Optimization Campaign",
+    "executionSummary": {
+        "status": "COMPLETE",
+        "durationMinutes": 720,
+        "totalCostUsd": 4500,
+        "missionsCompleted": 5,
+        "missionsTotal": 7,
+        "tasksCompleted": 23,
+        "tasksTotal": 30,
+        "successRate": 0.77
+    },
+    "planVsActual": {
+        "estimatedCostUsd": 5000,
+        "actualCostUsd": 4500,
+        "costVariance": -0.1,
+        "estimatedDurationMinutes": 600,
+        "actualDurationMinutes": 720,
+        "durationVariance": 0.2,
+        "plannedMissions": 7,
+        "actualMissions": 7,
+        "plannedTasks": 30,
+        "actualTasks": 30
+    },
+    "successes": [
+        {
+            "mission": "Automated Ticket Routing",
+            "outcome": "Reduced average resolution time by 45%",
+            "keyFactors": ["Effective workflow design", "Proper agent assignment"]
+        }
+    ],
+    "failures": [
+        {
+            "mission": "Agent Training",
+            "issue": "Training materials were incomplete",
+            "impact": "Delayed mission completion by 2 days",
+            "rootCause": "Insufficient content preparation"
+        }
+    ],
+    "lessonsLearned": [
+        "Automated routing significantly improves efficiency",
+        "Training materials must be prepared before campaign start",
+        "Budget estimates were accurate within 10%"
+    ],
+    "recommendations": [
+        "Use automated routing workflow in future campaigns",
+        "Add training material preparation as a prerequisite task",
+        "Maintain current budget estimation methodology"
+    ],
+    "agentImprovements": [
+        {
+            "agentId": "support-agent-id",
+            "suggestion": "Add ticket categorization tool",
+            "rationale": "Would improve routing accuracy"
+        }
+    ],
+    "workflowImprovements": [
+        {
+            "workflowId": "ticket-routing-workflow-id",
+            "suggestion": "Add fallback routing for edge cases",
+            "rationale": "Would reduce manual intervention"
+        }
+    ],
+    "signals": [
+        {
+            "type": "performance",
+            "metric": "resolution_time",
+            "value": 0.45,
+            "direction": "improvement",
+            "significance": "high"
+        }
+    ],
+    "generatedAt": "2026-02-18T18:00:00.000Z"
 }
 ```
 
@@ -116,6 +117,7 @@ AARs are automatically generated when campaigns complete:
 ### Generation trigger
 
 AARs are generated:
+
 - **On completion**: When campaign status changes to `COMPLETE`
 - **On failure**: When campaign status changes to `FAILED`
 - **On manual request**: Via API endpoint
@@ -157,12 +159,12 @@ AARs extract performance signals from execution data:
 
 ### Signal types
 
-| Type | Description | Example |
-|------|-------------|---------|
+| Type            | Description                           | Example                        |
+| --------------- | ------------------------------------- | ------------------------------ |
 | **Performance** | Performance improvements/degradations | Resolution time reduced by 45% |
-| **Cost** | Cost efficiency signals | Budget underrun by 10% |
-| **Quality** | Quality improvements | Satisfaction score increased |
-| **Efficiency** | Efficiency gains | Tasks completed 20% faster |
+| **Cost**        | Cost efficiency signals               | Budget underrun by 10%         |
+| **Quality**     | Quality improvements                  | Satisfaction score increased   |
+| **Efficiency**  | Efficiency gains                      | Tasks completed 20% faster     |
 
 ### Signal extraction process
 
@@ -175,24 +177,24 @@ AARs extract performance signals from execution data:
 
 ```json
 {
-  "signals": [
-    {
-      "type": "performance",
-      "metric": "resolution_time",
-      "value": 0.45,
-      "direction": "improvement",
-      "significance": "high",
-      "description": "Resolution time reduced by 45%"
-    },
-    {
-      "type": "cost",
-      "metric": "budget_variance",
-      "value": -0.10,
-      "direction": "efficiency",
-      "significance": "medium",
-      "description": "Budget underrun by 10%"
-    }
-  ]
+    "signals": [
+        {
+            "type": "performance",
+            "metric": "resolution_time",
+            "value": 0.45,
+            "direction": "improvement",
+            "significance": "high",
+            "description": "Resolution time reduced by 45%"
+        },
+        {
+            "type": "cost",
+            "metric": "budget_variance",
+            "value": -0.1,
+            "direction": "efficiency",
+            "significance": "medium",
+            "description": "Budget underrun by 10%"
+        }
+    ]
 }
 ```
 
@@ -206,15 +208,15 @@ AARs suggest agent improvements:
 
 ```json
 {
-  "agentImprovements": [
-    {
-      "agentId": "support-agent-id",
-      "suggestion": "Add ticket categorization tool",
-      "rationale": "Would improve routing accuracy",
-      "priority": "high",
-      "estimatedImpact": "Reduce routing errors by 30%"
-    }
-  ]
+    "agentImprovements": [
+        {
+            "agentId": "support-agent-id",
+            "suggestion": "Add ticket categorization tool",
+            "rationale": "Would improve routing accuracy",
+            "priority": "high",
+            "estimatedImpact": "Reduce routing errors by 30%"
+        }
+    ]
 }
 ```
 
@@ -224,15 +226,15 @@ AARs suggest workflow improvements:
 
 ```json
 {
-  "workflowImprovements": [
-    {
-      "workflowId": "ticket-routing-workflow-id",
-      "suggestion": "Add fallback routing for edge cases",
-      "rationale": "Would reduce manual intervention",
-      "priority": "medium",
-      "estimatedImpact": "Reduce manual routing by 20%"
-    }
-  ]
+    "workflowImprovements": [
+        {
+            "workflowId": "ticket-routing-workflow-id",
+            "suggestion": "Add fallback routing for edge cases",
+            "rationale": "Would reduce manual intervention",
+            "priority": "medium",
+            "estimatedImpact": "Reduce manual routing by 20%"
+        }
+    ]
 }
 ```
 

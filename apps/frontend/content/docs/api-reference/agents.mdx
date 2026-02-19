@@ -82,10 +82,10 @@ curl "https://agentc2.ai/agent/api/agents?active=true&detail=capabilities" \
 
 ### Errors
 
-| Status | Error Code                | Description                        |
-| ------ | ------------------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR`          | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Agent
 
@@ -234,12 +234,12 @@ curl https://agentc2.ai/agent/api/agents/research-assistant \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Update Agent
 
@@ -257,15 +257,15 @@ Update an existing agent. Only USER-type agents can be updated; SYSTEM agents ar
 
 All fields are optional. Only include fields you want to update:
 
-| Field         | Type     | Required | Description                    |
-| ------------- | -------- | -------- | ------------------------------ |
-| `name`        | string   | ❌ No    | Display name                   |
-| `instructions` | string | ❌ No    | System instructions            |
-| `temperature` | number   | ❌ No    | Sampling temperature (0-2)     |
-| `maxSteps`    | number   | ❌ No    | Maximum tool call rounds       |
-| `tools`       | string[] | ❌ No    | Array of tool IDs              |
-| `memoryEnabled` | boolean | ❌ No    | Enable conversation memory     |
-| `isActive`    | boolean  | ❌ No    | Whether the agent is active    |
+| Field           | Type     | Required | Description                 |
+| --------------- | -------- | -------- | --------------------------- |
+| `name`          | string   | ❌ No    | Display name                |
+| `instructions`  | string   | ❌ No    | System instructions         |
+| `temperature`   | number   | ❌ No    | Sampling temperature (0-2)  |
+| `maxSteps`      | number   | ❌ No    | Maximum tool call rounds    |
+| `tools`         | string[] | ❌ No    | Array of tool IDs           |
+| `memoryEnabled` | boolean  | ❌ No    | Enable conversation memory  |
+| `isActive`      | boolean  | ❌ No    | Whether the agent is active |
 
 ### Example Request
 
@@ -296,13 +296,13 @@ curl -X PATCH https://agentc2.ai/agent/api/agents/research-assistant \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_MODEL` | Model not found for provider       |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot update SYSTEM agent         |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `400`  | `INVALID_MODEL`  | Model not found for provider      |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Cannot update SYSTEM agent        |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Delete Agent
 
@@ -334,12 +334,12 @@ curl -X DELETE https://agentc2.ai/agent/api/agents/research-assistant \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot delete SYSTEM agent         |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Cannot delete SYSTEM agent        |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Chat with Agent
 
@@ -408,13 +408,13 @@ data: {"type":"done","runId":"run_abc123"}
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_MESSAGES` | Invalid messages format           |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded              |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code            | Description                       |
+| ------ | --------------------- | --------------------------------- |
+| `400`  | `INVALID_MESSAGES`    | Invalid messages format           |
+| `401`  | `UNAUTHORIZED`        | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`           | Agent not found                   |
+| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded               |
+| `500`  | `INTERNAL_ERROR`      | Server error                      |
 
 ## List Runs
 
@@ -473,11 +473,11 @@ curl "https://agentc2.ai/agent/api/agents/research-assistant/runs?limit=10&statu
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Get Run
 
@@ -517,7 +517,7 @@ curl https://agentc2.ai/agent/api/agents/research-assistant/runs/run_abc123 \
         "toolCalls": [
             {
                 "toolName": "web-fetch",
-                "args": {"url": "https://..."},
+                "args": { "url": "https://..." },
                 "result": "...",
                 "durationMs": 450
             }
@@ -529,11 +529,11 @@ curl https://agentc2.ai/agent/api/agents/research-assistant/runs/run_abc123 \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Run not found                      |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Run not found                     |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Version
 
@@ -587,11 +587,11 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## List Versions
 
@@ -636,11 +636,11 @@ curl https://agentc2.ai/agent/api/agents/research-assistant/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Agent not found                   |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Attach Tool
 
@@ -687,13 +687,13 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/tools \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_TOOL` | Tool not found                     |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Agent not found                    |
-| `409`  | `TOOL_ALREADY_ATTACHED` | Tool already attached to agent   |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code              | Description                       |
+| ------ | ----------------------- | --------------------------------- |
+| `400`  | `INVALID_TOOL`          | Tool not found                    |
+| `401`  | `UNAUTHORIZED`          | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`             | Agent not found                   |
+| `409`  | `TOOL_ALREADY_ATTACHED` | Tool already attached to agent    |
+| `500`  | `INTERNAL_ERROR`        | Server error                      |
 
 ## Remove Tool
 
@@ -726,11 +726,11 @@ curl -X DELETE https://agentc2.ai/agent/api/agents/research-assistant/tools/at_a
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Tool attachment not found          |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Tool attachment not found         |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Error Codes
 
@@ -742,7 +742,7 @@ All endpoints may return these error codes:
 | `400`  | `INVALID_MODEL`           | Model not found for provider       | Check available models            |
 | `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
 | `400`  | `INVALID_TOOL`            | Tool not found                     | Check tool ID is correct          |
-| `400`  | `INVALID_MESSAGES`        | Invalid messages format           | Use correct message array format  |
+| `400`  | `INVALID_MESSAGES`        | Invalid messages format            | Use correct message array format  |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
 | `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
 | `404`  | `NOT_FOUND`               | Agent or resource not found        | Check slug/ID is correct          |

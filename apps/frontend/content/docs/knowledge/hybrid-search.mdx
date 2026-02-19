@@ -1,0 +1,98 @@
+---
+title: "Hybrid Search"
+description: "Combine semantic vector search with lexical keyword search for better retrieval quality."
+section: "knowledge"
+order: 4
+primaryKeyword: "hybrid search AI"
+secondaryKeywords: ["vector search", "lexical search", "RAG retrieval"]
+searchIntent: "informational"
+pageType: "reference"
+ctaLabel: "Launch AgentC2 Workspace"
+ctaHref: "/workspace"
+relatedSlugs: ["knowledge/vector-search", "knowledge/overview", "knowledge/document-ingestion"]
+---
+
+# Hybrid Search
+
+Hybrid search combines semantic vector search with traditional lexical (keyword) search to improve retrieval quality. Vector search excels at finding conceptually similar content, while lexical search catches exact term matches that embeddings might miss.
+
+## When to use hybrid search
+
+Use hybrid search when:
+
+- **Exact terms matter** -- Product names, error codes, or technical identifiers that need exact matching
+- **Diverse queries** -- Your users search with both natural language and specific keywords
+- **High-stakes retrieval** -- The cost of missing a relevant document is high (compliance, legal, support)
+
+Use vector-only search when:
+
+- Queries are conversational and rarely use exact terms
+- Your corpus is semantically diverse with few keyword overlaps
+- Latency is critical and you want the simplest pipeline
+
+## How it works
+
+Hybrid search runs two parallel retrieval paths and merges the results:
+
+```
+Query → ┬─ Vector Search (semantic similarity) ──┐
+        │                                         ├─ Merge & Rank → Results
+        └─ Lexical Search (keyword matching) ─────┘
+```
+
+1. **Vector path** -- The query is embedded and compared against document chunk embeddings using cosine similarity
+2. **Lexical path** -- The query is tokenized and matched against document text using BM25 or full-text search
+3. **Merge** -- Results from both paths are combined using Reciprocal Rank Fusion (RRF), which assigns scores based on ranking position rather than raw similarity scores
+
+## Configuration
+
+Configure hybrid search when querying the knowledge base:
+
+```bash
+curl -X POST https://agentc2.ai/agent/api/rag/query \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "query": "How to configure SSO with SAML",
+    "mode": "hybrid",
+    "topK": 10,
+    "vectorWeight": 0.7,
+    "lexicalWeight": 0.3
+  }'
+```
+
+### Parameters
+
+| Parameter       | Type   | Default    | Description                                         |
+| --------------- | ------ | ---------- | --------------------------------------------------- |
+| `mode`          | string | `"vector"` | Search mode: `"vector"`, `"lexical"`, or `"hybrid"` |
+| `topK`          | number | 5          | Number of results to return                         |
+| `vectorWeight`  | number | 0.7        | Weight for semantic results (0-1)                   |
+| `lexicalWeight` | number | 0.3        | Weight for keyword results (0-1)                    |
+| `minScore`      | number | 0.0        | Minimum relevance score threshold                   |
+
+<Callout type="tip">
+    Start with the default 70/30 vector/lexical split. If users frequently search for exact product
+    names or error codes, shift toward 50/50. Monitor retrieval quality with representative queries
+    before adjusting.
+</Callout>
+
+## Evaluating retrieval quality
+
+Measure hybrid search effectiveness with two metrics:
+
+| Metric          | What it measures                                             | Target |
+| --------------- | ------------------------------------------------------------ | ------ |
+| **Recall@K**    | Percentage of relevant documents retrieved in top K results  | > 80%  |
+| **Precision@K** | Percentage of retrieved documents that are actually relevant | > 60%  |
+
+Test with a set of representative queries where you know the correct answers. Compare vector-only, lexical-only, and hybrid to find the best configuration for your data.
+
+## Troubleshooting
+
+| Problem                     | Solution                                                                         |
+| --------------------------- | -------------------------------------------------------------------------------- |
+| Exact terms not found       | Increase `lexicalWeight` or switch to `"lexical"` mode for term-specific queries |
+| Irrelevant semantic matches | Increase `minScore` threshold or decrease `vectorWeight`                         |
+| Slow queries                | Reduce `topK` or optimize your vector index                                      |
+| Missing recent documents    | Verify documents were ingested and embeddings were generated                     |

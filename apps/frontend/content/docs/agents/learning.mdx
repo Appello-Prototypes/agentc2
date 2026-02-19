@@ -90,7 +90,7 @@ Signals are extracted from agent runs by analyzing execution traces, evaluation 
 
 | Signal Type         | Trigger Condition                            | Example                                     |
 | ------------------- | -------------------------------------------- | ------------------------------------------- |
-| `LOW_SCORE`         | Run scored below threshold                   | Quality score < 0.6                         |
+| `LOW_SCORE`         | Run scored below threshold                   | Quality score below 0.6                    |
 | `TOOL_FAILURE`      | Tool call failed or returned error           | API timeout, invalid response               |
 | `GUARDRAIL_HIT`     | Guardrail policy triggered                   | Content filter blocked output               |
 | `NEGATIVE_FEEDBACK` | User gave negative feedback                  | Thumbs down, low rating                     |

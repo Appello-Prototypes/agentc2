@@ -4,8 +4,16 @@ description: "Mission-style operations: decompose intent into end state, mission
 section: "campaigns"
 order: 1
 primaryKeyword: "AI mission command"
-relatedSlugs: ["campaigns/creating-campaigns", "campaigns/templates", "campaigns/after-action-reviews"]
-secondaryKeywords: ["campaigns", "mission command", "task decomposition", "agent orchestration", "campaign execution"]
+relatedSlugs:
+    ["campaigns/creating-campaigns", "campaigns/templates", "campaigns/after-action-reviews"]
+secondaryKeywords:
+    [
+        "campaigns",
+        "mission command",
+        "task decomposition",
+        "agent orchestration",
+        "campaign execution"
+    ]
 pageType: "concept"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -54,6 +62,7 @@ Example: "Support tickets resolved in under 2 hours on average, with customer sa
 High-level missions that achieve the end state: **HOW** to get there.
 
 Example missions:
+
 - "Analyze current support ticket patterns"
 - "Implement automated ticket routing"
 - "Train support agents on new processes"
@@ -63,6 +72,7 @@ Example missions:
 Executable tasks within missions: **HOW** to execute each mission.
 
 Example tasks:
+
 - "Query support database for ticket patterns"
 - "Create ticket routing workflow"
 - "Generate training materials"
@@ -71,25 +81,25 @@ Example tasks:
 
 Campaigns are defined by the following core fields:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique campaign ID |
-| `slug` | string | URL-safe identifier |
-| `name` | string | Display name |
-| `status` | enum | `PLANNING`, `ANALYZING`, `READY`, `EXECUTING`, `REVIEWING`, `COMPLETE`, `FAILED`, `PAUSED` |
-| `intent` | text | Commander's intent (WHY) |
-| `endState` | text | Desired end state (WHAT) |
-| `description` | text | Additional context |
-| `constraints` | string[] | Must-do requirements |
-| `restraints` | string[] | Must-not-do requirements |
-| `analysisOutput` | JSON | Task decomposition output |
-| `executionPlan` | JSON | Phases, resource allocation, dependencies |
-| `aarJson` | JSON | After-action review data |
-| `requireApproval` | boolean | Pause for human review before execution |
-| `maxCostUsd` | number | Budget ceiling |
-| `timeoutMinutes` | number | Maximum execution time |
-| `totalCostUsd` | number | Actual cost incurred |
-| `progress` | number | Completion percentage (0-100) |
+| Field             | Type     | Description                                                                                |
+| ----------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `id`              | string   | Unique campaign ID                                                                         |
+| `slug`            | string   | URL-safe identifier                                                                        |
+| `name`            | string   | Display name                                                                               |
+| `status`          | enum     | `PLANNING`, `ANALYZING`, `READY`, `EXECUTING`, `REVIEWING`, `COMPLETE`, `FAILED`, `PAUSED` |
+| `intent`          | text     | Commander's intent (WHY)                                                                   |
+| `endState`        | text     | Desired end state (WHAT)                                                                   |
+| `description`     | text     | Additional context                                                                         |
+| `constraints`     | string[] | Must-do requirements                                                                       |
+| `restraints`      | string[] | Must-not-do requirements                                                                   |
+| `analysisOutput`  | JSON     | Task decomposition output                                                                  |
+| `executionPlan`   | JSON     | Phases, resource allocation, dependencies                                                  |
+| `aarJson`         | JSON     | After-action review data                                                                   |
+| `requireApproval` | boolean  | Pause for human review before execution                                                    |
+| `maxCostUsd`      | number   | Budget ceiling                                                                             |
+| `timeoutMinutes`  | number   | Maximum execution time                                                                     |
+| `totalCostUsd`    | number   | Actual cost incurred                                                                       |
+| `progress`        | number   | Completion percentage (0-100)                                                              |
 
 ## When to use campaigns
 
@@ -103,7 +113,8 @@ Campaigns excel when:
 - **After-action reviews**: Learn from execution outcomes
 
 <Callout type="info">
-Use **campaigns** for complex, multi-step operations. Use **agents** for single-agent tasks. Use **networks** for multi-agent routing. Use **workflows** for deterministic processes.
+    Use **campaigns** for complex, multi-step operations. Use **agents** for single-agent tasks. Use
+    **networks** for multi-agent routing. Use **workflows** for deterministic processes.
 </Callout>
 
 ## Campaign lifecycle
@@ -171,16 +182,16 @@ Campaign is marked complete:
 
 ## Campaign capabilities
 
-| Capability | Description | Example Use Case |
-|------------|-------------|------------------|
+| Capability               | Description                               | Example Use Case                                   |
+| ------------------------ | ----------------------------------------- | -------------------------------------------------- |
 | **Intent Decomposition** | Break down intent into missions and tasks | "Improve customer satisfaction" → missions → tasks |
-| **Agent Orchestration** | Coordinate multiple agents and workflows | Research agent → Analysis agent → Writing agent |
-| **Budget Control** | Enforce spending limits | Max $10,000, auto-pause if exceeded |
-| **Approval Workflows** | Require human review before execution | Pause for stakeholder approval |
-| **After-Action Reviews** | Automated AAR generation | Extract lessons learned, compare plan vs actual |
-| **Progress Tracking** | Real-time progress updates | 45% complete, 3/7 missions done |
-| **Cost Tracking** | Monitor spending | $2,500 / $10,000 budget used |
-| **Template Support** | Reusable campaign templates | "Q2 Support Optimization" template |
+| **Agent Orchestration**  | Coordinate multiple agents and workflows  | Research agent → Analysis agent → Writing agent    |
+| **Budget Control**       | Enforce spending limits                   | Max $10,000, auto-pause if exceeded                |
+| **Approval Workflows**   | Require human review before execution     | Pause for stakeholder approval                     |
+| **After-Action Reviews** | Automated AAR generation                  | Extract lessons learned, compare plan vs actual    |
+| **Progress Tracking**    | Real-time progress updates                | 45% complete, 3/7 missions done                    |
+| **Cost Tracking**        | Monitor spending                          | $2,500 / $10,000 budget used                       |
+| **Template Support**     | Reusable campaign templates               | "Q2 Support Optimization" template                 |
 
 ## Campaign types
 

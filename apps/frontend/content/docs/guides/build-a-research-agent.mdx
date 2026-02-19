@@ -5,7 +5,14 @@ section: "guides"
 order: 2
 primaryKeyword: "AI research agent"
 secondaryKeywords: ["web scraping agent", "document research AI", "research automation"]
-relatedSlugs: ["agents/creating-agents", "agents/tools", "integrations/firecrawl", "knowledge/document-ingestion", "knowledge/vector-search"]
+relatedSlugs:
+    [
+        "agents/creating-agents",
+        "agents/tools",
+        "integrations/firecrawl",
+        "knowledge/document-ingestion",
+        "knowledge/vector-search"
+    ]
 pageType: "tutorial"
 ctaLabel: "Start Building in AgentC2"
 ctaHref: "/signup"
@@ -25,7 +32,8 @@ Before starting, ensure you have:
 - (Optional) Documents ready for ingestion into the knowledge base
 
 <Callout type="info">
-    This guide builds a research agent that combines web scraping, document ingestion, and RAG retrieval. You can start with basic web research and add document capabilities incrementally.
+    This guide builds a research agent that combines web scraping, document ingestion, and RAG
+    retrieval. You can start with basic web research and add document capabilities incrementally.
 </Callout>
 
 ## Architecture overview
@@ -101,12 +109,12 @@ curl -X POST https://agentc2.ai/agent/api/agents \
 
 ### Key configuration decisions
 
-| Setting | Value | Rationale |
-|---------|-------|-----------|
-| **Temperature** | 0.3 | Low temperature for factual accuracy and consistent citation formatting |
-| **Max Tokens** | 8000 | Large context window for comprehensive reports |
-| **Max Steps** | 20 | Multiple tool calls needed for thorough research |
-| **Memory** | Enabled | Remember previous research queries and findings |
+| Setting         | Value   | Rationale                                                               |
+| --------------- | ------- | ----------------------------------------------------------------------- |
+| **Temperature** | 0.3     | Low temperature for factual accuracy and consistent citation formatting |
+| **Max Tokens**  | 8000    | Large context window for comprehensive reports                          |
+| **Max Steps**   | 20      | Multiple tool calls needed for thorough research                        |
+| **Memory**      | Enabled | Remember previous research queries and findings                         |
 
 ## Step 2: Configure Firecrawl integration
 
@@ -144,7 +152,8 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/tools \
 ```
 
 <Callout type="tip">
-    Firecrawl's `scrape-url` tool is best for single pages, while `crawl-url` can follow links and scrape multiple related pages. Use crawl for comprehensive research on a topic.
+    Firecrawl's `scrape-url` tool is best for single pages, while `crawl-url` can follow links and
+    scrape multiple related pages. Use crawl for comprehensive research on a topic.
 </Callout>
 
 ## Step 3: Set up knowledge base with document ingestion
@@ -201,7 +210,9 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/tools \
 ```
 
 <Callout type="info">
-    RAG retrieval uses semantic search to find relevant document chunks. The agent can query the knowledge base with natural language questions, and the system returns the most relevant passages.
+    RAG retrieval uses semantic search to find relevant document chunks. The agent can query the
+    knowledge base with natural language questions, and the system returns the most relevant
+    passages.
 </Callout>
 
 ## Step 4: Enhance agent instructions for multi-source research
@@ -236,6 +247,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
 ```
 
 The agent should:
+
 1. Identify relevant URLs to scrape
 2. Use Firecrawl to extract content
 3. Synthesize findings
@@ -251,6 +263,7 @@ curl https://agentc2.ai/agent/api/agents/research-agent/runs?limit=1 \
 ```
 
 Look for:
+
 - Multiple `firecrawl-scrape-url` calls
 - Proper URL selection
 - Content extraction success
@@ -274,6 +287,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
 ```
 
 The agent should:
+
 1. Use `rag-query` to search the knowledge base
 2. Retrieve relevant document chunks
 3. Synthesize information from multiple documents
@@ -298,6 +312,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
 ```
 
 Expected behavior:
+
 1. Agent queries knowledge base for internal documents
 2. Agent scrapes relevant web pages about RAG
 3. Agent synthesizes findings from both sources
@@ -364,7 +379,8 @@ curl -X PUT https://agentc2.ai/agent/api/agents/research-agent/guardrails \
 ```
 
 <Callout type="warning">
-    These guardrails ensure the agent doesn't produce reports based on insufficient research. Adjust thresholds based on your quality requirements.
+    These guardrails ensure the agent doesn't produce reports based on insufficient research. Adjust
+    thresholds based on your quality requirements.
 </Callout>
 
 ## Step 11: Test end-to-end research workflow
@@ -386,6 +402,7 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-agent/chat \
 ```
 
 Verify:
+
 - ✅ Multiple sources consulted (web + documents)
 - ✅ Proper citations throughout
 - ✅ Structured report format
@@ -404,6 +421,7 @@ curl https://agentc2.ai/agent/api/agents/research-agent/runs?limit=50 \
 ```
 
 Check:
+
 - Average number of sources per report
 - Mix of web vs. document sources
 - Citation quality

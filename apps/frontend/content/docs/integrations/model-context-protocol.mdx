@@ -59,12 +59,12 @@ curl -X POST https://agentc2.ai/agent/api/mcp/tools/hubspot-search-contacts/exec
 
 MCP tools follow the pattern `{server}-{tool-name}`:
 
-| Server | Example Tools |
-|--------|--------------|
-| hubspot | `hubspot-search-contacts`, `hubspot-create-deal` |
-| jira | `jira-search-issues`, `jira-create-issue` |
-| github | `github-search-repos`, `github-create-issue` |
-| firecrawl | `firecrawl-scrape-url`, `firecrawl-crawl-site` |
+| Server    | Example Tools                                    |
+| --------- | ------------------------------------------------ |
+| hubspot   | `hubspot-search-contacts`, `hubspot-create-deal` |
+| jira      | `jira-search-issues`, `jira-create-issue`        |
+| github    | `github-search-repos`, `github-create-issue`     |
+| firecrawl | `firecrawl-scrape-url`, `firecrawl-crawl-site`   |
 
 ## AgentC2's MCP extensions
 
@@ -83,23 +83,24 @@ Organization-level policies can restrict which MCP tools are available to which 
 AgentC2 tracks tool execution success rates, latency, and error patterns. If a tool's failure rate exceeds thresholds, it can be automatically disabled.
 
 <Callout type="info">
-MCP server connections are configured in the platform's MCP configuration. See the individual integration pages for setup instructions for each provider.
+    MCP server connections are configured in the platform's MCP configuration. See the individual
+    integration pages for setup instructions for each provider.
 </Callout>
 
 ## Configured MCP servers
 
 AgentC2 includes pre-configured MCP servers for:
 
-| Server | Category | Purpose |
-|--------|----------|---------|
-| HubSpot | CRM | Contacts, companies, deals, pipelines |
-| Jira | Productivity | Issues, sprints, project tracking |
-| Slack | Communication | Channels, messages, users, search |
-| GitHub | Development | Repos, issues, PRs, code, actions |
-| Google Drive | Productivity | File search, list, read |
-| Firecrawl | Web | Web scraping, content extraction |
-| Fathom | Knowledge | Meeting recordings, transcripts |
-| JustCall | Communication | Call logs, SMS messaging |
+| Server       | Category      | Purpose                               |
+| ------------ | ------------- | ------------------------------------- |
+| HubSpot      | CRM           | Contacts, companies, deals, pipelines |
+| Jira         | Productivity  | Issues, sprints, project tracking     |
+| Slack        | Communication | Channels, messages, users, search     |
+| GitHub       | Development   | Repos, issues, PRs, code, actions     |
+| Google Drive | Productivity  | File search, list, read               |
+| Firecrawl    | Web           | Web scraping, content extraction      |
+| Fathom       | Knowledge     | Meeting recordings, transcripts       |
+| JustCall     | Communication | Call logs, SMS messaging              |
 
 ## Adding custom MCP servers
 

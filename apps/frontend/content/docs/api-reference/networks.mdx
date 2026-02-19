@@ -71,10 +71,10 @@ curl "https://agentc2.ai/agent/api/networks?active=true" \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Network
 
@@ -156,7 +156,7 @@ curl -X POST https://agentc2.ai/agent/api/networks \
 | ------ | ------------------------- | ---------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request |
 | `400`  | `INVALID_TOPOLOGY`        | Invalid network topology           |
-| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference         |
+| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference        |
 | `400`  | `INVALID_MODEL`           | Model not found for provider       |
 | `400`  | `INVALID_SLUG`            | Slug contains invalid characters   |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  |
@@ -171,8 +171,8 @@ Get details for a specific network by slug or ID. Returns full network configura
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Example Request
@@ -198,16 +198,14 @@ curl https://agentc2.ai/agent/api/networks/research-network \
         "temperature": 0.3,
         "topologyJson": {
             "nodes": [
-                {"id": "coordinator", "type": "agent", "agentId": "coordinator-agent"},
-                {"id": "researcher", "type": "agent", "agentId": "research-agent"}
+                { "id": "coordinator", "type": "agent", "agentId": "coordinator-agent" },
+                { "id": "researcher", "type": "agent", "agentId": "research-agent" }
             ],
-            "edges": [
-                {"from": "coordinator", "to": "researcher"}
-            ]
+            "edges": [{ "from": "coordinator", "to": "researcher" }]
         },
         "primitives": [
-            {"primitiveType": "agent", "agentId": "coordinator-agent"},
-            {"primitiveType": "agent", "agentId": "research-agent"}
+            { "primitiveType": "agent", "agentId": "coordinator-agent" },
+            { "primitiveType": "agent", "agentId": "research-agent" }
         ],
         "maxSteps": 10,
         "version": 3,
@@ -221,12 +219,12 @@ curl https://agentc2.ai/agent/api/networks/research-network \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Insufficient permissions           |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Insufficient permissions          |
+| `404`  | `NOT_FOUND`      | Network not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Update Network
 
@@ -236,23 +234,23 @@ Update an existing network. Only USER-type networks can be updated. All fields a
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Request Body
 
 All fields are optional:
 
-| Field          | Type    | Required | Description                    |
-| -------------- | ------- | -------- | ------------------------------ |
-| `name`         | string  | ❌ No    | Display name                   |
-| `description`  | string  | ❌ No    | Human-readable description     |
-| `instructions` | string | ❌ No    | Routing coordinator instructions |
-| `topologyJson` | object  | ❌ No    | Network topology graph         |
-| `primitives`   | array   | ❌ No    | Array of primitive attachments  |
-| `isPublished`  | boolean | ❌ No    | Whether network is published  |
-| `isActive`     | boolean | ❌ No    | Whether network is active     |
+| Field          | Type    | Required | Description                      |
+| -------------- | ------- | -------- | -------------------------------- |
+| `name`         | string  | ❌ No    | Display name                     |
+| `description`  | string  | ❌ No    | Human-readable description       |
+| `instructions` | string  | ❌ No    | Routing coordinator instructions |
+| `topologyJson` | object  | ❌ No    | Network topology graph           |
+| `primitives`   | array   | ❌ No    | Array of primitive attachments   |
+| `isPublished`  | boolean | ❌ No    | Whether network is published     |
+| `isActive`     | boolean | ❌ No    | Whether network is active        |
 
 ### Example Request
 
@@ -283,14 +281,14 @@ curl -X PATCH https://agentc2.ai/agent/api/networks/research-network \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_TOPOLOGY` | Invalid network topology        |
-| `400`  | `INVALID_PRIMITIVE` | Invalid primitive reference     |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot update SYSTEM network       |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code          | Description                       |
+| ------ | ------------------- | --------------------------------- |
+| `400`  | `INVALID_TOPOLOGY`  | Invalid network topology          |
+| `400`  | `INVALID_PRIMITIVE` | Invalid primitive reference       |
+| `401`  | `UNAUTHORIZED`      | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`         | Cannot update SYSTEM network      |
+| `404`  | `NOT_FOUND`         | Network not found                 |
+| `500`  | `INTERNAL_ERROR`    | Server error                      |
 
 ## Delete Network
 
@@ -300,8 +298,8 @@ Delete a network. Only USER-type networks can be deleted. This action is permane
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Example Request
@@ -322,12 +320,12 @@ curl -X DELETE https://agentc2.ai/agent/api/networks/research-network \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `403`  | `FORBIDDEN`    | Cannot delete SYSTEM network       |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `403`  | `FORBIDDEN`      | Cannot delete SYSTEM network      |
+| `404`  | `NOT_FOUND`      | Network not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Execute Network
 
@@ -337,15 +335,15 @@ Execute a network with the provided input. The routing coordinator will determin
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Request Body
 
-| Field  | Type   | Required | Description                    |
-| ------ | ------ | -------- | ------------------------------ |
-| `input` | string | ✅ Yes   | Input text or task description  |
+| Field      | Type   | Required | Description                         |
+| ---------- | ------ | -------- | ----------------------------------- |
+| `input`    | string | ✅ Yes   | Input text or task description      |
 | `threadId` | string | ❌ No    | Conversation thread ID (for memory) |
 
 ### Example Request
@@ -376,24 +374,24 @@ data: {"type":"network_complete","runId":"net_run_abc123","output":"Recent quant
 
 ### Response Format
 
-| Field          | Type   | Description                                    |
-| -------------- | ------ | ---------------------------------------------- |
-| `type`         | string | `"coordinator_start"`, `"primitive_invoke"`, `"primitive_result"`, `"network_complete"` |
-| `primitiveType` | string | `"agent"`, `"workflow"`, or `"tool"`          |
-| `primitiveId`  | string | Primitive ID                                   |
-| `input`        | string | Input to primitive                             |
-| `output`       | string | Output from primitive                          |
-| `runId`        | string | Network run ID (for completion event)         |
+| Field           | Type   | Description                                                                             |
+| --------------- | ------ | --------------------------------------------------------------------------------------- |
+| `type`          | string | `"coordinator_start"`, `"primitive_invoke"`, `"primitive_result"`, `"network_complete"` |
+| `primitiveType` | string | `"agent"`, `"workflow"`, or `"tool"`                                                    |
+| `primitiveId`   | string | Primitive ID                                                                            |
+| `input`         | string | Input to primitive                                                                      |
+| `output`        | string | Output from primitive                                                                   |
+| `runId`         | string | Network run ID (for completion event)                                                   |
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `400`  | `INVALID_INPUT` | Invalid input format              |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded              |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code            | Description                       |
+| ------ | --------------------- | --------------------------------- |
+| `400`  | `INVALID_INPUT`       | Invalid input format              |
+| `401`  | `UNAUTHORIZED`        | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`           | Network not found                 |
+| `429`  | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded               |
+| `500`  | `INTERNAL_ERROR`      | Server error                      |
 
 ## List Runs
 
@@ -403,17 +401,17 @@ List network execution runs with filtering and pagination. Returns historical ru
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Query Parameters
 
-| Parameter | Type   | Default | Description                                    |
-| --------- | ------ | ------- | ---------------------------------------------- |
-| `limit`   | number | `50`    | Maximum number of runs to return               |
-| `offset`  | number | `0`     | Number of runs to skip                         |
-| `status`  | string | —       | Filter by status (`"completed"`, `"failed"`)   |
+| Parameter | Type   | Default | Description                                  |
+| --------- | ------ | ------- | -------------------------------------------- |
+| `limit`   | number | `50`    | Maximum number of runs to return             |
+| `offset`  | number | `0`     | Number of runs to skip                       |
+| `status`  | string | —       | Filter by status (`"completed"`, `"failed"`) |
 
 ### Example Request
 
@@ -447,11 +445,11 @@ curl "https://agentc2.ai/agent/api/networks/research-network/runs?limit=10&statu
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Network not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Create Version
 
@@ -461,8 +459,8 @@ Create a version snapshot of the current network configuration. Useful for track
 
 ### Path Parameters
 
-| Parameter | Type   | Description       |
-| --------- | ------ | ----------------- |
+| Parameter | Type   | Description        |
+| --------- | ------ | ------------------ |
 | `slug`    | string | Network slug or ID |
 
 ### Request Body
@@ -504,11 +502,11 @@ curl -X POST https://agentc2.ai/agent/api/networks/research-network/versions \
 
 ### Errors
 
-| Status | Error Code     | Description                        |
-| ------ | -------------- | ---------------------------------- |
-| `401`  | `UNAUTHORIZED` | Missing or invalid authentication  |
-| `404`  | `NOT_FOUND`    | Network not found                  |
-| `500`  | `INTERNAL_ERROR` | Server error                       |
+| Status | Error Code       | Description                       |
+| ------ | ---------------- | --------------------------------- |
+| `401`  | `UNAUTHORIZED`   | Missing or invalid authentication |
+| `404`  | `NOT_FOUND`      | Network not found                 |
+| `500`  | `INTERNAL_ERROR` | Server error                      |
 
 ## Error Codes
 
@@ -517,14 +515,14 @@ All endpoints may return these error codes:
 | Status | Error Code                | Description                        | Solution                          |
 | ------ | ------------------------- | ---------------------------------- | --------------------------------- |
 | `400`  | `MISSING_REQUIRED_FIELDS` | Missing required fields in request | Include all required fields       |
-| `400`  | `INVALID_TOPOLOGY`        | Invalid network topology           | Check topology structure           |
-| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference         | Verify primitive IDs exist         |
+| `400`  | `INVALID_TOPOLOGY`        | Invalid network topology           | Check topology structure          |
+| `400`  | `INVALID_PRIMITIVE`       | Invalid primitive reference        | Verify primitive IDs exist        |
 | `400`  | `INVALID_MODEL`           | Model not found for provider       | Check available models            |
 | `400`  | `INVALID_INPUT`           | Invalid input format               | Use correct input format          |
 | `400`  | `INVALID_SLUG`            | Slug contains invalid characters   | Use alphanumeric and hyphens only |
 | `401`  | `UNAUTHORIZED`            | Missing or invalid authentication  | Include `Authorization` header    |
 | `403`  | `FORBIDDEN`               | Insufficient permissions           | Ensure you have access            |
-| `404`  | `NOT_FOUND`               | Network or resource not found     | Check slug/ID is correct          |
+| `404`  | `NOT_FOUND`               | Network or resource not found      | Check slug/ID is correct          |
 | `409`  | `SLUG_CONFLICT`           | Slug already exists                | Use a different slug              |
 | `429`  | `RATE_LIMIT_EXCEEDED`     | Rate limit exceeded                | Wait before retrying              |
 | `500`  | `INTERNAL_ERROR`          | Server error                       | Retry request or contact support  |

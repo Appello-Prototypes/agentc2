@@ -4,8 +4,16 @@ description: "Create reusable campaign templates with parameterization, scheduli
 section: "campaigns"
 order: 3
 primaryKeyword: "campaign templates"
-relatedSlugs: ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
-secondaryKeywords: ["campaign templates", "reusable campaigns", "campaign parameterization", "campaign scheduling", "campaign governance"]
+relatedSlugs:
+    ["campaigns/overview", "campaigns/creating-campaigns", "campaigns/after-action-reviews"]
+secondaryKeywords:
+    [
+        "campaign templates",
+        "reusable campaigns",
+        "campaign parameterization",
+        "campaign scheduling",
+        "campaign governance"
+    ]
 pageType: "how-to"
 ctaLabel: "Launch AgentC2 Workspace"
 ctaHref: "/workspace"
@@ -20,6 +28,7 @@ Campaign templates enable you to create reusable campaign definitions with param
 A campaign template is a reusable campaign definition with parameterized fields. Templates define the structure (intent, end state, constraints, restraints) while allowing parameter values to be provided at instantiation time.
 
 Templates support:
+
 - **Parameterization**: Use `{{parameterName}}` placeholders in intent/end state
 - **Reuse**: Instantiate the same template multiple times
 - **Scheduling**: Schedule recurring campaigns via cron
@@ -30,23 +39,23 @@ Templates support:
 
 Templates are stored in the `CampaignTemplate` table:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `id` | string | Unique template ID |
-| `slug` | string | URL-safe identifier |
-| `name` | string | Display name |
-| `description` | text | Human-readable description |
-| `category` | string | Template category (`"sales"`, `"operations"`, `"safety"`, etc.) |
-| `intentTemplate` | text | Intent template with `{{parameter}}` placeholders |
-| `endStateTemplate` | text | End state template with placeholders |
-| `constraints` | string[] | Must-do requirements |
-| `restraints` | string[] | Must-not-do requirements |
-| `parameters` | JSON | Parameter definitions |
-| `requireApproval` | boolean | Require approval before execution |
-| `maxCostUsd` | number | Budget ceiling |
-| `timeoutMinutes` | number | Maximum execution time |
-| `isSystem` | boolean | System-provided template |
-| `isActive` | boolean | Whether template is active |
+| Field              | Type     | Description                                                     |
+| ------------------ | -------- | --------------------------------------------------------------- |
+| `id`               | string   | Unique template ID                                              |
+| `slug`             | string   | URL-safe identifier                                             |
+| `name`             | string   | Display name                                                    |
+| `description`      | text     | Human-readable description                                      |
+| `category`         | string   | Template category (`"sales"`, `"operations"`, `"safety"`, etc.) |
+| `intentTemplate`   | text     | Intent template with `{{parameter}}` placeholders               |
+| `endStateTemplate` | text     | End state template with placeholders                            |
+| `constraints`      | string[] | Must-do requirements                                            |
+| `restraints`       | string[] | Must-not-do requirements                                        |
+| `parameters`       | JSON     | Parameter definitions                                           |
+| `requireApproval`  | boolean  | Require approval before execution                               |
+| `maxCostUsd`       | number   | Budget ceiling                                                  |
+| `timeoutMinutes`   | number   | Maximum execution time                                          |
+| `isSystem`         | boolean  | System-provided template                                        |
+| `isActive`         | boolean  | Whether template is active                                      |
 
 ## Creating templates
 
@@ -108,20 +117,20 @@ curl -X POST https://agentc2.ai/agent/api/campaigns/templates \
 
 ### Request fields
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `name` | string | ✅ Yes | Display name |
-| `slug` | string | ❌ No | URL-safe identifier (auto-generated if omitted) |
-| `description` | string | ❌ No | Human-readable description |
-| `category` | string | ❌ No | Template category |
-| `intentTemplate` | string | ✅ Yes | Intent template with `{{parameter}}` placeholders |
-| `endStateTemplate` | string | ✅ Yes | End state template with placeholders |
-| `constraints` | string[] | ❌ No | Must-do requirements |
-| `restraints` | string[] | ❌ No | Must-not-do requirements |
-| `parameters` | object | ❌ No | Parameter definitions |
-| `requireApproval` | boolean | ❌ No | Require approval (default: `false`) |
-| `maxCostUsd` | number | ❌ No | Budget ceiling |
-| `timeoutMinutes` | number | ❌ No | Maximum execution time |
+| Field              | Type     | Required | Description                                       |
+| ------------------ | -------- | -------- | ------------------------------------------------- |
+| `name`             | string   | ✅ Yes   | Display name                                      |
+| `slug`             | string   | ❌ No    | URL-safe identifier (auto-generated if omitted)   |
+| `description`      | string   | ❌ No    | Human-readable description                        |
+| `category`         | string   | ❌ No    | Template category                                 |
+| `intentTemplate`   | string   | ✅ Yes   | Intent template with `{{parameter}}` placeholders |
+| `endStateTemplate` | string   | ✅ Yes   | End state template with placeholders              |
+| `constraints`      | string[] | ❌ No    | Must-do requirements                              |
+| `restraints`       | string[] | ❌ No    | Must-not-do requirements                          |
+| `parameters`       | object   | ❌ No    | Parameter definitions                             |
+| `requireApproval`  | boolean  | ❌ No    | Require approval (default: `false`)               |
+| `maxCostUsd`       | number   | ❌ No    | Budget ceiling                                    |
+| `timeoutMinutes`   | number   | ❌ No    | Maximum execution time                            |
 
 ### Parameter definitions
 
@@ -148,7 +157,7 @@ Templates use `{{parameterName}}` placeholders that are replaced at instantiatio
 
 ```json
 {
-  "intentTemplate": "Onboard {{customerName}} with personalized welcome, account setup, and initial training to achieve {{targetMetric}} within {{targetDate}}"
+    "intentTemplate": "Onboard {{customerName}} with personalized welcome, account setup, and initial training to achieve {{targetMetric}} within {{targetDate}}"
 }
 ```
 
@@ -156,7 +165,7 @@ Templates use `{{parameterName}}` placeholders that are replaced at instantiatio
 
 ```json
 {
-  "endStateTemplate": "{{customerName}} has completed onboarding, with {{targetMetric}} achieved and satisfaction score above {{satisfactionThreshold}}"
+    "endStateTemplate": "{{customerName}} has completed onboarding, with {{targetMetric}} achieved and satisfaction score above {{satisfactionThreshold}}"
 }
 ```
 
@@ -164,9 +173,7 @@ Templates use `{{parameterName}}` placeholders that are replaced at instantiatio
 
 ```json
 {
-  "restraints": [
-    "Cannot exceed {{maxBudget}} budget"
-  ]
+    "restraints": ["Cannot exceed {{maxBudget}} budget"]
 }
 ```
 
@@ -195,11 +202,13 @@ curl -X POST https://agentc2.ai/agent/api/campaigns \
 Parameter values are interpolated into templates:
 
 **Before interpolation**:
+
 ```
 "Onboard {{customerName}} with personalized welcome..."
 ```
 
 **After interpolation**:
+
 ```
 "Onboard Acme Corp with personalized welcome..."
 ```
@@ -275,6 +284,7 @@ curl -X POST https://agentc2.ai/agent/api/campaigns/templates/{templateId}/sched
 ```
 
 **Examples**:
+
 - `0 0 1 * *` — First day of every month at midnight
 - `0 9 * * 1` — Every Monday at 9 AM
 - `0 */6 * * *` — Every 6 hours
@@ -371,13 +381,13 @@ Make templates flexible with parameters:
 
 ```json
 {
-  "intentTemplate": "{{action}} {{target}} to achieve {{goal}} by {{deadline}}",
-  "parameters": {
-    "action": {"type": "string", "required": true},
-    "target": {"type": "string", "required": true},
-    "goal": {"type": "string", "required": true},
-    "deadline": {"type": "date", "required": true}
-  }
+    "intentTemplate": "{{action}} {{target}} to achieve {{goal}} by {{deadline}}",
+    "parameters": {
+        "action": { "type": "string", "required": true },
+        "target": { "type": "string", "required": true },
+        "goal": { "type": "string", "required": true },
+        "deadline": { "type": "date", "required": true }
+    }
 }
 ```
 
@@ -387,13 +397,13 @@ Include default values for optional parameters:
 
 ```json
 {
-  "parameters": {
-    "satisfactionThreshold": {
-      "type": "number",
-      "required": false,
-      "default": 4.5
+    "parameters": {
+        "satisfactionThreshold": {
+            "type": "number",
+            "required": false,
+            "default": 4.5
+        }
     }
-  }
 }
 ```
 
@@ -403,13 +413,13 @@ Add descriptions for all parameters:
 
 ```json
 {
-  "parameters": {
-    "customerName": {
-      "type": "string",
-      "required": true,
-      "description": "Name of the customer company"
+    "parameters": {
+        "customerName": {
+            "type": "string",
+            "required": true,
+            "description": "Name of the customer company"
+        }
     }
-  }
 }
 ```
 

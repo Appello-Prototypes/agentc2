@@ -303,7 +303,7 @@ Slack sends events to `/agent/api/slack/events`:
 {
     "type": "app_mention",
     "user": "U01234567",
-    "text": "<@U0BOT123> agent:research What is AI?",
+    "text": "&#60;@U0BOT123&#62; agent:research What is AI?",
     "ts": "1234567890.123456",
     "channel": "C01234567",
     "thread_ts": "1234567890.123456" // If in thread
@@ -379,10 +379,10 @@ async function sendWithRetry(message, retries = 3) {
 Sanitize user messages before processing:
 
 ```typescript
-// Remove @mentions and formatting
+// Strip @mentions and formatting from message
 const cleanText = text
-    .replace(/<@[^>]+>/g, "") // Remove @mentions
-    .replace(/<[^>]+>/g, "") // Remove links/formatting
+    .replace(/\u003c@[^\u003e]+\u003e/g, "") // Remove @mentions
+    .replace(/\u003c[^\u003e]+\u003e/g, "") // Remove links/formatting
     .trim();
 ```
 

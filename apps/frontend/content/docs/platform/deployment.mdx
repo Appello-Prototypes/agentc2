@@ -18,12 +18,12 @@ AgentC2 is deployed to Digital Ocean production servers using Bun runtime, PM2 p
 
 Production deployment uses Digital Ocean droplets with:
 
-| Specification | Value | Purpose |
-| ------------- | ----- | ------- |
-| **RAM** | 32 GB | Handle concurrent agent runs, large models |
-| **vCPUs** | 8 | Parallel processing, multiple apps |
-| **Storage** | 640 GB SSD | Database, logs, build artifacts |
-| **Cost** | $96/month | Production-grade infrastructure |
+| Specification | Value      | Purpose                                    |
+| ------------- | ---------- | ------------------------------------------ |
+| **RAM**       | 32 GB      | Handle concurrent agent runs, large models |
+| **vCPUs**     | 8          | Parallel processing, multiple apps         |
+| **Storage**   | 640 GB SSD | Database, logs, build artifacts            |
+| **Cost**      | $96/month  | Production-grade infrastructure            |
 
 ### Server details
 
@@ -189,12 +189,14 @@ NODE_OPTIONS="--max-old-space-size=24576" bunx turbo build
 ```
 
 This builds:
+
 - `apps/frontend` → `.next` directory
 - `apps/agent` → `.next` directory
 - All packages
 
 <Callout type="warning">
-    **Memory limits**: Large builds may require increased memory. Set `NODE_OPTIONS="--max-old-space-size=24576"` for 24GB limit.
+    **Memory limits**: Large builds may require increased memory. Set
+    `NODE_OPTIONS="--max-old-space-size=24576"` for 24GB limit.
 </Callout>
 
 ## Caddyfile configuration
@@ -213,7 +215,7 @@ agentc2.ai {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "strict-origin-when-cross-origin"
     }
-    
+
     # Reverse proxy to agent app
     reverse_proxy /agent* localhost:3001 {
         header_up Host {host}
@@ -221,7 +223,7 @@ agentc2.ai {
         header_up X-Forwarded-For {remote}
         header_up X-Forwarded-Proto {scheme}
     }
-    
+
     # Reverse proxy to frontend app
     reverse_proxy * localhost:3000 {
         header_up Host {host}
@@ -229,7 +231,7 @@ agentc2.ai {
         header_up X-Forwarded-For {remote}
         header_up X-Forwarded-Proto {scheme}
     }
-    
+
     # Automatic SSL via Let's Encrypt
     tls {
         dns cloudflare {env.CLOUDFLARE_API_TOKEN}
@@ -259,7 +261,8 @@ Caddy automatically obtains SSL certificates from Let's Encrypt:
 3. **Automatic renewal** — Caddy renews certificates automatically
 
 <Callout type="tip">
-    **DNS provider**: Configure DNS provider credentials in Caddyfile for automatic certificate issuance. Cloudflare, Digital Ocean, and other providers are supported.
+    **DNS provider**: Configure DNS provider credentials in Caddyfile for automatic certificate
+    issuance. Cloudflare, Digital Ocean, and other providers are supported.
 </Callout>
 
 ## PM2 ecosystem
@@ -271,52 +274,52 @@ PM2 manages application processes:
 ```javascript
 // ecosystem.config.js
 module.exports = {
-  apps: [
-    {
-      name: "frontend",
-      cwd: "/var/www/mastra/apps/frontend",
-      script: "bun",
-      args: "run start",
-      instances: 2,
-      exec_mode: "cluster",
-      env: {
-        NODE_ENV: "production",
-        PORT: 3000
-      },
-      error_file: "/var/log/pm2/frontend-error.log",
-      out_file: "/var/log/pm2/frontend-out.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z"
-    },
-    {
-      name: "agent",
-      cwd: "/var/www/mastra/apps/agent",
-      script: "bun",
-      args: "run start",
-      instances: 2,
-      exec_mode: "cluster",
-      env: {
-        NODE_ENV: "production",
-        PORT: 3001
-      },
-      error_file: "/var/log/pm2/agent-error.log",
-      out_file: "/var/log/pm2/agent-out.log",
-      log_date_format: "YYYY-MM-DD HH:mm:ss Z"
-    },
-    {
-      name: "inngest",
-      cwd: "/var/www/mastra/apps/inngest",
-      script: "bun",
-      args: "run start",
-      instances: 1,
-      env: {
-        NODE_ENV: "production",
-        PORT: 8288
-      },
-      error_file: "/var/log/pm2/inngest-error.log",
-      out_file: "/var/log/pm2/inngest-out.log"
-    }
-  ]
-}
+    apps: [
+        {
+            name: "frontend",
+            cwd: "/var/www/mastra/apps/frontend",
+            script: "bun",
+            args: "run start",
+            instances: 2,
+            exec_mode: "cluster",
+            env: {
+                NODE_ENV: "production",
+                PORT: 3000
+            },
+            error_file: "/var/log/pm2/frontend-error.log",
+            out_file: "/var/log/pm2/frontend-out.log",
+            log_date_format: "YYYY-MM-DD HH:mm:ss Z"
+        },
+        {
+            name: "agent",
+            cwd: "/var/www/mastra/apps/agent",
+            script: "bun",
+            args: "run start",
+            instances: 2,
+            exec_mode: "cluster",
+            env: {
+                NODE_ENV: "production",
+                PORT: 3001
+            },
+            error_file: "/var/log/pm2/agent-error.log",
+            out_file: "/var/log/pm2/agent-out.log",
+            log_date_format: "YYYY-MM-DD HH:mm:ss Z"
+        },
+        {
+            name: "inngest",
+            cwd: "/var/www/mastra/apps/inngest",
+            script: "bun",
+            args: "run start",
+            instances: 1,
+            env: {
+                NODE_ENV: "production",
+                PORT: 8288
+            },
+            error_file: "/var/log/pm2/inngest-error.log",
+            out_file: "/var/log/pm2/inngest-out.log"
+        }
+    ]
+};
 ```
 
 ### Start applications
@@ -485,7 +488,7 @@ If database migrations fail:
 
 ```bash
 # Restore from backup
-psql $DATABASE_URL < backup.sql
+psql $DATABASE_URL --file=backup.sql
 
 # Or revert migration
 bun run db:migrate:rollback

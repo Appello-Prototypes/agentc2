@@ -18,15 +18,15 @@ AgentC2 supports multiple trigger types for invoking agents: scheduled (cron), w
 
 The platform supports seven trigger types, each optimized for different use cases:
 
-| Trigger Type | Description | Use Case |
-| ------------ | ----------- | -------- |
-| **scheduled** | Cron-based recurring execution | Daily reports, periodic checks |
-| **webhook** | HTTP POST to unique webhook URL | External system integrations |
-| **event** | Internal event bus (Inngest) | Cross-agent workflows, learning signals |
-| **mcp** | MCP server tool signals | Tool-triggered agent invocations |
-| **api** | Direct API calls | Programmatic invocations |
-| **manual** | User-initiated from UI | Testing, one-off runs |
-| **test** | Test execution mode | Development, validation |
+| Trigger Type  | Description                     | Use Case                                |
+| ------------- | ------------------------------- | --------------------------------------- |
+| **scheduled** | Cron-based recurring execution  | Daily reports, periodic checks          |
+| **webhook**   | HTTP POST to unique webhook URL | External system integrations            |
+| **event**     | Internal event bus (Inngest)    | Cross-agent workflows, learning signals |
+| **mcp**       | MCP server tool signals         | Tool-triggered agent invocations        |
+| **api**       | Direct API calls                | Programmatic invocations                |
+| **manual**    | User-initiated from UI          | Testing, one-off runs                   |
+| **test**      | Test execution mode             | Development, validation                 |
 
 ### Unified trigger shape
 
@@ -34,20 +34,20 @@ All triggers share a common structure:
 
 ```typescript
 interface TriggerPayload {
-  triggerType: "scheduled" | "webhook" | "event" | "mcp" | "api" | "manual" | "test"
-  agentId: string
-  workspaceId?: string
-  input?: {
-    messages?: Array<{ role: string; content: string }>
-    [key: string]: unknown
-  }
-  metadata?: {
-    triggerId?: string
-    scheduleId?: string
-    webhookPath?: string
-    eventName?: string
-    [key: string]: unknown
-  }
+    triggerType: "scheduled" | "webhook" | "event" | "mcp" | "api" | "manual" | "test";
+    agentId: string;
+    workspaceId?: string;
+    input?: {
+        messages?: Array<{ role: string; content: string }>;
+        [key: string]: unknown;
+    };
+    metadata?: {
+        triggerId?: string;
+        scheduleId?: string;
+        webhookPath?: string;
+        eventName?: string;
+        [key: string]: unknown;
+    };
 }
 ```
 
@@ -95,15 +95,15 @@ Cron expressions use standard 5-field format:
 
 ### Common cron patterns
 
-| Pattern | Expression | Description |
-| ------- | ---------- | ----------- |
-| Every minute | `* * * * *` | Run every minute |
-| Every hour | `0 * * * *` | Run at minute 0 of every hour |
-| Daily at 9 AM | `0 9 * * *` | Run at 9:00 AM every day |
-| Weekly on Monday | `0 9 * * 1` | Run at 9:00 AM every Monday |
-| Monthly on 1st | `0 9 1 * *` | Run at 9:00 AM on the 1st of every month |
-| Every weekday | `0 9 * * 1-5` | Run at 9:00 AM Monday-Friday |
-| Every 15 minutes | `*/15 * * * *` | Run every 15 minutes |
+| Pattern          | Expression     | Description                              |
+| ---------------- | -------------- | ---------------------------------------- |
+| Every minute     | `* * * * *`    | Run every minute                         |
+| Every hour       | `0 * * * *`    | Run at minute 0 of every hour            |
+| Daily at 9 AM    | `0 9 * * *`    | Run at 9:00 AM every day                 |
+| Weekly on Monday | `0 9 * * 1`    | Run at 9:00 AM every Monday              |
+| Monthly on 1st   | `0 9 1 * *`    | Run at 9:00 AM on the 1st of every month |
+| Every weekday    | `0 9 * * 1-5`  | Run at 9:00 AM Monday-Friday             |
+| Every 15 minutes | `*/15 * * * *` | Run every 15 minutes                     |
 
 ### Creating schedules
 
@@ -129,13 +129,14 @@ curl -X POST https://agentc2.ai/agent/api/agents/research-assistant/schedules \
 
 Schedules are executed by a background cron job that:
 
-1. **Finds due schedules** — Queries `AgentSchedule` where `nextRunAt <= NOW()` and `isActive = true`
+1. **Finds due schedules** — Queries `AgentSchedule` where `nextRunAt` is at or before `NOW()` and `isActive = true`
 2. **Invokes agent** — Calls agent with `inputJson` payload
 3. **Updates schedule** — Sets `lastRunAt` and calculates `nextRunAt`
 4. **Increments counter** — Updates `runCount`
 
 <Callout type="tip">
-    **Timezone handling**: Always specify `timezone` when creating schedules. Cron expressions are evaluated in the specified timezone, not UTC.
+    **Timezone handling**: Always specify `timezone` when creating schedules. Cron expressions are
+    evaluated in the specified timezone, not UTC.
 </Callout>
 
 ## Webhook triggers
@@ -204,13 +205,13 @@ Webhooks validate the `X-Webhook-Secret` header:
 
 ```typescript
 // Validate webhook secret
-const webhookSecret = request.headers.get("X-Webhook-Secret")
+const webhookSecret = request.headers.get("X-Webhook-Secret");
 const trigger = await prisma.agentTrigger.findUnique({
-  where: { webhookPath }
-})
+    where: { webhookPath }
+});
 
 if (trigger.webhookSecret !== webhookSecret) {
-  return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 })
+    return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 });
 }
 ```
 
@@ -220,26 +221,27 @@ Webhook payloads are mapped to agent input via `inputMapping`:
 
 ```json
 {
-  "inputMapping": {
-    "messages": [
-      {
-        "role": "user",
-        "content": "{{payload.event.text}}"
-      }
-    ],
-    "metadata": {
-      "source": "slack",
-      "userId": "{{payload.event.user}}",
-      "channel": "{{payload.event.channel}}"
+    "inputMapping": {
+        "messages": [
+            {
+                "role": "user",
+                "content": "{{payload.event.text}}"
+            }
+        ],
+        "metadata": {
+            "source": "slack",
+            "userId": "{{payload.event.user}}",
+            "channel": "{{payload.event.channel}}"
+        }
     }
-  }
 }
 ```
 
 Template variables use `{{payload.path}}` syntax to extract values from the webhook payload.
 
 <Callout type="warning">
-    **Webhook security**: Always use `webhookSecret` for webhook validation. Without validation, anyone with the webhook URL can trigger your agent.
+    **Webhook security**: Always use `webhookSecret` for webhook validation. Without validation,
+    anyone with the webhook URL can trigger your agent.
 </Callout>
 
 ## Event triggers
@@ -275,17 +277,17 @@ Event triggers listen to internal Inngest events:
 Events are published via Inngest:
 
 ```typescript
-import { inngest } from "@/lib/inngest"
+import { inngest } from "@/lib/inngest";
 
 // Publish event that triggers agent
 await inngest.send({
-  name: "run/completed",
-  data: {
-    runId: "run_123",
-    agentId: "agent_456",
-    status: "COMPLETED"
-  }
-})
+    name: "run/completed",
+    data: {
+        runId: "run_123",
+        agentId: "agent_456",
+        status: "COMPLETED"
+    }
+});
 ```
 
 ### Event processing
@@ -295,29 +297,29 @@ The platform processes events via Inngest functions:
 ```typescript
 // Inngest function: agentTriggerFireFunction
 export const agentTriggerFireFunction = inngest.createFunction(
-  { id: "agent-trigger-fire" },
-  { event: "run/completed" },
-  async ({ event }) => {
-    // Find matching triggers
-    const triggers = await prisma.agentTrigger.findMany({
-      where: {
-        triggerType: "event",
-        eventName: event.name,
-        isActive: true
-      }
-    })
-    
-    // Filter by filterJson
-    const matchingTriggers = triggers.filter(trigger => {
-      return matchesFilter(event.data, trigger.filterJson)
-    })
-    
-    // Invoke agents
-    for (const trigger of matchingTriggers) {
-      await invokeAgent(trigger.agentId, trigger.inputMapping)
+    { id: "agent-trigger-fire" },
+    { event: "run/completed" },
+    async ({ event }) => {
+        // Find matching triggers
+        const triggers = await prisma.agentTrigger.findMany({
+            where: {
+                triggerType: "event",
+                eventName: event.name,
+                isActive: true
+            }
+        });
+
+        // Filter by filterJson
+        const matchingTriggers = triggers.filter((trigger) => {
+            return matchesFilter(event.data, trigger.filterJson);
+        });
+
+        // Invoke agents
+        for (const trigger of matchingTriggers) {
+            await invokeAgent(trigger.agentId, trigger.inputMapping);
+        }
     }
-  }
-)
+);
 ```
 
 ## MCP triggers
@@ -400,13 +402,13 @@ The platform prevents duplicate trigger executions:
 
 ### Deduplication strategies
 
-| Trigger Type | Deduplication Method |
-| ------------ | -------------------- |
+| Trigger Type  | Deduplication Method                     |
+| ------------- | ---------------------------------------- |
 | **scheduled** | Skip if `lastRunAt` within cron interval |
-| **webhook** | Idempotency key in request header |
-| **event** | Inngest event ID deduplication |
-| **mcp** | MCP event ID deduplication |
-| **api** | Request ID deduplication |
+| **webhook**   | Idempotency key in request header        |
+| **event**     | Inngest event ID deduplication           |
+| **mcp**       | MCP event ID deduplication               |
+| **api**       | Request ID deduplication                 |
 
 ### Idempotency keys
 
