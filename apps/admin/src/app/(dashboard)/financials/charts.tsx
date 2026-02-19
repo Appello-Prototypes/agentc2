@@ -132,7 +132,10 @@ export function MarginTrendChart({ data }: { data: MonthlyFinancial[] }) {
                 />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    formatter={(value: number) => [`$${Number(value).toFixed(2)}`, "Gross Margin"]}
+                    formatter={(value: number | undefined) => [
+                        `$${Number(value ?? 0).toFixed(2)}`,
+                        "Gross Margin",
+                    ]}
                 />
                 <Bar dataKey="margin" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -188,8 +191,10 @@ export function RevenueByPlanChart({ data }: { data: PlanRevenue[] }) {
                 </Pie>
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={((value: any) => [`$${Number(value).toFixed(2)}`, "Revenue"]) as any}
+                    formatter={(value: number | undefined) => [
+                        `$${Number(value ?? 0).toFixed(2)}`,
+                        "Revenue",
+                    ]}
                 />
             </PieChart>
         </ResponsiveContainer>
@@ -231,8 +236,10 @@ export function CostByModelChart({ data }: { data: ModelCost[] }) {
                 />
                 <Tooltip
                     contentStyle={tooltipStyle}
-                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                    formatter={((value: any) => [`$${Number(value).toFixed(4)}`, "Cost"]) as any}
+                    formatter={(value: number | undefined) => [
+                        `$${Number(value ?? 0).toFixed(4)}`,
+                        "Cost",
+                    ]}
                 />
                 <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
             </BarChart>
