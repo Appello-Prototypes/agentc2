@@ -51,7 +51,7 @@ export async function getExposedAgentCards(
 
     if (!agreement || agreement.status !== "active") return [];
 
-    return agreement.exposures.map((exposure) =>
+    return agreement.exposures.map((exposure: Parameters<typeof buildAgentCard>[0]) =>
         buildAgentCard(exposure, agreement.dataClassification, agreement.maxRequestsPerHour)
     );
 }
@@ -137,7 +137,7 @@ export async function discoverFederatedAgents(orgId: string): Promise<AgentCard[
         select: { id: true }
     });
 
-    const cardPromises = agreements.map((a) => getExposedAgentCards(a.id, orgId));
+    const cardPromises = agreements.map((a: { id: string }) => getExposedAgentCards(a.id, orgId));
     const cardArrays = await Promise.all(cardPromises);
     return cardArrays.flat();
 }

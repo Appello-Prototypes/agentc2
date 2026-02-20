@@ -5,7 +5,7 @@
  * between organizations.
  */
 
-import { prisma } from "@repo/database";
+import { prisma, Prisma } from "@repo/database";
 import { generateChannelKey, encryptChannelKey, decryptChannelKey } from "../crypto/encryption";
 import { getActiveOrgKeyPair } from "../crypto/keys";
 import { writeAuditLog } from "../audit";
@@ -143,7 +143,7 @@ export async function approveConnection(
         return { success: false, error: "Organization security keys not provisioned" };
     }
 
-    await prisma.$transaction(async (tx) => {
+    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
         // Update agreement
         await tx.federationAgreement.update({
             where: { id: agreementId },
@@ -294,11 +294,20 @@ export async function listConnections(orgId: string): Promise<AgreementSummary[]
         orderBy: { createdAt: "desc" }
     });
 
-    return agreements.map((a) => {
+    return agreements.map((a: {
+        id: string;
+        initiatorOrgId: string;
+        status: string;
+        createdAt: Date;
+        approvedAt: Date | null;
+        initiatorOrg: { id: string; name: string; slug: string; logoUrl: string | null };
+        responderOrg: { id: string; name: string; slug: string; logoUrl: string | null };
+        exposures: { ownerOrgId: string }[];
+    }) => {
         const isInitiator = a.initiatorOrgId === orgId;
         const partnerOrg = isInitiator ? a.responderOrg : a.initiatorOrg;
-        const myExposures = a.exposures.filter((e) => e.ownerOrgId === orgId);
-        const partnerExposures = a.exposures.filter((e) => e.ownerOrgId !== orgId);
+        const myExposures = a.exposures.filter((e: { ownerOrgId: string }) => e.ownerOrgId === orgId);
+        const partnerExposures = a.exposures.filter((e: { ownerOrgId: string }) => e.ownerOrgId !== orgId);
 
         return {
             id: a.id,
