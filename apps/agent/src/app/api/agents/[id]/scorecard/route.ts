@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { validateCriteriaWeights } from "@repo/mastra/scorers";
-import type { ScorecardCriterion } from "@repo/mastra/scorers";
+import { validateCriteriaWeights } from "@repo/agentc2/scorers";
+import type { ScorecardCriterion } from "@repo/agentc2/scorers";
 
 /**
  * GET /api/agents/[id]/scorecard

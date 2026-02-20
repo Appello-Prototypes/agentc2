@@ -107,7 +107,7 @@ Example update:
     "enabled": true,
     "autoApprovePlanBelow": "medium",
     "autoApprovePrBelow": "low",
-    "allowedRepos": ["https://github.com/acme/mastra-experiment"]
+    "allowedRepos": ["https://github.com/acme/agentc2"]
 }
 ```
 
@@ -125,8 +125,8 @@ Example create payload:
 
 ```json
 {
-    "repositoryUrl": "https://github.com/acme/mastra-experiment",
-    "name": "mastra-experiment",
+    "repositoryUrl": "https://github.com/acme/agentc2",
+    "name": "agentc2",
     "baseBranch": "main",
     "installCommand": "bun install",
     "buildCommand": "bun run type-check && bun run lint && bun run build",

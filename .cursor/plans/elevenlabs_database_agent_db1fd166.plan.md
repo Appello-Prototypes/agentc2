@@ -91,7 +91,7 @@ Currently seeded agents:
 
 **Missing**: `mcp-agent` - the agent that handles ElevenLabs webhook requests
 
-The MCP agent exists only as hardcoded code in [packages/mastra/src/agents/mcp-agent.ts](packages/mastra/src/agents/mcp-agent.ts).
+The MCP agent exists only as hardcoded code in [packages/agentc2/src/agents/mcp-agent.ts](packages/agentc2/src/agents/mcp-agent.ts).
 
 ## Proposed Change
 

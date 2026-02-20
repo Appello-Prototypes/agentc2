@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/api-auth";
-import { discoverFederatedAgents, getExposedAgentCards } from "@repo/mastra/federation";
+import { discoverFederatedAgents, getExposedAgentCards } from "@repo/agentc2/federation";
 
 /**
  * GET /api/federation/agents

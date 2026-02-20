@@ -292,13 +292,13 @@ Each execution generates:
 
 ## 8. Mapping to Current Implementation
 
-This vision maps to the existing Mastra AI Agent Framework:
+This vision maps to the existing AgentC2 AI Agent Framework:
 
 | Vision Component | Current Implementation                                       |
 | ---------------- | ------------------------------------------------------------ |
 | Agent Registry   | `Agent`, `AgentVersion`, `AgentTool` models in Prisma        |
 | Agent Runtime    | `agentResolver`, `run-recorder.ts`, chat/test/runs endpoints |
-| MCP Outbound     | `@mastra/mcp`, tool registry in `@repo/mastra`               |
+| MCP Outbound     | `@mastra/mcp`, tool registry in `@repo/agentc2`               |
 | MCP Inbound      | **NEW** - agent-as-tool gateway                              |
 | Scheduler        | Inngest cron + event functions                               |
 | Observability    | `AgentRun`, `AgentTrace`, `AgentToolCall`, evaluations       |

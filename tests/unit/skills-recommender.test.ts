@@ -9,7 +9,7 @@ vi.mock("@repo/database", () => ({
     Prisma: { InputJsonValue: {} }
 }));
 
-const { recommendSkills } = await import("@repo/mastra");
+const { recommendSkills } = await import("@repo/agentc2");
 
 const mockSkills = [
     {

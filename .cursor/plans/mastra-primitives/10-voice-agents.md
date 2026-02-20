@@ -23,13 +23,13 @@ Add a voice demo page showcasing Text-to-Speech (TTS), Speech-to-Text (STT), and
 ### Step 1: Install Voice Packages
 
 ```bash
-cd packages/mastra
+cd packages/agentc2
 bun add @mastra/voice-openai @mastra/voice-elevenlabs
 ```
 
 ### Step 2: Create Voice Agent
 
-Create `packages/mastra/src/agents/voice.ts`:
+Create `packages/agentc2/src/agents/voice.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -134,7 +134,7 @@ export type OpenAISpeaker = (typeof openaiSpeakers)[number];
 
 ### Step 3: Update Agent Exports
 
-Update `packages/mastra/src/agents/index.ts`:
+Update `packages/agentc2/src/agents/index.ts`:
 
 ```typescript
 export { assistantAgent } from "./assistant";
@@ -288,7 +288,7 @@ Create `apps/agent/src/app/api/demos/voice/chat/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { getMastra } from "@repo/mastra";
+import { getMastra } from "@repo/agentc2";
 
 export async function POST(request: NextRequest) {
     try {
@@ -817,7 +817,7 @@ Update `apps/agent/src/app/demos/layout.tsx` to add Voice link:
 
 ### Step 10: Update Mastra Instance
 
-Update `packages/mastra/src/mastra.ts` to register voice agents:
+Update `packages/agentc2/src/mastra.ts` to register voice agents:
 
 ```typescript
 import { openaiVoiceAgent, elevenlabsVoiceAgent, hybridVoiceAgent } from "./agents";
@@ -957,10 +957,10 @@ const voiceChatPrompts = [
 
 | File                                               | Action |
 | -------------------------------------------------- | ------ |
-| `packages/mastra/package.json`                     | Update |
-| `packages/mastra/src/agents/voice.ts`              | Create |
-| `packages/mastra/src/agents/index.ts`              | Update |
-| `packages/mastra/src/mastra.ts`                    | Update |
+| `packages/agentc2/package.json`                     | Update |
+| `packages/agentc2/src/agents/voice.ts`              | Create |
+| `packages/agentc2/src/agents/index.ts`              | Update |
+| `packages/agentc2/src/mastra.ts`                    | Update |
 | `apps/agent/src/app/demos/voice/page.tsx`          | Create |
 | `apps/agent/src/app/api/demos/voice/tts/route.ts`  | Create |
 | `apps/agent/src/app/api/demos/voice/stt/route.ts`  | Create |

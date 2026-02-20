@@ -57,7 +57,7 @@ vi.mock("@/lib/inngest", () => ({
     inngest: inngestMock
 }));
 
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/agentc2", () => ({
     agentResolver: agentResolverMock
 }));
 

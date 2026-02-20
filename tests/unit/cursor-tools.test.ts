@@ -8,7 +8,7 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-vi.mock("../../packages/mastra/src/crypto/encryption", () => ({
+vi.mock("../../packages/agentc2/src/crypto/encryption", () => ({
     decryptJson: vi.fn()
 }));
 
@@ -30,7 +30,7 @@ describe("Cursor Tools", () => {
     describe("cursor-launch-agent", () => {
         it("launches a Cursor Cloud Agent and returns agent info", async () => {
             const { cursorLaunchAgentTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -68,7 +68,7 @@ describe("Cursor Tools", () => {
 
         it("throws on API error", async () => {
             const { cursorLaunchAgentTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: false,
@@ -89,7 +89,7 @@ describe("Cursor Tools", () => {
             delete process.env.CURSOR_API_KEY;
 
             const { cursorLaunchAgentTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             await expect(
                 cursorLaunchAgentTool.execute({
@@ -103,7 +103,7 @@ describe("Cursor Tools", () => {
     describe("cursor-get-status", () => {
         it("returns agent status", async () => {
             const { cursorGetStatusTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -129,7 +129,7 @@ describe("Cursor Tools", () => {
     describe("cursor-add-followup", () => {
         it("sends followup instructions", async () => {
             const { cursorAddFollowupTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -152,7 +152,7 @@ describe("Cursor Tools", () => {
     describe("cursor-get-conversation", () => {
         it("returns conversation messages", async () => {
             const { cursorGetConversationTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -183,7 +183,7 @@ describe("Cursor Tools", () => {
 
         it("handles empty conversation", async () => {
             const { cursorGetConversationTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -201,7 +201,7 @@ describe("Cursor Tools", () => {
     describe("cursor-poll-until-done", () => {
         it("returns when agent completes", async () => {
             const { cursorPollUntilDoneTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch
                 .mockResolvedValueOnce({
@@ -234,7 +234,7 @@ describe("Cursor Tools", () => {
 
         it("returns on FAILED status", async () => {
             const { cursorPollUntilDoneTool } =
-                await import("../../packages/mastra/src/tools/cursor-tools");
+                await import("../../packages/agentc2/src/tools/cursor-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,

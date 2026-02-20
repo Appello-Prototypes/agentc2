@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { agentResolver } from "@repo/mastra/agents";
-import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
+import { agentResolver } from "@repo/agentc2/agents";
+import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { prisma, type Prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
@@ -15,7 +15,12 @@ import {
     getBotUserIdForInstallation,
     type SlackInstallationContext
 } from "@/lib/slack-tokens";
-import { lookupChannelBinding, isUserAllowed, type InstanceContext } from "@/lib/agent-instances";
+import {
+    lookupChannelBinding,
+    isUserAllowed,
+    shouldTrigger,
+    type InstanceContext
+} from "@/lib/agent-instances";
 
 /**
  * Hardcoded last-resort fallback when neither the database nor the env var
@@ -1193,6 +1198,7 @@ async function processMessage(
         userId,
         threadId: memoryThread,
         sessionId: channelId,
+        instanceId: instanceBinding?.instanceId ?? undefined,
         ...(instanceBinding
             ? {
                   metadata: {
@@ -1723,16 +1729,34 @@ export async function POST(request: NextRequest) {
                 !isActiveThreadReply &&
                 (await resolveThreadOriginAgent(messageEvent.thread_ts)) !== null;
 
+            // Check channel binding for trigger rules (triggerOnAllMessages, keywords, etc.)
+            let channelBindingCtx: InstanceContext | null = null;
+            try {
+                channelBindingCtx = await lookupChannelBinding("slack", messageEvent.channel);
+            } catch (e) {
+                console.warn("[Slack] Channel binding lookup failed:", e);
+            }
+            const hasFiles = !!(messageEvent.files && messageEvent.files.length > 0);
+            const isBoundChannel =
+                channelBindingCtx &&
+                shouldTrigger(channelBindingCtx, messageEvent.text, false, hasFiles);
+
             // In channels, if the message @mentions the bot, defer to the app_mention
             // handler which already processes it — avoids duplicate responses.
-            if (!isDM && botUserId && messageEvent.text.includes(`<@${botUserId}>`)) {
+            // Exception: bound channels with triggerOnAllMessages don't need @mention.
+            if (
+                !isDM &&
+                !isBoundChannel &&
+                botUserId &&
+                messageEvent.text.includes(`<@${botUserId}>`)
+            ) {
                 console.log(
                     "[Slack] Skipping bot-mentioned channel message (app_mention handler will process)"
                 );
                 return NextResponse.json({ ok: true });
             }
 
-            if (isDM || isActiveThreadReply || isAgentOriginThread) {
+            if (isDM || isActiveThreadReply || isAgentOriginThread || isBoundChannel) {
                 const directive = parseAgentDirective(messageEvent.text, defaultAgentSlug);
 
                 setImmediate(async () => {

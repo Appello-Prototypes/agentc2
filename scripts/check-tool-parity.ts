@@ -3,8 +3,8 @@
  * Tool Parity Check Script
  *
  * Compares three sources of truth:
- *   1. Tool Registry (packages/mastra/src/tools/registry.ts) — all tools available to agents
- *   2. MCP Schema (packages/mastra/src/tools/mcp-schemas/index.ts) — tools exposed via MCP to Cursor IDE
+ *   1. Tool Registry (packages/agentc2/src/tools/registry.ts) — all tools available to agents
+ *   2. MCP Schema (packages/agentc2/src/tools/mcp-schemas/index.ts) — tools exposed via MCP to Cursor IDE
  *   3. Workspace Concierge agent (live API) — tools actually attached to the Concierge
  *
  * Reports gaps between each pair and exits with code 1 if any are found.
@@ -15,8 +15,8 @@
  *   bun run scripts/check-tool-parity.ts --skip-api      # Skip live Concierge check
  */
 
-import { toolRegistry, toolCategoryMap } from "../packages/mastra/src/tools/registry";
-import { mcpToolDefinitions } from "../packages/mastra/src/tools/mcp-schemas/index";
+import { toolRegistry, toolCategoryMap } from "../packages/agentc2/src/tools/registry";
+import { mcpToolDefinitions } from "../packages/agentc2/src/tools/mcp-schemas/index";
 
 // ---------------------------------------------------------------------------
 // Helpers

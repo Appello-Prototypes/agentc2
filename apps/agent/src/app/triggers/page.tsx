@@ -137,6 +137,8 @@ interface Automation {
     name: string;
     description: string | null;
     isActive: boolean;
+    isArchived: boolean;
+    archivedAt: string | null;
     agent: { id: string; slug: string; name: string } | null;
     config: {
         cronExpr?: string;
@@ -166,6 +168,7 @@ interface Automation {
 interface AutomationSummary {
     total: number;
     active: number;
+    archived: number;
     schedules: number;
     triggers: number;
     implicit: number;
@@ -217,6 +220,8 @@ function AutomationRegistryTab() {
     const [automations, setAutomations] = useState<Automation[]>([]);
     const [summary, setSummary] = useState<AutomationSummary | null>(null);
     const [toggling, setToggling] = useState<string | null>(null);
+    const [showArchived, setShowArchived] = useState(false);
+    const [archiving, setArchiving] = useState<string | null>(null);
 
     // ── Accordion expansion state ────────────────────────────────────
     const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -236,7 +241,10 @@ function AutomationRegistryTab() {
     // ── Fetch automations list ───────────────────────────────────────
     const fetchAutomations = useCallback(async () => {
         try {
-            const res = await fetch(`${apiBase}/api/live/automations`);
+            const params = new URLSearchParams();
+            if (showArchived) params.set("includeArchived", "true");
+            const url = `${apiBase}/api/live/automations${params.toString() ? `?${params.toString()}` : ""}`;
+            const res = await fetch(url);
             const data = await res.json();
             if (data.success) {
                 setAutomations(data.automations || []);
@@ -251,7 +259,7 @@ function AutomationRegistryTab() {
         } finally {
             setLoading(false);
         }
-    }, [apiBase]);
+    }, [apiBase, showArchived]);
 
     // ── Fetch enriched runs for an automation ────────────────────────
     const fetchAutomationRuns = useCallback(
@@ -334,6 +342,50 @@ function AutomationRegistryTab() {
             }
         },
         [apiBase]
+    );
+
+    // ── Archive/unarchive automation ─────────────────────────────────
+    const archiveAutomation = useCallback(
+        async (automation: Automation, archive: boolean) => {
+            if (automation.sourceType === "implicit") return;
+            setArchiving(automation.id);
+            try {
+                const res = await fetch(
+                    `${apiBase}/api/live/automations/${encodeURIComponent(automation.id)}`,
+                    {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ isArchived: archive })
+                    }
+                );
+                const data = await res.json();
+                if (data.success) {
+                    if (archive && !showArchived) {
+                        setAutomations((prev) => prev.filter((a) => a.id !== automation.id));
+                    } else {
+                        setAutomations((prev) =>
+                            prev.map((a) =>
+                                a.id === automation.id
+                                    ? {
+                                          ...a,
+                                          isArchived: archive,
+                                          archivedAt: archive
+                                              ? new Date().toISOString()
+                                              : null,
+                                          isActive: archive ? false : a.isActive
+                                      }
+                                    : a
+                            )
+                        );
+                    }
+                }
+            } catch {
+                // Silently handle
+            } finally {
+                setArchiving(null);
+            }
+        },
+        [apiBase, showArchived]
     );
 
     // ── Row click: toggle accordion ──────────────────────────────────
@@ -436,7 +488,7 @@ function AutomationRegistryTab() {
             )}
 
             {/* Summary cards */}
-            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>Total Automations</CardDescription>
@@ -475,6 +527,27 @@ function AutomationRegistryTab() {
                         >
                             {summary?.overallSuccessRate ?? 0}%
                         </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Archived</CardDescription>
+                        <div className="flex items-center justify-between">
+                            <CardTitle className="text-muted-foreground text-2xl">
+                                {summary?.archived ?? 0}
+                            </CardTitle>
+                            <div
+                                className="flex items-center gap-1.5"
+                                title="Show archived automations"
+                            >
+                                <Switch
+                                    checked={showArchived}
+                                    onCheckedChange={setShowArchived}
+                                    className="scale-75"
+                                />
+                                <span className="text-muted-foreground text-xs">Show</span>
+                            </div>
+                        </div>
                     </CardHeader>
                 </Card>
             </div>
@@ -534,7 +607,7 @@ function AutomationRegistryTab() {
                                                 <Fragment key={automation.id}>
                                                     {/* Parent automation row */}
                                                     <TableRow
-                                                        className={`cursor-pointer ${isExpanded ? "bg-muted/50 border-b-0" : ""}`}
+                                                        className={`cursor-pointer ${isExpanded ? "bg-muted/50 border-b-0" : ""} ${automation.isArchived ? "opacity-50" : ""}`}
                                                         onClick={() =>
                                                             handleAutomationRowClick(automation)
                                                         }
@@ -547,14 +620,24 @@ function AutomationRegistryTab() {
                                                             </span>
                                                         </TableCell>
                                                         <TableCell>
-                                                            <div>
-                                                                <p className="font-medium">
-                                                                    {automation.name}
-                                                                </p>
-                                                                {automation.description && (
-                                                                    <p className="text-muted-foreground max-w-[200px] truncate text-xs">
-                                                                        {automation.description}
+                                                            <div className="flex items-center gap-2">
+                                                                <div>
+                                                                    <p className="font-medium">
+                                                                        {automation.name}
                                                                     </p>
+                                                                    {automation.description && (
+                                                                        <p className="text-muted-foreground max-w-[200px] truncate text-xs">
+                                                                            {automation.description}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
+                                                                {automation.isArchived && (
+                                                                    <Badge
+                                                                        variant="outline"
+                                                                        className="text-muted-foreground shrink-0 text-xs"
+                                                                    >
+                                                                        Archived
+                                                                    </Badge>
                                                                 )}
                                                             </div>
                                                         </TableCell>
@@ -604,6 +687,34 @@ function AutomationRegistryTab() {
                                                                 >
                                                                     Always On
                                                                 </Badge>
+                                                            ) : automation.isArchived ? (
+                                                                <div
+                                                                    className="flex items-center gap-2"
+                                                                    onClick={(e) =>
+                                                                        e.stopPropagation()
+                                                                    }
+                                                                >
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="sm"
+                                                                        className="h-7 text-xs"
+                                                                        disabled={
+                                                                            archiving ===
+                                                                            automation.id
+                                                                        }
+                                                                        onClick={() =>
+                                                                            archiveAutomation(
+                                                                                automation,
+                                                                                false
+                                                                            )
+                                                                        }
+                                                                    >
+                                                                        {archiving ===
+                                                                        automation.id
+                                                                            ? "..."
+                                                                            : "Unarchive"}
+                                                                    </Button>
+                                                                </div>
                                                             ) : (
                                                                 <div
                                                                     className="flex items-center gap-2"
@@ -630,6 +741,24 @@ function AutomationRegistryTab() {
                                                                             ? "Active"
                                                                             : "Paused"}
                                                                     </span>
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="text-muted-foreground hover:text-foreground h-6 px-1.5 text-xs"
+                                                                        disabled={
+                                                                            archiving ===
+                                                                            automation.id
+                                                                        }
+                                                                        onClick={() =>
+                                                                            archiveAutomation(
+                                                                                automation,
+                                                                                true
+                                                                            )
+                                                                        }
+                                                                        title="Archive this automation"
+                                                                    >
+                                                                        Archive
+                                                                    </Button>
                                                                 </div>
                                                             )}
                                                         </TableCell>

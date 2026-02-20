@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { processInvocation } from "@repo/mastra/federation";
-import { writeAuditLog } from "@repo/mastra/audit";
+import { processInvocation } from "@repo/agentc2/federation";
+import { writeAuditLog } from "@repo/agentc2/audit";
 
 /**
  * POST /api/a2a
@@ -138,7 +138,7 @@ async function handleTaskSend(
         );
     }
 
-    const { agentResolver } = await import("@repo/mastra");
+    const { agentResolver } = await import("@repo/agentc2");
 
     const result = await processInvocation(
         apiKey.organizationId,

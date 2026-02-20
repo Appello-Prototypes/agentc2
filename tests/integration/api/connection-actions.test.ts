@@ -24,7 +24,7 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
-vi.mock("@repo/mastra/mcp", () => ({
+vi.mock("@repo/agentc2/mcp", () => ({
     getMcpTools: getMcpToolsMock
 }));
 

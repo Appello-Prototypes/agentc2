@@ -134,7 +134,7 @@ export function MarginTrendChart({ data }: { data: MonthlyFinancial[] }) {
                     contentStyle={tooltipStyle}
                     formatter={(value: number | undefined) => [
                         `$${Number(value ?? 0).toFixed(2)}`,
-                        "Gross Margin",
+                        "Gross Margin"
                     ]}
                 />
                 <Bar dataKey="margin" fill="hsl(142, 76%, 36%)" radius={[4, 4, 0, 0]} />
@@ -193,7 +193,7 @@ export function RevenueByPlanChart({ data }: { data: PlanRevenue[] }) {
                     contentStyle={tooltipStyle}
                     formatter={(value: number | undefined) => [
                         `$${Number(value ?? 0).toFixed(2)}`,
-                        "Revenue",
+                        "Revenue"
                     ]}
                 />
             </PieChart>
@@ -238,7 +238,7 @@ export function CostByModelChart({ data }: { data: ModelCost[] }) {
                     contentStyle={tooltipStyle}
                     formatter={(value: number | undefined) => [
                         `$${Number(value ?? 0).toFixed(4)}`,
-                        "Cost",
+                        "Cost"
                     ]}
                 />
                 <Bar dataKey="cost" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />

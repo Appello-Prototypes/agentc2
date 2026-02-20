@@ -94,6 +94,7 @@ export async function GET(
                 slug: org!.slug,
                 description: org!.description,
                 logoUrl: org!.logoUrl,
+                timezone: org!.timezone,
                 metadata: org!.metadata,
                 workspacesCount: org!._count.workspaces,
                 membersCount: org!._count.memberships,
@@ -150,7 +151,7 @@ export async function PATCH(
         }
 
         const body = await request.json();
-        const { name, slug, description, logoUrl, metadata } = body;
+        const { name, slug, description, logoUrl, timezone, metadata } = body;
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const updateData: Record<string, any> = {};
@@ -197,6 +198,24 @@ export async function PATCH(
             updateData.logoUrl = logoUrl ? logoUrl.trim() : null;
         }
 
+        if (timezone !== undefined) {
+            if (typeof timezone !== "string" || timezone.trim().length === 0) {
+                return NextResponse.json(
+                    { success: false, error: "Timezone cannot be empty" },
+                    { status: 400 }
+                );
+            }
+            try {
+                Intl.DateTimeFormat(undefined, { timeZone: timezone });
+                updateData.timezone = timezone;
+            } catch {
+                return NextResponse.json(
+                    { success: false, error: "Invalid timezone" },
+                    { status: 400 }
+                );
+            }
+        }
+
         if (metadata !== undefined && typeof metadata === "object" && metadata !== null) {
             // Shallow-merge with existing metadata so other keys aren't wiped
             const existing = await prisma.organization.findUnique({
@@ -232,6 +251,7 @@ export async function PATCH(
                 slug: updatedOrg.slug,
                 description: updatedOrg.description,
                 logoUrl: updatedOrg.logoUrl,
+                timezone: updatedOrg.timezone,
                 metadata: updatedOrg.metadata,
                 createdAt: updatedOrg.createdAt,
                 updatedAt: updatedOrg.updatedAt

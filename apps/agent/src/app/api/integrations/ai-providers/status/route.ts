@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAiProviderStatus } from "@repo/mastra/agents";
+import { getAiProviderStatus } from "@repo/agentc2/agents";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**

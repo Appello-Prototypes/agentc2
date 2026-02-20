@@ -5,8 +5,8 @@
  * Credentials are resolved from the database (per-org) with env-var fallback.
  */
 
-import { TwilioVoiceClient, type VoiceConfig, type MessageHandler } from "@repo/mastra/channels";
-import { agentResolver } from "@repo/mastra/agents";
+import { TwilioVoiceClient, type VoiceConfig, type MessageHandler } from "@repo/agentc2/channels";
+import { agentResolver } from "@repo/agentc2/agents";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveChannelCredentials } from "@/lib/channel-credentials";

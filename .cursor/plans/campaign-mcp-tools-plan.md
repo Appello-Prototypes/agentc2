@@ -30,10 +30,10 @@ The Campaign (Mission Command) feature is fully operational:
 ### End-to-End Tool Registration Flow (proven pattern from Goals)
 
 ```
-1. MCP Schema Definition     → packages/mastra/src/tools/mcp-schemas/campaigns.ts
-2. Tool Implementation        → packages/mastra/src/tools/campaign-tools.ts
-3. Tool Registry Registration → packages/mastra/src/tools/registry.ts
-4. MCP Schema Index Export    → packages/mastra/src/tools/mcp-schemas/index.ts
+1. MCP Schema Definition     → packages/agentc2/src/tools/mcp-schemas/campaigns.ts
+2. Tool Implementation        → packages/agentc2/src/tools/campaign-tools.ts
+3. Tool Registry Registration → packages/agentc2/src/tools/registry.ts
+4. MCP Schema Index Export    → packages/agentc2/src/tools/mcp-schemas/index.ts
 5. Workspace Concierge Agent  → packages/database/prisma/seed-agents.ts
 6. V&V Coverage               → ~/.cursor/skills/mastra-vv/ (SKILL.md, procedures.md, acceptance-criteria.md)
 7. Platform Skill Docs        → ~/.cursor/skills/mastra-platform/ (SKILL.md, tool-reference.md, recipes.md)
@@ -158,13 +158,13 @@ Campaign routes use `getDemoSession(request)` which already supports:
 
 ### Step 1: Create MCP Schema Definition
 
-**File**: `packages/mastra/src/tools/mcp-schemas/campaigns.ts`
+**File**: `packages/agentc2/src/tools/mcp-schemas/campaigns.ts`
 **Pattern**: Copy `goals.ts` structure
 **Content**: 5 `McpToolDefinition` entries + 5 `McpToolRoute` entries (all `kind: "registry"`)
 
 ### Step 2: Create Tool Implementations
 
-**File**: `packages/mastra/src/tools/campaign-tools.ts`
+**File**: `packages/agentc2/src/tools/campaign-tools.ts`
 **Pattern**: Copy `goal-tools.ts` structure (uses `callInternalApi` helper)
 **Content**: 5 `createTool()` exports:
 
@@ -176,7 +176,7 @@ Campaign routes use `getDemoSession(request)` which already supports:
 
 ### Step 3: Register in Tool Registry
 
-**File**: `packages/mastra/src/tools/registry.ts`
+**File**: `packages/agentc2/src/tools/registry.ts`
 **Changes**:
 
 1. Add import for all 5 campaign tools
@@ -185,7 +185,7 @@ Campaign routes use `getDemoSession(request)` which already supports:
 
 ### Step 4: Export from MCP Schema Index
 
-**File**: `packages/mastra/src/tools/mcp-schemas/index.ts`
+**File**: `packages/agentc2/src/tools/mcp-schemas/index.ts`
 **Changes**:
 
 1. Add import for `campaignToolDefinitions` and `campaignToolRoutes`
@@ -271,10 +271,10 @@ Campaign routes use `getDemoSession(request)` which already supports:
 
 | File                                                 | Action     | Category            |
 | ---------------------------------------------------- | ---------- | ------------------- |
-| `packages/mastra/src/tools/mcp-schemas/campaigns.ts` | **CREATE** | MCP Schema          |
-| `packages/mastra/src/tools/campaign-tools.ts`        | **CREATE** | Tool Implementation |
-| `packages/mastra/src/tools/registry.ts`              | **MODIFY** | Tool Registry       |
-| `packages/mastra/src/tools/mcp-schemas/index.ts`     | **MODIFY** | MCP Schema Index    |
+| `packages/agentc2/src/tools/mcp-schemas/campaigns.ts` | **CREATE** | MCP Schema          |
+| `packages/agentc2/src/tools/campaign-tools.ts`        | **CREATE** | Tool Implementation |
+| `packages/agentc2/src/tools/registry.ts`              | **MODIFY** | Tool Registry       |
+| `packages/agentc2/src/tools/mcp-schemas/index.ts`     | **MODIFY** | MCP Schema Index    |
 | `packages/database/prisma/seed-agents.ts`            | **MODIFY** | Concierge Agent     |
 | `~/.cursor/skills/mastra-vv/SKILL.md`                | **MODIFY** | V&V Skill           |
 | `~/.cursor/skills/mastra-vv/procedures.md`           | **MODIFY** | V&V Procedures      |

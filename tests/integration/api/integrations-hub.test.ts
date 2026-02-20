@@ -32,22 +32,22 @@ vi.mock("@/lib/organization", () => ({
     getUserOrganizationId: getUserOrganizationIdMock
 }));
 
-vi.mock("@repo/mastra/mcp", () => ({
+vi.mock("@repo/agentc2/mcp", () => ({
     getIntegrationProviders: getIntegrationProvidersMock,
     getMcpTools: getMcpToolsMock,
     invalidateMcpCacheForOrg: invalidateMcpCacheForOrgMock,
     resetMcpClients: resetMcpClientsMock
 }));
 
-vi.mock("@repo/mastra/tools", () => ({
+vi.mock("@repo/agentc2/tools", () => ({
     invalidateMcpToolsCacheForOrg: invalidateMcpToolsCacheForOrgMock
 }));
 
-vi.mock("@repo/mastra/agents/model-registry", () => ({
+vi.mock("@repo/agentc2/agents/model-registry", () => ({
     clearModelCache: vi.fn()
 }));
 
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/agentc2", () => ({
     deprovisionIntegration: vi.fn().mockResolvedValue({ success: true }),
     hasBlueprint: vi.fn().mockReturnValue(false)
 }));

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { randomUUID } from "node:crypto";
 import { prisma } from "../packages/database/src";
-import { agentResolver } from "../packages/mastra/src";
+import { agentResolver } from "../packages/agentc2/src";
 import {
     extractTokenUsage,
     extractToolCalls,

@@ -75,7 +75,7 @@ Phase 10 (Voice Agents) - Standalone (requires OPENAI_API_KEY, ELEVENLABS_API_KE
 
 ## Current Project State
 
-### Existing Implementation (`packages/mastra/src/`)
+### Existing Implementation (`packages/agentc2/src/`)
 
 - **Agent**: `assistantAgent` - Anthropic Claude with basic tools and working memory
 - **Tools**: `dateTimeTool`, `calculatorTool`, `generateIdTool`
@@ -118,7 +118,7 @@ Phase 10 (Voice Agents) - Standalone (requires OPENAI_API_KEY, ELEVENLABS_API_KE
 ## Architecture
 
 ```
-packages/mastra/src/
+packages/agentc2/src/
 ├── agents/
 │   ├── assistant.ts        # Existing
 │   ├── structured.ts       # Phase 3

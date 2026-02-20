@@ -36,6 +36,8 @@ type UnifiedTrigger = {
     name: string;
     description: string | null;
     isActive: boolean;
+    isArchived?: boolean;
+    archivedAt?: string | null;
     createdAt: string;
     updatedAt: string;
     config: {
@@ -84,7 +86,8 @@ const TRIGGER_TYPES = [
 const STATUS_FILTERS = [
     { value: "all", label: "All" },
     { value: "active", label: "Active" },
-    { value: "disabled", label: "Disabled" }
+    { value: "disabled", label: "Disabled" },
+    { value: "archived", label: "Archived" }
 ];
 
 const emptyForm = {
@@ -144,9 +147,12 @@ export default function AutomationPage() {
         try {
             setLoading(true);
             setError(null);
-            const response = await fetch(
-                `${getApiBase()}/api/agents/${agentSlug}/execution-triggers`
-            );
+            const params = new URLSearchParams();
+            if (statusFilter === "archived" || statusFilter === "all") {
+                params.set("includeArchived", "true");
+            }
+            const url = `${getApiBase()}/api/agents/${agentSlug}/execution-triggers${params.toString() ? `?${params.toString()}` : ""}`;
+            const response = await fetch(url);
             const data = await response.json();
             if (!data.success) {
                 setError(data.error || "Failed to load execution triggers");
@@ -158,7 +164,7 @@ export default function AutomationPage() {
         } finally {
             setLoading(false);
         }
-    }, [agentSlug]);
+    }, [agentSlug, statusFilter]);
 
     useEffect(() => {
         fetchExecutionTriggers();
@@ -174,8 +180,12 @@ export default function AutomationPage() {
     const visibleTriggers = useMemo(() => {
         return executionTriggers.filter((trigger) => {
             if (typeFilter !== "all" && trigger.type !== typeFilter) return false;
-            if (statusFilter === "active" && !trigger.isActive) return false;
-            if (statusFilter === "disabled" && trigger.isActive) return false;
+            if (statusFilter === "archived") return trigger.isArchived === true;
+            if (statusFilter === "active" && (!trigger.isActive || trigger.isArchived))
+                return false;
+            if (statusFilter === "disabled" && (trigger.isActive || trigger.isArchived))
+                return false;
+            if (statusFilter === "all" && trigger.isArchived) return false;
             return true;
         });
     }, [executionTriggers, typeFilter, statusFilter]);
@@ -381,6 +391,15 @@ export default function AutomationPage() {
         await fetchExecutionTriggers();
     };
 
+    const archiveTrigger = async (triggerId: string, archive: boolean) => {
+        await fetch(`${getApiBase()}/api/agents/${agentSlug}/execution-triggers/${triggerId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isArchived: archive })
+        });
+        await fetchExecutionTriggers();
+    };
+
     /* ----- test / execute ----- */
 
     const testTrigger = async (triggerId: string) => {
@@ -537,7 +556,10 @@ export default function AutomationPage() {
                     )}
 
                     {visibleTriggers.map((trigger) => (
-                        <div key={trigger.id} className="flex flex-col gap-3 rounded-md border p-4">
+                        <div
+                            key={trigger.id}
+                            className={`flex flex-col gap-3 rounded-md border p-4 ${trigger.isArchived ? "opacity-50" : ""}`}
+                        >
                             <div className="flex flex-wrap items-center justify-between gap-3">
                                 <div>
                                     <div className="flex flex-wrap items-center gap-2 font-medium">
@@ -546,8 +568,12 @@ export default function AutomationPage() {
                                             {TRIGGER_TYPES.find((t) => t.value === trigger.type)
                                                 ?.label || trigger.type}
                                         </Badge>
-                                        {!trigger.isActive && (
-                                            <Badge variant="secondary">Disabled</Badge>
+                                        {trigger.isArchived ? (
+                                            <Badge variant="secondary">Archived</Badge>
+                                        ) : (
+                                            !trigger.isActive && (
+                                                <Badge variant="secondary">Disabled</Badge>
+                                            )
                                         )}
                                     </div>
                                     <div className="text-muted-foreground text-xs">
@@ -566,66 +592,107 @@ export default function AutomationPage() {
                                     </div>
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Switch
-                                        checked={trigger.isActive}
-                                        onCheckedChange={(checked) =>
-                                            toggleTrigger(trigger.id, checked)
-                                        }
-                                    />
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => startEdit(trigger)}
-                                    >
-                                        Edit
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={testingTriggerId === trigger.id}
-                                        onClick={() => testTrigger(trigger.id)}
-                                    >
-                                        {testingTriggerId === trigger.id ? "Testing..." : "Test"}
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        disabled={executingTriggerId === trigger.id}
-                                        onClick={() => executeTrigger(trigger.id)}
-                                    >
-                                        {executingTriggerId === trigger.id ? "Running..." : "Run"}
-                                    </Button>
-                                    <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        onClick={() =>
-                                            router.push(
-                                                `/agents/${agentSlug}/runs?triggerId=${trigger.sourceId}`
-                                            )
-                                        }
-                                    >
-                                        View runs
-                                    </Button>
-                                    {(trigger.type === "webhook" || trigger.type === "event") && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={() =>
-                                                router.push(
-                                                    `/triggers?triggerId=${trigger.sourceId}`
-                                                )
-                                            }
-                                        >
-                                            Events
-                                        </Button>
+                                    {trigger.isArchived ? (
+                                        <>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    archiveTrigger(trigger.id, false)
+                                                }
+                                            >
+                                                Unarchive
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/agents/${agentSlug}/runs?triggerId=${trigger.sourceId}`
+                                                    )
+                                                }
+                                            >
+                                                View runs
+                                            </Button>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Switch
+                                                checked={trigger.isActive}
+                                                onCheckedChange={(checked) =>
+                                                    toggleTrigger(trigger.id, checked)
+                                                }
+                                            />
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => startEdit(trigger)}
+                                            >
+                                                Edit
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={testingTriggerId === trigger.id}
+                                                onClick={() => testTrigger(trigger.id)}
+                                            >
+                                                {testingTriggerId === trigger.id
+                                                    ? "Testing..."
+                                                    : "Test"}
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={executingTriggerId === trigger.id}
+                                                onClick={() => executeTrigger(trigger.id)}
+                                            >
+                                                {executingTriggerId === trigger.id
+                                                    ? "Running..."
+                                                    : "Run"}
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/agents/${agentSlug}/runs?triggerId=${trigger.sourceId}`
+                                                    )
+                                                }
+                                            >
+                                                View runs
+                                            </Button>
+                                            {(trigger.type === "webhook" ||
+                                                trigger.type === "event") && (
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() =>
+                                                        router.push(
+                                                            `/triggers?triggerId=${trigger.sourceId}`
+                                                        )
+                                                    }
+                                                >
+                                                    Events
+                                                </Button>
+                                            )}
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() =>
+                                                    archiveTrigger(trigger.id, true)
+                                                }
+                                            >
+                                                Archive
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => deleteTrigger(trigger.id)}
+                                            >
+                                                Delete
+                                            </Button>
+                                        </>
                                     )}
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => deleteTrigger(trigger.id)}
-                                    >
-                                        Delete
-                                    </Button>
                                 </div>
                             </div>
                             <div className="text-muted-foreground grid gap-2 text-xs md:grid-cols-4">

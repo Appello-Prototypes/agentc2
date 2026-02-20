@@ -28,13 +28,13 @@ Implement evaluation and scoring for AI outputs using Mastra's built-in scorers 
 ### Step 1: Install Evals Package
 
 ```bash
-cd packages/mastra
+cd packages/agentc2
 bun add @mastra/evals
 ```
 
 ### Step 2: Create Scorers Module
 
-Create `packages/mastra/src/scorers/index.ts`:
+Create `packages/agentc2/src/scorers/index.ts`:
 
 ````typescript
 import {
@@ -242,7 +242,7 @@ export const scorers = {
 
 ### Step 3: Create Evaluated Agent
 
-Create `packages/mastra/src/agents/evaluated.ts`:
+Create `packages/agentc2/src/agents/evaluated.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -302,7 +302,7 @@ Strive to provide excellent responses that score well on all metrics.`,
 
 ### Step 4: Update Agent Exports
 
-Update `packages/mastra/src/agents/index.ts`:
+Update `packages/agentc2/src/agents/index.ts`:
 
 ```typescript
 export { assistantAgent } from "./assistant";
@@ -314,7 +314,7 @@ export { evaluatedAgent } from "./evaluated";
 
 ### Step 5: Update Mastra Instance
 
-Update `packages/mastra/src/mastra.ts` to register scorers and evaluated agent:
+Update `packages/agentc2/src/mastra.ts` to register scorers and evaluated agent:
 
 ```typescript
 import { evaluatedAgent } from "./agents";
@@ -339,7 +339,7 @@ global.mastraInstance = new Mastra({
 
 ### Step 6: Update Main Exports
 
-Update `packages/mastra/src/index.ts`:
+Update `packages/agentc2/src/index.ts`:
 
 ```typescript
 // Scorers
@@ -491,9 +491,9 @@ For example, you can use it like this:
 
 | File                                      | Action              |
 | ----------------------------------------- | ------------------- |
-| `packages/mastra/package.json`            | Add @mastra/evals   |
-| `packages/mastra/src/scorers/index.ts`    | Create              |
-| `packages/mastra/src/agents/evaluated.ts` | Create              |
-| `packages/mastra/src/agents/index.ts`     | Update              |
-| `packages/mastra/src/mastra.ts`           | Update with scorers |
-| `packages/mastra/src/index.ts`            | Update              |
+| `packages/agentc2/package.json`            | Add @mastra/evals   |
+| `packages/agentc2/src/scorers/index.ts`    | Create              |
+| `packages/agentc2/src/agents/evaluated.ts` | Create              |
+| `packages/agentc2/src/agents/index.ts`     | Update              |
+| `packages/agentc2/src/mastra.ts`           | Update with scorers |
+| `packages/agentc2/src/index.ts`            | Update              |

@@ -20,7 +20,7 @@ There are TWO relevancy calculations in the system, both flawed:
 
 ### 1. Mastra Evals `createAnswerRelevancyScorer` (LLM-based, Tier 1 scorer)
 
-**File:** `packages/mastra/src/scorers/index.ts` (lines 32-34)
+**File:** `packages/agentc2/src/scorers/index.ts` (lines 32-34)
 
 ```typescript
 export const relevancyScorer = createAnswerRelevancyScorer({
@@ -49,7 +49,7 @@ This approach fundamentally fails for:
 
 ### 2. Tier 1 Heuristic Word Overlap (pre-screen)
 
-**File:** `packages/mastra/src/scorers/tier1.ts` (lines 112-126)
+**File:** `packages/agentc2/src/scorers/tier1.ts` (lines 112-126)
 
 ```typescript
 const inputWords = new Set(
@@ -74,7 +74,7 @@ scores.relevance = Math.max(relevance, 0.2);
 
 ### Step 1: Replace the LLM-based relevancy scorer
 
-**File:** `packages/mastra/src/scorers/index.ts`
+**File:** `packages/agentc2/src/scorers/index.ts`
 
 Replace `createAnswerRelevancyScorer` with a custom scorer that evaluates whether the output is a reasonable response to the input, rather than using the reverse-question-generation approach.
 
@@ -114,7 +114,7 @@ Return only a JSON object: {"score": <number>, "reasoning": "<brief explanation>
 
 ### Step 2: Fix Tier 1 heuristic relevancy
 
-**File:** `packages/mastra/src/scorers/tier1.ts` (lines 112-126)
+**File:** `packages/agentc2/src/scorers/tier1.ts` (lines 112-126)
 
 Replace the word-overlap approach with a lightweight semantic check:
 
@@ -175,8 +175,8 @@ POST /api/agents/{id}/evaluations
 
 | File                                                      | Change                                                   |
 | --------------------------------------------------------- | -------------------------------------------------------- |
-| `packages/mastra/src/scorers/index.ts`                    | Replace `createAnswerRelevancyScorer` with custom scorer |
-| `packages/mastra/src/scorers/tier1.ts`                    | Fix word-overlap relevancy (lines 112-126)               |
+| `packages/agentc2/src/scorers/index.ts`                    | Replace `createAnswerRelevancyScorer` with custom scorer |
+| `packages/agentc2/src/scorers/tier1.ts`                    | Fix word-overlap relevancy (lines 112-126)               |
 | `apps/agent/src/app/api/agents/[id]/evaluations/route.ts` | No change needed (uses scorer via registry)              |
 
 ## Acceptance Criteria

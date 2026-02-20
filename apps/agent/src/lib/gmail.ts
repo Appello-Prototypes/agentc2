@@ -1,7 +1,7 @@
 import { google } from "googleapis";
 import { OAuth2Client } from "google-auth-library";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra/mcp";
+import { getIntegrationProviders } from "@repo/agentc2/mcp";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
 
 // Import from the single source of truth and re-export under the legacy name
@@ -292,7 +292,7 @@ export const syncSiblingGoogleConnections = async (
 
         // Trigger auto-provisioning for the sibling
         try {
-            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            const { provisionIntegration, hasBlueprint } = await import("@repo/agentc2");
             if (hasBlueprint(sibling.key)) {
                 const workspace = await prisma.workspace.findFirst({
                     where: { organizationId, isDefault: true },

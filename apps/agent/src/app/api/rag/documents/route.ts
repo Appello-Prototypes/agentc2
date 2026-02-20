@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { listDocuments, deleteDocument } from "@repo/mastra/rag";
+import { listDocuments, deleteDocument } from "@repo/agentc2/rag";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function GET(req: NextRequest) {

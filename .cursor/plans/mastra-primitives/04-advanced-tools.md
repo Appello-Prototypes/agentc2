@@ -18,7 +18,7 @@ Create additional tools demonstrating various Mastra tool capabilities: web cont
 
 ### Step 1: Create Web Fetch Tool
 
-Create `packages/mastra/src/tools/web-fetch.ts`:
+Create `packages/agentc2/src/tools/web-fetch.ts`:
 
 ```typescript
 import { createTool } from "@mastra/core/tools";
@@ -91,7 +91,7 @@ export const webFetchTool = createTool({
 
 ### Step 2: Create Memory Recall Tool
 
-Create `packages/mastra/src/tools/memory-recall.ts`:
+Create `packages/agentc2/src/tools/memory-recall.ts`:
 
 ```typescript
 import { createTool } from "@mastra/core/tools";
@@ -171,7 +171,7 @@ export const memoryRecallTool = createTool({
 
 ### Step 3: Create Workflow Trigger Tool
 
-Create `packages/mastra/src/tools/workflow-trigger.ts`:
+Create `packages/agentc2/src/tools/workflow-trigger.ts`:
 
 ```typescript
 import { createTool } from "@mastra/core/tools";
@@ -238,7 +238,7 @@ export const workflowTriggerTool = createTool({
 
 ### Step 4: Create JSON Parser Tool
 
-Create `packages/mastra/src/tools/json-parser.ts`:
+Create `packages/agentc2/src/tools/json-parser.ts`:
 
 ```typescript
 import { createTool } from "@mastra/core/tools";
@@ -312,7 +312,7 @@ function getNestedValue(obj: any, path: string): any {
 
 ### Step 5: Update Tool Exports
 
-Update `packages/mastra/src/tools/index.ts`:
+Update `packages/agentc2/src/tools/index.ts`:
 
 ```typescript
 export { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
@@ -344,7 +344,7 @@ export const extendedTools = {
 
 ### Step 6: Update Assistant Agent with Extended Tools
 
-Update `packages/mastra/src/agents/assistant.ts`:
+Update `packages/agentc2/src/agents/assistant.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -497,9 +497,9 @@ const workflowTriggerExamples = [
 
 | File                                            | Action |
 | ----------------------------------------------- | ------ |
-| `packages/mastra/src/tools/web-fetch.ts`        | Create |
-| `packages/mastra/src/tools/memory-recall.ts`    | Create |
-| `packages/mastra/src/tools/workflow-trigger.ts` | Create |
-| `packages/mastra/src/tools/json-parser.ts`      | Create |
-| `packages/mastra/src/tools/index.ts`            | Update |
-| `packages/mastra/src/agents/assistant.ts`       | Update |
+| `packages/agentc2/src/tools/web-fetch.ts`        | Create |
+| `packages/agentc2/src/tools/memory-recall.ts`    | Create |
+| `packages/agentc2/src/tools/workflow-trigger.ts` | Create |
+| `packages/agentc2/src/tools/json-parser.ts`      | Create |
+| `packages/agentc2/src/tools/index.ts`            | Update |
+| `packages/agentc2/src/agents/assistant.ts`       | Update |

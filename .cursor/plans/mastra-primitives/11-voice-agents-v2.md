@@ -235,7 +235,7 @@ export async function POST(req: Request) {
 
 #### 2.3 Create Mastra Sub-Agents
 
-**File**: `packages/mastra/src/agents/voice-tools.ts`
+**File**: `packages/agentc2/src/agents/voice-tools.ts`
 
 Specialist agents:
 
@@ -322,8 +322,8 @@ or contacts, use the gather_context tool to get real information.
 | Action | File                                                               |
 | ------ | ------------------------------------------------------------------ |
 | Create | `apps/agent/src/app/api/demos/voice/tools/gather-context/route.ts` |
-| Create | `packages/mastra/src/agents/voice-tools.ts`                        |
-| Modify | `packages/mastra/src/mastra.ts` (register new agents)              |
+| Create | `packages/agentc2/src/agents/voice-tools.ts`                        |
+| Modify | `packages/agentc2/src/mastra.ts` (register new agents)              |
 | Modify | `apps/agent/src/app/demos/voice/page.tsx` (tool indicators)        |
 
 ---

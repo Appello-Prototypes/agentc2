@@ -32,14 +32,14 @@ isProject: false
 
 Four new OAuth tools were created to fix the "Tool not found" errors blocking the email-triage agent:
 
-- `gmail-search-emails` ([packages/mastra/src/tools/gmail/search-emails.ts](packages/mastra/src/tools/gmail/search-emails.ts)) - Search Gmail using Gmail query syntax
-- `gmail-read-email` ([packages/mastra/src/tools/gmail/read-email.ts](packages/mastra/src/tools/gmail/read-email.ts)) - Read full email content by message ID
-- `gmail-draft-email` ([packages/mastra/src/tools/gmail/draft-email.ts](packages/mastra/src/tools/gmail/draft-email.ts)) - Create drafts for human review
-- `google-calendar-search-events` ([packages/mastra/src/tools/google-calendar/search-events.ts](packages/mastra/src/tools/google-calendar/search-events.ts)) - Search calendar events
+- `gmail-search-emails` ([packages/agentc2/src/tools/gmail/search-emails.ts](packages/agentc2/src/tools/gmail/search-emails.ts)) - Search Gmail using Gmail query syntax
+- `gmail-read-email` ([packages/agentc2/src/tools/gmail/read-email.ts](packages/agentc2/src/tools/gmail/read-email.ts)) - Read full email content by message ID
+- `gmail-draft-email` ([packages/agentc2/src/tools/gmail/draft-email.ts](packages/agentc2/src/tools/gmail/draft-email.ts)) - Create drafts for human review
+- `google-calendar-search-events` ([packages/agentc2/src/tools/google-calendar/search-events.ts](packages/agentc2/src/tools/google-calendar/search-events.ts)) - Search calendar events
 
-A shared OAuth helper module was extracted: [packages/mastra/src/tools/gmail/shared.ts](packages/mastra/src/tools/gmail/shared.ts)
+A shared OAuth helper module was extracted: [packages/agentc2/src/tools/gmail/shared.ts](packages/agentc2/src/tools/gmail/shared.ts)
 
-All tools were registered in [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts) and `calendar.readonly` scope was added to [apps/agent/src/lib/gmail.ts](apps/agent/src/lib/gmail.ts).
+All tools were registered in [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts) and `calendar.readonly` scope was added to [apps/agent/src/lib/gmail.ts](apps/agent/src/lib/gmail.ts).
 
 **Result**: 7 of 8 enrichment tool calls now succeed. Google Calendar returns 403 because the existing OAuth token lacks the newly added `calendar.readonly` scope (requires re-authorization).
 
@@ -55,7 +55,7 @@ graph TB
     end
 
     subgraph toolSources [Three Tool Sources]
-        Registry["Static Registry\n145+ tools\npackages/mastra/src/tools/registry.ts"]
+        Registry["Static Registry\n145+ tools\npackages/agentc2/src/tools/registry.ts"]
         Skills["Skill-Based Tools\nProgressive discovery\nvia search-skills / activate-skill"]
         MCPTools["MCP Tools\nDynamic, per-org\nvia getMcpTools()"]
     end
@@ -198,7 +198,7 @@ The status endpoint checks scopes, but there's no proactive notification.
 Create a shared `createOAuthTool()` factory that standardizes credential resolution for all OAuth tools:
 
 ```typescript
-// packages/mastra/src/tools/oauth-tool-factory.ts
+// packages/agentc2/src/tools/oauth-tool-factory.ts
 export function createOAuthTool<TInput, TOutput>({
     id, description, providerKey, inputSchema, outputSchema,
     execute: (params: TInput, credentials: OAuthCredentials) => Promise<TOutput>

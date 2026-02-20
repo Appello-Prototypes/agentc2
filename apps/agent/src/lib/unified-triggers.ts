@@ -69,6 +69,8 @@ export type UnifiedTrigger = {
     name: string;
     description: string | null;
     isActive: boolean;
+    isArchived?: boolean;
+    archivedAt?: Date | string | null;
     createdAt: Date | string;
     updatedAt: Date | string;
     config: UnifiedTriggerConfig;

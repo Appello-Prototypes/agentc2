@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getIntegrationProviders, getMcpTools } from "@repo/mastra/mcp";
+import { getIntegrationProviders, getMcpTools } from "@repo/agentc2/mcp";
 import { prisma } from "@repo/database";
 import { getDemoSession } from "@/lib/standalone-auth";
 import { getUserOrganizationId } from "@/lib/organization";

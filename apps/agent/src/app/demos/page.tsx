@@ -94,9 +94,9 @@ export default function DemosPage() {
     return (
         <div>
             <div className="mb-12 text-center">
-                <h1 className="mb-4 text-4xl font-bold">Mastra Playground</h1>
+                <h1 className="mb-4 text-4xl font-bold">AgentC2 Playground</h1>
                 <p className="text-muted-foreground mx-auto max-w-2xl text-lg">
-                    Explore all the capabilities of the Mastra AI framework through interactive
+                    Explore all the capabilities of the AgentC2 platform through interactive
                     demonstrations of each primitive.
                 </p>
             </div>

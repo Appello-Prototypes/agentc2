@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra/mcp";
+import { getIntegrationProviders } from "@repo/agentc2/mcp";
 import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import {
@@ -150,7 +150,7 @@ export async function GET(request: NextRequest) {
 
         // Auto-provision Skill + Agent if blueprint exists
         try {
-            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            const { provisionIntegration, hasBlueprint } = await import("@repo/agentc2");
             if (hasBlueprint("microsoft")) {
                 const workspace = await prisma.workspace.findFirst({
                     where: { organizationId, isDefault: true },

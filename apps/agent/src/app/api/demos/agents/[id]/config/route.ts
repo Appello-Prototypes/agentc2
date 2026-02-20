@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mastra } from "@repo/mastra/core";
-import { listMcpToolDefinitions } from "@repo/mastra/mcp";
+import { mastra } from "@repo/agentc2/core";
+import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
 
 /**
  * GET /api/demos/agents/[id]/config

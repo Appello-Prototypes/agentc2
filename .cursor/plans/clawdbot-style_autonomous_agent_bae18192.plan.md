@@ -6,19 +6,19 @@ todos:
       content: Create FTS migration script and add tiktoken dependency
       status: pending
     - id: approval-system
-      content: "Create approval system: patterns.ts, store.ts (singleton), and index.ts in packages/mastra/src/approvals/"
+      content: "Create approval system: patterns.ts, store.ts (singleton), and index.ts in packages/agentc2/src/approvals/"
       status: pending
     - id: shell-tool
       content: Create shell-exec.ts tool with approval integration, security boundaries, and execution tracing
       status: pending
     - id: context-guard
-      content: Create context guard, compressor, and tool call filter in packages/mastra/src/context/
+      content: Create context guard, compressor, and tool call filter in packages/agentc2/src/context/
       status: pending
     - id: hybrid-search
-      content: Create hybrid-search.ts in packages/mastra/src/memory/ with vector + FTS combination
+      content: Create hybrid-search.ts in packages/agentc2/src/memory/ with vector + FTS combination
       status: pending
     - id: lane-queue
-      content: Create lane-manager.ts with singleton pattern in packages/mastra/src/queue/
+      content: Create lane-manager.ts with singleton pattern in packages/agentc2/src/queue/
       status: pending
     - id: semantic-browser
       content: Create semantic-browser.ts tool wrapping Playwright accessibility API
@@ -33,7 +33,7 @@ todos:
       content: Create demo UI page with chat, approval, browser, and memory panels
       status: pending
     - id: exports-integration
-      content: Export new modules from packages/mastra/src/index.ts and add demo to landing page
+      content: Export new modules from packages/agentc2/src/index.ts and add demo to landing page
       status: pending
     - id: testing
       content: Test with adversarial inputs and run format/lint
@@ -166,7 +166,7 @@ Create a new tool that executes shell commands with a pattern-based approval sys
 
 ### New Files
 
-`**packages/mastra/src/tools/shell-exec.ts**`
+`**packages/agentc2/src/tools/shell-exec.ts**`
 
 - Tool definition using `createTool()`
 - Input: `{ command: string, args?: string[], cwd?: string }`
@@ -175,7 +175,7 @@ Create a new tool that executes shell commands with a pattern-based approval sys
 - Captures stdout, stderr, exit code
 - Timeout protection (default 30s)
 
-`**packages/mastra/src/approvals/index.ts**`
+`**packages/agentc2/src/approvals/index.ts**`
 
 - `ApprovalStore` class for managing command allowlists
 - Pattern-based matching (glob patterns for commands)
@@ -183,7 +183,7 @@ Create a new tool that executes shell commands with a pattern-based approval sys
 - Blocked patterns: `rm -rf /`, `sudo`, command substitution `$(...)`, pipes to sensitive files
 - Methods: `isApproved(command)`, `addApproval(pattern)`, `removeApproval(pattern)`, `getPendingApprovals()`
 
-`**packages/mastra/src/approvals/store.ts**`
+`**packages/agentc2/src/approvals/store.ts**`
 
 - PostgreSQL-backed storage for approvals per user
 - Table: `mastra_command_approvals` with columns: `id`, `user_id`, `pattern`, `created_at`, `last_used_at`
@@ -288,7 +288,7 @@ async function executeWithTrace(
 
 Implement session isolation to prevent race conditions in concurrent requests.
 
-`**packages/mastra/src/queue/lane-manager.ts**`
+`**packages/agentc2/src/queue/lane-manager.ts**`
 
 - Each user session gets its own "lane" (queue)
 - Requests in the same lane execute sequentially
@@ -308,7 +308,7 @@ interface LaneManager {
 The lane manager and approval store need HMR-safe singleton patterns (same as `mastra.ts`):
 
 ```typescript
-// packages/mastra/src/queue/lane-manager.ts
+// packages/agentc2/src/queue/lane-manager.ts
 
 declare global {
     var laneManager: LaneManager | undefined;
@@ -336,7 +336,7 @@ export function getApprovalStore(): ApprovalStore {
 
 Modify Playwright integration to return accessibility tree instead of screenshots.
 
-`**packages/mastra/src/tools/semantic-browser.ts**`
+`**packages/agentc2/src/tools/semantic-browser.ts**`
 
 - Wraps Playwright MCP tools
 - New tool: `browser_semantic_snapshot`
@@ -370,7 +370,7 @@ interface SemanticElement {
 
 Add guards to prevent context overflow, filter noisy tool calls, and auto-compress when needed.
 
-`**packages/mastra/src/context/guard.ts**`
+`**packages/agentc2/src/context/guard.ts**`
 
 - Estimates token count before LLM calls
 - Uses `tiktoken` for accurate counting (or simple heuristic: chars/4)
@@ -389,7 +389,7 @@ interface ContextGuard {
 }
 ```
 
-`**packages/mastra/src/context/compressor.ts**`
+`**packages/agentc2/src/context/compressor.ts**`
 
 - Summarizes old messages using a fast model
 - Preserves recent context (last 5 messages)
@@ -400,7 +400,7 @@ interface ContextGuard {
 
 From best practices: "Automatically strip intermediate tool call steps from memory... Like editing a movie—cut the boring driving scene, just show arrival."
 
-`**packages/mastra/src/context/tool-filter.ts**`
+`**packages/agentc2/src/context/tool-filter.ts**`
 
 The context compressor should filter tool results **before they enter memory**, not just when context is full:
 
@@ -459,7 +459,7 @@ CREATE INDEX IF NOT EXISTS mastra_messages_content_fts_idx
 ON mastra_messages USING gin(content_fts);
 ```
 
-`**packages/mastra/src/memory/hybrid-search.ts**`
+`**packages/agentc2/src/memory/hybrid-search.ts**`
 
 - Combines vector similarity with keyword matching
 - Configurable weights: `{ vector: 0.7, fts: 0.3 }`
@@ -490,7 +490,7 @@ async function hybridSearch(
 
 The autonomous agent needs explicit constraints in its system prompt:
 
-`**packages/mastra/src/agents/autonomous.ts**`
+`**packages/agentc2/src/agents/autonomous.ts**`
 
 ```typescript
 const SYSTEM_PROMPT = `
@@ -605,10 +605,10 @@ export async function POST(request: Request) {
 
 ## 8. Module Exports
 
-All new modules must be exported from `packages/mastra/src/index.ts`:
+All new modules must be exported from `packages/agentc2/src/index.ts`:
 
 ```typescript
-// packages/mastra/src/index.ts
+// packages/agentc2/src/index.ts
 
 // Existing exports...
 
@@ -640,7 +640,7 @@ export type { HybridSearchResult, HybridSearchOptions } from "./memory/hybrid-se
 ## File Structure
 
 ```
-packages/mastra/src/
+packages/agentc2/src/
 ├── tools/
 │   ├── shell-exec.ts          # NEW: Shell execution tool with tracing
 │   └── semantic-browser.ts    # NEW: Semantic browser snapshots
@@ -738,10 +738,10 @@ Our platform already has more sophisticated workflow primitives and evaluation c
 
 ## 9. Agent Registration
 
-The autonomous agent must be registered in `packages/mastra/src/mastra.ts` following the existing pattern:
+The autonomous agent must be registered in `packages/agentc2/src/mastra.ts` following the existing pattern:
 
 ```typescript
-// packages/mastra/src/mastra.ts
+// packages/agentc2/src/mastra.ts
 
 import { autonomousAgent } from "./agents";
 
@@ -770,7 +770,7 @@ Add to `.env.example`:
 AUTONOMOUS_AGENT_ENABLED=true
 AUTONOMOUS_SHELL_TIMEOUT_MS=30000
 AUTONOMOUS_CONTEXT_MAX_TOKENS=100000
-AUTONOMOUS_PROJECT_ROOT=/Users/coreyshelson/mastra-experiment
+AUTONOMOUS_PROJECT_ROOT=/Users/coreyshelson/agentc2
 ```
 
 ---
@@ -799,7 +799,7 @@ const demos = [
 ### Tool Definition Pattern
 
 ```typescript
-// packages/mastra/src/tools/shell-exec.ts
+// packages/agentc2/src/tools/shell-exec.ts
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
@@ -829,7 +829,7 @@ export const shellExecTool = createTool({
 ```typescript
 // apps/agent/src/app/api/demos/autonomous/chat/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { mastra } from "@repo/mastra";
+import { mastra } from "@repo/agentc2";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {
@@ -862,7 +862,7 @@ export async function POST(req: NextRequest) {
 ### Agent Definition Pattern
 
 ```typescript
-// packages/mastra/src/agents/autonomous.ts
+// packages/agentc2/src/agents/autonomous.ts
 import { Agent } from "@mastra/core/agent";
 import { memory } from "../memory";
 import { shellExecTool } from "../tools/shell-exec";
@@ -935,8 +935,8 @@ During implementation:
 
 After implementation:
 
-- [ ] Export all new modules from `packages/mastra/src/index.ts`
-- [ ] Register agent in `packages/mastra/src/mastra.ts`
+- [ ] Export all new modules from `packages/agentc2/src/index.ts`
+- [ ] Register agent in `packages/agentc2/src/mastra.ts`
 - [ ] Add demo to demos landing page
 - [ ] Run `bun run format && bun run lint`
 - [ ] Test with adversarial inputs (prompt injection, blocked commands)

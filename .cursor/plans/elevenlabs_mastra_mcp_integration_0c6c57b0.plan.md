@@ -3,7 +3,7 @@ name: ElevenLabs Mastra MCP Integration
 overview: Create a webhook API endpoint that ElevenLabs agents can call to execute Mastra MCP tools, enabling voice agents (Grace/James) to access HubSpot, Jira, Playwright, Firecrawl, JustCall, and ATLAS.
 todos:
     - id: mcp-execute
-      content: Add executeMcpTool() function to packages/mastra/src/mcp/client.ts
+      content: Add executeMcpTool() function to packages/agentc2/src/mcp/client.ts
       status: pending
     - id: webhook-endpoint
       content: Create POST /api/demos/voice/tools webhook endpoint for tool execution
@@ -63,7 +63,7 @@ const response = await agent.generate(message, { maxSteps });
 For webhooks, we need direct tool execution instead:
 
 ```typescript
-import { mcpClient } from "@repo/mastra";
+import { mcpClient } from "@repo/agentc2";
 
 // Execute specific tool with parameters
 const result = await mcpClient.callTool(toolName, parameters);
@@ -75,14 +75,14 @@ Create endpoint to list available tools with their schemas:
 
 - `GET /api/demos/voice/tools` - Returns tool definitions for ElevenLabs dashboard configuration
 
-This uses the existing `getMcpTools()` from [packages/mastra/src/mcp/client.ts](packages/mastra/src/mcp/client.ts).
+This uses the existing `getMcpTools()` from [packages/agentc2/src/mcp/client.ts](packages/agentc2/src/mcp/client.ts).
 
 ### 3. Add Tool Execution to MCP Client
 
 The current MCP client exports `listTools()` and `listToolsets()` but doesn't expose direct tool execution. Add:
 
 ```typescript
-// In packages/mastra/src/mcp/client.ts
+// In packages/agentc2/src/mcp/client.ts
 export async function executeMcpTool(toolName: string, parameters: Record<string, unknown>) {
     // Find tool and execute via MCP client
 }
@@ -102,8 +102,8 @@ After deploying, configure each tool in the ElevenLabs agent dashboard:
 | File                                                | Action                          |
 | --------------------------------------------------- | ------------------------------- |
 | `apps/agent/src/app/api/demos/voice/tools/route.ts` | Create - Webhook endpoint       |
-| `packages/mastra/src/mcp/client.ts`                 | Modify - Add `executeMcpTool()` |
-| `packages/mastra/src/mcp/index.ts`                  | Modify - Export new function    |
+| `packages/agentc2/src/mcp/client.ts`                 | Modify - Add `executeMcpTool()` |
+| `packages/agentc2/src/mcp/index.ts`                  | Modify - Export new function    |
 
 ## Security Considerations
 

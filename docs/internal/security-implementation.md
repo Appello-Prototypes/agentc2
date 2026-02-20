@@ -6,17 +6,17 @@
 
 ## Overview
 
-AgentC2 uses AES-256-GCM envelope encryption for all sensitive data at rest, Ed25519 digital signatures for organization identity, and HKDF-based key derivation for per-purpose keys. All encryption is implemented in the `packages/mastra/src/crypto/` module.
+AgentC2 uses AES-256-GCM envelope encryption for all sensitive data at rest, Ed25519 digital signatures for organization identity, and HKDF-based key derivation for per-purpose keys. All encryption is implemented in the `packages/agentc2/src/crypto/` module.
 
 ### Key Files
 
 | File                                       | Purpose                                                     |
 | ------------------------------------------ | ----------------------------------------------------------- |
-| `packages/mastra/src/crypto/encryption.ts` | AES-256-GCM encrypt/decrypt, HKDF key derivation            |
-| `packages/mastra/src/crypto/signing.ts`    | Ed25519 key generation, signing, verification               |
-| `packages/mastra/src/crypto/keys.ts`       | Organization key pair lifecycle (provision, rotate, revoke) |
-| `packages/mastra/src/crypto/types.ts`      | Type definitions for encrypted payloads and key pairs       |
-| `packages/mastra/src/crypto/index.ts`      | Package exports                                             |
+| `packages/agentc2/src/crypto/encryption.ts` | AES-256-GCM encrypt/decrypt, HKDF key derivation            |
+| `packages/agentc2/src/crypto/signing.ts`    | Ed25519 key generation, signing, verification               |
+| `packages/agentc2/src/crypto/keys.ts`       | Organization key pair lifecycle (provision, rotate, revoke) |
+| `packages/agentc2/src/crypto/types.ts`      | Type definitions for encrypted payloads and key pairs       |
+| `packages/agentc2/src/crypto/index.ts`      | Package exports                                             |
 
 ---
 
@@ -403,7 +403,7 @@ export function verifySignature(payload: string, signature: string, publicKeyB64
 
 ### Organization Key Pair Rotation
 
-Keys are managed in `packages/mastra/src/crypto/keys.ts` using the Prisma `OrganizationKeyPair` model.
+Keys are managed in `packages/agentc2/src/crypto/keys.ts` using the Prisma `OrganizationKeyPair` model.
 
 #### Provisioning
 
@@ -602,7 +602,7 @@ Security-relevant events are logged to the `AuditLog` model in the database. Eve
 
 ## Exports
 
-The `packages/mastra/src/crypto/index.ts` exports:
+The `packages/agentc2/src/crypto/index.ts` exports:
 
 ```typescript
 // Types

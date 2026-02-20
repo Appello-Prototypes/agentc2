@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { goalStore } from "@repo/mastra/orchestrator";
+import { goalStore } from "@repo/agentc2/orchestrator";
 import { inngest } from "@/lib/inngest";
 import { getDemoSession } from "@/lib/standalone-auth";
 

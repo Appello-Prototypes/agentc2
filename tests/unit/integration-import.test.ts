@@ -8,7 +8,7 @@ vi.mock("@repo/database", () => ({
     prisma: prismaMock
 }));
 
-vi.mock("../../packages/mastra/src/mcp/client", () => ({
+vi.mock("../../packages/agentc2/src/mcp/client", () => ({
     getIntegrationProviders: vi.fn(),
     getMcpTools: vi.fn()
 }));
@@ -21,8 +21,8 @@ describe("integration-import tools (unit)", () => {
 
     it("parses MCP JSON and matches provider hints", async () => {
         const { integrationImportMcpJsonTool } =
-            await import("../../packages/mastra/src/tools/integration-import-tools");
-        const { getIntegrationProviders } = await import("../../packages/mastra/src/mcp/client");
+            await import("../../packages/agentc2/src/tools/integration-import-tools");
+        const { getIntegrationProviders } = await import("../../packages/agentc2/src/mcp/client");
 
         vi.mocked(getIntegrationProviders).mockResolvedValue(undefined);
         prismaMock.membership.findFirst.mockResolvedValue({
@@ -73,8 +73,8 @@ describe("integration-import tools (unit)", () => {
 
     it("creates a custom provider plan when no match exists", async () => {
         const { integrationImportMcpJsonTool } =
-            await import("../../packages/mastra/src/tools/integration-import-tools");
-        const { getIntegrationProviders } = await import("../../packages/mastra/src/mcp/client");
+            await import("../../packages/agentc2/src/tools/integration-import-tools");
+        const { getIntegrationProviders } = await import("../../packages/agentc2/src/mcp/client");
 
         vi.mocked(getIntegrationProviders).mockResolvedValue(undefined);
         prismaMock.membership.findFirst.mockResolvedValue({

@@ -1,4 +1,4 @@
-# Multi-stage Dockerfile for Mastra AI Agent Framework
+# Multi-stage Dockerfile for AgentC2 AI Agent Framework
 # Optimized for Digital Ocean Droplet deployment with MCP and Playwright support
 
 # ============================================
@@ -45,7 +45,7 @@ FROM base AS deps
 COPY package.json bun.lock turbo.json ./
 COPY packages/auth/package.json ./packages/auth/
 COPY packages/database/package.json ./packages/database/
-COPY packages/mastra/package.json ./packages/mastra/
+COPY packages/agentc2/package.json ./packages/agentc2/
 COPY packages/ui/package.json ./packages/ui/
 COPY packages/next-config/package.json ./packages/next-config/
 COPY packages/typescript-config/package.json ./packages/typescript-config/
@@ -79,11 +79,11 @@ WORKDIR /app
 
 # Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
-    adduser --system --uid 1001 mastra
-USER mastra
+    adduser --system --uid 1001 agentc2
+USER agentc2
 
 # Copy built application from builder
-COPY --from=builder --chown=mastra:nodejs /app ./
+COPY --from=builder --chown=agentc2:nodejs /app ./
 
 # Set production environment
 ENV NODE_ENV=production

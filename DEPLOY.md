@@ -6,7 +6,7 @@
 - **Specs:** 32 GB RAM / 8 vCPUs / 640 GB SSD ($96/mo)
 - **User:** root
 - **SSH Key:** ~/.ssh/appello_digitalocean
-- **App Directory:** /var/www/mastra
+- **App Directory:** /var/www/agentc2
 - **Domain:** https://agentc2.ai
 - **Process Manager:** PM2
 - **Reverse Proxy:** Caddy
@@ -52,7 +52,7 @@ ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
 
 # Deploy
 export PATH="$HOME/.bun/bin:$PATH"
-cd /var/www/mastra
+cd /var/www/agentc2
 git pull origin main
 bun install
 bun run db:generate
@@ -77,7 +77,7 @@ If a deploy breaks production and the rollback trap didn't fire:
 
 ```bash
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
-cd /var/www/mastra
+cd /var/www/agentc2
 
 # Restore previous build
 [ -d apps/agent/.next.bak ] && rm -rf apps/agent/.next && mv apps/agent/.next.bak apps/agent/.next
@@ -93,13 +93,13 @@ pm2 status
 1. **Copy .env to server:**
 
     ```bash
-    scp -i ~/.ssh/appello_digitalocean .env root@138.197.150.253:/var/www/mastra/.env
+    scp -i ~/.ssh/appello_digitalocean .env root@138.197.150.253:/var/www/agentc2/.env
     ```
 
 2. **SSH and install:**
     ```bash
     ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
-    cd /var/www/mastra
+    cd /var/www/agentc2
     bun install
     bun run db:generate
     bun run db:push

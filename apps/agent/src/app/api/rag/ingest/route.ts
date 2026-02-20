@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createDocumentRecord, type CreateDocumentInput } from "@repo/mastra/documents";
+import { createDocumentRecord, type CreateDocumentInput } from "@repo/agentc2/documents";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

@@ -1,5 +1,5 @@
 import { prisma, Prisma, TriggerEventStatus } from "@repo/database";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { recordActivity } from "@repo/agentc2/activity/service";
 
 const MAX_PAYLOAD_CHARS = 10000;
 const PREVIEW_CHARS = 2000;

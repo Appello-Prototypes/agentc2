@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { skillAttachToAgent, skillDetachFromAgent } from "@repo/mastra/skills";
+import { skillAttachToAgent, skillDetachFromAgent } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ id: string }> };

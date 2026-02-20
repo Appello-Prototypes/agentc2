@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mastra } from "@repo/mastra/core";
-import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/mastra/scorers";
+import { mastra } from "@repo/agentc2/core";
+import { evaluateHelpfulness, evaluateCodeQuality } from "@repo/agentc2/scorers";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(req: NextRequest) {

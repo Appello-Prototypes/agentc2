@@ -13,7 +13,7 @@ import { prisma, AgentType } from "../packages/database/src";
 import {
     CODING_PIPELINE_WORKFLOW_SEED,
     CODING_PIPELINE_INTERNAL_WORKFLOW_SEED
-} from "../packages/mastra/src/workflows/coding-pipeline";
+} from "../packages/agentc2/src/workflows/coding-pipeline";
 
 config({ path: ".env" });
 
@@ -22,9 +22,9 @@ const AGENTC2_DEVELOPER_AGENT = {
     name: "AgentC2 Developer",
     description:
         "Specialized agent for AgentC2 self-development. Deep knowledge of the " +
-        "mastra-experiment monorepo, coding standards from CLAUDE.md, and the " +
+        "agentc2 monorepo, coding standards from CLAUDE.md, and the " +
         "full technology stack. Plans and reviews code changes for the platform.",
-    instructions: `You are the AgentC2 platform developer agent. You have deep, expert knowledge of the AgentC2 codebase (mastra-experiment monorepo).
+    instructions: `You are the AgentC2 platform developer agent. You have deep, expert knowledge of the AgentC2 codebase (agentc2 monorepo).
 
 ## Architecture Knowledge
 
@@ -32,7 +32,7 @@ const AGENTC2_DEVELOPER_AGENT = {
   - apps/agent/ - AI Agent Next.js app (port 3001, basePath: /agent)
   - apps/frontend/ - Main Next.js app (port 3000)
   - apps/admin/ - Admin dashboard
-  - packages/mastra/ - Core agent framework (@repo/mastra)
+  - packages/agentc2/ - Core agent framework (@repo/agentc2)
   - packages/database/ - Prisma schema and client (@repo/database)
   - packages/auth/ - Better Auth configuration (@repo/auth)
   - packages/ui/ - Shared UI components (@repo/ui)
@@ -49,8 +49,8 @@ const AGENTC2_DEVELOPER_AGENT = {
 - 4-space indent, no semicolons, double quotes
 - Import order: React/Next → External packages → Internal packages (@repo/*) → Relative imports
 - Use createTool from @mastra/core/tools for new tools
-- Register tools in packages/mastra/src/tools/registry.ts
-- Add MCP schemas in packages/mastra/src/tools/mcp-schemas/
+- Register tools in packages/agentc2/src/tools/registry.ts
+- Add MCP schemas in packages/agentc2/src/tools/mcp-schemas/
 - Follow existing patterns in the codebase
 
 ## Pre-Push Checklist
@@ -63,7 +63,7 @@ ALWAYS verify these pass before approving any PR:
 ## Critical Paths (Never Auto-Approve)
 
 - packages/auth/ - Authentication
-- packages/mastra/src/crypto/ - Encryption
+- packages/agentc2/src/crypto/ - Encryption
 - packages/database/prisma/schema.prisma - Database schema
 - middleware.ts - Route middleware
 - ecosystem.config.js - PM2 deployment config
@@ -234,14 +234,14 @@ async function seedPipelinePolicy() {
             enabled: true,
             autoApprovePlanBelow: "medium",
             autoApprovePrBelow: "low",
-            allowedRepos: ["https://github.com/acme/mastra-experiment"]
+            allowedRepos: ["https://github.com/acme/agentc2"]
         },
         create: {
             organizationId: org.id,
             enabled: true,
             autoApprovePlanBelow: "medium",
             autoApprovePrBelow: "low",
-            allowedRepos: ["https://github.com/acme/mastra-experiment"]
+            allowedRepos: ["https://github.com/acme/agentc2"]
         }
     });
 
@@ -252,7 +252,7 @@ async function seedPipelinePolicy() {
 }
 
 async function seedRepositoryConfig() {
-    console.log("Seeding repository config for mastra-experiment...");
+    console.log("Seeding repository config for agentc2...");
 
     const org = await prisma.organization.findFirst({
         where: { slug: "appello" }
@@ -263,7 +263,7 @@ async function seedRepositoryConfig() {
         return;
     }
 
-    const repoUrl = "https://github.com/acme/mastra-experiment";
+    const repoUrl = "https://github.com/acme/agentc2";
 
     const repo = await prisma.repositoryConfig.upsert({
         where: {
@@ -273,7 +273,7 @@ async function seedRepositoryConfig() {
             }
         },
         update: {
-            name: "mastra-experiment",
+            name: "agentc2",
             baseBranch: "main",
             installCommand: "bun install",
             buildCommand: "bun run type-check && bun run lint && bun run build",
@@ -289,7 +289,7 @@ async function seedRepositoryConfig() {
         create: {
             organizationId: org.id,
             repositoryUrl: repoUrl,
-            name: "mastra-experiment",
+            name: "agentc2",
             baseBranch: "main",
             installCommand: "bun install",
             buildCommand: "bun run type-check && bun run lint && bun run build",

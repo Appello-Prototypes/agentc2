@@ -17,6 +17,7 @@ model User {
     email                  String                  @unique
     emailVerified          Boolean                 @default(false)
     image                  String?
+    timezone               String?
     createdAt              DateTime                @default(now())
     updatedAt              DateTime                @updatedAt
     sessions               Session[]
@@ -85,6 +86,7 @@ model Organization {
     slug        String   @unique // URL-safe identifier
     description String?
     logoUrl     String?
+    timezone    String?
     metadata    Json?
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
@@ -734,6 +736,9 @@ model Agent {
     maxSpendUsd      Float? // Max spend per run in USD
     autoVectorize    Boolean @default(true) // Auto-embed outputs into RAG knowledge base
 
+    // Deployment
+    deploymentMode String? @default("singleton") // "singleton" or "multi-instance"
+
     // Metadata
     metadata          Json?
     isActive          Boolean @default(true)
@@ -868,6 +873,8 @@ model AgentSchedule {
     timezone    String     @default("UTC")
     inputJson   Json? // Default input for scheduled runs
     isActive    Boolean    @default(true)
+    isArchived  Boolean    @default(false)
+    archivedAt  DateTime?
     lastRunAt   DateTime?
     nextRunAt   DateTime?
     runCount    Int        @default(0)
@@ -878,6 +885,7 @@ model AgentSchedule {
     @@index([agentId])
     @@index([workspaceId])
     @@index([isActive, nextRunAt])
+    @@index([isArchived])
     @@map("agent_schedule")
 }
 
@@ -897,6 +905,8 @@ model AgentTrigger {
     filterJson            Json? // Conditions to match before triggering
     inputMapping          Json? // How to map trigger payload to agent input
     isActive              Boolean                 @default(true)
+    isArchived            Boolean                 @default(false)
+    archivedAt            DateTime?
     lastTriggeredAt       DateTime?
     triggerCount          Int                     @default(0)
     createdAt             DateTime                @default(now())
@@ -910,6 +920,7 @@ model AgentTrigger {
     @@index([workspaceId])
     @@index([triggerType])
     @@index([eventName])
+    @@index([isArchived])
     @@map("agent_trigger")
 }
 
@@ -1265,6 +1276,10 @@ model AgentRun {
     sessionId   String? // Channel session ID for conversation grouping
     threadId    String? // Thread/conversation ID within a channel
 
+    // Agent Instance (multi-instance agents)
+    instanceId String?
+    instance   AgentInstance? @relation(fields: [instanceId], references: [id], onDelete: SetNull)
+
     // Relations
     turns           AgentRunTurn[]
     trace           AgentTrace?
@@ -1286,6 +1301,7 @@ model AgentRun {
     @@index([source])
     @@index([sessionId])
     @@index([threadId])
+    @@index([instanceId])
     @@index([source, userId, createdAt]) // Rate limiting: per-user per-source
     @@index([source, threadId, createdAt]) // Rate limiting: per-org per-source via threadId prefix
     @@map("agent_run")
@@ -3170,6 +3186,7 @@ model AgentInstance {
 
     // Relations
     channelBindings InstanceChannelBinding[]
+    runs            AgentRun[]
 
     @@unique([organizationId, slug])
     @@index([agentId])

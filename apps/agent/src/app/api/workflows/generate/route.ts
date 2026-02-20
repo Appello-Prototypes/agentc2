@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra/agents";
+import { agentResolver } from "@repo/agentc2/agents";
 import { validateWorkflowDefinition } from "@/lib/workflow-validation";
 
 function extractJson(text: string) {

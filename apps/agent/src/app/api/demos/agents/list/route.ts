@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { mastra } from "@repo/mastra/core";
+import { mastra } from "@repo/agentc2/core";
 
 /**
  * GET /api/demos/agents/list

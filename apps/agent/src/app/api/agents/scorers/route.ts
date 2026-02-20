@@ -7,7 +7,7 @@
  */
 
 import { NextResponse } from "next/server";
-import { listAvailableScorers } from "@repo/mastra/scorers/registry";
+import { listAvailableScorers } from "@repo/agentc2/scorers/registry";
 
 export async function GET() {
     const scorers = listAvailableScorers();

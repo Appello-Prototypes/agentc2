@@ -119,6 +119,9 @@ export interface RunDetail {
     costEvent: CostEvent | CostEvent[] | null;
     guardrailEvents: GuardrailEvent[] | null;
     version: VersionInfo | null;
+    instanceId?: string | null;
+    instanceName?: string | null;
+    instanceSlug?: string | null;
 }
 
 // ─── Formatting helpers ──────────────────────────────────────────────────────

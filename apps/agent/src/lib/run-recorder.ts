@@ -31,8 +31,8 @@
 
 import { prisma, Prisma, RunStatus, RunTriggerType } from "@repo/database";
 import { inngest } from "./inngest";
-import { recordActivity, inputPreview } from "@repo/mastra/activity/service";
-import { calculateBilledCost } from "@repo/mastra/budget";
+import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
+import { calculateBilledCost } from "@repo/agentc2/budget";
 
 /**
  * Source of the agent run (which production channel)
@@ -88,6 +88,8 @@ export interface StartRunOptions {
     instructionsHash?: string;
     /** Full merged instructions text for audit */
     instructionsSnapshot?: string;
+    /** Agent instance ID (for multi-instance agents) */
+    instanceId?: string;
 }
 
 /**
@@ -257,14 +259,13 @@ export async function startRun(options: StartRunOptions): Promise<RunRecorderHan
                 startedAt: new Date(),
                 userId: options.userId,
                 versionId: resolvedVersionId,
-                // New fields for source tracking
                 source: options.source,
                 triggerType: options.triggerType,
                 triggerId: options.triggerId,
                 sessionId: options.sessionId,
                 threadId: options.threadId,
-                // Skills active at run time
-                skillsJson: options.skillsJson ?? undefined
+                skillsJson: options.skillsJson ?? undefined,
+                instanceId: options.instanceId ?? undefined
             }
         });
 
@@ -605,17 +606,30 @@ export function extractTokenUsage(response: {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     steps?: any[];
 }): { promptTokens: number; completionTokens: number; totalTokens: number } | null {
-    // Prefer totalUsage (aggregated across all steps) over usage (last step only)
-    const usage = response.totalUsage || response.usage;
+    // Check if a usage object has actual numeric data (not all undefined)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hasRealData = (u: any): boolean =>
+        u &&
+        (u.inputTokens != null ||
+            u.outputTokens != null ||
+            u.promptTokens != null ||
+            u.completionTokens != null);
 
-    // If still nothing, try to aggregate from steps array
-    if (!usage && response.steps?.length) {
+    // Prefer totalUsage, but ONLY if it has actual data
+    const source = hasRealData(response.totalUsage)
+        ? response.totalUsage
+        : hasRealData(response.usage)
+          ? response.usage
+          : null;
+
+    // Try step aggregation as fallback
+    if (!source && response.steps?.length) {
         let inputTokens = 0;
         let outputTokens = 0;
         for (const step of response.steps) {
             if (step.usage) {
-                inputTokens += step.usage.inputTokens || step.usage.promptTokens || 0;
-                outputTokens += step.usage.outputTokens || step.usage.completionTokens || 0;
+                inputTokens += step.usage.inputTokens ?? step.usage.promptTokens ?? 0;
+                outputTokens += step.usage.outputTokens ?? step.usage.completionTokens ?? 0;
             }
         }
         if (inputTokens > 0 || outputTokens > 0) {
@@ -627,12 +641,12 @@ export function extractTokenUsage(response: {
         }
     }
 
-    if (!usage) return null;
+    if (!source) return null;
 
-    // AI SDK v5/v6 uses inputTokens/outputTokens, v4 uses promptTokens/completionTokens
-    const promptTokens = usage.inputTokens || usage.promptTokens || 0;
-    const completionTokens = usage.outputTokens || usage.completionTokens || 0;
-    const totalTokens = usage.totalTokens || promptTokens + completionTokens;
+    // Use ?? (nullish coalescing) so that 0 is treated as a valid value
+    const promptTokens = source.inputTokens ?? source.promptTokens ?? 0;
+    const completionTokens = source.outputTokens ?? source.completionTokens ?? 0;
+    const totalTokens = source.totalTokens ?? promptTokens + completionTokens;
 
     return { promptTokens, completionTokens, totalTokens };
 }
@@ -690,14 +704,17 @@ export function extractToolCalls(response: {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         toolCalls?: any[],
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        toolResults?: any[]
+        toolResults?: any[],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        steps?: any[]
     ): ToolCallData[] => {
         if (!Array.isArray(toolCalls) || toolCalls.length === 0) return [];
 
-        return toolCalls.map((tc, i) => {
+        const result = toolCalls.map((tc, i) => {
             const tr = toolResults?.[i];
             const payload = tr?.payload;
             return {
+                toolCallId: tc?.toolCallId || tc?.id || tc?.payload?.toolCallId,
                 toolKey:
                     resolveToolName(tc) ||
                     resolveToolName(tr) ||
@@ -709,9 +726,32 @@ export function extractToolCalls(response: {
                 error: tr?.error || payload?.error
             };
         });
+
+        // Recover tool-error chunks that MastraModelOutput drops
+        for (const tc of result) {
+            if (tc.output === undefined && !tc.error && Array.isArray(steps)) {
+                for (const step of steps) {
+                    const parts = Array.isArray(step?.content) ? step.content : [];
+                    const errorPart = parts.find(
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (p: any) =>
+                            p?.type === "tool-error" &&
+                            (!tc.toolCallId || p?.toolCallId === tc.toolCallId)
+                    );
+                    if (errorPart) {
+                        tc.error =
+                            errorPart.error?.message || errorPart.error?.toString() || "Tool error";
+                        tc.success = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        return result;
     };
 
-    const directCalls = mapToolCalls(response.toolCalls, response.toolResults);
+    const directCalls = mapToolCalls(response.toolCalls, response.toolResults, response.steps);
     if (directCalls.length > 0) {
         return directCalls;
     }
@@ -738,7 +778,7 @@ export function extractToolCalls(response: {
 
         for (const tc of stepToolCalls) {
             calls.push({
-                id: tc?.toolCallId || tc?.id,
+                id: tc?.toolCallId || tc?.id || tc?.payload?.toolCallId,
                 toolKey: resolveToolName(tc) || "unknown",
                 input: resolveArgs(tc)
             });
@@ -1197,7 +1237,8 @@ export async function startConversationRun(
                 triggerId: options.triggerId,
                 sessionId: options.sessionId,
                 threadId: options.threadId,
-                skillsJson: options.skillsJson ?? undefined
+                skillsJson: options.skillsJson ?? undefined,
+                instanceId: options.instanceId ?? undefined
             }
         });
 

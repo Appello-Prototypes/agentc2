@@ -6,7 +6,7 @@
  */
 
 import { prisma } from "@repo/database";
-import { createDocument } from "../packages/mastra/src/documents/service";
+import { createDocument } from "../packages/agentc2/src/documents/service";
 import { readdir, readFile } from "fs/promises";
 import { join, basename, extname } from "path";
 

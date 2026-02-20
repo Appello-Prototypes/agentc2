@@ -5,8 +5,8 @@ import {
     generateId,
     type UIMessageStreamWriter
 } from "ai";
-import { agentResolver } from "@repo/mastra/agents";
-import { getScorersByNames } from "@repo/mastra/scorers/registry";
+import { agentResolver } from "@repo/agentc2/agents";
+import { getScorersByNames } from "@repo/agentc2/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -113,10 +113,27 @@ async function runEvaluationsAsync(
         const scorers = getScorersByNames(scorerNames);
         const scores: Record<string, number> = {};
 
+        // Format for Mastra's getTextContentFromMastraDBMessage() (see chat/route.ts)
         const input = {
-            inputMessages: [{ role: "user", content: inputText }]
-        };
-        const output = [{ role: "assistant", content: outputText }];
+            inputMessages: [
+                {
+                    role: "user" as const,
+                    content: {
+                        content: inputText,
+                        parts: [{ type: "text" as const, text: inputText }]
+                    }
+                }
+            ]
+        } as unknown as { inputMessages: { role: string; content: string }[] };
+        const output = [
+            {
+                role: "assistant" as const,
+                content: {
+                    content: outputText,
+                    parts: [{ type: "text" as const, text: outputText }]
+                }
+            }
+        ] as unknown as { role: string; content: string }[];
 
         for (const [name, config] of Object.entries(scorers)) {
             try {

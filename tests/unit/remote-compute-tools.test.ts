@@ -25,7 +25,7 @@ vi.mock("@repo/database", () => ({
 }));
 
 // Mock encryption
-vi.mock("../../packages/mastra/src/crypto/encryption", () => ({
+vi.mock("../../packages/agentc2/src/crypto/encryption", () => ({
     encrypt: vi.fn((val: string) => ({
         __enc: "v1",
         iv: "mock-iv",
@@ -48,7 +48,7 @@ const mockSshConnectivityCheck = vi.fn();
 const mockScpPush = vi.fn();
 const mockScpPull = vi.fn();
 
-vi.mock("../../packages/mastra/src/tools/remote-compute-helpers", () => ({
+vi.mock("../../packages/agentc2/src/tools/remote-compute-helpers", () => ({
     resolveDoToken: (...args: unknown[]) => mockResolveDoToken(...args),
     doFetch: (...args: unknown[]) => mockDoFetch(...args),
     generateEphemeralSshKey: () => mockGenerateEphemeralSshKey(),
@@ -82,7 +82,7 @@ describe("Remote Compute Tools", () => {
     describe("provision-compute", () => {
         it("provisions a droplet and returns connection details", async () => {
             const { provisionComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             // Mock SSH key registration
             mockDoFetch.mockResolvedValueOnce({
@@ -179,7 +179,7 @@ describe("Remote Compute Tools", () => {
 
         it("uses preset size names correctly", async () => {
             const { provisionComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockDoFetch
                 .mockResolvedValueOnce({
@@ -215,7 +215,7 @@ describe("Remote Compute Tools", () => {
 
         it("cleans up SSH key on droplet creation failure", async () => {
             const { provisionComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockDoFetch
                 .mockResolvedValueOnce({
@@ -252,7 +252,7 @@ describe("Remote Compute Tools", () => {
     describe("remote-execute", () => {
         it("executes a command on a provisioned droplet", async () => {
             const { remoteExecuteTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             const futureExpiry = new Date(Date.now() + 3600_000).toISOString();
 
@@ -300,7 +300,7 @@ describe("Remote Compute Tools", () => {
 
         it("rejects access from wrong organization", async () => {
             const { remoteExecuteTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockPrismaProvisionedResource.findUnique.mockResolvedValueOnce({
                 id: "resource-abc",
@@ -321,7 +321,7 @@ describe("Remote Compute Tools", () => {
 
         it("rejects execution on expired resource", async () => {
             const { remoteExecuteTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             const pastExpiry = new Date(Date.now() - 3600_000).toISOString();
 
@@ -348,7 +348,7 @@ describe("Remote Compute Tools", () => {
 
         it("rejects execution on non-active resource", async () => {
             const { remoteExecuteTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockPrismaProvisionedResource.findUnique.mockResolvedValueOnce({
                 id: "resource-abc",
@@ -371,7 +371,7 @@ describe("Remote Compute Tools", () => {
     describe("remote-file-transfer", () => {
         it("pushes file content to a droplet", async () => {
             const { remoteFileTransferTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             const futureExpiry = new Date(Date.now() + 3600_000).toISOString();
 
@@ -413,7 +413,7 @@ describe("Remote Compute Tools", () => {
 
         it("pulls file content from a droplet", async () => {
             const { remoteFileTransferTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             const futureExpiry = new Date(Date.now() + 3600_000).toISOString();
 
@@ -449,7 +449,7 @@ describe("Remote Compute Tools", () => {
 
         it("rejects push without content", async () => {
             const { remoteFileTransferTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             const futureExpiry = new Date(Date.now() + 3600_000).toISOString();
 
@@ -483,7 +483,7 @@ describe("Remote Compute Tools", () => {
     describe("teardown-compute", () => {
         it("destroys a droplet and cleans up SSH key", async () => {
             const { teardownComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockPrismaProvisionedResource.findUnique.mockResolvedValueOnce({
                 id: "resource-abc",
@@ -544,7 +544,7 @@ describe("Remote Compute Tools", () => {
 
         it("rejects teardown from wrong organization", async () => {
             const { teardownComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockPrismaProvisionedResource.findUnique.mockResolvedValueOnce({
                 id: "resource-abc",
@@ -563,7 +563,7 @@ describe("Remote Compute Tools", () => {
 
         it("is idempotent for already-destroyed resources", async () => {
             const { teardownComputeTool } =
-                await import("../../packages/mastra/src/tools/remote-compute-tools");
+                await import("../../packages/agentc2/src/tools/remote-compute-tools");
 
             mockPrismaProvisionedResource.findUnique.mockResolvedValueOnce({
                 id: "resource-abc",
@@ -587,9 +587,9 @@ describe("Remote Compute Tools", () => {
     describe("helpers", () => {
         it("generateEphemeralSshKey produces valid key pair", async () => {
             // Use the real implementation for this test
-            vi.doUnmock("../../packages/mastra/src/tools/remote-compute-helpers");
+            vi.doUnmock("../../packages/agentc2/src/tools/remote-compute-helpers");
             const { generateEphemeralSshKey } =
-                await import("../../packages/mastra/src/tools/remote-compute-helpers");
+                await import("../../packages/agentc2/src/tools/remote-compute-helpers");
 
             const key = generateEphemeralSshKey();
 
@@ -599,9 +599,9 @@ describe("Remote Compute Tools", () => {
         });
 
         it("DEFAULT_SIZES maps named sizes to DO slugs", async () => {
-            vi.doUnmock("../../packages/mastra/src/tools/remote-compute-helpers");
+            vi.doUnmock("../../packages/agentc2/src/tools/remote-compute-helpers");
             const { DEFAULT_SIZES } =
-                await import("../../packages/mastra/src/tools/remote-compute-helpers");
+                await import("../../packages/agentc2/src/tools/remote-compute-helpers");
 
             expect(DEFAULT_SIZES.small).toBe("s-1vcpu-2gb");
             expect(DEFAULT_SIZES.medium).toBe("s-2vcpu-4gb");
@@ -609,9 +609,9 @@ describe("Remote Compute Tools", () => {
         });
 
         it("BOOTSTRAP_SCRIPT installs required tools", async () => {
-            vi.doUnmock("../../packages/mastra/src/tools/remote-compute-helpers");
+            vi.doUnmock("../../packages/agentc2/src/tools/remote-compute-helpers");
             const { BOOTSTRAP_SCRIPT } =
-                await import("../../packages/mastra/src/tools/remote-compute-helpers");
+                await import("../../packages/agentc2/src/tools/remote-compute-helpers");
 
             expect(BOOTSTRAP_SCRIPT).toContain("bun");
             expect(BOOTSTRAP_SCRIPT).toContain("docker");

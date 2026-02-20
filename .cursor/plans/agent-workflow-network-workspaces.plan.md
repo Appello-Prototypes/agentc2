@@ -96,7 +96,7 @@ network-object-result        → Structured output final
 
 ### 1.5 Current Implementation Analysis
 
-**Location**: `packages/mastra/src/agents/network-resolver.ts`
+**Location**: `packages/agentc2/src/agents/network-resolver.ts`
 
 **Current State**:
 
@@ -1197,7 +1197,7 @@ POST /api/deployments/:id/rollback
 **Current State**:
 
 - Agents: Database-first ✅
-- Workflows: Code-first (in packages/mastra/src/workflows)
+- Workflows: Code-first (in packages/agentc2/src/workflows)
 - Networks: Hybrid (NetworkResolver loads agents from DB, workflows from code)
 
 **Recommendation**: Move to database-first for workflows and networks
@@ -1217,7 +1217,7 @@ apps/agent/src/app/workspace/           # Workspace pages
 apps/agent/src/app/api/agents/          # Agent APIs
 apps/agent/src/app/api/workspace/       # Workspace APIs
 packages/database/prisma/schema.prisma  # Database schema
-packages/mastra/src/agents/             # Agent implementations
+packages/agentc2/src/agents/             # Agent implementations
 ```
 
 ### Proposed Workflow Workspace
@@ -1226,7 +1226,7 @@ packages/mastra/src/agents/             # Agent implementations
 apps/agent/src/app/workflows/           # Workflow pages
 apps/agent/src/app/api/workflows/       # Workflow APIs
 apps/agent/src/components/workflow-builder/  # Builder components
-packages/mastra/src/workflows/builder/  # Workflow compiler
+packages/agentc2/src/workflows/builder/  # Workflow compiler
 ```
 
 ### Proposed Network Workspace
@@ -1235,7 +1235,7 @@ packages/mastra/src/workflows/builder/  # Workflow compiler
 apps/agent/src/app/networks/            # Network pages
 apps/agent/src/app/api/networks/        # Network APIs
 apps/agent/src/components/network-builder/  # Topology designer
-packages/mastra/src/networks/           # Network runtime
+packages/agentc2/src/networks/           # Network runtime
 ```
 
 ---

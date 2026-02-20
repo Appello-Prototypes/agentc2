@@ -1,6 +1,6 @@
 # Digital Ocean Droplet Setup Guide
 
-This guide walks through setting up a Digital Ocean Droplet for the Mastra AI Agent Framework.
+This guide walks through setting up a Digital Ocean Droplet for the AgentC2 AI Agent Framework.
 
 ## Prerequisites
 
@@ -121,15 +121,15 @@ sudo apt install -y git
 
 ```bash
 # Create application directory
-sudo mkdir -p /var/www/mastra
-sudo chown deploy:deploy /var/www/mastra
+sudo mkdir -p /var/www/agentc2
+sudo chown deploy:deploy /var/www/agentc2
 
 # Clone repository
-cd /var/www/mastra
-git clone https://github.com/YOUR_ORG/mastra-experiment.git .
+cd /var/www/agentc2
+git clone https://github.com/YOUR_ORG/agentc2.git .
 
 # Or if using SSH
-git clone git@github.com:YOUR_ORG/mastra-experiment.git .
+git clone git@github.com:YOUR_ORG/agentc2.git .
 ```
 
 ## 5. Configure Environment
@@ -137,7 +137,7 @@ git clone git@github.com:YOUR_ORG/mastra-experiment.git .
 Create the production `.env` file:
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 cp .env.example .env
 nano .env
 ```
@@ -182,7 +182,7 @@ BEHIND_PROXY=true
 ## 6. Initial Build
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 
 # Install dependencies
 bun install
@@ -265,7 +265,7 @@ sudo systemctl reload caddy
 ## 8. Start Application with PM2
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 
 # Create PM2 log directory
 sudo mkdir -p /var/log/pm2
@@ -353,7 +353,7 @@ sudo systemctl reload caddy
 
 ```bash
 # Test connection
-cd /var/www/mastra
+cd /var/www/agentc2
 bun run db:studio  # Opens Prisma Studio if connection works
 ```
 
@@ -373,7 +373,7 @@ which npx
 ### Deploy updates
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 ./scripts/deploy-do.sh
 ```
 
@@ -407,5 +407,5 @@ sudo journalctl -u caddy -f
 # Application code is in Git - no backup needed
 
 # Environment file backup (store securely!)
-cp /var/www/mastra/.env ~/backups/.env.$(date +%Y%m%d)
+cp /var/www/agentc2/.env ~/backups/.env.$(date +%Y%m%d)
 ```

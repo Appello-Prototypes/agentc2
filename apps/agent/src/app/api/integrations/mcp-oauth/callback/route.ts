@@ -11,9 +11,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { prisma } from "@repo/database";
-import { resetMcpClients, invalidateMcpCacheForOrg } from "@repo/mastra/mcp";
-import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
-import { exchangeMcpCodeForTokens } from "@repo/mastra/integrations/mcp-oauth";
+import { resetMcpClients, invalidateMcpCacheForOrg } from "@repo/agentc2/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
+import { exchangeMcpCodeForTokens } from "@repo/agentc2/integrations/mcp-oauth";
 import { validateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { encryptCredentials } from "@/lib/credential-crypto";
 
@@ -182,7 +182,7 @@ export async function GET(request: NextRequest) {
 
         // 11. Auto-provision Skill + Agent
         try {
-            const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            const { provisionIntegration, hasBlueprint } = await import("@repo/agentc2");
             if (hasBlueprint(providerKey)) {
                 const workspace = await prisma.workspace.findFirst({
                     where: { organizationId, isDefault: true },

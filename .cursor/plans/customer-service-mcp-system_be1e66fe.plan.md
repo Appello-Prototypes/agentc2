@@ -25,7 +25,7 @@ isProject: false
 ## Approach
 
 - Brainstorm a customer service flow with clear stages: intake/triage, CRM enrichment, ticketing actions, transcript context, and automation triggers, with a strict confirmation gate before any write actions.
-- Implement the system using only MCP CRUD tools (no code changes or DB seeding), relying on the MCP tool schema documented in [docs/mcp-crud-tools-spec.json](/Users/coreyshelson/mastra-experiment/docs/mcp-crud-tools-spec.json).
+- Implement the system using only MCP CRUD tools (no code changes or DB seeding), relying on the MCP tool schema documented in [docs/mcp-crud-tools-spec.json](/Users/coreyshelson/agentc2/docs/mcp-crud-tools-spec.json).
 
 ## Implementation Steps
 

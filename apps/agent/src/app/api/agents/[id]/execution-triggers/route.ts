@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { prisma } from "@repo/database";
 import { getNextRunAt } from "@/lib/schedule-utils";
+import { requireAuth, requireAgentAccess } from "@/lib/authz";
 import {
     UNIFIED_TRIGGER_TYPES,
     buildUnifiedTriggerId,
@@ -26,6 +27,8 @@ type TriggerRow = {
     filterJson: unknown;
     inputMapping: unknown;
     isActive: boolean;
+    isArchived: boolean;
+    archivedAt: Date | null;
     lastTriggeredAt: Date | null;
     triggerCount: number;
     createdAt: Date;
@@ -40,6 +43,8 @@ type ScheduleRow = {
     timezone: string;
     inputJson: unknown;
     isActive: boolean;
+    isArchived: boolean;
+    archivedAt: Date | null;
     lastRunAt: Date | null;
     nextRunAt: Date | null;
     runCount: number;
@@ -86,6 +91,8 @@ function buildScheduleTrigger(
         name: schedule.name,
         description: schedule.description,
         isActive: schedule.isActive,
+        isArchived: schedule.isArchived,
+        archivedAt: schedule.archivedAt,
         createdAt: schedule.createdAt,
         updatedAt: schedule.updatedAt,
         config: {
@@ -119,6 +126,8 @@ function buildTriggerTrigger(
         name: trigger.name,
         description: trigger.description,
         isActive: trigger.isActive,
+        isArchived: trigger.isArchived,
+        archivedAt: trigger.archivedAt,
         createdAt: trigger.createdAt,
         updatedAt: trigger.updatedAt,
         config: {
@@ -153,14 +162,25 @@ function buildTriggerTrigger(
  * GET /api/agents/[id]/execution-triggers
  *
  * Unified list of schedules + triggers for an agent.
+ *
+ * Query Parameters:
+ *   - includeArchived: "true" to include archived triggers (hidden by default)
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
 
+        const authResult = await requireAuth(request);
+        if (authResult.response) return authResult.response;
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) return accessResult.response;
+
+        const { searchParams } = new URL(request.url);
+        const includeArchived = searchParams.get("includeArchived") === "true";
+
         const agent = await prisma.agent.findFirst({
             where: {
-                OR: [{ slug: id }, { id }]
+                id: accessResult.agentId
             },
             select: {
                 id: true,
@@ -175,13 +195,15 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             );
         }
 
+        const archiveFilter = includeArchived ? {} : { isArchived: false };
+
         const [schedules, triggers] = await Promise.all([
             prisma.agentSchedule.findMany({
-                where: { agentId: agent.id },
+                where: { agentId: agent.id, ...archiveFilter },
                 orderBy: { createdAt: "desc" }
             }),
             prisma.agentTrigger.findMany({
-                where: { agentId: agent.id },
+                where: { agentId: agent.id, ...archiveFilter },
                 orderBy: { createdAt: "desc" }
             })
         ]);
@@ -234,10 +256,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } catch (error) {
         console.error("[Execution Triggers] Error listing:", error);
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to list execution triggers"
-            },
+            { success: false, error: "Failed to list execution triggers" },
             { status: 500 }
         );
     }
@@ -251,6 +270,12 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
+
+        const authResult = await requireAuth(request);
+        if (authResult.response) return authResult.response;
+        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+        if (accessResult.response) return accessResult.response;
+
         const body = await request.json();
 
         const {
@@ -296,16 +321,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        const agent = await prisma.agent.findFirst({
-            where: {
-                OR: [{ slug: id }, { id }]
-            },
+        const agent = await prisma.agent.findUnique({
+            where: { id: accessResult.agentId },
             select: { id: true, slug: true, workspaceId: true }
         });
 
         if (!agent) {
             return NextResponse.json(
-                { success: false, error: `Agent '${id}' not found` },
+                { success: false, error: "Agent not found" },
                 { status: 404 }
             );
         }
@@ -460,10 +483,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     } catch (error) {
         console.error("[Execution Triggers] Error creating:", error);
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to create execution trigger"
-            },
+            { success: false, error: "Failed to create execution trigger" },
             { status: 500 }
         );
     }

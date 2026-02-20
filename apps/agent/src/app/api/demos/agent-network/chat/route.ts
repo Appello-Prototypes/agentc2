@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { networkResolver } from "@repo/mastra/agents";
+import { networkResolver } from "@repo/agentc2/agents";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 /**

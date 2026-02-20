@@ -83,6 +83,7 @@ interface Agent {
     metadata: Record<string, any> | null;
     type: "SYSTEM" | "USER" | "DEMO";
     version: number;
+    deploymentMode?: string;
 }
 
 const PROVIDER_DISPLAY_NAMES: Record<string, string> = {
@@ -637,7 +638,8 @@ export default function ConfigurePage() {
                 publicToken: agentData.publicToken ?? null,
                 metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
-                version: agentData.version ?? 1
+                version: agentData.version ?? 1,
+                deploymentMode: agentData.deploymentMode ?? "singleton"
             };
 
             // Extract attached skills from API response
@@ -909,7 +911,8 @@ export default function ConfigurePage() {
                 publicToken: agentData.publicToken ?? null,
                 metadata: agentData.metadata ?? null,
                 type: agentData.type || "USER",
-                version: agentData.version ?? 1
+                version: agentData.version ?? 1,
+                deploymentMode: agentData.deploymentMode ?? "singleton"
             };
 
             // Update extended thinking state from response
@@ -1141,6 +1144,25 @@ export default function ConfigurePage() {
                                                 Organization
                                             </SelectItem>
                                             <SelectItem value="PUBLIC">Public</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <Label>Deployment</Label>
+                                    <Select
+                                        value={formData.deploymentMode ?? "singleton"}
+                                        onValueChange={(value) =>
+                                            handleChange("deploymentMode", value ?? undefined)
+                                        }
+                                    >
+                                        <SelectTrigger className="w-[180px]">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="singleton">Singleton</SelectItem>
+                                            <SelectItem value="multi-instance">
+                                                Multi-Instance
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

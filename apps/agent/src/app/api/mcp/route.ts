@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma } from "@repo/database";
-import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/mastra/tools";
+import { getToolByName, mcpToolDefinitions, mcpToolRoutes } from "@repo/agentc2/tools";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { checkRateLimit } from "@/lib/rate-limit";
@@ -441,6 +441,92 @@ export async function GET(request: NextRequest) {
             invoke_url: tool.invoke_url || "/api/mcp"
         }));
 
+        // Generate per-instance tools for multi-instance agents
+        const instances = await prisma.agentInstance.findMany({
+            where: {
+                isActive: true,
+                organization: { id: organizationId }
+            },
+            select: {
+                id: true,
+                slug: true,
+                name: true,
+                contextType: true,
+                contextId: true,
+                instructionOverrides: true,
+                agent: {
+                    select: {
+                        slug: true,
+                        name: true,
+                        description: true,
+                        modelProvider: true,
+                        modelName: true
+                    }
+                }
+            },
+            orderBy: { name: "asc" }
+        });
+
+        const instanceTools = instances.map((inst) => ({
+            name: `instance.${inst.slug}`,
+            description:
+                `${inst.name} — instance of ${inst.agent.name}. ` +
+                (inst.contextType
+                    ? `Context: ${inst.contextType}${inst.contextId ? ` (${inst.contextId})` : ""}. `
+                    : "") +
+                (inst.agent.description || ""),
+            metadata: {
+                instance_id: inst.id,
+                instance_slug: inst.slug,
+                instance_name: inst.name,
+                agent_slug: inst.agent.slug,
+                agent_name: inst.agent.name,
+                model: `${inst.agent.modelProvider}/${inst.agent.modelName}`,
+                context_type: inst.contextType,
+                context_id: inst.contextId,
+                has_instruction_overrides: !!inst.instructionOverrides
+            },
+            inputSchema: {
+                type: "object",
+                properties: {
+                    input: {
+                        type: "string",
+                        description: `Message or task for ${inst.name}`
+                    },
+                    context: {
+                        type: "object",
+                        description: "Optional context variables",
+                        additionalProperties: true
+                    },
+                    maxSteps: {
+                        type: "number",
+                        description: "Maximum tool-use steps (optional)"
+                    }
+                },
+                required: ["input"]
+            },
+            outputSchema: {
+                type: "object",
+                properties: {
+                    run_id: { type: "string" },
+                    output: { type: "string" },
+                    usage: { type: "object" },
+                    cost_usd: { type: "number" },
+                    duration_ms: { type: "number" },
+                    model: { type: "string" }
+                }
+            },
+            invoke_url: `/api/agents/${inst.agent.slug}/invoke`
+        }));
+
+        const allTools = [
+            ...tools,
+            ...instanceTools,
+            ...workflowTools,
+            ...networkTools,
+            ...staticTools
+        ];
+
         return NextResponse.json({
             success: true,
             protocol: "mcp-agent-gateway/1.0",
@@ -449,8 +535,8 @@ export async function GET(request: NextRequest) {
                 version: "1.0.0",
                 capabilities: ["tools", "invoke"]
             },
-            tools: [...tools, ...workflowTools, ...networkTools, ...staticTools],
-            total: tools.length + workflowTools.length + networkTools.length + staticTools.length
+            tools: allTools,
+            total: allTools.length
         });
     } catch (error) {
         console.error("[MCP Gateway] Error listing tools:", error);
@@ -1060,6 +1146,79 @@ export async function POST(request: NextRequest) {
                     cost_usd: result.cost_usd,
                     duration_ms: result.duration_ms,
                     model: result.model
+                }
+            });
+        }
+
+        if (tool.startsWith("instance.")) {
+            const instanceSlug = tool.slice("instance.".length);
+            if (!params?.input) {
+                return NextResponse.json(
+                    { success: false, error: "Missing params.input" },
+                    { status: 400 }
+                );
+            }
+
+            const instance = await prisma.agentInstance.findFirst({
+                where: {
+                    slug: instanceSlug,
+                    isActive: true,
+                    organization: { id: organizationId }
+                },
+                select: {
+                    id: true,
+                    agent: { select: { slug: true } }
+                }
+            });
+            if (!instance) {
+                return NextResponse.json(
+                    { success: false, error: `Instance not found: ${instanceSlug}` },
+                    { status: 404 }
+                );
+            }
+
+            const invokeUrl = new URL(
+                `/api/agents/${instance.agent.slug}/invoke`,
+                getInternalBaseUrl()
+            );
+            const invokeResponse = await fetch(invokeUrl, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...authHeaders
+                },
+                body: JSON.stringify({
+                    input: params.input,
+                    context: params.context,
+                    maxSteps: params.maxSteps,
+                    instanceId: instance.id,
+                    mode: "sync"
+                })
+            });
+
+            const result = await invokeResponse.json();
+            if (!result.success) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: result.error,
+                        run_id: result.run_id
+                    },
+                    { status: invokeResponse.status }
+                );
+            }
+
+            return NextResponse.json({
+                success: true,
+                result: {
+                    run_id: result.run_id,
+                    output: result.output,
+                    usage: result.usage,
+                    cost_usd: result.cost_usd,
+                    duration_ms: result.duration_ms,
+                    model: result.model,
+                    instance_slug: instanceSlug,
+                    instance_id: instance.id
                 }
             });
         }

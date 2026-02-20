@@ -8,13 +8,15 @@ import { requireMonitoringWorkspace } from "@/lib/monitoring-auth";
  * Returns a cross-agent list of all configured automations (schedules, triggers,
  * and implicit Slack listeners) with aggregated health metrics.
  *
- * This is the "Automation Registry" -- one row per configured automation,
- * not one row per execution event.
+ * Query Parameters:
+ *   - includeArchived: "true" to include archived automations (hidden by default)
+ *   - workspaceId: workspace filter
  */
 export async function GET(request: NextRequest) {
     try {
         const { searchParams } = new URL(request.url);
         const requestedWorkspaceId = searchParams.get("workspaceId");
+        const includeArchived = searchParams.get("includeArchived") === "true";
 
         const workspaceContext = await requireMonitoringWorkspace(requestedWorkspaceId, request);
         if (!workspaceContext.ok) {
@@ -28,17 +30,22 @@ export async function GET(request: NextRequest) {
             OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
         } satisfies Prisma.AgentScheduleWhereInput;
 
+        const archiveFilter = includeArchived ? {} : { isArchived: false };
+
         // Fetch all schedules and triggers across all agents
         const [schedules, triggers] = await Promise.all([
             prisma.agentSchedule.findMany({
-                where: wsFilter,
+                where: { ...wsFilter, ...archiveFilter },
                 include: {
                     agent: { select: { id: true, slug: true, name: true } }
                 },
                 orderBy: { createdAt: "desc" }
             }),
             prisma.agentTrigger.findMany({
-                where: wsFilter as Prisma.AgentTriggerWhereInput,
+                where: {
+                    ...(wsFilter as Prisma.AgentTriggerWhereInput),
+                    ...archiveFilter
+                },
                 include: {
                     agent: { select: { id: true, slug: true, name: true } }
                 },
@@ -130,6 +137,8 @@ export async function GET(request: NextRequest) {
                 name: s.name,
                 description: s.description,
                 isActive: s.isActive,
+                isArchived: s.isArchived,
+                archivedAt: s.archivedAt,
                 agent: s.agent,
                 config: {
                     cronExpr: s.cronExpr,
@@ -172,6 +181,8 @@ export async function GET(request: NextRequest) {
                 name: t.name,
                 description: t.description,
                 isActive: t.isActive,
+                isArchived: t.isArchived,
+                archivedAt: t.archivedAt,
                 agent: t.agent,
                 config: {
                     eventName: t.eventName,
@@ -300,6 +311,8 @@ export async function GET(request: NextRequest) {
                     name: `Slack Messages → ${agent.name}`,
                     description: "Incoming Slack messages routed to this agent",
                     isActive: true,
+                    isArchived: false,
+                    archivedAt: null,
                     agent,
                     config: {
                         eventName: "slack.message"
@@ -326,6 +339,7 @@ export async function GET(request: NextRequest) {
         const summary = {
             total: automations.length,
             active: automations.filter((a) => a!.isActive).length,
+            archived: automations.filter((a) => a!.isArchived).length,
             schedules: scheduleAutomations.length,
             triggers: triggerAutomations.length,
             implicit: slackAutomations.length,
@@ -350,10 +364,7 @@ export async function GET(request: NextRequest) {
     } catch (error) {
         console.error("[Automations Registry] Error:", error);
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to fetch automations"
-            },
+            { success: false, error: "Failed to fetch automations" },
             { status: 500 }
         );
     }

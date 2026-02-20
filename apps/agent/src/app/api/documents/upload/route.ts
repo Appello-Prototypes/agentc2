@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { createDocumentRecord, type CreateDocumentInput } from "@repo/mastra/documents";
+import { createDocumentRecord, type CreateDocumentInput } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { PDFParse } from "pdf-parse";

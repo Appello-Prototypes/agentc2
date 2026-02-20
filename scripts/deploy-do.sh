@@ -2,7 +2,7 @@
 #
 # Digital Ocean Deployment Script (manual fallback)
 #
-# Deploys the Mastra AI Agent Framework to a Digital Ocean Droplet.
+# Deploys the AgentC2 AI Agent Framework to a Digital Ocean Droplet.
 # Includes rollback safety — backs up .next dirs before building.
 #
 # The primary deploy method is GitHub Actions (.github/workflows/deploy-do.yml).
@@ -11,7 +11,7 @@
 # Prerequisites:
 # - SSH access to the Droplet (32GB / 8 vCPU)
 # - Bun, Node.js, PM2, and Caddy installed on the Droplet
-# - Repository cloned to /var/www/mastra
+# - Repository cloned to /var/www/agentc2
 # - .env file configured on the Droplet
 #
 # Usage:
@@ -27,7 +27,7 @@ set -euo pipefail
 DROPLET_IP="${1:-${DO_HOST:-}}"
 SSH_USER="${2:-${DO_USER:-${DO_USERNAME:-root}}}"
 SSH_KEY="${DO_SSH_KEY:-}"
-DEPLOY_PATH="/var/www/mastra"
+DEPLOY_PATH="/var/www/agentc2"
 BRANCH="${DEPLOY_BRANCH:-main}"
 
 # Build SSH options
@@ -75,7 +75,7 @@ ssh $SSH_OPTS "$SSH_USER@$DROPLET_IP" << 'ENDSSH'
     set -euo pipefail
     export PATH="$HOME/.bun/bin:$PATH"
 
-    DEPLOY_PATH="/var/www/mastra"
+    DEPLOY_PATH="/var/www/agentc2"
 
     # Rollback on failure
     rollback() {
@@ -98,7 +98,7 @@ ssh $SSH_OPTS "$SSH_USER@$DROPLET_IP" << 'ENDSSH'
     trap rollback ERR
 
     echo "=========================================="
-    echo "Deploying Mastra AI Agent Framework"
+    echo "Deploying AgentC2 AI Agent Framework"
     echo "=========================================="
 
     cd "$DEPLOY_PATH"

@@ -30,13 +30,13 @@ Connect to external MCP (Model Context Protocol) servers to give agents access t
 ### Step 1: Install MCP Package
 
 ```bash
-cd packages/mastra
+cd packages/agentc2
 bun add @mastra/mcp
 ```
 
 ### Step 2: Create MCP Client Module
 
-Create `packages/mastra/src/mcp/client.ts`:
+Create `packages/agentc2/src/mcp/client.ts`:
 
 ```typescript
 import { MCPClient } from "@mastra/mcp";
@@ -102,7 +102,7 @@ export async function disconnectMcp() {
 
 ### Step 3: Create MCP-Enabled Agent
 
-Create `packages/mastra/src/agents/mcp-agent.ts`:
+Create `packages/agentc2/src/agents/mcp-agent.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -165,7 +165,7 @@ export async function createMcpAgent() {
 
 ### Step 4: Update Agent Exports
 
-Update `packages/mastra/src/agents/index.ts`:
+Update `packages/agentc2/src/agents/index.ts`:
 
 ```typescript
 export { assistantAgent } from "./assistant";
@@ -178,7 +178,7 @@ export { mcpAgent, createMcpAgent } from "./mcp-agent";
 
 ### Step 5: Create MCP Exports
 
-Create `packages/mastra/src/mcp/index.ts`:
+Create `packages/agentc2/src/mcp/index.ts`:
 
 ```typescript
 export { mcpClient, getMcpTools, getMcpToolsets, disconnectMcp } from "./client";
@@ -186,7 +186,7 @@ export { mcpClient, getMcpTools, getMcpToolsets, disconnectMcp } from "./client"
 
 ### Step 6: Update Main Exports
 
-Update `packages/mastra/src/index.ts`:
+Update `packages/agentc2/src/index.ts`:
 
 ```typescript
 // MCP
@@ -200,7 +200,7 @@ Create `apps/agent/src/app/api/mcp/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { createMcpAgent } from "@repo/mastra";
+import { createMcpAgent } from "@repo/agentc2";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -402,10 +402,10 @@ Some MCP servers take time to start. Increase timeout or pre-warm.
 
 | File                                      | Action          |
 | ----------------------------------------- | --------------- |
-| `packages/mastra/package.json`            | Add @mastra/mcp |
-| `packages/mastra/src/mcp/client.ts`       | Create          |
-| `packages/mastra/src/mcp/index.ts`        | Create          |
-| `packages/mastra/src/agents/mcp-agent.ts` | Create          |
-| `packages/mastra/src/agents/index.ts`     | Update          |
-| `packages/mastra/src/index.ts`            | Update          |
+| `packages/agentc2/package.json`            | Add @mastra/mcp |
+| `packages/agentc2/src/mcp/client.ts`       | Create          |
+| `packages/agentc2/src/mcp/index.ts`        | Create          |
+| `packages/agentc2/src/agents/mcp-agent.ts` | Create          |
+| `packages/agentc2/src/agents/index.ts`     | Update          |
+| `packages/agentc2/src/index.ts`            | Update          |
 | `apps/agent/src/app/api/mcp/route.ts`     | Create          |

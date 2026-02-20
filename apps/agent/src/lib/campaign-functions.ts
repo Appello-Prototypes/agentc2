@@ -29,9 +29,9 @@
 
 import { inngest } from "./inngest";
 import { prisma, Prisma, CampaignStatus, MissionStatus, MissionTaskStatus } from "@repo/database";
-import { agentResolver } from "@repo/mastra/agents";
-import { invalidateMcpCacheForOrg } from "@repo/mastra/mcp";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { agentResolver } from "@repo/agentc2/agents";
+import { invalidateMcpCacheForOrg } from "@repo/agentc2/mcp";
+import { recordActivity } from "@repo/agentc2/activity/service";
 import {
     startRun,
     extractToolCalls,
@@ -1755,7 +1755,7 @@ Evaluate the overall campaign results against the stated intent and end state. P
         // Step 5: Ingest campaign results into RAG for cross-campaign memory
         await step.run("ingest-campaign-memory", async () => {
             try {
-                const { ingestDocument } = await import("@repo/mastra");
+                const { ingestDocument } = await import("@repo/agentc2");
 
                 const campaignForMemory = await prisma.campaign.findUniqueOrThrow({
                     where: { id: campaignId },

@@ -5,7 +5,7 @@ import {
     createDocumentRecord,
     listDocumentRecords,
     type CreateDocumentInput
-} from "@repo/mastra/documents";
+} from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 

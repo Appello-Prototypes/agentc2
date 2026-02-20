@@ -1,4 +1,4 @@
-# Mastra AI Agent Framework - System Specification
+# AgentC2 AI Agent Framework - System Specification
 
 **Version:** 1.0.0  
 **Last Updated:** February 2026  
@@ -34,7 +34,7 @@
 
 ## 1. System Overview
 
-The **Mastra AI Agent Framework** is a production-grade Turborepo monorepo for building, deploying, and orchestrating AI agents. It provides:
+The **AgentC2 AI Agent Framework** is a production-grade Turborepo monorepo for building, deploying, and orchestrating AI agents. It provides:
 
 - **Database-driven agent configuration** with version control and rollback
 - **Multi-provider LLM support** (OpenAI, Anthropic, Google)
@@ -261,7 +261,7 @@ All models include:
 
 ### Agent Resolver
 
-The `AgentResolver` class (`packages/mastra/src/agents/resolver.ts`) provides database-first agent resolution:
+The `AgentResolver` class (`packages/agentc2/src/agents/resolver.ts`) provides database-first agent resolution:
 
 ```typescript
 interface ResolveOptions {
@@ -328,7 +328,7 @@ interface MemoryConfig {
 
 ### Code-Defined Agents
 
-Registered in `packages/mastra/src/mastra.ts`:
+Registered in `packages/agentc2/src/mastra.ts`:
 
 | Agent                    | Purpose                      |
 | ------------------------ | ---------------------------- |
@@ -453,7 +453,7 @@ Registered in `packages/mastra/src/mastra.ts`:
 
 ### Static Tool Registry
 
-Located in `packages/mastra/src/tools/registry.ts`:
+Located in `packages/agentc2/src/tools/registry.ts`:
 
 | Tool ID         | Description               |
 | --------------- | ------------------------- |
@@ -501,7 +501,7 @@ const tools = await getToolsByNamesAsync(["calculator", "hubspot_hubspot-get-con
 ### Usage
 
 ```typescript
-import { mcpClient, executeMcpTool, listMcpToolDefinitions } from "@repo/mastra";
+import { mcpClient, executeMcpTool, listMcpToolDefinitions } from "@repo/agentc2";
 
 // List available tools
 const definitions = await listMcpToolDefinitions();
@@ -700,7 +700,7 @@ interface ChannelSession {
 
 ### Routing
 
-Channel router in `packages/mastra/src/channels/routing.ts` maps incoming messages to agents.
+Channel router in `packages/agentc2/src/channels/routing.ts` maps incoming messages to agents.
 
 ---
 

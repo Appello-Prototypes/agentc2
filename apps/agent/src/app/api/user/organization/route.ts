@@ -29,6 +29,7 @@ export async function GET() {
                         slug: true,
                         description: true,
                         logoUrl: true,
+                        timezone: true,
                         metadata: true,
                         createdAt: true,
                         updatedAt: true

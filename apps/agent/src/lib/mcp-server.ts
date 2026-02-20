@@ -2,7 +2,7 @@
  * MCP Server Factory for Claude CoWork (Remote Streamable HTTP)
  *
  * Creates an MCP Server instance that exposes the same tools as the
- * "Mastra Agents" MCP server in Cursor -- platform management tools
+ * "AgentC2 Agents" MCP server in Cursor -- platform management tools
  * (agent_, workflow_, network_, rag_, integration_, etc.) plus
  * database agents, workflows, and networks.
  *
@@ -138,7 +138,7 @@ export async function buildMcpServer(
 
     const server = new Server(
         {
-            name: "Mastra Agents",
+            name: "AgentC2 Agents",
             version: "1.0.0"
         },
         {

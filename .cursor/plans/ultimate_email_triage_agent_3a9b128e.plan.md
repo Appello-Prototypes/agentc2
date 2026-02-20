@@ -166,7 +166,7 @@ Also provides `read_email` to get full email content and `draft_email` to save p
 - **JustCall** (justcall.io) - Phone/SMS for sales calls
 - **Fathom** (fathom.video) - Meeting recording/transcripts
 - **Zoom** (zoom.us) - Video meetings
-- **GitHub** (github.com) - CI/CD notifications for mastra-experiment
+- **GitHub** (github.com) - CI/CD notifications for agentc2
 - **n8n** / Paddle (paddle.com) - Workflow automation billing
 - **Cursor** - AI dev tool billing notifications
 - **HubSpot** - CRM pipeline

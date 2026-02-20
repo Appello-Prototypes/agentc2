@@ -36,7 +36,7 @@ async function populateMcpSkillTools() {
     ) => Promise<Array<{ name: string; description: string; server: string }>>;
 
     try {
-        const mastra = await import("../../../packages/mastra/src/mcp/client");
+        const mastra = await import("../../../packages/agentc2/src/mcp/client");
         listMcpToolDefinitions = mastra.listMcpToolDefinitions;
     } catch (err) {
         console.error(
@@ -108,7 +108,7 @@ async function populateMcpSkillTools() {
 async function populateFromKnownTools() {
     console.log("  Using known tool lists from API fallback clients...\n");
 
-    // Known tools per server (from the API fallback clients in packages/mastra/src/mcp/api-clients/)
+    // Known tools per server (from the API fallback clients in packages/agentc2/src/mcp/api-clients/)
     const knownTools: Record<string, string[]> = {
         "mcp-crm-hubspot": [
             "hubspot_hubspot-get-contacts",

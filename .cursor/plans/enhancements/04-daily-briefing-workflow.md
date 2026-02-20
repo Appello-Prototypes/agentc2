@@ -159,7 +159,7 @@ The channel ID needs to be passed as a parameter or set as an environment variab
 :email: *Unread Emails (12)*
 1. *Ian Haase* -- Re: Q1 Budget Review -- Requesting final numbers by EOD
 2. *Mia Burns* -- New Client Onboarding -- FirmBroker contract ready for review
-3. *GitHub* -- CI/CD: 2 failed workflows on mastra-experiment
+3. *GitHub* -- CI/CD: 2 failed workflows on agentc2
 4. *HubSpot* -- Deal stage change: Acme Corp moved to Negotiation
 5. *Stripe* -- Monthly invoice #INV-2026-02 ready
 

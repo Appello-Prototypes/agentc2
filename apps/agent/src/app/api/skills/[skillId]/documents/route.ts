@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { skillAttachDocument, skillDetachDocument } from "@repo/mastra/skills";
+import { skillAttachDocument, skillDetachDocument } from "@repo/agentc2/skills";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ skillId: string }> };

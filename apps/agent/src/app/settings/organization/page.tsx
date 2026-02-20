@@ -20,6 +20,7 @@ import {
     SelectValue
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { COMMON_TIMEZONES } from "@/lib/timezone";
 
 interface Organization {
     id: string;
@@ -27,6 +28,7 @@ interface Organization {
     slug: string;
     description: string | null;
     logoUrl: string | null;
+    timezone: string;
     metadata: Record<string, unknown> | null;
     createdAt: string;
 }
@@ -54,6 +56,7 @@ export default function OrganizationSettingsPage() {
     const [slug, setSlug] = useState("");
     const [description, setDescription] = useState("");
     const [logoUrl, setLogoUrl] = useState("");
+    const [timezone, setTimezone] = useState("America/New_York");
 
     // Integrations state
     const [slackDefaultAgent, setSlackDefaultAgent] = useState("assistant");
@@ -92,6 +95,7 @@ export default function OrganizationSettingsPage() {
                 setSlug(data.organization.slug || "");
                 setDescription(data.organization.description || "");
                 setLogoUrl(data.organization.logoUrl || "");
+                setTimezone(data.organization.timezone || "America/New_York");
                 const meta = data.organization.metadata as Record<string, unknown> | null;
                 if (meta?.slackDefaultAgentSlug && typeof meta.slackDefaultAgentSlug === "string") {
                     setSlackDefaultAgent(meta.slackDefaultAgentSlug);
@@ -224,7 +228,8 @@ export default function OrganizationSettingsPage() {
                     name: name.trim(),
                     slug: slug.trim(),
                     description: description.trim() || null,
-                    logoUrl: logoUrl.trim() || null
+                    logoUrl: logoUrl.trim() || null,
+                    timezone
                 })
             });
 
@@ -382,6 +387,36 @@ export default function OrganizationSettingsPage() {
                             className="mt-1"
                             rows={3}
                         />
+                    </div>
+
+                    {/* Timezone */}
+                    <div>
+                        <label className="text-sm font-medium">Timezone</label>
+                        <p className="text-muted-foreground mb-2 text-xs">
+                            Default timezone for all members. Individual users can override this
+                            in their profile settings.
+                        </p>
+                        <Select
+                            value={timezone}
+                            onValueChange={(v: string | null) => {
+                                if (v) setTimezone(v);
+                            }}
+                            disabled={!canEdit}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select timezone">
+                                    {COMMON_TIMEZONES.find((tz) => tz.value === timezone)
+                                        ?.label || timezone}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                {COMMON_TIMEZONES.map((tz) => (
+                                    <SelectItem key={tz.value} value={tz.value}>
+                                        {tz.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Created Date */}

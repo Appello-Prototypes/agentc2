@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra/agents";
-import { listAvailableTools } from "@repo/mastra/tools";
+import { agentResolver } from "@repo/agentc2/agents";
+import { listAvailableTools } from "@repo/agentc2/tools";
 import { prisma } from "@repo/database";
 import { validateNetworkDefinition } from "@/lib/network-validation";
 

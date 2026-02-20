@@ -7,7 +7,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(dirname "$SCRIPT_DIR")"
-DOCKERFILE="$REPO_ROOT/packages/mastra/docker/Dockerfile.sandbox"
+DOCKERFILE="$REPO_ROOT/packages/agentc2/docker/Dockerfile.sandbox"
 
 echo "=========================================="
 echo "AgentC2 Sandbox Setup"

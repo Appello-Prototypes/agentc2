@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { toolRegistry } from "@repo/mastra/tools";
-import { getMcpTools } from "@repo/mastra/mcp";
+import { toolRegistry } from "@repo/agentc2/tools";
+import { getMcpTools } from "@repo/agentc2/mcp";
 
 /**
  * GET /api/agents/[id]/tool-health

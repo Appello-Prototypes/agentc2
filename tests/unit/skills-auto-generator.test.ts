@@ -9,7 +9,7 @@ vi.mock("@repo/database", () => ({
     Prisma: { InputJsonValue: {} }
 }));
 
-const { generateSkillForMcpServer, mcpSkillExists, getMcpSkillSlug } = await import("@repo/mastra");
+const { generateSkillForMcpServer, mcpSkillExists, getMcpSkillSlug } = await import("@repo/agentc2");
 
 describe("Skill Auto-Generator", () => {
     beforeEach(() => {

@@ -8,7 +8,7 @@ vi.mock("@repo/database", () => ({
     prisma: prismaMock
 }));
 
-vi.mock("../../../packages/mastra/src/mcp/client", () => ({
+vi.mock("../../../packages/agentc2/src/mcp/client", () => ({
     getIntegrationProviders: vi.fn(),
     getMcpTools: vi.fn()
 }));
@@ -21,9 +21,9 @@ describe("integration-import tools (integration)", () => {
 
     it("creates and tests MCP connections", async () => {
         const { integrationImportMcpJsonTool } =
-            await import("../../../packages/mastra/src/tools/integration-import-tools");
+            await import("../../../packages/agentc2/src/tools/integration-import-tools");
         const { getIntegrationProviders, getMcpTools } =
-            await import("../../../packages/mastra/src/mcp/client");
+            await import("../../../packages/agentc2/src/mcp/client");
 
         vi.mocked(getIntegrationProviders).mockResolvedValue([]);
         vi.mocked(getMcpTools).mockResolvedValue({

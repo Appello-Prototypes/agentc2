@@ -3,22 +3,22 @@ name: OAuth Tool Provider Architecture
 overview: Redesign OAuth tool integration to use dynamic, connection-gated, credential-pre-bound tool loading that mirrors the MCP pipeline's multi-tenant guarantees - eliminating the two-track system without MCP serialization overhead.
 todos:
     - id: oauth-provider-types
-      content: Create OAuthToolProvider interface, types, and provider registry in packages/mastra/src/tools/oauth-providers/types.ts
+      content: Create OAuthToolProvider interface, types, and provider registry in packages/agentc2/src/tools/oauth-providers/types.ts
       status: pending
     - id: token-refresh-utility
-      content: Create shared withTokenRefresh() utility in packages/mastra/src/tools/oauth-providers/token-refresh.ts that standardizes decrypt + refresh + retry + persist across all providers
+      content: Create shared withTokenRefresh() utility in packages/agentc2/src/tools/oauth-providers/token-refresh.ts that standardizes decrypt + refresh + retry + persist across all providers
       status: pending
     - id: google-provider
-      content: Implement GoogleToolProvider in packages/mastra/src/tools/oauth-providers/google.ts - scope-gated, returns bound Gmail + Calendar tools
+      content: Implement GoogleToolProvider in packages/agentc2/src/tools/oauth-providers/google.ts - scope-gated, returns bound Gmail + Calendar tools
       status: pending
     - id: microsoft-provider
-      content: Implement MicrosoftToolProvider in packages/mastra/src/tools/oauth-providers/microsoft.ts - returns bound Outlook Mail + Calendar tools
+      content: Implement MicrosoftToolProvider in packages/agentc2/src/tools/oauth-providers/microsoft.ts - returns bound Outlook Mail + Calendar tools
       status: pending
     - id: dropbox-provider
-      content: Implement DropboxToolProvider in packages/mastra/src/tools/oauth-providers/dropbox.ts - returns bound file tools
+      content: Implement DropboxToolProvider in packages/agentc2/src/tools/oauth-providers/dropbox.ts - returns bound file tools
       status: pending
     - id: oauth-loader
-      content: Create getOAuthTools(orgId) loader and getOAuthToolsCached() with per-org caching in packages/mastra/src/tools/oauth-providers/loader.ts
+      content: Create getOAuthTools(orgId) loader and getOAuthToolsCached() with per-org caching in packages/agentc2/src/tools/oauth-providers/loader.ts
       status: pending
     - id: refactor-tool-bases
       content: Refactor all 18 OAuth tools to export base definitions (schema + logic factory) that accept an API caller, removing credential params from inputSchema
@@ -211,7 +211,7 @@ sequenceDiagram
 
 ### 1. Create the OAuth Tool Provider interface and loader
 
-**New file**: [packages/mastra/src/tools/oauth-providers/types.ts](packages/mastra/src/tools/oauth-providers/types.ts)
+**New file**: [packages/agentc2/src/tools/oauth-providers/types.ts](packages/agentc2/src/tools/oauth-providers/types.ts)
 
 ```typescript
 export interface OAuthToolProvider {
@@ -231,7 +231,7 @@ Each provider implements `getTools()` which returns tools with credentials alrea
 
 ### 2. Create the Google tool provider (unified Gmail + Calendar)
 
-**New file**: [packages/mastra/src/tools/oauth-providers/google.ts](packages/mastra/src/tools/oauth-providers/google.ts)
+**New file**: [packages/agentc2/src/tools/oauth-providers/google.ts](packages/agentc2/src/tools/oauth-providers/google.ts)
 
 This provider:
 
@@ -279,14 +279,14 @@ const TOOL_SCOPES = {
 
 **New files**:
 
-- [packages/mastra/src/tools/oauth-providers/microsoft.ts](packages/mastra/src/tools/oauth-providers/microsoft.ts)
-- [packages/mastra/src/tools/oauth-providers/dropbox.ts](packages/mastra/src/tools/oauth-providers/dropbox.ts)
+- [packages/agentc2/src/tools/oauth-providers/microsoft.ts](packages/agentc2/src/tools/oauth-providers/microsoft.ts)
+- [packages/agentc2/src/tools/oauth-providers/dropbox.ts](packages/agentc2/src/tools/oauth-providers/dropbox.ts)
 
 Same pattern. Each provider returns bound tools. Microsoft returns both Outlook Mail and Calendar tools from a single connection. Dropbox returns file tools.
 
 ### 4. Create the OAuth tools loader
 
-**New file**: [packages/mastra/src/tools/oauth-providers/loader.ts](packages/mastra/src/tools/oauth-providers/loader.ts)
+**New file**: [packages/agentc2/src/tools/oauth-providers/loader.ts](packages/agentc2/src/tools/oauth-providers/loader.ts)
 
 Core function:
 
@@ -336,7 +336,7 @@ Current tools export singleton instances. Refactor to export both:
 - **Base definitions** (schema + logic, no credential binding) -- used by providers
 - **Legacy singletons** (kept temporarily for backward compatibility)
 
-For example, [packages/mastra/src/tools/gmail/search-emails.ts](packages/mastra/src/tools/gmail/search-emails.ts):
+For example, [packages/agentc2/src/tools/gmail/search-emails.ts](packages/agentc2/src/tools/gmail/search-emails.ts):
 
 ```typescript
 // Base definition (used by OAuth provider to create bound instances)
@@ -362,7 +362,7 @@ This applies to all 18 OAuth tools across Gmail (4), Google Calendar (1), Outloo
 
 ### 6. CRITICAL: Update getToolsByNamesAsync() -- The Single Resolution Function
 
-This is the most important change. In [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts), add OAuth tools as a third resolution source:
+This is the most important change. In [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts), add OAuth tools as a third resolution source:
 
 ```typescript
 export async function getToolsByNamesAsync(
@@ -415,7 +415,7 @@ export async function getToolsByNamesAsync(
 
 ### 7. Update AgentResolver.hydrate()
 
-In [packages/mastra/src/agents/resolver.ts](packages/mastra/src/agents/resolver.ts), two changes:
+In [packages/agentc2/src/agents/resolver.ts](packages/agentc2/src/agents/resolver.ts), two changes:
 
 **Change A**: For legacy agents without skills, load ALL OAuth tools (parallel to `getAllMcpTools`):
 
@@ -462,7 +462,7 @@ for (const key of Object.keys(allOAuthTools)) {
 
 ### 8. Remove OAuth tools from static registry (AFTER validation)
 
-In [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts), remove all 18 OAuth tool entries from `toolRegistry` and `toolCategoryMap`. They are now loaded dynamically via the OAuth cache.
+In [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts), remove all 18 OAuth tool entries from `toolRegistry` and `toolCategoryMap`. They are now loaded dynamically via the OAuth cache.
 
 **Safety**: Because `getToolsByNamesAsync()` checks static registry FIRST, we can run both systems in parallel during migration. OAuth tools in the registry serve as fallback. Only remove them after confirming the OAuth provider pipeline works end-to-end.
 
@@ -532,7 +532,7 @@ Eliminate the Better Auth dependency for Gmail by following the established Micr
 
 ### 12. Shared token refresh utility
 
-**New file**: [packages/mastra/src/tools/oauth-providers/token-refresh.ts](packages/mastra/src/tools/oauth-providers/token-refresh.ts)
+**New file**: [packages/agentc2/src/tools/oauth-providers/token-refresh.ts](packages/agentc2/src/tools/oauth-providers/token-refresh.ts)
 
 Standardize token refresh across all providers:
 
@@ -567,8 +567,8 @@ This replaces the duplicated refresh logic in `gmail/shared.ts`, `microsoft-oaut
 
 ## What Gets Added
 
-- `packages/mastra/src/tools/oauth-providers/` directory with types, loader, and per-provider implementations
-- `packages/mastra/src/tools/oauth-providers/token-refresh.ts` shared utility
+- `packages/agentc2/src/tools/oauth-providers/` directory with types, loader, and per-provider implementations
+- `packages/agentc2/src/tools/oauth-providers/token-refresh.ts` shared utility
 - Third resolution source in `getToolsByNamesAsync()` for OAuth tools
 - `apps/agent/src/app/api/integrations/google/` routes (standalone PKCE)
 - OAuth tool origin tracking in `AgentResolver.hydrate()` and tools API

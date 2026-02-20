@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/mastra/agents";
+import { agentResolver } from "@repo/agentc2/agents";
 import { TRAFFIC_SPLIT } from "@/lib/learning-config";
 import { extractToolCalls } from "@/lib/run-recorder";
 
@@ -96,6 +96,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const limit = Math.min(parseInt(searchParams.get("limit") || "20"), 100);
         // Source filter: "production" (default, excludes simulations), "simulation", or "all"
         const source = searchParams.get("source") || "production";
+        const instanceId = searchParams.get("instanceId");
 
         // Find agent by slug or id
         const agent = await prisma.agent.findFirst({
@@ -165,6 +166,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             where.versionId = versionId;
         }
 
+        if (instanceId) {
+            where.instanceId = instanceId;
+        }
+
         // Query runs
         const runs = await prisma.agentRun.findMany({
             where,
@@ -188,6 +193,9 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 },
                 _count: {
                     select: { guardrailEvents: true, toolCalls: true }
+                },
+                instance: {
+                    select: { id: true, name: true, slug: true }
                 }
             }
         });
@@ -248,7 +256,10 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                     guardrailCount: run._count.guardrailEvents ?? 0,
                     versionId: run.versionId,
                     experimentGroup: run.experimentGroup,
-                    source: run.source
+                    source: run.source,
+                    instanceId: run.instanceId,
+                    instanceName: run.instance?.name ?? null,
+                    instanceSlug: run.instance?.slug ?? null
                 };
             }),
             total,
@@ -302,6 +313,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
+        // Guard: multi-instance agents require an instanceId
+        if (
+            (record as { deploymentMode?: string }).deploymentMode === "multi-instance" &&
+            !body.instanceId
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "This agent uses multi-instance deployment. Provide an instanceId to invoke it."
+                },
+                { status: 400 }
+            );
+        }
+
         // Check for active experiment and get routing decision
         const { experimentId, experimentGroup, candidateVersionId } = await getExperimentRouting(
             record.id
@@ -330,7 +355,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 experimentId,
                 experimentGroup,
                 startedAt: new Date(),
-                source: runSource
+                source: runSource,
+                instanceId: body.instanceId ?? undefined
             }
         });
 

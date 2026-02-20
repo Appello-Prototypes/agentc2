@@ -1,7 +1,7 @@
 import { NextRequest } from "next/server";
 import { Agent } from "@mastra/core/agent";
-import { agentResolver } from "@repo/mastra/agents";
-import { storage, memory as sharedMemory } from "@repo/mastra/core";
+import { agentResolver } from "@repo/agentc2/agents";
+import { storage, memory as sharedMemory } from "@repo/agentc2/core";
 import { resolveCredentialValue } from "@/lib/channel-credentials";
 
 /**

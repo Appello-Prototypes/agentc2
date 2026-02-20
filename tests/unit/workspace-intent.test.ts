@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recommendWorkspaceSystem } from "../../packages/mastra/src/workspace/intent";
+import { recommendWorkspaceSystem } from "../../packages/agentc2/src/workspace/intent";
 
 describe("workspace intent recommendation", () => {
     it("defaults to agent for a single outcome", () => {

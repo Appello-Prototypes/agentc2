@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { readFile } from "fs/promises";
 import path from "path";
-import { ifcAdapter } from "../../packages/mastra/src/bim/adapters/ifc-adapter";
-import { csvAdapter } from "../../packages/mastra/src/bim/adapters/csv-adapter";
-import { speckleAdapter } from "../../packages/mastra/src/bim/adapters/speckle-adapter";
+import { ifcAdapter } from "../../packages/agentc2/src/bim/adapters/ifc-adapter";
+import { csvAdapter } from "../../packages/agentc2/src/bim/adapters/csv-adapter";
+import { speckleAdapter } from "../../packages/agentc2/src/bim/adapters/speckle-adapter";
 
 describe("BIM adapters", () => {
     it("parses normalized IFC elements", async () => {

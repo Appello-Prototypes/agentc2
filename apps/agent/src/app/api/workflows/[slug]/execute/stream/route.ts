@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/mastra/workflows";
+import { executeWorkflowDefinition, type WorkflowDefinition } from "@repo/agentc2/workflows";
 import { refreshWorkflowMetrics } from "@/lib/metrics";
 import { resolveRunEnvironment, resolveRunTriggerType } from "@/lib/run-metadata";
 import { createTriggerEventRecord } from "@/lib/trigger-events";

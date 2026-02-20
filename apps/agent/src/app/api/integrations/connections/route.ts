@@ -4,10 +4,10 @@ import {
     getIntegrationProviders,
     invalidateMcpCacheForOrg,
     resetMcpClients
-} from "@repo/mastra/mcp";
-import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
-import { clearModelCache } from "@repo/mastra/agents/model-registry";
-import { provisionIntegration, hasBlueprint } from "@repo/mastra/integrations";
+} from "@repo/agentc2/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
+import { clearModelCache } from "@repo/agentc2/agents/model-registry";
+import { provisionIntegration, hasBlueprint } from "@repo/agentc2/integrations";
 import { auditLog } from "@/lib/audit-log";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";

@@ -1,14 +1,14 @@
 import { beforeAll, describe, it, expect, vi } from "vitest";
 
-vi.mock("../../packages/mastra/src/agents/resolver", () => ({
+vi.mock("../../packages/agentc2/src/agents/resolver", () => ({
     agentResolver: { resolve: vi.fn() }
 }));
 
-vi.mock("../../packages/mastra/src/mastra", () => ({
+vi.mock("../../packages/agentc2/src/mastra", () => ({
     mastra: { getWorkflow: vi.fn() }
 }));
 
-vi.mock("../../packages/mastra/src/tools/registry", () => ({
+vi.mock("../../packages/agentc2/src/tools/registry", () => ({
     getToolsByNamesAsync: vi.fn()
 }));
 
@@ -20,11 +20,11 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-let executeWorkflowDefinition: typeof import("../../packages/mastra/src/workflows/builder/runtime").executeWorkflowDefinition;
+let executeWorkflowDefinition: typeof import("../../packages/agentc2/src/workflows/builder/runtime").executeWorkflowDefinition;
 
 beforeAll(async () => {
     ({ executeWorkflowDefinition } =
-        await import("../../packages/mastra/src/workflows/builder/runtime"));
+        await import("../../packages/agentc2/src/workflows/builder/runtime"));
 });
 
 describe("Workflow Runtime", () => {

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { getDocumentRecord } from "@repo/mastra/documents";
-import { ragIndexExists } from "@repo/mastra/rag";
+import { getDocumentRecord } from "@repo/agentc2/documents";
+import { ragIndexExists } from "@repo/agentc2/rag";
 import { authenticateRequest } from "@/lib/api-auth";
 import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";
@@ -60,7 +60,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         });
 
         // Import vector store directly to query with filter
-        const { vector } = await import("@repo/mastra");
+        const { vector } = await import("@repo/agentc2");
 
         console.log(
             `[chunks] Querying vectors for document slug="${document.slug}", name="${document.name}"`

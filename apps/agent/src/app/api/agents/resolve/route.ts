@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver, type RequestContext } from "@repo/mastra/agents";
+import { agentResolver, type RequestContext } from "@repo/agentc2/agents";
 
 export async function POST(request: NextRequest) {
     try {

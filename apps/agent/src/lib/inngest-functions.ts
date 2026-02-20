@@ -1,6 +1,6 @@
 import { inngest } from "./inngest";
-import { goalStore, goalExecutor } from "@repo/mastra/orchestrator";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { goalStore, goalExecutor } from "@repo/agentc2/orchestrator";
+import { recordActivity } from "@repo/agentc2/activity/service";
 import {
     prisma,
     Prisma,
@@ -10,8 +10,8 @@ import {
     CampaignStatus
 } from "@repo/database";
 import { refreshNetworkMetrics, refreshWorkflowMetrics } from "./metrics";
-import { mastra } from "@repo/mastra/core";
-import { getBimObjectBuffer, ingestBimElementsForVersion, parseIfcBuffer } from "@repo/mastra/bim";
+import { mastra } from "@repo/agentc2/core";
+import { getBimObjectBuffer, ingestBimElementsForVersion, parseIfcBuffer } from "@repo/agentc2/bim";
 import crypto from "crypto";
 import {
     SIGNAL_THRESHOLDS,
@@ -777,7 +777,7 @@ export const evaluationCompletedFunction = inngest.createFunction(
             });
 
             try {
-                const { ingestDocument } = await import("@repo/mastra");
+                const { ingestDocument } = await import("@repo/agentc2");
 
                 await ingestDocument(run.outputText, {
                     type: "markdown",
@@ -1026,7 +1026,7 @@ export const feedbackReEvaluationFunction = inngest.createFunction(
                     scorecard: run.agent.scorecard
                         ? {
                               criteria: run.agent.scorecard
-                                  .criteria as unknown as import("@repo/mastra").ScorecardCriterion[],
+                                  .criteria as unknown as import("@repo/agentc2").ScorecardCriterion[],
                               version: run.agent.scorecard.version,
                               samplingRate: run.agent.scorecard.samplingRate,
                               auditorModel: run.agent.scorecard.auditorModel,
@@ -1082,7 +1082,7 @@ export const feedbackReEvaluationFunction = inngest.createFunction(
         // Step 3: Run Tier 2 AI Auditor (feedback is already in DB,
         // so buildAuditorPrompt() will include it automatically)
         const tier2Result = await step.run("run-tier2-auditor", async () => {
-            const { runTier2Auditor } = await import("@repo/mastra");
+            const { runTier2Auditor } = await import("@repo/agentc2");
             return runTier2Auditor(context);
         });
 
@@ -1400,7 +1400,7 @@ export const runEvaluationFunction = inngest.createFunction(
                     scorecard: run.agent.scorecard
                         ? {
                               criteria: run.agent.scorecard
-                                  .criteria as unknown as import("@repo/mastra").ScorecardCriterion[],
+                                  .criteria as unknown as import("@repo/agentc2").ScorecardCriterion[],
                               version: run.agent.scorecard.version,
                               samplingRate: run.agent.scorecard.samplingRate,
                               auditorModel: run.agent.scorecard.auditorModel,
@@ -1467,23 +1467,23 @@ export const runEvaluationFunction = inngest.createFunction(
 
         // Step 3: Run Tier 1 heuristic pre-screen
         const tier1Result = await step.run("tier1-prescreen", async () => {
-            const { runTier1Prescreen } = await import("@repo/mastra");
+            const { runTier1Prescreen } = await import("@repo/agentc2");
             return runTier1Prescreen(context);
         });
 
         // Step 4: Decide whether to run Tier 2
         const runTier2 = await step.run("tier2-decision", async () => {
-            const { shouldRunTier2 } = await import("@repo/mastra");
+            const { shouldRunTier2 } = await import("@repo/agentc2");
             const samplingRate = context.agent.scorecard?.samplingRate ?? 1.0;
             const hasGroundTruth = !!context.testRun?.testCase?.expectedOutput;
             return shouldRunTier2(tier1Result, samplingRate, hasGroundTruth);
         });
 
         // Step 5: Run Tier 2 AI Auditor (if selected)
-        let tier2Result: import("@repo/mastra").Tier2Result | null = null;
+        let tier2Result: import("@repo/agentc2").Tier2Result | null = null;
         if (runTier2) {
             tier2Result = await step.run("tier2-auditor", async () => {
-                const { runTier2Auditor } = await import("@repo/mastra");
+                const { runTier2Auditor } = await import("@repo/agentc2");
                 return runTier2Auditor(context);
             });
         }
@@ -1494,7 +1494,7 @@ export const runEvaluationFunction = inngest.createFunction(
             // contribute to the same trend lines as Tier 2 auditor scores
             let normalizedTier1Scores = tier1Result.scores;
             if (!tier2Result && context.agent.scorecard) {
-                const { normalizeTier1ToScorecard } = await import("@repo/mastra");
+                const { normalizeTier1ToScorecard } = await import("@repo/agentc2");
                 normalizedTier1Scores = normalizeTier1ToScorecard(
                     tier1Result.scores,
                     context.agent.scorecard.criteria
@@ -4611,7 +4611,7 @@ export const simulationBatchRunFunction = inngest.createFunction(
 
         // Step 1: Resolve agents (validate they exist before starting batch)
         await step.run("resolve-agents", async () => {
-            const { agentResolver } = await import("@repo/mastra");
+            const { agentResolver } = await import("@repo/agentc2");
 
             const [simulatorResult, targetResult] = await Promise.all([
                 agentResolver.resolve({ slug: "simulator" }),
@@ -4637,7 +4637,7 @@ export const simulationBatchRunFunction = inngest.createFunction(
             const conversationIndex = batchIndex * 10 + i + 1;
 
             const result = await step.run(`conversation-${i}`, async () => {
-                const { agentResolver } = await import("@repo/mastra");
+                const { agentResolver } = await import("@repo/agentc2");
                 const { startRun } = await import("./run-recorder");
 
                 // Re-resolve agents in each step (Inngest steps are isolated)
@@ -5361,7 +5361,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                     timestamp: string;
                 }>;
             }> => {
-                const { agentResolver, BudgetExceededError } = await import("@repo/mastra");
+                const { agentResolver, BudgetExceededError } = await import("@repo/agentc2");
                 const { calculateCost } = await import("./cost-calculator");
                 const { extractToolCalls } = await import("./run-recorder");
 
@@ -5403,7 +5403,7 @@ export const asyncInvokeFunction = inngest.createFunction(
 
                 // Enforce input guardrails
                 try {
-                    const { enforceInputGuardrails } = await import("@repo/mastra/guardrails");
+                    const { enforceInputGuardrails } = await import("@repo/agentc2/guardrails");
                     const inputCheck = await enforceInputGuardrails(record.id, input, {
                         runId,
                         tenantId: record.tenantId || undefined
@@ -5429,7 +5429,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                 }
 
                 try {
-                    const { enforceOutputGuardrails } = await import("@repo/mastra/guardrails");
+                    const { enforceOutputGuardrails } = await import("@repo/agentc2/guardrails");
 
                     const response = await agent.generate(input, {
                         maxSteps: maxSteps ?? record.maxSteps ?? 5
@@ -5513,8 +5513,8 @@ export const asyncInvokeFunction = inngest.createFunction(
                             timestamp: new Date().toISOString()
                         });
 
+                        stepCounter++;
                         if (tc.output !== undefined || tc.error) {
-                            stepCounter++;
                             const preview =
                                 typeof tc.output === "string"
                                     ? tc.output.slice(0, 500)
@@ -5525,6 +5525,13 @@ export const asyncInvokeFunction = inngest.createFunction(
                                 content: tc.error
                                     ? `Tool ${tc.toolKey} failed: ${tc.error}`
                                     : `Tool ${tc.toolKey} result:\n${preview}`,
+                                timestamp: new Date().toISOString()
+                            });
+                        } else {
+                            executionSteps.push({
+                                step: stepCounter,
+                                type: "tool_result",
+                                content: `Tool ${tc.toolKey} completed with no output captured`,
                                 timestamp: new Date().toISOString()
                             });
                         }
@@ -7554,7 +7561,7 @@ const integrationHealthCheckFunction = inngest.createFunction(
         for (const [orgId, orgConnections] of byOrg) {
             await step.run(`health-check-org-${orgId.slice(0, 8)}`, async () => {
                 // Import dynamically to avoid circular deps
-                const { listMcpToolDefinitions } = await import("@repo/mastra");
+                const { listMcpToolDefinitions } = await import("@repo/agentc2");
 
                 try {
                     const { definitions, serverErrors } = await listMcpToolDefinitions(orgId);
@@ -7645,7 +7652,7 @@ const integrationToolRediscoveryFunction = inngest.createFunction(
 
         if (connections.length === 0) return { checked: 0, updated: 0 };
 
-        const { rediscoverToolsForConnection } = await import("@repo/mastra");
+        const { rediscoverToolsForConnection } = await import("@repo/agentc2");
 
         let updated = 0;
 
@@ -7697,7 +7704,7 @@ const integrationTokenRefreshFunction = inngest.createFunction(
 
         if (connections.length === 0) return { checked: 0, refreshed: 0, errors: 0 };
 
-        const { tokenNeedsRefresh, refreshMcpAccessToken } = await import("@repo/mastra");
+        const { tokenNeedsRefresh, refreshMcpAccessToken } = await import("@repo/agentc2");
         const { decryptCredentials, encryptCredentials } = await import("@/lib/credential-crypto");
 
         let refreshed = 0;
@@ -7729,7 +7736,7 @@ const integrationTokenRefreshFunction = inngest.createFunction(
                     if (!hostedMcpUrl) return; // Not a remote MCP OAuth connection
 
                     // Discover the auth server to get the token endpoint
-                    const { discoverAuthServer } = await import("@repo/mastra");
+                    const { discoverAuthServer } = await import("@repo/agentc2");
                     const authMeta = await discoverAuthServer(hostedMcpUrl);
                     if (!authMeta) return; // Can't discover auth server
                     const clientId = (creds.clientId || creds.client_id) as string | undefined;
@@ -7827,7 +7834,7 @@ export const asyncWorkflowExecuteFunction = inngest.createFunction(
                 throw new Error(`Workflow not found: ${workflowId}`);
             }
 
-            const { executeWorkflowDefinition } = await import("@repo/mastra/workflows");
+            const { executeWorkflowDefinition } = await import("@repo/agentc2/workflows");
             type WorkflowDefinition = Parameters<typeof executeWorkflowDefinition>[0]["definition"];
 
             return await executeWorkflowDefinition({
@@ -7990,7 +7997,7 @@ export const remoteComputeCleanupFunction = inngest.createFunction(
             await step.run(`cleanup-${resource.id}`, async () => {
                 try {
                     const { resolveDoToken, doFetch } =
-                        await import("@repo/mastra/tools/remote-compute-helpers");
+                        await import("@repo/agentc2/tools/remote-compute-helpers");
 
                     const token = await resolveDoToken(resource.organizationId);
                     const metadata = resource.metadata as Record<string, unknown>;

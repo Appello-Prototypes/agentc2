@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/api-auth";
-import { queryAuditLogs } from "@repo/mastra/audit";
+import { queryAuditLogs } from "@repo/agentc2/audit";
 
 /**
  * GET /api/federation/audit

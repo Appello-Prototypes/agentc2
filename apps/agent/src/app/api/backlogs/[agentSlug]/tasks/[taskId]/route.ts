@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { recordActivity } from "@repo/agentc2/activity/service";
 
 export async function PATCH(
     request: NextRequest,

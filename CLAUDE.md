@@ -23,7 +23,7 @@ This is a production-grade AI agent framework. Every change you make affects rea
 
 ## System Overview
 
-This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorepo for building, deploying, and orchestrating AI agents. The system integrates multiple AI providers, voice capabilities, MCP (Model Context Protocol) servers, RAG (Retrieval Augmented Generation), background job processing, and a comprehensive UI for agent management.
+This is the **AgentC2 AI Agent Framework** - a production-grade Turborepo monorepo for building, deploying, and orchestrating AI agents. Built on the open-source Mastra framework. The system integrates multiple AI providers, voice capabilities, MCP (Model Context Protocol) servers, RAG (Retrieval Augmented Generation), background job processing, and a comprehensive UI for agent management.
 
 ### Primary Purpose
 
@@ -123,7 +123,7 @@ This is the **Mastra AI Agent Framework** - a production-grade Turborepo monorep
 ├── packages/
 │   ├── auth/           # Better Auth configuration (@repo/auth)
 │   ├── database/       # Prisma schema and client (@repo/database)
-│   ├── mastra/         # Mastra agents, tools, workflows (@repo/mastra)
+│   ├── agentc2/        # Core agents, tools, workflows (@repo/agentc2)
 │   ├── ui/             # Shared UI components (@repo/ui)
 │   ├── next-config/    # Shared Next.js configuration
 │   └── typescript-config/  # Shared TypeScript configs
@@ -261,7 +261,7 @@ FEATURE_DB_AGENTS="true"      # Enable database-driven agents
 
 ## Package-Specific Dependencies
 
-### @repo/mastra (packages/mastra)
+### @repo/agentc2 (packages/agentc2)
 
 This is the core AI package. Key dependencies:
 
@@ -290,7 +290,7 @@ This is the core AI package. Key dependencies:
     "@mastra/voice-openai": "^0.12.0",
     "@repo/auth": "workspace:*",
     "@repo/database": "workspace:*",
-    "@repo/mastra": "workspace:*",
+    "@repo/agentc2": "workspace:*",
     "@repo/ui": "workspace:*",
     "inngest": "^3.50.0",
     "next": "16.1.0",
@@ -416,7 +416,7 @@ Deployments are automatic via GitHub Actions on push to `main`. For manual deplo
 
 ```bash
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
-cd /var/www/mastra
+cd /var/www/agentc2
 git pull origin main
 bun install
 bun run db:generate
@@ -484,7 +484,7 @@ OAuth integrations use standalone OAuth2 flows with PKCE, encrypted token storag
 ### MCP Tool Execution
 
 ```typescript
-import { executeMcpTool, listMcpToolDefinitions } from "@repo/mastra";
+import { executeMcpTool, listMcpToolDefinitions } from "@repo/agentc2";
 
 // List available tools
 const tools = await listMcpToolDefinitions();
@@ -504,7 +504,7 @@ const result = await executeMcpTool("hubspot.hubspot-get-user-details", {
 Agents are stored in PostgreSQL and resolved at runtime:
 
 ```typescript
-import { agentResolver, AgentResolver } from "@repo/mastra";
+import { agentResolver, AgentResolver } from "@repo/agentc2";
 
 // Resolve agent from database
 const agent = await agentResolver.resolve("trip-planner", {
@@ -537,7 +537,7 @@ model Agent {
 Tools are registered in the tool registry and resolved by name:
 
 ```typescript
-import { toolRegistry, getToolsByNames } from "@repo/mastra";
+import { toolRegistry, getToolsByNames } from "@repo/agentc2";
 
 // Get tools by name
 const tools = await getToolsByNames(["calculator", "web-fetch", "memory-recall"]);
@@ -550,7 +550,7 @@ const tools = await getToolsByNames(["calculator", "web-fetch", "memory-recall"]
 Mastra workflows enable multi-step agent orchestration:
 
 ```typescript
-import { humanApprovalWorkflow, parallelWorkflow } from "@repo/mastra";
+import { humanApprovalWorkflow, parallelWorkflow } from "@repo/agentc2";
 
 // Execute workflow
 const result = await humanApprovalWorkflow.execute({
@@ -568,7 +568,7 @@ await humanApprovalWorkflow.resume(runId, { approved: true });
 Document ingestion and semantic search:
 
 ```typescript
-import { ingestDocument, queryRag, ragGenerate } from "@repo/mastra";
+import { ingestDocument, queryRag, ragGenerate } from "@repo/agentc2";
 
 // Ingest document
 await ingestDocument({
@@ -745,10 +745,10 @@ Functions are registered in `apps/agent/src/lib/inngest-functions.ts` and served
 
 | File                                     | Purpose                            |
 | ---------------------------------------- | ---------------------------------- |
-| `packages/mastra/src/mastra.ts`          | Main Mastra instance configuration |
-| `packages/mastra/src/agents/index.ts`    | Agent exports and factory          |
-| `packages/mastra/src/mcp/client.ts`      | MCP server configuration           |
-| `packages/mastra/src/tools/registry.ts`  | Tool registry                      |
+| `packages/agentc2/src/mastra.ts`          | Main Mastra framework instance     |
+| `packages/agentc2/src/agents/index.ts`    | Agent exports and factory          |
+| `packages/agentc2/src/mcp/client.ts`      | MCP server configuration           |
+| `packages/agentc2/src/tools/registry.ts`  | Tool registry                      |
 | `packages/database/prisma/schema.prisma` | Database schema                    |
 | `apps/agent/src/app/api/`                | API routes                         |
 | `.env`                                   | Environment configuration          |

@@ -6,7 +6,7 @@ todos:
       content: "Phase 1A: Add Document + DocumentVersion models to Prisma schema, add Workspace relation, run db:generate"
       status: pending
     - id: phase1-service
-      content: "Phase 1B: Create document service (packages/mastra/src/documents/) with CRUD + automatic RAG embedding/re-embedding"
+      content: "Phase 1B: Create document service (packages/agentc2/src/documents/) with CRUD + automatic RAG embedding/re-embedding"
       status: pending
     - id: phase1-rag
       content: "Phase 1B: Enhance RAG pipeline to support document-scoped queries (filter by documentId in queryRag)"
@@ -24,7 +24,7 @@ todos:
       content: "Phase 2A: Add Skill, SkillVersion, SkillDocument, SkillTool, AgentSkill models to Prisma schema"
       status: pending
     - id: phase2-service
-      content: "Phase 2B: Create skill service (packages/mastra/src/skills/) with CRUD + composition"
+      content: "Phase 2B: Create skill service (packages/agentc2/src/skills/) with CRUD + composition"
       status: pending
     - id: phase2-resolver
       content: "Phase 2B: Modify agent resolver hydrate() to loadSkills(), inject skill instructions, merge skill tools"
@@ -46,9 +46,9 @@ The platform has 5 primitives today: **Agents**, **Workflows**, **Networks**, **
 
 - Workspace ownership via nullable `workspaceId` (SetNull on delete)
 - Versioning via companion `*Version` models
-- MCP exposure via definitions in `packages/mastra/src/tools/mcp-schemas/`
-- Tool implementations in `packages/mastra/src/tools/*-tools.ts`
-- Registry in `packages/mastra/src/tools/registry.ts`
+- MCP exposure via definitions in `packages/agentc2/src/tools/mcp-schemas/`
+- Tool implementations in `packages/agentc2/src/tools/*-tools.ts`
+- Registry in `packages/agentc2/src/tools/registry.ts`
 
 The gap: Tools provide capability (WHAT an agent can do), but nothing provides competence (HOW/WHEN/WHY). Knowledge exists in `docs/*.md` files but is disconnected from agents and RAG.
 
@@ -148,7 +148,7 @@ Also add `documents Document[]` relation to the `Workspace` model.
 
 ### 1B. Document Service
 
-Create `packages/mastra/src/documents/service.ts` -- handles CRUD with automatic RAG embedding:
+Create `packages/agentc2/src/documents/service.ts` -- handles CRUD with automatic RAG embedding:
 
 - `createDocument()` -- insert DB row, chunk content, embed into vector DB, store vectorIds back
 - `updateDocument()` -- create version, delete old vectors, re-chunk, re-embed
@@ -157,7 +157,7 @@ Create `packages/mastra/src/documents/service.ts` -- handles CRUD with automatic
 - `searchDocuments()` -- semantic search via existing `queryRag()` with `documentId` filter
 - `reembedDocument()` -- force re-chunk and re-embed (useful after RAG config changes)
 
-Key: The existing [packages/mastra/src/rag/pipeline.ts](packages/mastra/src/rag/pipeline.ts) already has `ingestDocument()`, `queryRag()`, and `deleteDocument()`. The service wraps these with the Prisma model layer.
+Key: The existing [packages/agentc2/src/rag/pipeline.ts](packages/agentc2/src/rag/pipeline.ts) already has `ingestDocument()`, `queryRag()`, and `deleteDocument()`. The service wraps these with the Prisma model layer.
 
 ### 1C. API Routes
 
@@ -173,11 +173,11 @@ Create under `apps/agent/src/app/api/documents/`:
 
 ### 1D. MCP Tool Exposure
 
-Create `packages/mastra/src/tools/document-tools.ts` with tool implementations, then expose via:
+Create `packages/agentc2/src/tools/document-tools.ts` with tool implementations, then expose via:
 
-- Create `packages/mastra/src/tools/mcp-schemas/documents.ts` with definitions + routes
-- Update [packages/mastra/src/tools/mcp-schemas/index.ts](packages/mastra/src/tools/mcp-schemas/index.ts) to aggregate
-- Update [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts) to register
+- Create `packages/agentc2/src/tools/mcp-schemas/documents.ts` with definitions + routes
+- Update [packages/agentc2/src/tools/mcp-schemas/index.ts](packages/agentc2/src/tools/mcp-schemas/index.ts) to aggregate
+- Update [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts) to register
 
 MCP tools to expose:
 
@@ -291,7 +291,7 @@ Also add `skills AgentSkill[]` to the `Agent` model and `skills Skill[]` to `Wor
 
 ### 2B. Agent Resolver Integration (Critical Change)
 
-Modify [packages/mastra/src/agents/resolver.ts](packages/mastra/src/agents/resolver.ts) `hydrate()` method:
+Modify [packages/agentc2/src/agents/resolver.ts](packages/agentc2/src/agents/resolver.ts) `hydrate()` method:
 
 **Current flow:**
 
@@ -422,13 +422,13 @@ MCP tools:
 ### Phase 1 (Documents)
 
 - **Modified:** [packages/database/prisma/schema.prisma](packages/database/prisma/schema.prisma) -- Document + DocumentVersion models
-- **New:** `packages/mastra/src/documents/service.ts` -- Document service with RAG integration
-- **New:** `packages/mastra/src/documents/index.ts` -- Exports
-- **Modified:** [packages/mastra/src/rag/pipeline.ts](packages/mastra/src/rag/pipeline.ts) -- Add document-scoped query support
-- **New:** `packages/mastra/src/tools/document-tools.ts` -- Document tool implementations
-- **New:** `packages/mastra/src/tools/mcp-schemas/documents.ts` -- MCP definitions + routes
-- **Modified:** [packages/mastra/src/tools/mcp-schemas/index.ts](packages/mastra/src/tools/mcp-schemas/index.ts) -- Aggregate document tools
-- **Modified:** [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts) -- Register document tools
+- **New:** `packages/agentc2/src/documents/service.ts` -- Document service with RAG integration
+- **New:** `packages/agentc2/src/documents/index.ts` -- Exports
+- **Modified:** [packages/agentc2/src/rag/pipeline.ts](packages/agentc2/src/rag/pipeline.ts) -- Add document-scoped query support
+- **New:** `packages/agentc2/src/tools/document-tools.ts` -- Document tool implementations
+- **New:** `packages/agentc2/src/tools/mcp-schemas/documents.ts` -- MCP definitions + routes
+- **Modified:** [packages/agentc2/src/tools/mcp-schemas/index.ts](packages/agentc2/src/tools/mcp-schemas/index.ts) -- Aggregate document tools
+- **Modified:** [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts) -- Register document tools
 - **New:** `apps/agent/src/app/api/documents/route.ts` -- Document list + create
 - **New:** `apps/agent/src/app/api/documents/[documentId]/route.ts` -- Document read + update + delete
 - **New:** `scripts/seed-documents.ts` -- Seed existing docs/.md files
@@ -436,13 +436,13 @@ MCP tools:
 ### Phase 2 (Skills)
 
 - **Modified:** [packages/database/prisma/schema.prisma](packages/database/prisma/schema.prisma) -- Skill + SkillVersion + junction tables + Agent.skills relation
-- **New:** `packages/mastra/src/skills/service.ts` -- Skill service
-- **New:** `packages/mastra/src/skills/index.ts` -- Exports
-- **Modified:** [packages/mastra/src/agents/resolver.ts](packages/mastra/src/agents/resolver.ts) -- `loadSkills()` method, instruction injection, tool merging
-- **New:** `packages/mastra/src/tools/skill-tools.ts` -- Skill tool implementations
-- **New:** `packages/mastra/src/tools/mcp-schemas/skills.ts` -- MCP definitions + routes
-- **Modified:** [packages/mastra/src/tools/mcp-schemas/index.ts](packages/mastra/src/tools/mcp-schemas/index.ts) -- Aggregate skill tools
-- **Modified:** [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts) -- Register skill tools
+- **New:** `packages/agentc2/src/skills/service.ts` -- Skill service
+- **New:** `packages/agentc2/src/skills/index.ts` -- Exports
+- **Modified:** [packages/agentc2/src/agents/resolver.ts](packages/agentc2/src/agents/resolver.ts) -- `loadSkills()` method, instruction injection, tool merging
+- **New:** `packages/agentc2/src/tools/skill-tools.ts` -- Skill tool implementations
+- **New:** `packages/agentc2/src/tools/mcp-schemas/skills.ts` -- MCP definitions + routes
+- **Modified:** [packages/agentc2/src/tools/mcp-schemas/index.ts](packages/agentc2/src/tools/mcp-schemas/index.ts) -- Aggregate skill tools
+- **Modified:** [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts) -- Register skill tools
 - **New:** `apps/agent/src/app/api/skills/route.ts` -- Skill list + create
 - **New:** `apps/agent/src/app/api/skills/[skillId]/route.ts` -- Skill CRUD
 - **New:** `apps/agent/src/app/api/skills/[skillId]/documents/route.ts` -- Attach/detach documents

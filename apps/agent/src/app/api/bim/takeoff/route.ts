@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { computeTakeoff } from "@repo/mastra/bim";
+import { computeTakeoff } from "@repo/agentc2/bim";
 import { getDemoSession } from "@/lib/standalone-auth";
 
 export async function POST(request: NextRequest) {

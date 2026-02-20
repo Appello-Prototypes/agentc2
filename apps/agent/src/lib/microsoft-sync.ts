@@ -229,7 +229,7 @@ async function triggerProvisioning(
     organizationId: string
 ): Promise<void> {
     try {
-        const { provisionIntegration, hasBlueprint } = await import("@repo/mastra");
+        const { provisionIntegration, hasBlueprint } = await import("@repo/agentc2");
         if (hasBlueprint(providerKey)) {
             const workspace = await prisma.workspace.findFirst({
                 where: { organizationId, isDefault: true },

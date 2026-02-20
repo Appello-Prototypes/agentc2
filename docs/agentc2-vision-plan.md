@@ -454,7 +454,7 @@ enum MessageStatus {
 When Agent B receives a message from Agent A:
 
 ```typescript
-// packages/mastra/src/agents/message-processor.ts
+// packages/agentc2/src/agents/message-processor.ts
 
 export async function processAgentMessage(message: AgentMessage) {
     const handshake = await prisma.agentHandshake.findUnique({

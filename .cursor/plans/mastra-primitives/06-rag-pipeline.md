@@ -20,13 +20,13 @@ Implement a complete RAG (Retrieval-Augmented Generation) pipeline with document
 ### Step 1: Install RAG Package
 
 ```bash
-cd packages/mastra
+cd packages/agentc2
 bun add @mastra/rag
 ```
 
 ### Step 2: Create RAG Pipeline Module
 
-Create `packages/mastra/src/rag/pipeline.ts`:
+Create `packages/agentc2/src/rag/pipeline.ts`:
 
 ```typescript
 import { MDocument } from "@mastra/rag";
@@ -284,7 +284,7 @@ export async function listDocuments(): Promise<
 
 ### Step 3: Create RAG Exports
 
-Create `packages/mastra/src/rag/index.ts`:
+Create `packages/agentc2/src/rag/index.ts`:
 
 ```typescript
 export {
@@ -303,7 +303,7 @@ export {
 
 ### Step 4: Update Main Exports
 
-Update `packages/mastra/src/index.ts`:
+Update `packages/agentc2/src/index.ts`:
 
 ```typescript
 // RAG
@@ -327,7 +327,7 @@ Create `apps/agent/src/app/api/rag/ingest/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { ingestDocument } from "@repo/mastra";
+import { ingestDocument } from "@repo/agentc2";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -365,7 +365,7 @@ Create `apps/agent/src/app/api/rag/query/route.ts`:
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { queryRag, ragGenerate, mastra } from "@repo/mastra";
+import { queryRag, ragGenerate, mastra } from "@repo/agentc2";
 import { auth } from "@repo/auth";
 import { headers } from "next/headers";
 
@@ -525,9 +525,9 @@ It supports agents, tools, workflows, and memory management.
 
 | File                                         | Action          |
 | -------------------------------------------- | --------------- |
-| `packages/mastra/package.json`               | Add @mastra/rag |
-| `packages/mastra/src/rag/pipeline.ts`        | Create          |
-| `packages/mastra/src/rag/index.ts`           | Create          |
-| `packages/mastra/src/index.ts`               | Update          |
+| `packages/agentc2/package.json`               | Add @mastra/rag |
+| `packages/agentc2/src/rag/pipeline.ts`        | Create          |
+| `packages/agentc2/src/rag/index.ts`           | Create          |
+| `packages/agentc2/src/index.ts`               | Update          |
 | `apps/agent/src/app/api/rag/ingest/route.ts` | Create          |
 | `apps/agent/src/app/api/rag/query/route.ts`  | Create          |

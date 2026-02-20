@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
-import { writeAuditLog } from "@repo/mastra/audit";
+import { writeAuditLog } from "@repo/agentc2/audit";
 
 /**
  * PUT /api/federation/exposures

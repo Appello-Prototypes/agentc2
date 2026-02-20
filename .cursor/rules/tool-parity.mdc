@@ -1,18 +1,18 @@
 ---
 description: Enforce tool parity between Registry, MCP Schema, and Workspace Concierge
 globs:
-    - packages/mastra/src/tools/**
-    - packages/mastra/src/tools/mcp-schemas/**
+    - packages/agentc2/src/tools/**
+    - packages/agentc2/src/tools/mcp-schemas/**
 ---
 
 # Tool Parity Rule
 
-When adding, removing, or renaming tools in the Mastra tool system, keep all three sources of truth in sync:
+When adding, removing, or renaming tools in the AgentC2 tool system, keep all three sources of truth in sync:
 
-1. **Tool Registry** (`packages/mastra/src/tools/registry.ts`)
+1. **Tool Registry** (`packages/agentc2/src/tools/registry.ts`)
     - Add the tool to `toolRegistry` and `toolCategoryMap`.
 
-2. **MCP Schema** (`packages/mastra/src/tools/mcp-schemas/`)
+2. **MCP Schema** (`packages/agentc2/src/tools/mcp-schemas/`)
     - If the tool should be accessible via Cursor IDE / external MCP clients, add a definition to the appropriate schema file and re-export from `index.ts`.
 
 3. **Workspace Concierge Agent**
@@ -20,7 +20,7 @@ When adding, removing, or renaming tools in the Mastra tool system, keep all thr
 
 ## Quick Checklist
 
-- [ ] New tool function created in `packages/mastra/src/tools/`
+- [ ] New tool function created in `packages/agentc2/src/tools/`
 - [ ] Imported and added to `toolRegistry` in `registry.ts`
 - [ ] Added to `toolCategoryMap` in `registry.ts`
 - [ ] (If MCP-exposed) Added to the appropriate `mcp-schemas/*.ts` file

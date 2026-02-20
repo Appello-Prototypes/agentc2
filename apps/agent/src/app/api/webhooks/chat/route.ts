@@ -5,7 +5,7 @@ import {
     type UIMessageStreamWriter
 } from "ai";
 import { headers } from "next/headers";
-import { agentResolver } from "@repo/mastra/agents";
+import { agentResolver } from "@repo/agentc2/agents";
 import { auth } from "@repo/auth";
 import { NextRequest, NextResponse } from "next/server";
 import {

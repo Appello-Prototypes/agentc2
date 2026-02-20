@@ -5,8 +5,8 @@ export default defineConfig({
     resolve: {
         alias: [
             {
-                find: /^@repo\/mastra\/(.+)$/,
-                replacement: path.resolve(__dirname, "packages/mastra/src/$1")
+                find: /^@repo\/agentc2\/(.+)$/,
+                replacement: path.resolve(__dirname, "packages/agentc2/src/$1")
             },
             {
                 find: /^@repo\/auth\/(.+)$/,
@@ -21,8 +21,8 @@ export default defineConfig({
                 replacement: path.resolve(__dirname, "packages/auth/src/index.ts")
             },
             {
-                find: "@repo/mastra",
-                replacement: path.resolve(__dirname, "packages/mastra/src/index.ts")
+                find: "@repo/agentc2",
+                replacement: path.resolve(__dirname, "packages/agentc2/src/index.ts")
             },
             {
                 find: "@",
@@ -52,7 +52,7 @@ export default defineConfig({
             include: [
                 "apps/agent/src/app/api/**/*.ts",
                 "apps/agent/src/lib/inngest-functions.ts",
-                "packages/mastra/src/agents/resolver.ts"
+                "packages/agentc2/src/agents/resolver.ts"
             ]
         },
         setupFiles: ["./tests/setup.ts"],

@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import { getDemoSession } from "@/lib/standalone-auth";
-import { goalStore } from "@repo/mastra/orchestrator";
+import { goalStore } from "@repo/agentc2/orchestrator";
 
 /**
  * GET /api/goals/stream

@@ -12,9 +12,9 @@ import {
     resolveRoutingDecision,
     type RoutingConfig,
     type RoutingDecision
-} from "@repo/mastra/agents";
-import { budgetEnforcement } from "@repo/mastra";
-import { getScorersByNames } from "@repo/mastra/scorers/registry";
+} from "@repo/agentc2/agents";
+import { budgetEnforcement } from "@repo/agentc2";
+import { getScorersByNames } from "@repo/agentc2/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
 import {
@@ -120,11 +120,29 @@ async function runEvaluationsAsync(
         const scorers = getScorersByNames(scorerNames);
         const scores: Record<string, number> = {};
 
-        // Format input/output as Mastra expects (message arrays)
+        // Format input/output for Mastra's getTextContentFromMastraDBMessage()
+        // which reads message.content.content or message.content.parts[].text.
+        // The TS types say content: string, but the runtime expects the nested form.
         const input = {
-            inputMessages: [{ role: "user", content: inputText }]
-        };
-        const output = [{ role: "assistant", content: outputText }];
+            inputMessages: [
+                {
+                    role: "user" as const,
+                    content: {
+                        content: inputText,
+                        parts: [{ type: "text" as const, text: inputText }]
+                    }
+                }
+            ]
+        } as unknown as { inputMessages: { role: string; content: string }[] };
+        const output = [
+            {
+                role: "assistant" as const,
+                content: {
+                    content: outputText,
+                    parts: [{ type: "text" as const, text: outputText }]
+                }
+            }
+        ] as unknown as { role: string; content: string }[];
 
         // Run each scorer - Mastra scorers use .run() method
         for (const [name, config] of Object.entries(scorers)) {
@@ -533,7 +551,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         // Enforce input guardrails before starting the stream
         const tGuardrails = performance.now();
         if (agentId && lastUserMessage) {
-            const { enforceInputGuardrails } = await import("@repo/mastra/guardrails");
+            const { enforceInputGuardrails } = await import("@repo/agentc2/guardrails");
             const inputCheck = await enforceInputGuardrails(agentId, lastUserMessage, {
                 tenantId: record?.tenantId || undefined
             });
@@ -875,7 +893,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                             : null;
                                 }
                             } catch (e) {
-                                console.log(`[Agent Chat] Could not get usage data: ${e}`);
+                                console.warn(
+                                    `[Agent Chat] Usage data extraction failed for run ${capturedRun?.runId}:`,
+                                    e
+                                );
                             }
 
                             if (capturedToolCalls.length > 0) {
@@ -892,11 +913,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 }
                             }
 
-                            // Extract token counts
-                            let promptTokens = usage?.promptTokens || usage?.inputTokens || 0;
+                            // Extract token counts (use ?? to preserve valid 0 values)
+                            let promptTokens = usage?.promptTokens ?? usage?.inputTokens ?? 0;
                             let completionTokens =
-                                usage?.completionTokens || usage?.outputTokens || 0;
-                            const totalTokens = usage?.totalTokens || 0;
+                                usage?.completionTokens ?? usage?.outputTokens ?? 0;
+                            const totalTokens = usage?.totalTokens ?? 0;
 
                             if (totalTokens > 0 && promptTokens === 0 && completionTokens === 0) {
                                 promptTokens = Math.round(totalTokens * 0.7);
@@ -914,7 +935,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             if (agentId && capturedFullOutput) {
                                 try {
                                     const { enforceOutputGuardrails } =
-                                        await import("@repo/mastra/guardrails");
+                                        await import("@repo/agentc2/guardrails");
                                     await enforceOutputGuardrails(agentId, capturedFullOutput, {
                                         runId: capturedRun?.runId,
                                         tenantId: record?.tenantId || undefined

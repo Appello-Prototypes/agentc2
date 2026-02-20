@@ -13,7 +13,7 @@
 | **OS**              | Ubuntu 24.04 LTS                          |
 | **User**            | root                                      |
 | **SSH Key**         | `~/.ssh/appello_digitalocean`             |
-| **App Directory**   | `/var/www/mastra`                         |
+| **App Directory**   | `/var/www/agentc2`                         |
 | **Domain**          | https://agentc2.ai                        |
 | **Process Manager** | PM2                                       |
 | **Reverse Proxy**   | Caddy                                     |
@@ -81,7 +81,7 @@ concurrency:
     cancel-in-progress: true
 
 env:
-    DEPLOY_PATH: /var/www/mastra
+    DEPLOY_PATH: /var/www/agentc2
     NODE_OPTIONS: "--max-old-space-size=6144"
 ```
 
@@ -199,14 +199,14 @@ sudo apt install -y git
 ### 4. Clone Repository
 
 ```bash
-sudo mkdir -p /var/www/mastra
-sudo chown deploy:deploy /var/www/mastra
+sudo mkdir -p /var/www/agentc2
+sudo chown deploy:deploy /var/www/agentc2
 
-cd /var/www/mastra
-git clone https://github.com/YOUR_ORG/mastra-experiment.git .
+cd /var/www/agentc2
+git clone https://github.com/YOUR_ORG/agentc2.git .
 
 # Or if using SSH
-git clone git@github.com:YOUR_ORG/mastra-experiment.git .
+git clone git@github.com:YOUR_ORG/agentc2.git .
 ```
 
 ### 5. Configure Environment
@@ -214,7 +214,7 @@ git clone git@github.com:YOUR_ORG/mastra-experiment.git .
 Create the production `.env` file:
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 cp .env.example .env
 nano .env
 ```
@@ -222,7 +222,7 @@ nano .env
 Or copy from local machine:
 
 ```bash
-scp -i ~/.ssh/appello_digitalocean .env root@138.197.150.253:/var/www/mastra/.env
+scp -i ~/.ssh/appello_digitalocean .env root@138.197.150.253:/var/www/agentc2/.env
 ```
 
 #### Required Environment Variables
@@ -265,7 +265,7 @@ BEHIND_PROXY=true
 ### 6. Initial Build
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 
 bun install
 bun run db:generate
@@ -566,8 +566,8 @@ module.exports = {
             user: "deploy",
             host: "your-droplet-ip",
             ref: "origin/main",
-            repo: "git@github.com:your-org/mastra-experiment.git",
-            path: "/var/www/mastra",
+            repo: "git@github.com:your-org/agentc2.git",
+            path: "/var/www/agentc2",
             "pre-deploy-local": "",
             "post-deploy":
                 "bun install && bun run db:generate && bun run build && pm2 reload ecosystem.config.js --env production",
@@ -612,7 +612,7 @@ Push to `main` — GitHub Actions handles everything:
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
 
 export PATH="$HOME/.bun/bin:$PATH"
-cd /var/www/mastra
+cd /var/www/agentc2
 git pull origin main
 bun install
 bun run db:generate
@@ -649,7 +649,7 @@ If a deploy breaks production and the rollback trap didn't fire:
 
 ```bash
 ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
-cd /var/www/mastra
+cd /var/www/agentc2
 
 # Restore previous build
 [ -d apps/agent/.next.bak ] && rm -rf apps/agent/.next && mv apps/agent/.next.bak apps/agent/.next
@@ -663,7 +663,7 @@ pm2 status
 ### Git-Based Rollback
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 git log --oneline -5  # Find the good commit
 git reset --hard <good-commit-sha>
 bun install
@@ -748,7 +748,7 @@ sudo systemctl reload caddy
 ### Database Connection Issues
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 bun run db:studio  # Opens Prisma Studio if connection works
 ```
 
@@ -805,13 +805,13 @@ NODE_OPTIONS="--max-old-space-size=28672" bunx turbo build
 # Application code is in Git — no backup needed
 
 # Environment file backup (store securely!)
-cp /var/www/mastra/.env ~/backups/.env.$(date +%Y%m%d)
+cp /var/www/agentc2/.env ~/backups/.env.$(date +%Y%m%d)
 ```
 
 ### Updates
 
 ```bash
-cd /var/www/mastra
+cd /var/www/agentc2
 
 # Standard deploy
 git pull origin main

@@ -23,7 +23,7 @@ Create workflows demonstrating all Mastra workflow control flow patterns: parall
 
 ### Step 1: Create Parallel Processing Workflow
 
-Create `packages/mastra/src/workflows/parallel.ts`:
+Create `packages/agentc2/src/workflows/parallel.ts`:
 
 ```typescript
 import { createStep, createWorkflow } from "@mastra/core/workflows";
@@ -153,7 +153,7 @@ export const parallelWorkflow = createWorkflow({
 
 ### Step 2: Create Conditional Branching Workflow
 
-Create `packages/mastra/src/workflows/branch.ts`:
+Create `packages/agentc2/src/workflows/branch.ts`:
 
 ```typescript
 import { createStep, createWorkflow } from "@mastra/core/workflows";
@@ -303,7 +303,7 @@ export const branchWorkflow = createWorkflow({
 
 ### Step 3: Create Loop Processing Workflows
 
-Create `packages/mastra/src/workflows/loop.ts`:
+Create `packages/agentc2/src/workflows/loop.ts`:
 
 ```typescript
 import { createStep, createWorkflow } from "@mastra/core/workflows";
@@ -443,7 +443,7 @@ export const doWhileWorkflow = createWorkflow({
 
 ### Step 4: Create Human-in-the-Loop Approval Workflow
 
-Create `packages/mastra/src/workflows/human-approval.ts`:
+Create `packages/agentc2/src/workflows/human-approval.ts`:
 
 ```typescript
 import { createStep, createWorkflow } from "@mastra/core/workflows";
@@ -601,7 +601,7 @@ export const humanApprovalWorkflow = createWorkflow({
 
 ### Step 5: Update Workflow Exports
 
-Update `packages/mastra/src/workflows/index.ts`:
+Update `packages/agentc2/src/workflows/index.ts`:
 
 ```typescript
 export { analysisWorkflow } from "./example-workflow";
@@ -613,7 +613,7 @@ export { humanApprovalWorkflow } from "./human-approval";
 
 ### Step 6: Update Mastra Instance
 
-Update `packages/mastra/src/mastra.ts` to register all workflows.
+Update `packages/agentc2/src/mastra.ts` to register all workflows.
 
 ## Documentation Deviations
 
@@ -731,9 +731,9 @@ const workflowExamples = {
 
 | File                                              | Action |
 | ------------------------------------------------- | ------ |
-| `packages/mastra/src/workflows/parallel.ts`       | Create |
-| `packages/mastra/src/workflows/branch.ts`         | Create |
-| `packages/mastra/src/workflows/loop.ts`           | Create |
-| `packages/mastra/src/workflows/human-approval.ts` | Create |
-| `packages/mastra/src/workflows/index.ts`          | Update |
-| `packages/mastra/src/mastra.ts`                   | Update |
+| `packages/agentc2/src/workflows/parallel.ts`       | Create |
+| `packages/agentc2/src/workflows/branch.ts`         | Create |
+| `packages/agentc2/src/workflows/loop.ts`           | Create |
+| `packages/agentc2/src/workflows/human-approval.ts` | Create |
+| `packages/agentc2/src/workflows/index.ts`          | Update |
+| `packages/agentc2/src/mastra.ts`                   | Update |

@@ -33,7 +33,7 @@ describe("Coding Pipeline Tools", () => {
     describe("ingest-ticket", () => {
         it("normalizes a SupportTicket", async () => {
             const { ingestTicketTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.supportTicket.findUnique.mockResolvedValueOnce({
                 id: "ticket-1",
@@ -58,7 +58,7 @@ describe("Coding Pipeline Tools", () => {
 
         it("normalizes a BacklogTask", async () => {
             const { ingestTicketTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.backlogTask.findUnique.mockResolvedValueOnce({
                 id: "task-1",
@@ -81,7 +81,7 @@ describe("Coding Pipeline Tools", () => {
 
         it("normalizes a GitHub Issue", async () => {
             const { ingestTicketTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             const result = await ingestTicketTool.execute({
                 sourceType: "github_issue",
@@ -96,7 +96,7 @@ describe("Coding Pipeline Tools", () => {
 
         it("throws for missing SupportTicket", async () => {
             const { ingestTicketTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.supportTicket.findUnique.mockResolvedValueOnce(null);
 
@@ -110,7 +110,7 @@ describe("Coding Pipeline Tools", () => {
 
         it("throws for missing BacklogTask", async () => {
             const { ingestTicketTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.backlogTask.findUnique.mockResolvedValueOnce(null);
 
@@ -126,7 +126,7 @@ describe("Coding Pipeline Tools", () => {
     describe("update-pipeline-status", () => {
         it("updates pipeline run status", async () => {
             const { updatePipelineStatusTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.codingPipelineRun.update.mockResolvedValueOnce({});
 
@@ -150,7 +150,7 @@ describe("Coding Pipeline Tools", () => {
 
         it("updates with PR details", async () => {
             const { updatePipelineStatusTool } =
-                await import("../../packages/mastra/src/tools/coding-pipeline-tools");
+                await import("../../packages/agentc2/src/tools/coding-pipeline-tools");
 
             mockPrisma.codingPipelineRun.update.mockResolvedValueOnce({});
 

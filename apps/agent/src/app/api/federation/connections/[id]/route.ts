@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { authenticateRequest } from "@/lib/api-auth";
-import { approveConnection, suspendConnection, revokeConnection } from "@repo/mastra/federation";
+import { approveConnection, suspendConnection, revokeConnection } from "@repo/agentc2/federation";
 
 /**
  * GET /api/federation/connections/[id]

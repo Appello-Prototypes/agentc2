@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra/agents";
+import { agentResolver } from "@repo/agentc2/agents";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";

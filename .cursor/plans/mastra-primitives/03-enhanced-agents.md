@@ -20,7 +20,7 @@ Create multiple specialized agents demonstrating different Mastra agent capabili
 
 ### Step 1: Create Structured Output Agent
 
-Create `packages/mastra/src/agents/structured.ts`:
+Create `packages/agentc2/src/agents/structured.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -94,7 +94,7 @@ export const schemas = {
 
 ### Step 2: Create Vision Agent
 
-Create `packages/mastra/src/agents/vision.ts`:
+Create `packages/agentc2/src/agents/vision.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -144,7 +144,7 @@ export const visionAnalysisSchema = z.object({
 
 ### Step 3: Create Research Agent
 
-Create `packages/mastra/src/agents/research.ts`:
+Create `packages/agentc2/src/agents/research.ts`:
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -242,7 +242,7 @@ export const researchTools = { webSearchTool, noteTool };
 
 ### Step 4: Update Agent Exports
 
-Update `packages/mastra/src/agents/index.ts`:
+Update `packages/agentc2/src/agents/index.ts`:
 
 ```typescript
 export { assistantAgent } from "./assistant";
@@ -253,7 +253,7 @@ export { researchAgent, researchTools } from "./research";
 
 ### Step 5: Update Mastra Instance
 
-Update `packages/mastra/src/mastra.ts` to register new agents:
+Update `packages/agentc2/src/mastra.ts` to register new agents:
 
 ```typescript
 import { assistantAgent, structuredAgent, visionAgent, researchAgent } from "./agents";
@@ -432,9 +432,9 @@ const response = await researchAgent.generate("What are the benefits of TypeScri
 
 | File                                       | Action |
 | ------------------------------------------ | ------ |
-| `packages/mastra/src/agents/structured.ts` | Create |
-| `packages/mastra/src/agents/vision.ts`     | Create |
-| `packages/mastra/src/agents/research.ts`   | Create |
-| `packages/mastra/src/agents/index.ts`      | Update |
-| `packages/mastra/src/mastra.ts`            | Update |
-| `packages/mastra/src/index.ts`             | Update |
+| `packages/agentc2/src/agents/structured.ts` | Create |
+| `packages/agentc2/src/agents/vision.ts`     | Create |
+| `packages/agentc2/src/agents/research.ts`   | Create |
+| `packages/agentc2/src/agents/index.ts`      | Update |
+| `packages/agentc2/src/mastra.ts`            | Update |
+| `packages/agentc2/src/index.ts`             | Update |

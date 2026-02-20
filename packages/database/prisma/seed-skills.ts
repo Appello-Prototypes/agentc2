@@ -180,13 +180,25 @@ You can execute networks, list and inspect runs, and view metrics.
 You can create, read, update, delete, enable, and disable unified execution triggers.
 
 ### Trigger types:
-- **schedule**: Cron-based recurring execution (e.g., "0 9 * * MON-FRI")
+- **scheduled**: Cron-based recurring execution (e.g., "0 9 * * MON-FRI")
 - **webhook**: HTTP endpoint that triggers on incoming requests
 - **event**: Triggered by internal platform events
 
+### Creating a scheduled trigger:
+\`\`\`json
+{
+  "agentId": "my-agent-slug",
+  "type": "scheduled",
+  "name": "Hourly heartbeat",
+  "config": { "cronExpr": "0 * * * *", "timezone": "UTC" },
+  "input": "Run the hourly check"
+}
+\`\`\`
+
 ### Best practices:
 - Always set a descriptive name and description
-- For schedules, use standard cron expressions
+- For schedules, use standard cron expressions with config.cronExpr
+- The type must be exactly "scheduled" (not "schedule")
 - Triggers can be enabled/disabled without deleting them`,
         category: "operations",
         tags: ["triggers", "schedules", "automation"],

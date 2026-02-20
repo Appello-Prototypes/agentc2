@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/mastra/agents";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { agentResolver } from "@repo/agentc2/agents";
+import { recordActivity } from "@repo/agentc2/activity/service";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { authenticateRequest } from "@/lib/api-auth";
@@ -319,7 +319,8 @@ export async function POST(request: NextRequest) {
                     workspaceId,
                     visibility: body.visibility ?? "PRIVATE",
                     metadata: body.metadata ?? Prisma.DbNull,
-                    isActive: body.isActive ?? true
+                    isActive: body.isActive ?? true,
+                    deploymentMode: body.deploymentMode ?? "singleton"
                 },
                 include: { tools: true }
             });

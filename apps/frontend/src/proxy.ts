@@ -51,6 +51,7 @@ export const config = {
          * Match all request paths except:
          * - / (root/landing page)
          * - /signup (registration page)
+         * - /investor (investor landing page)
          * - /terms (Terms of Service)
          * - /privacy (Privacy Policy)
          * - /security (Security Policy)
@@ -62,6 +63,6 @@ export const config = {
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|about|terms$|privacy$|security$|docs(?:/.*)?$|blog(?:/.*)?$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
+        "/((?!api/auth|about|investor$|terms$|privacy$|security$|docs(?:/.*)?$|blog(?:/.*)?$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };

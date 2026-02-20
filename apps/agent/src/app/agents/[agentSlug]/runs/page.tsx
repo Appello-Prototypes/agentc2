@@ -54,6 +54,9 @@ interface Run {
     uniqueToolCount: number;
     stepCount: number;
     versionId: string | null;
+    instanceId: string | null;
+    instanceName: string | null;
+    instanceSlug: string | null;
 }
 
 interface TraceStep {
@@ -189,6 +192,9 @@ interface RunDetail {
     } | null;
     guardrailEvents: GuardrailEvent[] | null;
     version: VersionInfo | null;
+    instanceId: string | null;
+    instanceName: string | null;
+    instanceSlug: string | null;
 }
 
 // --- Helpers ---
@@ -339,6 +345,9 @@ export default function RunsPage() {
                         traceStepsCount?: number;
                         traceToolCallsCount?: number;
                         toolCallsCount?: number;
+                        instanceId?: string;
+                        instanceName?: string;
+                        instanceSlug?: string;
                     }) => ({
                         id: run.id,
                         status: run.status,
@@ -366,7 +375,10 @@ export default function RunsPage() {
                         toolCallCount: run.traceToolCallsCount ?? run.toolCallsCount ?? 0,
                         uniqueToolCount: run.traceToolCallsCount ?? run.toolCallsCount ?? 0,
                         stepCount: run.traceStepsCount ?? 0,
-                        versionId: run.versionId || null
+                        versionId: run.versionId || null,
+                        instanceId: run.instanceId || null,
+                        instanceName: run.instanceName || null,
+                        instanceSlug: run.instanceSlug || null
                     })
                 );
                 setRuns(transformed);
@@ -545,6 +557,7 @@ export default function RunsPage() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>Status</TableHead>
+                                    <TableHead>Instance</TableHead>
                                     <TableHead>Source</TableHead>
                                     <TableHead>Model</TableHead>
                                     <TableHead>Input</TableHead>
@@ -583,7 +596,7 @@ export default function RunsPage() {
                             <TableBody>
                                 {sortedRuns.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="py-12 text-center">
+                                        <TableCell colSpan={10} className="py-12 text-center">
                                             <p className="text-muted-foreground text-sm">
                                                 No runs found
                                             </p>
@@ -604,6 +617,17 @@ export default function RunsPage() {
                                                 <Badge variant={getStatusBadgeVariant(run.status)}>
                                                     {run.status}
                                                 </Badge>
+                                            </TableCell>
+                                            <TableCell className="max-w-[120px] truncate text-xs">
+                                                {run.instanceName ? (
+                                                    <span className="text-foreground font-medium">
+                                                        {run.instanceName}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">
+                                                        Direct
+                                                    </span>
+                                                )}
                                             </TableCell>
                                             <TableCell>
                                                 {run.source ? (
@@ -764,6 +788,25 @@ export default function RunsPage() {
                                                         </div>
                                                     </div>
                                                 </div>
+
+                                                {(runDetail?.instanceName ||
+                                                    selectedRun.instanceName) && (
+                                                    <div className="bg-muted/30 rounded-lg border p-3">
+                                                        <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                                            Instance
+                                                        </h3>
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm font-medium">
+                                                                {runDetail?.instanceName ??
+                                                                    selectedRun.instanceName}
+                                                            </span>
+                                                            <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-[11px]">
+                                                                {runDetail?.instanceSlug ??
+                                                                    selectedRun.instanceSlug}
+                                                            </code>
+                                                        </div>
+                                                    </div>
+                                                )}
 
                                                 {(selectedRun.sessionId ||
                                                     selectedRun.threadId) && (

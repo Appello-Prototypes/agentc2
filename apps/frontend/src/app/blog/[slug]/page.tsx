@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BLOG_POSTS, getBlogPost } from "@/lib/content/blog";
+import { ALL_BLOG_POSTS, getBlogPost } from "@/lib/content/blog";
 import { getDocsPage } from "@/lib/content/docs";
 import { articleJsonLd, breadcrumbJsonLd, buildPageMetadata, faqJsonLd } from "@/lib/seo";
 import { ContentPageTracker } from "@/components/analytics/content-page-tracker";
@@ -12,7 +12,7 @@ interface BlogDetailProps {
 }
 
 export function generateStaticParams() {
-    return BLOG_POSTS.map((post) => ({ slug: post.slug }));
+    return ALL_BLOG_POSTS.map((post) => ({ slug: post.slug }));
 }
 
 export async function generateMetadata({ params }: BlogDetailProps): Promise<Metadata> {

@@ -55,7 +55,10 @@ export async function GET(
                 },
                 feedbacks: true,
                 costEvents: true,
-                guardrailEvents: true
+                guardrailEvents: true,
+                instance: {
+                    select: { id: true, name: true, slug: true }
+                }
             }
         });
 
@@ -121,7 +124,10 @@ export async function GET(
                 feedback: run.feedbacks,
                 costEvent: run.costEvents,
                 guardrailEvents: run.guardrailEvents,
-                version
+                version,
+                instanceId: run.instanceId,
+                instanceName: run.instance?.name ?? null,
+                instanceSlug: run.instance?.slug ?? null
             }
         });
     } catch (error) {

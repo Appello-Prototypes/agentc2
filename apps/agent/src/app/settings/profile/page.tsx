@@ -14,16 +14,23 @@ import {
     AvatarFallback,
     Skeleton,
     Alert,
-    AlertDescription
+    AlertDescription,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue
 } from "@repo/ui";
 import { useSession } from "@repo/auth/client";
 import { getApiBase } from "@/lib/utils";
+import { COMMON_TIMEZONES } from "@/lib/timezone";
 
 interface UserProfile {
     id: string;
     name: string;
     email: string;
     image: string | null;
+    timezone: string | null;
 }
 
 export default function ProfileSettingsPage() {
@@ -37,6 +44,8 @@ export default function ProfileSettingsPage() {
     // Form state
     const [name, setName] = useState("");
     const [imageUrl, setImageUrl] = useState("");
+    const [timezone, setTimezone] = useState<string>("");
+    const [orgTimezone, setOrgTimezone] = useState<string>("America/New_York");
 
     useEffect(() => {
         async function fetchProfile() {
@@ -47,6 +56,13 @@ export default function ProfileSettingsPage() {
                     setProfile(data.user);
                     setName(data.user.name || "");
                     setImageUrl(data.user.image || "");
+                    setTimezone(data.user.timezone || "");
+                }
+
+                const orgRes = await fetch(`${getApiBase()}/api/user/organization`);
+                const orgData = await orgRes.json();
+                if (orgData.success && orgData.organization?.timezone) {
+                    setOrgTimezone(orgData.organization.timezone);
                 }
             } catch (err) {
                 console.error("Failed to fetch profile:", err);
@@ -72,7 +88,8 @@ export default function ProfileSettingsPage() {
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
                     name: name.trim(),
-                    image: imageUrl.trim() || null
+                    image: imageUrl.trim() || null,
+                    timezone: timezone || null
                 })
             });
 
@@ -192,6 +209,47 @@ export default function ProfileSettingsPage() {
                         <p className="text-muted-foreground mt-1 text-xs">
                             Email cannot be changed at this time
                         </p>
+                    </div>
+
+                    {/* Timezone */}
+                    <div>
+                        <label className="text-sm font-medium">Timezone</label>
+                        <p className="text-muted-foreground mb-2 text-xs">
+                            Override your organization&apos;s default timezone ({
+                                COMMON_TIMEZONES.find((tz) => tz.value === orgTimezone)?.label ||
+                                orgTimezone
+                            }). Leave as &quot;Use organization default&quot; to inherit the org
+                            setting.
+                        </p>
+                        <Select
+                            value={timezone || "__org_default__"}
+                            onValueChange={(v: string | null) => {
+                                if (v === "__org_default__") {
+                                    setTimezone("");
+                                } else if (v) {
+                                    setTimezone(v);
+                                }
+                            }}
+                        >
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select timezone">
+                                    {timezone
+                                        ? COMMON_TIMEZONES.find((tz) => tz.value === timezone)
+                                              ?.label || timezone
+                                        : "Use organization default"}
+                                </SelectValue>
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="__org_default__">
+                                    Use organization default
+                                </SelectItem>
+                                {COMMON_TIMEZONES.map((tz) => (
+                                    <SelectItem key={tz.value} value={tz.value}>
+                                        {tz.label}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
 
                     {/* Save Button */}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { reembedDocument } from "@repo/mastra/documents";
+import { reembedDocument } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ documentId: string }> };

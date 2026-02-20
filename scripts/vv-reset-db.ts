@@ -3,15 +3,15 @@
  * V&V Database Reset Script
  *
  * Deletes ALL data except Organization, Workspace, User, Membership, and auth tables.
- * Use this to start the Mastra platform from a clean slate for V&V testing.
+ * Use this to start the AgentC2 platform from a clean slate for V&V testing.
  *
  * Usage:
- *   cd /path/to/mastra-experiment
+ *   cd /path/to/agentc2
  *   dotenv -e .env -- bun run scripts/vv-reset-db.ts
  *
  * Or on the server:
  *   export PATH="/root/.bun/bin:/root/.local/bin:$PATH"
- *   cd /var/www/mastra
+ *   cd /var/www/agentc2
  *   dotenv -e .env -- bun run scripts/vv-reset-db.ts
  */
 

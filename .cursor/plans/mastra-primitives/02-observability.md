@@ -42,7 +42,7 @@ export const mastra = new Mastra({
 
 ### Step 1: Configure Telemetry in Mastra Instance
 
-Update `packages/mastra/src/mastra.ts`:
+Update `packages/agentc2/src/mastra.ts`:
 
 ```typescript
 import { Mastra } from "@mastra/core/mastra";
@@ -67,7 +67,7 @@ function getMastra(): Mastra {
             },
             storage,
             telemetry: {
-                serviceName: "mastra-experiment",
+                serviceName: "agentc2",
                 enabled: true,
                 sampling: {
                     type: isDev ? "always_on" : "ratio",
@@ -250,6 +250,6 @@ Configure endpoint to send traces to SigNoz, Jaeger, Honeycomb, or other provide
 
 | File                            | Action                                     |
 | ------------------------------- | ------------------------------------------ |
-| `packages/mastra/src/mastra.ts` | Update with telemetry config               |
+| `packages/agentc2/src/mastra.ts` | Update with telemetry config               |
 | `turbo.json`                    | Add OTEL env vars to globalEnv             |
 | `.env`                          | Add OTEL_EXPORTER_OTLP_ENDPOINT (optional) |

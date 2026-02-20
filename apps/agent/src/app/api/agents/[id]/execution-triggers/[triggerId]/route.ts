@@ -25,6 +25,8 @@ type TriggerRow = {
     filterJson: unknown;
     inputMapping: unknown;
     isActive: boolean;
+    isArchived: boolean;
+    archivedAt: Date | null;
     lastTriggeredAt: Date | null;
     triggerCount: number;
     createdAt: Date;
@@ -39,6 +41,8 @@ type ScheduleRow = {
     timezone: string;
     inputJson: unknown;
     isActive: boolean;
+    isArchived: boolean;
+    archivedAt: Date | null;
     lastRunAt: Date | null;
     nextRunAt: Date | null;
     runCount: number;
@@ -68,6 +72,8 @@ function buildScheduleTrigger(
         name: schedule.name,
         description: schedule.description,
         isActive: schedule.isActive,
+        isArchived: schedule.isArchived,
+        archivedAt: schedule.archivedAt,
         createdAt: schedule.createdAt,
         updatedAt: schedule.updatedAt,
         config: {
@@ -101,6 +107,8 @@ function buildTriggerTrigger(
         name: trigger.name,
         description: trigger.description,
         isActive: trigger.isActive,
+        isArchived: trigger.isArchived,
+        archivedAt: trigger.archivedAt,
         createdAt: trigger.createdAt,
         updatedAt: trigger.updatedAt,
         config: {
@@ -232,6 +240,7 @@ export async function GET(
  * PATCH /api/agents/[id]/execution-triggers/[triggerId]
  *
  * Update a unified trigger (schedule or trigger).
+ * Supports isArchived for archive/unarchive operations.
  */
 export async function PATCH(
     request: NextRequest,
@@ -259,7 +268,8 @@ export async function PATCH(
             environment,
             filter,
             inputMapping,
-            isActive
+            isActive,
+            isArchived
         } = body as {
             name?: string;
             description?: string;
@@ -271,6 +281,7 @@ export async function PATCH(
             filter?: Record<string, unknown>;
             inputMapping?: Record<string, unknown> | null;
             isActive?: boolean;
+            isArchived?: boolean;
         };
 
         const agent = await prisma.agent.findFirst({
@@ -306,6 +317,17 @@ export async function PATCH(
             if (config.timezone !== undefined) updateData.timezone = config.timezone;
             if (isActive !== undefined) updateData.isActive = isActive !== false;
 
+            if (typeof isArchived === "boolean") {
+                updateData.isArchived = isArchived;
+                if (isArchived) {
+                    updateData.archivedAt = new Date();
+                    updateData.isActive = false;
+                    updateData.nextRunAt = null;
+                } else {
+                    updateData.archivedAt = null;
+                }
+            }
+
             const defaults: TriggerInputDefaults = {
                 input,
                 context,
@@ -326,7 +348,7 @@ export async function PATCH(
                 config.timezone !== undefined ||
                 (isActive === true && schedule.isActive === false);
 
-            if (shouldRecalculate) {
+            if (shouldRecalculate && !isArchived) {
                 const resolvedCron = (config.cronExpr as string | undefined) ?? schedule.cronExpr;
                 const resolvedTimezone =
                     (config.timezone as string | undefined) ?? schedule.timezone ?? "UTC";
@@ -347,7 +369,7 @@ export async function PATCH(
                 }
             }
 
-            if (isActive === false) {
+            if (isActive === false && typeof isArchived !== "boolean") {
                 updateData.nextRunAt = null;
             }
 
@@ -442,6 +464,16 @@ export async function PATCH(
                 : null;
         }
         if (isActive !== undefined) updateData.isActive = isActive !== false;
+
+        if (typeof isArchived === "boolean") {
+            updateData.isArchived = isArchived;
+            if (isArchived) {
+                updateData.archivedAt = new Date();
+                updateData.isActive = false;
+            } else {
+                updateData.archivedAt = null;
+            }
+        }
 
         const updated = await prisma.agentTrigger.update({
             where: { id: trigger.id },

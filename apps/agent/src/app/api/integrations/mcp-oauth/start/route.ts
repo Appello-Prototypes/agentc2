@@ -12,7 +12,7 @@ import { cookies } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { headers } from "next/headers";
-import { discoverAuthServer, buildMcpAuthorizationUrl } from "@repo/mastra/integrations/mcp-oauth";
+import { discoverAuthServer, buildMcpAuthorizationUrl } from "@repo/agentc2/integrations/mcp-oauth";
 import { generateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
 import { getUserOrganizationId } from "@/lib/organization";
 

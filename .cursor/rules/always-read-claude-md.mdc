@@ -1,14 +1,14 @@
 ---
-description: Core project guidance for the Mastra AI Agent Framework
+description: Core project guidance for the AgentC2 AI Agent Framework
 globs: **/*
 alwaysApply: true
 ---
 
-# Mastra AI Agent Framework - Core Guidelines
+# AgentC2 AI Agent Framework - Core Guidelines
 
 **ALWAYS READ `/CLAUDE.md` AT THE START OF EVERY CONVERSATION.**
 
-This project is the Mastra AI Agent Framework - a production-grade system for building, deploying, and orchestrating AI agents with voice capabilities, MCP integrations, and background job processing.
+This project is the AgentC2 AI Agent Framework - a production-grade system for building, deploying, and orchestrating AI agents with voice capabilities, MCP integrations, and background job processing. Built on the open-source Mastra framework.
 
 ## Critical Principles
 
@@ -32,7 +32,7 @@ This project is the Mastra AI Agent Framework - a production-grade system for bu
 
 ### Key Packages
 
-- `@repo/mastra` - Agent framework, tools, workflows
+- `@repo/agentc2` - Agent framework, tools, workflows
 - `@repo/database` - Prisma client and schema
 - `@repo/auth` - Authentication configuration
 - `@repo/ui` - Shared UI components
@@ -73,7 +73,7 @@ Key integrations configured in `.env`:
 ```
 apps/agent/      - AI Agent app (port 3001)
 apps/frontend/   - Main app (port 3000)
-packages/mastra/ - Core agent framework
+packages/agentc2/ - Core agent framework
 packages/database/ - Prisma schema
 packages/ui/     - Shared components
 ```

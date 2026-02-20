@@ -2,11 +2,11 @@
 /**
  * Database Dump / Snapshot
  *
- * Captures row counts and optional sample data from every table in the Mastra database.
+ * Captures row counts and optional sample data from every table in the AgentC2 database.
  * Outputs a structured JSON report to stdout and optionally saves to a timestamped file.
  *
  * Usage:
- *   cd /path/to/mastra-experiment
+ *   cd /path/to/agentc2
  *   set -a && source .env && set +a && bun run packages/database/src/db-dump.ts
  *
  * Options (via env vars):
@@ -201,7 +201,7 @@ async function main() {
     const startTime = Date.now();
     const timestamp = new Date().toISOString();
 
-    console.log("=== Mastra Database Dump ===");
+    console.log("=== AgentC2 Database Dump ===");
     console.log(`Timestamp: ${timestamp}`);
     console.log(`Samples per table: ${SAMPLE_ROWS}`);
     console.log("");
@@ -245,12 +245,12 @@ async function main() {
     for (const tbl of mastraTables) {
         try {
             const count = await getCount(`"${tbl}"`);
-            results.push({ name: tbl, category: "Mastra Internal", count });
+            results.push({ name: tbl, category: "Mastra Managed", count });
             totalRows += count;
         } catch {
             results.push({
                 name: tbl,
-                category: "Mastra Internal",
+                category: "Mastra Managed",
                 count: 0,
                 error: "table not found"
             });

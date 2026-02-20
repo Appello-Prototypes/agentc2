@@ -1,34 +1,51 @@
 #!/usr/bin/env node
 
 /**
- * Mastra Agent MCP Server
+ * AgentC2 MCP Server
  *
- * Exposes all Mastra agents as MCP tools that can be called from Cursor.
+ * Exposes all AgentC2 agents as MCP tools that can be called from Cursor.
  *
  * Usage:
  *   node index.js
  *
  * Environment:
- *   MASTRA_API_URL - Base URL for the Mastra API (default: production)
+ *   AGENTC2_API_URL - Base URL for the AgentC2 API (default: production)
  */
 
+import crypto from "node:crypto";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 // Default to production URL
-const API_URL = process.env.MASTRA_API_URL || "https://agentc2.ai";
-const API_KEY = process.env.MASTRA_API_KEY;
+const API_URL = process.env.AGENTC2_API_URL || "https://agentc2.ai";
+const API_KEY = process.env.AGENTC2_API_KEY;
 const ORGANIZATION_SLUG =
-    process.env.MASTRA_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
+    process.env.AGENTC2_ORGANIZATION_SLUG || process.env.MCP_API_ORGANIZATION_SLUG;
 
 // Cache for tools
 let toolsCache = null;
 let toolsCacheTime = 0;
 const CACHE_TTL = 60000; // 1 minute
 
+// Per-agent conversation thread tracking (30-minute timeout)
+const THREAD_TIMEOUT_MS = 30 * 60 * 1000;
+const agentThreads = new Map(); // agentSlug -> { threadId, lastActivity }
+
+function getOrCreateThreadId(agentSlug) {
+    const existing = agentThreads.get(agentSlug);
+    const now = Date.now();
+    if (existing && now - existing.lastActivity < THREAD_TIMEOUT_MS) {
+        existing.lastActivity = now;
+        return existing.threadId;
+    }
+    const threadId = `mcp-${crypto.randomUUID()}`;
+    agentThreads.set(agentSlug, { threadId, lastActivity: now });
+    return threadId;
+}
+
 /**
- * Fetch available tools from the Mastra API
+ * Fetch available tools from the AgentC2 API
  */
 async function fetchTools() {
     const now = Date.now();
@@ -64,7 +81,7 @@ async function fetchTools() {
 }
 
 /**
- * Invoke a tool via the Mastra MCP gateway
+ * Invoke a tool via the AgentC2 MCP gateway
  */
 async function invokeTool(toolName, params) {
     const headers = {
@@ -98,7 +115,7 @@ async function invokeTool(toolName, params) {
 // Create server
 const server = new Server(
     {
-        name: "mastra-agents",
+        name: "agentc2-agents",
         version: "1.0.0"
     },
     {
@@ -141,7 +158,20 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const originalName = toolNameMap.get(name) || name;
 
     try {
-        const result = await invokeTool(originalName, args || {});
+        // Inject threadId for agent tools to enable conversation grouping
+        let enrichedArgs = args || {};
+        if (originalName.startsWith("agent.")) {
+            const agentSlug = originalName.slice(6);
+            const threadId = getOrCreateThreadId(agentSlug);
+            enrichedArgs = {
+                ...enrichedArgs,
+                context: {
+                    ...(enrichedArgs.context || {}),
+                    threadId
+                }
+            };
+        }
+        const result = await invokeTool(originalName, enrichedArgs);
 
         let outputText = "";
         if (typeof result === "string") {
@@ -190,7 +220,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 async function main() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error("Mastra Agent MCP Server started");
+    console.error("AgentC2 MCP Server started");
 }
 
 main().catch(console.error);

@@ -304,15 +304,15 @@ All checks run in sequence. If ANY level fails with hardLimit=true, the run is b
 - `apps/agent/src/app/settings/billing/page.tsx` — Billing & Budget settings page
 - `apps/agent/src/app/api/organizations/[orgId]/budget/route.ts` — Org budget API
 - `apps/agent/src/app/api/organizations/[orgId]/subscription/route.ts` — Subscription API
-- `packages/mastra/src/budget/enforcement.ts` — Budget enforcement service
-- `packages/mastra/src/budget/markup.ts` — Markup calculation
+- `packages/agentc2/src/budget/enforcement.ts` — Budget enforcement service
+- `packages/agentc2/src/budget/markup.ts` — Markup calculation
 - `apps/admin/src/app/(dashboard)/plans/page.tsx` — Plan management
 - `apps/admin/src/app/(dashboard)/tenants/[orgSlug]/billing/page.tsx` — Admin billing view
 
 ### Modified Files
 
 - `packages/database/prisma/schema.prisma` — New models + modifications
-- `packages/mastra/src/agents/resolver.ts` — Enhanced budget checking
+- `packages/agentc2/src/agents/resolver.ts` — Enhanced budget checking
 - `apps/agent/src/lib/run-recorder.ts` — Add markup + user tracking to cost events
 - `apps/agent/src/lib/cost-calculator.ts` — Add markup-aware pricing
 - `apps/agent/src/app/settings/layout.tsx` — Add billing nav item

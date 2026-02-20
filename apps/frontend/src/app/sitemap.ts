@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { BLOG_POSTS } from "@/lib/content/blog";
+import { ALL_BLOG_POSTS } from "@/lib/content/blog";
 import { DOCS_PAGES, DOCS_LAUNCH_PRIORITY } from "@/lib/content/docs";
 import { getAllDocSlugs } from "@/lib/content/mdx";
 
@@ -48,7 +48,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
         }
     }
 
-    const blogRoutes: MetadataRoute.Sitemap = BLOG_POSTS.map((post) => ({
+    const blogRoutes: MetadataRoute.Sitemap = ALL_BLOG_POSTS.map((post) => ({
         url: `${BASE}/blog/${post.slug}`,
         lastModified: new Date(post.updatedAt),
         priority: post.category === "pillar" ? 0.8 : 0.6,

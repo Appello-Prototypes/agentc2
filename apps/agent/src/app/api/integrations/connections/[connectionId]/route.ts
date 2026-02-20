@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { invalidateMcpCacheForOrg, resetMcpClients } from "@repo/mastra/mcp";
-import { invalidateMcpToolsCacheForOrg } from "@repo/mastra/tools";
-import { clearModelCache } from "@repo/mastra/agents/model-registry";
+import { invalidateMcpCacheForOrg, resetMcpClients } from "@repo/agentc2/mcp";
+import { invalidateMcpToolsCacheForOrg } from "@repo/agentc2/tools";
+import { clearModelCache } from "@repo/agentc2/agents/model-registry";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import { decryptCredentials, encryptCredentials } from "@/lib/credential-crypto";
@@ -228,7 +228,7 @@ export async function DELETE(
         // Deactivate provisioned Skill + Agent before deleting the connection
         let deprovisioned = null;
         try {
-            const { deprovisionIntegration, hasBlueprint } = await import("@repo/mastra");
+            const { deprovisionIntegration, hasBlueprint } = await import("@repo/agentc2");
             if (hasBlueprint(connection.provider.key)) {
                 const workspace = await prisma.workspace.findFirst({
                     where: { organizationId, isDefault: true },

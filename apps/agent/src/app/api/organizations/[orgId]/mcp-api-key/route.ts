@@ -6,7 +6,7 @@ import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
 
 const TOOL_ID = "mastra-mcp-api";
-const TOOL_NAME = "Mastra MCP API Key";
+const TOOL_NAME = "AgentC2 MCP API Key";
 const ADMIN_ROLES = new Set(["owner", "admin"]);
 
 async function getOrgAndMembership(userId: string, orgId: string) {

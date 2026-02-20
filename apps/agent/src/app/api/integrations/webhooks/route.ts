@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { randomBytes } from "crypto";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getIntegrationProviders } from "@repo/mastra/mcp";
+import { getIntegrationProviders } from "@repo/agentc2/mcp";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
 import {

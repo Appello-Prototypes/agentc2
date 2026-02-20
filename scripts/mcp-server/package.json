@@ -1,7 +1,7 @@
 {
-  "name": "mastra-agent-mcp-server",
+  "name": "agentc2-mcp-server",
   "version": "1.0.0",
-  "description": "MCP server that exposes Mastra agents as callable tools",
+  "description": "MCP server that exposes AgentC2 agents as callable tools",
   "type": "module",
   "main": "index.js",
   "scripts": {

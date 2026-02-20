@@ -11,7 +11,7 @@ export async function register() {
         const { onPostBootstrap } = await import("@repo/auth");
         const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
         const { syncMicrosoftFromAccount } = await import("@/lib/microsoft-sync");
-        const { provisionOrgKeyPair } = await import("@repo/mastra/crypto");
+        const { provisionOrgKeyPair } = await import("@repo/agentc2/crypto");
 
         onPostBootstrap(async (userId, organizationId) => {
             console.log("[PostBootstrap] Syncing Gmail for user:", userId);

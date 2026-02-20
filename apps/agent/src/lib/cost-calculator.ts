@@ -10,8 +10,8 @@
  * - Google: https://cloud.google.com/vertex-ai/pricing
  *
  * NOTE: This file is used client-side (runs page) and cannot import from
- * @repo/mastra/agents (server-only). Pricing data is maintained locally.
- * For the canonical model registry, see packages/mastra/src/agents/model-registry.ts
+ * @repo/agentc2/agents (server-only). Pricing data is maintained locally.
+ * For the canonical model registry, see packages/agentc2/src/agents/model-registry.ts
  */
 
 /**
@@ -68,6 +68,7 @@ const MODEL_PRICING: Record<string, ModelPricing> = {
     // Anthropic Claude 4 models
     "claude-opus-4-20250514": { inputPer1M: 15.0, outputPer1M: 75.0 },
     "claude-sonnet-4-20250514": { inputPer1M: 3.0, outputPer1M: 15.0 },
+    "claude-sonnet-4-6": { inputPer1M: 3.0, outputPer1M: 15.0 },
 
     // Anthropic Claude 3.5 models
     "claude-3-5-sonnet-20241022": { inputPer1M: 3.0, outputPer1M: 15.0 },

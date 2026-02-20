@@ -394,7 +394,7 @@ scorers: {
 ## Agent Factory (Updated)
 
 ```typescript
-// packages/mastra/src/agents/factory.ts
+// packages/agentc2/src/agents/factory.ts
 
 export function createAgentFromConfig(
     config: StoredAgentConfig,

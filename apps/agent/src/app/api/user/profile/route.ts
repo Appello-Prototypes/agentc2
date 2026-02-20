@@ -25,6 +25,7 @@ export async function GET() {
                 name: true,
                 email: true,
                 image: true,
+                timezone: true,
                 emailVerified: true,
                 createdAt: true,
                 updatedAt: true
@@ -67,9 +68,9 @@ export async function PATCH(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, image } = body;
+        const { name, image, timezone } = body;
 
-        const updateData: { name?: string; image?: string | null } = {};
+        const updateData: { name?: string; image?: string | null; timezone?: string | null } = {};
 
         if (name !== undefined) {
             if (typeof name !== "string" || name.trim().length === 0) {
@@ -85,6 +86,22 @@ export async function PATCH(request: NextRequest) {
             updateData.image = image ? image.trim() : null;
         }
 
+        if (timezone !== undefined) {
+            if (timezone === null || timezone === "") {
+                updateData.timezone = null;
+            } else {
+                try {
+                    Intl.DateTimeFormat(undefined, { timeZone: timezone });
+                    updateData.timezone = timezone;
+                } catch {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid timezone" },
+                        { status: 400 }
+                    );
+                }
+            }
+        }
+
         const user = await prisma.user.update({
             where: { id: session.user.id },
             data: updateData,
@@ -93,6 +110,7 @@ export async function PATCH(request: NextRequest) {
                 name: true,
                 email: true,
                 image: true,
+                timezone: true,
                 emailVerified: true,
                 createdAt: true,
                 updatedAt: true

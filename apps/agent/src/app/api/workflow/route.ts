@@ -1,6 +1,6 @@
 import { handleWorkflowStream } from "@mastra/ai-sdk";
 import { createUIMessageStreamResponse } from "ai";
-import { mastra } from "@repo/mastra/core";
+import { mastra } from "@repo/agentc2/core";
 import { NextResponse } from "next/server";
 import { getDemoSession } from "@/lib/standalone-auth";
 

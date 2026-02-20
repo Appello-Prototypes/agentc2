@@ -2,11 +2,11 @@
 /**
  * Database Dump / Snapshot
  *
- * Captures row counts and optional sample data from every table in the Mastra database.
+ * Captures row counts and optional sample data from every table in the AgentC2 database.
  * Outputs a structured JSON report to stdout and optionally saves to a timestamped file.
  *
  * Usage:
- *   cd /path/to/mastra-experiment
+ *   cd /path/to/agentc2
  *   set -a && source .env && set +a && bun run packages/database/src/db-dump.ts
  *
  * Options (via env vars):

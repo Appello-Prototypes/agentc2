@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { BLOG_POSTS } from "@/lib/content/blog";
+import { ALL_BLOG_POSTS } from "@/lib/content/blog";
 import { buildPageMetadata } from "@/lib/seo";
 import { ContentPageTracker } from "@/components/analytics/content-page-tracker";
 
@@ -26,7 +26,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 };
 
 function getActiveCategories(): string[] {
-    const seen: Set<string> = new Set(BLOG_POSTS.map((p) => p.category));
+    const seen: Set<string> = new Set(ALL_BLOG_POSTS.map((p) => p.category));
     return ["all", ...Object.keys(CATEGORY_LABELS).filter((k) => k !== "all" && seen.has(k))];
 }
 
@@ -40,8 +40,8 @@ export default async function BlogIndexPage({ searchParams }: BlogIndexProps) {
     const categories = getActiveCategories();
     const filteredPosts =
         activeCategory === "all"
-            ? BLOG_POSTS
-            : BLOG_POSTS.filter((p) => p.category === activeCategory);
+            ? ALL_BLOG_POSTS
+            : ALL_BLOG_POSTS.filter((p) => p.category === activeCategory);
 
     return (
         <main className="mx-auto max-w-4xl px-6 py-12">

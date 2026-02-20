@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Prisma } from "@repo/database";
-import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/mastra/networks";
+import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
 import {
     createChangeLog,
     detectScalarChange,

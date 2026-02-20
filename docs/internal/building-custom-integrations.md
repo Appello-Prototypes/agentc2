@@ -19,7 +19,7 @@ AgentC2 supports two integration architectures:
 │                                                   │
 │  ┌──────────────┐  ┌──────────────────────────┐  │
 │  │  Tool         │  │  MCP Client               │  │
-│  │  Registry     │  │  (packages/mastra/src/    │  │
+│  │  Registry     │  │  (packages/agentc2/src/    │  │
 │  │  (registry.ts)│  │   mcp/client.ts)          │  │
 │  └──────┬───────┘  └──────────┬───────────────┘  │
 │         │                      │                   │
@@ -39,9 +39,9 @@ AgentC2 supports two integration architectures:
 
 | File                                       | Purpose                                                      |
 | ------------------------------------------ | ------------------------------------------------------------ |
-| `packages/mastra/src/mcp/client.ts`        | MCP client, server definitions, `INTEGRATION_PROVIDER_SEEDS` |
-| `packages/mastra/src/tools/registry.ts`    | Tool registry, `toolRegistry`, `toolCategoryMap`             |
-| `packages/mastra/src/crypto/encryption.ts` | Credential encryption/decryption                             |
+| `packages/agentc2/src/mcp/client.ts`        | MCP client, server definitions, `INTEGRATION_PROVIDER_SEEDS` |
+| `packages/agentc2/src/tools/registry.ts`    | Tool registry, `toolRegistry`, `toolCategoryMap`             |
+| `packages/agentc2/src/crypto/encryption.ts` | Credential encryption/decryption                             |
 | `packages/database/prisma/schema.prisma`   | `IntegrationProvider`, `IntegrationConnection` models        |
 
 ---
@@ -54,7 +54,7 @@ Use this checklist when adding a new integration:
 - [ ] Add `IntegrationProviderSeed` to `INTEGRATION_PROVIDER_SEEDS` in `mcp/client.ts`
 - [ ] (MCP) Configure server command/args/env or SSE URL
 - [ ] (OAuth) Implement OAuth start/callback routes
-- [ ] (OAuth) Implement tool functions in `packages/mastra/src/tools/`
+- [ ] (OAuth) Implement tool functions in `packages/agentc2/src/tools/`
 - [ ] Register tools in `toolRegistry` in `registry.ts`
 - [ ] Add tools to `toolCategoryMap` in `registry.ts`
 - [ ] (If MCP-exposed) Add MCP schema in `tools/mcp-schemas/`
@@ -70,7 +70,7 @@ Use this checklist when adding a new integration:
 
 #### Step 1: Add to `INTEGRATION_PROVIDER_SEEDS`
 
-In `packages/mastra/src/mcp/client.ts`, add a new entry to the `INTEGRATION_PROVIDER_SEEDS` array:
+In `packages/agentc2/src/mcp/client.ts`, add a new entry to the `INTEGRATION_PROVIDER_SEEDS` array:
 
 ```typescript
 const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
@@ -407,10 +407,10 @@ export async function GET(req: NextRequest) {
 
 ### Step 1: Create Tool Functions
 
-Create tool files in `packages/mastra/src/tools/`:
+Create tool files in `packages/agentc2/src/tools/`:
 
 ```typescript
-// packages/mastra/src/tools/my-provider/actions.ts
+// packages/agentc2/src/tools/my-provider/actions.ts
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
@@ -469,7 +469,7 @@ export const myProviderListItemsTool = createTool({
 
 ### Step 2: Register in `toolRegistry`
 
-In `packages/mastra/src/tools/registry.ts`:
+In `packages/agentc2/src/tools/registry.ts`:
 
 ```typescript
 import { myProviderListItemsTool, myProviderGetItemTool } from "./my-provider/actions";
@@ -498,7 +498,7 @@ export const toolCategoryMap: Record<string, string> = {
 
 ### Step 4: Export from Package
 
-In `packages/mastra/src/index.ts`, ensure the tools are exported:
+In `packages/agentc2/src/index.ts`, ensure the tools are exported:
 
 ```typescript
 export { myProviderListItemsTool, myProviderGetItemTool } from "./tools/my-provider/actions";
@@ -632,7 +632,7 @@ describe("myProviderListItemsTool", () => {
 npx -y @hubspot/mcp-server --help
 
 # List available tools from an MCP server
-import { getMcpTools } from "@repo/mastra/mcp/client";
+import { getMcpTools } from "@repo/agentc2/mcp/client";
 const tools = await getMcpTools("hubspot");
 console.log(Object.keys(tools));
 ```
@@ -725,11 +725,11 @@ When an agent needs tools at runtime:
 
 ```typescript
 // Synchronous (static tools only)
-import { getToolsByNames } from "@repo/mastra/tools/registry";
+import { getToolsByNames } from "@repo/agentc2/tools/registry";
 const tools = getToolsByNames(["calculator", "web-fetch"]);
 
 // Async (static + MCP + federation tools)
-import { getToolsByNamesAsync } from "@repo/mastra/tools/registry";
+import { getToolsByNamesAsync } from "@repo/agentc2/tools/registry";
 const tools = await getToolsByNamesAsync(
     ["calculator", "hubspot_hubspot-get-contacts", "federation:partner-tool"],
     organizationId

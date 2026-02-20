@@ -37,7 +37,7 @@ model BudgetPolicy {
 - PUT endpoint upserts budget policy
 - Accepts `hardLimit` parameter
 
-**MCP Tool:** `packages/mastra/src/tools/mcp-schemas/agent-quality.ts`
+**MCP Tool:** `packages/agentc2/src/tools/mcp-schemas/agent-quality.ts`
 
 - `agent_budget_update` tool passes `hardLimit` through
 
@@ -76,7 +76,7 @@ const hardLimit =
 
 ### Step 3: Add pre-run budget check (not just post-run)
 
-**File:** `packages/mastra/src/agents/resolver.ts` or the agent invocation path
+**File:** `packages/agentc2/src/agents/resolver.ts` or the agent invocation path
 
 Currently, budget is only checked AFTER a run completes (in Inngest). For hard limits, we need a PRE-RUN check that rejects the run before it starts:
 

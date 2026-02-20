@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
-import { getChannelKey } from "@repo/mastra/federation";
-import { decryptWithKey } from "@repo/mastra/crypto";
-import type { EncryptedPayload } from "@repo/mastra/crypto";
+import { getChannelKey } from "@repo/agentc2/federation";
+import { decryptWithKey } from "@repo/agentc2/crypto";
+import type { EncryptedPayload } from "@repo/agentc2/crypto";
 
 export async function GET(
     request: NextRequest,

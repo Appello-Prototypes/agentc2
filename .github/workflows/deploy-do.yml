@@ -32,7 +32,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPLOY_PATH: /var/www/mastra
+  DEPLOY_PATH: /var/www/agentc2
   # 6GB heap for CI runner (7GB RAM total)
   NODE_OPTIONS: "--max-old-space-size=6144"
 
@@ -139,7 +139,7 @@ jobs:
             trap rollback ERR
 
             echo "=========================================="
-            echo "Deploying Mastra AI Agent Framework"
+            echo "Deploying AgentC2 AI Agent Framework"
             echo "Commit: $SHORT_SHA"
             echo "=========================================="
 
@@ -180,7 +180,7 @@ jobs:
 
             echo ""
             echo "7a. Building sandbox Docker image (if changed)..."
-            DOCKERFILE="packages/mastra/docker/Dockerfile.sandbox"
+            DOCKERFILE="packages/agentc2/docker/Dockerfile.sandbox"
             if ! command -v docker >/dev/null 2>&1; then
               echo "   Docker not installed — skipping sandbox image build."
             elif [ -f "$DOCKERFILE" ]; then

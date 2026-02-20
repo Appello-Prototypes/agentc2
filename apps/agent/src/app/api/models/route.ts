@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getModelsForApi, clearModelCache } from "@repo/mastra/agents/model-registry";
-import type { ModelProvider } from "@repo/mastra/agents/model-registry";
+import { getModelsForApi, clearModelCache } from "@repo/agentc2/agents/model-registry";
+import type { ModelProvider } from "@repo/agentc2/agents/model-registry";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**

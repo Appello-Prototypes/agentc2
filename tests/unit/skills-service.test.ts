@@ -12,7 +12,7 @@ vi.mock("@repo/database", () => ({
 
 // Import after mocking
 const { createSkill, updateSkill, deleteSkill, getSkill, listSkills, forkSkill } =
-    await import("@repo/mastra");
+    await import("@repo/agentc2");
 
 describe("Skill Service", () => {
     beforeEach(() => {

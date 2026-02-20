@@ -49,6 +49,9 @@ export interface RunDetailPanelProps {
     /** Session/thread IDs if available */
     sessionId?: string | null;
     threadId?: string | null;
+    /** Instance info if run was from a multi-instance agent */
+    instanceName?: string | null;
+    instanceSlug?: string | null;
 }
 
 export default function RunDetailPanel({
@@ -61,7 +64,9 @@ export default function RunDetailPanel({
     completionTokens,
     totalTokens,
     sessionId,
-    threadId
+    threadId,
+    instanceName,
+    instanceSlug
 }: RunDetailPanelProps) {
     const [detailTab, setDetailTab] = useState("overview");
 
@@ -156,6 +161,22 @@ export default function RunDetailPanel({
                                     </div>
                                 </div>
                             </div>
+
+                            {(instanceName || runDetail?.instanceName) && (
+                                <div className="bg-muted/30 rounded-lg border p-3">
+                                    <h3 className="text-muted-foreground mb-1 text-xs font-medium uppercase">
+                                        Instance
+                                    </h3>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-sm font-medium">
+                                            {instanceName ?? runDetail?.instanceName}
+                                        </span>
+                                        <code className="bg-muted rounded px-1.5 py-0.5 font-mono text-[11px]">
+                                            {instanceSlug ?? runDetail?.instanceSlug}
+                                        </code>
+                                    </div>
+                                </div>
+                            )}
 
                             {(sessionId || threadId) && (
                                 <div className="grid grid-cols-2 gap-4">

@@ -1,13 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, TriggerEventStatus } from "@repo/database";
-import { agentResolver } from "@repo/mastra/agents";
-import { startRun, extractTokenUsage, extractToolCalls, type RunSource } from "@/lib/run-recorder";
+import { agentResolver } from "@repo/agentc2/agents";
+import {
+    startRun,
+    startConversationRun,
+    continueTurn,
+    extractTokenUsage,
+    extractToolCalls,
+    type RunSource
+} from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { inngest } from "@/lib/inngest";
 import { auditLog } from "@/lib/audit-log";
 import { resolveRunSource, resolveRunTriggerType } from "@/lib/unified-triggers";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
-import { enforceInputGuardrails, enforceOutputGuardrails } from "@repo/mastra/guardrails";
+import { enforceInputGuardrails, enforceOutputGuardrails } from "@repo/agentc2/guardrails";
 import { requireAgentAccess, requireAuth } from "@/lib/authz";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
@@ -164,6 +171,20 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
+        // Guard: multi-instance agents require an instanceId
+        if (
+            (record as { deploymentMode?: string }).deploymentMode === "multi-instance" &&
+            !body.instanceId
+        ) {
+            return NextResponse.json(
+                {
+                    success: false,
+                    error: "This agent uses multi-instance deployment. Provide an instanceId to invoke it."
+                },
+                { status: 400 }
+            );
+        }
+
         // Check policies
         if (record.requiresApproval) {
             return NextResponse.json(
@@ -219,7 +240,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     triggerType: triggerRecord
                         ? resolveRunTriggerType(triggerRecord.triggerType)
                         : undefined,
-                    triggerId: triggerRecord?.id
+                    triggerId: triggerRecord?.id,
+                    instanceId: body.instanceId ?? undefined
                 }
             });
 
@@ -273,21 +295,74 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // Sync mode - execute immediately with full observability
-        const runHandle = await startRun({
-            agentId: record.id,
-            agentSlug: record.slug,
-            input,
-            source: runSource,
-            triggerType: triggerRecord
-                ? resolveRunTriggerType(triggerRecord.triggerType)
-                : undefined,
-            triggerId: triggerRecord?.id,
-            userId: context?.userId,
-            threadId: context?.threadId,
-            sessionId: context?.sessionId,
-            tenantId: record.tenantId || undefined
-        });
+        // When a threadId is provided, try to continue an existing conversation run
+        let runHandle: Awaited<ReturnType<typeof startRun>>;
 
+        if (context?.threadId) {
+            const existingRun = await prisma.agentRun.findFirst({
+                where: {
+                    agentId: record.id,
+                    threadId: context.threadId,
+                    status: { in: ["COMPLETED", "RUNNING"] }
+                },
+                orderBy: { createdAt: "desc" },
+                select: { id: true, status: true }
+            });
+
+            if (existingRun) {
+                const turnHandle = await continueTurn({
+                    runId: existingRun.id,
+                    input,
+                    agentId: record.id,
+                    agentSlug: record.slug,
+                    tenantId: record.tenantId || undefined
+                });
+                runHandle = {
+                    runId: turnHandle.runId,
+                    traceId: turnHandle.traceId,
+                    complete: turnHandle.completeTurn,
+                    fail: turnHandle.failTurn,
+                    addToolCall: turnHandle.addToolCall
+                };
+            } else {
+                const convHandle = await startConversationRun({
+                    agentId: record.id,
+                    agentSlug: record.slug,
+                    input,
+                    source: runSource,
+                    triggerType: triggerRecord
+                        ? resolveRunTriggerType(triggerRecord.triggerType)
+                        : undefined,
+                    triggerId: triggerRecord?.id,
+                    userId: context?.userId,
+                    threadId: context.threadId,
+                    sessionId: context?.sessionId,
+                    tenantId: record.tenantId || undefined
+                });
+                runHandle = {
+                    runId: convHandle.runId,
+                    traceId: convHandle.traceId,
+                    complete: convHandle.completeTurn,
+                    fail: convHandle.failTurn,
+                    addToolCall: convHandle.addToolCall
+                };
+            }
+        } else {
+            runHandle = await startRun({
+                agentId: record.id,
+                agentSlug: record.slug,
+                input,
+                source: runSource,
+                triggerType: triggerRecord
+                    ? resolveRunTriggerType(triggerRecord.triggerType)
+                    : undefined,
+                triggerId: triggerRecord?.id,
+                userId: context?.userId,
+                threadId: context?.threadId,
+                sessionId: context?.sessionId,
+                tenantId: record.tenantId || undefined
+            });
+        }
         // Audit log the invocation
         auditLog.agentInvoke(
             runHandle.runId,
@@ -386,8 +461,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     timestamp: new Date().toISOString()
                 });
 
+                stepCounter++;
                 if (tc.output !== undefined || tc.error) {
-                    stepCounter++;
                     const resultPreview = formatToolResultPreview(tc.output, 500);
                     executionSteps.push({
                         step: stepCounter,
@@ -395,6 +470,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         content: tc.error
                             ? `Tool ${toolName} failed: ${tc.error}`
                             : `Tool ${toolName} result:\n${resultPreview}`,
+                        timestamp: new Date().toISOString()
+                    });
+                } else {
+                    executionSteps.push({
+                        step: stepCounter,
+                        type: "tool_result",
+                        content: `Tool ${toolName} completed with no output captured`,
                         timestamp: new Date().toISOString()
                     });
                 }

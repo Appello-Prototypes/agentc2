@@ -72,7 +72,7 @@ Use this questionnaire to finalize the implementation plan. Each section contain
 
 ## 3. Tool Registry Source of Truth
 
-**Context**: Tools are currently defined in code (`packages/mastra/src/tools/registry.ts`) with MCP fallback. The plan proposes a `ToolDefinition` database table.
+**Context**: Tools are currently defined in code (`packages/agentc2/src/tools/registry.ts`) with MCP fallback. The plan proposes a `ToolDefinition` database table.
 
 **Options**:
 
@@ -106,7 +106,7 @@ Use this questionnaire to finalize the implementation plan. Each section contain
 
 ## 4. Scorer Registry Source of Truth
 
-**Context**: Similar to tools, scorers are code-defined in `packages/mastra/src/scorers/registry.ts`. The plan proposes a `ScorerDefinition` table.
+**Context**: Similar to tools, scorers are code-defined in `packages/agentc2/src/scorers/registry.ts`. The plan proposes a `ScorerDefinition` table.
 
 **Options**:
 

@@ -61,45 +61,45 @@ const googleScopes = [
 - `drive.readonly` -- search, list, and read ANY file in the user's Drive (needed for "find that document")
 - `drive.file` -- create and edit files the app creates (needed for "produce a Google Doc"). This is Google's **recommended** scope for doc creation -- classified as non-sensitive, no extra app verification needed.
 
-**Edge case**: Existing users who signed up before this change won't have Drive scopes. The `checkGoogleScopes()` helper in `[packages/mastra/src/tools/gmail/shared.ts](packages/mastra/src/tools/gmail/shared.ts)` will catch this and Drive tools will gracefully return an error prompting re-auth.
+**Edge case**: Existing users who signed up before this change won't have Drive scopes. The `checkGoogleScopes()` helper in `[packages/agentc2/src/tools/gmail/shared.ts](packages/agentc2/src/tools/gmail/shared.ts)` will catch this and Drive tools will gracefully return an error prompting re-auth.
 
 ### 2. Build native Google Drive tools
 
-New directory: `packages/mastra/src/tools/google-drive/`
+New directory: `packages/agentc2/src/tools/google-drive/`
 
 Follow the Gmail/Calendar pattern exactly -- reuse `getAccessToken()` from `gmail/shared.ts` (same Google OAuth tokens), use `gmailAddress` as the lookup key.
 
 **Files to create:**
 
-- `packages/mastra/src/tools/google-drive/shared.ts`
+- `packages/agentc2/src/tools/google-drive/shared.ts`
     - `callDriveApi(gmailAddress, path, options)` helper wrapping Google Drive REST API v3 (`https://www.googleapis.com/drive/v3`)
     - Auto-retry on 401 with token refresh (same pattern as `callGmailApi`)
     - Scope check helper for Drive-specific scopes
-- `packages/mastra/src/tools/google-drive/search-files.ts` -- `**google-drive-search-files**`
+- `packages/agentc2/src/tools/google-drive/search-files.ts` -- `**google-drive-search-files**`
     - Input: `gmailAddress`, `query` (string), `maxResults` (default 10)
     - Uses Drive API `files.list` with `q` parameter and `fields=files(id,name,mimeType,modifiedTime,webViewLink,owners)`
     - Returns: file names, IDs, mimeTypes, modified dates, view links
-- `packages/mastra/src/tools/google-drive/read-file.ts` -- `**google-drive-read-file**`
+- `packages/agentc2/src/tools/google-drive/read-file.ts` -- `**google-drive-read-file**`
     - Input: `gmailAddress`, `fileId`
     - For Google Docs: `files.export` with `mimeType=text/plain`
     - For Google Sheets: `files.export` with `mimeType=text/csv`
     - For Google Slides: `files.export` with `mimeType=text/plain`
     - For other files: `files.get` with `alt=media` (returns raw content, truncated if too large)
     - Returns: file content as text + metadata
-- `packages/mastra/src/tools/google-drive/create-doc.ts` -- `**google-drive-create-doc**`
+- `packages/agentc2/src/tools/google-drive/create-doc.ts` -- `**google-drive-create-doc**`
     - Input: `gmailAddress`, `title` (string), `content` (string, plain text or markdown)
     - Uses Drive API multipart upload: `POST /upload/drive/v3/files?uploadType=multipart`
     - Metadata: `{ name: title, mimeType: "application/vnd.google-apps.document" }`
     - Body: plain text content (Google auto-converts to Doc format)
     - Returns: `{ success, fileId, fileName, webViewLink }` -- the link lets the user open the doc immediately
     - Requires `drive.file` scope
-- `packages/mastra/src/tools/google-drive/index.ts` -- Exports all three tools
+- `packages/agentc2/src/tools/google-drive/index.ts` -- Exports all three tools
 
 **Registration in existing files:**
 
-- `[packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts)` -- Import and add all three tools to `toolRegistry` and `toolCategoryMap` (category: "File Storage")
-- `[packages/mastra/src/tools/oauth-requirements.ts](packages/mastra/src/tools/oauth-requirements.ts)` -- Map all three tools to `"gmail"` provider (same as Calendar)
-- `[packages/mastra/src/tools/index.ts](packages/mastra/src/tools/index.ts)` -- Export from google-drive
+- `[packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts)` -- Import and add all three tools to `toolRegistry` and `toolCategoryMap` (category: "File Storage")
+- `[packages/agentc2/src/tools/oauth-requirements.ts](packages/agentc2/src/tools/oauth-requirements.ts)` -- Map all three tools to `"gmail"` provider (same as Calendar)
+- `[packages/agentc2/src/tools/index.ts](packages/agentc2/src/tools/index.ts)` -- Export from google-drive
 
 ### 3. ConnectStep UI -- Show all Google integrations + Slack
 
@@ -171,7 +171,7 @@ Update `buildStarterInstructions()`:
 
 No code changes. Deployment task:
 
-- Copy `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` from local `.env` to production `/var/www/mastra/.env`
+- Copy `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET` from local `.env` to production `/var/www/agentc2/.env`
 
 ### 7. Deploy
 

@@ -14,7 +14,7 @@ This section documents gaps, inconsistencies, and decision points identified dur
 
 | Area                 | Gap                                                                                                                                                                   | Required Action                                                                                                  |
 | -------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
-| **Observability**    | Mastra `Observability` component is NOT configured in `packages/mastra/src/mastra.ts`. No trace storage or redaction is active.                                       | Add `Observability` config with storage backend, optional redaction, and OpenTelemetry provider compatibility.   |
+| **Observability**    | Mastra `Observability` component is NOT configured in `packages/agentc2/src/mastra.ts`. No trace storage or redaction is active.                                       | Add `Observability` config with storage backend, optional redaction, and OpenTelemetry provider compatibility.   |
 | **RequestContext**   | Current `AgentResolver` uses a custom `RequestContext` interface. Mastra's core `RequestContext` has reserved keys (`resource`, `thread`) for user/session isolation. | Align custom `RequestContext` with Mastra's reserved keys; use `resource.userId` and `thread.id` patterns.       |
 | **Guardrails**       | Plan mentions UI toggles but does not map to Mastra input/output processors (`ModerationProcessor`, `PIIDetector`, `PromptInjectionDetector`) or tripwire handling.   | Define processor mappings, specify "block vs rewrite vs warn" strategies, and document tripwire action handling. |
 | **Memory**           | Plan does not clearly differentiate message history (sliding window), working memory (persistent key-value), and semantic recall (vector search).                     | Clarify memory modes; document `pgvector` extension requirement; specify storage configuration.                  |
@@ -27,12 +27,12 @@ This section documents gaps, inconsistencies, and decision points identified dur
 | Area                 | Current State                                                                            | Plan Proposal                                                                                                                                                                                                                                                                                                                   | Required Action                                                                  |
 | -------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | **API Endpoints**    | Existing: `/api/agents`, `/api/agents/:id`, `/api/agents/:id/test` (accepts slug or id)  | Plan defines many new endpoints without marking existing vs new.                                                                                                                                                                                                                                                                | Mark existing endpoints; label new endpoints explicitly.                         |
-| **Tool Registry**    | Tools are code-defined in `packages/mastra/src/tools/registry.ts` with MCP fallback.     | Plan proposes `ToolDefinition` database table.                                                                                                                                                                                                                                                                                  | Clarify registry ownership: code-first with optional DB overrides OR DB-primary. |
-| **Scorer Registry**  | Scorers are code-defined in `packages/mastra/src/scorers/registry.ts`.                   | Plan proposes `ScorerDefinition` database table.                                                                                                                                                                                                                                                                                | Same decision as tools; likely code-first with sampling config per-agent.        |
+| **Tool Registry**    | Tools are code-defined in `packages/agentc2/src/tools/registry.ts` with MCP fallback.     | Plan proposes `ToolDefinition` database table.                                                                                                                                                                                                                                                                                  | Clarify registry ownership: code-first with optional DB overrides OR DB-primary. |
+| **Scorer Registry**  | Scorers are code-defined in `packages/agentc2/src/scorers/registry.ts`.                   | Plan proposes `ScorerDefinition` database table.                                                                                                                                                                                                                                                                                | Same decision as tools; likely code-first with sampling config per-agent.        |
 | **Database Schema**  | Existing tables: `Agent`, `AgentTool`, `AgentVersion`, `StoredAgent`, `VoiceAgentTrace`. | Plan proposes ~20 new tables: `AgentRun`, `AgentTrace`, `AgentToolCall`, `AgentEvaluation`, `AgentFeedback`, `AgentTestCase`, `AgentTestRun`, `AgentConversation`, `AgentStatsDaily`, `AgentAlert`, `AgentConfig`, `ToolDefinition`, `ScorerDefinition`, `BudgetPolicy`, `CostEvent`, `GuardrailPolicy`, `GuardrailEvent`, etc. | Add migration checklist; define indexes and retention policies.                  |
 | **Multi-Tenancy**    | `Agent` model has `ownerId` but no `tenantId`.                                           | Plan assumes `tenantId` on all models.                                                                                                                                                                                                                                                                                          | Add `tenantId` to `Agent` and all new models; define migration strategy.         |
-| **Postgres Storage** | `@mastra/pg` is configured for Mastra storage in `packages/mastra/src/storage.ts`.       | Plan assumes this exists but doesn't verify.                                                                                                                                                                                                                                                                                    | Confirmed working; document integration points.                                  |
-| **Vector Store**     | `PgVector` configured in `packages/mastra/src/vector.ts` for semantic recall.            | Plan mentions semantic recall but doesn't specify pgvector.                                                                                                                                                                                                                                                                     | Document `pgvector` extension requirement and index strategy.                    |
+| **Postgres Storage** | `@mastra/pg` is configured for Mastra storage in `packages/agentc2/src/storage.ts`.       | Plan assumes this exists but doesn't verify.                                                                                                                                                                                                                                                                                    | Confirmed working; document integration points.                                  |
+| **Vector Store**     | `PgVector` configured in `packages/agentc2/src/vector.ts` for semantic recall.            | Plan mentions semantic recall but doesn't specify pgvector.                                                                                                                                                                                                                                                                     | Document `pgvector` extension requirement and index strategy.                    |
 
 ### Areas Requiring Decisions
 
@@ -816,7 +816,7 @@ These apply to all pages and should be enforced in every API and data access lay
 
 ### Observability (Mastra Integration)
 
-**Current Gap**: Mastra `Observability` is not configured in `packages/mastra/src/mastra.ts`.
+**Current Gap**: Mastra `Observability` is not configured in `packages/agentc2/src/mastra.ts`.
 
 **Required Configuration**:
 
@@ -893,7 +893,7 @@ const mastra = new Mastra({
 **Prerequisites**:
 
 - PostgreSQL with `pgvector` extension enabled: `CREATE EXTENSION IF NOT EXISTS vector;`
-- Vector index on message embeddings (configured in `packages/mastra/src/vector.ts`)
+- Vector index on message embeddings (configured in `packages/agentc2/src/vector.ts`)
 
 **Memory Config Schema** (stored in `Agent.memoryConfig`):
 
@@ -918,7 +918,7 @@ interface MemoryConfig {
 **Registry Architecture** (current implementation):
 
 ```
-Code Registry (packages/mastra/src/tools/registry.ts)
+Code Registry (packages/agentc2/src/tools/registry.ts)
     ├── Built-in tools (date-time, calculator, web-fetch, etc.)
     └── MCP tools (fetched dynamically, cached 1 minute)
         └── Agent-specific config (AgentTool.config)
@@ -953,7 +953,7 @@ Code Registry (packages/mastra/src/tools/registry.ts)
 | **Live Scorers**     | During generation (each step) | Real-time quality gates |
 | **Post-Run Scorers** | After run completion          | Batch quality analysis  |
 
-**Current Scorers** (from `packages/mastra/src/scorers/registry.ts`):
+**Current Scorers** (from `packages/agentc2/src/scorers/registry.ts`):
 
 - `relevancy` - Answer relevance (0-1, higher = better)
 - `toxicity` - Harmful content detection (0-1, lower = better)

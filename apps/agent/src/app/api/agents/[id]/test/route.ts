@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { createAgentFromConfig, agentResolver } from "@repo/mastra/agents";
+import { createAgentFromConfig, agentResolver } from "@repo/agentc2/agents";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents

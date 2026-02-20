@@ -1,6 +1,6 @@
 import { createHash } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { ingestBimElementsToRag, ingestBimModel, uploadBimObject } from "@repo/mastra/bim";
+import { ingestBimElementsToRag, ingestBimModel, uploadBimObject } from "@repo/agentc2/bim";
 import { inngest } from "@/lib/inngest";
 import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
 import { getDemoSession } from "@/lib/standalone-auth";

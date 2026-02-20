@@ -25,7 +25,7 @@ const mockIngestDocument = vi.fn().mockResolvedValue({
     chunksIngested: 3,
     vectorIds: ["v1", "v2", "v3"]
 });
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/agentc2", () => ({
     ingestDocument: mockIngestDocument
 }));
 

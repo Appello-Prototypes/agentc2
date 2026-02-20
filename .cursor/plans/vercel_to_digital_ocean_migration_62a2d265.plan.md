@@ -1,6 +1,6 @@
 ---
 name: Vercel to Digital Ocean Migration
-overview: Migrate the Mastra AI Agent Framework from Vercel serverless to a Digital Ocean Droplet to enable persistent MCP processes, long-running connections, and Playwright browser automation.
+overview: Migrate the AgentC2 AI Agent Framework from Vercel serverless to a Digital Ocean Droplet to enable persistent MCP processes, long-running connections, and Playwright browser automation.
 todos:
     - id: fix-auth-provider
       content: "CRITICAL: Fix Better Auth database provider mismatch (mysql -> postgresql) in packages/auth/src/auth.ts"
@@ -9,7 +9,7 @@ todos:
       content: "CRITICAL: Replace hardcoded catalyst.localhost checks with environment-based detection in 4 files"
       status: completed
     - id: fix-ssl-config
-      content: "CRITICAL: Fix hardcoded Supabase SSL check in packages/mastra/src/orchestrator/store.ts"
+      content: "CRITICAL: Fix hardcoded Supabase SSL check in packages/agentc2/src/orchestrator/store.ts"
       status: completed
     - id: fix-vercel-detection
       content: "CRITICAL: Replace VERCEL env check with environment-agnostic approach in standalone-auth.ts"
@@ -121,7 +121,7 @@ Four files contain hardcoded `catalyst.localhost` checks that determine basePath
 
 ### 3. Hardcoded SSL Configuration
 
-**File:** `packages/mastra/src/orchestrator/store.ts:18`
+**File:** `packages/agentc2/src/orchestrator/store.ts:18`
 
 **Problem:** SSL is only enabled if connection string contains "supabase":
 
@@ -152,9 +152,9 @@ trustedOrigins: [
 
 **Files:**
 
-- `packages/mastra/src/storage.ts` - PostgresStore (no pool config)
-- `packages/mastra/src/vector.ts` - PgVector (no pool config)
-- `packages/mastra/src/orchestrator/store.ts` - pg Pool (no limit)
+- `packages/agentc2/src/storage.ts` - PostgresStore (no pool config)
+- `packages/agentc2/src/vector.ts` - PgVector (no pool config)
+- `packages/agentc2/src/orchestrator/store.ts` - pg Pool (no limit)
 
 **Risk:** Connection exhaustion under load.
 
@@ -281,7 +281,7 @@ jobs:
                   username: ${{ secrets.DO_USERNAME }}
                   key: ${{ secrets.DO_SSH_KEY }}
                   script: |
-                      cd /var/www/mastra
+                      cd /var/www/agentc2
                       git pull origin main
                       bun install
                       bun run db:generate
@@ -389,7 +389,7 @@ ELEVENLABS_MCP_WEBHOOK_URL=https://yourdomain.com/agent/api/demos/live-agent-mcp
 1. Provision Ubuntu Droplet
 2. Install Bun, Node, Caddy, PM2, Playwright deps
 3. Configure firewall (allow 80, 443, 22)
-4. Clone repository to `/var/www/mastra`
+4. Clone repository to `/var/www/agentc2`
 5. Create production `.env` file
 
 ### Phase 3: Deployment

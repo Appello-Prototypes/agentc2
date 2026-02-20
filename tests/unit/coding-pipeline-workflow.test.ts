@@ -4,7 +4,7 @@ import {
     CODING_PIPELINE_INTERNAL_DEFINITION,
     CODING_PIPELINE_WORKFLOW_SEED,
     CODING_PIPELINE_INTERNAL_WORKFLOW_SEED
-} from "../../packages/mastra/src/workflows/coding-pipeline";
+} from "../../packages/agentc2/src/workflows/coding-pipeline";
 
 describe("Coding Pipeline Workflow Definitions", () => {
     describe("Standard pipeline", () => {

@@ -9,7 +9,7 @@ todos:
       content: "Create shared OAuth security module at apps/agent/src/lib/oauth-security.ts: signed state param (orgId+userId+nonce+expiry), PKCE code_verifier/code_challenge generation, state validation in callbacks"
       status: completed
     - id: provider-seeds
-      content: Add IntegrationProviderSeed entries for microsoft (combined mail+calendar), and dropbox to INTEGRATION_PROVIDER_SEEDS in packages/mastra/src/mcp/client.ts. Include actionsJson and triggersJson metadata.
+      content: Add IntegrationProviderSeed entries for microsoft (combined mail+calendar), and dropbox to INTEGRATION_PROVIDER_SEEDS in packages/agentc2/src/mcp/client.ts. Include actionsJson and triggersJson metadata.
       status: completed
     - id: schema
       content: "Add Prisma models: CalendarEvent, WebhookSubscription (generic for Graph+Dropbox), and add microsoft/dropbox providerKey support to GmailIntegration or create a generic IntegrationBinding model"
@@ -24,7 +24,7 @@ todos:
       content: "Create API routes for Outlook Mail: start (with state+PKCE), callback (validates state, exchanges code), status, CRUD, webhook (Graph validation handshake + clientState verification)"
       status: completed
     - id: outlook-mail-tools
-      content: "Create Outlook Mail action tools with auto-refresh + connection health: send, archive, list, get email in packages/mastra/src/tools/outlook-mail/"
+      content: "Create Outlook Mail action tools with auto-refresh + connection health: send, archive, list, get email in packages/agentc2/src/tools/outlook-mail/"
       status: completed
     - id: outlook-mail-ui
       content: Create setup UI page at apps/agent/src/app/mcp/outlook-mail/page.tsx with connection health display and re-auth flow
@@ -36,7 +36,7 @@ todos:
       content: "Create API routes for Outlook Calendar: start, callback, status, CRUD, webhook"
       status: completed
     - id: outlook-calendar-tools
-      content: "Create Outlook Calendar action tools: list, get, create, update events in packages/mastra/src/tools/outlook-calendar/"
+      content: "Create Outlook Calendar action tools: list, get, create, update events in packages/agentc2/src/tools/outlook-calendar/"
       status: completed
     - id: outlook-calendar-ui
       content: Create setup UI page at apps/agent/src/app/mcp/outlook-calendar/page.tsx
@@ -48,13 +48,13 @@ todos:
       content: "Create API routes for Dropbox: start, callback, status, CRUD, webhook (GET challenge verification + POST multi-account fanout)"
       status: completed
     - id: dropbox-tools
-      content: "Create Dropbox action tools: list, get, upload, search, sharing links in packages/mastra/src/tools/dropbox/"
+      content: "Create Dropbox action tools: list, get, upload, search, sharing links in packages/agentc2/src/tools/dropbox/"
       status: completed
     - id: dropbox-ui
       content: Create setup UI page at apps/agent/src/app/mcp/dropbox/page.tsx
       status: completed
     - id: registry
-      content: Register all new tools in packages/mastra/src/tools/registry.ts and export from packages/mastra/src/index.ts
+      content: Register all new tools in packages/agentc2/src/tools/registry.ts and export from packages/agentc2/src/index.ts
       status: completed
     - id: inngest-subscriptions
       content: "Add Inngest cron function for webhook subscription lifecycle: Graph subscription renewal (3-day TTL), Dropbox cursor refresh, dead-connection cleanup"
@@ -74,11 +74,11 @@ isProject: false
 
 Gmail is the only native OAuth integration today. Its architecture spans multiple layers:
 
-- **Provider seed** in [packages/mastra/src/mcp/client.ts](packages/mastra/src/mcp/client.ts) (lines 479-511) -- `providerType: "oauth"`, `authType: "oauth"`, triggers metadata
+- **Provider seed** in [packages/agentc2/src/mcp/client.ts](packages/agentc2/src/mcp/client.ts) (lines 479-511) -- `providerType: "oauth"`, `authType: "oauth"`, triggers metadata
 - **OAuth helper** at [apps/agent/src/lib/gmail.ts](apps/agent/src/lib/gmail.ts) -- OAuth2Client, token refresh, credential save/load from `IntegrationConnection`
 - **API routes** under `apps/agent/src/app/api/integrations/gmail/` -- start, callback, status, sync, watch
 - **Webhook** at [apps/agent/src/app/api/gmail/webhook/route.ts](apps/agent/src/app/api/gmail/webhook/route.ts) -- Pub/Sub push, fires `gmail.message.received` via Inngest `agent/trigger.fire`
-- **Tools** at [packages/mastra/src/tools/gmail/](packages/mastra/src/tools/gmail/) -- archive-email action tool
+- **Tools** at [packages/agentc2/src/tools/gmail/](packages/agentc2/src/tools/gmail/) -- archive-email action tool
 - **Prisma model** `GmailIntegration` -- binds agent + mailbox + Slack user
 - **Setup UI** at [apps/agent/src/app/mcp/gmail/page.tsx](apps/agent/src/app/mcp/gmail/page.tsx)
 
@@ -415,7 +415,7 @@ New function in [apps/agent/src/lib/inngest-functions.ts](apps/agent/src/lib/inn
 
 ### Shared Infrastructure (3 files changed)
 
-- [packages/mastra/src/mcp/client.ts](packages/mastra/src/mcp/client.ts) -- Add `microsoft` and `dropbox` provider seeds with `actionsJson` + `triggersJson`
+- [packages/agentc2/src/mcp/client.ts](packages/agentc2/src/mcp/client.ts) -- Add `microsoft` and `dropbox` provider seeds with `actionsJson` + `triggersJson`
 - [packages/database/prisma/schema.prisma](packages/database/prisma/schema.prisma) -- Add `WebhookSubscription`, `CalendarEvent` models, add `webhookSubscriptions` relation to `IntegrationConnection`
 - `.env` + [CLAUDE.md](CLAUDE.md) -- Document all new env vars
 
@@ -428,8 +428,8 @@ New function in [apps/agent/src/lib/inngest-functions.ts](apps/agent/src/lib/inn
 - `apps/agent/src/app/api/integrations/microsoft/callback/route.ts` -- OAuth callback (shared)
 - `apps/agent/src/app/api/integrations/microsoft/status/route.ts` -- Connection status + health
 - `apps/agent/src/app/api/microsoft/webhook/route.ts` -- Graph webhook: validation handshake + notification dispatch (routes to mail or calendar handler based on resource)
-- `packages/mastra/src/tools/outlook-mail/index.ts` + `actions.ts` -- Mail tool exports and implementations
-- `packages/mastra/src/tools/outlook-calendar/index.ts` + `actions.ts` -- Calendar tool exports and implementations
+- `packages/agentc2/src/tools/outlook-mail/index.ts` + `actions.ts` -- Mail tool exports and implementations
+- `packages/agentc2/src/tools/outlook-calendar/index.ts` + `actions.ts` -- Calendar tool exports and implementations
 - `apps/agent/src/app/mcp/microsoft/page.tsx` -- Unified setup UI (shows both mail and calendar status, single Connect button)
 
 ### Dropbox (8 files)
@@ -439,13 +439,13 @@ New function in [apps/agent/src/lib/inngest-functions.ts](apps/agent/src/lib/inn
 - `apps/agent/src/app/api/integrations/dropbox/callback/route.ts` -- OAuth callback
 - `apps/agent/src/app/api/integrations/dropbox/status/route.ts` -- Connection status
 - `apps/agent/src/app/api/dropbox/webhook/route.ts` -- GET challenge verification + POST multi-account fanout
-- `packages/mastra/src/tools/dropbox/index.ts` + `actions.ts` -- Tool exports and implementations
+- `packages/agentc2/src/tools/dropbox/index.ts` + `actions.ts` -- Tool exports and implementations
 - `apps/agent/src/app/mcp/dropbox/page.tsx` -- Setup UI
 
 ### Tool Registry + Inngest (3 files changed)
 
-- [packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts) -- Register all new tools
-- [packages/mastra/src/index.ts](packages/mastra/src/index.ts) -- Export new modules
+- [packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts) -- Register all new tools
+- [packages/agentc2/src/index.ts](packages/agentc2/src/index.ts) -- Export new modules
 - [apps/agent/src/lib/inngest-functions.ts](apps/agent/src/lib/inngest-functions.ts) -- Add subscription renewal cron
 
 ---

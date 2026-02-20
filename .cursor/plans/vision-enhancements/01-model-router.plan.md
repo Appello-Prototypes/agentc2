@@ -127,7 +127,7 @@ routingConfig?: RoutingConfig | null;
 
 ## Step 4: Agent Resolver Routing Logic
 
-**File:** [packages/mastra/src/agents/index.ts](packages/mastra/src/agents/index.ts) or the resolver file.
+**File:** [packages/agentc2/src/agents/index.ts](packages/agentc2/src/agents/index.ts) or the resolver file.
 
 This is the backend logic. When an agent with `routingConfig.mode === "auto"` receives a request:
 

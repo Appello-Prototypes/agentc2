@@ -21,22 +21,22 @@ todos:
       content: Re-authorize Google OAuth with calendar.readonly scope to fix the 403 errors on google-calendar-search-events
       status: pending
     - id: oauth-provider-types
-      content: Create OAuthToolProvider interface and types in packages/mastra/src/tools/oauth-providers/types.ts
+      content: Create OAuthToolProvider interface and types in packages/agentc2/src/tools/oauth-providers/types.ts
       status: pending
     - id: token-refresh-utility
-      content: Create shared withTokenRefresh() utility in packages/mastra/src/tools/oauth-providers/token-refresh.ts
+      content: Create shared withTokenRefresh() utility in packages/agentc2/src/tools/oauth-providers/token-refresh.ts
       status: pending
     - id: google-provider
-      content: Implement GoogleToolProvider (scope-gated Gmail + Calendar tools) in packages/mastra/src/tools/oauth-providers/google.ts
+      content: Implement GoogleToolProvider (scope-gated Gmail + Calendar tools) in packages/agentc2/src/tools/oauth-providers/google.ts
       status: pending
     - id: microsoft-provider
-      content: Implement MicrosoftToolProvider (Outlook Mail + Calendar) in packages/mastra/src/tools/oauth-providers/microsoft.ts
+      content: Implement MicrosoftToolProvider (Outlook Mail + Calendar) in packages/agentc2/src/tools/oauth-providers/microsoft.ts
       status: pending
     - id: dropbox-provider
-      content: Implement DropboxToolProvider (file tools) in packages/mastra/src/tools/oauth-providers/dropbox.ts
+      content: Implement DropboxToolProvider (file tools) in packages/agentc2/src/tools/oauth-providers/dropbox.ts
       status: pending
     - id: oauth-loader
-      content: Create getOAuthTools(orgId) loader with per-org caching in packages/mastra/src/tools/oauth-providers/loader.ts
+      content: Create getOAuthTools(orgId) loader with per-org caching in packages/agentc2/src/tools/oauth-providers/loader.ts
       status: pending
     - id: refactor-tool-bases
       content: Refactor all 18 OAuth tools to export base definitions (schema + logic factory) that accept an API caller

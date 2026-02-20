@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { mastra } from "@repo/mastra/core";
+import { mastra } from "@repo/agentc2/core";
 import { Readable } from "stream";
 
 // Helper to convert Node.js Readable stream to buffer

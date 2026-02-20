@@ -26,7 +26,7 @@
     "@modelcontextprotocol/sdk": "^1.26.0",
     "@repo/auth": "workspace:*",
     "@repo/database": "workspace:*",
-    "@repo/mastra": "workspace:*",
+    "@repo/agentc2": "workspace:*",
     "@repo/ui": "workspace:*",
     "@xyflow/react": "^12.10.0",
     "ai": "^6.0.64",

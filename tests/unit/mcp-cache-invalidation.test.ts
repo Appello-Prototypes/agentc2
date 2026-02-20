@@ -56,7 +56,7 @@ describe("MCP cache invalidation", () => {
         prismaMock.integrationProvider.findMany.mockResolvedValue([] as never);
 
         const { getMcpTools, invalidateMcpCacheForOrg } =
-            await import("../../packages/mastra/src/mcp/client");
+            await import("../../packages/agentc2/src/mcp/client");
         const { MCPClient } = await import("@mastra/mcp");
         MCPClient.reset();
         const baselineCalls = MCPClient.calls.length;
@@ -74,12 +74,12 @@ describe("MCP cache invalidation", () => {
         const getMcpToolsMock = vi
             .fn()
             .mockResolvedValue({ tools: { toolA: {} }, serverErrors: {} });
-        vi.doMock("../../packages/mastra/src/mcp/client", () => ({
+        vi.doMock("../../packages/agentc2/src/mcp/client", () => ({
             getMcpTools: getMcpToolsMock
         }));
 
         const { getAllMcpTools, invalidateMcpToolsCacheForOrg } =
-            await import("../../packages/mastra/src/tools/registry");
+            await import("../../packages/agentc2/src/tools/registry");
 
         await getAllMcpTools("org-1");
         await getAllMcpTools("org-1");

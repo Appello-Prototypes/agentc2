@@ -1,7 +1,7 @@
 import { randomUUID } from "crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { recordActivity } from "@repo/mastra/activity/service";
+import { recordActivity } from "@repo/agentc2/activity/service";
 import {
     createChangeLog,
     detectScalarChange,
@@ -249,6 +249,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             }
             if (body.metadata !== undefined) updateData.metadata = body.metadata;
             if (body.isActive !== undefined) updateData.isActive = body.isActive;
+            if (body.deploymentMode !== undefined) updateData.deploymentMode = body.deploymentMode;
 
             // Detect changes and build changesJson for version history
             // Use deep comparison for JSON fields with sorted keys to avoid false positives/negatives

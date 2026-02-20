@@ -8,7 +8,7 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
-vi.mock("../../packages/mastra/src/crypto/encryption", () => ({
+vi.mock("../../packages/agentc2/src/crypto/encryption", () => ({
     decryptJson: vi.fn()
 }));
 
@@ -30,7 +30,7 @@ describe("Verify Tools", () => {
     describe("wait-for-checks", () => {
         it("returns allPassed when all checks succeed", async () => {
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -64,7 +64,7 @@ describe("Verify Tools", () => {
 
         it("returns failure when a check fails", async () => {
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -97,7 +97,7 @@ describe("Verify Tools", () => {
 
         it("handles skipped and neutral conclusions as passing", async () => {
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,
@@ -133,7 +133,7 @@ describe("Verify Tools", () => {
 
         it("throws on GitHub API error", async () => {
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: false,
@@ -153,7 +153,7 @@ describe("Verify Tools", () => {
             delete process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
 
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             await expect(
                 waitForChecksTool.execute({
@@ -165,7 +165,7 @@ describe("Verify Tools", () => {
 
         it("parses repo from full URL", async () => {
             const { waitForChecksTool } =
-                await import("../../packages/mastra/src/tools/verify-tools");
+                await import("../../packages/agentc2/src/tools/verify-tools");
 
             mockFetch.mockResolvedValueOnce({
                 ok: true,

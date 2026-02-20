@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { generateScorecard } from "@repo/mastra/scorers";
+import { generateScorecard } from "@repo/agentc2/scorers";
 
 /**
  * POST /api/agents/[id]/scorecard/generate

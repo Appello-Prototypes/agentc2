@@ -276,10 +276,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
     } catch (error) {
         console.error("[Automations Detail] GET error:", error);
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to fetch automation runs"
-            },
+            { success: false, error: "Failed to fetch automation runs" },
             { status: 500 }
         );
     }
@@ -288,20 +285,20 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
 /**
  * PATCH /api/live/automations/[id]
  *
- * Toggle isActive (pause/resume) for a schedule or trigger.
+ * Toggle isActive (pause/resume) or isArchived (archive/unarchive) for a schedule or trigger.
  * Implicit automations cannot be toggled.
  *
- * Body: { isActive: boolean }
+ * Body: { isActive?: boolean, isArchived?: boolean }
  */
 export async function PATCH(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const body = await request.json();
-        const { isActive } = body as { isActive?: boolean };
+        const { isActive, isArchived } = body as { isActive?: boolean; isArchived?: boolean };
 
-        if (typeof isActive !== "boolean") {
+        if (typeof isActive !== "boolean" && typeof isArchived !== "boolean") {
             return NextResponse.json(
-                { success: false, error: "isActive (boolean) is required" },
+                { success: false, error: "isActive (boolean) or isArchived (boolean) is required" },
                 { status: 400 }
             );
         }
@@ -332,16 +329,41 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             );
         }
 
+        const updateData: Record<string, unknown> = {};
+
+        if (typeof isArchived === "boolean") {
+            updateData.isArchived = isArchived;
+            if (isArchived) {
+                updateData.archivedAt = new Date();
+                updateData.isActive = false;
+                if (parsed.sourceType === "schedule") {
+                    updateData.nextRunAt = null;
+                }
+            } else {
+                updateData.archivedAt = null;
+            }
+        }
+
+        if (typeof isActive === "boolean" && typeof isArchived !== "boolean") {
+            updateData.isActive = isActive;
+        }
+
         if (parsed.sourceType === "schedule") {
+            if (updateData.isActive === false && typeof isArchived !== "boolean") {
+                updateData.nextRunAt = null;
+            }
+
             const schedule = await prisma.agentSchedule.update({
                 where: { id: parsed.sourceId },
-                data: { isActive }
+                data: updateData
             });
             return NextResponse.json({
                 success: true,
                 automation: {
                     id: `schedule:${schedule.id}`,
-                    isActive: schedule.isActive
+                    isActive: schedule.isActive,
+                    isArchived: schedule.isArchived,
+                    archivedAt: schedule.archivedAt
                 }
             });
         }
@@ -349,13 +371,15 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         if (parsed.sourceType === "trigger") {
             const trigger = await prisma.agentTrigger.update({
                 where: { id: parsed.sourceId },
-                data: { isActive }
+                data: updateData
             });
             return NextResponse.json({
                 success: true,
                 automation: {
                     id: `trigger:${trigger.id}`,
-                    isActive: trigger.isActive
+                    isActive: trigger.isActive,
+                    isArchived: trigger.isArchived,
+                    archivedAt: trigger.archivedAt
                 }
             });
         }
@@ -367,10 +391,7 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     } catch (error) {
         console.error("[Automations Detail] PATCH error:", error);
         return NextResponse.json(
-            {
-                success: false,
-                error: error instanceof Error ? error.message : "Failed to update automation"
-            },
+            { success: false, error: "Failed to update automation" },
             { status: 500 }
         );
     }

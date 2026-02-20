@@ -14,7 +14,7 @@ Google Calendar has 7 fully-implemented tools but no dedicated agent to use them
 
 ## Available Calendar Tools
 
-From `packages/mastra/src/tools/google-calendar/`:
+From `packages/agentc2/src/tools/google-calendar/`:
 
 | Tool                            | File               | Purpose                     |
 | ------------------------------- | ------------------ | --------------------------- |

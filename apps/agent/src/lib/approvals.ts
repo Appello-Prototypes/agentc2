@@ -272,7 +272,7 @@ export const handleSlackApprovalReaction = async (options: {
 
     if (updated.workflowRunId) {
         try {
-            const { humanApprovalWorkflow } = await import("@repo/mastra");
+            const { humanApprovalWorkflow } = await import("@repo/agentc2");
             const workflow = humanApprovalWorkflow as unknown as {
                 resume: (
                     runId: string,

@@ -25,7 +25,7 @@ vi.mock("@repo/database", () => ({
 }));
 
 // Mock agent resolver
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/agentc2", () => ({
     agentResolver: {
         resolve: vi.fn()
     }

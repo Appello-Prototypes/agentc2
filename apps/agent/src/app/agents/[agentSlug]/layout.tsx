@@ -28,6 +28,7 @@ interface Agent {
     modelName: string;
     isActive: boolean;
     type: "SYSTEM" | "USER" | "DEMO";
+    deploymentMode?: string;
 }
 
 interface AgentListItem {
@@ -47,22 +48,30 @@ function formatModelName(modelName: string): string {
         .join(" ");
 }
 
-const navItems: { id: string; label: string; icon: IconName }[] = [
-    { id: "overview", label: "Overview", icon: "dashboard" },
-    { id: "configure", label: "Configure", icon: "settings" },
-    { id: "runs", label: "Runs", icon: "play-circle" },
-    { id: "automation", label: "Automation", icon: "calendar" },
-    { id: "analytics", label: "Analytics", icon: "analytics" },
-    { id: "traces", label: "Traces", icon: "activity" },
-    { id: "evaluations", label: "Evaluations", icon: "chart-evaluation" },
-    { id: "learning", label: "Learning", icon: "ai-network" },
-    { id: "costs", label: "Costs", icon: "dollar" },
-    { id: "versions", label: "Versions", icon: "git-branch" },
-    { id: "guardrails", label: "Guardrails", icon: "shield" },
-    { id: "simulations", label: "Simulations", icon: "play-list" },
-    { id: "backlog", label: "Backlog", icon: "task-list" },
-    { id: "output-actions", label: "Output Actions", icon: "arrow-right" }
-];
+function getNavItems(deploymentMode?: string): { id: string; label: string; icon: IconName }[] {
+    const items: { id: string; label: string; icon: IconName }[] = [
+        { id: "overview", label: "Overview", icon: "dashboard" },
+        { id: "configure", label: "Configure", icon: "settings" },
+        { id: "runs", label: "Runs", icon: "play-circle" },
+        { id: "automation", label: "Automation", icon: "calendar" },
+        { id: "analytics", label: "Analytics", icon: "analytics" },
+        { id: "traces", label: "Traces", icon: "activity" },
+        { id: "evaluations", label: "Evaluations", icon: "chart-evaluation" },
+        { id: "learning", label: "Learning", icon: "ai-network" },
+        { id: "costs", label: "Costs", icon: "dollar" },
+        { id: "versions", label: "Versions", icon: "git-branch" },
+        { id: "guardrails", label: "Guardrails", icon: "shield" },
+        { id: "simulations", label: "Simulations", icon: "play-list" },
+        { id: "backlog", label: "Backlog", icon: "task-list" },
+        { id: "output-actions", label: "Output Actions", icon: "arrow-right" }
+    ];
+
+    if (deploymentMode === "multi-instance") {
+        items.splice(3, 0, { id: "instances", label: "Instances", icon: "user-group" });
+    }
+
+    return items;
+}
 
 export default function AgentDetailLayout({ children }: { children: React.ReactNode }) {
     const params = useParams();
@@ -203,7 +212,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                         {/* Navigation */}
                         <nav className="flex-1 overflow-y-auto px-2 py-1">
                             <ul className="flex flex-col gap-0.5">
-                                {navItems.map((item) => {
+                                {getNavItems(agent.deploymentMode).map((item) => {
                                     const isItemActive = activeTab === item.id;
                                     const href = `/agents/${agentSlug}/${item.id}`;
 

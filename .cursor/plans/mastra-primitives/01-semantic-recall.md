@@ -32,7 +32,7 @@ SELECT * FROM pg_extension WHERE extname = 'vector';
 
 ### Step 2: Create Vector Store Singleton
 
-Create new file: `packages/mastra/src/vector.ts`
+Create new file: `packages/agentc2/src/vector.ts`
 
 ```typescript
 import { PgVector } from "@mastra/pg";
@@ -63,7 +63,7 @@ export const vector = getPgVector();
 
 ### Step 3: Update Memory Configuration
 
-Update `packages/mastra/src/memory.ts`:
+Update `packages/agentc2/src/memory.ts`:
 
 ```typescript
 import { Memory } from "@mastra/memory";
@@ -124,7 +124,7 @@ Update `turbo.json`:
 
 ### Step 5: Update Exports
 
-Update `packages/mastra/src/index.ts`:
+Update `packages/agentc2/src/index.ts`:
 
 ```typescript
 export { vector } from "./vector";
@@ -249,9 +249,9 @@ const testQueries = [
 
 | File                                       | Action             |
 | ------------------------------------------ | ------------------ |
-| `packages/mastra/src/vector.ts`            | Create             |
-| `packages/mastra/src/memory.ts`            | Update             |
-| `packages/mastra/src/index.ts`             | Update             |
+| `packages/agentc2/src/vector.ts`            | Create             |
+| `packages/agentc2/src/memory.ts`            | Update             |
+| `packages/agentc2/src/index.ts`             | Update             |
 | `.env`                                     | Add OPENAI_API_KEY |
 | `turbo.json`                               | Add to globalEnv   |
 | `apps/agent/src/app/demos/memory/page.tsx` | Create (Phase 9)   |

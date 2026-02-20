@@ -1,7 +1,7 @@
 /**
  * PM2 Ecosystem Configuration
  *
- * Production process management for Mastra AI Agent Framework on Digital Ocean
+ * Production process management for AgentC2 AI Agent Framework on Digital Ocean
  *
  * Usage:
  *   pm2 start ecosystem.config.js
@@ -93,8 +93,8 @@ module.exports = {
             user: "deploy",
             host: "your-droplet-ip",
             ref: "origin/main",
-            repo: "git@github.com:your-org/mastra-experiment.git",
-            path: "/var/www/mastra",
+            repo: "git@github.com:your-org/agentc2.git",
+            path: "/var/www/agentc2",
             "pre-deploy-local": "",
             "post-deploy":
                 "bun install && bun run db:generate && bun run build && pm2 reload ecosystem.config.js --env production",

@@ -54,8 +54,8 @@ This revised plan focuses on the **true remaining gaps** and the **narrative pac
 **What exists:**
 
 - Skills as composable competency bundles (13 MCP tools): create, read, update, delete, list, attach/detach documents and tools, agent binding with pinned vs discoverable modes, version history
-- Auto-generator ([packages/mastra/src/skills/auto-generator.ts](packages/mastra/src/skills/auto-generator.ts)) -- automatically creates SYSTEM skills when MCP servers are connected
-- Recommender ([packages/mastra/src/skills/recommender.ts](packages/mastra/src/skills/recommender.ts)) -- suggests skills for agents based on instruction analysis
+- Auto-generator ([packages/agentc2/src/skills/auto-generator.ts](packages/agentc2/src/skills/auto-generator.ts)) -- automatically creates SYSTEM skills when MCP servers are connected
+- Recommender ([packages/agentc2/src/skills/recommender.ts](packages/agentc2/src/skills/recommender.ts)) -- suggests skills for agents based on instruction analysis
 - Skill forking for customization
 - Tools organized by category (integration, utility, platform) with tags
 
@@ -187,7 +187,7 @@ Only 7 items genuinely need building. Everything else is reframing, connecting, 
 
 **What:** Add a routing layer in `AgentResolver.hydrate()` that can select model based on: (a) task complexity heuristic, (b) remaining monthly budget, (c) confidence from a fast-model pre-check.
 
-**Where:** [packages/mastra/src/agents/resolver.ts](packages/mastra/src/agents/resolver.ts). Add optional `modelRouter` config to Agent schema.
+**Where:** [packages/agentc2/src/agents/resolver.ts](packages/agentc2/src/agents/resolver.ts). Add optional `modelRouter` config to Agent schema.
 
 **Why it matters:** The paper calls this "Programmatic Down-Shifting." It's the difference between burning GPT-4o on "what time is it?" vs routing that to GPT-4o-mini and saving 95% of the cost.
 

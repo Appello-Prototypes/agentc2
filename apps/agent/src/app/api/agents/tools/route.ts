@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAvailableModelsAsync } from "@repo/mastra/agents";
-import { listMcpToolDefinitions } from "@repo/mastra/mcp";
-import { listAvailableTools, toolCategoryOrder } from "@repo/mastra/tools";
-import { listAvailableScorers } from "@repo/mastra/scorers/registry";
+import { getAvailableModelsAsync } from "@repo/agentc2/agents";
+import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
+import { listAvailableTools, toolCategoryOrder } from "@repo/agentc2/tools";
+import { listAvailableScorers } from "@repo/agentc2/scorers/registry";
 import { authenticateRequest } from "@/lib/api-auth";
 
 /**

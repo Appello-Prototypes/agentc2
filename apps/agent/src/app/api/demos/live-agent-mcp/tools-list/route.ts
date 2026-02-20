@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { listMcpToolDefinitions } from "@repo/mastra/mcp";
+import { listMcpToolDefinitions } from "@repo/agentc2/mcp";
 
 /**
  * GET /api/demos/live-agent-mcp/tools-list

@@ -6,7 +6,7 @@ import {
     completenessScorer,
     toneScorer,
     evaluateHelpfulness
-} from "@repo/mastra/scorers";
+} from "@repo/agentc2/scorers";
 import { inngest } from "@/lib/inngest";
 
 /**

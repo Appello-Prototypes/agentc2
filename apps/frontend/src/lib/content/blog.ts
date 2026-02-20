@@ -1,3 +1,12 @@
+import { OPENCLAW_POSTS } from "./blog-openclaw";
+import { ROLE_POSTS } from "./blog-by-role";
+import { TOOL_POSTS } from "./blog-by-tool";
+import { HOWTO_POSTS } from "./blog-how-to";
+import { COMPARISON_POSTS } from "./blog-comparisons";
+import { GOVERNANCE_POSTS } from "./blog-governance";
+import { THOUGHT_LEADERSHIP_POSTS } from "./blog-thought-leadership";
+import { USE_CASE_POSTS } from "./blog-use-cases";
+
 export interface BlogPost {
     slug: string;
     title: string;
@@ -4470,7 +4479,19 @@ export const BLOG_POSTS: BlogPost[] = [
     }
 ];
 
-export const BLOG_POST_BY_SLUG = new Map(BLOG_POSTS.map((post) => [post.slug, post]));
+export const ALL_BLOG_POSTS: BlogPost[] = [
+    ...BLOG_POSTS,
+    ...OPENCLAW_POSTS,
+    ...ROLE_POSTS,
+    ...TOOL_POSTS,
+    ...HOWTO_POSTS,
+    ...COMPARISON_POSTS,
+    ...GOVERNANCE_POSTS,
+    ...THOUGHT_LEADERSHIP_POSTS,
+    ...USE_CASE_POSTS
+];
+
+export const BLOG_POST_BY_SLUG = new Map(ALL_BLOG_POSTS.map((post) => [post.slug, post]));
 
 export function getBlogPost(slug: string): BlogPost | undefined {
     return BLOG_POST_BY_SLUG.get(slug);

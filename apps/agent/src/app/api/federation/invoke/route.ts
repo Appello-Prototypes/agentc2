@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { authenticateRequest } from "@/lib/api-auth";
-import { processInvocation } from "@repo/mastra/federation";
-import { agentResolver } from "@repo/mastra/agents";
+import { processInvocation } from "@repo/agentc2/federation";
+import { agentResolver } from "@repo/agentc2/agents";
 
 /**
  * POST /api/federation/invoke

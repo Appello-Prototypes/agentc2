@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getMcpToolsForServer } from "@repo/mastra/mcp";
-import { rediscoverToolsForConnection } from "@repo/mastra/integrations";
+import { getMcpToolsForServer } from "@repo/agentc2/mcp";
+import { rediscoverToolsForConnection } from "@repo/agentc2/integrations";
 import { getUserOrganizationId } from "@/lib/organization";
 import { resolveConnectionServerId } from "@/lib/integrations";
 

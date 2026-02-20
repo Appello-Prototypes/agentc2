@@ -10,7 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { addThreadSkillActivations } from "@repo/mastra/skills";
+import { addThreadSkillActivations } from "@repo/agentc2/skills";
 
 export async function POST(request: NextRequest) {
     try {

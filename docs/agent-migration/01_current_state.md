@@ -4,7 +4,7 @@
 
 The Mastra Experiment project currently has **two parallel agent architectures** that need to be unified:
 
-1. **Code-Defined Agents**: TypeScript files in `packages/mastra/src/agents/*.ts`, registered via `mastra.ts`
+1. **Code-Defined Agents**: TypeScript files in `packages/agentc2/src/agents/*.ts`, registered via `mastra.ts`
 2. **Stored Agents**: Database-backed via Prisma `StoredAgent` model, created via CRUD API
 
 This document describes the current state of both systems.
@@ -35,7 +35,7 @@ flowchart TB
     end
 
     subgraph storage [Storage - Two Sources]
-        CodeAgents["Code-Defined: packages/mastra/src/agents/*.ts"]
+        CodeAgents["Code-Defined: packages/agentc2/src/agents/*.ts"]
         DBAgents["StoredAgent Table: Prisma/PostgreSQL"]
     end
 
@@ -73,7 +73,7 @@ These agents are defined in TypeScript files and registered in `mastra.ts` via t
 ### Agent Registration in mastra.ts
 
 ```typescript
-// packages/mastra/src/mastra.ts
+// packages/agentc2/src/mastra.ts
 
 function buildAgents(): Record<string, Agent> {
     const agents: Record<string, Agent> = {
@@ -103,7 +103,7 @@ function buildAgents(): Record<string, Agent> {
 
 ```typescript
 // To get an agent:
-import { mastra } from "@repo/mastra";
+import { mastra } from "@repo/agentc2";
 const agent = mastra.getAgent("assistant"); // Uses registration key
 ```
 
@@ -141,7 +141,7 @@ model StoredAgent {
 
 ```typescript
 // To create an agent from stored config:
-import { createAgentFromConfig, StoredAgentConfig } from "@repo/mastra";
+import { createAgentFromConfig, StoredAgentConfig } from "@repo/agentc2";
 
 const config: StoredAgentConfig = await prisma.storedAgent.findUnique({ where: { id } });
 const agent = createAgentFromConfig(config);
@@ -167,7 +167,7 @@ Both systems use a shared tool registry for available tools.
 ### Registry Location
 
 ```typescript
-// packages/mastra/src/tools/registry.ts
+// packages/agentc2/src/tools/registry.ts
 
 export const toolRegistry: Record<string, Tool> = {
     "date-time": dateTimeTool,
@@ -252,19 +252,19 @@ export const toolRegistry: Record<string, Tool> = {
 
 | File                                       | Purpose                                    |
 | ------------------------------------------ | ------------------------------------------ |
-| `packages/mastra/src/agents/assistant.ts`  | Main AI Assistant with memory and tools    |
-| `packages/mastra/src/agents/structured.ts` | Structured output agent with Zod schemas   |
-| `packages/mastra/src/agents/vision.ts`     | Image analysis agent                       |
-| `packages/mastra/src/agents/research.ts`   | Multi-step research agent                  |
-| `packages/mastra/src/agents/evaluated.ts`  | Agent with all scorers                     |
-| `packages/mastra/src/agents/voice.ts`      | Voice agents (OpenAI, ElevenLabs, Hybrid)  |
-| `packages/mastra/src/agents/factory.ts`    | Factory for creating agents from DB config |
-| `packages/mastra/src/agents/index.ts`      | Agent exports                              |
+| `packages/agentc2/src/agents/assistant.ts`  | Main AI Assistant with memory and tools    |
+| `packages/agentc2/src/agents/structured.ts` | Structured output agent with Zod schemas   |
+| `packages/agentc2/src/agents/vision.ts`     | Image analysis agent                       |
+| `packages/agentc2/src/agents/research.ts`   | Multi-step research agent                  |
+| `packages/agentc2/src/agents/evaluated.ts`  | Agent with all scorers                     |
+| `packages/agentc2/src/agents/voice.ts`      | Voice agents (OpenAI, ElevenLabs, Hybrid)  |
+| `packages/agentc2/src/agents/factory.ts`    | Factory for creating agents from DB config |
+| `packages/agentc2/src/agents/index.ts`      | Agent exports                              |
 
 ### Core Files
 
 | File                                     | Purpose                   |
 | ---------------------------------------- | ------------------------- |
-| `packages/mastra/src/mastra.ts`          | Mastra singleton instance |
-| `packages/mastra/src/tools/registry.ts`  | Tool registry             |
+| `packages/agentc2/src/mastra.ts`          | Mastra singleton instance |
+| `packages/agentc2/src/tools/registry.ts`  | Tool registry             |
 | `packages/database/prisma/schema.prisma` | Database schema           |

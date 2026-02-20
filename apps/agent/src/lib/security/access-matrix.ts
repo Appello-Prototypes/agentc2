@@ -16,6 +16,7 @@ export const MCP_TOOL_ACCESS: Array<{ pattern: RegExp; minAccess: AccessLevel }>
         minAccess: "admin"
     },
     { pattern: /^agent\./, minAccess: "member" },
+    { pattern: /^instance\./, minAccess: "member" },
     { pattern: /^workflow-/, minAccess: "member" },
     { pattern: /^network-/, minAccess: "member" }
 ];

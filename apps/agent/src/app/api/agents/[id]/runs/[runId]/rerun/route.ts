@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/mastra/agents";
+import { agentResolver } from "@repo/agentc2/agents";
 
 /**
  * POST /api/agents/[id]/runs/[runId]/rerun
@@ -74,7 +74,8 @@ export async function POST(
                 modelProvider: record.modelProvider,
                 modelName: record.modelName,
                 versionId: versionId || originalRun.versionId,
-                startedAt: new Date()
+                startedAt: new Date(),
+                instanceId: originalRun.instanceId ?? undefined
             }
         });
 

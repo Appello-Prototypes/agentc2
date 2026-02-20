@@ -4,13 +4,13 @@ import { prismaMock, resetPrismaMock, mockPrismaModule } from "../../utils/db-mo
 // Mock prisma before importing anything that uses it
 mockPrismaModule();
 
-// Mock @repo/mastra ingestDocument
+// Mock @repo/agentc2 ingestDocument
 const mockIngestDocument = vi.fn().mockResolvedValue({
     documentId: "test-doc",
     chunksIngested: 3,
     vectorIds: ["v1", "v2", "v3"]
 });
-vi.mock("@repo/mastra", () => ({
+vi.mock("@repo/agentc2", () => ({
     ingestDocument: mockIngestDocument
 }));
 
@@ -65,7 +65,7 @@ describe("Auto-Vectorize Output", () => {
             where: { id: "eval-1" }
         });
 
-        const { ingestDocument } = await import("@repo/mastra");
+        const { ingestDocument } = await import("@repo/agentc2");
         await ingestDocument(run.outputText as string, {
             type: "markdown",
             sourceId: `agent-output/${agent.slug}/${run.id}`,

@@ -124,7 +124,7 @@ All test resources were successfully deleted:
 {
     "Mastra Agents": {
         "command": "/Users/coreyshelson/.nvm/versions/node/v24.11.1/bin/node",
-        "args": ["/Users/coreyshelson/mastra-experiment/scripts/mcp-server/index.js"],
+        "args": ["/Users/coreyshelson/agentc2/scripts/mcp-server/index.js"],
         "env": {
             "MASTRA_API_URL": "https://agentc2.ai",
             "MASTRA_API_KEY": "***REDACTED***",

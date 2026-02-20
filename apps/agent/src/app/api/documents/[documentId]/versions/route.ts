@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { getDocumentVersions } from "@repo/mastra/documents";
+import { getDocumentVersions } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
 
 type RouteContext = { params: Promise<{ documentId: string }> };

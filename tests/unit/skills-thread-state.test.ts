@@ -15,7 +15,7 @@ const {
     addThreadSkillActivations,
     setThreadSkillState,
     clearThreadSkillState
-} = await import("@repo/mastra");
+} = await import("@repo/agentc2");
 
 describe("Thread Skill State", () => {
     beforeEach(() => {

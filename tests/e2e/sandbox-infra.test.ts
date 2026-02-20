@@ -60,7 +60,7 @@ describe("Sandbox Tools", () => {
     describe("execute-code", () => {
         it("falls back to child_process when Docker is unavailable", async () => {
             const { executeCodeTool } =
-                await import("../../packages/mastra/src/tools/sandbox-tools");
+                await import("../../packages/agentc2/src/tools/sandbox-tools");
 
             const result = await executeCodeTool.execute(
                 {
@@ -79,7 +79,7 @@ describe("Sandbox Tools", () => {
 
         it("accepts networkAccess and injectCredentials params", async () => {
             const { executeCodeTool } =
-                await import("../../packages/mastra/src/tools/sandbox-tools");
+                await import("../../packages/agentc2/src/tools/sandbox-tools");
 
             prismaMock.integrationConnection.findMany.mockResolvedValue([]);
 
@@ -100,7 +100,7 @@ describe("Sandbox Tools", () => {
 
         it("has the new parameters in its input schema", async () => {
             const { executeCodeTool } =
-                await import("../../packages/mastra/src/tools/sandbox-tools");
+                await import("../../packages/agentc2/src/tools/sandbox-tools");
 
             const schema = executeCodeTool.inputSchema;
             const shape = schema.shape;
@@ -118,7 +118,7 @@ describe("Infrastructure Tracking Tools", () => {
     describe("track-resource", () => {
         it("creates a provisioned resource record", async () => {
             const { trackResourceTool } =
-                await import("../../packages/mastra/src/tools/infra-tools");
+                await import("../../packages/agentc2/src/tools/infra-tools");
 
             prismaMock.organization.findFirst.mockResolvedValue({
                 id: "org-1"
@@ -174,7 +174,7 @@ describe("Infrastructure Tracking Tools", () => {
     describe("list-resources", () => {
         it("lists active resources with cost totals", async () => {
             const { listResourcesTool } =
-                await import("../../packages/mastra/src/tools/infra-tools");
+                await import("../../packages/agentc2/src/tools/infra-tools");
 
             prismaMock.organization.findFirst.mockResolvedValue({
                 id: "org-1"
@@ -221,7 +221,7 @@ describe("Infrastructure Tracking Tools", () => {
     describe("destroy-resource", () => {
         it("marks a resource as destroyed", async () => {
             const { destroyResourceTool } =
-                await import("../../packages/mastra/src/tools/infra-tools");
+                await import("../../packages/agentc2/src/tools/infra-tools");
 
             prismaMock.provisionedResource.update.mockResolvedValue({
                 id: "res-1",

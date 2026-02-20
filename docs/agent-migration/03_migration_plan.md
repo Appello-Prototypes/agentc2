@@ -180,7 +180,7 @@ Create the `AgentResolver` class that can resolve agents from database, with fal
 
 #### 2.1 Create Scorer Registry
 
-**File:** `packages/mastra/src/scorers/registry.ts`
+**File:** `packages/agentc2/src/scorers/registry.ts`
 
 ```typescript
 import { relevancyScorer, toxicityScorer, completenessScorer, toneScorer } from "./index";
@@ -210,7 +210,7 @@ export function getScorersByNames(names: string[]) {
 
 #### 2.2 Create AgentResolver
 
-**File:** `packages/mastra/src/agents/resolver.ts`
+**File:** `packages/agentc2/src/agents/resolver.ts`
 
 ```typescript
 import { Agent } from "@mastra/core/agent";
@@ -355,7 +355,7 @@ export const agentResolver = new AgentResolver();
 
 ```typescript
 import { NextRequest, NextResponse } from "next/server";
-import { agentResolver } from "@repo/mastra";
+import { agentResolver } from "@repo/agentc2";
 
 export async function POST(request: NextRequest) {
     const { slug, requestContext } = await request.json();
@@ -543,7 +543,7 @@ Remove code-defined agents and fallback logic, making database the single source
 
 #### 5.1 Remove Fallback Logic
 
-**File:** `packages/mastra/src/agents/resolver.ts`
+**File:** `packages/agentc2/src/agents/resolver.ts`
 
 ```typescript
 // Remove fallbackToSystem option
@@ -552,7 +552,7 @@ Remove code-defined agents and fallback logic, making database the single source
 
 #### 5.2 Archive Code-Defined Agents
 
-Move files to `packages/mastra/src/agents/_archive/`:
+Move files to `packages/agentc2/src/agents/_archive/`:
 
 - `assistant.ts`
 - `structured.ts`

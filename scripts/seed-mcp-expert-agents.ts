@@ -1,5 +1,5 @@
 import { prisma, AgentType } from "../packages/database/src";
-import { listMcpToolDefinitions, MCP_SERVER_CONFIGS } from "../packages/mastra/src";
+import { listMcpToolDefinitions, MCP_SERVER_CONFIGS } from "../packages/agentc2/src";
 
 const DEFAULT_MODEL_PROVIDER = "anthropic";
 const DEFAULT_MODEL_NAME = "claude-sonnet-4-20250514";

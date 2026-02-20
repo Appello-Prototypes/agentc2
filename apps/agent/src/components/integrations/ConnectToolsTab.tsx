@@ -333,7 +333,7 @@ async function invokeTool(name, params) {
     return data.result;
 }
 
-const server = new Server({ name: "mastra-agents", version: "1.0.0" }, { capabilities: { tools: {} } });
+const server = new Server({ name: "agentc2-agents", version: "1.0.0" }, { capabilities: { tools: {} } });
 const nameMap = new Map();
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -401,7 +401,7 @@ await server.connect(transport);
             <div>
                 <h3 className="text-lg font-semibold tracking-tight">Connect Your AI Tools</h3>
                 <p className="text-muted-foreground text-sm">
-                    Use your Mastra agents directly from Cursor IDE or Claude CoWork. Pick your
+                    Use your AgentC2 agents directly from Cursor IDE or Claude CoWork. Pick your
                     platform and follow the steps below.
                 </p>
             </div>

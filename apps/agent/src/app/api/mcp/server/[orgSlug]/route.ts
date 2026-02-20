@@ -11,7 +11,7 @@ export const maxDuration = 120;
 /**
  * Remote MCP Server Endpoint (Streamable HTTP) -- Organization-scoped, OAuth-protected
  *
- * Exposes Mastra agents, workflows, and networks as a proper MCP server
+ * Exposes AgentC2 agents, workflows, and networks as a proper MCP server
  * using the Streamable HTTP transport. This endpoint is designed for
  * remote MCP clients like Claude CoWork (Custom Connectors).
  *
@@ -208,7 +208,7 @@ export async function GET(request: NextRequest, context: RouteContext): Promise<
 
     return new Response(
         JSON.stringify({
-            name: "Mastra Agents MCP Server",
+            name: "AgentC2 Agents MCP Server",
             version: "1.0.0",
             protocol: "mcp-streamable-http",
             organization: orgSlug,

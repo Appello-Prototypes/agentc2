@@ -12,8 +12,8 @@
 
 - 1 document: "Vanos Insulations Ltd. Brady Davenport Training & Certificate Report" (16 chunks, embedded)
 - 0 RAG entries (the vector index has data from the document but no standalone RAG ingestions)
-- Document service fully functional at `packages/mastra/src/documents/service.ts`
-- RAG pipeline fully functional at `packages/mastra/src/rag/pipeline.ts`
+- Document service fully functional at `packages/agentc2/src/documents/service.ts`
+- RAG pipeline fully functional at `packages/agentc2/src/rag/pipeline.ts`
 
 ## Documents to Ingest
 

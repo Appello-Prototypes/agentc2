@@ -13,13 +13,13 @@ Create a Mastra tool that Cursor users can invoke to read MCP config, preview im
 
 ## Scope & Defaults
 
-- Tool location: `@repo/mastra` tool registry (per your selection)
+- Tool location: `@repo/agentc2` tool registry (per your selection)
 - Default write mode: `replace`
 - Impact gate: required confirmation when agents would be affected
 
 ## Implementation Plan
 
-1. **Add the tool in `[packages/mastra/src/tools/integration-import-tools.ts](packages/mastra/src/tools/integration-import-tools.ts)**`
+1. **Add the tool in `[packages/agentc2/src/tools/integration-import-tools.ts](packages/agentc2/src/tools/integration-import-tools.ts)**`
 
 - Create a new `createTool` entry (e.g., `integration-mcp-config`) alongside `integrationImportMcpJsonTool`.
 - Inputs:
@@ -36,8 +36,8 @@ Create a Mastra tool that Cursor users can invoke to read MCP config, preview im
 
 1. **Register and export the tool**
 
-- Add the new tool export in `[packages/mastra/src/tools/index.ts](packages/mastra/src/tools/index.ts)` alongside the other integration tools.
-- Import and register it in `[packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts)` with a new key (e.g., `integration-mcp-config`).
+- Add the new tool export in `[packages/agentc2/src/tools/index.ts](packages/agentc2/src/tools/index.ts)` alongside the other integration tools.
+- Import and register it in `[packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts)` with a new key (e.g., `integration-mcp-config`).
 
 1. **Validate outputs**
 
@@ -48,9 +48,9 @@ Create a Mastra tool that Cursor users can invoke to read MCP config, preview im
 
 ## Files to Change
 
-- `[packages/mastra/src/tools/integration-import-tools.ts](packages/mastra/src/tools/integration-import-tools.ts)`
-- `[packages/mastra/src/tools/index.ts](packages/mastra/src/tools/index.ts)`
-- `[packages/mastra/src/tools/registry.ts](packages/mastra/src/tools/registry.ts)`
+- `[packages/agentc2/src/tools/integration-import-tools.ts](packages/agentc2/src/tools/integration-import-tools.ts)`
+- `[packages/agentc2/src/tools/index.ts](packages/agentc2/src/tools/index.ts)`
+- `[packages/agentc2/src/tools/registry.ts](packages/agentc2/src/tools/registry.ts)`
 
 ## Test Plan
 
