@@ -59,7 +59,11 @@ export async function POST(request: NextRequest) {
         const parsed = createWebhookSchema.safeParse(await request.json());
         if (!parsed.success) {
             return NextResponse.json(
-                { success: false, error: "Invalid input", details: parsed.error.flatten().fieldErrors },
+                {
+                    success: false,
+                    error: "Invalid input",
+                    details: parsed.error.flatten().fieldErrors
+                },
                 { status: 400 }
             );
         }

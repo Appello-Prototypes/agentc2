@@ -111,18 +111,15 @@ export async function POST(request: NextRequest) {
         const parsed = createConnectionSchema.safeParse(await request.json());
         if (!parsed.success) {
             return NextResponse.json(
-                { success: false, error: "Invalid input", details: parsed.error.flatten().fieldErrors },
+                {
+                    success: false,
+                    error: "Invalid input",
+                    details: parsed.error.flatten().fieldErrors
+                },
                 { status: 400 }
             );
         }
-        const {
-            providerKey,
-            name,
-            scope,
-            credentials,
-            metadata,
-            isDefault
-        } = parsed.data;
+        const { providerKey, name, scope, credentials, metadata, isDefault } = parsed.data;
 
         await getIntegrationProviders();
 

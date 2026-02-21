@@ -8215,9 +8215,7 @@ export const dataRetentionCleanupFunction = inngest.createFunction(
             const result = await prisma.session.deleteMany({
                 where: { expiresAt: { lt: sessionCutoff } }
             });
-            console.log(
-                `[DataRetention] Deleted ${result.count} sessions expired >30 days`
-            );
+            console.log(`[DataRetention] Deleted ${result.count} sessions expired >30 days`);
             return result.count;
         });
 
@@ -8231,9 +8229,7 @@ export const dataRetentionCleanupFunction = inngest.createFunction(
                     updatedAt: { lt: credCutoff }
                 }
             });
-            console.log(
-                `[DataRetention] Deleted ${result.count} deactivated credentials >90 days`
-            );
+            console.log(`[DataRetention] Deleted ${result.count} deactivated credentials >90 days`);
             return result.count;
         });
 

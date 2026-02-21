@@ -6,14 +6,14 @@ import { getUserOrganizationId } from "@/lib/organization";
 
 const ragIngestSchema = z.object({
     content: z.string().min(1).max(5_000_000),
-    type: z.string().max(50).optional(),
+    type: z.enum(["text", "markdown", "html", "json"]).optional(),
     sourceId: z.string().max(500).optional(),
     sourceName: z.string().max(500).optional(),
     description: z.string().max(2000).optional(),
     category: z.string().max(100).optional(),
     tags: z.array(z.string().max(100)).max(50).optional(),
     workspaceId: z.string().max(100).optional(),
-    onConflict: z.enum(["skip", "overwrite", "version"]).optional(),
+    onConflict: z.enum(["skip", "update", "error"]).optional(),
     chunkOptions: z
         .object({
             size: z.number().int().min(100).max(10000).optional(),
