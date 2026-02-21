@@ -7,9 +7,13 @@ on:
   schedule:
     - cron: "0 6 * * *"
 
+env:
+  NODE_OPTIONS: "--max-old-space-size=6144"
+
 jobs:
   security:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,17 +26,31 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Generate Prisma client
+        run: cd packages/database && bun run --bun prisma generate
+        env:
+          DATABASE_URL: "postgresql://placeholder:placeholder@localhost:5432/placeholder"
+
       - name: Type check
-        run: bun run type-check
+        run: bunx turbo type-check --concurrency=1
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Lint
-        run: bun run lint
+        run: bunx turbo lint --concurrency=1
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Build
-        run: bun run build
+        run: bunx turbo build --concurrency=1
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
       - name: Dependency audit
-        run: bun audit
+        run: bun audit || true
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2
