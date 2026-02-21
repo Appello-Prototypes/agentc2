@@ -86,6 +86,37 @@ function preview(value: unknown, maxLen: number = 200): string {
     return str.substring(0, maxLen) + "...";
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveToolName(value?: any): string | undefined {
+    return (
+        value?.toolName ||
+        value?.name ||
+        value?.tool ||
+        value?.function?.name ||
+        value?.payload?.toolName ||
+        value?.payload?.tool ||
+        value?.payload?.name ||
+        value?.payload?.function?.name
+    );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveToolArgs(value?: any): unknown {
+    return (
+        value?.args ??
+        value?.input ??
+        value?.arguments ??
+        value?.function?.arguments ??
+        value?.payload?.args ??
+        value?.payload?.arguments
+    );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function resolveToolResult(value?: any): unknown {
+    return value?.result ?? value?.output ?? value?.payload?.result;
+}
+
 function buildToolCallSummary(record: ToolCallRecord): string {
     return `[Step ${record.step}: ${record.toolName}(${record.inputPreview}) → ${record.outputPreview}]`;
 }
@@ -345,13 +376,15 @@ export async function managedGenerate(
         const stepToolResults = response.toolResults || [];
         const hasToolCall = stepToolCalls.length > 0;
 
-        // Build step summary
+        // Build step summary (robust property resolution for Mastra/AI SDK compat)
+        const firstToolName = resolveToolName(stepToolCalls[0]);
+        const firstToolArgs = resolveToolArgs(stepToolCalls[0]);
+        const firstToolResult = resolveToolResult(stepToolResults[0]);
+
         const stepSummary: StepSummary = {
-            toolName: stepToolCalls[0]?.toolName,
-            inputPreview: stepToolCalls[0]?.args ? preview(stepToolCalls[0].args, 100) : "",
-            outputPreview: stepToolResults[0]?.result
-                ? preview(stepToolResults[0].result, 200)
-                : "",
+            toolName: firstToolName,
+            inputPreview: firstToolArgs ? preview(firstToolArgs, 100) : "",
+            outputPreview: firstToolResult ? preview(firstToolResult, 200) : "",
             promptTokens: stepPromptTokens,
             completionTokens: stepCompletionTokens,
             hasToolCall,
@@ -363,9 +396,9 @@ export async function managedGenerate(
         for (let i = 0; i < stepToolCalls.length; i++) {
             toolCallHistory.push({
                 step: currentStep,
-                toolName: stepToolCalls[i]?.toolName || "unknown",
-                inputPreview: preview(stepToolCalls[i]?.args, 80),
-                outputPreview: preview(stepToolResults[i]?.result, 120)
+                toolName: resolveToolName(stepToolCalls[i]) || "unknown",
+                inputPreview: preview(resolveToolArgs(stepToolCalls[i]), 80),
+                outputPreview: preview(resolveToolResult(stepToolResults[i]), 120)
             });
         }
 
@@ -377,13 +410,11 @@ export async function managedGenerate(
             // Compress or preview tool results before adding to context
             const toolResultParts: string[] = [];
             for (let i = 0; i < stepToolCalls.length; i++) {
-                const tc = stepToolCalls[i] as { toolName?: string };
-                const result = stepToolResults[i];
+                const resultObj = stepToolResults[i];
+                const toolResult = resolveToolResult(resultObj);
                 const rawResult =
-                    typeof result?.result === "string"
-                        ? result.result
-                        : JSON.stringify(result?.result ?? "");
-                const toolName = tc.toolName || "unknown";
+                    typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult ?? "");
+                const toolName = resolveToolName(stepToolCalls[i]) || "unknown";
 
                 let condensed: string;
                 if (compressionModel && rawResult.length > compressionThreshold) {
@@ -394,7 +425,7 @@ export async function managedGenerate(
                         compressionModel
                     );
                 } else {
-                    condensed = preview(result?.result, 500);
+                    condensed = preview(toolResult, 500);
                 }
                 toolResultParts.push(`Tool: ${toolName}\nResult: ${condensed}`);
             }
