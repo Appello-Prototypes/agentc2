@@ -1,5 +1,6 @@
 import { betterAuth } from "better-auth";
 import { createAuthMiddleware } from "better-auth/api";
+import { twoFactor } from "better-auth/plugins";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "@repo/database";
 import { getAppUrl } from "./env";
@@ -122,10 +123,16 @@ export const auth = betterAuth({
             enabled: isProduction
         }
     },
-    // Auto-bootstrap organization for new social sign-up users.
-    // Uses deferOrgCreation so the hook only handles invite codes and domain
-    // matching — if neither applies, org creation is deferred to the onboarding
-    // page where the user can choose to join a suggested org or create their own.
+    plugins: [
+        twoFactor({
+            issuer: "AgentC2",
+            totpOptions: {
+                period: 30,
+                digits: 6
+            },
+            skipVerificationOnEnable: false
+        })
+    ],
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
             // Auth event logging

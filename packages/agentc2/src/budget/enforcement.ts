@@ -18,6 +18,7 @@ export interface BudgetCheckResult {
     allowed: boolean;
     violations: BudgetViolation[];
     warnings: BudgetViolation[];
+    reservationId?: string;
 }
 
 function startOfMonth(): Date {
@@ -29,10 +30,88 @@ function startOfMonth(): Date {
 
 async function sumCostEventsSince(filter: Record<string, unknown>, since: Date): Promise<number> {
     const events = await prisma.costEvent.findMany({
-        where: { ...filter, createdAt: { gte: since } },
+        where: {
+            ...filter,
+            createdAt: { gte: since },
+            status: { not: "CANCELLED" }
+        },
         select: { billedCostUsd: true, costUsd: true }
     });
     return events.reduce((s, e) => s + (e.billedCostUsd ?? e.costUsd ?? 0), 0);
+}
+
+/**
+ * Create a budget reservation before agent execution to prevent race conditions.
+ * The reservation holds an estimated maximum cost until finalized or cancelled.
+ */
+export async function createBudgetReservation(
+    runId: string,
+    agentId: string,
+    estimatedCostUsd: number,
+    options?: { tenantId?: string | null; userId?: string | null }
+): Promise<string> {
+    const reservation = await prisma.costEvent.create({
+        data: {
+            runId,
+            agentId,
+            tenantId: options?.tenantId,
+            userId: options?.userId,
+            provider: "reservation",
+            modelName: "estimated",
+            costUsd: estimatedCostUsd,
+            billedCostUsd: estimatedCostUsd,
+            status: "RESERVED"
+        }
+    });
+    return reservation.id;
+}
+
+/**
+ * Finalize a budget reservation with actual cost. Replaces estimated cost with real values.
+ */
+export async function finalizeBudgetReservation(
+    reservationId: string,
+    actualCostUsd: number
+): Promise<void> {
+    await prisma.costEvent.update({
+        where: { id: reservationId },
+        data: {
+            status: "FINALIZED",
+            costUsd: actualCostUsd,
+            billedCostUsd: actualCostUsd,
+            modelName: "actual"
+        }
+    });
+}
+
+/**
+ * Cancel a budget reservation (agent execution failed or was aborted).
+ */
+export async function cancelBudgetReservation(reservationId: string): Promise<void> {
+    await prisma.costEvent.update({
+        where: { id: reservationId },
+        data: {
+            status: "CANCELLED",
+            costUsd: 0,
+            billedCostUsd: 0
+        }
+    });
+}
+
+/**
+ * Clean up stale reservations older than the given age (default 30 minutes).
+ * Should be called periodically (e.g., via Inngest cron).
+ */
+export async function cleanupStaleReservations(maxAgeMs: number = 30 * 60 * 1000): Promise<number> {
+    const cutoff = new Date(Date.now() - maxAgeMs);
+    const result = await prisma.costEvent.updateMany({
+        where: {
+            status: "RESERVED",
+            createdAt: { lt: cutoff }
+        },
+        data: { status: "CANCELLED", costUsd: 0, billedCostUsd: 0 }
+    });
+    return result.count;
 }
 
 export class BudgetEnforcementService {

@@ -35,7 +35,12 @@
     "./audit": "./src/audit/index.ts",
     "./federation": "./src/federation/index.ts",
     "./budget": "./src/budget/index.ts",
-    "./tenant-scope": "./src/tenant-scope.ts"
+    "./budget/outcomes": "./src/budget/outcomes.ts",
+    "./budget/revenue": "./src/budget/revenue.ts",
+    "./security/financial-approvals": "./src/security/financial-approvals.ts",
+    "./skills/marketplace": "./src/skills/marketplace.ts",
+    "./tenant-scope": "./src/tenant-scope.ts",
+    "./lib/logger": "./src/lib/logger.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

@@ -19,7 +19,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { spawn, execSync, type ChildProcess } from "child_process";
-import { mkdir, writeFile, readFile, stat, readdir, realpath } from "fs/promises";
+import { mkdir, writeFile, readFile, stat, readdir, realpath, lstat } from "fs/promises";
 import { join, normalize, isAbsolute, extname, resolve } from "path";
 
 const WORKSPACE_ROOT = process.env.AGENT_WORKSPACE_ROOT || "/var/lib/agentc2/workspaces";
@@ -149,6 +149,18 @@ function resolveWorkspacePath(
     }
 
     return resolvedPath;
+}
+
+async function assertNotSymlink(filePath: string): Promise<void> {
+    try {
+        const stats = await lstat(filePath);
+        if (stats.isSymbolicLink()) {
+            throw new Error("Symbolic links are not allowed in agent workspaces");
+        }
+    } catch (err) {
+        if (err instanceof Error && err.message.includes("Symbolic links")) throw err;
+        // File doesn't exist yet (write operation) — that's fine
+    }
 }
 
 async function ensureWorkspaceDir(agentId: string, organizationId?: string): Promise<string> {
@@ -589,6 +601,7 @@ export const writeWorkspaceFileTool = createTool({
         }
 
         const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath, organizationId);
+        await assertNotSymlink(resolvedPath);
 
         // Check if file already exists (for delta tracking)
         let previousSize = 0;
@@ -652,6 +665,7 @@ export const readWorkspaceFileTool = createTool({
         const resolvedPath = resolveWorkspacePath(effectiveAgentId, relativePath, organizationId);
 
         try {
+            await assertNotSymlink(resolvedPath);
             const content = await readFile(resolvedPath, "utf-8");
             return {
                 content: truncate(content, MAX_OUTPUT_SIZE),

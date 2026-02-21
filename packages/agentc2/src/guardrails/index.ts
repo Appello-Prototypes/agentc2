@@ -53,14 +53,47 @@ const PII_PATTERNS = [
     /\b[A-Z]{2}\d{6,9}\b/i // Passport-like
 ];
 
-// Prompt injection patterns
+// API key and credential patterns — always checked on output regardless of config
+const SECRET_PATTERNS = [
+    /\bsk-[a-zA-Z0-9]{20,}\b/, // OpenAI keys
+    /\bsk-ant-[a-zA-Z0-9]{20,}\b/, // Anthropic keys
+    /\bghp_[a-zA-Z0-9]{36,}\b/, // GitHub PATs
+    /\bghu_[a-zA-Z0-9]{36,}\b/, // GitHub user tokens
+    /\bghs_[a-zA-Z0-9]{36,}\b/, // GitHub server tokens
+    /\bxoxb-[0-9]+-[a-zA-Z0-9]+\b/, // Slack bot tokens
+    /\bxoxp-[0-9]+-[a-zA-Z0-9]+\b/, // Slack user tokens
+    /\bAKIA[0-9A-Z]{16}\b/, // AWS access keys
+    /-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----/, // Private keys
+    /\bpat-na1-[a-zA-Z0-9-]+\b/, // HubSpot PATs
+    /\bfc-[a-zA-Z0-9]{20,}\b/, // Firecrawl keys
+    /\bsk_live_[a-zA-Z0-9]{24,}\b/, // Stripe live keys
+    /\brk_live_[a-zA-Z0-9]{24,}\b/, // Stripe restricted keys
+    /\bwhsec_[a-zA-Z0-9]{32,}\b/, // Stripe webhook secrets
+    /\bATATT3x[a-zA-Z0-9_-]{20,}\b/, // Atlassian API tokens
+    /\bnpx_[a-zA-Z0-9]{36,}\b/, // npm tokens
+    /\bpypi-[a-zA-Z0-9]{50,}\b/ // PyPI tokens
+];
+
+// Prompt injection patterns — basic structural markers
 const INJECTION_PATTERNS = [
     /ignore\s+(all\s+)?previous\s+instructions/i,
     /disregard\s+(all\s+)?prior\s+instructions/i,
     /you\s+are\s+now\s+a\s+/i,
     /system\s*:\s*you/i,
     /\[\s*INST\s*\]/i,
-    /<<\s*SYS\s*>>/i
+    /<<\s*SYS\s*>>/i,
+    // Semantic injection patterns
+    /what would happen if you (ignored|forgot|disregarded)/i,
+    /pretend you (are|have|don't have|do not have)/i,
+    /your (instructions|system prompt|rules) (say|are|contain)/i,
+    /reveal your (prompt|instructions|system)/i,
+    /output your (system|initial) (prompt|message|instructions)/i,
+    /forget (everything|all|your)/i,
+    /act as (if|though) you (have|had) no (rules|restrictions|instructions)/i,
+    /override (your|the) (safety|content|system)/i,
+    /new session[:\s]+/i,
+    /\[system\]/i,
+    /BEGIN OVERRIDE/i
 ];
 
 const DEFAULT_GUARDRAIL_CONFIG: GuardrailConfig = {
@@ -83,8 +116,52 @@ function containsPII(text: string): boolean {
     return PII_PATTERNS.some((pattern) => pattern.test(text));
 }
 
+function containsSecrets(text: string): string | null {
+    for (const pattern of SECRET_PATTERNS) {
+        if (pattern.test(text)) return pattern.source;
+    }
+    return null;
+}
+
+/**
+ * Normalize input before injection detection to defeat evasion techniques:
+ * Base64 decoding, URL decoding, Unicode normalization, zero-width char stripping.
+ */
+function normalizeForInjectionCheck(text: string): string {
+    let normalized = text;
+
+    // Strip zero-width characters that could break pattern matching
+    normalized = normalized.replace(/[\u200B-\u200F\u2028-\u202F\uFEFF\u00AD]/g, "");
+
+    // Unicode NFC normalization
+    normalized = normalized.normalize("NFC");
+
+    // Decode URL-encoded content (double-decode to catch %2569gnore → %69gnore → ignore)
+    try {
+        normalized = decodeURIComponent(normalized);
+        normalized = decodeURIComponent(normalized);
+    } catch {
+        // Invalid encoding, continue with what we have
+    }
+
+    // Detect and decode Base64 content (only obvious blocks)
+    const b64Regex = /(?:[A-Za-z0-9+/]{4}){4,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?/g;
+    normalized = normalized.replace(b64Regex, (match) => {
+        try {
+            const decoded = Buffer.from(match, "base64").toString("utf8");
+            if (/^[\x20-\x7E\s]+$/.test(decoded)) return decoded;
+        } catch {
+            // Not valid Base64
+        }
+        return match;
+    });
+
+    return normalized;
+}
+
 function containsPromptInjection(text: string): boolean {
-    return INJECTION_PATTERNS.some((pattern) => pattern.test(text));
+    const normalized = normalizeForInjectionCheck(text);
+    return INJECTION_PATTERNS.some((pattern) => pattern.test(normalized));
 }
 
 function matchesBlockedPatterns(text: string, patterns: string[]): string | null {
@@ -334,6 +411,16 @@ export async function enforceOutputGuardrails(
         violations.push({
             guardrailKey: "output.blockPII",
             message: "Output contains potential PII leakage",
+            severity: "block"
+        });
+    }
+
+    // Check for leaked secrets/credentials (always enabled, not configurable)
+    const matchedSecret = containsSecrets(output);
+    if (matchedSecret) {
+        violations.push({
+            guardrailKey: "output.secretLeakage",
+            message: `Output contains a potential secret or credential (pattern: ${matchedSecret})`,
             severity: "block"
         });
     }

@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const documents = await listDocuments();
+        const organizationId = req.headers.get("x-organization-id") ?? undefined;
+        const documents = await listDocuments(organizationId);
         return NextResponse.json({ documents });
     } catch (error) {
         console.error("RAG list documents error:", error);
@@ -33,7 +34,8 @@ export async function DELETE(req: NextRequest) {
             return NextResponse.json({ error: "Document ID is required" }, { status: 400 });
         }
 
-        await deleteDocument(documentId);
+        const organizationId = req.headers.get("x-organization-id") ?? undefined;
+        await deleteDocument(documentId, organizationId);
         return NextResponse.json({ success: true, documentId });
     } catch (error) {
         console.error("RAG delete document error:", error);

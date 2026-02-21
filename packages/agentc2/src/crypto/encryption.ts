@@ -14,6 +14,9 @@ import { createCipheriv, createDecipheriv, createHmac, hkdfSync, randomBytes } f
 import type { EncryptedPayload } from "./types";
 
 let cachedKek: Buffer | null | undefined;
+let cachedPrevKek: Buffer | null | undefined;
+
+const CURRENT_KEY_VERSION = 2;
 
 function getPlatformKek(): Buffer | null {
     if (cachedKek !== undefined) return cachedKek;
@@ -32,16 +35,41 @@ function getPlatformKek(): Buffer | null {
     return cachedKek;
 }
 
+function getPreviousKek(): Buffer | null {
+    if (cachedPrevKek !== undefined) return cachedPrevKek;
+    const key = process.env.CREDENTIAL_ENCRYPTION_KEY_PREV;
+    if (!key) {
+        cachedPrevKek = null;
+        return null;
+    }
+    const buffer = Buffer.from(key, "hex");
+    if (buffer.length !== 32) {
+        console.warn("[Crypto] Invalid CREDENTIAL_ENCRYPTION_KEY_PREV length");
+        cachedPrevKek = null;
+        return null;
+    }
+    cachedPrevKek = buffer;
+    return cachedPrevKek;
+}
+
+function getKeyForVersion(version?: number): Buffer | null {
+    if (version === CURRENT_KEY_VERSION || version === undefined) return getPlatformKek();
+    if (version === CURRENT_KEY_VERSION - 1) return getPreviousKek() || getPlatformKek();
+    // v1 payloads (no keyVersion field) use the current key for backward compat
+    return getPlatformKek();
+}
+
 /** Reset cached KEK (for testing). */
 export function resetKekCache(): void {
     cachedKek = undefined;
+    cachedPrevKek = undefined;
 }
 
 export function isEncryptedPayload(value: unknown): value is EncryptedPayload {
     if (!value || typeof value !== "object" || Array.isArray(value)) return false;
     const p = value as Record<string, unknown>;
     return (
-        p.__enc === "v1" &&
+        (p.__enc === "v1" || p.__enc === "v2") &&
         typeof p.iv === "string" &&
         typeof p.tag === "string" &&
         typeof p.data === "string"
@@ -50,6 +78,7 @@ export function isEncryptedPayload(value: unknown): value is EncryptedPayload {
 
 /**
  * Encrypt arbitrary data with the platform KEK (AES-256-GCM).
+ * Uses v2 format with key versioning for rotation support.
  * Returns null if no KEK is configured.
  */
 export function encrypt(plaintext: string): EncryptedPayload | null {
@@ -62,7 +91,8 @@ export function encrypt(plaintext: string): EncryptedPayload | null {
     const tag = cipher.getAuthTag();
 
     return {
-        __enc: "v1",
+        __enc: "v2",
+        keyVersion: CURRENT_KEY_VERSION,
         iv: iv.toString("base64"),
         tag: tag.toString("base64"),
         data: encrypted.toString("base64")
@@ -70,11 +100,13 @@ export function encrypt(plaintext: string): EncryptedPayload | null {
 }
 
 /**
- * Decrypt an AES-256-GCM encrypted payload with the platform KEK.
+ * Decrypt an AES-256-GCM encrypted payload.
+ * Supports both v1 (legacy, no key version) and v2 (versioned) payloads.
+ * On v2 payloads, selects the correct key based on keyVersion.
  * Returns null on failure.
  */
 export function decrypt(payload: EncryptedPayload): string | null {
-    const key = getPlatformKek();
+    const key = getKeyForVersion(payload.keyVersion);
     if (!key) return null;
 
     try {
@@ -85,9 +117,40 @@ export function decrypt(payload: EncryptedPayload): string | null {
         decipher.setAuthTag(tag);
         return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString("utf8");
     } catch (error) {
+        // If decryption fails with current key and a previous key is available, try it
+        if (payload.keyVersion === undefined || payload.__enc === "v1") {
+            const prevKey = getPreviousKek();
+            if (prevKey) {
+                try {
+                    const iv = Buffer.from(payload.iv, "base64");
+                    const tag = Buffer.from(payload.tag, "base64");
+                    const encrypted = Buffer.from(payload.data, "base64");
+                    const decipher = createDecipheriv("aes-256-gcm", prevKey, iv);
+                    decipher.setAuthTag(tag);
+                    return Buffer.concat([decipher.update(encrypted), decipher.final()]).toString(
+                        "utf8"
+                    );
+                } catch {
+                    // Both keys failed
+                }
+            }
+        }
         console.error("[Crypto] Decryption failed:", error);
         return null;
     }
+}
+
+/**
+ * Re-encrypt a payload with the current key and version.
+ * Used during key rotation to migrate credentials.
+ */
+export function reEncrypt(payload: EncryptedPayload): EncryptedPayload | null {
+    if (payload.keyVersion === CURRENT_KEY_VERSION && payload.__enc === "v2") {
+        return payload;
+    }
+    const plaintext = decrypt(payload);
+    if (!plaintext) return null;
+    return encrypt(plaintext);
 }
 
 /**

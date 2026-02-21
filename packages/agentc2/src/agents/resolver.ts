@@ -940,14 +940,31 @@ export class AgentResolver {
             const shouldLoadFull = loadAllSkills || isPinned || isThreadActivated;
 
             if (shouldLoadFull) {
-                // Full load: include tools, instructions, documents
+                // If pinnedVersion is set, load that specific version's instructions
+                let resolvedInstructions = skill.instructions;
+                let resolvedVersion = skill.version;
+
+                if (agentSkill.pinnedVersion != null) {
+                    const pinnedVer = await prisma.skillVersion.findFirst({
+                        where: {
+                            skillId: skill.id,
+                            version: agentSkill.pinnedVersion
+                        },
+                        select: { version: true, instructions: true }
+                    });
+                    if (pinnedVer) {
+                        resolvedInstructions = pinnedVer.instructions;
+                        resolvedVersion = pinnedVer.version;
+                    }
+                }
+
                 activeSkills.push({
                     skillId: skill.id,
                     skillSlug: skill.slug,
-                    skillVersion: skill.version
+                    skillVersion: resolvedVersion
                 });
 
-                skillInstructions += `\n\n## Skill: ${skill.name}\n${skill.instructions}`;
+                skillInstructions += `\n\n## Skill: ${skill.name}\n${resolvedInstructions}`;
                 if (skill.examples) {
                     skillInstructions += `\n\n### Examples:\n${skill.examples}`;
                 }

@@ -3,13 +3,17 @@ import { z } from "zod";
 import { lookup } from "dns/promises";
 import { isIP } from "net";
 
+const FETCH_TIMEOUT_MS = 10_000;
+const MAX_REDIRECTS = 5;
+
 function isPrivateIp(ip: string): boolean {
-    if (ip === "127.0.0.1" || ip === "::1") return true;
+    if (ip === "127.0.0.1" || ip === "0.0.0.0" || ip === "::1" || ip === "::") return true;
     if (ip.startsWith("10.")) return true;
     if (ip.startsWith("192.168.")) return true;
     if (ip.startsWith("169.254.")) return true;
     if (/^172\.(1[6-9]|2\d|3[0-1])\./.test(ip)) return true;
     if (ip.startsWith("fc") || ip.startsWith("fd") || ip.startsWith("fe80:")) return true;
+    if (/^127\./.test(ip)) return true;
     return false;
 }
 
@@ -18,7 +22,7 @@ async function assertSafeFetchUrl(input: string) {
     if (!["http:", "https:"].includes(parsed.protocol)) {
         throw new Error("Only http/https URLs are allowed");
     }
-    const hostname = parsed.hostname.toLowerCase();
+    const hostname = parsed.hostname.replace(/^\[|\]$/g, "").toLowerCase();
     if (hostname === "localhost" || hostname.endsWith(".localhost")) {
         throw new Error("Fetching localhost is not allowed");
     }
@@ -26,10 +30,12 @@ async function assertSafeFetchUrl(input: string) {
     const knownBlockedHosts = new Set([
         "169.254.169.254",
         "metadata.google.internal",
-        "metadata.aws.internal"
+        "metadata.aws.internal",
+        "metadata.azure.internal",
+        "0.0.0.0"
     ]);
     if (knownBlockedHosts.has(hostname)) {
-        throw new Error("Fetching metadata endpoints is not allowed");
+        throw new Error("Fetching metadata/blocked endpoints is not allowed");
     }
 
     if (isIP(hostname) && isPrivateIp(hostname)) {
@@ -42,10 +48,39 @@ async function assertSafeFetchUrl(input: string) {
     }
 }
 
+async function fetchWithRedirectValidation(
+    url: string,
+    headers: Record<string, string>,
+    remainingRedirects: number = MAX_REDIRECTS
+): Promise<Response> {
+    const response = await fetch(url, {
+        headers,
+        redirect: "manual",
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
+    });
+
+    if ([301, 302, 303, 307, 308].includes(response.status)) {
+        if (remainingRedirects <= 0) {
+            throw new Error("Too many redirects");
+        }
+        const location = response.headers.get("location");
+        if (!location) {
+            throw new Error("Redirect response missing Location header");
+        }
+        const redirectUrl = new URL(location, url).toString();
+        await assertSafeFetchUrl(redirectUrl);
+        return fetchWithRedirectValidation(redirectUrl, headers, remainingRedirects - 1);
+    }
+
+    return response;
+}
+
 /**
  * Web Fetch Tool
  *
  * Fetches content from a URL and returns text or structured data.
+ * Includes SSRF protections: private IP blocking, redirect validation,
+ * DNS rebinding protection, and configurable timeouts.
  */
 export const webFetchTool = createTool({
     id: "web-fetch",
@@ -53,30 +88,43 @@ export const webFetchTool = createTool({
     inputSchema: z.object({
         url: z.string().url().describe("The URL to fetch"),
         extractText: z.boolean().optional().default(true).describe("Extract plain text from HTML"),
-        maxLength: z.number().optional().default(5000).describe("Maximum characters to return")
+        maxLength: z.number().optional().default(25000).describe("Maximum characters to return"),
+        preferMarkdown: z
+            .boolean()
+            .optional()
+            .default(true)
+            .describe("Request markdown from Cloudflare-enabled sites via content negotiation")
     }),
     outputSchema: z.object({
         url: z.string(),
         status: z.number(),
         contentType: z.string(),
         content: z.string(),
-        truncated: z.boolean()
+        truncated: z.boolean(),
+        markdownTokens: z.number().optional()
     }),
-    execute: async ({ url, extractText = true, maxLength = 5000 }) => {
+    execute: async ({ url, extractText = true, maxLength = 25000, preferMarkdown = true }) => {
         try {
             await assertSafeFetchUrl(url);
-            const response = await fetch(url, {
-                headers: {
-                    "User-Agent": "AgentC2Bot/1.0 (AI Assistant)",
-                    Accept: "text/html,application/json,text/plain"
-                }
+            const acceptHeader = preferMarkdown
+                ? "text/markdown, text/html;q=0.9, application/json;q=0.8, text/plain;q=0.7"
+                : "text/html, application/json, text/plain";
+            const response = await fetchWithRedirectValidation(url, {
+                "User-Agent": "AgentC2Bot/1.0 (AI Assistant)",
+                Accept: acceptHeader
             });
 
             const contentType = response.headers.get("content-type") || "text/plain";
+            const markdownTokensHeader = response.headers.get("x-markdown-tokens");
+            const markdownTokens = markdownTokensHeader
+                ? parseInt(markdownTokensHeader, 10)
+                : undefined;
             let content = await response.text();
 
-            // Simple HTML text extraction
-            if (extractText && contentType.includes("text/html")) {
+            const isMarkdown =
+                contentType.includes("text/markdown") || contentType.includes("text/x-markdown");
+
+            if (extractText && contentType.includes("text/html") && !isMarkdown) {
                 content = content
                     .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
                     .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
@@ -95,7 +143,8 @@ export const webFetchTool = createTool({
                 status: response.status,
                 contentType,
                 content,
-                truncated
+                truncated,
+                ...(markdownTokens !== undefined && !isNaN(markdownTokens) && { markdownTokens })
             };
         } catch (error) {
             throw new Error(

@@ -2287,6 +2287,39 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
                 }
             }
         }
+    },
+    {
+        key: "coinbase",
+        name: "Coinbase AgentKit",
+        description:
+            "Crypto wallets and payments — create wallets, send/receive crypto, check balances, interact with smart contracts",
+        category: "payments",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["CDP_API_KEY_NAME", "CDP_API_KEY_PRIVATE_KEY"],
+            fieldDefinitions: {
+                CDP_API_KEY_NAME: {
+                    label: "CDP API key name",
+                    description: "From Coinbase Developer Platform > API Keys",
+                    placeholder: "organizations/...",
+                    type: "text"
+                },
+                CDP_API_KEY_PRIVATE_KEY: {
+                    label: "CDP API key private key",
+                    description: "The private key associated with your CDP API key",
+                    placeholder: "-----BEGIN EC PRIVATE KEY-----...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Coinbase", "coinbase", "AgentKit", "agentkit", "CDP"],
+                envAliases: {
+                    CDP_API_KEY_NAME: "CDP_API_KEY_NAME",
+                    CDP_API_KEY_PRIVATE_KEY: "CDP_API_KEY_PRIVATE_KEY"
+                }
+            }
+        }
     }
 ];
 
@@ -3074,6 +3107,23 @@ function buildServerDefinitionForProvider(options: {
                 command: "ibmcloud",
                 args: ["--mcp-transport", "stdio"],
                 env: { IBMCLOUD_API_KEY: ibmApiKey }
+            };
+        }
+        case "coinbase": {
+            const cdpKeyName =
+                getCredentialValue(credentials, ["CDP_API_KEY_NAME"]) ||
+                (allowEnvFallback ? process.env.CDP_API_KEY_NAME : undefined);
+            const cdpPrivateKey =
+                getCredentialValue(credentials, ["CDP_API_KEY_PRIVATE_KEY"]) ||
+                (allowEnvFallback ? process.env.CDP_API_KEY_PRIVATE_KEY : undefined);
+            if (!cdpKeyName || !cdpPrivateKey) return null;
+            return {
+                command: "npx",
+                args: ["-y", "@coinbase/agentkit", "chatbot", "--mcp"],
+                env: {
+                    CDP_API_KEY_NAME: cdpKeyName,
+                    CDP_API_KEY_PRIVATE_KEY: cdpPrivateKey
+                }
             };
         }
         default: {
@@ -4658,6 +4708,8 @@ export async function executeMcpTool(
         organizationId?: string | null;
         userId?: string | null;
         connectionId?: string | null;
+        accessLevel?: "public" | "authenticated" | "member" | "admin" | "owner";
+        timeoutMs?: number;
     }
 ): Promise<McpToolExecutionResult> {
     let resolvedToolName = toolName;
@@ -4720,9 +4772,56 @@ export async function executeMcpTool(
             };
         }
 
-        // Execute the tool - toolsets return Tool objects that are callable
+        // ACL enforcement: check tool access level when called internally by agents
+        if (options?.accessLevel) {
+            const adminToolPattern =
+                /^(agent-delete|workflow-delete|network-delete|destroy-resource|teardown-compute|agent-create|agent-update|workflow-create|workflow-update|network-create|network-update|execute-code|remote-execute|remote-file-transfer|provision-compute)$/i;
+            const memberToolPattern = /^(agent\.|instance\.|workflow-|network-)/;
+
+            let requiredLevel: "public" | "authenticated" | "member" | "admin" | "owner" = "member";
+            if (adminToolPattern.test(matchedName)) requiredLevel = "admin";
+            else if (memberToolPattern.test(matchedName)) requiredLevel = "member";
+
+            const levels = ["public", "authenticated", "member", "admin", "owner"] as const;
+            const callerIdx = levels.indexOf(options.accessLevel);
+            const requiredIdx = levels.indexOf(requiredLevel);
+            if (callerIdx < requiredIdx) {
+                return {
+                    success: false,
+                    toolName: matchedName,
+                    error: `Insufficient access: tool "${matchedName}" requires ${requiredLevel}, caller has ${options.accessLevel}`
+                };
+            }
+        }
+
+        // Parameter validation: if the tool has an inputSchema, validate params against it
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const result = await (tool as any).execute({ context: parameters });
+        const toolObj = tool as any;
+        if (toolObj.inputSchema || toolObj.schema?.input) {
+            const schema = toolObj.inputSchema || toolObj.schema?.input;
+            if (schema && typeof schema.safeParse === "function") {
+                const validation = schema.safeParse(parameters);
+                if (!validation.success) {
+                    return {
+                        success: false,
+                        toolName: matchedName,
+                        error: `Invalid parameters: ${validation.error?.issues?.map((i: { message: string }) => i.message).join(", ") || "validation failed"}`
+                    };
+                }
+            }
+        }
+
+        // Execute with timeout
+        const timeoutMs = options?.timeoutMs ?? 60_000;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const executePromise = (tool as any).execute({ context: parameters });
+        const timeoutPromise = new Promise<never>((_, reject) =>
+            setTimeout(
+                () => reject(new Error(`Tool execution timed out after ${timeoutMs}ms`)),
+                timeoutMs
+            )
+        );
+        const result = await Promise.race([executePromise, timeoutPromise]);
 
         if (options?.organizationId) {
             const serverName = matchedName.includes("_")

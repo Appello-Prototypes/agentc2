@@ -10,6 +10,8 @@ import {
     type FieldChange
 } from "@/lib/changelog";
 import { requireAgentAccess, requireAuth, requireOrgRole } from "@/lib/authz";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -118,6 +120,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (authResult.response) {
             return authResult.response;
         }
+
+        const rateKey = `orgMutation:agent:${authResult.context.organizationId}`;
+        const rate = await checkRateLimit(rateKey, RATE_LIMIT_POLICIES.orgMutation);
+        if (!rate.allowed) {
+            return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+        }
+
         const roleResult = await requireOrgRole(
             authResult.context.userId,
             authResult.context.organizationId

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
 import { authenticateRequest } from "@/lib/api-auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
 /**
  * Helper to check if user has required role in organization
@@ -130,6 +132,12 @@ export async function PATCH(
         }
 
         const { orgId } = await params;
+
+        const rateKey = `orgMutation:org:${orgId}`;
+        const rate = await checkRateLimit(rateKey, RATE_LIMIT_POLICIES.orgMutation);
+        if (!rate.allowed) {
+            return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+        }
 
         const { membership, organization } = await checkMembership(authContext.userId, orgId, [
             "owner",

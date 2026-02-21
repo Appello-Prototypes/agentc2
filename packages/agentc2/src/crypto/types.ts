@@ -1,8 +1,9 @@
 export type EncryptedPayload = {
-    __enc: "v1";
+    __enc: "v1" | "v2";
     iv: string;
     tag: string;
     data: string;
+    keyVersion?: number;
 };
 
 export type Ed25519KeyPair = {

@@ -3,6 +3,7 @@ export type { EncryptedPayload, Ed25519KeyPair, EncryptedKeyPair, SignedPayload 
 export {
     encrypt,
     decrypt,
+    reEncrypt,
     encryptJson,
     decryptJson,
     encryptWithKey,

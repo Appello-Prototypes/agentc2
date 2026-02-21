@@ -6,6 +6,8 @@ import { recordActivity } from "@repo/agentc2/activity/service";
 import { auth } from "@repo/auth";
 import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { authenticateRequest } from "@/lib/api-auth";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -249,6 +251,14 @@ export async function POST(request: NextRequest) {
             ? await getDefaultWorkspaceIdForUser(session.user.id)
             : null;
         const organizationId = session?.user ? await getUserOrganizationId(session.user.id) : null;
+
+        if (organizationId) {
+            const rateKey = `orgMutation:agentCreate:${organizationId}`;
+            const rate = await checkRateLimit(rateKey, RATE_LIMIT_POLICIES.orgMutation);
+            if (!rate.allowed) {
+                return NextResponse.json({ error: "Rate limit exceeded" }, { status: 429 });
+            }
+        }
 
         // Validate required fields
         const { name, instructions, modelProvider, modelName } = body;

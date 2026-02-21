@@ -171,6 +171,9 @@ model Organization {
     orgBudgetPolicy OrgBudgetPolicy?
     budgetAlerts    BudgetAlert[]
 
+    // Network Egress
+    networkEgressPolicy NetworkEgressPolicy?
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -803,6 +806,11 @@ model Agent {
     federationExposures    FederationExposure[]
     instances              AgentInstance[]
     storageUsage           WorkspaceStorageUsage[]
+    outcomes               AgentOutcome[]
+    revenueEvents          AgentRevenueEvent[]
+    toolPermissions        AgentToolPermission[]
+    identity               AgentIdentity?
+    reputation             AgentReputation?
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -1722,8 +1730,14 @@ model BudgetPolicy {
     monthlyLimitUsd Float?
     alertAtPct      Float?    @default(80) // Alert when usage reaches this percentage
     hardLimit       Boolean   @default(true) // Block runs when limit exceeded
-    createdAt       DateTime  @default(now())
-    updatedAt       DateTime  @updatedAt
+
+    // Spending autonomy for financial tools
+    spendingTier     String @default("read_only") // "read_only", "spend_with_approval", "spend_autonomous"
+    maxPerActionUsd  Float? // Max USD per individual financial action
+    maxPerSessionUsd Float? // Max USD per session/run for financial actions
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
 
     @@index([agentId])
     @@index([workflowId])
@@ -1734,13 +1748,13 @@ model BudgetPolicy {
 
 // Cost Event - Token/cost tracking per run
 model CostEvent {
-    id               String        @id @default(cuid())
+    id               String          @id @default(cuid())
     runId            String
-    run              AgentRun      @relation(fields: [runId], references: [id], onDelete: Cascade)
+    run              AgentRun        @relation(fields: [runId], references: [id], onDelete: Cascade)
     turnId           String?
-    turn             AgentRunTurn? @relation(fields: [turnId], references: [id], onDelete: Cascade)
+    turn             AgentRunTurn?   @relation(fields: [turnId], references: [id], onDelete: Cascade)
     agentId          String
-    agent            Agent         @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    agent            Agent           @relation(fields: [agentId], references: [id], onDelete: Cascade)
     tenantId         String?
     userId           String?
     provider         String
@@ -1752,7 +1766,8 @@ model CostEvent {
     platformCostUsd  Float?
     billedCostUsd    Float?
     markupMultiplier Float?
-    createdAt        DateTime      @default(now())
+    status           CostEventStatus @default(FINALIZED)
+    createdAt        DateTime        @default(now())
 
     @@index([runId])
     @@index([turnId])
@@ -1760,6 +1775,12 @@ model CostEvent {
     @@index([tenantId])
     @@index([userId, createdAt])
     @@map("cost_event")
+}
+
+enum CostEventStatus {
+    RESERVED
+    FINALIZED
+    CANCELLED
 }
 
 // Agent Cost Daily - Daily cost rollups
@@ -3133,10 +3154,16 @@ model Skill {
     updatedAt DateTime @updatedAt
     createdBy String?
 
+    // Marketplace fields
+    isPublic     Boolean @default(false)
+    installCount Int     @default(0)
+    rating       Float?
+
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness
     @@index([slug])
     @@index([workspaceId])
     @@index([category])
+    @@index([isPublic])
     @@map("skill")
 }
 
@@ -3178,12 +3205,13 @@ model SkillTool {
 }
 
 model AgentSkill {
-    id      String  @id @default(cuid())
-    agentId String
-    agent   Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
-    skillId String
-    skill   Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
-    pinned  Boolean @default(true) // true = always loaded at resolution (default), false = discoverable via meta-tools
+    id            String  @id @default(cuid())
+    agentId       String
+    agent         Agent   @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    skillId       String
+    skill         Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+    pinned        Boolean @default(true) // true = always loaded at resolution (default), false = discoverable via meta-tools
+    pinnedVersion Int? // If set, use this SkillVersion.version instead of latest
 
     @@unique([agentId, skillId])
     @@map("agent_skill")
@@ -4844,4 +4872,102 @@ model ChangeLog {
     @@index([entityId, version])
     @@index([createdAt])
     @@map("change_log")
+}
+
+// ─── Agentic Web Feature Models ──────────────────────────────────────
+
+// Agent Outcome — tracks measurable outcomes from agent runs for cost-per-outcome analytics
+model AgentOutcome {
+    id          String   @id @default(cuid())
+    agentId     String
+    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    runId       String?
+    outcomeType String // "ticket_resolved", "lead_qualified", "document_generated", etc.
+    valueUsd    Float? // Monetary value of this outcome (if quantifiable)
+    metadata    Json? // Outcome-specific data
+    success     Boolean  @default(true)
+    createdAt   DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([outcomeType])
+    @@map("agent_outcome")
+}
+
+// Agent Revenue Event — tracks revenue generated by or attributed to agents
+model AgentRevenueEvent {
+    id          String   @id @default(cuid())
+    agentId     String
+    agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    revenueType String // "subscription", "transaction", "service_fee", etc.
+    amountUsd   Float
+    currency    String   @default("USD")
+    source      String? // "stripe", "coinbase", "manual"
+    referenceId String? // External reference (e.g. Stripe payment ID)
+    metadata    Json?
+    createdAt   DateTime @default(now())
+
+    @@index([agentId, createdAt])
+    @@index([revenueType])
+    @@map("agent_revenue_event")
+}
+
+// Agent Tool Permission — per-agent overrides for tool access permissions
+model AgentToolPermission {
+    id         String @id @default(cuid())
+    agentId    String
+    agent      Agent  @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    toolId     String
+    permission String @default("full") // "read_only", "write", "spend", "full"
+    maxCostUsd Float? // Per-invocation cost limit for this tool
+
+    @@unique([agentId, toolId])
+    @@map("agent_tool_permission")
+}
+
+// Network Egress Policy — org-level domain allowlist/denylist for outbound requests
+model NetworkEgressPolicy {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    mode           String       @default("allowlist") // "allowlist" or "denylist"
+    domains        String[] // Domain patterns (e.g. "*.example.com", "api.stripe.com")
+    enabled        Boolean      @default(true)
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@unique([organizationId])
+    @@map("network_egress_policy")
+}
+
+// Agent Identity — cryptographic identity for agent-to-agent trust
+model AgentIdentity {
+    id                  String   @id @default(cuid())
+    agentId             String   @unique
+    agent               Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    publicKey           String   @db.Text
+    encryptedPrivateKey Json // AES-256-GCM encrypted (same pattern as OrganizationKeyPair)
+    keyVersion          Int      @default(1)
+    keyId               String   @unique
+    createdAt           DateTime @default(now())
+
+    @@map("agent_identity")
+}
+
+// Agent Reputation — trust scoring and autonomy tracking
+model AgentReputation {
+    id               String   @id @default(cuid())
+    agentId          String   @unique
+    agent            Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+    totalRuns        Int      @default(0)
+    successfulRuns   Int      @default(0)
+    failedRuns       Int      @default(0)
+    totalSpendUsd    Float    @default(0)
+    totalRevenueUsd  Float    @default(0)
+    trustScore       Float    @default(0) // 0-100
+    autonomyTier     String   @default("supervised") // "supervised", "semi_autonomous", "autonomous"
+    lastCalculatedAt DateTime @default(now())
+    createdAt        DateTime @default(now())
+    updatedAt        DateTime @updatedAt
+
+    @@map("agent_reputation")
 }

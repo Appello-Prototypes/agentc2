@@ -186,6 +186,8 @@ export const agentDiscoverTool = createTool({
     }
 });
 
+const MAX_INVOCATION_DEPTH = 5;
+
 export const agentInvokeDynamicTool = createTool({
     id: "agent-invoke-dynamic",
     description:
@@ -200,7 +202,11 @@ export const agentInvokeDynamicTool = createTool({
         maxSteps: z
             .number()
             .optional()
-            .describe("Override the maximum number of tool-use steps (default uses agent config)")
+            .describe("Override the maximum number of tool-use steps (default uses agent config)"),
+        _invocationDepth: z
+            .number()
+            .optional()
+            .describe("Internal: current invocation chain depth (auto-managed)")
     }),
     outputSchema: z.object({
         success: z.boolean(),
@@ -217,26 +223,63 @@ export const agentInvokeDynamicTool = createTool({
             .optional(),
         error: z.string().optional()
     }),
-    execute: async ({ agentSlug, message, context, maxSteps }) => {
+    execute: async ({ agentSlug, message, context, maxSteps, _invocationDepth }) => {
+        const depth = _invocationDepth ?? 0;
+
+        if (depth >= MAX_INVOCATION_DEPTH) {
+            return {
+                success: false,
+                agentSlug,
+                error: `Maximum agent invocation depth (${MAX_INVOCATION_DEPTH}) exceeded. Recursive agent chains are limited to prevent runaway execution.`
+            };
+        }
+
         try {
+            // Verify target agent exists and is active before invocation
+            const agentInfo = await callInternalApi(`/api/agents/${agentSlug}`, {
+                query: { detail: "minimal" }
+            });
+            if (!agentInfo?.isActive) {
+                return {
+                    success: false,
+                    agentSlug,
+                    error: `Target agent "${agentSlug}" is not active`
+                };
+            }
+
+            const startMs = Date.now();
             const result = await callInternalApi(`/api/agents/${agentSlug}/invoke`, {
                 method: "POST",
                 body: {
                     input: message,
-                    context: context || {},
+                    context: {
+                        ...(context || {}),
+                        _invocationDepth: depth + 1,
+                        _sourceAgent: context?._sourceAgent || "unknown"
+                    },
                     maxSteps,
                     mode: "sync"
                 }
             });
+            const durationMs = Date.now() - startMs;
+
+            console.log(
+                `[AgentInvoke] ${agentSlug} invoked at depth ${depth}, duration=${durationMs}ms, run=${result.run_id}`
+            );
+
             return {
                 success: true,
                 agentSlug,
                 output: result.output,
                 run_id: result.run_id,
-                duration_ms: result.duration_ms,
+                duration_ms: result.duration_ms ?? durationMs,
                 usage: result.usage
             };
         } catch (error) {
+            console.warn(
+                `[AgentInvoke] Failed to invoke ${agentSlug} at depth ${depth}:`,
+                error instanceof Error ? error.message : error
+            );
             return {
                 success: false,
                 agentSlug,

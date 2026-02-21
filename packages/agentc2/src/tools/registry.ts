@@ -56,6 +56,21 @@ import { dateTimeTool, calculatorTool, generateIdTool } from "./example-tools";
 import { webFetchTool } from "./web-fetch";
 import { webSearchTool, webScrapeTool } from "./web-search";
 import {
+    exaSearchTool,
+    exaFindSimilarTool,
+    exaGetContentsTool,
+    exaResearchTool
+} from "./exa-search";
+import { braveSearchTool, braveLocalSearchTool, braveNewsSearchTool } from "./brave-search";
+import { perplexityResearchTool, perplexitySearchTool } from "./perplexity-search";
+import { smartSearchTool } from "./search-router";
+import {
+    stripeAcsCreateSessionTool,
+    stripeAcsGetProductTool,
+    stripeAcsListProductsTool
+} from "./stripe-acs";
+import { recordOutcomeTool, agentROITool } from "./outcome-tracking";
+import {
     youtubeGetTranscriptTool,
     youtubeSearchVideosTool,
     youtubeAnalyzeVideoTool,
@@ -326,6 +341,25 @@ export const toolCategoryMap: Record<string, string> = {
     "web-search": "Utilities",
     "web-scrape": "Utilities",
     "memory-recall": "Utilities",
+
+    // Search
+    "exa-search": "Search",
+    "exa-find-similar": "Search",
+    "exa-get-contents": "Search",
+    "exa-research": "Search",
+    "brave-search": "Search",
+    "brave-local-search": "Search",
+    "brave-news-search": "Search",
+    "perplexity-research": "Search",
+    "perplexity-search": "Search",
+    "smart-search": "Search",
+
+    // Commerce
+    "stripe-acs-create-session": "Commerce",
+    "stripe-acs-get-product": "Commerce",
+    "stripe-acs-list-products": "Commerce",
+    "record-outcome": "Commerce",
+    "agent-roi": "Commerce",
 
     // YouTube
     "youtube-get-transcript": "YouTube",
@@ -609,6 +643,8 @@ export const toolCategoryMap: Record<string, string> = {
  */
 export const toolCategoryOrder: string[] = [
     "Utilities",
+    "Search",
+    "Commerce",
     "Code Execution",
     "Remote Compute",
     "Backlog",
@@ -693,6 +729,25 @@ export const toolRegistry: Record<string, any> = {
     "web-search": webSearchTool,
     "web-scrape": webScrapeTool,
     "memory-recall": memoryRecallTool,
+
+    // Search tools
+    "exa-search": exaSearchTool,
+    "exa-find-similar": exaFindSimilarTool,
+    "exa-get-contents": exaGetContentsTool,
+    "exa-research": exaResearchTool,
+    "brave-search": braveSearchTool,
+    "brave-local-search": braveLocalSearchTool,
+    "brave-news-search": braveNewsSearchTool,
+    "perplexity-research": perplexityResearchTool,
+    "perplexity-search": perplexitySearchTool,
+    "smart-search": smartSearchTool,
+
+    // Commerce tools
+    "stripe-acs-create-session": stripeAcsCreateSessionTool,
+    "stripe-acs-get-product": stripeAcsGetProductTool,
+    "stripe-acs-list-products": stripeAcsListProductsTool,
+    "record-outcome": recordOutcomeTool,
+    "agent-roi": agentROITool,
 
     // YouTube
     "youtube-get-transcript": youtubeGetTranscriptTool,

@@ -68,6 +68,30 @@ export async function register() {
             "[Instrumentation] Post-bootstrap hooks registered (Gmail, Microsoft, KeyPair)"
         );
 
+        // Verify Docker availability for sandboxed code execution
+        try {
+            const { execSync } = await import("child_process");
+            execSync("docker info", { stdio: "ignore", timeout: 5000 });
+            console.log("[Instrumentation] Docker is available for sandboxed code execution");
+        } catch {
+            const fallbackAllowed =
+                process.env.SANDBOX_ALLOW_UNSANDBOXED_FALLBACK === "true" &&
+                process.env.NODE_ENV !== "production";
+            if (process.env.NODE_ENV === "production") {
+                console.error(
+                    "[Instrumentation] WARNING: Docker is NOT available. Code execution tool will fail."
+                );
+            } else if (fallbackAllowed) {
+                console.warn(
+                    "[Instrumentation] Docker unavailable. Unsandboxed fallback is enabled (dev only)."
+                );
+            } else {
+                console.warn(
+                    "[Instrumentation] Docker unavailable. Code execution tool will be disabled."
+                );
+            }
+        }
+
         // Security: verify CREDENTIAL_ENCRYPTION_KEY in production
         if (process.env.NODE_ENV === "production") {
             const key = process.env.CREDENTIAL_ENCRYPTION_KEY;

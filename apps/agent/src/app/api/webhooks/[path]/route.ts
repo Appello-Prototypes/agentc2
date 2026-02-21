@@ -100,7 +100,55 @@ export async function POST(
 
         const { normalizedPayload } = buildTriggerPayloadSnapshot(payload);
 
-        // Resolve workspaceId: use trigger's workspace, fall back to default workspace
+        // ── Signature verification (fail-closed — runs BEFORE trigger event creation) ──
+        const webhookSecretPlain = trigger.webhookSecret
+            ? decryptString(trigger.webhookSecret)
+            : null;
+        const requireSignatures = process.env.REQUIRE_WEBHOOK_SIGNATURES === "true";
+        let signatureVerified = false;
+
+        if (webhookSecretPlain) {
+            if (timestampHeader) {
+                const parsed = Number(timestampHeader);
+                if (Number.isNaN(parsed)) {
+                    return NextResponse.json(
+                        { success: false, error: "Invalid webhook timestamp" },
+                        { status: 400 }
+                    );
+                }
+                const timestampMs = parsed < 1e12 ? parsed * 1000 : parsed;
+                const driftMs = Math.abs(Date.now() - timestampMs);
+                if (driftMs > 5 * 60 * 1000) {
+                    return NextResponse.json(
+                        { success: false, error: "Webhook timestamp expired" },
+                        { status: 401 }
+                    );
+                }
+            }
+
+            if (!verifySignature(rawBody, signature, webhookSecretPlain, timestampHeader)) {
+                console.warn(`[Webhook] Invalid signature for trigger ${trigger.id}`);
+                return NextResponse.json(
+                    { success: false, error: "Invalid signature" },
+                    { status: 401 }
+                );
+            }
+            signatureVerified = true;
+        } else if (requireSignatures) {
+            console.warn(
+                `[Webhook] Rejected: REQUIRE_WEBHOOK_SIGNATURES=true but trigger ${trigger.id} has no secret`
+            );
+            return NextResponse.json(
+                { success: false, error: "Webhook signature required but no secret configured" },
+                { status: 403 }
+            );
+        } else {
+            console.warn(
+                `[Webhook] Accepting unsigned webhook for trigger ${trigger.id} (no secret configured)`
+            );
+        }
+
+        // ── Create trigger event AFTER signature verification ──
         let workspaceId = trigger.workspaceId;
         if (!workspaceId) {
             const defaultWorkspace = await prisma.workspace.findFirst({
@@ -119,7 +167,10 @@ export async function POST(
             triggerType: trigger.triggerType,
             entityType: "agent",
             webhookPath: trigger.webhookPath,
-            payload: normalizedPayload
+            payload: {
+                ...normalizedPayload,
+                _signatureVerified: signatureVerified
+            }
         });
 
         if (!trigger.isActive) {
@@ -142,51 +193,6 @@ export async function POST(
                 { success: false, error: "Agent is disabled" },
                 { status: 403 }
             );
-        }
-
-        // Verify signature if secret is set
-        const webhookSecretPlain = trigger.webhookSecret
-            ? decryptString(trigger.webhookSecret)
-            : null;
-        if (webhookSecretPlain) {
-            let timestampMs: number | null = null;
-            if (timestampHeader) {
-                const parsed = Number(timestampHeader);
-                if (Number.isNaN(parsed)) {
-                    await updateTriggerEventRecord(triggerEvent.id, {
-                        status: TriggerEventStatus.REJECTED,
-                        errorMessage: "Invalid webhook timestamp"
-                    });
-                    return NextResponse.json(
-                        { success: false, error: "Invalid webhook timestamp" },
-                        { status: 400 }
-                    );
-                }
-                timestampMs = parsed < 1e12 ? parsed * 1000 : parsed;
-                const driftMs = Math.abs(Date.now() - timestampMs);
-                if (driftMs > 5 * 60 * 1000) {
-                    await updateTriggerEventRecord(triggerEvent.id, {
-                        status: TriggerEventStatus.REJECTED,
-                        errorMessage: "Webhook timestamp expired"
-                    });
-                    return NextResponse.json(
-                        { success: false, error: "Webhook timestamp expired" },
-                        { status: 401 }
-                    );
-                }
-            }
-
-            if (!verifySignature(rawBody, signature, webhookSecretPlain, timestampHeader)) {
-                console.warn(`[Webhook] Invalid signature for trigger ${trigger.id}`);
-                await updateTriggerEventRecord(triggerEvent.id, {
-                    status: TriggerEventStatus.REJECTED,
-                    errorMessage: "Invalid signature"
-                });
-                return NextResponse.json(
-                    { success: false, error: "Invalid signature" },
-                    { status: 401 }
-                );
-            }
         }
 
         // Queue agent invocation via Inngest

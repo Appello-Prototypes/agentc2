@@ -93,6 +93,13 @@ export async function ingestDocument(
     vectorIds: string[];
 }> {
     const { type = "text", sourceId, sourceName, chunkOptions, organizationId } = options;
+
+    if (!organizationId) {
+        if (process.env.NODE_ENV === "production") {
+            throw new Error("[ingestDocument] organizationId is required in production");
+        }
+        console.warn("[ingestDocument] No organizationId — ingested data will lack tenant scope");
+    }
     const documentId = sourceId || `doc_${Date.now()}`;
 
     const doc = createDocument(content, type);
@@ -202,8 +209,13 @@ export async function queryRag(
     } = options;
 
     if (!organizationId) {
+        if (process.env.NODE_ENV === "production") {
+            throw new Error(
+                "[queryRag] organizationId is required in production to prevent cross-tenant data leakage"
+            );
+        }
         console.warn(
-            "[queryRag] No organizationId provided -- results are unscoped (cross-tenant risk)"
+            "[queryRag] No organizationId provided — results are unscoped (cross-tenant risk)"
         );
     }
 
@@ -373,10 +385,19 @@ Provide a comprehensive answer based on the context above.`;
 /**
  * Delete a document and all its chunks from RAG
  */
-export async function deleteDocument(documentId: string): Promise<void> {
+export async function deleteDocument(documentId: string, organizationId?: string): Promise<void> {
+    if (!organizationId && process.env.NODE_ENV === "production") {
+        throw new Error("[deleteDocument] organizationId is required in production");
+    }
+
     // Clean up RagChunk records for full-text search
     try {
-        await prisma.ragChunk.deleteMany({ where: { documentId } });
+        await prisma.ragChunk.deleteMany({
+            where: {
+                documentId,
+                ...(organizationId ? { organizationId } : {})
+            }
+        });
     } catch {
         // Non-critical: table may not exist yet
     }
@@ -386,7 +407,10 @@ export async function deleteDocument(documentId: string): Promise<void> {
     }
     await vector.deleteVectors({
         indexName: RAG_INDEX_NAME,
-        filter: { documentId }
+        filter: {
+            documentId,
+            ...(organizationId ? { organizationId } : {})
+        }
     });
 }
 
@@ -405,6 +429,15 @@ export async function keywordSearch(
     } = {}
 ): Promise<Array<{ id: string; text: string; score: number; metadata: Record<string, any> }>> {
     const { topK = 10, organizationId, documentId } = options;
+
+    if (!organizationId) {
+        if (process.env.NODE_ENV === "production") {
+            throw new Error("[keywordSearch] organizationId is required in production");
+        }
+        console.warn(
+            "[keywordSearch] No organizationId — results are unscoped (cross-tenant risk)"
+        );
+    }
 
     try {
         const results: Array<{
@@ -556,7 +589,7 @@ export async function rerankResults(
 /**
  * List all ingested documents
  */
-export async function listDocuments(): Promise<
+export async function listDocuments(organizationId?: string): Promise<
     Array<{
         documentId: string;
         sourceName: string;
@@ -564,8 +597,12 @@ export async function listDocuments(): Promise<
         ingestedAt: string;
     }>
 > {
+    if (!organizationId && process.env.NODE_ENV === "production") {
+        throw new Error("[listDocuments] organizationId is required in production");
+    }
+
     if (!(await ragIndexExists())) {
-        return []; // No documents ingested yet
+        return [];
     }
 
     const stats = await vector.describeIndex({ indexName: RAG_INDEX_NAME });

@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
 import {
     Badge,
+    Button,
     Card,
     CardContent,
     Collapsible,
@@ -12,7 +13,7 @@ import {
     CollapsibleTrigger,
     Skeleton
 } from "@repo/ui";
-import { ChevronDownIcon } from "lucide-react";
+import { ChevronDownIcon, PinIcon, HistoryIcon } from "lucide-react";
 
 interface SkillVersion {
     id: string;
@@ -29,29 +30,61 @@ export default function SkillVersionsPage() {
     const skillSlug = params.skillSlug as string;
     const [versions, setVersions] = useState<SkillVersion[]>([]);
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+    const loadVersions = useCallback(async () => {
+        try {
+            const skillRes = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
+            if (skillRes.ok) {
+                const data = await skillRes.json();
+                const s = data.skill || data;
+                const versionsRes = await fetch(`${getApiBase()}/api/skills/${s.id}/versions`);
+                if (versionsRes.ok) {
+                    const vData = await versionsRes.json();
+                    setVersions(vData.versions || vData || []);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to load:", err);
+        } finally {
+            setLoading(false);
+        }
+    }, [skillSlug]);
 
     useEffect(() => {
-        const load = async () => {
-            try {
-                // First get the skill to get its ID
-                const skillRes = await fetch(`${getApiBase()}/api/skills/${skillSlug}`);
-                if (skillRes.ok) {
-                    const data = await skillRes.json();
-                    const s = data.skill || data;
-                    const versionsRes = await fetch(`${getApiBase()}/api/skills/${s.id}/versions`);
-                    if (versionsRes.ok) {
-                        const vData = await versionsRes.json();
-                        setVersions(vData.versions || vData || []);
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to load:", err);
-            } finally {
-                setLoading(false);
-            }
-        };
-        load();
-    }, [skillSlug]);
+        loadVersions();
+    }, [loadVersions]);
+
+    const handlePinVersion = async (version: number) => {
+        setActionLoading(`pin-${version}`);
+        try {
+            await fetch(`${getApiBase()}/api/skills/${skillSlug}/pin`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ version })
+            });
+        } catch (err) {
+            console.error("Failed to pin version:", err);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleRollback = async (version: number) => {
+        setActionLoading(`rollback-${version}`);
+        try {
+            await fetch(`${getApiBase()}/api/skills/${skillSlug}/rollback`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ version })
+            });
+            await loadVersions();
+        } catch (err) {
+            console.error("Failed to rollback:", err);
+        } finally {
+            setActionLoading(null);
+        }
+    };
 
     if (loading) return <Skeleton className="h-64 w-full" />;
 
@@ -75,6 +108,32 @@ export default function SkillVersionsPage() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                disabled={actionLoading === `pin-${v.version}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handlePinVersion(v.version);
+                                                }}
+                                            >
+                                                <PinIcon className="mr-1 h-3 w-3" />
+                                                Pin
+                                            </Button>
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-7 text-xs"
+                                                disabled={actionLoading === `rollback-${v.version}`}
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleRollback(v.version);
+                                                }}
+                                            >
+                                                <HistoryIcon className="mr-1 h-3 w-3" />
+                                                Rollback
+                                            </Button>
                                             <span className="text-muted-foreground text-xs">
                                                 {new Date(v.createdAt).toLocaleDateString()}
                                             </span>

@@ -87,7 +87,13 @@ export type AuditAction =
     | "AUTH_LOGOUT"
     | "AUTH_SESSION_CREATED"
     // Data Access
-    | "DATA_ACCESS";
+    | "DATA_ACCESS"
+    // Tool Execution
+    | "TOOL_EXECUTE"
+    // Agent Chain Invocation
+    | "AGENT_CHAIN_INVOKE"
+    // Budget Changes
+    | "BUDGET_CHANGE";
 
 /**
  * Audit log entry options
@@ -118,8 +124,24 @@ export async function createAuditLog(options: AuditLogOptions): Promise<void> {
             }
         });
     } catch (error) {
-        // Log but don't throw - audit logging should not block operations
         console.error("[AuditLog] Failed to create audit log:", error);
+        // Retry once after a short delay
+        setTimeout(async () => {
+            try {
+                await prisma.auditLog.create({
+                    data: {
+                        action: options.action,
+                        entityType: options.entityType,
+                        entityId: options.entityId,
+                        actorId: options.actorId || options.userId,
+                        tenantId: options.tenantId,
+                        metadata: options.metadata as Prisma.InputJsonValue
+                    }
+                });
+            } catch (retryError) {
+                console.error("[AuditLog] Retry also failed:", retryError);
+            }
+        }, 2000);
     }
 }
 
@@ -327,6 +349,61 @@ export const auditLog = {
             actorId,
             tenantId,
             metadata: { agentId, source }
+        });
+    },
+
+    // Tool Execution
+    async toolExecute(
+        toolName: string,
+        agentId: string,
+        status: "success" | "error",
+        actorId?: string,
+        tenantId?: string,
+        metadata?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "TOOL_EXECUTE",
+            entityType: "McpTool",
+            entityId: toolName,
+            actorId,
+            tenantId,
+            metadata: { agentId, status, ...metadata }
+        });
+    },
+
+    // Agent Chain Invocation
+    async agentChainInvoke(
+        sourceAgentId: string,
+        targetAgentSlug: string,
+        depth: number,
+        actorId?: string,
+        tenantId?: string
+    ) {
+        await createAuditLog({
+            action: "AGENT_CHAIN_INVOKE",
+            entityType: "AgentChain",
+            entityId: `${sourceAgentId}->${targetAgentSlug}`,
+            actorId,
+            tenantId,
+            metadata: { sourceAgentId, targetAgentSlug, depth }
+        });
+    },
+
+    // Budget Changes
+    async budgetChange(
+        entityId: string,
+        entityType: "agent" | "org" | "user",
+        actorId?: string,
+        tenantId?: string,
+        changes?: Record<string, unknown>
+    ) {
+        await createAuditLog({
+            action: "BUDGET_CHANGE",
+            entityType: `BudgetPolicy:${entityType}`,
+            entityId,
+            actorId,
+            tenantId,
+            metadata: { changes }
         });
     },
 

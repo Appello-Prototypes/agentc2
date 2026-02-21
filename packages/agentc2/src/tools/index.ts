@@ -3,6 +3,21 @@ export { askQuestionsTool } from "./ask-questions";
 export { webFetchTool } from "./web-fetch";
 export { webSearchTool, webScrapeTool } from "./web-search";
 export {
+    exaSearchTool,
+    exaFindSimilarTool,
+    exaGetContentsTool,
+    exaResearchTool
+} from "./exa-search";
+export { braveSearchTool, braveLocalSearchTool, braveNewsSearchTool } from "./brave-search";
+export { perplexityResearchTool, perplexitySearchTool } from "./perplexity-search";
+export { smartSearchTool } from "./search-router";
+export {
+    stripeAcsCreateSessionTool,
+    stripeAcsGetProductTool,
+    stripeAcsListProductsTool
+} from "./stripe-acs";
+export { recordOutcomeTool, agentROITool } from "./outcome-tracking";
+export {
     youtubeGetTranscriptTool,
     youtubeSearchVideosTool,
     youtubeAnalyzeVideoTool,

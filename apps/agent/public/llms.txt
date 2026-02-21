@@ -1,0 +1,25 @@
+# AgentC2 - AI Agent Operations Platform
+> Build, deploy, and orchestrate AI agents with voice, MCP integrations, and background jobs.
+
+## API
+- [Agent Invocation](https://agentc2.ai/agent/api/agents/{id}/invoke): POST - Run an agent
+- [Agent Chat](https://agentc2.ai/agent/api/agents/{id}/chat): POST - Stream chat with agent
+- [MCP Gateway](https://agentc2.ai/agent/api/mcp): POST - Execute MCP tools
+- [RAG Query](https://agentc2.ai/agent/api/rag/query): POST - Semantic search
+- [Health](https://agentc2.ai/agent/api/health): GET - Platform health status
+
+## Authentication
+API key via X-API-Key header or Authorization: Bearer header.
+
+## Capabilities
+- Multi-provider AI (OpenAI, Anthropic) with model routing
+- MCP tool integrations (HubSpot, Jira, Slack, GitHub, Firecrawl, and more)
+- RAG pipeline with hybrid vector + keyword search
+- Voice agents via ElevenLabs and OpenAI Realtime
+- Agent-to-agent delegation and multi-agent networks
+- Background job processing via Inngest
+
+## Docs
+- [API Reference](https://agentc2.ai/docs/api-reference)
+- [Agent Federation](https://agentc2.ai/agent/api/federation/agent-card)
+- [Marketplace](https://agentc2.ai/agent/api/federation/marketplace)
