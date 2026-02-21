@@ -27,13 +27,6 @@ import {
     humanApprovalWorkflow
 } from "./workflows";
 
-// Trip Planner Workflows (agents are now database-driven via NetworkResolver)
-import {
-    parallelResearchWorkflow,
-    itineraryAssemblyWorkflow,
-    budgetApprovalWorkflow
-} from "./workflows/trip-planner";
-
 // Extend global type for Next.js HMR singleton pattern
 declare global {
     var mastraInstance: Mastra | undefined;
@@ -123,11 +116,7 @@ function getMastra(): Mastra {
                 "conditional-branch": branchWorkflow,
                 "foreach-loop": foreachWorkflow,
                 "dowhile-loop": doWhileWorkflow,
-                "human-approval": humanApprovalWorkflow,
-                // Trip Planner Workflows
-                "trip-parallel-research": parallelResearchWorkflow,
-                "trip-itinerary-assembly": itineraryAssemblyWorkflow,
-                "trip-budget-approval": budgetApprovalWorkflow
+                "human-approval": humanApprovalWorkflow
             },
             storage,
             observability: getObservability()

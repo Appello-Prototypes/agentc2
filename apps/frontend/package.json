@@ -1,6 +1,7 @@
 {
   "name": "frontend",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "AgentC2 marketing site, documentation, and public-facing pages",
   "private": true,
   "scripts": {
     "dev": "next dev",

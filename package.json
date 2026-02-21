@@ -1,7 +1,12 @@
 {
-  "name": "catalyst-monorepo",
-  "version": "0.1.0",
+  "name": "agentc2",
+  "version": "1.0.0",
   "private": true,
+  "description": "AgentC2 AI Agent Framework - Build, deploy, and orchestrate AI agents with voice, MCP, and RAG capabilities",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/agentc2/agentc2.git"
+  },
   "workspaces": [
     "apps/*",
     "packages/*"

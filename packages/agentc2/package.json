@@ -1,6 +1,7 @@
 {
   "name": "@repo/agentc2",
-  "version": "0.0.0",
+  "version": "1.0.0",
+  "description": "Core AI agent framework - agents, tools, workflows, MCP integrations, RAG, and memory",
   "private": true,
   "type": "module",
   "main": "./src/index.ts",

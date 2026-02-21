@@ -1,0 +1,64 @@
+---
+title: "Connect Your First Integration"
+description: "Connect an external service to AgentC2 and give your agents real-world capabilities."
+section: "getting-started"
+order: 3
+primaryKeyword: "connect AI agent integration"
+secondaryKeywords: ["AI agent tools setup", "MCP integration setup"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Create Your First Agent"
+ctaHref: "/signup"
+relatedSlugs: ["getting-started/quickstart", "core-concepts/integrations", "core-concepts/agents"]
+---
+
+# Connect Your First Integration
+
+Agents become powerful when they can interact with external services. This guide walks you through connecting your first integration so your agents can search your CRM, send messages, or access documents.
+
+## Step 1: Open the Integrations Hub
+
+From the workspace sidebar, click **Integrations**. You'll see a list of available services organized by category.
+
+![Integrations hub](/docs/screenshots/integrations-hub.svg)
+
+## Step 2: Choose a service
+
+Pick a service your team already uses. Good starting options:
+
+- **Slack** -- Let agents respond to messages in your team channels
+- **HubSpot** -- Give agents access to your contacts and deals
+- **Google Drive** -- Let agents search and read your team documents
+- **GitHub** -- Give agents access to repos, issues, and PRs
+
+## Step 3: Connect
+
+Click **Connect** next to your chosen service and follow the setup flow:
+
+- **API key services** (HubSpot, Jira, Firecrawl) -- Paste your API key
+- **OAuth services** (Gmail, Google Drive, Outlook, Dropbox) -- Sign in and authorize access
+
+Once connected, a green status indicator confirms the connection is active.
+
+## Step 4: Attach tools to an agent
+
+1. Go to **Agents** and open an agent's configuration
+2. Under **Tools**, you'll see the new integration's tools available
+3. Select the tools you want the agent to use
+4. Save the configuration
+
+Your agent can now use those tools during conversations.
+
+## Step 5: Test it
+
+Open a chat with your agent and ask it to do something that requires the integration:
+
+- _"Look up the contact john@example.com in HubSpot"_
+- _"What files do I have in Google Drive about Q1 planning?"_
+- _"Search our Slack #general channel for messages about the product launch"_
+
+## What's next?
+
+- **[Core Concepts: Integrations](/docs/core-concepts/integrations)** -- See the full list of 15+ available services
+- **[Core Concepts: Agents](/docs/core-concepts/agents)** -- Learn more about agent capabilities
+- **[Deploy to Slack](/docs/guides/deploy-to-slack)** -- Set up two-way Slack conversations

@@ -189,10 +189,6 @@ async function renderMdxVersion(mdxPage: DocPage) {
 
                 <section className="mt-10 rounded-lg border p-6">
                     <h2 className="text-foreground text-xl font-semibold">Next Step</h2>
-                    <p className="text-muted-foreground mt-2">
-                        Apply this pattern in your workspace and validate behavior with traces and
-                        evaluations.
-                    </p>
                     <TrackedLink
                         href={mdxPage.frontmatter.ctaHref ?? "/workspace"}
                         className="bg-primary text-primary-foreground mt-4 inline-flex rounded-md px-4 py-2 text-sm font-medium"
@@ -207,7 +203,7 @@ async function renderMdxVersion(mdxPage: DocPage) {
                             cta_target: mdxPage.frontmatter.ctaHref ?? "/workspace"
                         }}
                     >
-                        {mdxPage.frontmatter.ctaLabel ?? "Launch AgentC2 Workspace"}
+                        {mdxPage.frontmatter.ctaLabel ?? "Open Workspace"}
                     </TrackedLink>
                 </section>
 
@@ -324,10 +320,6 @@ function renderTsVersion(page: NonNullable<ReturnType<typeof getDocsPage>>) {
 
                 <section id="next-step" className="mt-10 rounded-lg border p-6">
                     <h2 className="text-foreground text-xl font-semibold">Next Step</h2>
-                    <p className="text-muted-foreground mt-2">
-                        Apply this pattern in your workspace and validate behavior with traces and
-                        evaluations.
-                    </p>
                     <TrackedLink
                         href={page.ctaHref}
                         className="bg-primary text-primary-foreground mt-4 inline-flex rounded-md px-4 py-2 text-sm font-medium"

@@ -93,7 +93,7 @@ async function fetchConciergeTools(): Promise<string[]> {
     const baseUrl =
         process.env.MASTRA_API_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
     const apiKey = process.env.MCP_API_KEY;
-    const orgSlug = process.env.MCP_API_ORGANIZATION_SLUG || "appello";
+    const orgSlug = process.env.MCP_API_ORGANIZATION_SLUG || "default";
 
     if (!apiKey) {
         console.warn("[Parity] MCP_API_KEY not set — skipping live Concierge check");

@@ -1,117 +1,95 @@
 ---
 title: "Quickstart"
-description: "Create and test your first AI agent in AgentC2 in under 5 minutes."
+description: "Create and chat with your first AI agent in under 5 minutes."
 section: "getting-started"
 order: 2
 primaryKeyword: "AI agent quickstart"
 secondaryKeywords: ["create AI agent", "deploy AI agent", "agent tutorial"]
 searchIntent: "transactional"
 pageType: "tutorial"
-ctaLabel: "Start Building in AgentC2"
+ctaLabel: "Create Your First Agent"
 ctaHref: "/signup"
-relatedSlugs: ["getting-started/introduction", "getting-started/first-agent", "agents/overview"]
+relatedSlugs:
+    ["getting-started/introduction", "getting-started/connect-integration", "core-concepts/agents"]
 ---
 
 # Quickstart
 
-This guide walks you through creating an agent, sending it a message, and inspecting the run trace. You'll have a working agent in under 5 minutes.
+Create your first agent and have a conversation with it in under 5 minutes. No code required.
 
-## Prerequisites
+## Step 1: Sign up
 
-- An AgentC2 account ([sign up here](/signup))
-- An OpenAI or Anthropic API key configured in your workspace settings
+Go to [agentc2.ai/signup](/signup) and create your account. You'll land in your workspace -- your home base for everything in AgentC2.
 
-## Step 1: Create an agent
+![Workspace dashboard](/docs/screenshots/workspace-dashboard.svg)
 
-Send a POST request to create a new agent:
+## Step 2: Create an agent
 
-```bash
-curl -X POST https://agentc2.ai/agent/api/agents \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My First Agent",
-    "instructions": "You are a helpful assistant. Answer questions clearly and concisely.",
-    "modelProvider": "openai",
-    "modelName": "gpt-4o",
-    "temperature": 0.7,
-    "memoryEnabled": true
-  }'
-```
+1. Click **Agents** in the sidebar
+2. Click **New Agent**
+3. Fill in the basics:
+    - **Name**: Give it a name like "My First Agent"
+    - **Instructions**: Describe what it should do, e.g. "You are a helpful assistant. Answer questions clearly and concisely."
+    - **Model**: Choose a model (GPT-4o is a good default)
+4. Click **Create**
 
-**Response:**
-
-```json
-{
-    "id": "cm...",
-    "slug": "my-first-agent",
-    "name": "My First Agent",
-    "modelProvider": "openai",
-    "modelName": "gpt-4o",
-    "memoryEnabled": true,
-    "isActive": true,
-    "createdAt": "2026-02-18T00:00:00.000Z"
-}
-```
+![New Agent form](/docs/screenshots/new-agent-form.svg)
 
 <Callout type="tip">
-You can also create agents through the workspace UI at **Agents > New Agent**. The UI provides a form with all configuration options and real-time validation.
+    Start with simple instructions. You can always refine them after testing.
 </Callout>
 
-## Step 2: Send a message
+## Step 3: Chat with your agent
 
-Use the chat endpoint to send a message and get a streamed response:
+Click into the agent and start typing. Your agent will respond based on the instructions you gave it.
 
-```bash
-curl -X POST https://agentc2.ai/agent/api/agents/my-first-agent/chat \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "messages": [
-      { "role": "user", "content": "What are the three laws of thermodynamics?" }
-    ]
-  }'
-```
+![Agent chat](/docs/screenshots/agent-chat.svg)
 
-The response streams back as server-sent events. Each chunk contains a text delta that you can render in real time.
+Try asking:
 
-## Step 3: Inspect the run
+- "What can you help me with?"
+- "Summarize the key trends in AI for 2026"
+- "Draft an email to a client about our new product launch"
 
-Every agent execution creates a run record with full tracing. List recent runs:
+## Step 4: Review the run
 
-```bash
-curl https://agentc2.ai/agent/api/agents/my-first-agent/runs \
-  -H "Authorization: Bearer $TOKEN"
-```
+Every conversation generates a **run** -- a detailed record of what the agent did.
 
-Each run includes:
+1. Go to **Runs** in the sidebar
+2. Click on a recent run to see the trace
 
-| Field                          | Description                                  |
-| ------------------------------ | -------------------------------------------- |
-| `id`                           | Unique run identifier                        |
-| `status`                       | `COMPLETED`, `FAILED`, or `RUNNING`          |
-| `inputTokens` / `outputTokens` | Token usage for cost tracking                |
-| `costUsd`                      | Estimated cost of the run                    |
-| `durationMs`                   | Total execution time                         |
-| `traces`                       | Step-by-step execution trace with tool calls |
+Each run shows:
 
-## Step 4: Add tools
+- What the agent was asked
+- What tools it used (if any)
+- How long it took
+- How much it cost
 
-Agents become powerful when they can use tools. Attach an MCP tool to give your agent access to external services:
+![Run trace](/docs/screenshots/run-trace.svg)
 
-```bash
-curl -X POST https://agentc2.ai/agent/api/agents/my-first-agent/tools \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "toolId": "web-fetch"
-  }'
-```
+## Step 5: Add tools
 
-Now your agent can fetch web pages to answer questions with real-time information.
+Agents become powerful when they can interact with external services. To add tools:
+
+1. Open your agent's settings
+2. Go to the **Tools** section
+3. Select tools from your connected integrations (e.g., web search, CRM lookup)
+4. Save
+
+Now your agent can take real actions -- fetching web pages, looking up contacts, searching documents.
+
+<Callout type="info">
+    You'll need to connect at least one integration first. See **[Connect Your First
+    Integration](/docs/getting-started/connect-integration)** for a step-by-step walkthrough.
+</Callout>
 
 ## What's next?
 
-- **[First Agent](/docs/getting-started/first-agent)** -- Build a complete agent with memory, tools, and guardrails
-- **[Agents Overview](/docs/agents/overview)** -- Learn the full agent lifecycle
-- **[Integrations](/docs/integrations/overview)** -- Connect to CRM, email, and project management tools
+- **[Connect Your First Integration](/docs/getting-started/connect-integration)** -- Give your agent access to external tools
+- **[Core Concepts: Agents](/docs/core-concepts/agents)** -- Learn about memory, guardrails, versioning, and more
+- **[Build a Customer Support Agent](/docs/guides/build-a-customer-support-agent)** -- Follow a complete guide
+
+<Callout type="info">
+    **Prefer the API?** You can also create and manage agents programmatically. See the **[API
+    Reference](/docs/api-reference/authentication)** for curl examples and endpoint documentation.
+</Callout>

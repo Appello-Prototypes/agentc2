@@ -1,6 +1,7 @@
 {
   "name": "admin",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "AgentC2 admin dashboard - platform-level settings, billing, and monitoring",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3003",

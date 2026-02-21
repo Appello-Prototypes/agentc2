@@ -1,0 +1,74 @@
+---
+title: "Connect Your CRM"
+description: "Step-by-step guide to connecting HubSpot or Jira and building agents that manage your pipeline."
+section: "guides"
+order: 6
+primaryKeyword: "connect AI agent to CRM"
+secondaryKeywords: ["HubSpot AI agent", "Jira AI agent", "CRM automation"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Open Workspace and Follow Along"
+ctaHref: "/workspace"
+relatedSlugs: ["core-concepts/integrations", "guides/build-a-sales-agent", "core-concepts/agents"]
+---
+
+# Connect Your CRM
+
+This guide walks you through connecting HubSpot or Jira to AgentC2 and building an agent that can search contacts, update deals, or manage issues.
+
+## Option A: Connect HubSpot
+
+### Step 1: Get your HubSpot API key
+
+1. Log in to your HubSpot account
+2. Go to **Settings > Integrations > Private Apps**
+3. Create a new private app with the scopes your agents will need (contacts, companies, deals)
+4. Copy the access token
+
+### Step 2: Connect in AgentC2
+
+1. Go to **Integrations** in the workspace sidebar
+2. Find **HubSpot** and click **Connect**
+3. Paste your access token
+4. Click **Test Connection** to verify
+
+### Step 3: Attach tools to an agent
+
+1. Open your agent's configuration
+2. Under **Tools**, you'll see HubSpot tools available (search contacts, get company details, create deals, etc.)
+3. Select the tools relevant to your use case
+4. Save
+
+### Step 4: Test
+
+Chat with your agent:
+
+- _"Find all contacts from Acme Corp"_
+- _"What deals are in the pipeline for this quarter?"_
+- _"Create a new contact for jane@example.com"_
+
+## Option B: Connect Jira
+
+### Step 1: Get your Jira API token
+
+1. Go to [id.atlassian.com](https://id.atlassian.com) and create an API token
+2. Note your Jira URL (e.g., `your-org.atlassian.net`) and email
+
+### Step 2: Connect in AgentC2
+
+1. Go to **Integrations** and find **Jira**
+2. Enter your Jira URL, email, and API token
+3. Test the connection
+
+### Step 3: Build an agent
+
+Attach Jira tools to an agent and try:
+
+- _"What are the open bugs in the PROJ project?"_
+- _"Create a task for the frontend redesign"_
+- _"Show me the current sprint status"_
+
+## What's next?
+
+- **[Build a Sales Agent](/docs/guides/build-a-sales-agent)** -- Full guide for CRM-powered sales automation
+- **[Integrations](/docs/core-concepts/integrations)** -- See all available services

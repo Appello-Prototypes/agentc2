@@ -1,0 +1,179 @@
+---
+title: "Connect from Cursor IDE"
+description: "Step-by-step guide to connect Cursor IDE to AgentC2 via MCP using the local stdio proxy script."
+section: "api-reference"
+order: 3
+primaryKeyword: "Cursor MCP setup"
+secondaryKeywords: ["Cursor IDE MCP", "AgentC2 Cursor integration"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "View API Authentication"
+ctaHref: "/docs/api-reference/authentication"
+relatedSlugs:
+    [
+        "api-reference/mcp-overview",
+        "api-reference/mcp-getting-started",
+        "api-reference/mcp-tool-reference"
+    ]
+---
+
+# Connect from Cursor IDE
+
+Cursor uses a local Node.js proxy script that bridges Cursor's stdio-based MCP transport to the AgentC2 Streamable HTTP API. This guide walks through downloading the proxy, configuring Cursor, and verifying the connection.
+
+## Prerequisites
+
+- **Node.js** 18+ installed (`node --version` to check)
+- **Cursor IDE** installed
+- An AgentC2 API key and organization slug ([generate one](/docs/mcp/getting-started))
+
+## Step 1: Download the proxy script
+
+The MCP server proxy is a Node.js script that translates between Cursor's stdio protocol and AgentC2's HTTP API. You can download it from the Integrations Hub or create the files manually.
+
+### Option A: Download from Integrations Hub
+
+1. Go to **Integrations** in your AgentC2 workspace
+2. In the **Organization MCP Access** section, click **Download MCP Server**
+3. Extract the downloaded files to `~/mastra-mcp-server/`
+
+### Option B: Create manually
+
+Create a directory and two files:
+
+```bash
+mkdir -p ~/mastra-mcp-server
+```
+
+Create `~/mastra-mcp-server/package.json`:
+
+```json
+{
+    "name": "mastra-mcp-server",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "dependencies": {
+        "@modelcontextprotocol/sdk": "^1.12.1"
+    }
+}
+```
+
+The `index.js` script uses the `@modelcontextprotocol/sdk` to create a stdio server that proxies tool discovery and execution requests to the AgentC2 API. It reads `MASTRA_API_URL`, `MASTRA_API_KEY`, and `MASTRA_ORGANIZATION_SLUG` from environment variables.
+
+<Callout type="info">
+    The proxy script handles tool listing (`tools/list`), tool execution (`tools/call`), and
+    connection lifecycle management. It maps each MCP protocol message to the corresponding AgentC2
+    API endpoint.
+</Callout>
+
+## Step 2: Install dependencies
+
+```bash
+cd ~/mastra-mcp-server
+npm install
+```
+
+## Step 3: Generate your API key
+
+If you haven't already, follow the [Quick Start](/docs/mcp/getting-started) to generate an API key and note your organization slug.
+
+## Step 4: Configure Cursor
+
+Add the AgentC2 MCP server to your Cursor configuration. Edit (or create) `~/.cursor/mcp.json`:
+
+```json
+{
+    "mcpServers": {
+        "AgentC2": {
+            "command": "/usr/local/bin/node",
+            "args": ["/Users/your-username/mastra-mcp-server/index.js"],
+            "env": {
+                "MASTRA_API_URL": "https://agentc2.ai/agent",
+                "MASTRA_API_KEY": "<your-api-key>",
+                "MASTRA_ORGANIZATION_SLUG": "<your-org-slug>"
+            }
+        }
+    }
+}
+```
+
+Replace the placeholders:
+
+| Placeholder                                       | Value                                      |
+| ------------------------------------------------- | ------------------------------------------ |
+| `/usr/local/bin/node`                             | Path to your Node.js binary (`which node`) |
+| `/Users/your-username/mastra-mcp-server/index.js` | Absolute path to the proxy script          |
+| `<your-api-key>`                                  | Your MCP API key from the Integrations Hub |
+| `<your-org-slug>`                                 | Your organization slug                     |
+
+<Callout type="tip">
+    On macOS, the Node.js path is typically `/usr/local/bin/node` (Homebrew) or
+    `~/.nvm/versions/node/v22.x.x/bin/node` (nvm). Run `which node` to find yours.
+</Callout>
+
+### Per-project configuration
+
+To scope the MCP server to a specific project instead of globally, create `.cursor/mcp.json` in your project root with the same structure.
+
+## Step 5: Restart Cursor
+
+Close and reopen Cursor (or use **Cmd+Shift+P → Developer: Reload Window**). Cursor reads MCP configuration on startup and initializes configured servers.
+
+## Step 6: Verify the connection
+
+Open a new Cursor chat and ask:
+
+> "What MCP tools do you have available?"
+
+Cursor should list the AgentC2 tools. You can also check the MCP server status in **Cursor Settings → MCP** — the AgentC2 server should show a green status indicator.
+
+Try a quick operation:
+
+> "List all agents in my AgentC2 workspace"
+
+This calls `agent_discover` and confirms end-to-end connectivity.
+
+## Troubleshooting
+
+### Tools not loading
+
+**Symptom**: Cursor shows the MCP server but no tools appear.
+
+- Check the proxy script path is absolute (not using `~` — expand to full path)
+- Verify `npm install` completed successfully in the proxy directory
+- Check Cursor's MCP logs: **Cursor Settings → MCP → AgentC2 → View Logs**
+
+### Authentication errors
+
+**Symptom**: Tools appear but calls fail with 401 or 403.
+
+- Verify `MASTRA_API_KEY` is correct and has not been regenerated
+- Verify `MASTRA_ORGANIZATION_SLUG` matches exactly (case-sensitive)
+- Ensure `MASTRA_API_URL` is `https://agentc2.ai/agent` (with `/agent` suffix, no trailing slash)
+
+### Node.js path issues
+
+**Symptom**: Cursor reports "command not found" or fails to start the MCP server.
+
+- Use the absolute path to Node.js, not just `node`
+- Run `which node` in your terminal and use that exact path
+- If using nvm, the path changes per Node version — use the full versioned path
+
+### "spawn ENOENT" error
+
+**Symptom**: Cursor logs show `spawn ENOENT`.
+
+- The `command` field must point to an existing executable
+- On Windows, use `node.exe` or the full path to `node.cmd`
+- Ensure the `args` path uses forward slashes, even on Windows
+
+### Proxy script crashes on startup
+
+- Run the script manually to see errors: `MASTRA_API_URL=https://agentc2.ai/agent MASTRA_API_KEY=your-key MASTRA_ORGANIZATION_SLUG=your-slug node ~/mastra-mcp-server/index.js`
+- Check that `@modelcontextprotocol/sdk` installed correctly
+- Verify Node.js version is 18 or higher
+
+## Updating the proxy script
+
+When AgentC2 releases proxy script updates (new tool support, protocol improvements), re-download from the Integrations Hub or update your `package.json` dependencies and run `npm install` again. No Cursor configuration changes are needed — the same `mcp.json` entry continues to work.

@@ -18,7 +18,7 @@
 #   ./scripts/deploy-do.sh [droplet-ip] [ssh-user]
 #
 # Examples:
-#   ./scripts/deploy-do.sh 138.197.150.253 root
+#   ./scripts/deploy-do.sh $DO_HOST root
 #   ./scripts/deploy-do.sh  # Uses DO_HOST and DO_USER from environment
 
 set -euo pipefail
@@ -156,4 +156,4 @@ ssh $SSH_OPTS "$SSH_USER@$DROPLET_IP" << 'ENDSSH'
 ENDSSH
 
 log_info "Deployment finished successfully!"
-log_info "Check the application at https://agentc2.ai"
+log_info "Check the application at https://${DEPLOY_DOMAIN:-your-domain}"

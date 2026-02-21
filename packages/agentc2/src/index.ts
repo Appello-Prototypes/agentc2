@@ -31,10 +31,7 @@ export {
     // Model routing
     classifyComplexity,
     resolveRoutingDecision,
-    resolveModelOverride,
-    // Network resolver for database-driven agent networks
-    NetworkResolver,
-    networkResolver
+    resolveModelOverride
 } from "./agents";
 export type {
     StoredAgentConfig,

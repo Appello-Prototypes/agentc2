@@ -1,0 +1,74 @@
+---
+title: "Agents"
+description: "What agents are, how they work, and when to use them in AgentC2."
+section: "core-concepts"
+order: 1
+primaryKeyword: "AI agents"
+secondaryKeywords: ["build AI agents", "AI agent platform", "agent tools memory"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Try It in Your Workspace"
+ctaHref: "/workspace"
+relatedSlugs: ["core-concepts/integrations", "core-concepts/networks", "core-concepts/workflows"]
+---
+
+# Agents
+
+An agent is an AI assistant that can reason about tasks, use tools, remember conversations, and take actions on your behalf. You configure an agent by giving it instructions, choosing a model, and attaching the tools it needs.
+
+## How agents work
+
+When you send a message to an agent, it:
+
+1. **Reads your message** and decides what to do
+2. **Calls tools** if it needs external information (search the web, look up a contact, check a calendar)
+3. **Remembers context** from earlier in the conversation
+4. **Responds** with an answer, a summary, or a completed action
+
+All of this is tracked automatically. Every agent run records what happened, what tools were called, how long it took, and how much it cost.
+
+## Creating an agent
+
+You can create an agent directly from the workspace UI -- no code required.
+
+1. Go to **Agents** in the sidebar
+2. Click **New Agent**
+3. Give it a name and write instructions that describe its role
+4. Choose a model (GPT-4o, Claude Sonnet, etc.)
+5. Attach tools from your connected integrations
+6. Start chatting
+
+![New Agent form](/docs/screenshots/new-agent-form.svg)
+
+## Key capabilities
+
+| Capability      | What it does                                                            |
+| --------------- | ----------------------------------------------------------------------- |
+| **Tools**       | Call external services -- search your CRM, send emails, fetch web pages |
+| **Memory**      | Remember past conversations and recall relevant context                 |
+| **Guardrails**  | Enforce rules about what the agent can and cannot do                    |
+| **Versioning**  | Snapshot configurations so you can roll back safely                     |
+| **Budgets**     | Set monthly spend limits to control costs                               |
+| **Evaluations** | Automatically score response quality                                    |
+| **Tracing**     | See exactly what happened in every run, step by step                    |
+
+## Skills: reusable capability bundles
+
+Skills let you package instructions, tools, and reference documents into a reusable bundle that any agent can inherit. Instead of duplicating the same email-drafting instructions across three agents, create one "Email Drafting" skill and attach it to all of them.
+
+When you update a skill, every agent using it gets the update automatically.
+
+## When to use agents vs. other primitives
+
+| Use case                              | Best primitive |
+| ------------------------------------- | -------------- |
+| Open-ended conversation and reasoning | **Agent**      |
+| Multi-step process with fixed steps   | **Workflow**   |
+| Task that needs multiple specialists  | **Network**    |
+| Complex goal with phases and reviews  | **Campaign**   |
+
+## What's next?
+
+- **[Integrations](/docs/core-concepts/integrations)** -- Connect tools your agents can use
+- **[Networks](/docs/core-concepts/networks)** -- Coordinate multiple agents together
+- **[Build a Customer Support Agent](/docs/guides/build-a-customer-support-agent)** -- Follow a step-by-step guide

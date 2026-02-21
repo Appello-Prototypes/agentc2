@@ -1,0 +1,78 @@
+---
+title: "Integrations"
+description: "Connect agents to CRM, email, project management, and 15+ external services."
+section: "core-concepts"
+order: 2
+primaryKeyword: "AI agent integrations"
+secondaryKeywords: ["MCP integration", "agent tools", "connect AI to CRM"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Try It in Your Workspace"
+ctaHref: "/workspace"
+relatedSlugs: ["core-concepts/agents", "core-concepts/networks", "guides/connect-your-crm"]
+---
+
+# Integrations
+
+Integrations connect your agents to the tools your team already uses. When you connect a service like HubSpot, Slack, or Gmail, your agents gain the ability to look up contacts, send messages, search files, and more -- all from within a conversation.
+
+## Available integrations
+
+AgentC2 connects to 15+ services across CRM, communication, productivity, and web tools.
+
+### CRM and sales
+
+| Service     | What agents can do                                                      |
+| ----------- | ----------------------------------------------------------------------- |
+| **HubSpot** | Search contacts, create deals, update pipeline stages, manage companies |
+
+### Communication
+
+| Service               | What agents can do                                      |
+| --------------------- | ------------------------------------------------------- |
+| **Slack**             | Read and send messages, search channels, manage threads |
+| **Gmail**             | Read, send, and archive emails                          |
+| **Microsoft Outlook** | Read and send emails, manage calendar events            |
+| **JustCall**          | Access call logs, send SMS messages                     |
+
+### Productivity
+
+| Service             | What agents can do                                         |
+| ------------------- | ---------------------------------------------------------- |
+| **Jira**            | Create and update issues, manage sprints, track projects   |
+| **GitHub**          | Search repos, manage issues and PRs, review code           |
+| **Google Drive**    | Search and read documents, spreadsheets, and presentations |
+| **Google Calendar** | Create, update, and check availability for events          |
+| **Dropbox**         | List, read, upload, and share files                        |
+
+### Web and knowledge
+
+| Service        | What agents can do                                    |
+| -------------- | ----------------------------------------------------- |
+| **Firecrawl**  | Scrape and extract content from websites              |
+| **Fathom**     | Access meeting recordings, transcripts, and summaries |
+| **ElevenLabs** | Text-to-speech, voice synthesis for voice agents      |
+
+## Connecting an integration
+
+1. Go to **Integrations** in the workspace sidebar
+2. Find the service you want to connect
+3. Click **Connect** and follow the setup flow (API key or OAuth sign-in)
+4. Once connected, the integration's tools are available to all your agents
+
+![Integrations hub](/docs/screenshots/integrations-hub.svg)
+
+## How integrations work
+
+AgentC2 uses two approaches to connect with external services:
+
+- **MCP (Model Context Protocol)** -- A standardized protocol for tool discovery and execution. Most integrations use MCP, which means agents can dynamically discover what actions are available.
+- **OAuth** -- Direct API connections with automatic token refresh for services like Gmail, Google Drive, Microsoft Outlook, and Dropbox.
+
+Once connected, you attach integration tools to specific agents. An agent only has access to the tools you explicitly give it.
+
+## What's next?
+
+- **[Connect Your CRM](/docs/guides/connect-your-crm)** -- Step-by-step HubSpot or Jira setup
+- **[Deploy to Slack](/docs/guides/deploy-to-slack)** -- Get agents responding in Slack channels
+- **[Agents](/docs/core-concepts/agents)** -- Learn how agents use tools

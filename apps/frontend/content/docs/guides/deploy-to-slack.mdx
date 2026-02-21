@@ -1,0 +1,75 @@
+---
+title: "Deploy to Slack"
+description: "Set up two-way Slack conversations where your team can chat with AI agents directly from channels and DMs."
+section: "guides"
+order: 4
+primaryKeyword: "Slack AI agent"
+secondaryKeywords: ["deploy AI to Slack", "Slack bot AI", "Slack agent integration"]
+searchIntent: "transactional"
+pageType: "tutorial"
+ctaLabel: "Open Workspace and Follow Along"
+ctaHref: "/workspace"
+relatedSlugs:
+    ["core-concepts/integrations", "core-concepts/agents", "guides/build-a-customer-support-agent"]
+---
+
+# Deploy to Slack
+
+This guide walks you through deploying an agent to Slack so your team can chat with it by @mentioning it in channels or sending direct messages.
+
+## What you'll get
+
+- **@mention support** -- @mention your bot in any channel and get a threaded response
+- **Direct messages** -- Send DMs to the bot for private conversations
+- **Multi-agent routing** -- Route to different agents with `agent:research` or `agent:sales` prefixes
+- **Conversation memory** -- Each Slack thread maintains its own conversation context
+
+## Step 1: Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps)
+2. Click **Create New App** > **From scratch**
+3. Name your app and select your workspace
+
+## Step 2: Configure bot permissions
+
+Under **OAuth & Permissions**, add these bot token scopes:
+
+- `app_mentions:read` -- Receive @mentions
+- `chat:write` -- Send messages
+- `im:history` -- Read DM history
+- `im:read` -- Access DM metadata
+- `channels:history` -- Read channel messages
+
+## Step 3: Enable event subscriptions
+
+Under **Event Subscriptions**:
+
+1. Turn on **Enable Events**
+2. Set the Request URL to your AgentC2 Slack webhook endpoint
+3. Subscribe to `app_mention` and `message.im` events
+
+## Step 4: Install and connect
+
+1. Go to **Install App** and click **Install to Workspace**
+2. Copy the Bot User OAuth Token
+3. In AgentC2, go to **Integrations** > **Slack** > **Connect**
+4. Paste your bot token and signing secret
+
+## Step 5: Test
+
+1. Add your bot to a Slack channel
+2. @mention it with a question: `@YourBot What can you help me with?`
+3. The bot responds in a thread
+
+### Multi-agent routing
+
+Your team can route to specific agents by prefixing messages:
+
+- `@YourBot agent:research What is quantum computing?` -- routes to the research agent
+- `@YourBot agent:sales Find leads in HubSpot` -- routes to the sales agent
+- `@YourBot help` -- lists all available agents
+
+## What's next?
+
+- **[Integrations](/docs/core-concepts/integrations)** -- Connect more services
+- **[Build a Customer Support Agent](/docs/guides/build-a-customer-support-agent)** -- Build a support agent for Slack

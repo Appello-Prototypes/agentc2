@@ -1,41 +1,48 @@
-# Catalyst
+# AgentC2
 
-A modern, full-stack web application built with Next.js 16, React 19, and Prisma, organized as a Turborepo monorepo.
+A production-grade AI agent framework built with Next.js 16, React 19, and Prisma, organized as a Turborepo monorepo. Built on the open-source [Mastra](https://mastra.ai) framework.
 
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router)
 - **UI Library**: React 19
 - **Authentication**: Better Auth
-- **Database**: MySQL with Prisma ORM
+- **Database**: PostgreSQL with Prisma ORM
 - **Styling**: Tailwind CSS 4
 - **Components**: shadcn/ui
 - **Monorepo**: Turborepo
 - **Package Manager**: Bun
 - **Language**: TypeScript
+- **AI**: Mastra Core, MCP, Memory, RAG, Evals
+- **Voice**: ElevenLabs, OpenAI Realtime
+- **Background Jobs**: Inngest
 
 ## Project Structure
 
 ```
-catalyst-agent/
+agentc2/
 ├── apps/
-│   ├── frontend/          # Main Next.js application (port 3000)
-│   │   └── src/app/(Public)/api/auth/  # Better Auth endpoints
-│   └── agent/             # Agent Next.js application (port 3001)
-│       └── next.config.ts # Configured with basePath: "/agent"
+│   ├── agent/             # AI Agent Next.js app (port 3001, basePath: /agent)
+│   ├── frontend/          # Marketing & docs site (port 3000)
+│   ├── admin/             # Admin dashboard (port 3003)
+│   ├── caddy/             # Reverse proxy configuration
+│   ├── inngest/           # Background job dev server (port 8288)
+│   └── ngrok/             # Webhook tunnel management
 ├── packages/
-│   ├── database/          # Prisma schema and client
-│   └── typescript-config/ # Shared TS configs
-├── scripts/               # Caddy management scripts
-├── Caddyfile             # Caddy reverse proxy configuration
-├── docker-compose.yml    # MySQL database setup
-└── turbo.json           # Turborepo configuration
+│   ├── agentc2/           # Core agent framework (@repo/agentc2)
+│   ├── database/          # Prisma schema and client (@repo/database)
+│   ├── auth/              # Better Auth configuration (@repo/auth)
+│   ├── ui/                # Shared UI components (@repo/ui)
+│   ├── next-config/       # Shared Next.js configuration
+│   └── typescript-config/ # Shared TypeScript configs
+├── docs/                  # Technical documentation
+└── scripts/               # Development and deployment scripts
 ```
 
 ## Prerequisites
 
 - [Bun](https://bun.sh) v1.3.4 or higher
-- [Docker](https://www.docker.com/) (for MySQL database)
+- [Docker](https://www.docker.com/) (for PostgreSQL database)
 - [Caddy](https://caddyserver.com/) (for local HTTPS and reverse proxy)
 
 ## Getting Started
@@ -44,7 +51,7 @@ catalyst-agent/
 
     ```bash
     git clone <repository-url>
-    cd catalyst-agent
+    cd agentc2
     ```
 
 2. **Install Caddy**
@@ -53,8 +60,6 @@ catalyst-agent/
     brew install caddy
     caddy trust
     ```
-
-    Note: `.localhost` domains automatically resolve to 127.0.0.1, so no `/etc/hosts` modification is needed.
 
 3. **Install dependencies**
 
@@ -68,7 +73,7 @@ catalyst-agent/
     cp .env.example .env
     ```
 
-    Edit `.env` if needed (default values work for local dev).
+    Edit `.env` with your database connection string and API keys.
 
 5. **Start the database**
 
@@ -95,10 +100,7 @@ catalyst-agent/
     bun run dev
     ```
 
-    The command will:
-    - Run pre-flight checks for Caddy setup
-    - Start all services in Turbo TUI (Caddy, frontend, agent)
-    - Show organized logs for each service
+    This starts all services via Turbo TUI (Caddy, agent, frontend, inngest).
 
 9. **Open your browser**
 
@@ -109,18 +111,9 @@ catalyst-agent/
 ### Development
 
 - `bun run dev` - Start all apps with Caddy via Turbo TUI (HTTPS)
-    - Runs pre-flight checks automatically
-    - Shows all services (Caddy, frontend, agent) in organized TUI
-    - Caddy logs only show errors (not request spam)
 - `bun run dev:local` - Start all apps without Caddy (localhost only)
 - `bun run build` - Build all apps and packages
-- `bun run start` - Start production server (in apps/frontend)
-
-### Caddy
-
-- `bun run caddy:start` - Start Caddy reverse proxy only (daemon mode)
-- `bun run caddy:stop` - Stop Caddy reverse proxy
-- `bun run caddy:reload` - Reload Caddyfile configuration
+- `bun run start` - Start production server
 
 ### Code Quality
 
@@ -136,100 +129,69 @@ catalyst-agent/
 - `bun run db:studio` - Open Prisma Studio (database GUI)
 - `bun run db:seed` - Seed the database with initial data
 
+### Testing
+
+- `bun run test` - Run all tests
+- `bun run test:unit` - Run unit tests
+- `bun run test:integration` - Run integration tests
+
 ### Cleanup
 
 - `bun run clean` - Clean build artifacts
 
 ## Environment Variables
 
-Create a `.env` file in the root directory with the following variables:
+Create a `.env` file in the root directory. See `.env.example` for all available variables.
+
+Key variables:
 
 ```env
-# Database
-DATABASE_URL="mysql://catalyst_user:catalyst_password@localhost:3306/catalyst"
-MYSQL_ROOT_PASSWORD=root_password
-MYSQL_DATABASE=catalyst
-MYSQL_USER=catalyst_user
-MYSQL_PASSWORD=catalyst_password
-MYSQL_PORT=3306
+# Database (PostgreSQL)
+DATABASE_URL="postgresql://user:password@localhost:5432/agentc2"
 
 # Authentication
 NEXT_PUBLIC_APP_URL="https://catalyst.localhost"
-BETTER_AUTH_SECRET="your-secret-key-here"
+BETTER_AUTH_SECRET="your-secret-key"
+
+# AI Providers
+OPENAI_API_KEY="sk-..."
+ANTHROPIC_API_KEY="sk-ant-..."
 ```
-
-**Note**: Generate a secure `BETTER_AUTH_SECRET` using:
-
-```bash
-openssl rand -base64 32
-```
-
-## Features
-
-- ✅ Authentication with Better Auth (email/password)
-- ✅ Cross-app session sharing via Caddy reverse proxy
-- ✅ Path-based routing with cookie sharing (`catalyst.localhost` domain)
-- ✅ Local HTTPS development with self-signed certificates
-- ✅ Protected routes with middleware
-- ✅ Dark mode support
-- ✅ Responsive design with Tailwind CSS
-- ✅ Type-safe database queries with Prisma
-- ✅ Monorepo architecture for code sharing
 
 ## Architecture
 
 ### Caddy Reverse Proxy
 
-This project uses **Caddy** as a reverse proxy to enable cookie sharing between the frontend and agent applications through path-based routing on a single domain.
+Caddy enables cookie sharing between apps through path-based routing on a single domain.
 
 **URL Structure:**
 
 ```
 https://catalyst.localhost           → Frontend (localhost:3000)
 https://catalyst.localhost/agent     → Agent App (localhost:3001)
-https://catalyst.localhost/api/auth  → Better Auth API (via frontend)
+https://catalyst.localhost/admin     → Admin App (localhost:3003)
+https://catalyst.localhost/api/auth  → Better Auth API
 ```
 
-**How It Works:**
+### Agent App
 
-1. **Single Domain**: All apps accessed via `catalyst.localhost` domain
-2. **Cookie Sharing**: Better Auth cookies set on `catalyst.localhost` with path `/`
-3. **Path Routing**: Caddy routes `/agent*` to agent app, everything else to frontend
-4. **HTTPS**: Caddy provides local HTTPS with self-signed certificates
-5. **Result**: Login on frontend → automatically authenticated on agent app
-
-### Agent App Configuration
-
-The agent app uses `basePath: "/agent"` in `next.config.ts`:
-
-- **Why**: Tells Next.js to prefix all asset URLs with `/agent`
-- **Result**: Assets load from `https://catalyst.localhost/agent/_next/...` ✓
-- **File Structure**: Pages go in `apps/agent/src/app/`, NOT `apps/agent/src/app/agent/`
-- **Example**: `app/page.tsx` serves at `https://catalyst.localhost/agent`
+The agent app uses `basePath: "/agent"` in `next.config.ts`. Pages go in `apps/agent/src/app/`, NOT `apps/agent/src/app/agent/`.
 
 ### Authentication Flow
 
 1. Frontend hosts Better Auth API at `/api/auth/*`
-2. Both apps use same `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"`
-3. Agent auth client fetches sessions from frontend's auth API
-4. Cookies shared automatically via same domain
-5. Session state synchronized across all apps
+2. Both apps use the same `NEXT_PUBLIC_APP_URL`
+3. Cookies shared automatically via same domain
+4. Session state synchronized across all apps
 
 ## Development Workflow
 
-### Adding New Features
+### Adding Features
 
-**Frontend Protected Routes**: Create new routes in `apps/frontend/src/app/(Authenticated)/`
-
-**Frontend Public Routes**: Create new routes in `apps/frontend/src/app/(Public)/`
-
-**Agent App Routes**:
-
-- Add pages in `apps/agent/src/app/` (automatically served at `/agent`)
-- Example: `apps/agent/src/app/dashboard/page.tsx` → `https://catalyst.localhost/agent/dashboard`
-- Use `useSession()` from `@/lib/auth-client` for authentication
-
-**Shared Components**: Add to `packages/ui/src/` and export via `index.ts`
+- **Agent routes**: `apps/agent/src/app/` (served at `/agent`)
+- **Frontend routes**: `apps/frontend/src/app/`
+- **Admin routes**: `apps/admin/src/app/`
+- **Shared components**: `packages/ui/src/`
 
 ### Database Changes
 
@@ -239,75 +201,51 @@ The agent app uses `basePath: "/agent"` in `next.config.ts`:
 
 ### Code Formatting
 
-This project uses Prettier with specific formatting rules. Run `bun run format` before committing.
+Uses Prettier with 4-space indent and no semicolons. Run `bun run format` before committing.
 
-## Project Packages
+## Packages
 
+- **@repo/agentc2**: Core agent framework -- agents, tools, workflows, MCP, RAG, memory
 - **@repo/database**: Prisma client and schema
-- **@repo/ui**: Shared UI components built with shadcn/ui
-- **@repo/lib**: Shared utility functions
-- **@repo/typescript-config**: Shared TypeScript configurations
+- **@repo/auth**: Better Auth configuration
+- **@repo/ui**: Shared UI components (shadcn/ui)
+- **@repo/next-config**: Shared Next.js configuration
+- **@repo/typescript-config**: Shared TypeScript configs
+
+## Documentation
+
+- [CLAUDE.md](./CLAUDE.md) - Development guidelines and complete reference
+- [DEPLOY.md](./DEPLOY.md) - Production deployment procedures
+- [docs/](./docs/) - Technical documentation
 
 ## Troubleshooting
 
 ### Caddy Issues
 
-**Browser shows certificate warning:**
-
 ```bash
-caddy trust  # Install Caddy's root CA
-# Restart browser
+caddy trust                              # Install Caddy root CA
+lsof -i :443                             # Check port availability
+caddy validate --config ./Caddyfile      # Verify config
 ```
-
-**Caddy not starting:**
-
-```bash
-lsof -i :443  # Check if port 443 is available
-caddy validate --config ./Caddyfile  # Verify config
-```
-
-Note: `.localhost` domains automatically resolve to 127.0.0.1, so no DNS configuration is needed.
 
 ### Authentication Issues
 
-**Agent app shows "Please sign in" after logging in on frontend:**
-
-- Verify `NEXT_PUBLIC_APP_URL="https://catalyst.localhost"` in `.env`
-- Check cookies in DevTools > Application > Cookies (should see cookies on `catalyst.localhost`)
+- Verify `NEXT_PUBLIC_APP_URL` matches your Caddy domain in `.env`
+- Check cookies in DevTools > Application > Cookies
 - Ensure accessing via `https://catalyst.localhost`, not `localhost`
-- Restart dev server after changing `.env`
 
-**Assets (CSS/JS) not loading on agent app:**
+### Build Failures
 
-- Verify `basePath: "/agent"` is set in `apps/agent/next.config.ts`
-- Check page files are in `apps/agent/src/app/`, NOT `apps/agent/src/app/agent/`
-- Assets should load from `https://catalyst.localhost/agent/_next/...`
+```bash
+bun run type-check    # Check for type errors
+bun run lint          # Check for lint errors
+bun run clean         # Clear build cache
+bun run db:generate   # Regenerate Prisma client
+```
 
-### Development Mode
-
-**Want to bypass Caddy:**
+### Want to bypass Caddy?
 
 ```bash
 bun run dev:local  # Uses localhost URLs instead
 # Update .env: NEXT_PUBLIC_APP_URL="http://localhost:3000"
 ```
-
-## Documentation
-
-- [Agent Platform Vision](./docs/agent-platform-vision.md) - Product vision and architecture
-- [System Specification](./SYSTEM-SPECIFICATION.md) - Technical implementation details
-- [Agent Workspace Plan](./agentworkspaceplan.md) - Workspace UI and API specification
-- [CLAUDE.md](./CLAUDE.md) - Development guidelines and procedures
-
-## Learn More
-
-- [Next.js Documentation](https://nextjs.org/docs)
-- [Better Auth Documentation](https://www.better-auth.com/docs)
-- [Prisma Documentation](https://www.prisma.io/docs)
-- [Turborepo Documentation](https://turbo.build/repo/docs)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [Caddy Documentation](https://caddyserver.com/docs)
-
-## License
-
-[Your License Here]

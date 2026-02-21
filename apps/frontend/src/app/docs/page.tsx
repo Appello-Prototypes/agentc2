@@ -9,59 +9,31 @@ import { ContentPageTracker } from "@/components/analytics/content-page-tracker"
 export const metadata: Metadata = buildPageMetadata({
     title: "AgentC2 Documentation",
     description:
-        "Comprehensive AgentC2 documentation for AI agent orchestration, MCP integrations, workflows, networks, guardrails, and production deployment.",
+        "Learn how to build, deploy, and operate AI agents with AgentC2. Quickstart guides, core concepts, integrations, and API reference.",
     path: "/docs",
-    keywords: ["AI agent documentation", "AI agent orchestration docs", "MCP integration docs"]
+    keywords: ["AI agent documentation", "AI agent platform docs", "agent quickstart guide"]
 });
 
 const SECTION_META: Record<string, { description: string; icon: string }> = {
     "getting-started": {
-        description: "Install, configure, and create your first agent in under 5 minutes.",
+        description: "Create your first agent in under 5 minutes. No code required.",
         icon: "rocket"
     },
-    agents: {
-        description: "Build autonomous agents with LLMs, tools, memory, and guardrails.",
+    "core-concepts": {
+        description: "Understand agents, networks, workflows, integrations, and knowledge.",
         icon: "bot"
     },
-    skills: {
-        description: "Bundle reusable capability into composable, versioned skill packages.",
-        icon: "puzzle"
+    guides: {
+        description: "Step-by-step tutorials for common use cases and production setups.",
+        icon: "compass"
     },
-    workflows: {
-        description: "Define deterministic multi-step processes with branching and approvals.",
-        icon: "workflow"
-    },
-    networks: {
-        description: "Orchestrate multiple agents via topology-aware routing and delegation.",
-        icon: "network"
-    },
-    integrations: {
-        description: "Connect to CRM, email, project management, and 15+ external services.",
-        icon: "plug"
-    },
-    channels: {
-        description: "Deploy agents across Slack, WhatsApp, Telegram, voice, and web embed.",
+    workspace: {
+        description: "Navigate the AgentC2 workspace UI -- chat, manage agents, connect tools.",
         icon: "channels"
     },
-    knowledge: {
-        description: "Ingest documents, build vector indices, and query with RAG pipelines.",
-        icon: "book"
-    },
-    campaigns: {
-        description: "Run mission-style multi-agent operations with after-action reviews.",
-        icon: "target"
-    },
-    platform: {
-        description: "Multi-tenancy, auth, security, observability, and deployment controls.",
-        icon: "shield"
-    },
     "api-reference": {
-        description: "Full endpoint documentation with request/response schemas and examples.",
+        description: "Full REST API, MCP developer access, and endpoint documentation.",
         icon: "code"
-    },
-    guides: {
-        description: "End-to-end tutorials for common agent patterns and production setups.",
-        icon: "compass"
     }
 };
 
@@ -290,9 +262,8 @@ export default function DocsHomePage() {
                     AgentC2 Documentation
                 </h1>
                 <p className="text-muted-foreground max-w-3xl text-base leading-relaxed">
-                    Learn how to build, deploy, and scale production AI agents with AgentC2. From
-                    your first agent to multi-agent networks, these docs cover architecture,
-                    integrations, and operational best practices.
+                    Everything you need to build, deploy, and operate AI agents with AgentC2. Start
+                    with a quickstart, explore core concepts, or jump into a step-by-step guide.
                 </p>
                 <div className="flex gap-3">
                     <TrackedLink

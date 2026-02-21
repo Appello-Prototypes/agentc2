@@ -69,6 +69,3 @@ export {
     getAiProviderStatus,
     getFastCompressionModel
 } from "./model-provider";
-
-// Network resolver for database-driven agent networks
-export { NetworkResolver, networkResolver } from "./network-resolver";

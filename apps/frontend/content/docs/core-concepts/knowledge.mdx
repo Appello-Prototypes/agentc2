@@ -1,0 +1,59 @@
+---
+title: "Knowledge"
+description: "Upload documents and data so your agents can search and reference your business knowledge."
+section: "core-concepts"
+order: 5
+primaryKeyword: "RAG pipeline for AI agents"
+secondaryKeywords: ["knowledge base AI", "document AI search", "vector search agents"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Try It in Your Workspace"
+ctaHref: "/workspace"
+relatedSlugs: ["core-concepts/agents", "core-concepts/integrations", "core-concepts/workflows"]
+---
+
+# Knowledge
+
+The knowledge base lets you upload documents, guides, and reference materials that your agents can search through when answering questions. This is how you give your agents specific knowledge about your business, products, or processes.
+
+## How it works
+
+When you upload a document, AgentC2 automatically:
+
+1. **Splits** the document into smaller chunks
+2. **Embeds** each chunk as a vector for semantic search
+3. **Stores** everything so agents can retrieve relevant sections on demand
+
+When an agent with knowledge access receives a question, it searches the knowledge base for relevant chunks and includes them as context in its response. This is called **Retrieval Augmented Generation (RAG)**.
+
+## Adding documents
+
+1. Go to **Knowledge** in the workspace sidebar
+2. Click **Upload Document**
+3. Select a file (PDF, text, markdown, or other supported formats)
+4. The document is automatically processed and indexed
+
+![Knowledge upload](/docs/screenshots/knowledge-upload.svg)
+
+Once indexed, any agent with knowledge access can search and reference the document's content.
+
+## Search methods
+
+| Method            | How it works                                        | Best for                                                                                 |
+| ----------------- | --------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| **Vector search** | Finds semantically similar content based on meaning | "What is our refund policy?" -- finds relevant paragraphs even if the exact words differ |
+| **Hybrid search** | Combines vector search with keyword matching        | Best overall accuracy for most use cases                                                 |
+
+## Giving agents knowledge access
+
+Attach knowledge to an agent in the agent configuration:
+
+1. Open your agent's settings
+2. Under tools, add the **Knowledge Search** tool
+3. The agent will automatically search your knowledge base when relevant
+
+## What's next?
+
+- **[Agents](/docs/core-concepts/agents)** -- Build agents that use knowledge
+- **[Build a Customer Support Agent](/docs/guides/build-a-customer-support-agent)** -- Create a support agent backed by your docs
+- **[Integrations](/docs/core-concepts/integrations)** -- Connect external data sources

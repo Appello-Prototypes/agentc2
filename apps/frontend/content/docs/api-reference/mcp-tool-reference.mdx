@@ -1,0 +1,200 @@
+---
+title: "MCP Tool Reference"
+description: "Complete categorized reference of all 202 MCP tools available through the AgentC2 MCP server."
+section: "api-reference"
+order: 5
+primaryKeyword: "MCP tool reference"
+secondaryKeywords: ["AgentC2 MCP tools list", "MCP tool catalog"]
+searchIntent: "informational"
+pageType: "reference"
+ctaLabel: "View API Authentication"
+ctaHref: "/docs/api-reference/authentication"
+relatedSlugs:
+    [
+        "api-reference/mcp-overview",
+        "api-reference/mcp-common-patterns",
+        "api-reference/mcp-getting-started"
+    ]
+---
+
+# MCP Tool Reference
+
+The AgentC2 MCP server exposes 202 tools across seven categories. This page provides a categorized listing with tool names and descriptions.
+
+<Callout type="tip">
+    The canonical tool list with full parameter schemas is always available by connecting an MCP
+    client and running `tools/list`. The schemas include input types, required fields, and
+    descriptions for every parameter.
+</Callout>
+
+## Agent Management
+
+Tools for creating, configuring, invoking, evaluating, and managing agents. This is the largest category with approximately 50 tools.
+
+### Core agent operations
+
+| Tool                   | Description                                                    |
+| ---------------------- | -------------------------------------------------------------- |
+| `agent_create`         | Create a new agent with instructions, model, and configuration |
+| `agent_delete`         | Delete an agent and its associated data                        |
+| `agent_discover`       | List all agents in the workspace with status and metadata      |
+| `agent_invoke_dynamic` | Invoke any agent with a prompt and receive a response          |
+
+### Budget and cost tracking
+
+| Tool                  | Description                                                 |
+| --------------------- | ----------------------------------------------------------- |
+| `agent_budget_get`    | Get the current budget configuration for an agent           |
+| `agent_budget_update` | Set or update monthly/daily budget limits                   |
+| `agent_costs`         | Retrieve cost breakdown by agent, time period, or model     |
+| `agent_analytics`     | View usage analytics including token counts and run volumes |
+
+### Guardrails and governance
+
+| Tool                      | Description                                         |
+| ------------------------- | --------------------------------------------------- |
+| `agent_guardrails_get`    | Get guardrail policies applied to an agent          |
+| `agent_guardrails_update` | Update input/output guardrail rules                 |
+| `agent_guardrails_events` | View guardrail trigger history and blocked requests |
+
+### Evaluations and feedback
+
+| Tool                     | Description                                  |
+| ------------------------ | -------------------------------------------- |
+| `agent_evaluations_list` | List evaluation runs for an agent            |
+| `agent_evaluations_run`  | Execute an evaluation suite against an agent |
+| `agent_feedback_submit`  | Submit human feedback on an agent response   |
+| `agent_feedback_list`    | List feedback entries for an agent           |
+
+### Learning and experiments
+
+| Tool                         | Description                                        |
+| ---------------------------- | -------------------------------------------------- |
+| `agent_learning_experiments` | View and manage learning experiments and A/B tests |
+
+### Skill attachment
+
+| Tool                 | Description                  |
+| -------------------- | ---------------------------- |
+| `agent_attach_skill` | Attach a skill to an agent   |
+| `agent_detach_skill` | Remove a skill from an agent |
+
+### Individual agent tools
+
+Each agent in your workspace also exposes a dedicated invocation tool (e.g., `agent_general_assistant`, `agent_research_agent`). These tools invoke a specific agent by slug, providing a shortcut compared to `agent_invoke_dynamic`.
+
+## Workflow Management
+
+Tools for designing, validating, executing, and monitoring workflows.
+
+| Tool                     | Description                                                 |
+| ------------------------ | ----------------------------------------------------------- |
+| `workflow_create`        | Create a new workflow definition                            |
+| `workflow_read`          | Get a workflow's configuration and step definitions         |
+| `workflow_update`        | Update a workflow's steps, configuration, or metadata       |
+| `workflow_delete`        | Delete a workflow                                           |
+| `workflow_generate`      | AI-generate a workflow from a natural language description  |
+| `workflow_validate`      | Validate a workflow definition for structural correctness   |
+| `workflow_execute`       | Execute a workflow with input parameters                    |
+| `workflow_get_run`       | Get the status and output of a specific workflow run        |
+| `workflow_list_runs`     | List recent workflow runs with status and timing            |
+| `workflow_resume`        | Resume a paused workflow (e.g., after human approval)       |
+| `workflow_stats`         | Get aggregate execution statistics                          |
+| `workflow_metrics`       | View performance metrics (latency, success rate, cost)      |
+| `workflow_versions`      | List version history for a workflow                         |
+| `workflow_designer_chat` | Chat with the AI workflow designer for iterative refinement |
+
+## Network Management
+
+Tools for building and executing multi-agent networks.
+
+| Tool                | Description                                               |
+| ------------------- | --------------------------------------------------------- |
+| `network_create`    | Create a new multi-agent network with topology            |
+| `network_read`      | Get a network's configuration, primitives, and routing    |
+| `network_update`    | Update network topology or participant configuration      |
+| `network_delete`    | Delete a network                                          |
+| `network_execute`   | Execute a network with an input prompt                    |
+| `network_generate`  | AI-generate a network from a natural language description |
+| `network_list_runs` | List recent network execution runs                        |
+| `network_metrics`   | View network performance metrics                          |
+| `network_versions`  | List version history for a network                        |
+
+## Knowledge / RAG
+
+Tools for document ingestion, querying, and knowledge base management.
+
+| Tool                  | Description                                                    |
+| --------------------- | -------------------------------------------------------------- |
+| `rag_ingest`          | Ingest a document into the knowledge base (text, URL, or file) |
+| `rag_query`           | Query the knowledge base with semantic search                  |
+| `rag_documents_list`  | List all documents in the knowledge base                       |
+| `rag_document_delete` | Delete a document from the knowledge base                      |
+
+## Skill Management
+
+Tools for creating and managing reusable capability bundles.
+
+| Tool                    | Description                                            |
+| ----------------------- | ------------------------------------------------------ |
+| `skill_create`          | Create a new skill with instructions and configuration |
+| `skill_read`            | Get a skill's configuration and attached resources     |
+| `skill_update`          | Update a skill's instructions or metadata              |
+| `skill_delete`          | Delete a skill                                         |
+| `skill_list`            | List all skills in the workspace                       |
+| `skill_attach_tool`     | Attach a tool to a skill                               |
+| `skill_detach_tool`     | Remove a tool from a skill                             |
+| `skill_attach_document` | Attach a knowledge document to a skill                 |
+| `skill_detach_document` | Remove a document from a skill                         |
+| `skill_get_versions`    | List version history for a skill                       |
+
+## Integration Management
+
+Tools for managing external service connections and MCP tool execution.
+
+| Tool                           | Description                                      |
+| ------------------------------ | ------------------------------------------------ |
+| `integration_providers_list`   | List all available integration providers         |
+| `integration_connections_list` | List active integration connections for the org  |
+| `integration_connect`          | Create a new integration connection              |
+| `integration_disconnect`       | Remove an integration connection                 |
+| `integration_mcp_tools_list`   | List tools exposed by connected MCP integrations |
+| `integration_mcp_tool_execute` | Execute a tool from a connected MCP integration  |
+| `integration_health`           | Check health status of an integration connection |
+
+## Organization Management
+
+Tools for workspace and membership management.
+
+| Tool                   | Description                               |
+| ---------------------- | ----------------------------------------- |
+| `org_workspaces_list`  | List all workspaces in the organization   |
+| `org_workspace_create` | Create a new workspace                    |
+| `org_members_list`     | List organization members and their roles |
+
+## Utility Tools
+
+General-purpose tools for file operations and CI/CD integration.
+
+| Tool                   | Description                                             |
+| ---------------------- | ------------------------------------------------------- |
+| `read_workspace_file`  | Read a file from the connected workspace                |
+| `write_workspace_file` | Write or update a file in the workspace                 |
+| `verify_branch`        | Verify a Git branch exists and check its status         |
+| `wait_for_checks`      | Wait for CI/CD checks to complete on a branch           |
+| `track_resource`       | Track a created or modified resource for audit purposes |
+
+## Discovering tools programmatically
+
+Connect any MCP client and the full tool catalog is available via the `tools/list` MCP protocol method. This returns the complete list with:
+
+- Tool names and descriptions
+- Input parameter JSON schemas (types, required fields, defaults)
+- Output schema descriptions
+
+```bash
+# Using Claude Code as an example
+claude> "What tools do you have from the AgentC2 server?"
+```
+
+The tool list updates automatically as AgentC2 adds new capabilities — no client-side changes needed.

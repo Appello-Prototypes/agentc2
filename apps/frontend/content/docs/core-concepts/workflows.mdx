@@ -1,0 +1,74 @@
+---
+title: "Workflows"
+description: "Define deterministic multi-step processes with branching, approvals, and retries."
+section: "core-concepts"
+order: 4
+primaryKeyword: "AI workflow orchestration"
+secondaryKeywords: ["agentic workflow platform", "human in the loop AI", "workflow automation"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Try It in Your Workspace"
+ctaHref: "/workspace"
+relatedSlugs: ["core-concepts/agents", "core-concepts/networks", "core-concepts/knowledge"]
+---
+
+# Workflows
+
+Workflows define multi-step processes with explicit control flow. Unlike agents, which use AI reasoning to decide what to do next, workflows follow a predetermined sequence of steps. You define the exact order of operations, including branches, loops, and approval gates.
+
+## When to use workflows
+
+Use workflows when you need:
+
+- **Guaranteed execution order** -- Steps must happen in a specific sequence
+- **Human approval gates** -- A person must review and approve before proceeding
+- **Retry logic** -- Automatically retry failed steps
+- **Compliance requirements** -- You need an auditable record of exactly what happened and when
+
+## How workflows work
+
+A workflow is a series of connected steps. Each step has typed inputs and outputs, so data flows predictably through the process.
+
+```
+Input -> Classify -> Branch:
+  |-- High Priority -> Escalate -> Notify Manager
+  |-- Normal -> Auto-Respond -> Log
+```
+
+### Step types
+
+| Step              | What it does                                                  |
+| ----------------- | ------------------------------------------------------------- |
+| **Agent step**    | Calls an agent to reason about the input and produce output   |
+| **Tool step**     | Executes a specific tool (send email, update CRM, fetch data) |
+| **Branch step**   | Routes to different paths based on conditions                 |
+| **Loop step**     | Repeats steps until a condition is met                        |
+| **Approval step** | Pauses and waits for human review                             |
+| **Parallel step** | Runs multiple steps simultaneously                            |
+
+## Creating a workflow
+
+1. Go to **Workflows** in the workspace sidebar
+2. Click **New Workflow**
+3. Use the visual editor to add and connect steps
+4. Configure each step's inputs, outputs, and conditions
+5. Test with sample data
+
+You can also use the **AI-assisted designer** -- describe the process in plain language, and AgentC2 will generate a workflow definition for you to review and refine.
+
+## Agents vs. workflows
+
+| Agents                                  | Workflows                                   |
+| --------------------------------------- | ------------------------------------------- |
+| Decide what to do based on AI reasoning | Follow a fixed sequence of steps            |
+| Handle open-ended, creative tasks       | Handle structured, repeatable processes     |
+| May call different tools each time      | Always execute the same steps               |
+| Best for conversation and analysis      | Best for data pipelines and approval chains |
+
+You can combine both: use a workflow that includes agent steps for the parts that need reasoning, while keeping the overall process deterministic.
+
+## What's next?
+
+- **[Knowledge](/docs/core-concepts/knowledge)** -- Give your agents and workflows access to documents and data
+- **[Production Guardrails Guide](/docs/guides/production-guardrails)** -- Add safety controls to workflows
+- **[Agents](/docs/core-concepts/agents)** -- Learn about the AI-powered steps in workflows

@@ -98,20 +98,16 @@ export function getDocSections(): Array<{
 
     const sectionOrder = [
         "getting-started",
-        "agents",
-        "skills",
-        "workflows",
-        "networks",
-        "integrations",
-        "channels",
-        "knowledge",
-        "campaigns",
-        "platform",
-        "api-reference",
-        "guides"
+        "core-concepts",
+        "guides",
+        "workspace",
+        "api-reference"
     ];
 
+    const sectionSet = new Set(sectionOrder);
+
     return sectionDirs
+        .filter((dir) => sectionSet.has(dir.name))
         .map((dir) => {
             const sectionPath = path.join(CONTENT_DIR, dir.name);
             const files = fs.readdirSync(sectionPath).filter((f) => f.endsWith(".mdx"));

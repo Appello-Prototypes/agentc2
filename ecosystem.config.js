@@ -29,8 +29,12 @@ module.exports = {
             restart_delay: 4000,
             // Logging
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-            error_file: "/var/log/pm2/frontend-error.log",
-            out_file: "/var/log/pm2/frontend-out.log",
+            error_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/frontend-error.log`
+                : "/var/log/pm2/frontend-error.log",
+            out_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/frontend-out.log`
+                : "/var/log/pm2/frontend-out.log",
             merge_logs: true,
             // Memory management (32GB server)
             max_memory_restart: "2G"
@@ -56,8 +60,12 @@ module.exports = {
             restart_delay: 4000,
             // Logging
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-            error_file: "/var/log/pm2/agent-error.log",
-            out_file: "/var/log/pm2/agent-out.log",
+            error_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/agent-error.log`
+                : "/var/log/pm2/agent-error.log",
+            out_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/agent-out.log`
+                : "/var/log/pm2/agent-out.log",
             merge_logs: true,
             // Memory management - agent needs more for MCP processes (32GB server)
             max_memory_restart: "4G"
@@ -79,8 +87,12 @@ module.exports = {
             restart_delay: 4000,
             // Logging
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
-            error_file: "/var/log/pm2/admin-error.log",
-            out_file: "/var/log/pm2/admin-out.log",
+            error_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/admin-error.log`
+                : "/var/log/pm2/admin-error.log",
+            out_file: process.env.LOG_DIR
+                ? `${process.env.LOG_DIR}/admin-out.log`
+                : "/var/log/pm2/admin-out.log",
             merge_logs: true,
             // Memory management
             max_memory_restart: "512M"

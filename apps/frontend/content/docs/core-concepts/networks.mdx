@@ -1,0 +1,76 @@
+---
+title: "Networks"
+description: "Orchestrate multiple agents working together with intelligent routing and delegation."
+section: "core-concepts"
+order: 3
+primaryKeyword: "multi-agent orchestration"
+secondaryKeywords: ["AI agent networks", "agent routing", "multi-agent system"]
+searchIntent: "informational"
+pageType: "concept"
+ctaLabel: "Try It in Your Workspace"
+ctaHref: "/workspace"
+relatedSlugs:
+    ["core-concepts/agents", "core-concepts/workflows", "guides/multi-agent-orchestration"]
+---
+
+# Networks
+
+A network coordinates multiple agents to handle complex tasks that no single agent could do well alone. Instead of building one overloaded agent, you create specialists and let a coordinator route work to the right one.
+
+## Why networks?
+
+A single agent handling sales, support, research, and writing would need an enormous instruction set and dozens of tools. It would be slow, expensive, and unreliable.
+
+Networks solve this by decomposing the problem:
+
+- A **Research Agent** searches the web and gathers information
+- An **Analysis Agent** examines the data and draws conclusions
+- A **Writing Agent** produces polished summaries and reports
+- A **Coordinator** examines each request and delegates to the right specialist
+
+The result is faster, more accurate, and cheaper than a single generalist agent.
+
+## How networks work
+
+Every network has a **coordinator** -- an agent that reads the incoming request and decides which specialist should handle it. The coordinator can:
+
+- **Route** to a single specialist based on the request type
+- **Fan out** to multiple specialists in parallel, then merge results
+- **Pipeline** through specialists sequentially, each building on the previous output
+
+![Network topology editor](/docs/screenshots/network-topology.svg)
+
+## Network topologies
+
+| Topology       | How it works                                        | Best for                                                   |
+| -------------- | --------------------------------------------------- | ---------------------------------------------------------- |
+| **Router**     | Coordinator delegates to one specialist             | Customer support triage, request classification            |
+| **Parallel**   | Multiple specialists work simultaneously            | Research from multiple sources, multi-perspective analysis |
+| **Sequential** | Specialists work in order, each refining the output | Content production (research -> write -> edit)             |
+
+## Creating a network
+
+1. Go to **Networks** in the workspace sidebar
+2. Click **New Network**
+3. Name it and write coordinator instructions
+4. Add agents and workflows as specialists
+5. Use the visual topology editor to define routing
+6. Test with sample inputs
+
+You can also use the **AI-assisted designer** -- describe what you want the network to do in plain language, and AgentC2 will suggest a topology and specialist configuration.
+
+## Example: Research Pipeline Network
+
+A research network with three specialists:
+
+- **Researcher** -- Uses Firecrawl to scrape websites and gather raw information
+- **Analyst** -- Examines the research and identifies key findings
+- **Writer** -- Produces a structured report with citations
+
+The coordinator reads the request ("Research quantum computing breakthroughs in 2025"), routes research tasks to the Researcher, analysis to the Analyst, and writing to the Writer. Each specialist focuses on what it does best.
+
+## What's next?
+
+- **[Multi-Agent Orchestration Guide](/docs/guides/multi-agent-orchestration)** -- Build your first network step by step
+- **[Workflows](/docs/core-concepts/workflows)** -- Use deterministic steps alongside agents
+- **[Agents](/docs/core-concepts/agents)** -- Learn about the specialists that networks coordinate

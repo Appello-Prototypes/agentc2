@@ -1,0 +1,176 @@
+---
+title: "Common MCP Patterns"
+description: "Recipes and workflows for managing agents, workflows, networks, and knowledge via MCP tools from your AI assistant."
+section: "api-reference"
+order: 6
+primaryKeyword: "MCP workflow patterns"
+secondaryKeywords: ["AgentC2 MCP recipes", "MCP automation examples"]
+searchIntent: "informational"
+pageType: "how-to"
+ctaLabel: "View API Authentication"
+ctaHref: "/docs/api-reference/authentication"
+relatedSlugs:
+    [
+        "api-reference/mcp-tool-reference",
+        "api-reference/mcp-overview",
+        "api-reference/mcp-getting-started"
+    ]
+---
+
+# Common MCP Patterns
+
+These patterns show what you can accomplish by talking to your AI assistant (Cursor, Claude, etc.) when connected to the AgentC2 MCP server. Each section shows a conversational prompt and the sequence of MCP tools your assistant will call behind the scenes.
+
+## Create and configure an agent
+
+**What to ask:**
+
+> "Create a new agent called 'research-assistant' using GPT-4o. Give it instructions to research topics thoroughly and cite sources. Enable memory, attach the web-fetch and rag-query tools, and set a monthly budget of $50."
+
+**Tool sequence:**
+
+1. `agent_create` — Creates the agent with name, model provider (`openai`), model name (`gpt-4o`), instructions, and `memoryEnabled: true`
+2. `agent_attach_skill` or tool attachment — Attaches `web-fetch` and `rag-query` tools
+3. `agent_budget_update` — Sets the monthly budget to $50
+
+**What you get:** A fully configured agent ready to accept prompts, with memory for conversation continuity, web access for live research, knowledge base access for internal documents, and a cost ceiling to prevent runaway spend.
+
+## Build and run a workflow
+
+**What to ask:**
+
+> "Generate a workflow that takes a URL, scrapes it with Firecrawl, summarizes the content with our research agent, and emails the summary via Gmail. Then validate and execute it with the URL https://example.com/report."
+
+**Tool sequence:**
+
+1. `workflow_generate` — AI-generates a workflow definition from the natural language description, producing steps for scraping, summarization, and email delivery
+2. `workflow_validate` — Checks the generated workflow for structural correctness, valid step references, and proper input/output contracts
+3. `workflow_execute` — Runs the workflow with `{ "url": "https://example.com/report" }` as input
+
+**What you get:** A reusable multi-step pipeline that can be re-executed with different URLs. The workflow persists in your workspace for future runs, version tracking, and performance monitoring.
+
+### Iterating on a workflow
+
+If the generated workflow doesn't quite match your needs:
+
+> "Update the workflow to add a step between scraping and summarization that extracts only the key data tables from the scraped content."
+
+**Tool sequence:**
+
+1. `workflow_read` — Retrieves the current workflow definition
+2. `workflow_update` — Adds the extraction step between existing steps
+3. `workflow_validate` — Re-validates the modified workflow
+
+## Ingest documents and query knowledge
+
+**What to ask:**
+
+> "Ingest this document into the knowledge base: [paste text or URL]. Then query: 'What are the key findings about customer retention?'"
+
+**Tool sequence:**
+
+1. `rag_ingest` — Ingests the document content, automatically chunking and embedding it for semantic search
+2. `rag_query` — Searches the knowledge base with the query, returning relevant chunks ranked by semantic similarity
+
+**What you get:** Immediate semantic search over your ingested content. The knowledge base is persistent — documents remain available for all agents and workflows.
+
+### Bulk ingestion
+
+> "Ingest these three documents into the knowledge base: [URL 1], [URL 2], [URL 3]. Then list all documents to confirm."
+
+**Tool sequence:**
+
+1. `rag_ingest` × 3 — One call per document
+2. `rag_documents_list` — Confirms all documents are indexed and shows metadata
+
+## Execute a multi-agent network
+
+**What to ask:**
+
+> "Create a network with three agents: a research agent that gathers information, a writing agent that produces content, and a review agent that checks quality. Use a sequential topology. Execute it with the prompt 'Write a market analysis for AI agent platforms in 2026.'"
+
+**Tool sequence:**
+
+1. `network_create` — Creates the network with three agent primitives and a sequential routing topology (research → writing → review)
+2. `network_execute` — Runs the network with the input prompt, routing through each agent in sequence
+
+**What you get:** A coordinated multi-agent execution where each agent specializes in one aspect of the task. The research agent gathers data, the writing agent structures it into a report, and the review agent checks for quality and completeness.
+
+### Generating a network with AI
+
+If you prefer AI-assisted design:
+
+> "Generate a network for processing customer support tickets. It should classify the ticket, route to a specialist agent based on category, draft a response, and get human approval before sending."
+
+**Tool sequence:**
+
+1. `network_generate` — AI-designs the network topology, agent roles, and routing logic from the description
+2. `network_read` — Review the generated network configuration
+3. `network_execute` — Test with a sample ticket
+
+## Manage integrations
+
+**What to ask:**
+
+> "List all connected integrations, check if HubSpot is healthy, and show me what Jira tools are available."
+
+**Tool sequence:**
+
+1. `integration_connections_list` — Returns all active integration connections with their status, provider type, and last-tested timestamp
+2. `integration_health` — Runs a health check on the HubSpot connection, validating credentials and API access
+3. `integration_mcp_tools_list` — Lists all tools exposed by the Jira MCP integration with descriptions
+
+**What you get:** A diagnostic overview of your integration landscape — which services are connected, whether they're healthy, and what tools are available from each.
+
+## Monitor agent costs and performance
+
+**What to ask:**
+
+> "Show me the costs for all agents this month. Which agent is the most expensive? What's the total spend?"
+
+**Tool sequence:**
+
+1. `agent_costs` — Retrieves cost data across all agents for the current billing period
+2. `agent_analytics` — Provides usage analytics with token counts, run volumes, and cost breakdowns per agent
+
+**What you get:** A clear picture of platform spend by agent, model, and time period. Useful for budget planning and identifying optimization opportunities.
+
+## Agent guardrails and governance
+
+**What to ask:**
+
+> "Show me the current guardrails on the sales-assistant agent. Add a rule that blocks any response containing competitor pricing information. Then show me recent guardrail events."
+
+**Tool sequence:**
+
+1. `agent_guardrails_get` — Retrieves current input/output guardrail rules
+2. `agent_guardrails_update` — Adds the new output filtering rule
+3. `agent_guardrails_events` — Lists recent guardrail triggers, blocked requests, and policy enforcement logs
+
+## Version and iterate
+
+**What to ask:**
+
+> "Show me the version history for the research-assistant agent. What changed between the last two versions?"
+
+**Tool sequence:**
+
+1. `agent_discover` — Finds the agent and its current version
+2. The agent's version history is available through workspace version tracking
+
+### Workflow versioning
+
+> "List all versions of the content-pipeline workflow. Roll back to version 2."
+
+**Tool sequence:**
+
+1. `workflow_versions` — Lists all versions with timestamps and change summaries
+2. `workflow_update` — Restores the configuration from version 2
+
+## Combining patterns
+
+The real power of MCP access comes from chaining these patterns in a single conversation:
+
+> "Create a new agent called 'weekly-reporter' that queries our knowledge base for the latest project updates, generates a summary report, and emails it. Set up a workflow that runs this every Monday at 9 AM. Set a monthly budget of $20 and add a guardrail that prevents the agent from sharing any financial data."
+
+This single request might trigger 6-8 tool calls: agent creation, tool attachment, workflow generation, workflow validation, budget configuration, and guardrail setup — all handled by your AI assistant without leaving your development environment.

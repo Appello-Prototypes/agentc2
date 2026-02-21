@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="800" height="450" viewBox="0 0 800 450">
+  <rect width="800" height="450" fill="#f4f4f5" stroke="#e4e4e7" stroke-width="1"/>
+  <g fill="#71717a" font-family="system-ui, -apple-system, sans-serif" text-anchor="middle">
+    <text x="400" y="218" font-size="18" font-weight="600">Screenshot: Knowledge Upload</text>
+    <text x="400" y="242" font-size="14">The knowledge page with document upload and index status</text>
+  </g>
+</svg>

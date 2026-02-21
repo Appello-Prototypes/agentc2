@@ -2,12 +2,11 @@
 
 ## Server Details
 
-- **Host:** 138.197.150.253
-- **Specs:** 32 GB RAM / 8 vCPUs / 640 GB SSD ($96/mo)
-- **User:** root
-- **SSH Key:** ~/.ssh/appello_digitalocean
+- **Host:** `$DO_HOST` (set via environment or GitHub Secrets)
+- **User:** `$DO_USERNAME` (default: root)
+- **SSH Key:** `$DO_SSH_KEY` path
 - **App Directory:** /var/www/agentc2
-- **Domain:** https://agentc2.ai
+- **Domain:** Your configured domain
 - **Process Manager:** PM2
 - **Reverse Proxy:** Caddy
 
@@ -25,16 +24,16 @@ Features:
 - Rollback safety — backs up `.next` dirs before building, restores on failure
 - Crash-loop detection — verifies PM2 processes are stable after restart
 - Slack notifications — posts success/failure to Slack (if `SLACK_WEBHOOK_URL` secret is configured)
-- Health checks — pings `agentc2.ai` after deploy
+- Health checks — pings the configured domain after deploy
 
 ### Required GitHub Secrets
 
-| Secret              | Value                                           |
-| ------------------- | ----------------------------------------------- |
-| `DO_HOST`           | `138.197.150.253`                               |
-| `DO_USERNAME`       | `root`                                          |
-| `DO_SSH_KEY`        | SSH private key (`~/.ssh/appello_digitalocean`) |
-| `SLACK_WEBHOOK_URL` | _(optional)_ Slack Incoming Webhook URL         |
+| Secret              | Value                                     |
+| ------------------- | ----------------------------------------- |
+| `DO_HOST`           | Your server IP                            |
+| `DO_USERNAME`       | `root`                                    |
+| `DO_SSH_KEY`        | SSH private key (path to your deploy key) |
+| `SLACK_WEBHOOK_URL` | _(optional)_ Slack Incoming Webhook URL   |
 
 ### Skip Tests
 
@@ -48,7 +47,7 @@ If CI is unavailable, deploy manually:
 
 ```bash
 # SSH to server
-ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+ssh -i $DO_SSH_KEY $DO_USERNAME@$DO_HOST
 
 # Deploy
 export PATH="$HOME/.bun/bin:$PATH"
@@ -68,7 +67,7 @@ pm2 status
 Or use the deploy script:
 
 ```bash
-./scripts/deploy-do.sh 138.197.150.253 root
+./scripts/deploy-do.sh $DO_HOST $DO_USERNAME
 ```
 
 ## Rollback
@@ -76,7 +75,7 @@ Or use the deploy script:
 If a deploy breaks production and the rollback trap didn't fire:
 
 ```bash
-ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+ssh -i $DO_SSH_KEY $DO_USERNAME@$DO_HOST
 cd /var/www/agentc2
 
 # Restore previous build
@@ -93,12 +92,12 @@ pm2 status
 1. **Copy .env to server:**
 
     ```bash
-    scp -i ~/.ssh/appello_digitalocean .env root@138.197.150.253:/var/www/agentc2/.env
+    scp -i $DO_SSH_KEY .env $DO_USERNAME@$DO_HOST:/var/www/agentc2/.env
     ```
 
 2. **SSH and install:**
     ```bash
-    ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
+    ssh -i $DO_SSH_KEY $DO_USERNAME@$DO_HOST
     cd /var/www/agentc2
     bun install
     bun run db:generate
@@ -142,8 +141,8 @@ sudo systemctl status caddy
 sudo journalctl -u caddy -f
 
 # Test endpoints
-curl -I https://agentc2.ai
-curl https://agentc2.ai/api/mcp -H "X-API-Key: $MCP_API_KEY" -H "X-Organization-Slug: appello"
+curl -I https://$DEPLOY_DOMAIN
+curl https://$DEPLOY_DOMAIN/api/mcp -H "X-API-Key: $MCP_API_KEY" -H "X-Organization-Slug: $ORG_SLUG"
 
 # Check server resources
 free -h          # Memory

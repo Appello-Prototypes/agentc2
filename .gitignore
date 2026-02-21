@@ -78,5 +78,8 @@ storybook-static
 # DB dump snapshots
 scripts/dumps/
 
+# Playwright MCP logs
+.playwright-mcp/
+
 # Secrets / keys
 keys.txt

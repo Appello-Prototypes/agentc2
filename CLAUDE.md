@@ -415,8 +415,8 @@ git push origin main
 Deployments are automatic via GitHub Actions on push to `main`. For manual deploy:
 
 ```bash
-ssh -i ~/.ssh/appello_digitalocean root@138.197.150.253
-cd /var/www/agentc2
+ssh -i $SSH_KEY_PATH $SSH_USER@$DEPLOY_HOST
+cd $DEPLOY_PATH
 git pull origin main
 bun install
 bun run db:generate
@@ -427,10 +427,9 @@ pm2 status
 
 ### Server Details
 
-- **Host:** 138.197.150.253
-- **Specs:** 32 GB RAM / 8 vCPUs / 640 GB SSD ($96/mo)
-- **Domain:** https://agentc2.ai
-- **SSH Key:** ~/.ssh/appello_digitalocean
+- **Host:** `$DEPLOY_HOST` (set in `.env` or GitHub Secrets)
+- **Domain:** `$DEPLOY_DOMAIN` (e.g., https://agentc2.ai)
+- **SSH Key:** `$SSH_KEY_PATH`
 - **Process Manager:** PM2
 - **Reverse Proxy:** Caddy
 
