@@ -5,6 +5,7 @@ import { createMockRequest, createMockParams, parseResponse } from "../../utils/
 import { mockAgent } from "../../fixtures/agents";
 
 const prismaMock = mockDeep<PrismaClient>();
+const authenticateRequestMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -14,10 +15,19 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: authenticateRequestMock
+}));
+
 describe("Triggers API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
+        authenticateRequestMock.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
+        prismaMock.workspace.findMany.mockResolvedValue([{ id: "ws-1" } as never]);
     });
 
     it("creates a webhook trigger", async () => {

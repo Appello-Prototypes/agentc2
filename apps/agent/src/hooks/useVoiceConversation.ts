@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { getApiBase } from "@/lib/utils";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -212,7 +213,7 @@ export function useVoiceConversation(
             abortControllerRef.current = ac;
 
             try {
-                const res = await fetch(`/api/agents/${agentSlug}/voice`, {
+                const res = await fetch(`${getApiBase()}/api/agents/${agentSlug}/voice`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({

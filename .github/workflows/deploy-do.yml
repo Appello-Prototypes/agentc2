@@ -18,17 +18,25 @@ name: Deploy to Digital Ocean
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
     inputs:
       skip_tests:
-        description: "Skip tests before deployment"
+        description: "Skip tests (requires justification in PR description)"
         required: false
         default: "false"
         type: boolean
+      environment:
+        description: "Target environment"
+        required: false
+        default: "production"
+        type: choice
+        options:
+          - production
+          - staging
 
 concurrency:
-  group: deploy-production
+  group: deploy-${{ github.ref_name == 'develop' && 'staging' || 'production' }}
   cancel-in-progress: true
 
 env:
@@ -87,12 +95,14 @@ jobs:
     timeout-minutes: 45
     needs: [test]
     if: always() && (needs.test.result == 'success' || needs.test.result == 'skipped')
+    env:
+      IS_STAGING: ${{ github.ref_name == 'develop' || github.event.inputs.environment == 'staging' }}
 
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.DO_HOST }}
+          host: ${{ (github.ref_name == 'develop' || github.event.inputs.environment == 'staging') && secrets.DO_STAGING_HOST || secrets.DO_HOST }}
           username: ${{ secrets.DO_USERNAME }}
           key: ${{ secrets.DO_SSH_KEY }}
           script_stop: true
@@ -214,8 +224,8 @@ jobs:
             sudo systemctl reload caddy || sudo systemctl restart caddy
 
             echo ""
-            echo "9. Restarting PM2 processes..."
-            pm2 restart ecosystem.config.js --update-env || pm2 start ecosystem.config.js
+            echo "9. Reloading PM2 processes (zero-downtime)..."
+            pm2 reload ecosystem.config.js --update-env || pm2 start ecosystem.config.js
             pm2 save
 
             echo ""

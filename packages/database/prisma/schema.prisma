@@ -21,6 +21,7 @@ model User {
     termsAcceptedAt        DateTime?
     privacyConsentAt       DateTime?
     marketingConsent       Boolean                 @default(false)
+    status                 String                  @default("active") // active, frozen, deleted
     createdAt              DateTime                @default(now())
     updatedAt              DateTime                @updatedAt
     sessions               Session[]
@@ -75,6 +76,8 @@ model Verification {
     createdAt  DateTime? @default(now())
     updatedAt  DateTime? @updatedAt
 
+    @@index([identifier])
+    @@index([expiresAt])
     @@map("verification")
 }
 
@@ -4970,4 +4973,62 @@ model AgentReputation {
     updatedAt        DateTime @updatedAt
 
     @@map("agent_reputation")
+}
+
+// Data Subject Request — GDPR Art. 15-22, CCPA, PIPEDA tracking
+model DataSubjectRequest {
+    id              String    @id @default(cuid())
+    type            String // ACCESS, RECTIFICATION, ERASURE, PORTABILITY, RESTRICTION, OBJECTION
+    status          String    @default("PENDING") // PENDING, IN_PROGRESS, COMPLETED, REJECTED
+    jurisdiction    String? // GDPR, CCPA, PIPEDA
+    requestorEmail  String
+    requestorUserId String?
+    organizationId  String?
+    notes           String?   @db.Text
+    completedAt     DateTime?
+    rejectionReason String?   @db.Text
+    createdAt       DateTime  @default(now())
+    updatedAt       DateTime  @updatedAt
+
+    @@index([requestorUserId])
+    @@index([status])
+    @@index([createdAt])
+    @@map("data_subject_request")
+}
+
+// Consent Record — granular consent tracking for compliance
+model ConsentRecord {
+    id          String    @id @default(cuid())
+    userId      String
+    consentType String // PRIVACY_POLICY, TERMS_OF_SERVICE, MARKETING, DATA_PROCESSING
+    version     String // Policy version consented to
+    granted     Boolean
+    ipAddress   String?
+    userAgent   String?
+    createdAt   DateTime  @default(now())
+    revokedAt   DateTime?
+
+    @@index([userId])
+    @@index([consentType])
+    @@map("consent_record")
+}
+
+model WebhookDeadLetter {
+    id           String    @id @default(cuid())
+    source       String // "slack", "elevenlabs", "inngest", "stripe", etc.
+    eventType    String?
+    payload      Json
+    headers      Json?
+    errorMessage String?   @db.Text
+    retryCount   Int       @default(0)
+    maxRetries   Int       @default(3)
+    status       String    @default("pending") // "pending", "retrying", "failed", "replayed"
+    nextRetryAt  DateTime?
+    processedAt  DateTime?
+    createdAt    DateTime  @default(now())
+    updatedAt    DateTime  @updatedAt
+
+    @@index([source, status])
+    @@index([nextRetryAt])
+    @@map("webhook_dead_letter")
 }

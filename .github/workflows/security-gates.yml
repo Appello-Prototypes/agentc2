@@ -43,8 +43,33 @@ jobs:
           TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
           TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
 
+      - name: Run unit and integration tests
+        run: bun run test
+        env:
+          TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+          TURBO_TEAM: ${{ secrets.TURBO_TEAM }}
+
       - name: Dependency audit
         run: bun audit || true
+
+      - name: SCA scan (audit-ci)
+        run: bunx audit-ci --high || true
+
+      - name: License compliance check
+        run: |
+          bunx license-checker --production --failOn "GPL-2.0;GPL-3.0;AGPL-1.0;AGPL-3.0" --summary || true
+
+      - name: Generate SBOM (CycloneDX)
+        run: |
+          bunx @cyclonedx/cyclonedx-npm --output-file sbom.json --spec-version 1.5 || true
+
+      - name: Upload SBOM artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.json
+          retention-days: 90
 
       - name: Secret scan
         uses: gitleaks/gitleaks-action@v2

@@ -38,89 +38,192 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        const [user, memberships, integrations, documents, auditLogs, agentRuns] =
-            await Promise.all([
-                prisma.user.findUnique({
-                    where: { id: userId },
-                    select: {
-                        id: true,
-                        name: true,
-                        email: true,
-                        emailVerified: true,
-                        image: true,
-                        timezone: true,
-                        termsAcceptedAt: true,
-                        privacyConsentAt: true,
-                        marketingConsent: true,
-                        createdAt: true,
-                        updatedAt: true
+        const [
+            user,
+            memberships,
+            integrations,
+            documents,
+            auditLogs,
+            agentRuns,
+            feedback,
+            costEvents,
+            supportTickets,
+            guardrailEvents,
+            consentRecords,
+            dsrs
+        ] = await Promise.all([
+            prisma.user.findUnique({
+                where: { id: userId },
+                select: {
+                    id: true,
+                    name: true,
+                    email: true,
+                    emailVerified: true,
+                    image: true,
+                    timezone: true,
+                    termsAcceptedAt: true,
+                    privacyConsentAt: true,
+                    marketingConsent: true,
+                    createdAt: true,
+                    updatedAt: true
+                }
+            }),
+            prisma.membership.findMany({
+                where: { userId },
+                select: {
+                    organizationId: true,
+                    role: true,
+                    createdAt: true
+                }
+            }),
+            prisma.integrationConnection.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    providerId: true,
+                    name: true,
+                    scope: true,
+                    isActive: true,
+                    createdAt: true,
+                    lastUsedAt: true
+                }
+            }),
+            prisma.document.findMany({
+                where: { createdBy: userId },
+                select: {
+                    id: true,
+                    slug: true,
+                    name: true,
+                    category: true,
+                    tags: true,
+                    createdAt: true,
+                    updatedAt: true
+                },
+                take: 500
+            }),
+            prisma.auditLog.findMany({
+                where: { actorId: userId },
+                select: {
+                    id: true,
+                    action: true,
+                    entityType: true,
+                    entityId: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" },
+                take: 1000
+            }),
+            prisma.agentRun.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    agentId: true,
+                    status: true,
+                    inputText: true,
+                    outputText: true,
+                    costUsd: true,
+                    totalTokens: true,
+                    durationMs: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" },
+                take: 500
+            }),
+            prisma.agentRun.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    feedbacks: {
+                        select: {
+                            id: true,
+                            thumbs: true,
+                            rating: true,
+                            comment: true,
+                            source: true,
+                            createdAt: true
+                        }
                     }
-                }),
-                prisma.membership.findMany({
-                    where: { userId },
-                    select: {
-                        organizationId: true,
-                        role: true,
-                        createdAt: true
-                    }
-                }),
-                prisma.integrationConnection.findMany({
-                    where: { userId },
-                    select: {
-                        id: true,
-                        providerId: true,
-                        name: true,
-                        scope: true,
-                        isActive: true,
-                        createdAt: true,
-                        lastUsedAt: true
-                    }
-                }),
-                prisma.document.findMany({
-                    where: { createdBy: userId },
-                    select: {
-                        id: true,
-                        slug: true,
-                        name: true,
-                        category: true,
-                        tags: true,
-                        createdAt: true,
-                        updatedAt: true
-                    },
-                    take: 500
-                }),
-                prisma.auditLog.findMany({
-                    where: { actorId: userId },
-                    select: {
-                        id: true,
-                        action: true,
-                        entityType: true,
-                        entityId: true,
-                        createdAt: true
-                    },
-                    orderBy: { createdAt: "desc" },
-                    take: 1000
-                }),
-                prisma.agentRun.findMany({
-                    where: { userId },
-                    select: {
-                        id: true,
-                        agentId: true,
-                        status: true,
-                        inputText: true,
-                        outputText: true,
-                        costUsd: true,
-                        totalTokens: true,
-                        durationMs: true,
-                        createdAt: true
-                    },
-                    orderBy: { createdAt: "desc" },
-                    take: 500
-                })
-            ]);
+                },
+                orderBy: { createdAt: "desc" },
+                take: 500
+            }),
+            prisma.costEvent.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    agentId: true,
+                    provider: true,
+                    modelName: true,
+                    totalTokens: true,
+                    costUsd: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" },
+                take: 1000
+            }),
+            prisma.supportTicket.findMany({
+                where: { submittedById: userId },
+                select: {
+                    id: true,
+                    ticketNumber: true,
+                    type: true,
+                    status: true,
+                    priority: true,
+                    title: true,
+                    description: true,
+                    createdAt: true,
+                    updatedAt: true
+                },
+                orderBy: { createdAt: "desc" },
+                take: 100
+            }),
+            prisma.guardrailEvent.findMany({
+                where: {
+                    run: { userId }
+                },
+                select: {
+                    id: true,
+                    agentId: true,
+                    type: true,
+                    guardrailKey: true,
+                    reason: true,
+                    createdAt: true
+                },
+                orderBy: { createdAt: "desc" },
+                take: 500
+            }),
+            prisma.consentRecord.findMany({
+                where: { userId },
+                select: {
+                    id: true,
+                    consentType: true,
+                    version: true,
+                    granted: true,
+                    createdAt: true,
+                    revokedAt: true
+                },
+                orderBy: { createdAt: "desc" }
+            }),
+            prisma.dataSubjectRequest.findMany({
+                where: { requestorUserId: userId },
+                select: {
+                    id: true,
+                    type: true,
+                    status: true,
+                    jurisdiction: true,
+                    createdAt: true,
+                    completedAt: true
+                },
+                orderBy: { createdAt: "desc" }
+            })
+        ]);
+
+        const flatFeedback = feedback.flatMap((run) =>
+            run.feedbacks.map((fb) => ({ ...fb, runId: run.id }))
+        );
 
         await auditLog.create({
-            action: "CREDENTIAL_ACCESS",
+            action: "USER_DATA_EXPORT",
             entityType: "User",
             entityId: userId,
             userId,
@@ -129,12 +232,32 @@ export async function GET(request: NextRequest) {
 
         const exportData = {
             exportedAt: new Date().toISOString(),
+            dataCategories: [
+                "user",
+                "memberships",
+                "integrations",
+                "documents",
+                "auditLogs",
+                "agentRuns",
+                "feedback",
+                "costEvents",
+                "supportTickets",
+                "guardrailEvents",
+                "consentRecords",
+                "dataSubjectRequests"
+            ],
             user,
             memberships,
             integrations,
             documents,
             auditLogs,
-            agentRuns
+            agentRuns,
+            feedback: flatFeedback,
+            costEvents,
+            supportTickets,
+            guardrailEvents,
+            consentRecords,
+            dataSubjectRequests: dsrs
         };
 
         return NextResponse.json({ success: true, data: exportData });

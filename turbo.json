@@ -31,6 +31,16 @@
       "dependsOn": ["^build", "^db:generate"],
       "inputs": ["src/**", "app/**", "*.ts", "*.tsx", "*.mjs", "*.json", "tsconfig.json"]
     },
+    "test": {
+      "dependsOn": ["^build", "^db:generate"],
+      "inputs": ["src/**", "app/**", "*.ts", "*.tsx", "*.test.*", "*.spec.*", "__tests__/**"],
+      "cache": false
+    },
+    "test:coverage": {
+      "dependsOn": ["^build", "^db:generate"],
+      "inputs": ["src/**", "app/**", "*.ts", "*.tsx", "*.test.*", "*.spec.*", "__tests__/**"],
+      "cache": false
+    },
     "clean": {
       "cache": false
     },

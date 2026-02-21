@@ -14,6 +14,7 @@ export * from "./command";
 export * from "./command-palette";
 export * from "./dialog";
 export * from "./dropdown-menu";
+export * from "./empty-state";
 export * from "./error-boundary";
 export * from "./field";
 export * from "./hover-card";

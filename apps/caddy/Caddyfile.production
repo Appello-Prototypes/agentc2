@@ -51,7 +51,7 @@ agentc2.ai {
 
     # Public legal pages — route to frontend app (no auth required)
     @public_legal {
-        path /terms /privacy /security /about
+        path /terms /privacy /security /about /trust-center /subprocessors /ai-transparency
     }
 
     handle @public_legal {

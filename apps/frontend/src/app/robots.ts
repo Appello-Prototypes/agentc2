@@ -14,7 +14,10 @@ export default function robots(): MetadataRoute.Robots {
                     "/blog/",
                     "/terms",
                     "/privacy",
-                    "/security"
+                    "/security",
+                    "/trust-center",
+                    "/subprocessors",
+                    "/ai-transparency"
                 ],
                 disallow: [
                     "/api/",

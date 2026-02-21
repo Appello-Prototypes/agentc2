@@ -129,7 +129,13 @@ const decryptCredentials = (value: unknown) => {
     if (!isEncryptedPayload(value)) return value;
 
     const key = getEncryptionKey();
-    if (!key) return {};
+    if (!key) {
+        console.error(
+            "[MCP] CREDENTIAL_ENCRYPTION_KEY is not set — cannot decrypt integration credentials. " +
+                "MCP servers requiring credentials will fail to connect."
+        );
+        return {};
+    }
 
     try {
         const iv = Buffer.from(value.iv, "base64");
@@ -142,7 +148,10 @@ const decryptCredentials = (value: unknown) => {
         );
         return JSON.parse(decrypted) as Record<string, unknown>;
     } catch (error) {
-        console.error("[MCP] Failed to decrypt credentials:", error);
+        console.error(
+            "[MCP] Failed to decrypt credentials — data may be corrupted or encryption key may have changed:",
+            error
+        );
         return {};
     }
 };

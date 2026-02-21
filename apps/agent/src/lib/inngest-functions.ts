@@ -8233,6 +8233,70 @@ export const dataRetentionCleanupFunction = inngest.createFunction(
             return result.count;
         });
 
+        // 5. Guardrail events older than 1 year
+        const guardrailCutoff = new Date(now);
+        guardrailCutoff.setFullYear(guardrailCutoff.getFullYear() - 1);
+        const guardrailDeleted = await step.run("cleanup-guardrail-events", async () => {
+            const result = await prisma.guardrailEvent.deleteMany({
+                where: { createdAt: { lt: guardrailCutoff } }
+            });
+            console.log(
+                `[DataRetention] Deleted ${result.count} guardrail events older than 1 year`
+            );
+            return result.count;
+        });
+
+        // 6. Integration events older than 1 year
+        const integrationEventCutoff = new Date(now);
+        integrationEventCutoff.setFullYear(integrationEventCutoff.getFullYear() - 1);
+        const integrationEventsDeleted = await step.run("cleanup-integration-events", async () => {
+            const result = await prisma.integrationEvent.deleteMany({
+                where: { createdAt: { lt: integrationEventCutoff } }
+            });
+            console.log(
+                `[DataRetention] Deleted ${result.count} integration events older than 1 year`
+            );
+            return result.count;
+        });
+
+        // 7. Cost events older than 2 years
+        const costCutoff = new Date(now);
+        costCutoff.setFullYear(costCutoff.getFullYear() - 2);
+        const costEventsDeleted = await step.run("cleanup-cost-events", async () => {
+            const result = await prisma.costEvent.deleteMany({
+                where: { createdAt: { lt: costCutoff } }
+            });
+            console.log(`[DataRetention] Deleted ${result.count} cost events older than 2 years`);
+            return result.count;
+        });
+
+        // 8. Completed DSRs older than 2 years
+        const dsrCutoff = new Date(now);
+        dsrCutoff.setFullYear(dsrCutoff.getFullYear() - 2);
+        const dsrsDeleted = await step.run("cleanup-completed-dsrs", async () => {
+            const result = await prisma.dataSubjectRequest.deleteMany({
+                where: {
+                    status: "COMPLETED",
+                    completedAt: { lt: dsrCutoff }
+                }
+            });
+            console.log(
+                `[DataRetention] Deleted ${result.count} completed DSRs older than 2 years`
+            );
+            return result.count;
+        });
+
+        // 9. Budget alerts older than 1 year
+        const budgetAlertCutoff = new Date(now);
+        budgetAlertCutoff.setFullYear(budgetAlertCutoff.getFullYear() - 1);
+        const budgetAlertsDeleted = await step.run("cleanup-budget-alerts", async () => {
+            const result = await prisma.budgetAlert.deleteMany({
+                where: { createdAt: { lt: budgetAlertCutoff } }
+            });
+            console.log(`[DataRetention] Deleted ${result.count} budget alerts older than 1 year`);
+            return result.count;
+        });
+
         // Log purge summary
         await step.run("log-purge-summary", async () => {
             await prisma.auditLog.create({
@@ -8245,13 +8309,136 @@ export const dataRetentionCleanupFunction = inngest.createFunction(
                         logsDeleted,
                         sessionsDeleted,
                         credsDeleted,
+                        guardrailDeleted,
+                        integrationEventsDeleted,
+                        costEventsDeleted,
+                        dsrsDeleted,
+                        budgetAlertsDeleted,
                         runAt: now.toISOString()
                     }
                 }
             });
         });
 
-        return { runsDeleted, logsDeleted, sessionsDeleted, credsDeleted };
+        return {
+            runsDeleted,
+            logsDeleted,
+            sessionsDeleted,
+            credsDeleted,
+            guardrailDeleted,
+            integrationEventsDeleted,
+            costEventsDeleted,
+            dsrsDeleted,
+            budgetAlertsDeleted
+        };
+    }
+);
+
+// ── Consent Expiry Check ────────────────────────────────────────────────
+export const consentExpiryCheckFunction = inngest.createFunction(
+    {
+        id: "consent-expiry-check",
+        retries: 2
+    },
+    { cron: "0 4 * * *" },
+    async ({ step }) => {
+        const flaggedCount = await step.run("check-consent-expiry", async () => {
+            const usersWithoutConsent = await prisma.user.findMany({
+                where: {
+                    privacyConsentAt: null,
+                    email: { not: { contains: "@redacted.local" } }
+                },
+                select: { id: true, email: true, createdAt: true }
+            });
+
+            if (usersWithoutConsent.length > 0) {
+                await prisma.auditLog.create({
+                    data: {
+                        action: "CONFIG_CHANGE",
+                        entityType: "ConsentCheck",
+                        entityId: "consent-expiry",
+                        metadata: {
+                            usersWithoutConsent: usersWithoutConsent.length,
+                            runAt: new Date().toISOString()
+                        }
+                    }
+                });
+            }
+
+            return usersWithoutConsent.length;
+        });
+
+        return { flaggedCount };
+    }
+);
+
+// ── Security Monitor ────────────────────────────────────────────────────
+export const securityMonitorFunction = inngest.createFunction(
+    {
+        id: "security-monitor",
+        retries: 1
+    },
+    { cron: "*/5 * * * *" },
+    async ({ step }) => {
+        const now = new Date();
+        const windowStart = new Date(now.getTime() - 15 * 60 * 1000); // 15 min window
+
+        // 1. Check for auth brute force attempts
+        const authAnomalies = await step.run("check-auth-anomalies", async () => {
+            const failedAuths = await prisma.auditLog.groupBy({
+                by: ["metadata"],
+                where: {
+                    action: "AUTH_LOGIN_FAILURE",
+                    createdAt: { gte: windowStart }
+                },
+                _count: { id: true }
+            });
+
+            let alertsSent = 0;
+            for (const entry of failedAuths) {
+                if (entry._count.id > 10) {
+                    const meta = entry.metadata as Record<string, unknown> | null;
+                    const ip = (meta?.ip as string) || "unknown";
+                    const { alertAuthBruteForce } = await import("./alerts");
+                    await alertAuthBruteForce({
+                        ip,
+                        attempts: entry._count.id,
+                        windowMinutes: 15
+                    });
+                    alertsSent++;
+                }
+            }
+            return alertsSent;
+        });
+
+        // 2. Check for guardrail block spikes
+        const guardrailAnomalies = await step.run("check-guardrail-spikes", async () => {
+            const recentBlocks = await prisma.guardrailEvent.groupBy({
+                by: ["agentId"],
+                where: {
+                    type: "BLOCKED",
+                    createdAt: { gte: windowStart }
+                },
+                _count: { id: true }
+            });
+
+            let alertsSent = 0;
+            for (const entry of recentBlocks) {
+                if (entry._count.id >= 10) {
+                    const { alertGuardrailSpike } = await import("./alerts");
+                    await alertGuardrailSpike({
+                        agentId: entry.agentId,
+                        currentCount: entry._count.id,
+                        baselineCount: 2,
+                        windowMinutes: 15
+                    });
+                    alertsSent++;
+                }
+            }
+            return alertsSent;
+        });
+
+        return { authAnomalies, guardrailAnomalies };
     }
 );
 
@@ -8321,5 +8508,8 @@ export const inngestFunctions = [
     // Dark Factory pipeline stats
     pipelineStatsRollupFunction,
     // Data retention cleanup
-    dataRetentionCleanupFunction
+    dataRetentionCleanupFunction,
+    consentExpiryCheckFunction,
+    // Security monitoring
+    securityMonitorFunction
 ];

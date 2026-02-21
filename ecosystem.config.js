@@ -17,8 +17,11 @@ module.exports = {
             cwd: "./apps/frontend",
             script: "node_modules/.bin/next",
             args: "start",
-            instances: 1,
-            exec_mode: "fork",
+            instances: 2,
+            exec_mode: "cluster",
+            wait_ready: true,
+            listen_timeout: 10000,
+            kill_timeout: 5000,
             env: {
                 NODE_ENV: "production",
                 PORT: 3000
@@ -27,7 +30,8 @@ module.exports = {
             max_restarts: 10,
             min_uptime: "10s",
             restart_delay: 4000,
-            // Logging
+            // Logging — structured JSON for aggregation (Loki, Logtail)
+            log_type: "json",
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
             error_file: process.env.LOG_DIR
                 ? `${process.env.LOG_DIR}/frontend-error.log`
@@ -44,8 +48,11 @@ module.exports = {
             cwd: "./apps/agent",
             script: "node_modules/.bin/next",
             args: "start",
-            instances: 1,
-            exec_mode: "fork",
+            instances: 4,
+            exec_mode: "cluster",
+            wait_ready: true,
+            listen_timeout: 10000,
+            kill_timeout: 5000,
             env: {
                 NODE_ENV: "production",
                 PORT: 3001,
@@ -58,7 +65,8 @@ module.exports = {
             max_restarts: 10,
             min_uptime: "10s",
             restart_delay: 4000,
-            // Logging
+            // Logging — structured JSON for aggregation (Loki, Logtail)
+            log_type: "json",
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
             error_file: process.env.LOG_DIR
                 ? `${process.env.LOG_DIR}/agent-error.log`
@@ -85,7 +93,8 @@ module.exports = {
             max_restarts: 10,
             min_uptime: "10s",
             restart_delay: 4000,
-            // Logging
+            // Logging — structured JSON for aggregation (Loki, Logtail)
+            log_type: "json",
             log_date_format: "YYYY-MM-DD HH:mm:ss Z",
             error_file: process.env.LOG_DIR
                 ? `${process.env.LOG_DIR}/admin-error.log`

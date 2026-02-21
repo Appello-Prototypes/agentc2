@@ -23,13 +23,22 @@ function isStandaloneDeployment(): boolean {
 const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
 
 async function proxy(request: NextRequest) {
+    // Inject X-Request-ID for distributed tracing
+    const requestId = request.headers.get("x-request-id") || crypto.randomUUID();
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set("x-request-id", requestId);
+
     // API routes: only apply CSRF enforcement, skip page-level auth
     if (request.nextUrl.pathname.startsWith("/api/")) {
         if (STATE_CHANGING_METHODS.has(request.method)) {
             const csrf = enforceCsrf(request);
             if (csrf.response) return csrf.response;
         }
-        return NextResponse.next();
+        const response = NextResponse.next({
+            request: { headers: requestHeaders }
+        });
+        response.headers.set("x-request-id", requestId);
+        return response;
     }
 
     // Root page: redirect authenticated users to /workspace, otherwise show public landing

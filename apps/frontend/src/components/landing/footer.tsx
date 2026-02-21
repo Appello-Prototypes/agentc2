@@ -36,7 +36,9 @@ const columns = [
         links: [
             { label: "Privacy Policy", href: "/privacy" },
             { label: "Terms of Service", href: "/terms" },
-            { label: "Security", href: "/security" }
+            { label: "Security", href: "/security" },
+            { label: "Trust Center", href: "/trust-center" },
+            { label: "AI Transparency", href: "/ai-transparency" }
         ]
     }
 ];

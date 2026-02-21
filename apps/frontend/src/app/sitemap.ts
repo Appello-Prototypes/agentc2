@@ -19,7 +19,25 @@ export default function sitemap(): MetadataRoute.Sitemap {
         { url: `${BASE}/blog`, lastModified: now, priority: 0.8, changeFrequency: "weekly" },
         { url: `${BASE}/terms`, lastModified: now, priority: 0.2, changeFrequency: "yearly" },
         { url: `${BASE}/privacy`, lastModified: now, priority: 0.2, changeFrequency: "yearly" },
-        { url: `${BASE}/security`, lastModified: now, priority: 0.5, changeFrequency: "monthly" }
+        { url: `${BASE}/security`, lastModified: now, priority: 0.5, changeFrequency: "monthly" },
+        {
+            url: `${BASE}/trust-center`,
+            lastModified: now,
+            priority: 0.5,
+            changeFrequency: "monthly"
+        },
+        {
+            url: `${BASE}/subprocessors`,
+            lastModified: now,
+            priority: 0.3,
+            changeFrequency: "monthly"
+        },
+        {
+            url: `${BASE}/ai-transparency`,
+            lastModified: now,
+            priority: 0.3,
+            changeFrequency: "monthly"
+        }
     ];
 
     const seen = new Set<string>();

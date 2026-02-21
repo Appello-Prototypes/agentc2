@@ -5,6 +5,8 @@ import { createMockRequest, createMockParams, parseResponse } from "../../utils/
 import { mockAgent } from "../../fixtures/agents";
 
 const prismaMock = mockDeep<PrismaClient>();
+const requireAuthMock = vi.fn();
+const requireAgentAccessMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -14,10 +16,27 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+vi.mock("@/lib/authz", () => ({
+    requireAuth: requireAuthMock,
+    requireAgentAccess: requireAgentAccessMock
+}));
+
+vi.mock("@/lib/credential-crypto", () => ({
+    encryptString: vi.fn((s: string) => `encrypted:${s}`)
+}));
+
 describe("Execution Triggers API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
+        requireAuthMock.mockResolvedValue({
+            context: { userId: "user-1", organizationId: "org-1" }
+        });
+        requireAgentAccessMock.mockResolvedValue({
+            agentId: mockAgent.id
+        });
+        prismaMock.agent.findFirst.mockResolvedValue(mockAgent as never);
+        prismaMock.agent.findUnique.mockResolvedValue(mockAgent as never);
     });
 
     it("creates a scheduled trigger", async () => {

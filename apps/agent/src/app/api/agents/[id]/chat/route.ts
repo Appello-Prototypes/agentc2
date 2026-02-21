@@ -742,11 +742,55 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     };
 
+                    // Idle-timeout helper: wraps an async iterator so that once
+                    // generationDone is true, we break out after IDLE_TIMEOUT_MS of
+                    // no new chunks instead of waiting for the stream to close
+                    // (Mastra can take 10-20s for post-generation cleanup).
+                    const IDLE_TIMEOUT_MS = 3_000;
+                    let generationDone = false;
+
+                    async function drainTextWithIdleTimeout(
+                        stream: AsyncIterable<string>
+                    ): Promise<void> {
+                        const iterator = (
+                            stream as AsyncIterable<string> & {
+                                [Symbol.asyncIterator](): AsyncIterator<string>;
+                            }
+                        )[Symbol.asyncIterator]();
+
+                        while (true) {
+                            const raceTargets: Promise<
+                                IteratorResult<string, unknown> | { done: true; value: undefined }
+                            >[] = [iterator.next()];
+
+                            if (generationDone) {
+                                raceTargets.push(
+                                    new Promise((resolve) =>
+                                        setTimeout(
+                                            () => resolve({ done: true, value: undefined }),
+                                            IDLE_TIMEOUT_MS
+                                        )
+                                    )
+                                );
+                            }
+
+                            const result = await Promise.race(raceTargets);
+                            if (result.done) break;
+
+                            const chunk = result.value as string;
+                            fullOutput += chunk;
+                            writer.write({
+                                type: "text-delta",
+                                id: messageId,
+                                delta: chunk
+                            });
+                        }
+                    }
+
                     if (fullStream && textStream) {
                         // Drain tool events from fullStream in the background.
-                        // Tool calls complete before the final text chunk, so they'll
-                        // be captured before we snapshot. Remaining fullStream events
-                        // (usage stats, finish reasons) should NOT block the response.
+                        // Sets generationDone when the stream closes so the idle
+                        // timeout can kick in on the textStream side.
                         void (async () => {
                             try {
                                 for await (const chunk of fullStream) {
@@ -755,17 +799,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 }
                             } catch (e) {
                                 console.error("[Agent Chat] fullStream background drain error:", e);
+                            } finally {
+                                generationDone = true;
                             }
                         })();
 
-                        for await (const chunk of textStream) {
-                            fullOutput += chunk;
-                            writer.write({
-                                type: "text-delta",
-                                id: messageId,
-                                delta: chunk
-                            });
-                        }
+                        await drainTextWithIdleTimeout(textStream);
                     } else if (fullStream) {
                         for await (const chunk of fullStream) {
                             const c = normalizeChunk(chunk);
@@ -792,14 +831,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             }
                         }
                     } else {
-                        for await (const chunk of textStream) {
-                            fullOutput += chunk;
-                            writer.write({
-                                type: "text-delta",
-                                id: messageId,
-                                delta: chunk
-                            });
-                        }
+                        await drainTextWithIdleTimeout(textStream);
                     }
 
                     // End the text message -- this is the last thing the client needs.

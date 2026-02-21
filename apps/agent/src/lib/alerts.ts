@@ -23,7 +23,12 @@ export type AlertType =
     | "auto_promotion"
     | "threshold_breach"
     | "learning_paused"
-    | "learning_resumed";
+    | "learning_resumed"
+    | "auth_brute_force"
+    | "guardrail_spike"
+    | "budget_threshold"
+    | "tool_execution_anomaly"
+    | "security_event";
 
 export interface SendAlertParams {
     agentId: string;
@@ -380,6 +385,110 @@ export async function alertExperimentTimeout(params: {
             experimentId: params.experimentId,
             durationHours: params.durationHours,
             runCount: params.runCount
+        }
+    });
+}
+
+// =============================================================================
+// Security Alert Functions
+// =============================================================================
+
+/**
+ * Send an auth brute force alert
+ */
+export async function alertAuthBruteForce(params: {
+    ip: string;
+    attempts: number;
+    windowMinutes: number;
+}): Promise<void> {
+    await sendAlert({
+        agentId: "system",
+        agentSlug: "security",
+        severity: "critical",
+        type: "auth_brute_force",
+        message: `Brute force detected: ${params.attempts} failed auth attempts from IP ${params.ip} in ${params.windowMinutes} minutes`,
+        metadata: {
+            ip: params.ip,
+            attempts: params.attempts,
+            windowMinutes: params.windowMinutes
+        }
+    });
+}
+
+/**
+ * Send a guardrail spike alert
+ */
+export async function alertGuardrailSpike(params: {
+    agentId: string;
+    agentSlug?: string;
+    currentCount: number;
+    baselineCount: number;
+    windowMinutes: number;
+}): Promise<void> {
+    const multiplier =
+        params.baselineCount > 0 ? (params.currentCount / params.baselineCount).toFixed(1) : "N/A";
+
+    await sendAlert({
+        agentId: params.agentId,
+        agentSlug: params.agentSlug,
+        severity: "warning",
+        type: "guardrail_spike",
+        message: `Guardrail block spike: ${params.currentCount} blocks in ${params.windowMinutes}min (${multiplier}x baseline)`,
+        metadata: {
+            currentCount: params.currentCount,
+            baselineCount: params.baselineCount,
+            multiplier,
+            windowMinutes: params.windowMinutes
+        }
+    });
+}
+
+/**
+ * Send a budget threshold alert
+ */
+export async function alertBudgetThreshold(params: {
+    agentId: string;
+    agentSlug?: string;
+    percentUsed: number;
+    currentSpendUsd: number;
+    limitUsd: number;
+}): Promise<void> {
+    await sendAlert({
+        agentId: params.agentId,
+        agentSlug: params.agentSlug,
+        severity: params.percentUsed >= 95 ? "critical" : "warning",
+        type: "budget_threshold",
+        message: `Budget at ${params.percentUsed.toFixed(0)}% utilization ($${params.currentSpendUsd.toFixed(2)} / $${params.limitUsd.toFixed(2)})`,
+        metadata: {
+            percentUsed: params.percentUsed,
+            currentSpendUsd: params.currentSpendUsd,
+            limitUsd: params.limitUsd
+        }
+    });
+}
+
+/**
+ * Send a tool execution anomaly alert
+ */
+export async function alertToolExecutionAnomaly(params: {
+    agentId: string;
+    agentSlug?: string;
+    failureRate: number;
+    failedCount: number;
+    totalCount: number;
+    windowMinutes: number;
+}): Promise<void> {
+    await sendAlert({
+        agentId: params.agentId,
+        agentSlug: params.agentSlug,
+        severity: "warning",
+        type: "tool_execution_anomaly",
+        message: `Tool execution failure rate ${(params.failureRate * 100).toFixed(0)}% (${params.failedCount}/${params.totalCount}) in ${params.windowMinutes}min window`,
+        metadata: {
+            failureRate: params.failureRate,
+            failedCount: params.failedCount,
+            totalCount: params.totalCount,
+            windowMinutes: params.windowMinutes
         }
     });
 }

@@ -1,126 +1,144 @@
 /**
- * Structured JSON Logger
+ * Structured JSON Logger (pino-based)
  *
- * Provides machine-readable JSON logs for security-relevant events.
- * Outputs to stdout in JSON format for consumption by log aggregators
- * (e.g., Datadog, Grafana Loki, CloudWatch).
+ * Production: Machine-readable JSON for log aggregators (Grafana Loki, Logtail, Datadog)
+ * Development: Pretty-printed human-readable output
+ *
+ * Features:
+ * - Automatic field redaction (passwords, tokens, API keys, secrets)
+ * - Child loggers with per-request context (requestId, userId, organizationId)
+ * - Async, non-blocking I/O via pino's native transport
  *
  * Usage:
- *   import { securityLogger } from "@repo/agentc2/lib/logger";
- *   securityLogger.info("tool.execute", { toolName, agentId, status: "success" });
- *   securityLogger.warn("guardrail.blocked", { agentId, guardrailKey, input: input.slice(0, 100) });
+ *   import { logger, createRequestLogger } from "@repo/agentc2/lib/logger";
+ *   logger.info({ toolName, agentId }, "Tool executed successfully");
+ *
+ *   // Per-request child logger (in middleware)
+ *   const reqLogger = createRequestLogger({ requestId, userId, organizationId });
+ *   reqLogger.info({ path: "/api/agents" }, "Request handled");
  */
 
-type LogLevel = "debug" | "info" | "warn" | "error";
+import pino from "pino";
 
-interface LogEntry {
-    level: LogLevel;
-    event: string;
-    message: string;
-    timestamp: string;
-    service: string;
-    traceId?: string;
-    tenantId?: string;
-    userId?: string;
-    agentId?: string;
-    [key: string]: unknown;
-}
+const isDev = process.env.NODE_ENV !== "production";
 
-const LOG_LEVELS: Record<LogLevel, number> = {
-    debug: 0,
-    info: 1,
-    warn: 2,
-    error: 3
-};
+const REDACT_PATHS = [
+    "password",
+    "token",
+    "apiKey",
+    "api_key",
+    "secret",
+    "authorization",
+    "cookie",
+    "accessToken",
+    "refreshToken",
+    "credentials",
+    "CREDENTIAL_ENCRYPTION_KEY",
+    "OPENAI_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ELEVENLABS_API_KEY",
+    "req.headers.authorization",
+    "req.headers.cookie",
+    "req.headers['x-api-key']"
+];
 
-const MIN_LEVEL = (process.env.LOG_LEVEL as LogLevel) || "info";
-
-function shouldLog(level: LogLevel): boolean {
-    return LOG_LEVELS[level] >= LOG_LEVELS[MIN_LEVEL];
-}
-
-function emit(entry: LogEntry): void {
-    if (!shouldLog(entry.level)) return;
-    const output = JSON.stringify(entry);
-    if (entry.level === "error") {
-        process.stderr.write(output + "\n");
-    } else {
-        process.stdout.write(output + "\n");
-    }
-}
-
-export interface LogContext {
-    traceId?: string;
-    tenantId?: string;
-    userId?: string;
-    agentId?: string;
-    [key: string]: unknown;
-}
-
-function log(level: LogLevel, event: string, message: string, context?: LogContext): void {
-    const { traceId, tenantId, userId, agentId, ...rest } = context || {};
-    emit({
-        level,
-        event,
-        message,
-        timestamp: new Date().toISOString(),
+export const logger = pino({
+    level: process.env.LOG_LEVEL || (isDev ? "debug" : "info"),
+    redact: {
+        paths: REDACT_PATHS,
+        censor: "[REDACTED]"
+    },
+    ...(isDev
+        ? {
+              transport: {
+                  target: "pino-pretty",
+                  options: {
+                      colorize: true,
+                      translateTime: "SYS:HH:MM:ss",
+                      ignore: "pid,hostname"
+                  }
+              }
+          }
+        : {}),
+    base: {
         service: "agentc2",
-        traceId,
-        tenantId,
-        userId,
-        agentId,
-        ...rest
-    });
+        env: process.env.NODE_ENV || "development"
+    },
+    timestamp: pino.stdTimeFunctions.isoTime,
+    formatters: {
+        level(label) {
+            return { level: label };
+        }
+    }
+});
+
+export type Logger = pino.Logger;
+
+export interface RequestContext {
+    requestId?: string;
+    userId?: string;
+    organizationId?: string;
+    agentId?: string;
+    traceId?: string;
 }
 
+export function createRequestLogger(context: RequestContext): Logger {
+    return logger.child(context);
+}
+
+/**
+ * Backward-compatible security logger interface.
+ * Wraps pino logger for structured security event logging.
+ */
 export const securityLogger = {
-    debug: (event: string, context?: LogContext) => log("debug", event, event, context),
-    info: (event: string, context?: LogContext) => log("info", event, event, context),
-    warn: (event: string, context?: LogContext) => log("warn", event, event, context),
-    error: (event: string, context?: LogContext) => log("error", event, event, context),
+    debug: (event: string, context?: Record<string, unknown>) =>
+        logger.debug({ event, ...context }, event),
+    info: (event: string, context?: Record<string, unknown>) =>
+        logger.info({ event, ...context }, event),
+    warn: (event: string, context?: Record<string, unknown>) =>
+        logger.warn({ event, ...context }, event),
+    error: (event: string, context?: Record<string, unknown>) =>
+        logger.error({ event, ...context }, event),
 
     authLogin: (userId: string, ip?: string) =>
-        log("info", "auth.login", "User logged in", { userId, ip }),
+        logger.info({ event: "auth.login", userId, ip }, "User logged in"),
     authFailure: (email: string, ip?: string) =>
-        log("warn", "auth.failure", "Login failed", { email, ip } as LogContext),
-    authLogout: (userId: string) => log("info", "auth.logout", "User logged out", { userId }),
+        logger.warn({ event: "auth.failure", email, ip }, "Login failed"),
+    authLogout: (userId: string) =>
+        logger.info({ event: "auth.logout", userId }, "User logged out"),
 
     toolExecute: (toolName: string, agentId: string, status: string, durationMs?: number) =>
-        log("info", "tool.execute", `Tool ${toolName} ${status}`, {
-            agentId,
-            toolName,
-            status,
-            durationMs
-        } as LogContext),
+        logger.info(
+            { event: "tool.execute", toolName, agentId, status, durationMs },
+            `Tool ${toolName} ${status}`
+        ),
 
     credentialAccess: (connectionId: string, userId?: string, tenantId?: string) =>
-        log("info", "credential.access", "Credential decrypted", {
-            connectionId,
-            userId,
-            tenantId
-        }),
+        logger.info(
+            { event: "credential.access", connectionId, userId, tenantId },
+            "Credential decrypted"
+        ),
 
     guardrailBlock: (agentId: string, guardrailKey: string, direction: "input" | "output") =>
-        log("warn", "guardrail.blocked", `Guardrail ${guardrailKey} blocked ${direction}`, {
-            agentId,
-            guardrailKey,
-            direction
-        } as LogContext),
+        logger.warn(
+            { event: "guardrail.blocked", agentId, guardrailKey, direction },
+            `Guardrail ${guardrailKey} blocked ${direction}`
+        ),
 
     budgetViolation: (agentId: string, level: string, currentUsd: number, limitUsd: number) =>
-        log("warn", "budget.violation", `Budget ${level} limit exceeded`, {
-            agentId,
-            level,
-            currentUsd,
-            limitUsd
-        } as LogContext),
+        logger.warn(
+            { event: "budget.violation", agentId, level, currentUsd, limitUsd },
+            `Budget ${level} limit exceeded`
+        ),
 
     webhookReceived: (triggerId: string, verified: boolean) =>
-        log("info", "webhook.received", `Webhook ${verified ? "verified" : "unverified"}`, {
-            triggerId,
-            verified
-        } as LogContext),
+        logger.info(
+            { event: "webhook.received", triggerId, verified },
+            `Webhook ${verified ? "verified" : "unverified"}`
+        ),
 
     rateLimited: (key: string, ip?: string) =>
-        log("warn", "rate.limited", `Rate limit hit: ${key}`, { key, ip } as LogContext)
+        logger.warn({ event: "rate.limited", key, ip }, `Rate limit hit: ${key}`)
 };
+
+export type LogContext = Record<string, unknown>;

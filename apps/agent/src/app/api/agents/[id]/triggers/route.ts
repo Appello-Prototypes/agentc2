@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { randomBytes } from "crypto";
 import { mergeTriggerInputMapping, validateTriggerInputMapping } from "@/lib/unified-triggers";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/agents/[id]/triggers
@@ -10,12 +11,24 @@ import { mergeTriggerInputMapping, validateTriggerInputMapping } from "@/lib/uni
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const auth = await authenticateRequest(request);
+        if (!auth) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
 
-        // Find agent
         const agent = await prisma.agent.findFirst({
             where: {
-                OR: [{ slug: id }, { id: id }]
+                OR: [{ slug: id }, { id: id }],
+                workspaceId: {
+                    in: (
+                        await prisma.workspace.findMany({
+                            where: { organizationId: auth.organizationId },
+                            select: { id: true }
+                        })
+                    ).map((w) => w.id)
+                }
             }
         });
 
@@ -72,6 +85,11 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
+        const auth = await authenticateRequest(request);
+        if (!auth) {
+            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+        }
+
         const { id } = await params;
         const body = await request.json();
 
@@ -138,10 +156,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
-        // Find agent
         const agent = await prisma.agent.findFirst({
             where: {
-                OR: [{ slug: id }, { id: id }]
+                OR: [{ slug: id }, { id: id }],
+                workspaceId: {
+                    in: (
+                        await prisma.workspace.findMany({
+                            where: { organizationId: auth.organizationId },
+                            select: { id: true }
+                        })
+                    ).map((w) => w.id)
+                }
             }
         });
 

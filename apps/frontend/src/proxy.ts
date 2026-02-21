@@ -55,6 +55,9 @@ export const config = {
          * - /terms (Terms of Service)
          * - /privacy (Privacy Policy)
          * - /security (Security Policy)
+         * - /trust-center (Trust Center)
+         * - /subprocessors (Subprocessor List)
+         * - /ai-transparency (AI Transparency Statement)
          * - /docs/* (documentation pages)
          * - /blog/* (blog pages)
          * - /api/auth/* (Better Auth endpoints)
@@ -63,6 +66,6 @@ export const config = {
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          */
-        "/((?!api/auth|about|investor$|terms$|privacy$|security$|docs(?:/.*)?$|blog(?:/.*)?$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
+        "/((?!api/auth|about|investor$|terms$|privacy$|security$|trust-center$|subprocessors$|ai-transparency$|docs(?:/.*)?$|blog(?:/.*)?$|_next/static|_next/image|favicon.ico|.*\\..*|signup$)(?!$).*)"
     ]
 };

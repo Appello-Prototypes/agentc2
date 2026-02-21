@@ -93,7 +93,18 @@ export type AuditAction =
     // Agent Chain Invocation
     | "AGENT_CHAIN_INVOKE"
     // Budget Changes
-    | "BUDGET_CHANGE";
+    | "BUDGET_CHANGE"
+    // User & DSR
+    | "USER_DELETE"
+    | "USER_DATA_EXPORT"
+    | "DSR_CREATE"
+    | "DSR_COMPLETE"
+    // Consent
+    | "CONSENT_GRANT"
+    | "CONSENT_REVOKE"
+    // Account Freeze
+    | "ACCOUNT_FREEZE"
+    | "ACCOUNT_UNFREEZE";
 
 /**
  * Audit log entry options

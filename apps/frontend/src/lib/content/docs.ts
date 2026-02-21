@@ -218,14 +218,10 @@ function buildRichBody(
 }
 
 const launchPrioritySlugs = new Set<string>([
-    "getting-started/introduction",
     "getting-started/quickstart",
     "core-concepts/agents",
-    "core-concepts/networks",
-    "core-concepts/integrations",
     "guides/build-a-customer-support-agent",
-    "guides/multi-agent-orchestration",
-    "guides/deploy-to-slack"
+    "api-reference/mcp-overview"
 ]);
 
 function titleFromSlug(slug: string): string {

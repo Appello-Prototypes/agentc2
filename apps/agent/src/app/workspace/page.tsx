@@ -89,14 +89,16 @@ import {
     ClipboardListIcon,
     CheckIcon,
     AlertTriangleIcon,
-    ArrowUpCircleIcon
+    ArrowUpCircleIcon,
+    PhoneIcon,
+    PhoneOffIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
-import { ModelSelector, isAnthropicModel, type ModelOverride } from "@/components/ModelSelector";
-import { ThinkingToggle } from "@/components/ThinkingToggle";
+import { ModelSelector, type ModelOverride } from "@/components/ModelSelector";
 import { TaskSuggestions } from "@/components/TaskSuggestions";
 import { InteractiveQuestions } from "@/components/InteractiveQuestions";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
+import { useVoiceConversation, type VoiceState } from "@/hooks/useVoiceConversation";
 
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
@@ -399,6 +401,22 @@ function InputHeaderArea({ mode, onClearMode }: { mode: InputMode; onClearMode: 
     );
 }
 
+function getSupportedMimeType(): { mimeType: string; extension: string } {
+    const candidates: { mimeType: string; extension: string }[] = [
+        { mimeType: "audio/webm;codecs=opus", extension: "webm" },
+        { mimeType: "audio/webm", extension: "webm" },
+        { mimeType: "audio/mp4", extension: "m4a" },
+        { mimeType: "audio/ogg;codecs=opus", extension: "ogg" },
+        { mimeType: "audio/wav", extension: "wav" }
+    ];
+    for (const c of candidates) {
+        if (typeof MediaRecorder !== "undefined" && MediaRecorder.isTypeSupported(c.mimeType)) {
+            return c;
+        }
+    }
+    return { mimeType: "", extension: "webm" };
+}
+
 /**
  * Voice-to-text microphone button using the existing STT endpoint (Whisper).
  * Records audio via MediaRecorder, transcribes, and inserts text into the textarea.
@@ -428,7 +446,12 @@ function VoiceInputButton() {
     const startRecording = useCallback(async () => {
         try {
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            const mediaRecorder = new MediaRecorder(stream, { mimeType: "audio/webm" });
+            const { mimeType, extension } = getSupportedMimeType();
+
+            const recorderOptions: MediaRecorderOptions = {};
+            if (mimeType) recorderOptions.mimeType = mimeType;
+
+            const mediaRecorder = new MediaRecorder(stream, recorderOptions);
             audioChunksRef.current = [];
 
             mediaRecorder.ondataavailable = (event) => {
@@ -439,16 +462,20 @@ function VoiceInputButton() {
 
             mediaRecorder.onstop = async () => {
                 stream.getTracks().forEach((track) => track.stop());
-                const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+                const blobType = mimeType || "audio/webm";
+                const audioBlob = new Blob(audioChunksRef.current, { type: blobType });
                 setIsTranscribing(true);
 
                 try {
                     const formData = new FormData();
-                    formData.append("audio", audioBlob, "recording.webm");
+                    formData.append("audio", audioBlob, `recording.${extension}`);
                     const response = await fetch(`${getApiBase()}/api/demos/voice/stt`, {
                         method: "POST",
                         body: formData
                     });
+                    if (!response.ok) {
+                        throw new Error(`STT request failed: ${response.status}`);
+                    }
                     const data = await response.json();
                     if (data.transcript) {
                         insertTextIntoTextarea(data.transcript);
@@ -483,7 +510,6 @@ function VoiceInputButton() {
         }
     }, [isRecording, startRecording, stopRecording]);
 
-    // Hide if browser doesn't support MediaRecorder
     if (typeof window !== "undefined" && !navigator.mediaDevices?.getUserMedia) {
         return null;
     }
@@ -501,6 +527,97 @@ function VoiceInputButton() {
                 <MicIcon className="size-4" />
             )}
         </PromptInputButton>
+    );
+}
+
+const VOICE_STATE_LABELS: Record<VoiceState, string> = {
+    idle: "Tap to start",
+    listening: "Listening...",
+    processing: "Thinking...",
+    speaking: "Speaking..."
+};
+
+function VoiceConversationOverlay({
+    agentSlug,
+    onClose
+}: {
+    agentSlug: string;
+    onClose: () => void;
+}) {
+    const { state, currentTranscript, error, toggleVoice, stopAll, audioLevel } =
+        useVoiceConversation({
+            agentSlug,
+            continuous: true,
+            onError: (msg) => console.error("[VoiceConv]", msg)
+        });
+
+    const orbScale = 1 + audioLevel * 0.4;
+
+    return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+            <button
+                onClick={onClose}
+                className="absolute top-4 right-4 rounded-full p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Close voice conversation"
+            >
+                <PhoneOffIcon className="size-6" />
+            </button>
+
+            <div className="flex flex-col items-center gap-8">
+                {/* Pulsing orb */}
+                <button
+                    onClick={toggleVoice}
+                    className="relative flex size-32 items-center justify-center rounded-full transition-transform"
+                    style={{ transform: `scale(${orbScale})` }}
+                    aria-label={VOICE_STATE_LABELS[state]}
+                >
+                    <div
+                        className={[
+                            "absolute inset-0 rounded-full",
+                            state === "listening"
+                                ? "animate-pulse bg-red-500/30"
+                                : state === "processing"
+                                  ? "animate-pulse bg-yellow-500/20"
+                                  : state === "speaking"
+                                    ? "animate-pulse bg-blue-500/20"
+                                    : "bg-white/10"
+                        ].join(" ")}
+                    />
+                    <div
+                        className={[
+                            "relative flex size-24 items-center justify-center rounded-full",
+                            state === "listening"
+                                ? "bg-red-500"
+                                : state === "processing"
+                                  ? "bg-yellow-500"
+                                  : state === "speaking"
+                                    ? "bg-blue-500"
+                                    : "bg-white/20"
+                        ].join(" ")}
+                    >
+                        <MicIcon className="size-10 text-white" />
+                    </div>
+                </button>
+
+                <div className="text-center">
+                    <p className="text-lg font-medium text-white">{VOICE_STATE_LABELS[state]}</p>
+                    {currentTranscript && (
+                        <p className="mt-2 max-w-md text-sm text-white/60">{currentTranscript}</p>
+                    )}
+                    {error && <p className="mt-2 text-sm text-red-400">{error}</p>}
+                </div>
+
+                <button
+                    onClick={() => {
+                        stopAll();
+                        onClose();
+                    }}
+                    className="rounded-full bg-white/10 px-6 py-2 text-sm text-white transition-colors hover:bg-white/20"
+                >
+                    End conversation
+                </button>
+            </div>
+        </div>
     );
 }
 
@@ -600,7 +717,6 @@ export default function UnifiedChatPage() {
         searchParams.get("agent") || getDefaultAgentSlug()
     );
     const [modelOverride, setModelOverride] = useState<ModelOverride | null>(null);
-    const [thinkingEnabled, setThinkingEnabled] = useState(false);
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
     const [currentRunId, setCurrentRunId] = useState<string | null>(null);
     const [agentDefaultModel, setAgentDefaultModel] = useState<string | undefined>(undefined);
@@ -612,6 +728,7 @@ export default function UnifiedChatPage() {
     );
     const [inputMode, setInputMode] = useState<InputMode>(null);
     const [interactionMode, setInteractionMode] = useState<InteractionMode>("agent");
+    const [voiceConversationActive, setVoiceConversationActive] = useState(false);
 
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
@@ -620,8 +737,6 @@ export default function UnifiedChatPage() {
     const hasMessagesRef = useRef(false);
     const [titleVersion, setTitleVersion] = useState(0);
 
-    const currentModelName = modelOverride?.name || agentDefaultModel || null;
-    const showThinkingToggle = isAnthropicModel(currentModelName);
     const displayModelName = modelOverride?.name || agentDefaultModel || "";
     const modelDisplayText = MODEL_DISPLAY_MAP[displayModelName] || displayModelName;
 
@@ -636,9 +751,6 @@ export default function UnifiedChatPage() {
         if (currentRunId) bodyExtra.runId = currentRunId;
         bodyExtra.interactionMode = interactionMode;
         if (modelOverride) bodyExtra.modelOverride = modelOverride;
-        if (thinkingEnabled && isAnthropicModel(modelOverride?.name || null)) {
-            bodyExtra.thinkingOverride = { type: "enabled", budgetTokens: 10000 };
-        }
         return new DefaultChatTransport({
             api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
             body: bodyExtra
@@ -647,7 +759,6 @@ export default function UnifiedChatPage() {
         selectedAgentSlug,
         threadId,
         modelOverride,
-        thinkingEnabled,
         currentRunId,
         interactionMode,
         session?.user?.id
@@ -659,11 +770,39 @@ export default function UnifiedChatPage() {
     });
     const isStreaming = status === "streaming";
     const isSubmitted = status === "submitted";
-    const isBusy = isStreaming || isSubmitted;
     const hasMessages = messages.length > 0;
+
+    // Optimistic "effectively ready" detection: if the stream is technically
+    // still open but no new content has arrived for 2s and we already have
+    // visible text, consider the response complete so the UI unlocks fast.
+    const [effectivelyReady, setEffectivelyReady] = useState(false);
+    const lastContentHashRef = useRef("");
+    useEffect(() => {
+        if (!isStreaming) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset optimistic flag when stream ends
+            setEffectivelyReady(false);
+            lastContentHashRef.current = "";
+            return;
+        }
+        const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+        const textParts = lastAssistant?.parts?.filter(
+            (p) => p.type === "text" && (p as { text: string }).text.length > 0
+        );
+        if (!textParts || textParts.length === 0) return;
+
+        const hash = textParts.map((p) => (p as { text: string }).text).join("");
+        if (hash !== lastContentHashRef.current) {
+            lastContentHashRef.current = hash;
+            setEffectivelyReady(false);
+        }
+        const timer = setTimeout(() => setEffectivelyReady(true), 2_000);
+        return () => clearTimeout(timer);
+    }, [isStreaming, messages]);
+
+    const isBusy = (isStreaming || isSubmitted) && !effectivelyReady;
     const submitStatus = isSubmitted
         ? ("submitted" as const)
-        : isStreaming
+        : isStreaming && !effectivelyReady
           ? ("streaming" as const)
           : undefined;
 
@@ -737,7 +876,6 @@ export default function UnifiedChatPage() {
             if (newSlug !== selectedAgentSlug) {
                 setSelectedAgentSlug(newSlug);
                 setModelOverride(null);
-                setThinkingEnabled(false);
 
                 // CRITICAL: Finalize the current conversation run before switching agents.
                 // Without this, subsequent messages would try to add turns to the OLD agent's run.
@@ -952,6 +1090,7 @@ export default function UnifiedChatPage() {
             </PromptInputBody>
             <PromptInputFooter className="flex-wrap">
                 <PromptInputTools className="min-w-0 flex-wrap">
+                    <ChatInputActions setInputMode={setInputMode} />
                     {/* Mode Selector Dropdown: Ask / Agent / Plan */}
                     <DropdownMenu>
                         <DropdownMenuTrigger
@@ -998,8 +1137,14 @@ export default function UnifiedChatPage() {
                             })}
                         </DropdownMenuContent>
                     </DropdownMenu>
-                    <ChatInputActions setInputMode={setInputMode} />
                     <VoiceInputButton />
+                    <PromptInputButton
+                        onClick={() => setVoiceConversationActive(true)}
+                        aria-label="Voice conversation"
+                        title="Start voice conversation"
+                    >
+                        <PhoneIcon className="size-4" />
+                    </PromptInputButton>
                     <AgentSelector
                         value={selectedAgentSlug}
                         onChange={handleAgentChange}
@@ -1019,11 +1164,6 @@ export default function UnifiedChatPage() {
                             Auto
                         </span>
                     )}
-                    <ThinkingToggle
-                        enabled={thinkingEnabled}
-                        onChange={setThinkingEnabled}
-                        visible={showThinkingToggle}
-                    />
                 </PromptInputTools>
                 <PromptInputSubmit
                     className="shrink-0"
@@ -1213,12 +1353,21 @@ export default function UnifiedChatPage() {
         return null;
     };
 
+    // Voice conversation overlay (shared between landing and chat states)
+    const voiceOverlay = voiceConversationActive && selectedAgentSlug && (
+        <VoiceConversationOverlay
+            agentSlug={selectedAgentSlug}
+            onClose={() => setVoiceConversationActive(false)}
+        />
+    );
+
     // ═════════════════════════════════════════════════════════════════════════
     // LANDING STATE -- content at bottom, like CoWork
     // ═════════════════════════════════════════════════════════════════════════
     if (!hasMessages) {
         return (
             <div className="flex h-full">
+                {voiceOverlay}
                 <ConversationSidebar
                     activeId={null}
                     onSelect={handleLoadConversation}
@@ -1288,6 +1437,7 @@ export default function UnifiedChatPage() {
     // ═════════════════════════════════════════════════════════════════════════
     return (
         <div className="flex h-full">
+            {voiceOverlay}
             <ConversationSidebar
                 activeId={threadId}
                 onSelect={handleLoadConversation}
@@ -1304,11 +1454,6 @@ export default function UnifiedChatPage() {
                         {modelDisplayText && (
                             <Badge variant="outline" className="text-muted-foreground text-xs">
                                 {modelDisplayText}
-                            </Badge>
-                        )}
-                        {thinkingEnabled && (
-                            <Badge variant="outline" className="text-xs text-blue-500">
-                                Thinking
                             </Badge>
                         )}
                     </div>

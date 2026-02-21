@@ -499,25 +499,64 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     };
 
+                    const IDLE_TIMEOUT_MS = 3_000;
+                    let generationDone = false;
+
+                    async function drainTextWithIdleTimeout(
+                        stream: AsyncIterable<string>
+                    ): Promise<void> {
+                        const iterator = (
+                            stream as AsyncIterable<string> & {
+                                [Symbol.asyncIterator](): AsyncIterator<string>;
+                            }
+                        )[Symbol.asyncIterator]();
+
+                        while (true) {
+                            const raceTargets: Promise<
+                                IteratorResult<string, unknown> | { done: true; value: undefined }
+                            >[] = [iterator.next()];
+
+                            if (generationDone) {
+                                raceTargets.push(
+                                    new Promise((resolve) =>
+                                        setTimeout(
+                                            () => resolve({ done: true, value: undefined }),
+                                            IDLE_TIMEOUT_MS
+                                        )
+                                    )
+                                );
+                            }
+
+                            const result = await Promise.race(raceTargets);
+                            if (result.done) break;
+
+                            const chunk = result.value as string;
+                            fullOutput += chunk;
+                            writer.write({
+                                type: "text-delta",
+                                id: messageId,
+                                delta: chunk
+                            });
+                        }
+                    }
+
                     if (fullStream && textStream) {
-                        const toolPromise = (async () => {
-                            for await (const chunk of fullStream) {
-                                handleToolChunk(normalizeChunk(chunk));
+                        void (async () => {
+                            try {
+                                for await (const chunk of fullStream) {
+                                    handleToolChunk(normalizeChunk(chunk));
+                                }
+                            } catch (e) {
+                                console.error(
+                                    "[Public Chat] fullStream background drain error:",
+                                    e
+                                );
+                            } finally {
+                                generationDone = true;
                             }
                         })();
 
-                        const textPromise = (async () => {
-                            for await (const chunk of textStream) {
-                                fullOutput += chunk;
-                                writer.write({
-                                    type: "text-delta",
-                                    id: messageId,
-                                    delta: chunk
-                                });
-                            }
-                        })();
-
-                        await Promise.all([toolPromise, textPromise]);
+                        await drainTextWithIdleTimeout(textStream);
                     } else if (fullStream) {
                         for await (const chunk of fullStream) {
                             const c = normalizeChunk(chunk);
@@ -543,14 +582,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                             }
                         }
                     } else {
-                        for await (const chunk of textStream) {
-                            fullOutput += chunk;
-                            writer.write({
-                                type: "text-delta",
-                                id: messageId,
-                                delta: chunk
-                            });
-                        }
+                        await drainTextWithIdleTimeout(textStream);
                     }
 
                     writer.write({ type: "text-end", id: messageId });

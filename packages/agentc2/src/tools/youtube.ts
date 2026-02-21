@@ -137,7 +137,8 @@ async function fetchVideoMetadata(url: string): Promise<YouTubeVideoMetadata> {
             title: (data.title as string) || "",
             channel: (data.author_name as string) || ""
         };
-    } catch {
+    } catch (error) {
+        console.error("[YouTube] Failed to fetch video metadata via oEmbed:", error);
         return { title: "", channel: "" };
     }
 }
@@ -302,7 +303,10 @@ export const youtubeAnalyzeVideoTool = createTool({
 
         const [metadata, transcriptResult] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
-            fetchTranscript(normalizedUrl).catch(() => null)
+            fetchTranscript(normalizedUrl).catch((error) => {
+                console.error("[YouTube] Transcript fetch failed for analysis:", error);
+                return null;
+            })
         ]);
 
         const base = { title: metadata.title, channel: metadata.channel, analysisType: type };
@@ -370,7 +374,10 @@ export const youtubeIngestToKnowledgeTool = createTool({
 
         const [metadata, transcriptResult] = await Promise.all([
             fetchVideoMetadata(normalizedUrl),
-            fetchTranscript(normalizedUrl).catch(() => null)
+            fetchTranscript(normalizedUrl).catch((error) => {
+                console.error("[YouTube] Transcript fetch failed for ingestion:", error);
+                return null;
+            })
         ]);
 
         if (!transcriptResult?.content || transcriptResult.content.length < 20) {

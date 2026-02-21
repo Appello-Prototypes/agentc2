@@ -30,6 +30,14 @@ export interface TocEntry {
 
 const CONTENT_DIR = path.join(process.cwd(), "content", "docs");
 
+const ACTIVE_SECTIONS = [
+    "getting-started",
+    "core-concepts",
+    "guides",
+    "workspace",
+    "api-reference"
+];
+
 export function getAllDocSlugs(): string[] {
     const slugs: string[] = [];
 
@@ -37,15 +45,12 @@ export function getAllDocSlugs(): string[] {
         return slugs;
     }
 
-    const sections = fs
-        .readdirSync(CONTENT_DIR, { withFileTypes: true })
-        .filter((d) => d.isDirectory());
-
-    for (const section of sections) {
-        const sectionPath = path.join(CONTENT_DIR, section.name);
+    for (const sectionName of ACTIVE_SECTIONS) {
+        const sectionPath = path.join(CONTENT_DIR, sectionName);
+        if (!fs.existsSync(sectionPath)) continue;
         const files = fs.readdirSync(sectionPath).filter((f) => f.endsWith(".mdx"));
         for (const file of files) {
-            slugs.push(`${section.name}/${file.replace(".mdx", "")}`);
+            slugs.push(`${sectionName}/${file.replace(".mdx", "")}`);
         }
     }
 
@@ -96,15 +101,7 @@ export function getDocSections(): Array<{
         .readdirSync(CONTENT_DIR, { withFileTypes: true })
         .filter((d) => d.isDirectory());
 
-    const sectionOrder = [
-        "getting-started",
-        "core-concepts",
-        "guides",
-        "workspace",
-        "api-reference"
-    ];
-
-    const sectionSet = new Set(sectionOrder);
+    const sectionSet = new Set(ACTIVE_SECTIONS);
 
     return sectionDirs
         .filter((dir) => sectionSet.has(dir.name))
@@ -132,8 +129,8 @@ export function getDocSections(): Array<{
             };
         })
         .sort((a, b) => {
-            const ai = sectionOrder.indexOf(a.slug);
-            const bi = sectionOrder.indexOf(b.slug);
+            const ai = ACTIVE_SECTIONS.indexOf(a.slug);
+            const bi = ACTIVE_SECTIONS.indexOf(b.slug);
             return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
         });
 }
