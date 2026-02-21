@@ -44,14 +44,17 @@ export async function PATCH(
         }
 
         const data: Prisma.BacklogTaskUpdateInput = {};
+        if (body.title !== undefined) data.title = body.title;
+        if (body.description !== undefined) data.description = body.description;
         if (body.status) data.status = body.status;
         if (body.priority !== undefined) data.priority = body.priority;
+        if (body.tags !== undefined) data.tags = body.tags;
         if (body.lastAttemptNote) {
             data.lastAttemptNote = body.lastAttemptNote;
             data.lastAttemptAt = new Date();
         }
         if (body.result) data.result = body.result;
-        if (body.dueDate) data.dueDate = new Date(body.dueDate);
+        if (body.dueDate !== undefined) data.dueDate = body.dueDate ? new Date(body.dueDate) : null;
         if (body.status === "COMPLETED") data.completedAt = new Date();
 
         const updated = await prisma.backlogTask.update({

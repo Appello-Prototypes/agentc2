@@ -12,6 +12,7 @@ interface TaskDetailProps {
     agentSlug: string;
     onStatusChange: (taskId: string, status: string) => void;
     onDelete: (taskId: string) => void;
+    onEdit: (task: BacklogTask) => void;
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -34,7 +35,13 @@ function getPriorityLevel(priority: number): string {
     return "low";
 }
 
-export default function TaskDetail({ task, agentSlug, onStatusChange, onDelete }: TaskDetailProps) {
+export default function TaskDetail({
+    task,
+    agentSlug,
+    onStatusChange,
+    onDelete,
+    onEdit
+}: TaskDetailProps) {
     const router = useRouter();
     const [showPipelineModal, setShowPipelineModal] = useState(false);
     const [pipelineRepo, setPipelineRepo] = useState("");
@@ -311,6 +318,9 @@ export default function TaskDetail({ task, agentSlug, onStatusChange, onDelete }
                             Defer
                         </Button>
                     )}
+                    <Button variant="outline" size="sm" onClick={() => onEdit(task)}>
+                        Edit
+                    </Button>
                     <Button variant="destructive" size="sm" onClick={() => onDelete(task.id)}>
                         Delete
                     </Button>

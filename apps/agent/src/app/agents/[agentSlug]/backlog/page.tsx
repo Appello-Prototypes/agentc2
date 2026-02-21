@@ -8,6 +8,7 @@ import BacklogSummary from "./components/backlog-summary";
 import TaskCard from "./components/task-card";
 import TaskDetail from "./components/task-detail";
 import AddTaskDialog from "./components/add-task-dialog";
+import EditTaskDialog from "./components/edit-task-dialog";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ interface BacklogInfo {
     tasksByStatus: Record<string, number>;
 }
 
-type StatusGroup = "active" | "completed";
+const ALL_STATUSES = ["PENDING", "IN_PROGRESS", "COMPLETED", "FAILED", "DEFERRED"];
 
 // ─── Page Component ───────────────────────────────────────────────────────────
 
@@ -53,8 +54,11 @@ export default function BacklogPage() {
     const [tasks, setTasks] = useState<BacklogTask[]>([]);
     const [loading, setLoading] = useState(true);
     const [selectedTask, setSelectedTask] = useState<BacklogTask | null>(null);
-    const [statusGroup, setStatusGroup] = useState<StatusGroup>("active");
+    const [activeFilters, setActiveFilters] = useState<Set<string>>(
+        new Set(["PENDING", "IN_PROGRESS"])
+    );
     const [showAddDialog, setShowAddDialog] = useState(false);
+    const [editingTask, setEditingTask] = useState<BacklogTask | null>(null);
 
     const fetchBacklog = useCallback(async () => {
         try {
@@ -70,8 +74,11 @@ export default function BacklogPage() {
 
     const fetchTasks = useCallback(async () => {
         try {
-            const statusParam =
-                statusGroup === "active" ? "PENDING,IN_PROGRESS" : "COMPLETED,FAILED,DEFERRED";
+            const filtersToUse =
+                activeFilters.size === 0 || activeFilters.size === ALL_STATUSES.length
+                    ? ALL_STATUSES
+                    : Array.from(activeFilters);
+            const statusParam = filtersToUse.join(",");
             const res = await fetch(
                 `${getApiBase()}/api/backlogs/${agentSlug}/tasks?status=${statusParam}&sortBy=priority&limit=100`
             );
@@ -82,14 +89,13 @@ export default function BacklogPage() {
         } catch (err) {
             console.error("Failed to fetch tasks:", err);
         }
-    }, [agentSlug, statusGroup]);
+    }, [agentSlug, activeFilters]);
 
     const refreshAll = useCallback(() => {
         fetchBacklog();
         fetchTasks();
     }, [fetchBacklog, fetchTasks]);
 
-    // Initial data load
     useEffect(() => {
         let cancelled = false;
         async function loadInitial() {
@@ -102,11 +108,25 @@ export default function BacklogPage() {
         };
     }, [fetchBacklog, fetchTasks]);
 
-    // Auto-refresh every 30s
     useEffect(() => {
         const interval = setInterval(refreshAll, 30000);
         return () => clearInterval(interval);
     }, [refreshAll]);
+
+    const handleToggleFilter = useCallback((status: string) => {
+        setActiveFilters((prev) => {
+            if (status === "ALL") {
+                return new Set<string>();
+            }
+            const next = new Set(prev);
+            if (next.has(status)) {
+                next.delete(status);
+            } else {
+                next.add(status);
+            }
+            return next;
+        });
+    }, []);
 
     const handleStatusChange = async (taskId: string, newStatus: string) => {
         try {
@@ -117,9 +137,7 @@ export default function BacklogPage() {
             });
             const data = await res.json();
             if (data.success) {
-                // Refresh lists
                 await Promise.all([fetchBacklog(), fetchTasks()]);
-                // Update selected task if it's the one we changed
                 if (selectedTask?.id === taskId) {
                     setSelectedTask(data.task);
                 }
@@ -146,6 +164,10 @@ export default function BacklogPage() {
         }
     };
 
+    const handleEditTask = (task: BacklogTask) => {
+        setEditingTask(task);
+    };
+
     return (
         <div className="flex h-full flex-col overflow-hidden">
             {/* Header */}
@@ -167,39 +189,15 @@ export default function BacklogPage() {
                     </div>
                 </div>
 
-                {/* Summary badges */}
+                {/* Clickable filter badges */}
                 <div className="mt-3">
                     <BacklogSummary
                         tasksByStatus={backlog?.tasksByStatus || {}}
                         totalTasks={backlog?.totalTasks || 0}
                         loading={loading}
+                        activeFilters={activeFilters}
+                        onToggleFilter={handleToggleFilter}
                     />
-                </div>
-            </div>
-
-            {/* Status group tabs */}
-            <div className="border-b px-6 py-2">
-                <div className="flex gap-4">
-                    <button
-                        className={`pb-1 text-sm font-medium transition-colors ${
-                            statusGroup === "active"
-                                ? "border-primary text-foreground border-b-2"
-                                : "text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => setStatusGroup("active")}
-                    >
-                        Active
-                    </button>
-                    <button
-                        className={`pb-1 text-sm font-medium transition-colors ${
-                            statusGroup === "completed"
-                                ? "border-primary text-foreground border-b-2"
-                                : "text-muted-foreground hover:text-foreground"
-                        }`}
-                        onClick={() => setStatusGroup("completed")}
-                    >
-                        Completed / Closed
-                    </button>
                 </div>
             </div>
 
@@ -218,19 +216,15 @@ export default function BacklogPage() {
                             <div className="text-muted-foreground mb-4 text-4xl">{"[ ]"}</div>
                             <h3 className="text-lg font-medium">No tasks</h3>
                             <p className="text-muted-foreground mt-1 text-sm">
-                                {statusGroup === "active"
-                                    ? "No active tasks in this backlog."
-                                    : "No completed or closed tasks."}
+                                No tasks match the current filters.
                             </p>
-                            {statusGroup === "active" && (
-                                <Button
-                                    size="sm"
-                                    className="mt-4"
-                                    onClick={() => setShowAddDialog(true)}
-                                >
-                                    Add First Task
-                                </Button>
-                            )}
+                            <Button
+                                size="sm"
+                                className="mt-4"
+                                onClick={() => setShowAddDialog(true)}
+                            >
+                                Add Task
+                            </Button>
                         </div>
                     ) : (
                         <div className="space-y-1 p-2">
@@ -241,6 +235,8 @@ export default function BacklogPage() {
                                     isSelected={selectedTask?.id === task.id}
                                     onSelect={setSelectedTask}
                                     onStatusChange={handleStatusChange}
+                                    onEdit={handleEditTask}
+                                    onDelete={handleDeleteTask}
                                 />
                             ))}
                         </div>
@@ -254,6 +250,7 @@ export default function BacklogPage() {
                         agentSlug={agentSlug}
                         onStatusChange={handleStatusChange}
                         onDelete={handleDeleteTask}
+                        onEdit={handleEditTask}
                     />
                 </div>
             </div>
@@ -263,10 +260,16 @@ export default function BacklogPage() {
                 agentSlug={agentSlug}
                 open={showAddDialog}
                 onClose={() => setShowAddDialog(false)}
-                onTaskAdded={() => {
-                    fetchBacklog();
-                    fetchTasks();
-                }}
+                onTaskAdded={refreshAll}
+            />
+
+            {/* Edit task dialog */}
+            <EditTaskDialog
+                agentSlug={agentSlug}
+                task={editingTask}
+                open={!!editingTask}
+                onClose={() => setEditingTask(null)}
+                onTaskUpdated={refreshAll}
             />
         </div>
     );

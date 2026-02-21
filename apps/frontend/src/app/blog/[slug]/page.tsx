@@ -87,8 +87,7 @@ export default async function BlogDetailPage({ params }: BlogDetailProps) {
                 </h1>
                 <p className="text-muted-foreground mt-3 leading-relaxed">{post.description}</p>
                 <p className="text-muted-foreground mt-4 text-sm">
-                    By {post.author} · Published {post.publishedAt} · Updated {post.updatedAt} ·{" "}
-                    {post.readMinutes} min read
+                    By {post.author} · {post.readMinutes} min read
                 </p>
             </header>
 

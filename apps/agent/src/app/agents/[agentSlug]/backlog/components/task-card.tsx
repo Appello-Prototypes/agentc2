@@ -1,6 +1,17 @@
 "use client";
 
-import { Badge, cn } from "@repo/ui";
+import {
+    Badge,
+    cn,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuSub,
+    DropdownMenuSubContent,
+    DropdownMenuSubTrigger,
+    DropdownMenuTrigger
+} from "@repo/ui";
 import { formatRelativeTime } from "@/components/run-detail-utils";
 import type { BacklogTask } from "../page";
 
@@ -9,6 +20,8 @@ interface TaskCardProps {
     isSelected: boolean;
     onSelect: (task: BacklogTask) => void;
     onStatusChange: (taskId: string, status: string) => void;
+    onEdit: (task: BacklogTask) => void;
+    onDelete: (taskId: string) => void;
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
@@ -39,13 +52,20 @@ function getPriorityLevel(priority: number): string {
     return "low";
 }
 
-export default function TaskCard({ task, isSelected, onSelect, onStatusChange }: TaskCardProps) {
+export default function TaskCard({
+    task,
+    isSelected,
+    onSelect,
+    onStatusChange,
+    onEdit,
+    onDelete
+}: TaskCardProps) {
     const priorityLevel = getPriorityLevel(task.priority);
 
     return (
         <div
             className={cn(
-                "cursor-pointer rounded-lg border px-4 py-3 transition-colors",
+                "group cursor-pointer rounded-lg border px-4 py-3 transition-colors",
                 isSelected ? "border-primary bg-accent" : "hover:bg-accent/50 border-transparent"
             )}
             onClick={() => onSelect(task)}
@@ -67,21 +87,12 @@ export default function TaskCard({ task, isSelected, onSelect, onStatusChange }:
                         </p>
                     )}
                     <div className="mt-2 flex items-center gap-2">
-                        <select
-                            className="bg-background text-muted-foreground cursor-pointer rounded border px-1.5 py-0.5 text-[10px]"
-                            value={task.status}
-                            onChange={(e) => {
-                                e.stopPropagation();
-                                onStatusChange(task.id, e.target.value);
-                            }}
-                            onClick={(e) => e.stopPropagation()}
+                        <Badge
+                            variant="outline"
+                            className={`text-[10px] ${STATUS_COLORS[task.status] || ""}`}
                         >
-                            {Object.entries(STATUS_LABELS).map(([value, label]) => (
-                                <option key={value} value={value}>
-                                    {label}
-                                </option>
-                            ))}
-                        </select>
+                            {STATUS_LABELS[task.status] || task.status}
+                        </Badge>
                         {task.tags.length > 0 && (
                             <div className="flex gap-1">
                                 {task.tags.slice(0, 2).map((tag) => (
@@ -103,12 +114,62 @@ export default function TaskCard({ task, isSelected, onSelect, onStatusChange }:
                     </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1">
-                    <Badge
-                        variant="outline"
-                        className={`text-[10px] ${STATUS_COLORS[task.status] || ""}`}
-                    >
-                        {STATUS_LABELS[task.status] || task.status}
-                    </Badge>
+                    <DropdownMenu>
+                        <DropdownMenuTrigger
+                            render={
+                                <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground hover:bg-accent -mt-1 -mr-2 flex h-7 w-7 items-center justify-center rounded-md opacity-0 transition-opacity group-hover:opacity-100 data-[state=open]:opacity-100"
+                                    onClick={(e) => e.stopPropagation()}
+                                />
+                            }
+                        >
+                            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                                <circle cx="8" cy="3" r="1.5" />
+                                <circle cx="8" cy="8" r="1.5" />
+                                <circle cx="8" cy="13" r="1.5" />
+                            </svg>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                            <DropdownMenuSub>
+                                <DropdownMenuSubTrigger>Set Status</DropdownMenuSubTrigger>
+                                <DropdownMenuSubContent>
+                                    {Object.entries(STATUS_LABELS).map(([value, label]) => (
+                                        <DropdownMenuItem
+                                            key={value}
+                                            disabled={task.status === value}
+                                            onClick={() => onStatusChange(task.id, value)}
+                                        >
+                                            <span
+                                                className={cn(
+                                                    "mr-2 inline-block h-2 w-2 rounded-full",
+                                                    value === "PENDING" && "bg-amber-400",
+                                                    value === "IN_PROGRESS" && "bg-blue-400",
+                                                    value === "COMPLETED" && "bg-emerald-400",
+                                                    value === "FAILED" && "bg-red-400",
+                                                    value === "DEFERRED" && "bg-gray-400"
+                                                )}
+                                            />
+                                            {label}
+                                            {task.status === value && (
+                                                <span className="text-muted-foreground ml-auto text-xs">
+                                                    current
+                                                </span>
+                                            )}
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuSubContent>
+                            </DropdownMenuSub>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => onEdit(task)}>Edit</DropdownMenuItem>
+                            <DropdownMenuItem
+                                className="text-red-400 focus:text-red-400"
+                                onClick={() => onDelete(task.id)}
+                            >
+                                Delete
+                            </DropdownMenuItem>
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                     <span className="text-muted-foreground text-[10px]">
                         {formatRelativeTime(task.createdAt)}
                     </span>

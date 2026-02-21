@@ -92,7 +92,7 @@ export default async function BlogIndexPage({ searchParams }: BlogIndexProps) {
                             {post.description}
                         </p>
                         <p className="text-muted-foreground mt-4 text-xs">
-                            {post.publishedAt} · {post.readMinutes} min read
+                            {post.readMinutes} min read
                         </p>
                     </li>
                 ))}
