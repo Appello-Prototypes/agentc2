@@ -145,8 +145,8 @@ export async function POST(request: NextRequest) {
         console.log(`[Live Agent MCP] Incoming request at ${new Date().toISOString()}`);
         console.log(`[Live Agent MCP] Agent: ${agentSlug}`);
         console.log(`[Live Agent MCP] Tool: ${tool}`);
-        console.log(`[Live Agent MCP] Parameters:`, JSON.stringify(parameters, null, 2));
-        console.log(`[Live Agent MCP] Raw body:`, JSON.stringify(body, null, 2));
+        console.log(`[Live Agent MCP] Parameters:`, Object.keys(parameters || {}));
+        console.log(`[Live Agent MCP] Body keys:`, Object.keys(body || {}));
 
         if (!tool) {
             console.log(`[Live Agent MCP] ERROR: Missing tool field`);

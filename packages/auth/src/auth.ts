@@ -45,6 +45,32 @@ export function onPostBootstrap(cb: PostBootstrapCallback): void {
     postBootstrapCallbacks.push(cb);
 }
 
+export type AuthEventType = "login_success" | "login_failure" | "logout" | "session_created";
+export interface AuthEvent {
+    type: AuthEventType;
+    userId?: string;
+    email?: string;
+    ip?: string;
+    path?: string;
+}
+
+type AuthEventCallback = (event: AuthEvent) => Promise<void>;
+const authEventCallbacks: AuthEventCallback[] = [];
+
+export function onAuthEvent(cb: AuthEventCallback): void {
+    authEventCallbacks.push(cb);
+}
+
+async function emitAuthEvent(event: AuthEvent): Promise<void> {
+    for (const cb of authEventCallbacks) {
+        try {
+            await cb(event);
+        } catch (err) {
+            console.error("[Auth Event] Callback failed:", err);
+        }
+    }
+}
+
 export const auth = betterAuth({
     database: prismaAdapter(prisma, {
         provider: "postgresql"
@@ -79,11 +105,11 @@ export const auth = betterAuth({
             : {})
     },
     session: {
-        expiresIn: 60 * 60 * 24, // 24 hours
-        updateAge: 60 * 60 * 6, // Update every 6 hours
+        expiresIn: 60 * 30, // 30-minute idle timeout (session expires if no activity)
+        updateAge: 60 * 2, // Refresh session every 2 minutes of activity
         cookieCache: {
             enabled: true,
-            maxAge: 60 * 5 // 5 minutes
+            maxAge: 60 // 1-minute cache for timely session freshness checks
         }
     },
     secret: process.env.BETTER_AUTH_SECRET!,
@@ -102,9 +128,39 @@ export const auth = betterAuth({
     // page where the user can choose to join a suggested org or create their own.
     hooks: {
         after: createAuthMiddleware(async (ctx) => {
+            // Auth event logging
+            if (ctx.path === "/sign-in/email" || ctx.path === "/sign-in/social") {
+                const newSession = ctx.context.newSession;
+                if (newSession) {
+                    await emitAuthEvent({
+                        type: "login_success",
+                        userId: newSession.user.id,
+                        email: newSession.user.email,
+                        path: ctx.path
+                    });
+                }
+            }
+            if (ctx.path === "/sign-out") {
+                const session = ctx.context.session;
+                if (session) {
+                    await emitAuthEvent({
+                        type: "logout",
+                        userId: session.user.id,
+                        path: ctx.path
+                    });
+                }
+            }
+
             if (ctx.path === "/callback/:id") {
                 const newSession = ctx.context.newSession;
                 if (newSession) {
+                    await emitAuthEvent({
+                        type: "session_created",
+                        userId: newSession.user.id,
+                        email: newSession.user.email,
+                        path: ctx.path
+                    });
+
                     // Check if the new user already has an org membership
                     const existing = await prisma.membership.findFirst({
                         where: { userId: newSession.user.id }

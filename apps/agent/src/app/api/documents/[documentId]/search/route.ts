@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { searchDocumentRecords } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 type RouteContext = { params: Promise<{ documentId: string }> };
 
@@ -34,9 +35,12 @@ export async function POST(request: NextRequest, context: RouteContext) {
             return NextResponse.json({ error: "query is required" }, { status: 400 });
         }
 
+        const organizationId = await getUserOrganizationId(userId);
+
         const results = await searchDocumentRecords({
             query: body.query,
             documentId,
+            organizationId: organizationId || undefined,
             topK: body.topK,
             minScore: body.minScore
         });

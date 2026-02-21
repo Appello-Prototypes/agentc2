@@ -175,8 +175,8 @@ POST /api/agents/{id}/evaluations
 
 | File                                                      | Change                                                   |
 | --------------------------------------------------------- | -------------------------------------------------------- |
-| `packages/agentc2/src/scorers/index.ts`                    | Replace `createAnswerRelevancyScorer` with custom scorer |
-| `packages/agentc2/src/scorers/tier1.ts`                    | Fix word-overlap relevancy (lines 112-126)               |
+| `packages/agentc2/src/scorers/index.ts`                   | Replace `createAnswerRelevancyScorer` with custom scorer |
+| `packages/agentc2/src/scorers/tier1.ts`                   | Fix word-overlap relevancy (lines 112-126)               |
 | `apps/agent/src/app/api/agents/[id]/evaluations/route.ts` | No change needed (uses scorer via registry)              |
 
 ## Acceptance Criteria

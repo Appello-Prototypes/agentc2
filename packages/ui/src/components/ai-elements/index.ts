@@ -207,6 +207,9 @@ export {
 // Tool Invocation Card
 export { ToolInvocationCard, type ToolInvocationCardProps } from "./tool-invocation-card";
 
+// Code Diff Card
+export { CodeDiffCard, isDiffResult, type CodeDiffCardProps } from "./code-diff-card";
+
 // Artifact
 export {
     Artifact,

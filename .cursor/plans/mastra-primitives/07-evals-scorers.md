@@ -489,8 +489,8 @@ For example, you can use it like this:
 
 ## Files Changed
 
-| File                                      | Action              |
-| ----------------------------------------- | ------------------- |
+| File                                       | Action              |
+| ------------------------------------------ | ------------------- |
 | `packages/agentc2/package.json`            | Add @mastra/evals   |
 | `packages/agentc2/src/scorers/index.ts`    | Create              |
 | `packages/agentc2/src/agents/evaluated.ts` | Create              |

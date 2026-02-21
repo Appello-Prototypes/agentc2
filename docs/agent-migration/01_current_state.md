@@ -250,8 +250,8 @@ export const toolRegistry: Record<string, Tool> = {
 
 ### Agent Definition Files
 
-| File                                       | Purpose                                    |
-| ------------------------------------------ | ------------------------------------------ |
+| File                                        | Purpose                                    |
+| ------------------------------------------- | ------------------------------------------ |
 | `packages/agentc2/src/agents/assistant.ts`  | Main AI Assistant with memory and tools    |
 | `packages/agentc2/src/agents/structured.ts` | Structured output agent with Zod schemas   |
 | `packages/agentc2/src/agents/vision.ts`     | Image analysis agent                       |
@@ -265,6 +265,6 @@ export const toolRegistry: Record<string, Tool> = {
 
 | File                                     | Purpose                   |
 | ---------------------------------------- | ------------------------- |
-| `packages/agentc2/src/mastra.ts`          | Mastra singleton instance |
-| `packages/agentc2/src/tools/registry.ts`  | Tool registry             |
+| `packages/agentc2/src/mastra.ts`         | Mastra singleton instance |
+| `packages/agentc2/src/tools/registry.ts` | Tool registry             |
 | `packages/database/prisma/schema.prisma` | Database schema           |

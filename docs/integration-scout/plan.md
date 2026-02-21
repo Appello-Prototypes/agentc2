@@ -13,28 +13,28 @@ This is manual, tedious, and doesn't scale. We need an autonomous agent that can
 
 ### Existing Assets
 
-| Agent | Purpose | Reusable? |
-|-------|---------|-----------|
-| `browser-agent` | Playwright + Firecrawl + code execution | Yes — core browsing capability |
-| `mcp-setup-agent` | Parses MCP JSON, creates connections | Yes — connection creation |
-| `web-scraper-specialist` | Firecrawl-focused scraping | Partially — for docs discovery |
+| Agent                    | Purpose                                 | Reusable?                      |
+| ------------------------ | --------------------------------------- | ------------------------------ |
+| `browser-agent`          | Playwright + Firecrawl + code execution | Yes — core browsing capability |
+| `mcp-setup-agent`        | Parses MCP JSON, creates connections    | Yes — connection creation      |
+| `web-scraper-specialist` | Firecrawl-focused scraping              | Partially — for docs discovery |
 
 ### Active Integrations
 
-| Integration | Provider Key | Status | Notes |
-|------------|-------------|--------|-------|
-| Playwright | `playwright` | Connected | Browser automation |
-| Firecrawl | `firecrawl` | Connected | Web scraping |
-| Gmail | `gmail` | Connected | 3 accounts (corey@, nathan@, tmckenna@) |
-| Slack | `slack` | Connected | Notifications |
-| HubSpot | `hubspot` | Connected | CRM |
-| Jira | `jira` | Connected | Project management |
-| GitHub | `github` | Connected | Code repos |
-| Google Calendar | `google-calendar` | Connected | 3 accounts |
-| Google Drive | `google-drive` | Connected | 3 accounts |
-| Fathom | `fathom` | Connected | Meeting recordings |
-| ATLAS | `atlas` | Connected | n8n workflows |
-| JustCall | `justcall` | Connected | Phone/SMS (for 2FA) |
+| Integration     | Provider Key      | Status    | Notes                                   |
+| --------------- | ----------------- | --------- | --------------------------------------- |
+| Playwright      | `playwright`      | Connected | Browser automation                      |
+| Firecrawl       | `firecrawl`       | Connected | Web scraping                            |
+| Gmail           | `gmail`           | Connected | 3 accounts (corey@, nathan@, tmckenna@) |
+| Slack           | `slack`           | Connected | Notifications                           |
+| HubSpot         | `hubspot`         | Connected | CRM                                     |
+| Jira            | `jira`            | Connected | Project management                      |
+| GitHub          | `github`          | Connected | Code repos                              |
+| Google Calendar | `google-calendar` | Connected | 3 accounts                              |
+| Google Drive    | `google-drive`    | Connected | 3 accounts                              |
+| Fathom          | `fathom`          | Connected | Meeting recordings                      |
+| ATLAS           | `atlas`           | Connected | n8n workflows                           |
+| JustCall        | `justcall`        | Connected | Phone/SMS (for 2FA)                     |
 
 ### Disconnected Providers (Opportunity)
 
@@ -65,30 +65,30 @@ The human receives a Slack DM with a weekly integration expansion report showing
 ```mermaid
 graph TB
     TRIGGER[Scheduled Trigger<br/>Weekly or On-Demand] --> SCOUT[Integration Scout<br/>Orchestrator Agent]
-    
+
     SCOUT -->|"Step 1: What's available?"| DISCOVER[Discovery Phase]
     DISCOVER -->|List disconnected providers| PLATFORM_API[AgentC2 Platform API]
     DISCOVER -->|Research sign-up flows| FIRECRAWL[Firecrawl + Web Search]
-    
+
     SCOUT -->|"Step 2: Can we sign up?"| EVALUATE[Evaluation Phase]
     EVALUATE -->|Check free tier, API docs| BROWSER[Playwright Browser]
     EVALUATE -->|Score feasibility| CODE[Code Execution]
-    
+
     SCOUT -->|"Step 3: Create account"| SIGNUP[Account Creation Phase]
     SIGNUP -->|Navigate sign-up page| BROWSER
     SIGNUP -->|Fill forms, click buttons| BROWSER
     SIGNUP -->|Read confirmation emails| GMAIL[Gmail Integration]
     SIGNUP -->|Handle email 2FA| GMAIL
     SIGNUP -->|Handle SMS 2FA| JUSTCALL[JustCall SMS]
-    
+
     SCOUT -->|"Step 4: Configure"| CONFIGURE[Configuration Phase]
     CONFIGURE -->|Find API key page| BROWSER
     CONFIGURE -->|Create connection| PLATFORM_API
-    
+
     SCOUT -->|"Step 5: Validate"| VALIDATE[Validation Phase]
     VALIDATE -->|Test tool calls| PLATFORM_API
     VALIDATE -->|Record results| WORKSPACE[Workspace Files]
-    
+
     SCOUT -->|"Step 6: Report"| REPORT[Reporting Phase]
     REPORT -->|DM results| SLACK[Slack]
     REPORT -->|Save history| WORKSPACE
@@ -96,21 +96,21 @@ graph TB
 
 ### Execution Flow
 
-| Phase | Step | What Happens |
-|-------|------|-------------|
-| Trigger | 0 | Weekly cron or manual invoke |
-| Discover | 1 | List all disconnected providers from AgentC2 catalog |
-| Discover | 2 | For each provider, web-search for sign-up page, pricing, API docs |
-| Evaluate | 3 | Score each provider: free tier? API access? MCP server? Auth complexity? |
-| Evaluate | 4 | Rank providers by feasibility, pick top candidates |
-| Sign Up | 5 | Navigate to sign-up page via Playwright |
-| Sign Up | 6 | Fill registration form (name, email, password) |
-| Sign Up | 7 | Check Gmail for confirmation email, click verification link |
-| Sign Up | 8 | Handle 2FA if required (email code or SMS via JustCall) |
-| Configure | 9 | Navigate to API settings, generate API key |
-| Configure | 10 | Create IntegrationConnection on AgentC2 with credentials |
-| Validate | 11 | Test connection by listing tools and invoking a simple one |
-| Report | 12 | Post results to Slack, save to workspace files |
+| Phase     | Step | What Happens                                                             |
+| --------- | ---- | ------------------------------------------------------------------------ |
+| Trigger   | 0    | Weekly cron or manual invoke                                             |
+| Discover  | 1    | List all disconnected providers from AgentC2 catalog                     |
+| Discover  | 2    | For each provider, web-search for sign-up page, pricing, API docs        |
+| Evaluate  | 3    | Score each provider: free tier? API access? MCP server? Auth complexity? |
+| Evaluate  | 4    | Rank providers by feasibility, pick top candidates                       |
+| Sign Up   | 5    | Navigate to sign-up page via Playwright                                  |
+| Sign Up   | 6    | Fill registration form (name, email, password)                           |
+| Sign Up   | 7    | Check Gmail for confirmation email, click verification link              |
+| Sign Up   | 8    | Handle 2FA if required (email code or SMS via JustCall)                  |
+| Configure | 9    | Navigate to API settings, generate API key                               |
+| Configure | 10   | Create IntegrationConnection on AgentC2 with credentials                 |
+| Validate  | 11   | Test connection by listing tools and invoking a simple one               |
+| Report    | 12   | Post results to Slack, save to workspace files                           |
 
 ### Rationale
 
@@ -124,18 +124,19 @@ graph TB
 
 ## Section 4: Pre-Requisites
 
-| # | Item | Current State | Action Required |
-|---|------|--------------|-----------------|
-| P1 | Dedicated email for sign-ups | Gmail connected for existing accounts | Use or create a dedicated email (e.g., integrations@useappello.com) |
-| P2 | Playwright tools available | Connected, active | ✅ Ready |
-| P3 | Firecrawl tools available | Connected, active | ✅ Ready |
-| P4 | Gmail read/send tools | Connected for 3 accounts | ✅ Ready (use one of the existing accounts) |
-| P5 | JustCall for SMS 2FA | Connected, active | ✅ Ready (need to identify a number for SMS 2FA) |
-| P6 | Platform API tools for creating connections | Available via platform tools | Need to verify `integration_connection_create` works for agent-to-agent |
-| P7 | Secure credential storage | Agent workspace files | Credentials will be stored via IntegrationConnection (encrypted at rest) |
-| P8 | Standard password for sign-ups | Not configured | Need a secure, unique password strategy (generate per-service) |
+| #   | Item                                        | Current State                         | Action Required                                                          |
+| --- | ------------------------------------------- | ------------------------------------- | ------------------------------------------------------------------------ |
+| P1  | Dedicated email for sign-ups                | Gmail connected for existing accounts | Use or create a dedicated email (e.g., integrations@useappello.com)      |
+| P2  | Playwright tools available                  | Connected, active                     | ✅ Ready                                                                 |
+| P3  | Firecrawl tools available                   | Connected, active                     | ✅ Ready                                                                 |
+| P4  | Gmail read/send tools                       | Connected for 3 accounts              | ✅ Ready (use one of the existing accounts)                              |
+| P5  | JustCall for SMS 2FA                        | Connected, active                     | ✅ Ready (need to identify a number for SMS 2FA)                         |
+| P6  | Platform API tools for creating connections | Available via platform tools          | Need to verify `integration_connection_create` works for agent-to-agent  |
+| P7  | Secure credential storage                   | Agent workspace files                 | Credentials will be stored via IntegrationConnection (encrypted at rest) |
+| P8  | Standard password for sign-ups              | Not configured                        | Need a secure, unique password strategy (generate per-service)           |
 
 ### Fallback Behavior
+
 - If CAPTCHA blocks sign-up → Skip, flag for human intervention, try next provider
 - If OAuth-only (no API key) → Flag as "requires human OAuth flow", skip
 - If SMS 2FA and no JustCall number → Flag for human, skip
@@ -147,42 +148,43 @@ graph TB
 
 ### 5.1 Identity
 
-| Field | Value |
-|-------|-------|
-| **slug** | `integration-scout` |
-| **name** | Integration Scout |
+| Field           | Value                                                                                                                                                                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **slug**        | `integration-scout`                                                                                                                                                                                                                    |
+| **name**        | Integration Scout                                                                                                                                                                                                                      |
 | **description** | Autonomous integration expansion agent. Discovers disconnected SaaS providers, evaluates feasibility, creates accounts, configures connections, and validates end-to-end — expanding the platform's integration catalog automatically. |
-| **type** | USER |
+| **type**        | USER                                                                                                                                                                                                                                   |
 
 ### 5.2 Model Configuration
 
-| Field | Value | Rationale |
-|-------|-------|-----------|
-| **modelProvider** | anthropic | Best at complex multi-step reasoning with tool use |
-| **modelName** | claude-sonnet-4-20250514 | Strong reasoning, good at form-filling and web navigation |
-| **temperature** | 0.2 | Low creativity — we want reliable, deterministic sign-up flows |
-| **maxTokens** | 8192 | Needs room for detailed analysis and reporting |
+| Field             | Value                    | Rationale                                                      |
+| ----------------- | ------------------------ | -------------------------------------------------------------- |
+| **modelProvider** | anthropic                | Best at complex multi-step reasoning with tool use             |
+| **modelName**     | claude-sonnet-4-20250514 | Strong reasoning, good at form-filling and web navigation      |
+| **temperature**   | 0.2                      | Low creativity — we want reliable, deterministic sign-up flows |
+| **maxTokens**     | 8192                     | Needs room for detailed analysis and reporting                 |
 
 ### 5.3 Tools
 
-| Tool ID | Purpose |
-|---------|---------|
-| `web-search` | Find sign-up pages, API docs, pricing pages |
-| `web-scrape` | Extract content from documentation pages |
-| `web-fetch` | Quick page content retrieval |
-| `execute-code` | Data processing, feasibility scoring, report generation |
-| `write-workspace-file` | Save integration attempt history, credentials staging |
-| `read-workspace-file` | Read previous attempt history, avoid re-trying failed integrations |
-| `list-workspace-files` | Check existing workspace state |
-| `calculator` | Quick math for scoring |
-| `date-time` | Timestamp operations |
-| `gmail-list-emails` | Check for confirmation emails, 2FA codes |
-| `gmail-read-email` | Read email content for verification links and codes |
-| `gmail-archive-email` | Clean up processed confirmation emails |
-| `slack_slack_post_message` | Report results to Slack |
-| `slack_slack_lookup_user_by_email` | Find Corey's Slack user ID for DM |
+| Tool ID                            | Purpose                                                            |
+| ---------------------------------- | ------------------------------------------------------------------ |
+| `web-search`                       | Find sign-up pages, API docs, pricing pages                        |
+| `web-scrape`                       | Extract content from documentation pages                           |
+| `web-fetch`                        | Quick page content retrieval                                       |
+| `execute-code`                     | Data processing, feasibility scoring, report generation            |
+| `write-workspace-file`             | Save integration attempt history, credentials staging              |
+| `read-workspace-file`              | Read previous attempt history, avoid re-trying failed integrations |
+| `list-workspace-files`             | Check existing workspace state                                     |
+| `calculator`                       | Quick math for scoring                                             |
+| `date-time`                        | Timestamp operations                                               |
+| `gmail-list-emails`                | Check for confirmation emails, 2FA codes                           |
+| `gmail-read-email`                 | Read email content for verification links and codes                |
+| `gmail-archive-email`              | Clean up processed confirmation emails                             |
+| `slack_slack_post_message`         | Report results to Slack                                            |
+| `slack_slack_lookup_user_by_email` | Find Corey's Slack user ID for DM                                  |
 
 Note: Playwright and Firecrawl tools will be available via MCP integration. The specific tool IDs will be discovered during the platform tool listing. Key Playwright tools needed:
+
 - `playwright_browser_navigate`
 - `playwright_browser_snapshot`
 - `playwright_browser_click`
@@ -193,6 +195,7 @@ Note: Playwright and Firecrawl tools will be available via MCP integration. The 
 - `playwright_browser_evaluate`
 
 Key Firecrawl tools needed:
+
 - `firecrawl_firecrawl_search`
 - `firecrawl_firecrawl_scrape`
 - `firecrawl_firecrawl_extract`
@@ -201,29 +204,29 @@ Key Firecrawl tools needed:
 
 None initially — single agent with high step count. If we find that 40 steps isn't enough for a full sign-up + test cycle, we'll break it into a network with:
 
-| Sub-Agent Slug | Delegation Purpose |
-|---------------|-------------------|
+| Sub-Agent Slug           | Delegation Purpose              |
+| ------------------------ | ------------------------------- |
 | `integration-researcher` | Discovery + feasibility scoring |
-| `account-creator` | Playwright-driven sign-up flows |
-| `integration-validator` | Post-connection testing |
+| `account-creator`        | Playwright-driven sign-up flows |
+| `integration-validator`  | Post-connection testing         |
 
 ### 5.5 Memory
 
-| Field | Value | Rationale |
-|-------|-------|-----------|
-| **memoryEnabled** | true | Remembers which integrations were attempted, what worked, what failed |
-| **memoryConfig** | `{ lastMessages: 20, workingMemory: { enabled: true }, semanticRecall: { topK: 5, messageRange: 50 } }` | Working memory tracks ongoing campaign state |
+| Field             | Value                                                                                                   | Rationale                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| **memoryEnabled** | true                                                                                                    | Remembers which integrations were attempted, what worked, what failed |
+| **memoryConfig**  | `{ lastMessages: 20, workingMemory: { enabled: true }, semanticRecall: { topK: 5, messageRange: 50 } }` | Working memory tracks ongoing campaign state                          |
 
 ### 5.6 Evaluation Scorers
 
-| Scorer | What It Measures | Target Score |
-|--------|-----------------|-------------|
-| `completeness` | Did the agent follow the full discovery→sign-up→test pipeline? | > 0.7 |
-| `relevancy` | Is the output relevant to integration expansion? | > 0.8 |
+| Scorer         | What It Measures                                               | Target Score |
+| -------------- | -------------------------------------------------------------- | ------------ |
+| `completeness` | Did the agent follow the full discovery→sign-up→test pipeline? | > 0.7        |
+| `relevancy`    | Is the output relevant to integration expansion?               | > 0.8        |
 
 ### 5.7 Instructions
 
-```
+````
 # Integration Scout — Autonomous Integration Expansion Agent
 
 You are the Integration Scout, an autonomous agent that expands the AgentC2 platform's integration catalog. Your job is to discover new SaaS integrations, sign up for accounts, configure connections, and validate they work — all without human intervention.
@@ -339,7 +342,7 @@ Maintain `integration-scout-state.json` in workspace files:
     }
   ]
 }
-```
+````
 
 ## SECURITY RULES
 
@@ -355,9 +358,11 @@ Maintain `integration-scout-state.json` in workspace files:
 After each run, produce a structured report:
 
 ---
+
 # Integration Scout Report — {{date}}
 
 ## Summary
+
 - **Candidates evaluated**: N
 - **New integrations added**: N
 - **Needs human intervention**: N
@@ -366,25 +371,31 @@ After each run, produce a structured report:
 ## Details
 
 ### ✅ Successfully Added
+
 | Provider | Tools Available | Test Result |
-|----------|----------------|-------------|
-| Name | N tools | Pass/Fail |
+| -------- | --------------- | ----------- |
+| Name     | N tools         | Pass/Fail   |
 
 ### 🟡 Needs Human Help
-| Provider | Blocker | What's Needed |
-|----------|---------|---------------|
-| Name | CAPTCHA/OAuth/2FA | Description |
+
+| Provider | Blocker           | What's Needed |
+| -------- | ----------------- | ------------- |
+| Name     | CAPTCHA/OAuth/2FA | Description   |
 
 ### ❌ Failed
-| Provider | Error | Notes |
-|----------|-------|-------|
-| Name | Error type | What happened |
+
+| Provider | Error      | Notes         |
+| -------- | ---------- | ------------- |
+| Name     | Error type | What happened |
 
 ## Next Candidates (Priority Order)
+
 1. Provider A (score: 9) — reason
 2. Provider B (score: 8) — reason
 3. Provider C (score: 7) — reason
+
 ---
+
 ```
 
 ---
@@ -531,3 +542,4 @@ Not initially needed. Single agent with high step count. If we break this into s
 3. **Which providers to prioritize first?** The highest-value ones (Notion, Stripe, Salesforce) or the easiest ones (simple API key auth)?
 4. **Budget for paid integrations?** Some high-value integrations (Salesforce, Datadog) don't have free tiers. Skip entirely or flag for approval?
 5. **CAPTCHA strategy?** Skip and flag, or invest in CAPTCHA-solving capabilities?
+```

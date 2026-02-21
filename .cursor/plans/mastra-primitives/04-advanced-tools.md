@@ -495,8 +495,8 @@ const workflowTriggerExamples = [
 
 ## Files Changed
 
-| File                                            | Action |
-| ----------------------------------------------- | ------ |
+| File                                             | Action |
+| ------------------------------------------------ | ------ |
 | `packages/agentc2/src/tools/web-fetch.ts`        | Create |
 | `packages/agentc2/src/tools/memory-recall.ts`    | Create |
 | `packages/agentc2/src/tools/workflow-trigger.ts` | Create |

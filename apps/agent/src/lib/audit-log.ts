@@ -80,7 +80,14 @@ export type AuditAction =
     | "INVITE_REVOKE"
     // Domains
     | "DOMAIN_ADD"
-    | "DOMAIN_REMOVE";
+    | "DOMAIN_REMOVE"
+    // Authentication
+    | "AUTH_LOGIN_SUCCESS"
+    | "AUTH_LOGIN_FAILURE"
+    | "AUTH_LOGOUT"
+    | "AUTH_SESSION_CREATED"
+    // Data Access
+    | "DATA_ACCESS";
 
 /**
  * Audit log entry options

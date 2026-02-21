@@ -525,9 +525,9 @@ It supports agents, tools, workflows, and memory management.
 
 | File                                         | Action          |
 | -------------------------------------------- | --------------- |
-| `packages/agentc2/package.json`               | Add @mastra/rag |
-| `packages/agentc2/src/rag/pipeline.ts`        | Create          |
-| `packages/agentc2/src/rag/index.ts`           | Create          |
-| `packages/agentc2/src/index.ts`               | Update          |
+| `packages/agentc2/package.json`              | Add @mastra/rag |
+| `packages/agentc2/src/rag/pipeline.ts`       | Create          |
+| `packages/agentc2/src/rag/index.ts`          | Create          |
+| `packages/agentc2/src/index.ts`              | Update          |
 | `apps/agent/src/app/api/rag/ingest/route.ts` | Create          |
 | `apps/agent/src/app/api/rag/query/route.ts`  | Create          |

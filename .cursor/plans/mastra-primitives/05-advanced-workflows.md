@@ -729,8 +729,8 @@ const workflowExamples = {
 
 ## Files Changed
 
-| File                                              | Action |
-| ------------------------------------------------- | ------ |
+| File                                               | Action |
+| -------------------------------------------------- | ------ |
 | `packages/agentc2/src/workflows/parallel.ts`       | Create |
 | `packages/agentc2/src/workflows/branch.ts`         | Create |
 | `packages/agentc2/src/workflows/loop.ts`           | Create |

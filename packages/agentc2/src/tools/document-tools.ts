@@ -28,6 +28,10 @@ export const documentCreateTool = createTool({
         category: z.string().optional().describe("Category for organization"),
         tags: z.array(z.string()).optional().describe("Tags for categorization"),
         workspaceId: z.string().optional().describe("Workspace to associate the document with"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant scoping (auto-injected)"),
         onConflict: z
             .enum(["error", "skip", "update"])
             .optional()
@@ -43,6 +47,7 @@ export const documentCreateTool = createTool({
         category,
         tags,
         workspaceId,
+        organizationId,
         onConflict
     }) => {
         const input: CreateDocumentInput = {
@@ -54,6 +59,7 @@ export const documentCreateTool = createTool({
             category,
             tags,
             workspaceId,
+            organizationId,
             onConflict
         };
         const document = await createDocument(input);
@@ -65,11 +71,15 @@ export const documentReadTool = createTool({
     id: "document-read",
     description: "Read a document by ID or slug.",
     inputSchema: z.object({
-        documentId: z.string().describe("Document ID or slug")
+        documentId: z.string().describe("Document ID or slug"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ documentId }) => {
-        const document = await getDocument(documentId);
+    execute: async ({ documentId, organizationId }) => {
+        const document = await getDocument(documentId, organizationId ?? undefined);
         return document;
     }
 });
@@ -84,10 +94,19 @@ export const documentUpdateTool = createTool({
         description: z.string().optional(),
         category: z.string().optional(),
         tags: z.array(z.string()).optional(),
-        changeSummary: z.string().optional().describe("Summary of changes for version history")
+        changeSummary: z.string().optional().describe("Summary of changes for version history"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ documentId, ...body }) => {
+    execute: async ({ documentId, organizationId, ...body }) => {
+        if (organizationId) {
+            const doc = await getDocument(documentId, organizationId);
+            if (!doc) return { success: false, error: "Document not found" };
+        }
+
         const input: UpdateDocumentInput = {};
         if (body.name !== undefined) input.name = body.name;
         if (body.content !== undefined) input.content = body.content;
@@ -105,10 +124,18 @@ export const documentDeleteTool = createTool({
     id: "document-delete",
     description: "Remove document and its embeddings.",
     inputSchema: z.object({
-        documentId: z.string().describe("Document ID")
+        documentId: z.string().describe("Document ID"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped access (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ documentId }) => {
+    execute: async ({ documentId, organizationId }) => {
+        if (organizationId) {
+            const doc = await getDocument(documentId, organizationId);
+            if (!doc) return { success: false, error: "Document not found" };
+        }
         await deleteDocument(documentId);
         return { success: true };
     }
@@ -122,12 +149,17 @@ export const documentListTool = createTool({
         tags: z.string().optional().describe("Comma-separated tags"),
         type: z.enum(["USER", "SYSTEM"]).optional(),
         skip: z.number().optional(),
-        take: z.number().optional()
+        take: z.number().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped listing (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ category, tags, type, skip, take }) => {
+    execute: async ({ category, tags, type, skip, take, organizationId }) => {
         const tagArray = tags ? tags.split(",").map((t) => t.trim()) : undefined;
         const documents = await listDocuments({
+            organizationId: organizationId ?? undefined,
             category: category ?? undefined,
             tags: tagArray,
             type: type ?? undefined,
@@ -145,13 +177,18 @@ export const documentSearchTool = createTool({
         query: z.string().describe("Search query"),
         documentId: z.string().optional().describe("Scope search to a specific document"),
         topK: z.number().optional().describe("Max results"),
-        minScore: z.number().optional().describe("Minimum similarity score")
+        minScore: z.number().optional().describe("Minimum similarity score"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped search (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ query, documentId, topK, minScore }) => {
+    execute: async ({ query, documentId, topK, minScore, organizationId }) => {
         const results = await searchDocuments({
             query,
             documentId: documentId ?? undefined,
+            organizationId: organizationId ?? undefined,
             topK: topK ?? undefined,
             minScore: minScore ?? undefined
         });

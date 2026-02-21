@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { createDocumentRecord, type CreateDocumentInput } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
-import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
+import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 import { PDFParse } from "pdf-parse";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
@@ -153,6 +153,7 @@ export async function POST(request: NextRequest) {
         }
 
         const workspaceId = (await getDefaultWorkspaceIdForUser(userId)) || undefined;
+        const organizationId = await getUserOrganizationId(userId);
 
         // --- Create document via existing service ---
         const input: CreateDocumentInput = {
@@ -164,6 +165,7 @@ export async function POST(request: NextRequest) {
             category,
             tags: tags.length > 0 ? tags : undefined,
             workspaceId,
+            organizationId: organizationId || undefined,
             type: "USER",
             createdBy: userId
         };

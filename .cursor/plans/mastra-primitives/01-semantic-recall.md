@@ -249,9 +249,9 @@ const testQueries = [
 
 | File                                       | Action             |
 | ------------------------------------------ | ------------------ |
-| `packages/agentc2/src/vector.ts`            | Create             |
-| `packages/agentc2/src/memory.ts`            | Update             |
-| `packages/agentc2/src/index.ts`             | Update             |
+| `packages/agentc2/src/vector.ts`           | Create             |
+| `packages/agentc2/src/memory.ts`           | Update             |
+| `packages/agentc2/src/index.ts`            | Update             |
 | `.env`                                     | Add OPENAI_API_KEY |
 | `turbo.json`                               | Add to globalEnv   |
 | `apps/agent/src/app/demos/memory/page.tsx` | Create (Phase 9)   |

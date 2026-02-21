@@ -393,8 +393,8 @@ export default function OrganizationSettingsPage() {
                     <div>
                         <label className="text-sm font-medium">Timezone</label>
                         <p className="text-muted-foreground mb-2 text-xs">
-                            Default timezone for all members. Individual users can override this
-                            in their profile settings.
+                            Default timezone for all members. Individual users can override this in
+                            their profile settings.
                         </p>
                         <Select
                             value={timezone}
@@ -405,8 +405,8 @@ export default function OrganizationSettingsPage() {
                         >
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Select timezone">
-                                    {COMMON_TIMEZONES.find((tz) => tz.value === timezone)
-                                        ?.label || timezone}
+                                    {COMMON_TIMEZONES.find((tz) => tz.value === timezone)?.label ||
+                                        timezone}
                                 </SelectValue>
                             </SelectTrigger>
                             <SelectContent>

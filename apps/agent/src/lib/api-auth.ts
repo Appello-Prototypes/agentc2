@@ -4,6 +4,7 @@ import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getUserOrganizationId } from "@/lib/organization";
 import { validateAccessToken } from "@/lib/mcp-oauth";
+import { validateStoredApiKey } from "@/lib/api-key-hash";
 
 /**
  * Authenticate an API request via API key or session cookie.
@@ -83,14 +84,10 @@ export async function authenticateRequest(
                     },
                     select: { credentials: true, isActive: true }
                 });
-                const credentialPayload = credential?.credentials;
-                const storedKey =
-                    credentialPayload &&
-                    typeof credentialPayload === "object" &&
-                    !Array.isArray(credentialPayload)
-                        ? (credentialPayload as { apiKey?: string }).apiKey
-                        : undefined;
-                if (credential?.isActive && storedKey && storedKey === apiKey) {
+                if (
+                    credential &&
+                    validateStoredApiKey(apiKey, credential.credentials, credential.isActive)
+                ) {
                     const context = await resolveOrgContext(orgSlugHeader);
                     if (context) return context;
                 }

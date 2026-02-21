@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import { agentResolver } from "@repo/agentc2/agents";
+import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
 import { recordActivity, inputPreview } from "@repo/agentc2/activity/service";
 import { prisma, type Prisma } from "@repo/database";
 import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorder";
@@ -1016,7 +1016,7 @@ async function processMessage(
             `[Slack] Instance: ${instanceBinding.instanceSlug} (${instanceBinding.instanceName})`
         );
     }
-    console.log(`[Slack] Message: ${text}`);
+    console.log(`[Slack] Message received (${text.length} chars)`);
 
     // Instance-level access control
     if (instanceBinding && !isUserAllowed(instanceBinding, userId)) {
@@ -1057,11 +1057,29 @@ async function processMessage(
     }
 
     // Memory: use instance namespace when available (cross-channel awareness)
-    // Thread-level sub-scoping still applies within the instance
+    // Thread-level sub-scoping still applies within the instance.
+    // Org-prefix ensures cross-tenant isolation even for shared user IDs.
+    const slackOrgId = installation?.organizationId || "";
     const memoryThread = instanceBinding
-        ? `${instanceBinding.memoryNamespace}-${threadTs}`
-        : slackThreadId;
-    const memoryResource = instanceBinding ? instanceBinding.memoryNamespace : userId;
+        ? slackOrgId
+            ? `${slackOrgId}:${instanceBinding.memoryNamespace}-${threadTs}`
+            : `${instanceBinding.memoryNamespace}-${threadTs}`
+        : slackOrgId
+          ? `${slackOrgId}:${slackThreadId}`
+          : slackThreadId;
+    const memoryResource = instanceBinding
+        ? slackOrgId
+            ? `${slackOrgId}:${instanceBinding.memoryNamespace}`
+            : instanceBinding.memoryNamespace
+        : slackOrgId
+          ? `${slackOrgId}:${userId}`
+          : userId;
+
+    // Model routing (pre-resolve)
+    const { modelOverride: routedModelOverride } = await resolveModelOverride(slug, text, {
+        userId,
+        organizationId: installation?.organizationId ?? undefined
+    });
 
     // Resolve the agent
     let agentId: string;
@@ -1076,7 +1094,8 @@ async function processMessage(
                 userId,
                 metadata: requestMetadata
             },
-            threadId: memoryThread
+            threadId: memoryThread,
+            modelOverride: routedModelOverride
         });
 
         agent = resolved.agent;
@@ -1271,7 +1290,7 @@ async function processMessage(
             costUsd
         });
 
-        console.log(`[Slack] Response preview: ${response.text?.substring(0, 200)}...`);
+        console.log(`[Slack] Response generated (${response.text?.length || 0} chars)`);
         console.log(`${"=".repeat(60)}\n`);
 
         // Record to Activity Feed

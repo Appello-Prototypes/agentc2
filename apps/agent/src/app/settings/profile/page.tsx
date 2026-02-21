@@ -215,10 +215,10 @@ export default function ProfileSettingsPage() {
                     <div>
                         <label className="text-sm font-medium">Timezone</label>
                         <p className="text-muted-foreground mb-2 text-xs">
-                            Override your organization&apos;s default timezone ({
-                                COMMON_TIMEZONES.find((tz) => tz.value === orgTimezone)?.label ||
-                                orgTimezone
-                            }). Leave as &quot;Use organization default&quot; to inherit the org
+                            Override your organization&apos;s default timezone (
+                            {COMMON_TIMEZONES.find((tz) => tz.value === orgTimezone)?.label ||
+                                orgTimezone}
+                            ). Leave as &quot;Use organization default&quot; to inherit the org
                             setting.
                         </p>
                         <Select

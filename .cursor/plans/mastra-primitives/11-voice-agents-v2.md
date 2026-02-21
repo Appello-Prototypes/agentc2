@@ -322,8 +322,8 @@ or contacts, use the gather_context tool to get real information.
 | Action | File                                                               |
 | ------ | ------------------------------------------------------------------ |
 | Create | `apps/agent/src/app/api/demos/voice/tools/gather-context/route.ts` |
-| Create | `packages/agentc2/src/agents/voice-tools.ts`                        |
-| Modify | `packages/agentc2/src/mastra.ts` (register new agents)              |
+| Create | `packages/agentc2/src/agents/voice-tools.ts`                       |
+| Modify | `packages/agentc2/src/mastra.ts` (register new agents)             |
 | Modify | `apps/agent/src/app/demos/voice/page.tsx` (tool indicators)        |
 
 ---

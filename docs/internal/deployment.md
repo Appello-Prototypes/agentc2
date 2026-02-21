@@ -13,7 +13,7 @@
 | **OS**              | Ubuntu 24.04 LTS                          |
 | **User**            | root                                      |
 | **SSH Key**         | `~/.ssh/appello_digitalocean`             |
-| **App Directory**   | `/var/www/agentc2`                         |
+| **App Directory**   | `/var/www/agentc2`                        |
 | **Domain**          | https://agentc2.ai                        |
 | **Process Manager** | PM2                                       |
 | **Reverse Proxy**   | Caddy                                     |

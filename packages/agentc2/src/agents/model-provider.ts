@@ -269,3 +269,23 @@ export async function getAiProviderStatus(
 
     return result;
 }
+
+/**
+ * Resolve a fast, cheap model suitable for semantic compression of tool results.
+ * Tries Anthropic Haiku first ($0.25/M tokens), falls back to OpenAI gpt-4o-mini.
+ */
+export async function getFastCompressionModel(
+    organizationId?: string | null
+): Promise<LanguageModel | null> {
+    const haikuModel = await resolveModelForOrg(
+        "anthropic",
+        "claude-3-5-haiku-20241022",
+        organizationId
+    );
+    if (haikuModel) return haikuModel;
+
+    const miniModel = await resolveModelForOrg("openai", "gpt-4o-mini", organizationId);
+    if (miniModel) return miniModel;
+
+    return null;
+}

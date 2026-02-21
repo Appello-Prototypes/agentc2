@@ -48,6 +48,7 @@ interface RoutingConfig {
     mode: "locked" | "auto";
     fastModel?: { provider: string; name: string };
     escalationModel?: { provider: string; name: string };
+    reasoningModel?: { provider: string; name: string };
     confidenceThreshold?: number;
     budgetAware?: boolean;
 }
@@ -196,6 +197,8 @@ export default function ConfigurePage() {
     const [fastModelName, setFastModelName] = useState<string>("gpt-4o-mini");
     const [escalationModelProvider, setEscalationModelProvider] = useState<string>("anthropic");
     const [escalationModelName, setEscalationModelName] = useState<string>("");
+    const [reasoningModelProvider, setReasoningModelProvider] = useState<string>("openai");
+    const [reasoningModelName, setReasoningModelName] = useState<string>("");
     const [confidenceThreshold, setConfidenceThreshold] = useState<number>(0.7);
     const [budgetAwareRouting, setBudgetAwareRouting] = useState(false);
 
@@ -710,6 +713,8 @@ export default function ConfigurePage() {
         setFastModelName(rc?.fastModel?.name || "gpt-4o-mini");
         setEscalationModelProvider(rc?.escalationModel?.provider || "anthropic");
         setEscalationModelName(rc?.escalationModel?.name || "");
+        setReasoningModelProvider(rc?.reasoningModel?.provider || "openai");
+        setReasoningModelName(rc?.reasoningModel?.name || "");
         setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
         setBudgetAwareRouting(rc?.budgetAware ?? false);
     }, [agent, modelsLoading]);
@@ -854,6 +859,9 @@ export default function ConfigurePage() {
                           fastModel: { provider: fastModelProvider, name: fastModelName },
                           escalationModel: escalationModelName
                               ? { provider: escalationModelProvider, name: escalationModelName }
+                              : undefined,
+                          reasoningModel: reasoningModelName
+                              ? { provider: reasoningModelProvider, name: reasoningModelName }
                               : undefined,
                           confidenceThreshold,
                           budgetAware: budgetAwareRouting
@@ -1039,6 +1047,8 @@ export default function ConfigurePage() {
                                     rc?.escalationModel?.provider || "anthropic"
                                 );
                                 setEscalationModelName(rc?.escalationModel?.name || "");
+                                setReasoningModelProvider(rc?.reasoningModel?.provider || "openai");
+                                setReasoningModelName(rc?.reasoningModel?.name || "");
                                 setConfidenceThreshold(rc?.confidenceThreshold ?? 0.7);
                                 setBudgetAwareRouting(rc?.budgetAware ?? false);
                                 setHasChanges(false);
@@ -2303,6 +2313,177 @@ export default function ConfigurePage() {
                                                                 "flagship",
                                                                 "fast",
                                                                 "reasoning",
+                                                                "open-source",
+                                                                "legacy"
+                                                            ];
+                                                            const grouped = new Map<
+                                                                string,
+                                                                ModelInfo[]
+                                                            >();
+                                                            for (const m of provModels) {
+                                                                const cat =
+                                                                    m.category || "flagship";
+                                                                if (!grouped.has(cat))
+                                                                    grouped.set(cat, []);
+                                                                grouped.get(cat)!.push(m);
+                                                            }
+                                                            return catOrder
+                                                                .filter((cat) => grouped.has(cat))
+                                                                .map((cat) => (
+                                                                    <SelectGroup key={cat}>
+                                                                        <SelectLabel>
+                                                                            {catLabels[cat] ?? cat}
+                                                                        </SelectLabel>
+                                                                        {grouped
+                                                                            .get(cat)!
+                                                                            .map((m) => (
+                                                                                <SelectItem
+                                                                                    key={m.name}
+                                                                                    value={m.name}
+                                                                                >
+                                                                                    <div className="flex w-full items-center justify-between gap-3">
+                                                                                        <span>
+                                                                                            {
+                                                                                                m.displayName
+                                                                                            }
+                                                                                        </span>
+                                                                                        {m.pricing && (
+                                                                                            <span className="text-muted-foreground shrink-0 font-mono text-[10px]">
+                                                                                                {formatPricing(
+                                                                                                    m.pricing
+                                                                                                )}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                </SelectItem>
+                                                                            ))}
+                                                                    </SelectGroup>
+                                                                ));
+                                                        })()}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        <Label className="text-base font-medium">
+                                            Reasoning Model
+                                        </Label>
+                                        <p className="text-muted-foreground -mt-3 text-xs">
+                                            Used for inputs requiring deep analytical thinking,
+                                            multi-step proofs, or complex debugging
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Provider</Label>
+                                                <Select
+                                                    value={reasoningModelProvider}
+                                                    onValueChange={(v) => {
+                                                        if (!v) return;
+                                                        setReasoningModelProvider(v);
+                                                        const providerModels =
+                                                            availableModels.filter(
+                                                                (m) => m.provider === v
+                                                            );
+                                                        if (providerModels.length > 0) {
+                                                            setReasoningModelName(
+                                                                providerModels[0].name
+                                                            );
+                                                        }
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue>
+                                                            {PROVIDER_DISPLAY_NAMES[
+                                                                reasoningModelProvider
+                                                            ] ?? reasoningModelProvider}
+                                                        </SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="anthropic">
+                                                            Anthropic
+                                                        </SelectItem>
+                                                        <SelectItem value="openai">
+                                                            OpenAI
+                                                        </SelectItem>
+                                                        <SelectItem value="google">
+                                                            Google
+                                                        </SelectItem>
+                                                        <SelectItem value="groq">Groq</SelectItem>
+                                                        <SelectItem value="deepseek">
+                                                            DeepSeek
+                                                        </SelectItem>
+                                                        <SelectItem value="mistral">
+                                                            Mistral
+                                                        </SelectItem>
+                                                        <SelectItem value="xai">
+                                                            xAI (Grok)
+                                                        </SelectItem>
+                                                        <SelectItem value="togetherai">
+                                                            Together AI
+                                                        </SelectItem>
+                                                        <SelectItem value="fireworks">
+                                                            Fireworks AI
+                                                        </SelectItem>
+                                                        <SelectItem value="openrouter">
+                                                            OpenRouter
+                                                        </SelectItem>
+                                                        <SelectItem value="kimi">
+                                                            Kimi (Moonshot)
+                                                        </SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                            <div className="space-y-1">
+                                                <Label className="text-xs">Model</Label>
+                                                <Select
+                                                    value={reasoningModelName || "none"}
+                                                    onValueChange={(v) => {
+                                                        setReasoningModelName(
+                                                            !v || v === "none" ? "" : v
+                                                        );
+                                                        setHasChanges(true);
+                                                    }}
+                                                >
+                                                    <SelectTrigger>
+                                                        <SelectValue>
+                                                            {reasoningModelName
+                                                                ? (availableModels.find(
+                                                                      (m) =>
+                                                                          m.name ===
+                                                                          reasoningModelName
+                                                                  )?.displayName ??
+                                                                  reasoningModelName)
+                                                                : "None (disabled)"}
+                                                        </SelectValue>
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="none">
+                                                            None (disabled)
+                                                        </SelectItem>
+                                                        {(() => {
+                                                            const provModels =
+                                                                availableModels.filter(
+                                                                    (m) =>
+                                                                        m.provider ===
+                                                                        reasoningModelProvider
+                                                                );
+                                                            const catLabels: Record<
+                                                                string,
+                                                                string
+                                                            > = {
+                                                                flagship: "Flagship",
+                                                                fast: "Fast",
+                                                                reasoning: "Reasoning",
+                                                                "open-source": "Open Source",
+                                                                legacy: "Legacy"
+                                                            };
+                                                            const catOrder = [
+                                                                "reasoning",
+                                                                "flagship",
+                                                                "fast",
                                                                 "open-source",
                                                                 "legacy"
                                                             ];

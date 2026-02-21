@@ -1,5 +1,6 @@
 import { inngest } from "./inngest";
 import { goalStore, goalExecutor } from "@repo/agentc2/orchestrator";
+import { cleanupOrgVectors } from "@repo/agentc2";
 import { recordActivity } from "@repo/agentc2/activity/service";
 import {
     prisma,
@@ -7087,6 +7088,11 @@ export const adminTenantDeleteRequestedFunction = inngest.createFunction(
             });
         });
 
+        // Purge orphaned vectors from PgVector tables (outside Prisma cascade graph)
+        const vectorCleanup = await step.run("cleanup-org-vectors", async () => {
+            return cleanupOrgVectors(orgId);
+        });
+
         await step.run("log-lifecycle", async () => {
             await prisma.tenantLifecycleEvent.create({
                 data: {
@@ -7094,12 +7100,19 @@ export const adminTenantDeleteRequestedFunction = inngest.createFunction(
                     fromStatus: "suspended",
                     toStatus: "deactivated",
                     reason: "Deletion requested",
-                    performedBy
+                    performedBy,
+                    metadata: {
+                        vectorCleanup: {
+                            ragDeleted: vectorCleanup.ragDeleted,
+                            memoryDeleted: vectorCleanup.memoryDeleted,
+                            errors: vectorCleanup.errors
+                        }
+                    }
                 }
             });
         });
 
-        return { success: true, orgId };
+        return { success: true, orgId, vectorCleanup };
     }
 );
 
@@ -8163,6 +8176,89 @@ export const pipelineStatsRollupFunction = inngest.createFunction(
     }
 );
 
+// ── Data Retention Cleanup ──────────────────────────────────────────────
+export const dataRetentionCleanupFunction = inngest.createFunction(
+    {
+        id: "data-retention-cleanup",
+        retries: 2
+    },
+    { cron: "0 3 * * *" },
+    async ({ step }) => {
+        const now = new Date();
+
+        // 1. Agent runs older than 180 days
+        const runsCutoff = new Date(now);
+        runsCutoff.setDate(runsCutoff.getDate() - 180);
+        const runsDeleted = await step.run("cleanup-agent-runs", async () => {
+            const result = await prisma.agentRun.deleteMany({
+                where: { createdAt: { lt: runsCutoff } }
+            });
+            console.log(`[DataRetention] Deleted ${result.count} agent runs older than 180 days`);
+            return result.count;
+        });
+
+        // 2. Audit logs older than 2 years
+        const auditCutoff = new Date(now);
+        auditCutoff.setFullYear(auditCutoff.getFullYear() - 2);
+        const logsDeleted = await step.run("cleanup-audit-logs", async () => {
+            const result = await prisma.auditLog.deleteMany({
+                where: { createdAt: { lt: auditCutoff } }
+            });
+            console.log(`[DataRetention] Deleted ${result.count} audit logs older than 2 years`);
+            return result.count;
+        });
+
+        // 3. Sessions expired more than 30 days ago
+        const sessionCutoff = new Date(now);
+        sessionCutoff.setDate(sessionCutoff.getDate() - 30);
+        const sessionsDeleted = await step.run("cleanup-sessions", async () => {
+            const result = await prisma.session.deleteMany({
+                where: { expiresAt: { lt: sessionCutoff } }
+            });
+            console.log(
+                `[DataRetention] Deleted ${result.count} sessions expired >30 days`
+            );
+            return result.count;
+        });
+
+        // 4. Deactivated credentials metadata older than 90 days
+        const credCutoff = new Date(now);
+        credCutoff.setDate(credCutoff.getDate() - 90);
+        const credsDeleted = await step.run("cleanup-deactivated-credentials", async () => {
+            const result = await prisma.toolCredential.deleteMany({
+                where: {
+                    isActive: false,
+                    updatedAt: { lt: credCutoff }
+                }
+            });
+            console.log(
+                `[DataRetention] Deleted ${result.count} deactivated credentials >90 days`
+            );
+            return result.count;
+        });
+
+        // Log purge summary
+        await step.run("log-purge-summary", async () => {
+            await prisma.auditLog.create({
+                data: {
+                    action: "CONFIG_CHANGE",
+                    entityType: "DataRetention",
+                    entityId: "scheduled-cleanup",
+                    metadata: {
+                        runsDeleted,
+                        logsDeleted,
+                        sessionsDeleted,
+                        credsDeleted,
+                        runAt: now.toISOString()
+                    }
+                }
+            });
+        });
+
+        return { runsDeleted, logsDeleted, sessionsDeleted, credsDeleted };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -8227,5 +8323,7 @@ export const inngestFunctions = [
     // Async workflow execution (coding pipeline)
     asyncWorkflowExecuteFunction,
     // Dark Factory pipeline stats
-    pipelineStatsRollupFunction
+    pipelineStatsRollupFunction,
+    // Data retention cleanup
+    dataRetentionCleanupFunction
 ];

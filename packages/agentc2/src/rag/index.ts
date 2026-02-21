@@ -9,6 +9,9 @@ export {
     ragGenerateStream,
     deleteDocument,
     listDocuments,
+    keywordSearch,
+    reciprocalRankFusion,
+    rerankResults,
     type DocumentType,
     type ChunkOptions
 } from "./pipeline";

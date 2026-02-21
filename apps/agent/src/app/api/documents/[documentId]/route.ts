@@ -8,6 +8,8 @@ import {
     type UpdateDocumentInput
 } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+import { createAuditLog } from "@/lib/audit-log";
 
 type RouteContext = { params: Promise<{ documentId: string }> };
 
@@ -33,11 +35,20 @@ export async function GET(request: NextRequest, context: RouteContext) {
         }
 
         const { documentId } = await context.params;
-        const document = await getDocumentRecord(documentId);
+        const userOrgId = await getUserOrganizationId(userId);
+        const document = await getDocumentRecord(documentId, userOrgId || undefined);
 
         if (!document) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }
+
+        createAuditLog({
+            action: "DATA_ACCESS",
+            entityType: "Document",
+            entityId: document.id,
+            actorId: userId,
+            metadata: { slug: document.slug }
+        }).catch(() => {});
 
         return NextResponse.json(document);
     } catch (error) {
@@ -71,6 +82,12 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         }
 
         const { documentId } = await context.params;
+        const putOrgId = await getUserOrganizationId(userId);
+        const existingDoc = await getDocumentRecord(documentId, putOrgId || undefined);
+        if (!existingDoc) {
+            return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
+
         const body = await request.json();
 
         const input: UpdateDocumentInput = {
@@ -120,6 +137,11 @@ export async function DELETE(request: NextRequest, context: RouteContext) {
         }
 
         const { documentId } = await context.params;
+        const deleteOrgId = await getUserOrganizationId(userId);
+        const docToDelete = await getDocumentRecord(documentId, deleteOrgId || undefined);
+        if (!docToDelete) {
+            return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
 
         await deleteDocumentRecord(documentId);
 

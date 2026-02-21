@@ -400,12 +400,12 @@ Some MCP servers take time to start. Increase timeout or pre-warm.
 
 ## Files Changed
 
-| File                                      | Action          |
-| ----------------------------------------- | --------------- |
+| File                                       | Action          |
+| ------------------------------------------ | --------------- |
 | `packages/agentc2/package.json`            | Add @mastra/mcp |
 | `packages/agentc2/src/mcp/client.ts`       | Create          |
 | `packages/agentc2/src/mcp/index.ts`        | Create          |
 | `packages/agentc2/src/agents/mcp-agent.ts` | Create          |
 | `packages/agentc2/src/agents/index.ts`     | Update          |
 | `packages/agentc2/src/index.ts`            | Update          |
-| `apps/agent/src/app/api/mcp/route.ts`     | Create          |
+| `apps/agent/src/app/api/mcp/route.ts`      | Create          |

@@ -823,6 +823,18 @@ const WORKSPACE_TOOL_IDS = new Set([
     "list-workspace-files"
 ]);
 
+const ORG_SCOPED_TOOL_IDS = new Set([
+    "rag-query",
+    "rag-ingest",
+    "document-create",
+    "document-read",
+    "document-update",
+    "document-delete",
+    "document-list",
+    "document-search",
+    "memory-recall"
+]);
+
 /**
  * Wraps a sandbox tool with pre-bound organizationId and agentId so the LLM
  * doesn't need to provide them. Called by the agent resolver at hydration time.
@@ -832,17 +844,34 @@ export function bindWorkspaceContext(
     tool: any,
     context: { organizationId: string; agentId: string }
 ) {
-    if (!tool?.id || !WORKSPACE_TOOL_IDS.has(tool.id)) return tool;
+    if (!tool?.id) return tool;
 
-    const originalExecute = tool.execute;
-    return {
-        ...tool,
-        execute: (input: Record<string, unknown>) => {
-            return originalExecute({
-                ...input,
-                organizationId: input.organizationId || context.organizationId,
-                agentId: input.agentId || context.agentId
-            });
-        }
-    };
+    if (WORKSPACE_TOOL_IDS.has(tool.id)) {
+        const originalExecute = tool.execute;
+        return {
+            ...tool,
+            execute: (input: Record<string, unknown>) => {
+                return originalExecute({
+                    ...input,
+                    organizationId: input.organizationId || context.organizationId,
+                    agentId: input.agentId || context.agentId
+                });
+            }
+        };
+    }
+
+    if (ORG_SCOPED_TOOL_IDS.has(tool.id)) {
+        const originalExecute = tool.execute;
+        return {
+            ...tool,
+            execute: (input: Record<string, unknown>) => {
+                return originalExecute({
+                    ...input,
+                    organizationId: input.organizationId || context.organizationId
+                });
+            }
+        };
+    }
+
+    return tool;
 }

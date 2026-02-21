@@ -957,10 +957,10 @@ const voiceChatPrompts = [
 
 | File                                               | Action |
 | -------------------------------------------------- | ------ |
-| `packages/agentc2/package.json`                     | Update |
-| `packages/agentc2/src/agents/voice.ts`              | Create |
-| `packages/agentc2/src/agents/index.ts`              | Update |
-| `packages/agentc2/src/mastra.ts`                    | Update |
+| `packages/agentc2/package.json`                    | Update |
+| `packages/agentc2/src/agents/voice.ts`             | Create |
+| `packages/agentc2/src/agents/index.ts`             | Update |
+| `packages/agentc2/src/mastra.ts`                   | Update |
 | `apps/agent/src/app/demos/voice/page.tsx`          | Create |
 | `apps/agent/src/app/api/demos/voice/tts/route.ts`  | Create |
 | `apps/agent/src/app/api/demos/voice/stt/route.ts`  | Create |

@@ -34,7 +34,8 @@
     "./crypto": "./src/crypto/index.ts",
     "./audit": "./src/audit/index.ts",
     "./federation": "./src/federation/index.ts",
-    "./budget": "./src/budget/index.ts"
+    "./budget": "./src/budget/index.ts",
+    "./tenant-scope": "./src/tenant-scope.ts"
   },
   "scripts": {
     "type-check": "tsc --noEmit"

@@ -269,19 +269,19 @@ Campaign routes use `getDemoSession(request)` which already supports:
 
 ## File Change Summary
 
-| File                                                 | Action     | Category            |
-| ---------------------------------------------------- | ---------- | ------------------- |
+| File                                                  | Action     | Category            |
+| ----------------------------------------------------- | ---------- | ------------------- |
 | `packages/agentc2/src/tools/mcp-schemas/campaigns.ts` | **CREATE** | MCP Schema          |
 | `packages/agentc2/src/tools/campaign-tools.ts`        | **CREATE** | Tool Implementation |
 | `packages/agentc2/src/tools/registry.ts`              | **MODIFY** | Tool Registry       |
 | `packages/agentc2/src/tools/mcp-schemas/index.ts`     | **MODIFY** | MCP Schema Index    |
-| `packages/database/prisma/seed-agents.ts`            | **MODIFY** | Concierge Agent     |
-| `~/.cursor/skills/mastra-vv/SKILL.md`                | **MODIFY** | V&V Skill           |
-| `~/.cursor/skills/mastra-vv/procedures.md`           | **MODIFY** | V&V Procedures      |
-| `~/.cursor/skills/mastra-vv/acceptance-criteria.md`  | **MODIFY** | V&V Acceptance      |
-| `~/.cursor/skills/mastra-platform/SKILL.md`          | **MODIFY** | Platform Skill      |
-| `~/.cursor/skills/mastra-platform/tool-reference.md` | **MODIFY** | Platform Tool Ref   |
-| `~/.cursor/skills/mastra-platform/recipes.md`        | **MODIFY** | Platform Recipes    |
+| `packages/database/prisma/seed-agents.ts`             | **MODIFY** | Concierge Agent     |
+| `~/.cursor/skills/mastra-vv/SKILL.md`                 | **MODIFY** | V&V Skill           |
+| `~/.cursor/skills/mastra-vv/procedures.md`            | **MODIFY** | V&V Procedures      |
+| `~/.cursor/skills/mastra-vv/acceptance-criteria.md`   | **MODIFY** | V&V Acceptance      |
+| `~/.cursor/skills/mastra-platform/SKILL.md`           | **MODIFY** | Platform Skill      |
+| `~/.cursor/skills/mastra-platform/tool-reference.md`  | **MODIFY** | Platform Tool Ref   |
+| `~/.cursor/skills/mastra-platform/recipes.md`         | **MODIFY** | Platform Recipes    |
 
 **2 new files, 9 modified files, 0 deleted files**
 

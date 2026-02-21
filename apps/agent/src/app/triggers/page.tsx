@@ -369,9 +369,7 @@ function AutomationRegistryTab() {
                                     ? {
                                           ...a,
                                           isArchived: archive,
-                                          archivedAt: archive
-                                              ? new Date().toISOString()
-                                              : null,
+                                          archivedAt: archive ? new Date().toISOString() : null,
                                           isActive: archive ? false : a.isActive
                                       }
                                     : a
@@ -709,8 +707,7 @@ function AutomationRegistryTab() {
                                                                             )
                                                                         }
                                                                     >
-                                                                        {archiving ===
-                                                                        automation.id
+                                                                        {archiving === automation.id
                                                                             ? "..."
                                                                             : "Unarchive"}
                                                                     </Button>

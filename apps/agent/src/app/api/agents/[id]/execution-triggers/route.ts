@@ -3,6 +3,7 @@ import { randomBytes } from "crypto";
 import { prisma } from "@repo/database";
 import { getNextRunAt } from "@/lib/schedule-utils";
 import { requireAuth, requireAgentAccess } from "@/lib/authz";
+import { encryptString } from "@/lib/credential-crypto";
 import {
     UNIFIED_TRIGGER_TYPES,
     buildUnifiedTriggerId,
@@ -327,10 +328,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
 
         if (!agent) {
-            return NextResponse.json(
-                { success: false, error: "Agent not found" },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, error: "Agent not found" }, { status: 404 });
         }
 
         if (type === "scheduled") {
@@ -445,9 +443,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         let webhookPath: string | null = null;
         let webhookSecret: string | null = null;
+        let webhookSecretPlain: string | null = null;
         if (triggerType === "webhook") {
             webhookPath = `trigger_${randomBytes(16).toString("hex")}`;
-            webhookSecret = randomBytes(32).toString("hex");
+            webhookSecretPlain = randomBytes(32).toString("hex");
+            webhookSecret = encryptString(webhookSecretPlain);
         }
 
         const trigger = await prisma.agentTrigger.create({
@@ -474,7 +474,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (triggerType === "webhook") {
             response.webhook = {
                 path: `/api/webhooks/${webhookPath}`,
-                secret: webhookSecret,
+                secret: webhookSecretPlain,
                 note: "Save this secret - it won't be shown again"
             };
         }

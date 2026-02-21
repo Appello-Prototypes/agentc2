@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
-import { agentResolver } from "@repo/agentc2/agents";
+import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
+import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
 import { TRAFFIC_SPLIT } from "@/lib/learning-config";
 import { extractToolCalls } from "@/lib/run-recorder";
 
@@ -296,6 +297,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
+        // Model routing (pre-resolve)
+        const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
+            id,
+            input
+        );
+
         // Resolve the agent
         const { agent, record, source } = await agentResolver.resolve({
             slug: id,
@@ -303,7 +310,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             requestContext: {
                 resource: contextVars,
                 metadata: contextVars
-            }
+            },
+            modelOverride: routedModelOverride
         });
 
         if (!record) {
@@ -388,28 +396,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         });
 
         const startTime = Date.now();
+        const effectiveMaxSteps = record.maxSteps ?? 5;
+        const USE_MANAGED_GENERATE = effectiveMaxSteps > 5;
 
-        // Execute the agent with streaming
+        // Execute the agent
         try {
-            const result = await agent.generate(input);
-
-            const durationMs = Date.now() - startTime;
-
-            // Extract usage data - handle both v4 and v5/v6 SDK formats
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const rawUsage = (result as any).usage || (result as any).totalUsage;
-            const usage = rawUsage
-                ? {
-                      promptTokens: rawUsage.promptTokens ?? rawUsage.inputTokens ?? 0,
-                      completionTokens: rawUsage.completionTokens ?? rawUsage.outputTokens ?? 0,
-                      totalTokens: rawUsage.totalTokens ?? 0
-                  }
-                : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
-
-            // Extract tool calls from result
-            const toolCalls = extractToolCalls(result);
-
-            // Build execution steps
+            let responseText: string | undefined;
+            let usage = { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
             interface ExecutionStep {
                 step: number;
                 type: "thinking" | "tool_call" | "tool_result" | "response";
@@ -418,69 +411,151 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 durationMs?: number;
             }
             const executionSteps: ExecutionStep[] = [];
-            let stepCounter = 0;
 
-            // Add tool call steps
-            for (const tc of toolCalls) {
-                stepCounter++;
-                const toolName = tc.toolKey || "unknown";
-                const args = tc.input || {};
-                executionSteps.push({
-                    step: stepCounter,
-                    type: "tool_call",
-                    content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
-                    timestamp: new Date().toISOString()
+            if (USE_MANAGED_GENERATE) {
+                const contextCfg = (record as { contextConfig?: Record<string, unknown> })
+                    .contextConfig;
+                const compressionModel = await getFastCompressionModel();
+                const managedResult = await managedGenerate(agent, input, {
+                    maxSteps: effectiveMaxSteps,
+                    maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,
+                    windowSize: (contextCfg?.windowSize as number) ?? 5,
+                    anchorInstructions: (contextCfg?.anchorInstructions as boolean) ?? true,
+                    anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
+                    maxTokens: record.maxTokens ?? undefined,
+                    modelProvider: record.modelProvider,
+                    compressionModel: compressionModel ?? undefined,
+                    isReasoningModel
                 });
 
-                // Add tool result step if available
-                if (tc.output !== undefined || tc.error) {
+                responseText = managedResult.text;
+                usage = {
+                    promptTokens: managedResult.totalPromptTokens,
+                    completionTokens: managedResult.totalCompletionTokens,
+                    totalTokens:
+                        managedResult.totalPromptTokens + managedResult.totalCompletionTokens
+                };
+
+                let stepCounter = 0;
+                for (const step of managedResult.steps) {
+                    if (step.hasToolCall) {
+                        stepCounter++;
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_call",
+                            content: `Calling tool: ${step.toolName || "unknown"}\nArgs: ${step.inputPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+                        stepCounter++;
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_result",
+                            content: `Tool ${step.toolName || "unknown"} result:\n${step.outputPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+
+                        await prisma.agentToolCall.create({
+                            data: {
+                                runId: run.id,
+                                traceId: trace.id,
+                                toolKey: step.toolName || "unknown",
+                                inputJson: {} as Prisma.InputJsonValue,
+                                outputJson:
+                                    (step.outputPreview as unknown as Prisma.InputJsonValue) ||
+                                    Prisma.JsonNull,
+                                success: true,
+                                error: null
+                            }
+                        });
+                    }
+                }
+                stepCounter++;
+                executionSteps.push({
+                    step: stepCounter,
+                    type: "response",
+                    content:
+                        (responseText || "").slice(0, 2000) +
+                        (responseText && responseText.length > 2000 ? "..." : ""),
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                const result = await agent.generate(input);
+
+                responseText = result.text;
+
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const rawUsage = (result as any).usage || (result as any).totalUsage;
+                usage = rawUsage
+                    ? {
+                          promptTokens: rawUsage.promptTokens ?? rawUsage.inputTokens ?? 0,
+                          completionTokens: rawUsage.completionTokens ?? rawUsage.outputTokens ?? 0,
+                          totalTokens: rawUsage.totalTokens ?? 0
+                      }
+                    : { promptTokens: 0, completionTokens: 0, totalTokens: 0 };
+
+                const toolCalls = extractToolCalls(result);
+                let stepCounter = 0;
+
+                for (const tc of toolCalls) {
                     stepCounter++;
-                    const resultPreview = formatToolResultPreview(tc.output, 500);
+                    const toolName = tc.toolKey || "unknown";
+                    const args = tc.input || {};
                     executionSteps.push({
                         step: stepCounter,
-                        type: "tool_result",
-                        content: tc.error
-                            ? `Tool ${toolName} failed: ${tc.error}`
-                            : `Tool ${toolName} result:\n${resultPreview}`,
+                        type: "tool_call",
+                        content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
                         timestamp: new Date().toISOString()
+                    });
+
+                    if (tc.output !== undefined || tc.error) {
+                        stepCounter++;
+                        const resultPreview = formatToolResultPreview(tc.output, 500);
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_result",
+                            content: tc.error
+                                ? `Tool ${toolName} failed: ${tc.error}`
+                                : `Tool ${toolName} result:\n${resultPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    await prisma.agentToolCall.create({
+                        data: {
+                            runId: run.id,
+                            traceId: trace.id,
+                            toolKey: toolName,
+                            inputJson: args as Prisma.InputJsonValue,
+                            outputJson:
+                                tc.output !== undefined
+                                    ? (tc.output as Prisma.InputJsonValue)
+                                    : Prisma.JsonNull,
+                            success: tc.success,
+                            error: tc.error || null,
+                            durationMs: tc.durationMs
+                        }
                     });
                 }
 
-                // Record tool call in database
-                await prisma.agentToolCall.create({
-                    data: {
-                        runId: run.id,
-                        traceId: trace.id,
-                        toolKey: toolName,
-                        inputJson: args as Prisma.InputJsonValue,
-                        outputJson:
-                            tc.output !== undefined
-                                ? (tc.output as Prisma.InputJsonValue)
-                                : Prisma.JsonNull,
-                        success: tc.success,
-                        error: tc.error || null,
-                        durationMs: tc.durationMs
-                    }
+                stepCounter++;
+                executionSteps.push({
+                    step: stepCounter,
+                    type: "response",
+                    content:
+                        (responseText || "").slice(0, 2000) +
+                        (responseText && responseText.length > 2000 ? "..." : ""),
+                    timestamp: new Date().toISOString()
                 });
             }
 
-            // Add final response step
-            stepCounter++;
-            executionSteps.push({
-                step: stepCounter,
-                type: "response",
-                content:
-                    result.text?.slice(0, 2000) +
-                    (result.text && result.text.length > 2000 ? "..." : ""),
-                timestamp: new Date().toISOString()
-            });
+            const durationMs = Date.now() - startTime;
 
             // Update run with results
             await prisma.agentRun.update({
                 where: { id: run.id },
                 data: {
                     status: "COMPLETED",
-                    outputText: result.text,
+                    outputText: responseText,
                     durationMs,
                     completedAt: new Date(),
                     promptTokens: usage.promptTokens,
@@ -494,7 +569,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 where: { runId: run.id },
                 data: {
                     status: "COMPLETED",
-                    outputText: result.text,
+                    outputText: responseText,
                     durationMs,
                     stepsJson: executionSteps as unknown as Prisma.JsonArray,
                     tokensJson: usage as Prisma.InputJsonValue
@@ -504,11 +579,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return NextResponse.json({
                 success: true,
                 runId: run.id,
-                output: result.text,
+                output: responseText,
                 durationMs,
-                usage: result.usage,
+                usage,
                 source,
-                // Experiment info for shadow A/B testing
                 experiment: experimentId
                     ? {
                           experimentId,

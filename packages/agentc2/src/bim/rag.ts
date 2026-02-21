@@ -46,6 +46,7 @@ export interface BimHybridQueryOptions {
     versionId: string;
     query: string;
     filters?: BimElementFilters;
+    organizationId?: string;
     topK?: number;
     minScore?: number;
     limit?: number;
@@ -61,6 +62,7 @@ export async function queryBimHybrid(options: BimHybridQueryOptions) {
             offset: options.offset
         }),
         queryRag(options.query, {
+            organizationId: options.organizationId,
             topK: options.topK,
             minScore: options.minScore,
             filter: { documentId: `bim_${options.versionId}` }

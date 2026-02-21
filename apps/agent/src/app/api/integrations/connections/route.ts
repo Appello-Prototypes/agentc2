@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { prisma } from "@repo/database";
 import {
     getIntegrationProviders,
@@ -12,6 +13,15 @@ import { auditLog } from "@/lib/audit-log";
 import { encryptCredentials } from "@/lib/credential-crypto";
 import { getConnectionMissingFields } from "@/lib/integrations";
 import { authenticateRequest } from "@/lib/api-auth";
+
+const createConnectionSchema = z.object({
+    providerKey: z.string().min(1).max(200),
+    name: z.string().min(1).max(200),
+    scope: z.enum(["org", "user"]).default("org"),
+    credentials: z.record(z.unknown()).optional(),
+    metadata: z.record(z.unknown()).optional(),
+    isDefault: z.boolean().optional()
+});
 
 /**
  * GET /api/integrations/connections
@@ -98,29 +108,21 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const body = await request.json();
-        const {
-            providerKey,
-            name,
-            scope = "org",
-            credentials,
-            metadata,
-            isDefault
-        } = body as {
-            providerKey?: string;
-            name?: string;
-            scope?: string;
-            credentials?: Record<string, unknown>;
-            metadata?: Record<string, unknown>;
-            isDefault?: boolean;
-        };
-
-        if (!providerKey || !name) {
+        const parsed = createConnectionSchema.safeParse(await request.json());
+        if (!parsed.success) {
             return NextResponse.json(
-                { success: false, error: "Missing required fields: providerKey, name" },
+                { success: false, error: "Invalid input", details: parsed.error.flatten().fieldErrors },
                 { status: 400 }
             );
         }
+        const {
+            providerKey,
+            name,
+            scope,
+            credentials,
+            metadata,
+            isDefault
+        } = parsed.data;
 
         await getIntegrationProviders();
 

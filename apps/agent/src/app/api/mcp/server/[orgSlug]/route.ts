@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { buildMcpServer } from "@/lib/mcp-server";
 import { getPublicBaseUrl } from "@/lib/mcp-oauth";
+import { validateStoredApiKey } from "@/lib/api-key-hash";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { toReqRes, toFetchResponse } from "fetch-to-node";
 
@@ -66,15 +67,7 @@ async function authenticateRequest(
         },
         select: { credentials: true, isActive: true }
     });
-    const credentialPayload = credential?.credentials;
-    const storedKey =
-        credentialPayload &&
-        typeof credentialPayload === "object" &&
-        !Array.isArray(credentialPayload)
-            ? (credentialPayload as { apiKey?: string }).apiKey
-            : undefined;
-
-    if (credential?.isActive && storedKey && storedKey === token) {
+    if (credential && validateStoredApiKey(token, credential.credentials, credential.isActive)) {
         return {
             organizationId: org.id,
             authHeaders: {

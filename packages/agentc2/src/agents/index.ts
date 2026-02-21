@@ -47,7 +47,8 @@ export {
     agentResolver,
     BudgetExceededError,
     classifyComplexity,
-    resolveRoutingDecision
+    resolveRoutingDecision,
+    resolveModelOverride
 } from "./resolver";
 export type {
     RequestContext,
@@ -65,7 +66,8 @@ export {
     resolveModelForOrg,
     getOrgApiKey,
     hasOrgApiKey,
-    getAiProviderStatus
+    getAiProviderStatus,
+    getFastCompressionModel
 } from "./model-provider";
 
 // Network resolver for database-driven agent networks

@@ -743,15 +743,15 @@ Functions are registered in `apps/agent/src/lib/inngest-functions.ts` and served
 
 ## Important File Locations
 
-| File                                     | Purpose                            |
-| ---------------------------------------- | ---------------------------------- |
-| `packages/agentc2/src/mastra.ts`          | Main Mastra framework instance     |
-| `packages/agentc2/src/agents/index.ts`    | Agent exports and factory          |
-| `packages/agentc2/src/mcp/client.ts`      | MCP server configuration           |
-| `packages/agentc2/src/tools/registry.ts`  | Tool registry                      |
-| `packages/database/prisma/schema.prisma` | Database schema                    |
-| `apps/agent/src/app/api/`                | API routes                         |
-| `.env`                                   | Environment configuration          |
+| File                                     | Purpose                        |
+| ---------------------------------------- | ------------------------------ |
+| `packages/agentc2/src/mastra.ts`         | Main Mastra framework instance |
+| `packages/agentc2/src/agents/index.ts`   | Agent exports and factory      |
+| `packages/agentc2/src/mcp/client.ts`     | MCP server configuration       |
+| `packages/agentc2/src/tools/registry.ts` | Tool registry                  |
+| `packages/database/prisma/schema.prisma` | Database schema                |
+| `apps/agent/src/app/api/`                | API routes                     |
+| `.env`                                   | Environment configuration      |
 
 ---
 

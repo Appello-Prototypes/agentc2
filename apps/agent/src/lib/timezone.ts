@@ -7,10 +7,7 @@
 
 // ─── Absolute formatters ────────────────────────────────────────────────────
 
-export function formatDate(
-    dateInput: string | Date | null | undefined,
-    timezone?: string
-): string {
+export function formatDate(dateInput: string | Date | null | undefined, timezone?: string): string {
     if (!dateInput) return "-";
     const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     if (isNaN(date.getTime())) return "-";
@@ -54,10 +51,7 @@ export function formatDateTime(
     });
 }
 
-export function formatTime(
-    dateInput: string | Date | null | undefined,
-    timezone?: string
-): string {
+export function formatTime(dateInput: string | Date | null | undefined, timezone?: string): string {
     if (!dateInput) return "-";
     const date = typeof dateInput === "string" ? new Date(dateInput) : dateInput;
     if (isNaN(date.getTime())) return "-";

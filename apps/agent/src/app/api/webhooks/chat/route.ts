@@ -16,6 +16,7 @@ import {
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
 import { getUserOrganizationId } from "@/lib/organization";
+import { orgScopedResourceId, orgScopedThreadId } from "@repo/agentc2/tenant-scope";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 
 /**
@@ -51,8 +52,17 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { threadId, messages } = body;
 
-        const userThreadId = threadId || `webhook-wizard-${userId}-${Date.now()}`;
-        const resourceId = userId;
+        const userThreadId = threadId
+            ? organizationId
+                ? `${organizationId}:${threadId}`
+                : threadId
+            : orgScopedThreadId(
+                  organizationId || "",
+                  "webhook",
+                  WEBHOOK_WIZARD_SLUG,
+                  `${userId}-${Date.now()}`
+              );
+        const resourceId = orgScopedResourceId(organizationId || "", userId);
 
         // Extract last user message
         const lastUserMessage = messages

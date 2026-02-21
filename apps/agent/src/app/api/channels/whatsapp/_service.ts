@@ -121,7 +121,9 @@ async function executeAgentWithRecording(
  * Records all runs in AgentRun for full observability
  */
 const messageHandler: MessageHandler = async (message) => {
-    console.log(`[WhatsApp] Handling message from ${message.from}: "${message.text}"`);
+    console.log(
+        `[WhatsApp] Handling message from ${message.from} (${message.text?.length || 0} chars)`
+    );
 
     // Get or create session
     const channelId = message.from;

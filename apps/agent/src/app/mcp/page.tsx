@@ -9,6 +9,7 @@ import WebhookDetail from "@/components/webhooks/WebhookDetail";
 import type { WebhookTrigger } from "@/components/webhooks/types";
 import { ConnectToolsTab } from "@/components/integrations/ConnectToolsTab";
 import { PlatformsTab } from "@/components/integrations/PlatformsTab";
+import { AddCustomMcpDialog } from "@/components/integrations/AddCustomMcpDialog";
 import {
     Badge,
     Button,
@@ -693,12 +694,15 @@ export default function IntegrationsHubPage() {
                                         >
                                             {testAllRunning ? "Testing..." : "Test all"}
                                         </Button>
+                                        <AddCustomMcpDialog
+                                            onSuccess={() => window.location.reload()}
+                                        />
                                         <Link
                                             href="/mcp/config"
                                             className={buttonVariants({ variant: "default" })}
                                         >
                                             <PlusIcon className="mr-2 h-4 w-4" />
-                                            New MCP Server
+                                            Import Config
                                         </Link>
                                     </div>
                                 </CardHeader>

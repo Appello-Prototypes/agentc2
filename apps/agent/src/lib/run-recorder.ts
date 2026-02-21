@@ -1498,7 +1498,8 @@ export async function finalizeConversationRun(runId: string): Promise<boolean> {
  * Increments usedCreditsUsd; if credits are exhausted, spills into overageAccruedUsd.
  */
 async function updateSubscriptionCredits(
-    tx: Prisma.TransactionClient,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    tx: any,
     organizationId: string,
     billedAmount: number
 ): Promise<void> {

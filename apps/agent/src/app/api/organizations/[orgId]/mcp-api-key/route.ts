@@ -4,6 +4,7 @@ import crypto from "crypto";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { buildHashedCredential, getKeyPrefix } from "@/lib/api-key-hash";
 
 const TOOL_ID = "mastra-mcp-api";
 const TOOL_NAME = "AgentC2 MCP API Key";
@@ -32,10 +33,9 @@ async function getOrgAndMembership(userId: string, orgId: string) {
     return { organization, membership };
 }
 
-function maskApiKey(value: string | null): string | null {
-    if (!value) return null;
-    const suffix = value.slice(-4);
-    return `••••••••••••${suffix}`;
+function maskPrefix(prefix: string | null): string | null {
+    if (!prefix) return null;
+    return `${prefix}••••••••••••`;
 }
 
 export async function GET(request: Request, { params }: { params: Promise<{ orgId: string }> }) {
@@ -74,13 +74,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgI
         });
 
         const credentialPayload = credential?.credentials;
-        const apiKey =
-            credential?.isActive &&
-            credentialPayload &&
-            typeof credentialPayload === "object" &&
-            !Array.isArray(credentialPayload)
-                ? (credentialPayload as { apiKey?: string }).apiKey || null
-                : null;
+        const prefix =
+            credential?.isActive && credentialPayload ? getKeyPrefix(credentialPayload) : null;
 
         await auditLog.create({
             action: "CREDENTIAL_ACCESS",
@@ -92,8 +87,8 @@ export async function GET(request: Request, { params }: { params: Promise<{ orgI
 
         return NextResponse.json({
             success: true,
-            apiKeyMasked: maskApiKey(apiKey),
-            hasApiKey: !!apiKey,
+            apiKeyMasked: maskPrefix(prefix),
+            hasApiKey: !!prefix,
             isActive: credential?.isActive ?? false,
             createdAt: credential?.createdAt ?? null,
             updatedAt: credential?.updatedAt ?? null
@@ -137,6 +132,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
         }
 
         const apiKey = crypto.randomBytes(32).toString("hex");
+        const hashedCredential = buildHashedCredential(apiKey);
         const credential = await prisma.toolCredential.upsert({
             where: {
                 organizationId_toolId: {
@@ -148,13 +144,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ org
                 organizationId: organization.id,
                 toolId: TOOL_ID,
                 name: TOOL_NAME,
-                credentials: { apiKey },
+                credentials: hashedCredential,
                 isActive: true,
                 createdBy: session.user.id
             },
             update: {
                 name: TOOL_NAME,
-                credentials: { apiKey },
+                credentials: hashedCredential,
                 isActive: true,
                 updatedAt: new Date()
             }

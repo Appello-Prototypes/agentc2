@@ -65,6 +65,8 @@ import {
     ChainOfThoughtContent,
     ChainOfThoughtStep,
     ToolInvocationCard,
+    CodeDiffCard,
+    isDiffResult,
     type PromptInputMessage,
     type ToolActivity
 } from "@repo/ui";
@@ -1094,6 +1096,12 @@ export default function UnifiedChatPage() {
                 part.toolInvocation?.state === "output-error"
                     ? part.toolInvocation?.errorText || "Tool execution failed"
                     : undefined;
+
+            if (hasResult && !toolError && isDiffResult(toolResult)) {
+                return (
+                    <CodeDiffCard key={callId} result={String(toolResult)} toolName={toolName} />
+                );
+            }
 
             return (
                 <ToolInvocationCard

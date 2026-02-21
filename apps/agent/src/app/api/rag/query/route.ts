@@ -1,7 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 import { queryRag, ragGenerateStream } from "@repo/agentc2/rag";
 import { mastra } from "@repo/agentc2/core";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+
+const ragQuerySchema = z.object({
+    query: z.string().min(1).max(10000),
+    topK: z.number().int().min(1).max(100).optional(),
+    minScore: z.number().min(0).max(1).optional(),
+    generateResponse: z.boolean().optional(),
+    mode: z.enum(["vector", "keyword", "hybrid"]).optional(),
+    vectorWeight: z.number().min(0).max(1).optional()
+});
 
 export async function POST(req: NextRequest) {
     const encoder = new TextEncoder();
@@ -12,15 +23,25 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const { query, topK, minScore, generateResponse } = await req.json();
-
-        if (!query) {
-            return NextResponse.json({ error: "Query is required" }, { status: 400 });
+        const organizationId = await getUserOrganizationId(session.user.id);
+        const body = ragQuerySchema.safeParse(await req.json());
+        if (!body.success) {
+            return NextResponse.json(
+                { error: "Invalid input", details: body.error.flatten().fieldErrors },
+                { status: 400 }
+            );
         }
+        const { query, topK, minScore, generateResponse, mode, vectorWeight } = body.data;
 
         // Non-streaming path for search-only queries
         if (!generateResponse) {
-            const results = await queryRag(query, { topK, minScore });
+            const results = await queryRag(query, {
+                organizationId: organizationId || undefined,
+                topK,
+                minScore,
+                mode: mode || "vector",
+                vectorWeight
+            });
             return NextResponse.json({ results });
         }
 
@@ -42,6 +63,7 @@ export async function POST(req: NextRequest) {
 
                     // Get streaming response with sources
                     const { textStream, sources } = await ragGenerateStream(query, agent, {
+                        organizationId: organizationId || undefined,
                         topK,
                         minScore
                     });

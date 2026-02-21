@@ -163,52 +163,52 @@ Each page's `body` field in `docs.ts` must be replaced with real content. The co
 | introduction | CLAUDE.md system overview, product positioning from docs/agentc2-product-overview.md |
 | quickstart   | Agent creation flow from apps/agent, tool attachment patterns                        |
 | architecture | Monorepo structure, database schema overview, Mastra core                            |
-| key-concepts | Agent/Workflow/Network/Skill definitions from packages/agentc2                        |
+| key-concepts | Agent/Workflow/Network/Skill definitions from packages/agentc2                       |
 | first-agent  | Step-by-step from database seed to chat interaction                                  |
 
 #### 2.2 Agents section (15 pages)
 
-| Page              | Content Source                                             |
-| ----------------- | ---------------------------------------------------------- |
+| Page              | Content Source                                              |
+| ----------------- | ----------------------------------------------------------- |
 | overview          | packages/agentc2/src/agents/resolver.ts, Prisma Agent model |
-| creating-agents   | API route apps/agent/src/app/api/agents/route.ts           |
-| configuration     | Agent model fields, modelProvider/modelName, temperature   |
+| creating-agents   | API route apps/agent/src/app/api/agents/route.ts            |
+| configuration     | Agent model fields, modelProvider/modelName, temperature    |
 | model-providers   | packages/agentc2/src/agents/resolver.ts model registry      |
-| memory            | @mastra/memory integration, memoryConfig field             |
+| memory            | @mastra/memory integration, memoryConfig field              |
 | tools             | packages/agentc2/src/tools/registry.ts, 145+ tool list      |
-| version-control   | AgentVersion model, rollback API route                     |
-| budgets-and-costs | BudgetPolicy model, CostEvent tracking                     |
+| version-control   | AgentVersion model, rollback API route                      |
+| budgets-and-costs | BudgetPolicy model, CostEvent tracking                      |
 | guardrails        | GuardrailPolicy model, packages/agentc2/src/guardrails/     |
-| evaluations       | AgentEvaluation model, scorers, scorecards                 |
-| learning          | LearningSession/Signal/Proposal/Experiment models          |
-| simulations       | SimulationSession model                                    |
-| output-actions    | OutputAction model                                         |
-| public-embedding  | Embed pages, publicToken, visibility levels                |
-| api-reference     | All /api/agents/\* endpoint signatures                     |
+| evaluations       | AgentEvaluation model, scorers, scorecards                  |
+| learning          | LearningSession/Signal/Proposal/Experiment models           |
+| simulations       | SimulationSession model                                     |
+| output-actions    | OutputAction model                                          |
+| public-embedding  | Embed pages, publicToken, visibility levels                 |
+| api-reference     | All /api/agents/\* endpoint signatures                      |
 
 #### 2.3 Skills section (6 pages)
 
-| Page                   | Content Source                        |
-| ---------------------- | ------------------------------------- |
-| overview               | Skill/SkillVersion/AgentSkill models  |
+| Page                   | Content Source                         |
+| ---------------------- | -------------------------------------- |
+| overview               | Skill/SkillVersion/AgentSkill models   |
 | creating-skills        | packages/agentc2/src/skills/service.ts |
-| progressive-disclosure | Skill activation logic                |
-| auto-generated-skills  | MCP provisioner auto-skill creation   |
-| version-control        | SkillVersion model                    |
-| api-reference          | /api/skills/\* endpoints              |
+| progressive-disclosure | Skill activation logic                 |
+| auto-generated-skills  | MCP provisioner auto-skill creation    |
+| version-control        | SkillVersion model                     |
+| api-reference          | /api/skills/\* endpoints               |
 
 #### 2.4 Workflows section (8 pages)
 
-| Page               | Content Source                                   |
-| ------------------ | ------------------------------------------------ |
+| Page               | Content Source                                    |
+| ------------------ | ------------------------------------------------- |
 | overview           | Workflow model, packages/agentc2/src/workflows/   |
-| creating-workflows | Workflow builder, /api/workflows/route.ts        |
-| step-types         | WorkflowRunStep types                            |
+| creating-workflows | Workflow builder, /api/workflows/route.ts         |
+| step-types         | WorkflowRunStep types                             |
 | control-flow       | packages/agentc2/src/workflows/builder/runtime.ts |
-| human-in-the-loop  | Approval gates in workflows                      |
-| ai-assisted-design | /api/workflows/[slug]/designer-chat              |
-| version-control    | WorkflowVersion model                            |
-| api-reference      | All /api/workflows/\* endpoints                  |
+| human-in-the-loop  | Approval gates in workflows                       |
+| ai-assisted-design | /api/workflows/[slug]/designer-chat               |
+| version-control    | WorkflowVersion model                             |
+| api-reference      | All /api/workflows/\* endpoints                   |
 
 #### 2.5 Networks section (6 pages)
 
@@ -223,25 +223,25 @@ Each page's `body` field in `docs.ts` must be replaced with real content. The co
 
 #### 2.6 Integrations section (17 pages)
 
-| Page                   | Content Source                                               |
-| ---------------------- | ------------------------------------------------------------ |
+| Page                   | Content Source                                                |
+| ---------------------- | ------------------------------------------------------------- |
 | overview               | packages/agentc2/src/mcp/client.ts, IntegrationProvider model |
-| model-context-protocol | @mastra/mcp architecture, tool execution                     |
-| hubspot                | HubSpot MCP server config                                    |
-| jira                   | Jira MCP server config                                       |
-| slack                  | Slack integration, /api/slack/events                         |
-| github                 | GitHub MCP server config                                     |
-| gmail                  | Gmail OAuth integration                                      |
-| google-drive           | Google Drive MCP server                                      |
-| google-calendar        | Calendar OAuth integration                                   |
-| microsoft-outlook      | Microsoft Graph API integration                              |
-| microsoft-teams        | Teams integration                                            |
-| dropbox                | Dropbox OAuth integration                                    |
-| elevenlabs             | Voice agent integration                                      |
-| firecrawl              | Firecrawl MCP config                                         |
-| fathom                 | Fathom MCP config                                            |
-| justcall               | JustCall MCP config                                          |
-| building-custom        | How to add a new MCP server                                  |
+| model-context-protocol | @mastra/mcp architecture, tool execution                      |
+| hubspot                | HubSpot MCP server config                                     |
+| jira                   | Jira MCP server config                                        |
+| slack                  | Slack integration, /api/slack/events                          |
+| github                 | GitHub MCP server config                                      |
+| gmail                  | Gmail OAuth integration                                       |
+| google-drive           | Google Drive MCP server                                       |
+| google-calendar        | Calendar OAuth integration                                    |
+| microsoft-outlook      | Microsoft Graph API integration                               |
+| microsoft-teams        | Teams integration                                             |
+| dropbox                | Dropbox OAuth integration                                     |
+| elevenlabs             | Voice agent integration                                       |
+| firecrawl              | Firecrawl MCP config                                          |
+| fathom                 | Fathom MCP config                                             |
+| justcall               | JustCall MCP config                                           |
+| building-custom        | How to add a new MCP server                                   |
 
 #### 2.7 Channels section (6 pages)
 

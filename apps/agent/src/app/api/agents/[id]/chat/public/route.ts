@@ -223,9 +223,25 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const body = await request.json();
         const { threadId, messages } = body;
 
-        const userThreadId = threadId || `embed-${id}-${Date.now()}`;
+        // Resolve org for tenant-scoped memory isolation
+        let publicOrgId = "";
+        if (agentRecord.workspaceId) {
+            const ws = await prisma.workspace.findUnique({
+                where: { id: agentRecord.workspaceId },
+                select: { organizationId: true }
+            });
+            publicOrgId = ws?.organizationId || "";
+        }
+
         const ipHash = createHash("sha256").update(ip).digest("hex").slice(0, 12);
-        const resourceId = `public-${ipHash}`;
+        const userThreadId = threadId
+            ? publicOrgId
+                ? `${publicOrgId}:${threadId}`
+                : threadId
+            : publicOrgId
+              ? `${publicOrgId}:embed-${id}-${Date.now()}`
+              : `embed-${id}-${Date.now()}`;
+        const resourceId = publicOrgId ? `${publicOrgId}:public-${ipHash}` : `public-${ipHash}`;
 
         // Extract last user message (text only -- no file uploads for public)
         const lastUserMsg = messages?.filter((m: { role: string }) => m.role === "user").pop() as
@@ -624,7 +640,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }
             },
             onError: (error: unknown) => {
-                console.error("[Public Chat] UIMessageStream error:", error);
+                console.error(
+                    "[Public Chat] UIMessageStream error:",
+                    error instanceof Error ? error.message : "[non-Error]"
+                );
                 if (run) {
                     run.fail(error instanceof Error ? error : String(error)).catch(console.error);
                 }
@@ -639,7 +658,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
         });
     } catch (error) {
-        console.error("[Public Chat] Error:", error);
+        console.error(
+            "[Public Chat] Error:",
+            error instanceof Error ? error.message : "[non-Error]"
+        );
         return NextResponse.json(
             {
                 success: false,

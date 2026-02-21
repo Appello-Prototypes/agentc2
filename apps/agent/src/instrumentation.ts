@@ -8,10 +8,31 @@
 export async function register() {
     // Only register hooks on the Node.js runtime (not during build or edge)
     if (process.env.NEXT_RUNTIME === "nodejs") {
-        const { onPostBootstrap } = await import("@repo/auth");
+        const { onPostBootstrap, onAuthEvent } = await import("@repo/auth");
         const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
         const { syncMicrosoftFromAccount } = await import("@/lib/microsoft-sync");
         const { provisionOrgKeyPair } = await import("@repo/agentc2/crypto");
+        const { createAuditLog } = await import("@/lib/audit-log");
+
+        onAuthEvent(async (event) => {
+            const actionMap = {
+                login_success: "AUTH_LOGIN_SUCCESS",
+                login_failure: "AUTH_LOGIN_FAILURE",
+                logout: "AUTH_LOGOUT",
+                session_created: "AUTH_SESSION_CREATED"
+            } as const;
+
+            await createAuditLog({
+                action: actionMap[event.type],
+                entityType: "Session",
+                entityId: event.userId || "unknown",
+                actorId: event.userId,
+                metadata: {
+                    ip: event.ip,
+                    path: event.path
+                }
+            });
+        });
 
         onPostBootstrap(async (userId, organizationId) => {
             console.log("[PostBootstrap] Syncing Gmail for user:", userId);
@@ -46,5 +67,26 @@ export async function register() {
         console.log(
             "[Instrumentation] Post-bootstrap hooks registered (Gmail, Microsoft, KeyPair)"
         );
+
+        // Security: verify CREDENTIAL_ENCRYPTION_KEY in production
+        if (process.env.NODE_ENV === "production") {
+            const key = process.env.CREDENTIAL_ENCRYPTION_KEY;
+            if (!key) {
+                console.error(
+                    "[FATAL] CREDENTIAL_ENCRYPTION_KEY is not set. Credentials will not be encrypted."
+                );
+                process.exit(1);
+            }
+            const buf = Buffer.from(key, "hex");
+            if (buf.length !== 32) {
+                console.error(
+                    "[FATAL] CREDENTIAL_ENCRYPTION_KEY must be 64 hex chars (32 bytes). Got:",
+                    key.length,
+                    "chars"
+                );
+                process.exit(1);
+            }
+            console.log("[Instrumentation] CREDENTIAL_ENCRYPTION_KEY validated");
+        }
     }
 }

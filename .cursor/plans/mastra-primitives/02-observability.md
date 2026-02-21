@@ -248,8 +248,8 @@ Configure endpoint to send traces to SigNoz, Jaeger, Honeycomb, or other provide
 
 ## Files Changed
 
-| File                            | Action                                     |
-| ------------------------------- | ------------------------------------------ |
+| File                             | Action                                     |
+| -------------------------------- | ------------------------------------------ |
 | `packages/agentc2/src/mastra.ts` | Update with telemetry config               |
-| `turbo.json`                    | Add OTEL env vars to globalEnv             |
-| `.env`                          | Add OTEL_EXPORTER_OTLP_ENDPOINT (optional) |
+| `turbo.json`                     | Add OTEL env vars to globalEnv             |
+| `.env`                           | Add OTEL_EXPORTER_OTLP_ENDPOINT (optional) |

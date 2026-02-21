@@ -8,6 +8,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@repo/database";
 import { randomBytes } from "crypto";
+import { validateStoredApiKey } from "@/lib/api-key-hash";
 
 // ── Auth Code Store ─────────────────────────────────────────────
 
@@ -149,15 +150,10 @@ export async function validateClientCredentials(
         select: { credentials: true, isActive: true }
     });
 
-    const credentialPayload = credential?.credentials;
-    const storedKey =
-        credentialPayload &&
-        typeof credentialPayload === "object" &&
-        !Array.isArray(credentialPayload)
-            ? (credentialPayload as { apiKey?: string }).apiKey
-            : undefined;
-
-    if (credential?.isActive && storedKey && storedKey === clientSecret) {
+    if (
+        credential &&
+        validateStoredApiKey(clientSecret, credential.credentials, credential.isActive)
+    ) {
         return { organizationId: org.id };
     }
 

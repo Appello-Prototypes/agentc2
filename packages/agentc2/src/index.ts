@@ -31,6 +31,7 @@ export {
     // Model routing
     classifyComplexity,
     resolveRoutingDecision,
+    resolveModelOverride,
     // Network resolver for database-driven agent networks
     NetworkResolver,
     networkResolver
@@ -48,7 +49,13 @@ export type {
 } from "./agents";
 
 // Model provider resolver (org-scoped AI API keys)
-export { resolveModelForOrg, getOrgApiKey, hasOrgApiKey, getAiProviderStatus } from "./agents";
+export {
+    resolveModelForOrg,
+    getOrgApiKey,
+    hasOrgApiKey,
+    getAiProviderStatus,
+    getFastCompressionModel
+} from "./agents";
 
 // MCP
 export {
@@ -63,6 +70,7 @@ export {
     getMcpToolsets,
     disconnectMcp,
     executeMcpTool,
+    truncateMcpResult,
     invalidateMcpCacheForOrg,
     resetMcpClients,
     listMcpToolDefinitions,
@@ -129,6 +137,7 @@ export {
     tools,
     webFetchTool,
     memoryRecallTool,
+    createScopedMemoryRecallTool,
     workflowTriggerTool,
     jsonParserTool,
     askQuestionsTool,
@@ -223,6 +232,9 @@ export {
     ragGenerateStream,
     deleteDocument,
     listDocuments,
+    keywordSearch,
+    reciprocalRankFusion,
+    rerankResults,
     type DocumentType,
     type ChunkOptions
 } from "./rag";
@@ -429,6 +441,30 @@ export type {
     BudgetViolation,
     MarkupResult
 } from "./budget";
+
+// Managed multi-step generation with context windowing
+export { managedGenerate } from "./lib/managed-generate";
+export type {
+    ManagedGenerateOptions,
+    ManagedGenerateResult,
+    ContextConfig,
+    StepSummary
+} from "./lib/managed-generate";
+
+// Phase-based task decomposition
+export { runPhases } from "./lib/phase-runner";
+export type { Phase, PhaseResult, PhaseRunnerOptions, PhaseRunResult } from "./lib/phase-runner";
+
+// Tenant isolation helpers
+export {
+    orgScopedResourceId,
+    orgScopedThreadId,
+    parseOrgScopedResourceId,
+    extractOrgFromScopedId
+} from "./tenant-scope";
+
+// Tenant lifecycle (org deletion cleanup)
+export { cleanupOrgVectors } from "./tenant-lifecycle";
 
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";

@@ -311,7 +311,7 @@ import {
 } from "./instance-tools";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getMcpTools } from "../mcp/client";
+import { getMcpTools, truncateMcpResult } from "../mcp/client";
 
 /**
  * Logical category for each built-in tool.
@@ -1021,6 +1021,27 @@ export function invalidateMcpToolsCacheForOrg(organizationId?: string | null) {
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function wrapMcpToolsWithTruncation(tools: Record<string, any>): Record<string, any> {
+    const wrapped: Record<string, (typeof tools)[string]> = {};
+    for (const [name, tool] of Object.entries(tools)) {
+        if (tool && typeof tool.execute === "function") {
+            const originalExecute = tool.execute.bind(tool);
+            wrapped[name] = {
+                ...tool,
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                execute: async (...args: any[]) => {
+                    const result = await originalExecute(...args);
+                    return truncateMcpResult(result);
+                }
+            };
+        } else {
+            wrapped[name] = tool;
+        }
+    }
+    return wrapped;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function getMcpToolsCached(organizationId?: string | null): Promise<Record<string, any>> {
     const cacheKey = organizationId || "__default__";
     const now = Date.now();
@@ -1031,8 +1052,9 @@ async function getMcpToolsCached(organizationId?: string | null): Promise<Record
 
     try {
         const { tools } = await getMcpTools(organizationId);
-        cachedMcpToolsByOrg.set(cacheKey, { tools, loadedAt: now });
-        return tools;
+        const truncatedTools = wrapMcpToolsWithTruncation(tools);
+        cachedMcpToolsByOrg.set(cacheKey, { tools: truncatedTools, loadedAt: now });
+        return truncatedTools;
     } catch (error) {
         console.warn("[Tool Registry] Failed to load MCP tools:", error);
         return {};

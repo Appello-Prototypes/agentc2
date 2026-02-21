@@ -370,9 +370,9 @@ This work qualifies for:
 | Network definitions      | Platform database (biz-ops, comms, research-intel, platform-admin)                    |
 | Backlog schema           | `packages/database/prisma/schema.prisma` (Backlog, BacklogTask, ActivityEvent models) |
 | Backlog API routes       | `apps/agent/src/app/api/backlogs/` (3 route files)                                    |
-| Backlog tools            | `packages/agentc2/src/tools/backlog-tools.ts` (5 tools)                                |
+| Backlog tools            | `packages/agentc2/src/tools/backlog-tools.ts` (5 tools)                               |
 | Backlog UI               | `apps/agent/src/app/agents/[agentSlug]/backlog/` (5 component files)                  |
-| Activity recording       | `packages/agentc2/src/activity/service.ts` (15 integration points)                     |
+| Activity recording       | `packages/agentc2/src/activity/service.ts` (15 integration points)                    |
 
 ### 8.2 Production Telemetry
 

@@ -61,11 +61,16 @@ export const ragQueryTool = createTool({
     inputSchema: z.object({
         query: z.string(),
         topK: z.number().optional(),
-        minScore: z.number().optional()
+        minScore: z.number().optional(),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant-scoped queries (auto-injected)")
     }),
     outputSchema: baseOutputSchema,
-    execute: async ({ query, topK, minScore }) => {
+    execute: async ({ query, topK, minScore, organizationId }) => {
         const results = await queryRag(query, {
+            organizationId: organizationId ?? undefined,
             topK: topK ?? undefined,
             minScore: minScore ?? undefined
         });
@@ -90,6 +95,10 @@ export const ragIngestTool = createTool({
         category: z.string().optional().describe("Category for organization"),
         tags: z.array(z.string()).optional().describe("Tags for categorization"),
         workspaceId: z.string().optional().describe("Workspace to associate the document with"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID for tenant scoping (auto-injected)"),
         onConflict: z
             .enum(["error", "skip", "update"])
             .optional()
@@ -106,6 +115,7 @@ export const ragIngestTool = createTool({
         category,
         tags,
         workspaceId,
+        organizationId,
         onConflict
     }) => {
         const slug = sourceId || `doc-${Date.now()}`;
@@ -120,6 +130,7 @@ export const ragIngestTool = createTool({
             category,
             tags,
             workspaceId,
+            organizationId,
             chunkOptions: chunkOptions as CreateDocumentInput["chunkOptions"],
             onConflict: onConflict || "error"
         };

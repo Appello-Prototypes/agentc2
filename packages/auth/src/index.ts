@@ -1,6 +1,6 @@
 // Server-side auth
-export { auth, onPostBootstrap } from "./auth";
-export type { Session, User } from "./auth";
+export { auth, onPostBootstrap, onAuthEvent } from "./auth";
+export type { Session, User, AuthEvent, AuthEventType } from "./auth";
 
 // Client-side auth
 export { authClient, signIn, signUp, signOut, linkSocial, useSession } from "./auth-client";

@@ -9,6 +9,7 @@ import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
 import { resolveRequiredToolAccess, type AccessLevel } from "@/lib/security/access-matrix";
 import { validateAccessToken } from "@/lib/mcp-oauth";
 import { enforceCsrf, getCorsHeaders } from "@/lib/security/http-security";
+import { validateStoredApiKey } from "@/lib/api-key-hash";
 
 /**
  * MCP Server Gateway
@@ -99,14 +100,10 @@ async function authenticateRequest(
                     },
                     select: { credentials: true, isActive: true }
                 });
-                const credentialPayload = credential?.credentials;
-                const storedKey =
-                    credentialPayload &&
-                    typeof credentialPayload === "object" &&
-                    !Array.isArray(credentialPayload)
-                        ? (credentialPayload as { apiKey?: string }).apiKey
-                        : undefined;
-                if (credential?.isActive && storedKey && storedKey === apiKey) {
+                if (
+                    credential &&
+                    validateStoredApiKey(apiKey, credential.credentials, credential.isActive)
+                ) {
                     const context = await resolveOrgContext(orgSlugHeader);
                     if (context) {
                         return context;

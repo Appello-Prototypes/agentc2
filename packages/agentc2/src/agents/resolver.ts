@@ -1400,11 +1400,12 @@ export interface RoutingConfig {
     mode: "locked" | "auto";
     fastModel?: { provider: string; name: string };
     escalationModel?: { provider: string; name: string };
+    reasoningModel?: { provider: string; name: string };
     confidenceThreshold?: number; // 0-1, default 0.7
     budgetAware?: boolean;
 }
 
-export type RoutingTier = "FAST" | "PRIMARY" | "ESCALATION";
+export type RoutingTier = "FAST" | "PRIMARY" | "ESCALATION" | "REASONING";
 
 export interface RoutingDecision {
     tier: RoutingTier;
@@ -1419,6 +1420,7 @@ export interface RoutingDecision {
 export function classifyComplexity(input: string): {
     score: number;
     level: "simple" | "moderate" | "complex";
+    needsReasoning: boolean;
 } {
     let score = 0;
 
@@ -1454,7 +1456,13 @@ export function classifyComplexity(input: string): {
     score = Math.max(0, Math.min(1, score));
 
     const level = score >= 0.5 ? "complex" : score >= 0.2 ? "moderate" : "simple";
-    return { score, level };
+
+    // Reasoning detection: problems requiring multi-step logical deduction
+    const reasoningPatterns =
+        /\b(prove|disprove|derive|deduce|step[- ]by[- ]step|mathematical|theorem|proof|logic|contradict|implication|infer|calculate.*show|verify.*correct|find.*error|what.*wrong|debug.*why|root\s*cause|differential|integral|equation|algorithm\s+complexity)\b/i;
+    const needsReasoning = reasoningPatterns.test(input) && score >= 0.4;
+
+    return { score, level, needsReasoning };
 }
 
 /**
@@ -1471,7 +1479,7 @@ export function resolveRoutingDecision(
         return null; // Routing disabled, use primary model as-is
     }
 
-    const { score, level } = classifyComplexity(input);
+    const { score, level, needsReasoning } = classifyComplexity(input);
     const threshold = routingConfig.confidenceThreshold ?? 0.7;
 
     // Budget-aware: if over budget threshold, bias toward fast model for moderate tasks
@@ -1507,5 +1515,108 @@ export function resolveRoutingDecision(
         reason = `Moderate input (score=${score.toFixed(2)})`;
     }
 
+    // Reasoning tier override: if input needs deep reasoning and a reasoning model is configured
+    if (needsReasoning && routingConfig.reasoningModel?.name) {
+        tier = "REASONING";
+        model = routingConfig.reasoningModel;
+        reason = `Reasoning-class input detected (score=${score.toFixed(2)})`;
+    }
+
     return { tier, model, reason };
+}
+
+/**
+ * Resolve model override for any execution path (invoke, runs, Slack, test, chat).
+ * Encapsulates the routing logic so it doesn't need to be duplicated in each route.
+ *
+ * @returns modelOverride to pass to agentResolver.resolve(), or undefined if primary model should be used
+ */
+export async function resolveModelOverride(
+    agentIdOrSlug: string,
+    input:
+        | string
+        | Array<{ role: string; content?: string; parts?: Array<{ type: string; text?: string }> }>,
+    options?: { userId?: string; organizationId?: string }
+): Promise<{
+    modelOverride?: { provider: string; name: string };
+    routingDecision: RoutingDecision | null;
+    isReasoningModel?: boolean;
+}> {
+    const routingRecord = await prisma.agent.findFirst({
+        where: { OR: [{ slug: agentIdOrSlug }, { id: agentIdOrSlug }] },
+        select: {
+            id: true,
+            routingConfig: true,
+            modelProvider: true,
+            modelName: true,
+            budgetPolicy: { select: { enabled: true, alertAtPct: true } }
+        }
+    });
+
+    if (!routingRecord?.routingConfig) {
+        return { routingDecision: null };
+    }
+
+    const rc = routingRecord.routingConfig as unknown as RoutingConfig;
+    if (rc.mode !== "auto") {
+        return { routingDecision: null };
+    }
+
+    // Extract text from input (string or message array)
+    let inputForRouting = "";
+    if (typeof input === "string") {
+        inputForRouting = input;
+    } else if (Array.isArray(input)) {
+        const lastMsg = input.filter((m) => m.role === "user").pop();
+        if (lastMsg?.parts && Array.isArray(lastMsg.parts)) {
+            for (const part of lastMsg.parts) {
+                if (part.type === "text" && part.text) inputForRouting = part.text;
+            }
+        } else if (lastMsg?.content) {
+            inputForRouting = lastMsg.content;
+        }
+    }
+
+    if (!inputForRouting) {
+        return { routingDecision: null };
+    }
+
+    let budgetExceeded = false;
+    if (rc.budgetAware) {
+        try {
+            const budgetResult = await budgetEnforcement.check({
+                agentId: routingRecord.id,
+                userId: options?.userId,
+                organizationId: options?.organizationId
+            });
+            const alertPct = routingRecord.budgetPolicy?.enabled
+                ? (routingRecord.budgetPolicy.alertAtPct ?? 80)
+                : 80;
+            budgetExceeded = budgetResult.warnings.some(
+                (w) => w.level === "agent" && w.percentUsed >= alertPct
+            );
+        } catch (e) {
+            console.warn("[resolveModelOverride] Budget check for routing failed:", e);
+        }
+    }
+
+    const routingDecision = resolveRoutingDecision(
+        rc,
+        { provider: routingRecord.modelProvider, name: routingRecord.modelName },
+        inputForRouting,
+        budgetExceeded
+    );
+
+    let modelOverride: { provider: string; name: string } | undefined;
+    if (routingDecision && routingDecision.tier !== "PRIMARY") {
+        modelOverride = routingDecision.model;
+    }
+
+    const isReasoningModel = routingDecision?.tier === "REASONING";
+
+    console.log(
+        `[ModelRouting] ${routingDecision?.tier || "PRIMARY"} → ${modelOverride ? `${modelOverride.provider}/${modelOverride.name}` : "primary"} (${routingDecision?.reason || "default"})`
+    );
+
+    return { modelOverride, routingDecision, isReasoningModel };
 }

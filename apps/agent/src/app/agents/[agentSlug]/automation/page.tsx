@@ -597,9 +597,7 @@ export default function AutomationPage() {
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                onClick={() =>
-                                                    archiveTrigger(trigger.id, false)
-                                                }
+                                                onClick={() => archiveTrigger(trigger.id, false)}
                                             >
                                                 Unarchive
                                             </Button>
@@ -678,9 +676,7 @@ export default function AutomationPage() {
                                             <Button
                                                 variant="ghost"
                                                 size="sm"
-                                                onClick={() =>
-                                                    archiveTrigger(trigger.id, true)
-                                                }
+                                                onClick={() => archiveTrigger(trigger.id, true)}
                                             >
                                                 Archive
                                             </Button>

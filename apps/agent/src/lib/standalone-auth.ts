@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
+import { validateStoredApiKey } from "@/lib/api-key-hash";
 
 /**
  * Check if running in standalone mode (demo access without authentication)
@@ -94,14 +95,10 @@ export async function getDemoSession(request?: NextRequest): Promise<DemoSession
                         },
                         select: { credentials: true, isActive: true }
                     });
-                    const credentialPayload = credential?.credentials;
-                    const storedKey =
-                        credentialPayload &&
-                        typeof credentialPayload === "object" &&
-                        !Array.isArray(credentialPayload)
-                            ? (credentialPayload as { apiKey?: string }).apiKey
-                            : undefined;
-                    if (credential?.isActive && storedKey && storedKey === apiKey) {
+                    if (
+                        credential &&
+                        validateStoredApiKey(apiKey, credential.credentials, credential.isActive)
+                    ) {
                         const user = await resolveUser(orgSlugHeader);
                         if (user) return { user };
                     }

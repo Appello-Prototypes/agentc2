@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useParams } from "next/navigation"
-import { useState, useEffect, useCallback } from "react"
+import { useParams } from "next/navigation";
+import { useState, useEffect, useCallback } from "react";
 import {
     Badge,
     Button,
@@ -15,85 +15,83 @@ import {
     Skeleton,
     Switch,
     cn
-} from "@repo/ui"
-import { getApiBase } from "@/lib/utils"
+} from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 
 interface ChannelBinding {
-    id: string
-    channelType: string
-    channelIdentifier: string
-    channelName: string | null
-    triggerOnAllMessages: boolean
-    triggerKeywords: string[]
-    isActive: boolean
+    id: string;
+    channelType: string;
+    channelIdentifier: string;
+    channelName: string | null;
+    triggerOnAllMessages: boolean;
+    triggerKeywords: string[];
+    isActive: boolean;
 }
 
 interface Instance {
-    id: string
-    name: string
-    slug: string
-    agentId: string
-    organizationId: string
-    contextType: string | null
-    contextId: string | null
-    contextData: Record<string, unknown> | null
-    instructionOverrides: string | null
-    memoryNamespace: string
-    ragCollectionId: string | null
-    temperatureOverride: number | null
-    maxStepsOverride: number | null
-    isActive: boolean
-    version: number
-    metadata: Record<string, unknown> | null
-    channelBindings: ChannelBinding[]
-    createdAt: string
-    updatedAt: string
+    id: string;
+    name: string;
+    slug: string;
+    agentId: string;
+    organizationId: string;
+    contextType: string | null;
+    contextId: string | null;
+    contextData: Record<string, unknown> | null;
+    instructionOverrides: string | null;
+    memoryNamespace: string;
+    ragCollectionId: string | null;
+    temperatureOverride: number | null;
+    maxStepsOverride: number | null;
+    isActive: boolean;
+    version: number;
+    metadata: Record<string, unknown> | null;
+    channelBindings: ChannelBinding[];
+    createdAt: string;
+    updatedAt: string;
 }
 
-const CHANNEL_TYPES = ["slack", "email", "whatsapp", "web", "voice"] as const
+const CHANNEL_TYPES = ["slack", "email", "whatsapp", "web", "voice"] as const;
 
 export default function InstancesPage() {
-    const params = useParams()
-    const agentSlug = params.agentSlug as string
+    const params = useParams();
+    const agentSlug = params.agentSlug as string;
 
-    const [instances, setInstances] = useState<Instance[]>([])
-    const [loading, setLoading] = useState(true)
-    const [expandedId, setExpandedId] = useState<string | null>(null)
-    const [agentId, setAgentId] = useState<string | null>(null)
+    const [instances, setInstances] = useState<Instance[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [expandedId, setExpandedId] = useState<string | null>(null);
+    const [agentId, setAgentId] = useState<string | null>(null);
 
     // Add-binding form state (per instance)
-    const [addingBindingFor, setAddingBindingFor] = useState<string | null>(null)
-    const [bindingChannelType, setBindingChannelType] = useState<string>("slack")
-    const [bindingChannelId, setBindingChannelId] = useState("")
-    const [bindingChannelName, setBindingChannelName] = useState("")
-    const [bindingTriggerAll, setBindingTriggerAll] = useState(false)
-    const [bindingSaving, setBindingSaving] = useState(false)
+    const [addingBindingFor, setAddingBindingFor] = useState<string | null>(null);
+    const [bindingChannelType, setBindingChannelType] = useState<string>("slack");
+    const [bindingChannelId, setBindingChannelId] = useState("");
+    const [bindingChannelName, setBindingChannelName] = useState("");
+    const [bindingTriggerAll, setBindingTriggerAll] = useState(false);
+    const [bindingSaving, setBindingSaving] = useState(false);
 
     const fetchInstances = useCallback(async () => {
         try {
-            const agentRes = await fetch(`${getApiBase()}/api/agents/${agentSlug}`)
-            const agentData = await agentRes.json()
-            if (!agentData.success || !agentData.agent) return
+            const agentRes = await fetch(`${getApiBase()}/api/agents/${agentSlug}`);
+            const agentData = await agentRes.json();
+            if (!agentData.success || !agentData.agent) return;
 
-            setAgentId(agentData.agent.id)
+            setAgentId(agentData.agent.id);
 
-            const res = await fetch(
-                `${getApiBase()}/api/instances?agentId=${agentData.agent.id}`
-            )
-            const data = await res.json()
+            const res = await fetch(`${getApiBase()}/api/instances?agentId=${agentData.agent.id}`);
+            const data = await res.json();
             if (data.instances) {
-                setInstances(data.instances)
+                setInstances(data.instances);
             }
         } catch (error) {
-            console.error("Failed to fetch instances:", error)
+            console.error("Failed to fetch instances:", error);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }, [agentSlug])
+    }, [agentSlug]);
 
     useEffect(() => {
-        fetchInstances()
-    }, [fetchInstances])
+        fetchInstances();
+    }, [fetchInstances]);
 
     const toggleActive = async (instanceId: string, currentActive: boolean) => {
         try {
@@ -101,28 +99,28 @@ export default function InstancesPage() {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ isActive: !currentActive })
-            })
-            fetchInstances()
+            });
+            fetchInstances();
         } catch (error) {
-            console.error("Failed to toggle instance:", error)
+            console.error("Failed to toggle instance:", error);
         }
-    }
+    };
 
     const deleteInstance = async (instanceId: string) => {
-        if (!confirm("Delete this instance and all its channel bindings?")) return
+        if (!confirm("Delete this instance and all its channel bindings?")) return;
         try {
             await fetch(`${getApiBase()}/api/instances/${instanceId}`, {
                 method: "DELETE"
-            })
-            fetchInstances()
+            });
+            fetchInstances();
         } catch (error) {
-            console.error("Failed to delete instance:", error)
+            console.error("Failed to delete instance:", error);
         }
-    }
+    };
 
     const addBinding = async (instanceId: string) => {
-        if (!bindingChannelId.trim()) return
-        setBindingSaving(true)
+        if (!bindingChannelId.trim()) return;
+        setBindingSaving(true);
         try {
             await fetch(`${getApiBase()}/api/instances/${instanceId}/bindings`, {
                 method: "POST",
@@ -133,30 +131,30 @@ export default function InstancesPage() {
                     channelName: bindingChannelName.trim() || null,
                     triggerOnAllMessages: bindingTriggerAll
                 })
-            })
-            setAddingBindingFor(null)
-            setBindingChannelId("")
-            setBindingChannelName("")
-            setBindingTriggerAll(false)
-            fetchInstances()
+            });
+            setAddingBindingFor(null);
+            setBindingChannelId("");
+            setBindingChannelName("");
+            setBindingTriggerAll(false);
+            fetchInstances();
         } catch (error) {
-            console.error("Failed to add binding:", error)
+            console.error("Failed to add binding:", error);
         } finally {
-            setBindingSaving(false)
+            setBindingSaving(false);
         }
-    }
+    };
 
     const removeBinding = async (instanceId: string, bindingId: string) => {
         try {
             await fetch(
                 `${getApiBase()}/api/instances/${instanceId}/bindings?bindingId=${bindingId}`,
                 { method: "DELETE" }
-            )
-            fetchInstances()
+            );
+            fetchInstances();
         } catch (error) {
-            console.error("Failed to remove binding:", error)
+            console.error("Failed to remove binding:", error);
         }
-    }
+    };
 
     if (loading) {
         return (
@@ -168,7 +166,7 @@ export default function InstancesPage() {
                     ))}
                 </div>
             </div>
-        )
+        );
     }
 
     return (
@@ -177,8 +175,8 @@ export default function InstancesPage() {
                 <div>
                     <h1 className="text-xl font-semibold">Instances</h1>
                     <p className="text-muted-foreground text-sm">
-                        Deployed copies of this agent, each with isolated memory and
-                        custom configuration.
+                        Deployed copies of this agent, each with isolated memory and custom
+                        configuration.
                     </p>
                 </div>
                 <Badge variant="outline" className="tabular-nums">
@@ -192,8 +190,8 @@ export default function InstancesPage() {
                         No instances deployed
                     </p>
                     <p className="text-muted-foreground mb-4 text-xs">
-                        Create an instance to deploy this agent with isolated memory
-                        and custom overrides.
+                        Create an instance to deploy this agent with isolated memory and custom
+                        overrides.
                     </p>
                     <p className="text-muted-foreground text-xs">
                         Use the{" "}
@@ -206,7 +204,7 @@ export default function InstancesPage() {
             ) : (
                 <div className="space-y-3">
                     {instances.map((instance) => {
-                        const isExpanded = expandedId === instance.id
+                        const isExpanded = expandedId === instance.id;
                         return (
                             <div
                                 key={instance.id}
@@ -214,11 +212,7 @@ export default function InstancesPage() {
                             >
                                 <button
                                     className="flex w-full items-center justify-between p-4 text-left"
-                                    onClick={() =>
-                                        setExpandedId(
-                                            isExpanded ? null : instance.id
-                                        )
-                                    }
+                                    onClick={() => setExpandedId(isExpanded ? null : instance.id)}
                                 >
                                     <div className="flex items-center gap-3">
                                         <span
@@ -231,9 +225,7 @@ export default function InstancesPage() {
                                         />
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="font-medium">
-                                                    {instance.name}
-                                                </span>
+                                                <span className="font-medium">{instance.name}</span>
                                                 <span className="text-muted-foreground font-mono text-xs">
                                                     {instance.slug}
                                                 </span>
@@ -248,16 +240,12 @@ export default function InstancesPage() {
                                                     </Badge>
                                                 )}
                                                 <span>
-                                                    {instance.channelBindings.length}{" "}
-                                                    binding
-                                                    {instance.channelBindings
-                                                        .length !== 1
+                                                    {instance.channelBindings.length} binding
+                                                    {instance.channelBindings.length !== 1
                                                         ? "s"
                                                         : ""}
                                                 </span>
-                                                <span className="text-muted-foreground/50">
-                                                    ·
-                                                </span>
+                                                <span className="text-muted-foreground/50">·</span>
                                                 <span className="font-mono">
                                                     {instance.memoryNamespace}
                                                 </span>
@@ -282,9 +270,7 @@ export default function InstancesPage() {
                                                     Instruction Overrides
                                                 </h4>
                                                 <pre className="bg-muted max-h-32 overflow-auto rounded p-2 text-xs whitespace-pre-wrap">
-                                                    {
-                                                        instance.instructionOverrides
-                                                    }
+                                                    {instance.instructionOverrides}
                                                 </pre>
                                             </div>
                                         )}
@@ -295,8 +281,7 @@ export default function InstancesPage() {
                                                     Temperature
                                                 </span>
                                                 <p className="font-mono text-sm">
-                                                    {instance.temperatureOverride ??
-                                                        "default"}
+                                                    {instance.temperatureOverride ?? "default"}
                                                 </p>
                                             </div>
                                             <div>
@@ -304,8 +289,7 @@ export default function InstancesPage() {
                                                     Max Steps
                                                 </span>
                                                 <p className="font-mono text-sm">
-                                                    {instance.maxStepsOverride ??
-                                                        "default"}
+                                                    {instance.maxStepsOverride ?? "default"}
                                                 </p>
                                             </div>
                                             <div>
@@ -324,27 +308,18 @@ export default function InstancesPage() {
                                                 <h4 className="text-muted-foreground text-xs font-medium uppercase">
                                                     Channel Bindings
                                                 </h4>
-                                                {addingBindingFor !==
-                                                    instance.id && (
+                                                {addingBindingFor !== instance.id && (
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
                                                         className="h-6 text-xs"
                                                         onClick={(e) => {
-                                                            e.stopPropagation()
-                                                            setAddingBindingFor(
-                                                                instance.id
-                                                            )
-                                                            setBindingChannelType(
-                                                                "slack"
-                                                            )
-                                                            setBindingChannelId("")
-                                                            setBindingChannelName(
-                                                                ""
-                                                            )
-                                                            setBindingTriggerAll(
-                                                                false
-                                                            )
+                                                            e.stopPropagation();
+                                                            setAddingBindingFor(instance.id);
+                                                            setBindingChannelType("slack");
+                                                            setBindingChannelId("");
+                                                            setBindingChannelName("");
+                                                            setBindingTriggerAll(false);
                                                         }}
                                                     >
                                                         + Add Binding
@@ -352,107 +327,87 @@ export default function InstancesPage() {
                                                 )}
                                             </div>
 
-                                            {instance.channelBindings.length >
-                                                0 && (
+                                            {instance.channelBindings.length > 0 && (
                                                 <div className="mb-2 space-y-1.5">
-                                                    {instance.channelBindings.map(
-                                                        (b) => (
-                                                            <div
-                                                                key={b.id}
-                                                                className="bg-muted/50 flex items-center justify-between rounded px-3 py-1.5 text-xs"
-                                                            >
-                                                                <div className="flex items-center gap-2">
+                                                    {instance.channelBindings.map((b) => (
+                                                        <div
+                                                            key={b.id}
+                                                            className="bg-muted/50 flex items-center justify-between rounded px-3 py-1.5 text-xs"
+                                                        >
+                                                            <div className="flex items-center gap-2">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className="h-4 px-1 text-[9px]"
+                                                                >
+                                                                    {b.channelType}
+                                                                </Badge>
+                                                                <span className="font-medium">
+                                                                    {b.channelName ||
+                                                                        b.channelIdentifier}
+                                                                </span>
+                                                                <span className="text-muted-foreground font-mono">
+                                                                    {b.channelIdentifier}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                {b.triggerOnAllMessages && (
                                                                     <Badge
-                                                                        variant="outline"
+                                                                        variant="secondary"
                                                                         className="h-4 px-1 text-[9px]"
                                                                     >
-                                                                        {
-                                                                            b.channelType
-                                                                        }
+                                                                        all messages
                                                                     </Badge>
-                                                                    <span className="font-medium">
-                                                                        {b.channelName ||
-                                                                            b.channelIdentifier}
-                                                                    </span>
-                                                                    <span className="text-muted-foreground font-mono">
-                                                                        {b.channelIdentifier}
-                                                                    </span>
-                                                                </div>
-                                                                <div className="flex items-center gap-2">
-                                                                    {b.triggerOnAllMessages && (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="h-4 px-1 text-[9px]"
-                                                                        >
-                                                                            all
-                                                                            messages
-                                                                        </Badge>
-                                                                    )}
-                                                                    {b.triggerKeywords
-                                                                        .length >
-                                                                        0 && (
-                                                                        <Badge
-                                                                            variant="secondary"
-                                                                            className="h-4 px-1 text-[9px]"
-                                                                        >
-                                                                            {
-                                                                                b
-                                                                                    .triggerKeywords
-                                                                                    .length
-                                                                            }{" "}
-                                                                            keyword
-                                                                            {b
-                                                                                .triggerKeywords
-                                                                                .length !==
-                                                                            1
-                                                                                ? "s"
-                                                                                : ""}
-                                                                        </Badge>
-                                                                    )}
-                                                                    <span
-                                                                        className={cn(
-                                                                            "size-1.5 rounded-full",
-                                                                            b.isActive
-                                                                                ? "bg-green-500"
-                                                                                : "bg-muted-foreground"
-                                                                        )}
-                                                                    />
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="sm"
-                                                                        className="text-destructive h-5 px-1 text-[10px]"
-                                                                        onClick={(
-                                                                            e
-                                                                        ) => {
-                                                                            e.stopPropagation()
-                                                                            removeBinding(
-                                                                                instance.id,
-                                                                                b.id
-                                                                            )
-                                                                        }}
+                                                                )}
+                                                                {b.triggerKeywords.length > 0 && (
+                                                                    <Badge
+                                                                        variant="secondary"
+                                                                        className="h-4 px-1 text-[9px]"
                                                                     >
-                                                                        Remove
-                                                                    </Button>
-                                                                </div>
+                                                                        {b.triggerKeywords.length}{" "}
+                                                                        keyword
+                                                                        {b.triggerKeywords
+                                                                            .length !== 1
+                                                                            ? "s"
+                                                                            : ""}
+                                                                    </Badge>
+                                                                )}
+                                                                <span
+                                                                    className={cn(
+                                                                        "size-1.5 rounded-full",
+                                                                        b.isActive
+                                                                            ? "bg-green-500"
+                                                                            : "bg-muted-foreground"
+                                                                    )}
+                                                                />
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-destructive h-5 px-1 text-[10px]"
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        removeBinding(
+                                                                            instance.id,
+                                                                            b.id
+                                                                        );
+                                                                    }}
+                                                                >
+                                                                    Remove
+                                                                </Button>
                                                             </div>
-                                                        )
-                                                    )}
+                                                        </div>
+                                                    ))}
                                                 </div>
                                             )}
 
-                                            {instance.channelBindings.length ===
-                                                0 &&
-                                                addingBindingFor !==
-                                                    instance.id && (
+                                            {instance.channelBindings.length === 0 &&
+                                                addingBindingFor !== instance.id && (
                                                     <p className="text-muted-foreground mb-2 text-xs">
-                                                        No channel bindings
-                                                        configured.
+                                                        No channel bindings configured.
                                                     </p>
                                                 )}
 
                                             {/* Add Binding Form */}
-                                            {addingBindingFor ===
-                                                instance.id && (
+                                            {addingBindingFor === instance.id && (
                                                 <div className="bg-muted/30 space-y-3 rounded-lg border p-3">
                                                     <div className="grid grid-cols-2 gap-3">
                                                         <div className="space-y-1">
@@ -460,15 +415,10 @@ export default function InstancesPage() {
                                                                 Channel Type
                                                             </Label>
                                                             <Select
-                                                                value={
-                                                                    bindingChannelType
-                                                                }
-                                                                onValueChange={(
-                                                                    v
-                                                                ) =>
+                                                                value={bindingChannelType}
+                                                                onValueChange={(v) =>
                                                                     setBindingChannelType(
-                                                                        v ??
-                                                                            "slack"
+                                                                        v ?? "slack"
                                                                     )
                                                                 }
                                                             >
@@ -476,25 +426,17 @@ export default function InstancesPage() {
                                                                     <SelectValue />
                                                                 </SelectTrigger>
                                                                 <SelectContent>
-                                                                    {CHANNEL_TYPES.map(
-                                                                        (t) => (
-                                                                            <SelectItem
-                                                                                key={
-                                                                                    t
-                                                                                }
-                                                                                value={
-                                                                                    t
-                                                                                }
-                                                                            >
-                                                                                {t.charAt(
-                                                                                    0
-                                                                                ).toUpperCase() +
-                                                                                    t.slice(
-                                                                                        1
-                                                                                    )}
-                                                                            </SelectItem>
-                                                                        )
-                                                                    )}
+                                                                    {CHANNEL_TYPES.map((t) => (
+                                                                        <SelectItem
+                                                                            key={t}
+                                                                            value={t}
+                                                                        >
+                                                                            {t
+                                                                                .charAt(0)
+                                                                                .toUpperCase() +
+                                                                                t.slice(1)}
+                                                                        </SelectItem>
+                                                                    ))}
                                                                 </SelectContent>
                                                             </Select>
                                                         </div>
@@ -505,18 +447,14 @@ export default function InstancesPage() {
                                                             <Input
                                                                 className="h-8 text-xs"
                                                                 placeholder={
-                                                                    bindingChannelType ===
-                                                                    "slack"
+                                                                    bindingChannelType === "slack"
                                                                         ? "C0123456789"
                                                                         : "identifier"
                                                                 }
-                                                                value={
-                                                                    bindingChannelId
-                                                                }
+                                                                value={bindingChannelId}
                                                                 onChange={(e) =>
                                                                     setBindingChannelId(
-                                                                        e.target
-                                                                            .value
+                                                                        e.target.value
                                                                     )
                                                                 }
                                                             />
@@ -524,41 +462,31 @@ export default function InstancesPage() {
                                                     </div>
                                                     <div className="space-y-1">
                                                         <Label className="text-xs">
-                                                            Display Name
-                                                            (optional)
+                                                            Display Name (optional)
                                                         </Label>
                                                         <Input
                                                             className="h-8 text-xs"
                                                             placeholder={
-                                                                bindingChannelType ===
-                                                                "slack"
+                                                                bindingChannelType === "slack"
                                                                     ? "#channel-name"
                                                                     : "name"
                                                             }
-                                                            value={
-                                                                bindingChannelName
-                                                            }
+                                                            value={bindingChannelName}
                                                             onChange={(e) =>
                                                                 setBindingChannelName(
-                                                                    e.target
-                                                                        .value
+                                                                    e.target.value
                                                                 )
                                                             }
                                                         />
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <Switch
-                                                            checked={
-                                                                bindingTriggerAll
-                                                            }
-                                                            onCheckedChange={
-                                                                setBindingTriggerAll
-                                                            }
+                                                            checked={bindingTriggerAll}
+                                                            onCheckedChange={setBindingTriggerAll}
                                                         />
                                                         <Label className="text-xs">
-                                                            Trigger on all
-                                                            messages (no
-                                                            @mention required)
+                                                            Trigger on all messages (no @mention
+                                                            required)
                                                         </Label>
                                                     </div>
                                                     <div className="flex gap-2">
@@ -570,10 +498,8 @@ export default function InstancesPage() {
                                                                 bindingSaving
                                                             }
                                                             onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                addBinding(
-                                                                    instance.id
-                                                                )
+                                                                e.stopPropagation();
+                                                                addBinding(instance.id);
                                                             }}
                                                         >
                                                             {bindingSaving
@@ -585,10 +511,8 @@ export default function InstancesPage() {
                                                             size="sm"
                                                             className="h-7 text-xs"
                                                             onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                setAddingBindingFor(
-                                                                    null
-                                                                )
+                                                                e.stopPropagation();
+                                                                setAddingBindingFor(null);
                                                             }}
                                                         >
                                                             Cancel
@@ -603,22 +527,15 @@ export default function InstancesPage() {
                                                 variant="outline"
                                                 size="sm"
                                                 onClick={() =>
-                                                    toggleActive(
-                                                        instance.id,
-                                                        instance.isActive
-                                                    )
+                                                    toggleActive(instance.id, instance.isActive)
                                                 }
                                             >
-                                                {instance.isActive
-                                                    ? "Deactivate"
-                                                    : "Activate"}
+                                                {instance.isActive ? "Deactivate" : "Activate"}
                                             </Button>
                                             <Button
                                                 variant="destructive"
                                                 size="sm"
-                                                onClick={() =>
-                                                    deleteInstance(instance.id)
-                                                }
+                                                onClick={() => deleteInstance(instance.id)}
                                             >
                                                 Delete
                                             </Button>
@@ -626,10 +543,10 @@ export default function InstancesPage() {
                                     </div>
                                 )}
                             </div>
-                        )
+                        );
                     })}
                 </div>
             )}
         </div>
-    )
+    );
 }

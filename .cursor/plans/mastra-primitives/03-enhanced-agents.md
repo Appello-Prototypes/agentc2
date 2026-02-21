@@ -430,8 +430,8 @@ const response = await researchAgent.generate("What are the benefits of TypeScri
 
 ## Files Changed
 
-| File                                       | Action |
-| ------------------------------------------ | ------ |
+| File                                        | Action |
+| ------------------------------------------- | ------ |
 | `packages/agentc2/src/agents/structured.ts` | Create |
 | `packages/agentc2/src/agents/vision.ts`     | Create |
 | `packages/agentc2/src/agents/research.ts`   | Create |

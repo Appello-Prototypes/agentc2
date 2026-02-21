@@ -10,8 +10,8 @@ AgentC2 uses AES-256-GCM envelope encryption for all sensitive data at rest, Ed2
 
 ### Key Files
 
-| File                                       | Purpose                                                     |
-| ------------------------------------------ | ----------------------------------------------------------- |
+| File                                        | Purpose                                                     |
+| ------------------------------------------- | ----------------------------------------------------------- |
 | `packages/agentc2/src/crypto/encryption.ts` | AES-256-GCM encrypt/decrypt, HKDF key derivation            |
 | `packages/agentc2/src/crypto/signing.ts`    | Ed25519 key generation, signing, verification               |
 | `packages/agentc2/src/crypto/keys.ts`       | Organization key pair lifecycle (provision, rotate, revoke) |

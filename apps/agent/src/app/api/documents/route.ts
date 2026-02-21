@@ -7,7 +7,7 @@ import {
     type CreateDocumentInput
 } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
-import { getDefaultWorkspaceIdForUser } from "@/lib/organization";
+import { getDefaultWorkspaceIdForUser, getUserOrganizationId } from "@/lib/organization";
 
 /**
  * GET /api/documents
@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
             (await getDefaultWorkspaceIdForUser(userId)) ||
             undefined;
 
+        const organizationId = await getUserOrganizationId(userId);
+
         const result = await listDocumentRecords({
+            organizationId: organizationId || undefined,
             workspaceId,
             category,
             type,
@@ -106,6 +109,8 @@ export async function POST(request: NextRequest) {
         const workspaceId =
             body.workspaceId || (await getDefaultWorkspaceIdForUser(userId)) || undefined;
 
+        const organizationId = await getUserOrganizationId(userId);
+
         const input: CreateDocumentInput = {
             slug,
             name,
@@ -116,6 +121,7 @@ export async function POST(request: NextRequest) {
             tags,
             metadata,
             workspaceId,
+            organizationId: organizationId || undefined,
             type,
             createdBy: userId,
             chunkOptions

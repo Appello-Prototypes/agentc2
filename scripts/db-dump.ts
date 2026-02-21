@@ -178,7 +178,16 @@ interface TableResult {
     samples?: Record<string, unknown>[];
 }
 
+const VALID_IDENTIFIER = /^"?[a-zA-Z_][a-zA-Z0-9_]*"?$/;
+
+function assertSafeIdentifier(sql: string): void {
+    if (!VALID_IDENTIFIER.test(sql)) {
+        throw new Error(`Unsafe SQL identifier rejected: ${sql}`);
+    }
+}
+
 async function getCount(sql: string): Promise<number> {
+    assertSafeIdentifier(sql);
     const result = (await prisma.$queryRawUnsafe(
         `SELECT count(*)::int as c FROM ${sql}`
     )) as Array<{ c: number }>;
@@ -187,10 +196,12 @@ async function getCount(sql: string): Promise<number> {
 
 async function getSamples(sql: string, limit: number): Promise<Record<string, unknown>[]> {
     if (limit <= 0) return [];
-    const rows = (await prisma.$queryRawUnsafe(`SELECT * FROM ${sql} LIMIT ${limit}`)) as Record<
-        string,
-        unknown
-    >[];
+    assertSafeIdentifier(sql);
+    const safeLimit = Math.max(1, Math.min(Math.floor(limit), 100));
+    const rows = (await prisma.$queryRawUnsafe(
+        `SELECT * FROM ${sql} LIMIT $1`,
+        safeLimit
+    )) as Record<string, unknown>[];
     return rows;
 }
 

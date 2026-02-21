@@ -102,8 +102,8 @@ After deploying, configure each tool in the ElevenLabs agent dashboard:
 | File                                                | Action                          |
 | --------------------------------------------------- | ------------------------------- |
 | `apps/agent/src/app/api/demos/voice/tools/route.ts` | Create - Webhook endpoint       |
-| `packages/agentc2/src/mcp/client.ts`                 | Modify - Add `executeMcpTool()` |
-| `packages/agentc2/src/mcp/index.ts`                  | Modify - Export new function    |
+| `packages/agentc2/src/mcp/client.ts`                | Modify - Add `executeMcpTool()` |
+| `packages/agentc2/src/mcp/index.ts`                 | Modify - Export new function    |
 
 ## Security Considerations
 

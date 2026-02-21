@@ -25,6 +25,7 @@ export interface CreateDocumentInput {
     tags?: string[];
     metadata?: Record<string, unknown>;
     workspaceId?: string;
+    organizationId?: string;
     type?: "USER" | "SYSTEM";
     createdBy?: string;
     chunkOptions?: ChunkOptions;
@@ -47,6 +48,7 @@ export interface UpdateDocumentInput {
 
 export interface ListDocumentsInput {
     workspaceId?: string;
+    organizationId?: string;
     category?: string;
     tags?: string[];
     type?: "USER" | "SYSTEM";
@@ -57,6 +59,7 @@ export interface ListDocumentsInput {
 export interface SearchDocumentsInput {
     query: string;
     documentId?: string;
+    organizationId?: string;
     topK?: number;
     minScore?: number;
 }
@@ -87,9 +90,11 @@ async function embedDocumentAsync(
         type: string;
         sourceName: string;
         chunkOptions?: ChunkOptions;
+        organizationId?: string;
     }
 ) {
     const ragResult = await ragIngest(content, {
+        organizationId: options.organizationId,
         type: options.type as DocumentType,
         sourceId: slug,
         sourceName: options.sourceName,
@@ -159,15 +164,27 @@ export async function createDocument(input: CreateDocumentInput) {
             tags: input.tags || [],
             metadata: (input.metadata || {}) as Prisma.InputJsonValue,
             workspaceId: input.workspaceId,
+            organizationId: input.organizationId,
             type: input.type || "USER",
             createdBy: input.createdBy
         }
     });
 
+    // Resolve organizationId: prefer explicit, else derive from workspace
+    let resolvedOrgId = input.organizationId;
+    if (!resolvedOrgId && input.workspaceId) {
+        const ws = await prisma.workspace.findUnique({
+            where: { id: input.workspaceId },
+            select: { organizationId: true }
+        });
+        resolvedOrgId = ws?.organizationId || undefined;
+    }
+
     embedDocumentAsync(document.id, slug, input.content, {
         type: contentType,
         sourceName: input.name,
-        chunkOptions: input.chunkOptions
+        chunkOptions: input.chunkOptions,
+        organizationId: resolvedOrgId
     }).catch((error) => {
         console.error(`[DocumentService] Background embedding failed for "${slug}":`, error);
     });
@@ -282,14 +299,19 @@ export async function deleteDocument(idOrSlug: string) {
 }
 
 /**
- * Get a single document by ID or slug
+ * Get a single document by ID or slug.
+ * When organizationId is provided, the query is scoped to that org (query-level isolation).
  */
-export async function getDocument(idOrSlug: string) {
-    // Try by ID first, then by slug
+export async function getDocument(idOrSlug: string, organizationId?: string) {
+    const where: Record<string, unknown> = {
+        OR: [{ id: idOrSlug }, { slug: idOrSlug }]
+    };
+    if (organizationId) {
+        where.organizationId = organizationId;
+    }
+
     const document = await prisma.document.findFirst({
-        where: {
-            OR: [{ id: idOrSlug }, { slug: idOrSlug }]
-        },
+        where,
         include: {
             skills: {
                 include: {
@@ -310,6 +332,7 @@ export async function getDocument(idOrSlug: string) {
 export async function listDocuments(input: ListDocumentsInput = {}) {
     const where: Record<string, unknown> = {};
 
+    if (input.organizationId) where.organizationId = input.organizationId;
     if (input.workspaceId) where.workspaceId = input.workspaceId;
     if (input.category) where.category = input.category;
     if (input.type) where.type = input.type;
@@ -365,6 +388,7 @@ export async function searchDocuments(input: SearchDocumentsInput) {
     }
 
     const results = await queryRag(input.query, {
+        organizationId: input.organizationId,
         topK: input.topK ?? 5,
         minScore: input.minScore ?? 0.5,
         filter: Object.keys(filter).length > 0 ? filter : undefined
@@ -378,14 +402,21 @@ export async function searchDocuments(input: SearchDocumentsInput) {
  */
 export async function reembedDocument(id: string, chunkOptions?: ChunkOptions) {
     const existing = await prisma.document.findUniqueOrThrow({
-        where: { id }
+        where: { id },
+        include: { workspace: { select: { organizationId: true } } }
     });
 
     // Delete old vectors
     await ragDelete(existing.slug);
 
+    // Resolve org for tenant-scoped vector metadata (prefer document's own field, fall back to workspace)
+    const reembedOrgId =
+        existing.organizationId ||
+        (existing as { workspace?: { organizationId: string } | null }).workspace?.organizationId;
+
     // Re-ingest
     const ragResult = await ragIngest(existing.content, {
+        organizationId: reembedOrgId || undefined,
         type: existing.contentType as DocumentType,
         sourceId: existing.slug,
         sourceName: existing.name,

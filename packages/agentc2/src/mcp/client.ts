@@ -2149,10 +2149,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             },
             importHints: {
                 matchNames: ["AWS", "aws", "Amazon Web Services"],
-                matchArgs: [
-                    "awslabs.aws-api-mcp-server",
-                    "awslabs.aws-api-mcp-server@latest"
-                ],
+                matchArgs: ["awslabs.aws-api-mcp-server", "awslabs.aws-api-mcp-server@latest"],
                 envAliases: {
                     AWS_ACCESS_KEY_ID: "AWS_ACCESS_KEY_ID",
                     AWS_SECRET_ACCESS_KEY: "AWS_SECRET_ACCESS_KEY",
@@ -2255,10 +2252,7 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
             },
             importHints: {
                 matchNames: ["Oracle Cloud", "OCI", "oracle-cloud", "Oracle"],
-                matchArgs: [
-                    "oracle.oci-cloud-mcp-server",
-                    "@purplesquirrel/oracle-mcp-server"
-                ],
+                matchArgs: ["oracle.oci-cloud-mcp-server", "@purplesquirrel/oracle-mcp-server"],
                 envAliases: {
                     OCI_CLI_TENANCY: "OCI_CLI_TENANCY",
                     OCI_CLI_USER: "OCI_CLI_USER",
@@ -4625,6 +4619,38 @@ export interface McpToolDefinition {
  * @param parameters - The parameters to pass to the tool
  * @returns The result of the tool execution
  */
+
+const MAX_MCP_RESULT_CHARS = 12_000;
+
+/**
+ * Truncate an MCP tool result to prevent context explosion in multi-step runs.
+ * Handles both string and object results safely.
+ */
+export function truncateMcpResult(
+    result: unknown,
+    maxChars: number = MAX_MCP_RESULT_CHARS
+): unknown {
+    if (result === null || result === undefined) return result;
+
+    const serialized = typeof result === "string" ? result : JSON.stringify(result);
+    if (serialized.length <= maxChars) return result;
+
+    if (typeof result === "string") {
+        return (
+            result.substring(0, maxChars) +
+            `\n...[truncated, ${serialized.length - maxChars} chars omitted]`
+        );
+    }
+
+    // For objects, truncate the serialized form and return a wrapper
+    const truncatedStr = serialized.substring(0, maxChars);
+    return {
+        _truncated: true,
+        _originalLength: serialized.length,
+        data: truncatedStr
+    };
+}
+
 export async function executeMcpTool(
     toolName: string,
     parameters: Record<string, unknown>,
@@ -4734,7 +4760,7 @@ export async function executeMcpTool(
         return {
             success: true,
             toolName: matchedName,
-            result
+            result: truncateMcpResult(result)
         };
     } catch (error) {
         return {

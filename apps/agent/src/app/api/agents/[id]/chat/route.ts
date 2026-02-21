@@ -9,11 +9,9 @@ import {
 import {
     agentResolver,
     BudgetExceededError,
-    resolveRoutingDecision,
-    type RoutingConfig,
+    resolveModelOverride,
     type RoutingDecision
 } from "@repo/agentc2/agents";
-import { budgetEnforcement } from "@repo/agentc2";
 import { getScorersByNames } from "@repo/agentc2/scorers/registry";
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
@@ -28,6 +26,7 @@ import {
 import { calculateCost } from "@/lib/cost-calculator";
 import { createTriggerEventRecord } from "@/lib/trigger-events";
 import { getUserOrganizationId, getDefaultWorkspaceIdForUser } from "@/lib/organization";
+import { orgScopedResourceId, orgScopedThreadId } from "@repo/agentc2/tenant-scope";
 import { requireAgentAccess, requireAuth } from "@/lib/authz";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { RATE_LIMIT_POLICIES } from "@/lib/security/rate-limit-policy";
@@ -247,18 +246,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const mode = requestContext?.mode || "test";
         const runSource: RunSource = mode === "live" ? "api" : "test";
 
-        // Create a thread ID for this session
-        const userThreadId = threadId || `${runSource}-${id}-${Date.now()}`;
-        const resourceId = requestContext?.userId || "test-user";
-
         // Resolve organization and workspace context for the user
+        const rawUserId = requestContext?.userId || `anon-${Date.now()}`;
         let resolvedOrgId: string | null = null;
         let enrichedRequestContext = requestContext;
         const tOrg = performance.now();
-        if (resourceId && resourceId !== "test-user" && resourceId !== "chat-user") {
+        if (rawUserId && !rawUserId.startsWith("anon-")) {
             const [orgId, workspaceId] = await Promise.all([
-                getUserOrganizationId(resourceId),
-                getDefaultWorkspaceIdForUser(resourceId)
+                getUserOrganizationId(rawUserId),
+                getDefaultWorkspaceIdForUser(rawUserId)
             ]);
             resolvedOrgId = orgId;
             if (orgId || workspaceId) {
@@ -269,11 +265,17 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 };
             }
         }
+
+        // Org-scoped memory identifiers to prevent cross-tenant leakage
+        const resourceId = orgScopedResourceId(resolvedOrgId || "", rawUserId);
+        const userThreadId = threadId
+            ? resolvedOrgId
+                ? `${resolvedOrgId}:${threadId}`
+                : threadId
+            : orgScopedThreadId(resolvedOrgId || "", runSource, id, String(Date.now()));
         timing.orgResolve = Math.round(performance.now() - tOrg);
 
         // ── Model Routing (pre-resolve) ─────────────────────────────────────
-        // Extract last user message text for routing classification BEFORE
-        // resolving the agent, so we can pass a modelOverride to resolve().
         let routingDecision: RoutingDecision | null = null;
         let modelOverrideForResolve: { provider: string; name: string } | undefined;
 
@@ -286,74 +288,12 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 `[Agent Chat] Explicit model override: ${modelOverride.provider}/${modelOverride.name}`
             );
         } else {
-            const routingRecord = await prisma.agent.findFirst({
-                where: { OR: [{ slug: id }, { id }] },
-                select: {
-                    id: true,
-                    routingConfig: true,
-                    modelProvider: true,
-                    modelName: true,
-                    budgetPolicy: { select: { enabled: true, alertAtPct: true } }
-                }
+            const routingResult = await resolveModelOverride(id, messages || [], {
+                userId: resourceId !== "test-user" ? resourceId : undefined,
+                organizationId: resolvedOrgId || undefined
             });
-
-            if (routingRecord?.routingConfig) {
-                const rc = routingRecord.routingConfig as unknown as RoutingConfig;
-                if (rc.mode === "auto") {
-                    const lastMsg = messages
-                        ?.filter((m: { role: string }) => m.role === "user")
-                        .pop() as
-                        | { content?: string; parts?: Array<{ type: string; text?: string }> }
-                        | undefined;
-                    let inputForRouting = "";
-                    if (lastMsg?.parts && Array.isArray(lastMsg.parts)) {
-                        for (const part of lastMsg.parts) {
-                            if (part.type === "text" && part.text) inputForRouting = part.text;
-                        }
-                    } else if (lastMsg?.content) {
-                        inputForRouting = lastMsg.content;
-                    }
-
-                    if (inputForRouting) {
-                        let budgetExceeded = false;
-                        if (rc.budgetAware) {
-                            try {
-                                const budgetResult = await budgetEnforcement.check({
-                                    agentId: routingRecord.id,
-                                    userId: resourceId !== "test-user" ? resourceId : undefined,
-                                    organizationId: resolvedOrgId
-                                });
-                                const alertPct = routingRecord.budgetPolicy?.enabled
-                                    ? (routingRecord.budgetPolicy.alertAtPct ?? 80)
-                                    : 80;
-                                budgetExceeded = budgetResult.warnings.some(
-                                    (w) => w.level === "agent" && w.percentUsed >= alertPct
-                                );
-                            } catch (e) {
-                                console.warn("[Agent Chat] Budget check for routing failed:", e);
-                            }
-                        }
-
-                        routingDecision = resolveRoutingDecision(
-                            rc,
-                            {
-                                provider: routingRecord.modelProvider,
-                                name: routingRecord.modelName
-                            },
-                            inputForRouting,
-                            budgetExceeded
-                        );
-
-                        if (routingDecision && routingDecision.tier !== "PRIMARY") {
-                            modelOverrideForResolve = routingDecision.model;
-                        }
-
-                        console.log(
-                            `[Agent Chat] Model routing: ${routingDecision?.tier || "PRIMARY"} → ${modelOverrideForResolve ? `${modelOverrideForResolve.provider}/${modelOverrideForResolve.name}` : "primary"} (${routingDecision?.reason || "default"})`
-                        );
-                    }
-                }
-            }
+            routingDecision = routingResult.routingDecision;
+            modelOverrideForResolve = routingResult.modelOverride;
         }
 
         // Resolve agent via AgentResolver (database-first, fallback to code-defined)
@@ -1063,7 +1003,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 }
             },
             onError: (error: unknown) => {
-                console.error("[Agent Chat] UIMessageStream error:", error);
+                console.error(
+                    "[Agent Chat] UIMessageStream error:",
+                    error instanceof Error ? error.message : "[non-Error]"
+                );
                 // Record the failure
                 if (run) {
                     run.fail(error instanceof Error ? error : String(error)).catch(console.error);
@@ -1141,7 +1084,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             return createUIMessageStreamResponse({ stream: budgetStream });
         }
 
-        console.error("[Agent Chat] Error:", error);
+        console.error(
+            "[Agent Chat] Error:",
+            error instanceof Error ? error.message : "[non-Error]"
+        );
         return NextResponse.json(
             {
                 success: false,
@@ -1174,12 +1120,16 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             return NextResponse.json([]);
         }
 
-        const resourceId = searchParams.get("userId") || "test-user";
+        const rawUserId2 = searchParams.get("userId") || `anon-${Date.now()}`;
+        let historyOrgId: string | null = null;
+        if (rawUserId2 && !rawUserId2.startsWith("anon-")) {
+            historyOrgId = await getUserOrganizationId(rawUserId2);
+        }
+        const historyResourceId = orgScopedResourceId(historyOrgId || "", rawUserId2);
 
-        // Get messages from the thread using recall
         const result = await memory.recall({
             threadId,
-            resourceId
+            resourceId: historyResourceId
         });
 
         if (!result.messages || result.messages.length === 0) {

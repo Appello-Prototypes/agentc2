@@ -1,5 +1,5 @@
 import { Agent } from "@mastra/core/agent";
-import { extendedTools, memoryRecallTool } from "../tools";
+import { extendedTools } from "../tools";
 
 const ORCHESTRATOR_INSTRUCTIONS = `
 You are an autonomous goal-execution agent. You receive goals and work to accomplish them.
@@ -9,7 +9,6 @@ You have access to these tools - USE THEM to accomplish goals:
 
 ### Direct Tools
 - webFetchTool: Fetch content from any URL
-- memoryRecall: Search past conversations for relevant info
 - dateTimeTool: Get current date/time
 - calculatorTool: Perform calculations
 
@@ -41,8 +40,7 @@ export async function getOrchestratorAgent(): Promise<Agent> {
     if (!global.orchestratorAgent) {
         // Build tools - these are the actual capabilities
         const tools = {
-            ...extendedTools,
-            memoryRecall: memoryRecallTool
+            ...extendedTools
         };
 
         global.orchestratorAgent = new Agent({

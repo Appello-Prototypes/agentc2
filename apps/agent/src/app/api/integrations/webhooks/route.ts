@@ -1,17 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { randomBytes } from "crypto";
+import { z } from "zod";
 import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getIntegrationProviders } from "@repo/agentc2/mcp";
 import { auditLog } from "@/lib/audit-log";
 import { getUserOrganizationId } from "@/lib/organization";
+import { encryptString } from "@/lib/credential-crypto";
 import {
     extractTriggerInputMapping,
     mergeTriggerInputMapping,
     validateTriggerInputMapping,
     type TriggerInputMapping
 } from "@/lib/unified-triggers";
+
+const createWebhookSchema = z.object({
+    agentId: z.string().min(1).max(200),
+    name: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    filter: z.record(z.unknown()).nullable().optional(),
+    inputMapping: z.record(z.unknown()).nullable().optional(),
+    isActive: z.boolean().optional()
+});
 
 /**
  * POST /api/integrations/webhooks
@@ -45,22 +56,14 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const body = await request.json();
-        const { agentId, name, description, filter, inputMapping, isActive } = body as {
-            agentId?: string;
-            name?: string;
-            description?: string;
-            filter?: Record<string, unknown> | null;
-            inputMapping?: TriggerInputMapping | null;
-            isActive?: boolean;
-        };
-
-        if (!agentId || !name) {
+        const parsed = createWebhookSchema.safeParse(await request.json());
+        if (!parsed.success) {
             return NextResponse.json(
-                { success: false, error: "Missing required fields: agentId, name" },
+                { success: false, error: "Invalid input", details: parsed.error.flatten().fieldErrors },
                 { status: 400 }
             );
         }
+        const { agentId, name, description, filter, inputMapping, isActive } = parsed.data;
 
         const agent = await prisma.agent.findFirst({
             where: {
@@ -106,7 +109,8 @@ export async function POST(request: NextRequest) {
         }
 
         const webhookPath = `trigger_${randomBytes(16).toString("hex")}`;
-        const webhookSecret = randomBytes(32).toString("hex");
+        const webhookSecretPlain = randomBytes(32).toString("hex");
+        const webhookSecretEncrypted = encryptString(webhookSecretPlain);
 
         const trigger = await prisma.agentTrigger.create({
             data: {
@@ -116,7 +120,7 @@ export async function POST(request: NextRequest) {
                 description: description || null,
                 triggerType: "webhook",
                 webhookPath,
-                webhookSecret,
+                webhookSecret: webhookSecretEncrypted,
                 filterJson: filter ? JSON.parse(JSON.stringify(filter)) : null,
                 inputMapping: mergedMapping ? JSON.parse(JSON.stringify(mergedMapping)) : null,
                 isActive: isActive !== false
@@ -132,7 +136,7 @@ export async function POST(request: NextRequest) {
                 isDefault: false,
                 isActive: true,
                 webhookPath,
-                webhookSecret,
+                webhookSecret: webhookSecretEncrypted,
                 agentTriggerId: trigger.id,
                 metadata: {
                     agentId: agent.id,
@@ -152,7 +156,7 @@ export async function POST(request: NextRequest) {
             connection,
             webhook: {
                 path: `/api/webhooks/${webhookPath}`,
-                secret: webhookSecret,
+                secret: webhookSecretPlain,
                 note: "Save this secret - it won't be shown again"
             }
         });

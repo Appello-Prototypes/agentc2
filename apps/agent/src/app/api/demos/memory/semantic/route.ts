@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { memory } from "@repo/agentc2/core";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+import { orgScopedResourceId } from "@repo/agentc2/tenant-scope";
 
 export async function POST(req: NextRequest) {
     try {
@@ -15,8 +17,16 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: "Query is required" }, { status: 400 });
         }
 
-        const resourceId = session.user.id;
-        const thread = threadId || "default";
+        const userId = session.user.id;
+        const orgId = await getUserOrganizationId(userId);
+        const resourceId = orgScopedResourceId(orgId || "", userId);
+        const thread = threadId
+            ? orgId
+                ? `${orgId}:${threadId}`
+                : threadId
+            : orgId
+              ? `${orgId}:default`
+              : "default";
 
         const result = await memory.recall({
             threadId: thread,

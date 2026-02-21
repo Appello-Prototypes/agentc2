@@ -56,7 +56,7 @@ export async function POST(
 
         const network = await prisma.network.findFirst({
             where: { OR: [{ slug }, { id: slug }] },
-            include: { workspace: { select: { environment: true } } }
+            include: { workspace: { select: { environment: true, organizationId: true } } }
         });
 
         if (!network) {
@@ -66,14 +66,27 @@ export async function POST(
             );
         }
 
+        const networkOrgId = network.workspace?.organizationId || "";
         const { agent } = await buildNetworkAgent(network.id);
+        const scopedThreadId = body.threadId
+            ? networkOrgId
+                ? `${networkOrgId}:${body.threadId}`
+                : body.threadId
+            : networkOrgId
+              ? `${networkOrgId}:thread-${Date.now()}`
+              : `thread-${Date.now()}`;
+        const scopedResourceId = body.resourceId
+            ? networkOrgId
+                ? `${networkOrgId}:${body.resourceId}`
+                : body.resourceId
+            : null;
         const run = await prisma.networkRun.create({
             data: {
                 networkId: network.id,
                 status: RunStatus.RUNNING,
                 inputText: message,
-                threadId: body.threadId || `thread-${Date.now()}`,
-                resourceId: body.resourceId || null,
+                threadId: scopedThreadId,
+                resourceId: scopedResourceId,
                 source: body.source || "api",
                 environment: resolveRunEnvironment(
                     body.environment,
@@ -117,8 +130,8 @@ export async function POST(
         const result = await (agent as any).network(message, {
             maxSteps: network.maxSteps,
             memory: {
-                thread: body.threadId || run.threadId,
-                resource: body.resourceId || run.resourceId || "default"
+                thread: run.threadId,
+                resource: run.resourceId || (networkOrgId ? `${networkOrgId}:default` : "default")
             }
         });
 

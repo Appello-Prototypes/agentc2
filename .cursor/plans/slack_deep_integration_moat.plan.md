@@ -224,8 +224,8 @@ Recent activity: {{binding.context.recentActivity}}
 
 **Files to modify:**
 
-| File                                     | Action                            |
-| ---------------------------------------- | --------------------------------- |
+| File                                      | Action                            |
+| ----------------------------------------- | --------------------------------- |
 | `packages/agentc2/src/agents/resolver.ts` | Add binding context interpolation |
 
 **Tasks:**
@@ -243,7 +243,7 @@ Recent activity: {{binding.context.recentActivity}}
 | File                                           | Action                       |
 | ---------------------------------------------- | ---------------------------- |
 | `apps/agent/src/app/api/slack/events/route.ts` | Use binding memory namespace |
-| `packages/agentc2/src/agents/resolver.ts`       | Support namespace override   |
+| `packages/agentc2/src/agents/resolver.ts`      | Support namespace override   |
 
 **Tasks:**
 
@@ -278,7 +278,7 @@ Recent activity: {{binding.context.recentActivity}}
 
 | File                                          | Action                     |
 | --------------------------------------------- | -------------------------- |
-| `packages/agentc2/src/agents/resolver.ts`      | Pass RAG scope filter      |
+| `packages/agentc2/src/agents/resolver.ts`     | Pass RAG scope filter      |
 | `apps/agent/src/lib/slack-binding-context.ts` | Document ingestion scoping |
 
 **Tasks:**

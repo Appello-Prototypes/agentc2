@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, TriggerEventStatus } from "@repo/database";
-import { agentResolver } from "@repo/agentc2/agents";
+import { agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
+import { managedGenerate, getFastCompressionModel } from "@repo/agentc2";
 import {
     startRun,
     startConversationRun,
@@ -137,13 +138,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             );
         }
 
+        // Model routing (pre-resolve)
+        const { modelOverride: routedModelOverride, isReasoningModel } = await resolveModelOverride(
+            id,
+            input,
+            {
+                userId: authResult.context.userId,
+                organizationId: authResult.context.organizationId
+            }
+        );
+
         // Resolve agent from database
         let agent, record, source;
         try {
             ({ agent, record, source } = await agentResolver.resolve({
                 slug: id,
                 requestContext: context,
-                threadId: context?.threadId || context?.thread?.id
+                threadId: context?.threadId || context?.thread?.id,
+                modelOverride: routedModelOverride
             }));
         } catch (resolveError) {
             const msg = resolveError instanceof Error ? resolveError.message : String(resolveError);
@@ -405,27 +417,170 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             const threadId = context?.threadId || context?.thread?.id;
             const resourceId = context?.userId || context?.resource?.userId || "default";
 
-            const generateOptions = {
-                maxSteps: effectiveMaxSteps,
-                ...(record.maxTokens ? { maxTokens: record.maxTokens } : {}),
-                // Add memory configuration if threadId is provided and agent has memory enabled
-                ...(threadId && record.memoryEnabled
-                    ? {
-                          memory: {
-                              thread: threadId,
-                              resource: resourceId
-                          }
-                      }
-                    : {})
-            } as unknown as Parameters<typeof agent.generate>[1];
+            // Read contextConfig from agent record if available
+            const contextCfg = (record as { contextConfig?: Record<string, unknown> })
+                .contextConfig;
 
-            const response = await agent.generate(input, generateOptions);
+            // Use managed generate for multi-step runs (>5 steps) to control context growth
+            const USE_MANAGED_GENERATE = effectiveMaxSteps > 5;
+
+            let responseText: string | undefined;
+            let usage: {
+                promptTokens: number;
+                completionTokens: number;
+                totalTokens: number;
+            } | null = null;
+            interface ExecutionStep {
+                step: number;
+                type: "thinking" | "tool_call" | "tool_result" | "response";
+                content: string;
+                timestamp: string;
+            }
+            const executionSteps: ExecutionStep[] = [];
+
+            if (USE_MANAGED_GENERATE) {
+                const compressionModel = await getFastCompressionModel(
+                    authResult.context.organizationId
+                );
+                const managedResult = await managedGenerate(agent, input, {
+                    maxSteps: effectiveMaxSteps,
+                    maxContextTokens: (contextCfg?.maxContextTokens as number) ?? 50_000,
+                    windowSize: (contextCfg?.windowSize as number) ?? 5,
+                    anchorInstructions: (contextCfg?.anchorInstructions as boolean) ?? true,
+                    anchorInterval: (contextCfg?.anchorInterval as number) ?? 10,
+                    maxTokens: record.maxTokens ?? undefined,
+                    memory:
+                        threadId && record.memoryEnabled
+                            ? { thread: threadId, resource: resourceId }
+                            : undefined,
+                    modelProvider: record.modelProvider,
+                    compressionModel: compressionModel ?? undefined,
+                    isReasoningModel,
+                    onStep: async (stepNum, summary) => {
+                        if (summary.hasToolCall && summary.toolName) {
+                            await runHandle.addToolCall({
+                                toolKey: summary.toolName,
+                                input: {},
+                                output: summary.outputPreview,
+                                success: true
+                            });
+                        }
+                    }
+                });
+
+                responseText = managedResult.text;
+                usage = {
+                    promptTokens: managedResult.totalPromptTokens,
+                    completionTokens: managedResult.totalCompletionTokens,
+                    totalTokens:
+                        managedResult.totalPromptTokens + managedResult.totalCompletionTokens
+                };
+
+                // Build execution steps from managed result
+                let stepCounter = 0;
+                for (const step of managedResult.steps) {
+                    if (step.hasToolCall) {
+                        stepCounter++;
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_call",
+                            content: `Calling tool: ${step.toolName || "unknown"}\nArgs: ${step.inputPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+                        stepCounter++;
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_result",
+                            content: `Tool ${step.toolName || "unknown"} result:\n${step.outputPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+                }
+                stepCounter++;
+                executionSteps.push({
+                    step: stepCounter,
+                    type: "response",
+                    content:
+                        (responseText || "").slice(0, 2000) +
+                        (responseText && responseText.length > 2000 ? "..." : ""),
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                // Standard single-pass generate for simple agents
+                const generateOptions = {
+                    maxSteps: effectiveMaxSteps,
+                    ...(record.maxTokens ? { maxTokens: record.maxTokens } : {}),
+                    ...(threadId && record.memoryEnabled
+                        ? {
+                              memory: {
+                                  thread: threadId,
+                                  resource: resourceId
+                              }
+                          }
+                        : {})
+                } as unknown as Parameters<typeof agent.generate>[1];
+
+                const response = await agent.generate(input, generateOptions);
+                responseText = response.text;
+                usage = extractTokenUsage(response);
+
+                const toolCalls = extractToolCalls(response);
+                let stepCounter = 0;
+                for (const tc of toolCalls) {
+                    const toolName = tc.toolKey || "unknown";
+                    const args = tc.input || {};
+
+                    stepCounter++;
+                    executionSteps.push({
+                        step: stepCounter,
+                        type: "tool_call",
+                        content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
+                        timestamp: new Date().toISOString()
+                    });
+
+                    stepCounter++;
+                    if (tc.output !== undefined || tc.error) {
+                        const resultPreview = formatToolResultPreview(tc.output, 500);
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_result",
+                            content: tc.error
+                                ? `Tool ${toolName} failed: ${tc.error}`
+                                : `Tool ${toolName} result:\n${resultPreview}`,
+                            timestamp: new Date().toISOString()
+                        });
+                    } else {
+                        executionSteps.push({
+                            step: stepCounter,
+                            type: "tool_result",
+                            content: `Tool ${toolName} completed with no output captured`,
+                            timestamp: new Date().toISOString()
+                        });
+                    }
+
+                    await runHandle.addToolCall({
+                        toolKey: toolName,
+                        input: args,
+                        output: tc.output,
+                        success: tc.success,
+                        error: tc.error,
+                        durationMs: tc.durationMs
+                    });
+                }
+                stepCounter++;
+                executionSteps.push({
+                    step: stepCounter,
+                    type: "response",
+                    content:
+                        (responseText || "").slice(0, 2000) +
+                        (responseText && responseText.length > 2000 ? "..." : ""),
+                    timestamp: new Date().toISOString()
+                });
+            }
 
             clearTimeout(timeoutId);
             const durationMs = Date.now() - startTime;
 
-            // Extract usage
-            const usage = extractTokenUsage(response);
             const costUsd = usage
                 ? calculateCost(
                       record.modelName,
@@ -435,77 +590,9 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                   )
                 : undefined;
 
-            // Extract tool calls from response
-            const toolCalls = extractToolCalls(response);
-
-            // Build execution steps and record tool calls
-            interface ExecutionStep {
-                step: number;
-                type: "thinking" | "tool_call" | "tool_result" | "response";
-                content: string;
-                timestamp: string;
-            }
-            const executionSteps: ExecutionStep[] = [];
-            let stepCounter = 0;
-
-            // Process tool calls
-            for (const tc of toolCalls) {
-                const toolName = tc.toolKey || "unknown";
-                const args = tc.input || {};
-
-                stepCounter++;
-                executionSteps.push({
-                    step: stepCounter,
-                    type: "tool_call",
-                    content: `Calling tool: ${toolName}\nArgs: ${JSON.stringify(args, null, 2)}`,
-                    timestamp: new Date().toISOString()
-                });
-
-                stepCounter++;
-                if (tc.output !== undefined || tc.error) {
-                    const resultPreview = formatToolResultPreview(tc.output, 500);
-                    executionSteps.push({
-                        step: stepCounter,
-                        type: "tool_result",
-                        content: tc.error
-                            ? `Tool ${toolName} failed: ${tc.error}`
-                            : `Tool ${toolName} result:\n${resultPreview}`,
-                        timestamp: new Date().toISOString()
-                    });
-                } else {
-                    executionSteps.push({
-                        step: stepCounter,
-                        type: "tool_result",
-                        content: `Tool ${toolName} completed with no output captured`,
-                        timestamp: new Date().toISOString()
-                    });
-                }
-
-                // Record tool call
-                await runHandle.addToolCall({
-                    toolKey: toolName,
-                    input: args,
-                    output: tc.output,
-                    success: tc.success,
-                    error: tc.error,
-                    durationMs: tc.durationMs
-                });
-            }
-
-            // Add final response step
-            stepCounter++;
-            executionSteps.push({
-                step: stepCounter,
-                type: "response",
-                content:
-                    response.text?.slice(0, 2000) +
-                    (response.text && response.text.length > 2000 ? "..." : ""),
-                timestamp: new Date().toISOString()
-            });
-
             // Complete the run with full metrics and steps
             await runHandle.complete({
-                output: response.text,
+                output: responseText,
                 modelProvider: record.modelProvider,
                 modelName: record.modelName,
                 promptTokens: usage?.promptTokens,
@@ -556,8 +643,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             }
 
             // Enforce output guardrails after execution
-            if (response.text) {
-                const outputCheck = await enforceOutputGuardrails(record.id, response.text, {
+            if (responseText) {
+                const outputCheck = await enforceOutputGuardrails(record.id, responseText, {
                     runId: runHandle.runId,
                     tenantId: record.tenantId || undefined
                 });
@@ -587,7 +674,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 success: true,
                 run_id: runHandle.runId,
                 status: "success",
-                output: response.text,
+                output: responseText,
                 usage: usage
                     ? {
                           prompt_tokens: usage.promptTokens,

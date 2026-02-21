@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
                 return NextResponse.json({ ok: true });
             }
 
-            console.log(`[Telegram] Message from ${userId} in chat ${chatId}: "${text}"`);
+            console.log(`[Telegram] Message from user in chat ${chatId} (${text.length} chars)`);
 
             // Get or create session
             const session = await getOrCreateSession(chatId, userId);

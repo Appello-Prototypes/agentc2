@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { networkResolver } from "@repo/agentc2/agents";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+import { orgScopedResourceId } from "@repo/agentc2/tenant-scope";
 
 /**
  * Agent Network Chat API Route
@@ -37,8 +39,17 @@ export async function POST(req: NextRequest) {
             );
         }
 
-        const effectiveThreadId = threadId || `thread-${Date.now()}`;
-        const effectiveResourceId = resourceId || session.user.id;
+        const demoOrgId = await getUserOrganizationId(session.user.id);
+        const effectiveThreadId = threadId
+            ? demoOrgId
+                ? `${demoOrgId}:${threadId}`
+                : threadId
+            : demoOrgId
+              ? `${demoOrgId}:thread-${Date.now()}`
+              : `thread-${Date.now()}`;
+        const effectiveResourceId = resourceId
+            ? orgScopedResourceId(demoOrgId || "", resourceId)
+            : orgScopedResourceId(demoOrgId || "", session.user.id);
 
         const stream = new ReadableStream({
             async start(controller) {

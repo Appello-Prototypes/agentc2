@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
-import { createAgentFromConfig, agentResolver } from "@repo/agentc2/agents";
+import { createAgentFromConfig, agentResolver, resolveModelOverride } from "@repo/agentc2/agents";
 
 // Feature flag for using new Agent model vs legacy StoredAgent
 // Default to true for the new database-driven agents
@@ -25,11 +25,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         if (USE_DB_AGENTS) {
+            // Model routing (pre-resolve)
+            const { modelOverride: routedModelOverride } = await resolveModelOverride(id, prompt);
+
             // Use AgentResolver to get agent (supports both slug and id)
             // MCP-enabled agents automatically receive all MCP tools via the resolver
             const { agent, record, source } = await agentResolver.resolve({
                 slug: id,
-                requestContext
+                requestContext,
+                modelOverride: routedModelOverride
             });
 
             // Generate response with maxSteps from database or default (matches production channels)

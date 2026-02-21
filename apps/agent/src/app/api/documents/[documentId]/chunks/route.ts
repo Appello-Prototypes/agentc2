@@ -4,6 +4,7 @@ import { auth } from "@repo/auth";
 import { getDocumentRecord } from "@repo/agentc2/documents";
 import { ragIndexExists } from "@repo/agentc2/rag";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 import { embed } from "ai";
 import { openai } from "@ai-sdk/openai";
 
@@ -35,9 +36,9 @@ export async function GET(request: NextRequest, context: RouteContext) {
         }
 
         const { documentId } = await context.params;
+        const userOrgId = await getUserOrganizationId(userId);
 
-        // Get the document to find its slug (used as documentId in vectors)
-        const document = await getDocumentRecord(documentId);
+        const document = await getDocumentRecord(documentId, userOrgId || undefined);
         if (!document) {
             return NextResponse.json({ error: "Document not found" }, { status: 404 });
         }

@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { memory } from "@repo/agentc2/core";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+import { orgScopedResourceId } from "@repo/agentc2/tenant-scope";
 
 export async function GET() {
     try {
@@ -9,10 +11,11 @@ export async function GET() {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const resourceId = session.user.id;
-        const threadId = `memory-demo-${resourceId}`;
+        const userId = session.user.id;
+        const orgId = await getUserOrganizationId(userId);
+        const resourceId = orgScopedResourceId(orgId || "", userId);
+        const threadId = orgId ? `${orgId}:memory-demo-${userId}` : `memory-demo-${userId}`;
 
-        // Get working memory for the user from the memory demo thread
         const workingMemory = await memory.getWorkingMemory({
             threadId,
             resourceId

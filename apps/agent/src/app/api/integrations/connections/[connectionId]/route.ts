@@ -52,6 +52,14 @@ export async function GET(
 
         const decryptedCredentials = decryptCredentials(connection.credentials);
 
+        await auditLog.create({
+            action: "DATA_ACCESS",
+            entityType: "IntegrationConnection",
+            entityId: connectionId,
+            userId: session.user.id,
+            metadata: { organizationId, providerId: connection.providerId }
+        });
+
         return NextResponse.json({
             success: true,
             connection: {

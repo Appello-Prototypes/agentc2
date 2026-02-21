@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
 import { getUserMembership } from "@/lib/organization";
+import { enforceCsrf } from "@/lib/security/http-security";
 
 /**
  * Check if running in standalone mode (not behind reverse proxy)
@@ -19,7 +20,18 @@ function isStandaloneDeployment(): boolean {
  * Validates sessions and protects routes
  * Note: Next.js 16 renamed middleware to proxy
  */
+const STATE_CHANGING_METHODS = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 async function proxy(request: NextRequest) {
+    // API routes: only apply CSRF enforcement, skip page-level auth
+    if (request.nextUrl.pathname.startsWith("/api/")) {
+        if (STATE_CHANGING_METHODS.has(request.method)) {
+            const csrf = enforceCsrf(request);
+            if (csrf.response) return csrf.response;
+        }
+        return NextResponse.next();
+    }
+
     // Root page: redirect authenticated users to /workspace, otherwise show public landing
     if (request.nextUrl.pathname === "/") {
         try {
@@ -93,7 +105,6 @@ export const config = {
     matcher: [
         /*
          * Match all request paths except:
-         * - api (API routes handle their own authentication for fine-grained control)
          * - login (public login page)
          * - signup (public signup page)
          * - terms (public Terms of Service)
@@ -106,10 +117,9 @@ export const config = {
          * - favicon.ico (favicon file)
          * - .*\.* (any file with an extension like .txt, .xml, .json, .png, etc.)
          *
-         * Note: API routes are excluded because they implement their own auth checks.
-         * This allows each API endpoint to decide its own auth requirements
-         * (e.g., some may be public, others require auth, some need specific roles).
+         * API routes ARE matched for CSRF enforcement on state-changing methods.
+         * API routes still handle their own auth checks independently.
          */
-        "/((?!api|embed|embed-v2|login|signup|waitlist|terms$|privacy$|security$|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
+        "/((?!embed|embed-v2|login|signup|waitlist|terms$|privacy$|security$|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
     ]
 };

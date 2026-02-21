@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mastra } from "@repo/agentc2/core";
 import { getDemoSession } from "@/lib/standalone-auth";
+import { getUserOrganizationId } from "@/lib/organization";
+import { orgScopedResourceId } from "@repo/agentc2/tenant-scope";
 
 /**
  * Streaming chat endpoint for memory demo
@@ -21,7 +23,8 @@ export async function POST(req: NextRequest) {
         }
 
         const userId = session.user.id;
-        const threadId = `memory-demo-${userId}`;
+        const orgId = await getUserOrganizationId(userId);
+        const threadId = orgId ? `${orgId}:memory-demo-${userId}` : `memory-demo-${userId}`;
 
         const agent = mastra.getAgent("assistant");
 
@@ -41,7 +44,7 @@ export async function POST(req: NextRequest) {
                     const responseStream = await agent.stream(message, {
                         memory: {
                             thread: threadId,
-                            resource: userId
+                            resource: orgScopedResourceId(orgId || "", userId)
                         }
                     });
 

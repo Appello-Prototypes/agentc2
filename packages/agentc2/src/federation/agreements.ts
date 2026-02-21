@@ -143,7 +143,8 @@ export async function approveConnection(
         return { success: false, error: "Organization security keys not provisioned" };
     }
 
-    await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await prisma.$transaction(async (tx: any) => {
         // Update agreement
         await tx.federationAgreement.update({
             where: { id: agreementId },
@@ -294,32 +295,38 @@ export async function listConnections(orgId: string): Promise<AgreementSummary[]
         orderBy: { createdAt: "desc" }
     });
 
-    return agreements.map((a: {
-        id: string;
-        initiatorOrgId: string;
-        status: string;
-        createdAt: Date;
-        approvedAt: Date | null;
-        initiatorOrg: { id: string; name: string; slug: string; logoUrl: string | null };
-        responderOrg: { id: string; name: string; slug: string; logoUrl: string | null };
-        exposures: { ownerOrgId: string }[];
-    }) => {
-        const isInitiator = a.initiatorOrgId === orgId;
-        const partnerOrg = isInitiator ? a.responderOrg : a.initiatorOrg;
-        const myExposures = a.exposures.filter((e: { ownerOrgId: string }) => e.ownerOrgId === orgId);
-        const partnerExposures = a.exposures.filter((e: { ownerOrgId: string }) => e.ownerOrgId !== orgId);
+    return agreements.map(
+        (a: {
+            id: string;
+            initiatorOrgId: string;
+            status: string;
+            createdAt: Date;
+            approvedAt: Date | null;
+            initiatorOrg: { id: string; name: string; slug: string; logoUrl: string | null };
+            responderOrg: { id: string; name: string; slug: string; logoUrl: string | null };
+            exposures: { ownerOrgId: string }[];
+        }) => {
+            const isInitiator = a.initiatorOrgId === orgId;
+            const partnerOrg = isInitiator ? a.responderOrg : a.initiatorOrg;
+            const myExposures = a.exposures.filter(
+                (e: { ownerOrgId: string }) => e.ownerOrgId === orgId
+            );
+            const partnerExposures = a.exposures.filter(
+                (e: { ownerOrgId: string }) => e.ownerOrgId !== orgId
+            );
 
-        return {
-            id: a.id,
-            partnerOrg,
-            status: a.status,
-            direction: isInitiator ? ("initiated" as const) : ("received" as const),
-            exposedAgentCount: myExposures.length,
-            partnerExposedAgentCount: partnerExposures.length,
-            createdAt: a.createdAt,
-            approvedAt: a.approvedAt
-        };
-    });
+            return {
+                id: a.id,
+                partnerOrg,
+                status: a.status,
+                direction: isInitiator ? ("initiated" as const) : ("received" as const),
+                exposedAgentCount: myExposures.length,
+                partnerExposedAgentCount: partnerExposures.length,
+                createdAt: a.createdAt,
+                approvedAt: a.approvedAt
+            };
+        }
+    );
 }
 
 /**

@@ -3,6 +3,7 @@ import { prisma, TriggerEventStatus } from "@repo/database";
 import { createHmac, timingSafeEqual } from "crypto";
 import { inngest } from "@/lib/inngest";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { decryptString } from "@/lib/credential-crypto";
 import {
     buildTriggerPayloadSnapshot,
     createTriggerEventRecord,
@@ -144,7 +145,10 @@ export async function POST(
         }
 
         // Verify signature if secret is set
-        if (trigger.webhookSecret) {
+        const webhookSecretPlain = trigger.webhookSecret
+            ? decryptString(trigger.webhookSecret)
+            : null;
+        if (webhookSecretPlain) {
             let timestampMs: number | null = null;
             if (timestampHeader) {
                 const parsed = Number(timestampHeader);
@@ -172,7 +176,7 @@ export async function POST(
                 }
             }
 
-            if (!verifySignature(rawBody, signature, trigger.webhookSecret, timestampHeader)) {
+            if (!verifySignature(rawBody, signature, webhookSecretPlain, timestampHeader)) {
                 console.warn(`[Webhook] Invalid signature for trigger ${trigger.id}`);
                 await updateTriggerEventRecord(triggerEvent.id, {
                     status: TriggerEventStatus.REJECTED,

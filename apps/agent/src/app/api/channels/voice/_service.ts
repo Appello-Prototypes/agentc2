@@ -43,7 +43,9 @@ async function getConfig(organizationId?: string): Promise<VoiceConfig> {
  * Records all runs in AgentRun for full observability
  */
 const messageHandler: MessageHandler = async (message, agent) => {
-    console.log(`[Voice] Handling speech from ${message.from}: "${message.text}"`);
+    console.log(
+        `[Voice] Handling speech from ${message.from} (${message.text?.length || 0} chars)`
+    );
 
     const config = await getConfig();
     const agentSlug = config.defaultAgentSlug;

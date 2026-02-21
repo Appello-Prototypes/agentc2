@@ -8,7 +8,7 @@ export {
     youtubeAnalyzeVideoTool,
     youtubeIngestToKnowledgeTool
 } from "./youtube";
-export { memoryRecallTool } from "./memory-recall";
+export { memoryRecallTool, createScopedMemoryRecallTool } from "./memory-recall";
 export { workflowTriggerTool } from "./workflow-trigger";
 export { jsonParserTool } from "./json-parser";
 export { mcpToolDefinitions, mcpToolRoutes } from "./mcp-schemas";

@@ -37,12 +37,12 @@ AgentC2 supports two integration architectures:
 
 ### Key Files
 
-| File                                       | Purpose                                                      |
-| ------------------------------------------ | ------------------------------------------------------------ |
+| File                                        | Purpose                                                      |
+| ------------------------------------------- | ------------------------------------------------------------ |
 | `packages/agentc2/src/mcp/client.ts`        | MCP client, server definitions, `INTEGRATION_PROVIDER_SEEDS` |
 | `packages/agentc2/src/tools/registry.ts`    | Tool registry, `toolRegistry`, `toolCategoryMap`             |
 | `packages/agentc2/src/crypto/encryption.ts` | Credential encryption/decryption                             |
-| `packages/database/prisma/schema.prisma`   | `IntegrationProvider`, `IntegrationConnection` models        |
+| `packages/database/prisma/schema.prisma`    | `IntegrationProvider`, `IntegrationConnection` models        |
 
 ---
 

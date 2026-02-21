@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { headers } from "next/headers";
 import { auth } from "@repo/auth";
-import { reembedDocument } from "@repo/agentc2/documents";
+import { getDocument as getDocumentRecord, reembedDocument } from "@repo/agentc2/documents";
 import { authenticateRequest } from "@/lib/api-auth";
+import { getUserOrganizationId } from "@/lib/organization";
 
 type RouteContext = { params: Promise<{ documentId: string }> };
 
@@ -16,12 +17,16 @@ export async function POST(request: NextRequest, context: RouteContext) {
     try {
         const apiAuth = await authenticateRequest(request);
         let userId = apiAuth?.userId;
+        let organizationId = apiAuth?.organizationId;
 
         if (!userId) {
             const session = await auth.api.getSession({
                 headers: await headers()
             });
             userId = session?.user?.id;
+            if (userId) {
+                organizationId = (await getUserOrganizationId(userId)) || undefined;
+            }
         }
 
         if (!userId) {
@@ -29,6 +34,19 @@ export async function POST(request: NextRequest, context: RouteContext) {
         }
 
         const { documentId } = await context.params;
+
+        const existing = await getDocumentRecord(documentId);
+        if (!existing) {
+            return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
+
+        if (
+            existing.organizationId &&
+            organizationId &&
+            existing.organizationId !== organizationId
+        ) {
+            return NextResponse.json({ error: "Document not found" }, { status: 404 });
+        }
 
         const document = await reembedDocument(documentId);
 
