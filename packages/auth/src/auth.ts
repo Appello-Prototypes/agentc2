@@ -168,12 +168,11 @@ export const auth = betterAuth({
                         path: ctx.path
                     });
 
-                    // Check if the new user already has an org membership
-                    const existing = await prisma.membership.findFirst({
-                        where: { userId: newSession.user.id }
-                    });
-                    if (!existing) {
-                        try {
+                    try {
+                        const existing = await prisma.membership.findFirst({
+                            where: { userId: newSession.user.id }
+                        });
+                        if (!existing) {
                             const result = await bootstrapUserOrganization(
                                 newSession.user.id,
                                 newSession.user.name,
@@ -196,12 +195,12 @@ export const auth = betterAuth({
                                     }
                                 }
                             }
-                        } catch (error) {
-                            console.error(
-                                "[Auth Hook] Bootstrap failed for social sign-up:",
-                                error
-                            );
                         }
+                    } catch (error) {
+                        console.error(
+                            "[Auth Hook] Callback post-processing failed:",
+                            error
+                        );
                     }
                 }
             }

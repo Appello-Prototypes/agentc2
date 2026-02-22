@@ -7133,10 +7133,10 @@ export const adminHealthCheckFunction = inngest.createFunction(
                     o.id as org_id,
                     o.name,
                     o.slug,
-                    SUM(s."failedRuns") as failed,
+                    SUM(ROUND(s."totalRuns" * (1 - COALESCE(s."successRate", 1))))::int as failed,
                     SUM(s."totalRuns") as total,
                     CASE WHEN SUM(s."totalRuns") > 0
-                        THEN CAST(SUM(s."failedRuns") AS FLOAT) / SUM(s."totalRuns")
+                        THEN 1.0 - (SUM(s."totalRuns" * COALESCE(s."successRate", 1)) / SUM(s."totalRuns"))
                         ELSE 0
                     END as error_rate
                 FROM agent_stats_daily s
@@ -7147,7 +7147,7 @@ export const adminHealthCheckFunction = inngest.createFunction(
                 AND o.status = 'active'
                 GROUP BY o.id, o.name, o.slug
                 HAVING SUM(s."totalRuns") > 10
-                AND CAST(SUM(s."failedRuns") AS FLOAT) / SUM(s."totalRuns") > 0.5
+                AND (1.0 - (SUM(s."totalRuns" * COALESCE(s."successRate", 1)) / SUM(s."totalRuns"))) > 0.5
             `) as Array<{
                 org_id: string;
                 name: string;
