@@ -397,6 +397,33 @@ const INTEGRATION_PROVIDER_SEEDS: IntegrationProviderSeed[] = [
         }
     },
     {
+        key: "appello",
+        name: "Appello",
+        description:
+            "Construction & field service management - jobs, projects, scheduling, timesheets, safety, equipment, financials",
+        category: "productivity",
+        authType: "apiKey",
+        providerType: "mcp",
+        configJson: {
+            requiredFields: ["APPELLO_API_TOKEN"],
+            fieldDefinitions: {
+                APPELLO_API_TOKEN: {
+                    label: "Appello MCP JWT token",
+                    description: "Bearer token for the Appello MCP API",
+                    placeholder: "eyJhbGci...",
+                    type: "password"
+                }
+            },
+            importHints: {
+                matchNames: ["Appello", "appello"],
+                matchUrls: ["release-api.useappello.app/mcp", "api.useappello.app/mcp"],
+                headerAliases: {
+                    Authorization: "APPELLO_API_TOKEN"
+                }
+            }
+        }
+    },
+    {
         key: "twilio",
         name: "Twilio",
         description: "Outbound voice calls via Twilio and ElevenLabs streaming",
@@ -2930,6 +2957,18 @@ function buildServerDefinitionForProvider(options: {
                 url: new URL("https://mcp.justcall.host/mcp"),
                 requestInit: {
                     headers: { Authorization: `Bearer ${justcallToken}` }
+                }
+            };
+        }
+        case "appello": {
+            const appelloToken =
+                getCredentialValue(credentials, ["APPELLO_API_TOKEN"]) ||
+                (allowEnvFallback ? process.env.APPELLO_API_TOKEN : undefined);
+            if (!appelloToken) return null;
+            return {
+                url: new URL("https://release-api.useappello.app/mcp"),
+                requestInit: {
+                    headers: { Authorization: `Bearer ${appelloToken}` }
                 }
             };
         }
