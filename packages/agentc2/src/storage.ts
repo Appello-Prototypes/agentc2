@@ -18,7 +18,8 @@ function getPgStore(): PostgresStore {
         global.pgStore = new PostgresStore({
             id: "mastra-storage",
             connectionString: process.env.DATABASE_URL,
-            schemaName: "public"
+            schemaName: "public",
+            ssl: { rejectUnauthorized: false }
         });
     }
 
