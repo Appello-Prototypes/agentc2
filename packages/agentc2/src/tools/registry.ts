@@ -98,6 +98,12 @@ import {
     agentTestCasesCreateTool,
     agentScorersListTool
 } from "./agent-quality-tools";
+import {
+    playbookSearchTool,
+    playbookDetailTool,
+    playbookListInstalledTool,
+    playbookDeployTool
+} from "./playbook";
 import { agentRunCancelTool, agentRunRerunTool, agentRunTraceTool } from "./run-management-tools";
 import {
     agentLearningSessionsTool,
@@ -634,7 +640,13 @@ export const toolCategoryMap: Record<string, string> = {
     "submit-support-ticket": "Support",
     "list-my-tickets": "Support",
     "view-ticket-details": "Support",
-    "comment-on-ticket": "Support"
+    "comment-on-ticket": "Support",
+
+    // Playbook Marketplace
+    "playbook-search": "Marketplace",
+    "playbook-detail": "Marketplace",
+    "playbook-list-installed": "Marketplace",
+    "playbook-deploy": "Marketplace"
 };
 
 /**
@@ -1059,7 +1071,13 @@ export const toolRegistry: Record<string, any> = {
     "submit-support-ticket": submitSupportTicketTool,
     "list-my-tickets": listMyTicketsTool,
     "view-ticket-details": viewTicketDetailsTool,
-    "comment-on-ticket": commentOnTicketTool
+    "comment-on-ticket": commentOnTicketTool,
+
+    // Playbook Marketplace tools
+    "playbook-search": playbookSearchTool,
+    "playbook-detail": playbookDetailTool,
+    "playbook-list-installed": playbookListInstalledTool,
+    "playbook-deploy": playbookDeployTool
 };
 
 /**

@@ -177,6 +177,16 @@ model Organization {
     // Network Egress
     networkEgressPolicy NetworkEgressPolicy?
 
+    // Stripe Connect (for Playbook Marketplace seller payouts)
+    stripeConnectAccountId String?
+    stripeConnectStatus    String? // "pending", "active", "restricted"
+
+    // Playbook Marketplace
+    publishedPlaybooks    Playbook[]             @relation("PlaybookPublisher")
+    purchasedPlaybooks    PlaybookPurchase[]     @relation("PlaybookBuyer")
+    playbookInstallations PlaybookInstallation[] @relation("PlaybookInstaller")
+    playbookReviews       PlaybookReview[]       @relation("PlaybookReviewer")
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -213,6 +223,9 @@ model Workspace {
     CrmAuditLog       CrmAuditLog[]
     documents         Document[]
     skills            Skill[]
+
+    // Playbook Marketplace
+    playbookInstallations PlaybookInstallation[]
 
     @@unique([organizationId, slug])
     @@index([organizationId])
@@ -814,6 +827,10 @@ model Agent {
     toolPermissions        AgentToolPermission[]
     identity               AgentIdentity?
     reputation             AgentReputation?
+
+    // Playbook Marketplace (tracks which playbook this was deployed from)
+    playbookSourceId       String?
+    playbookInstallationId String?
 
     @@unique([workspaceId, slug]) // Per-workspace slug uniqueness (NULLs treated as distinct in PG)
     @@index([slug])
@@ -5031,4 +5048,199 @@ model WebhookDeadLetter {
     @@index([source, status])
     @@index([nextRetryAt])
     @@map("webhook_dead_letter")
+}
+
+// ─── Playbook Marketplace ─────────────────────────────────────────────────────
+
+enum PlaybookStatus {
+    DRAFT
+    PENDING_REVIEW
+    PUBLISHED
+    SUSPENDED
+    ARCHIVED
+}
+
+enum PlaybookPricingModel {
+    FREE
+    ONE_TIME
+    SUBSCRIPTION
+    PER_USE
+}
+
+enum PlaybookComponentType {
+    AGENT
+    SKILL
+    DOCUMENT
+    WORKFLOW
+    NETWORK
+    CAMPAIGN_TEMPLATE
+    GUARDRAIL_POLICY
+    TEST_CASE
+    SCORECARD
+}
+
+enum PurchaseStatus {
+    PENDING
+    COMPLETED
+    REFUNDED
+    CANCELLED
+}
+
+enum InstallationStatus {
+    INSTALLING
+    CONFIGURING
+    TESTING
+    ACTIVE
+    PAUSED
+    UNINSTALLED
+    FAILED
+}
+
+model Playbook {
+    id              String   @id @default(cuid())
+    slug            String   @unique
+    name            String
+    tagline         String?
+    description     String   @db.Text
+    longDescription String?  @db.Text
+    category        String
+    tags            String[]
+    coverImageUrl   String?
+    iconUrl         String?
+
+    publisherOrgId    String
+    publisherOrg      Organization   @relation("PlaybookPublisher", fields: [publisherOrgId], references: [id])
+    publishedByUserId String
+    status            PlaybookStatus @default(DRAFT)
+
+    pricingModel    PlaybookPricingModel @default(FREE)
+    priceUsd        Float?
+    monthlyPriceUsd Float?
+    perUsePriceUsd  Float?
+
+    installCount  Int    @default(0)
+    averageRating Float?
+    reviewCount   Int    @default(0)
+    trustScore    Float?
+
+    requiredIntegrations String[]
+
+    version  Int               @default(1)
+    versions PlaybookVersion[]
+
+    components    PlaybookComponent[]
+    purchases     PlaybookPurchase[]
+    installations PlaybookInstallation[]
+    reviews       PlaybookReview[]
+
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([publisherOrgId, status])
+    @@index([status, category])
+    @@index([category])
+    @@map("playbook")
+}
+
+model PlaybookVersion {
+    id         String   @id @default(cuid())
+    playbookId String
+    playbook   Playbook @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+    version    Int
+    manifest   Json
+    changelog  String?  @db.Text
+    createdAt  DateTime @default(now())
+    createdBy  String?
+
+    @@unique([playbookId, version])
+    @@index([playbookId])
+    @@map("playbook_version")
+}
+
+model PlaybookComponent {
+    id             String                @id @default(cuid())
+    playbookId     String
+    playbook       Playbook              @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+    componentType  PlaybookComponentType
+    sourceEntityId String
+    sourceSlug     String
+    configSnapshot Json
+    isEntryPoint   Boolean               @default(false)
+    sortOrder      Int                   @default(0)
+
+    @@unique([playbookId, componentType, sourceEntityId])
+    @@index([playbookId])
+    @@map("playbook_component")
+}
+
+model PlaybookPurchase {
+    id                    String               @id @default(cuid())
+    playbookId            String
+    playbook              Playbook             @relation(fields: [playbookId], references: [id])
+    buyerOrgId            String
+    buyerOrg              Organization         @relation("PlaybookBuyer", fields: [buyerOrgId], references: [id])
+    buyerUserId           String
+    status                PurchaseStatus       @default(PENDING)
+    pricingModel          PlaybookPricingModel
+    amountUsd             Float
+    platformFeeUsd        Float
+    sellerPayoutUsd       Float
+    stripePaymentIntentId String?
+    stripeSubscriptionId  String?
+    createdAt             DateTime             @default(now())
+    updatedAt             DateTime             @updatedAt
+
+    installation PlaybookInstallation?
+
+    @@index([playbookId])
+    @@index([buyerOrgId])
+    @@map("playbook_purchase")
+}
+
+model PlaybookInstallation {
+    id                 String             @id @default(cuid())
+    playbookId         String
+    playbook           Playbook           @relation(fields: [playbookId], references: [id])
+    purchaseId         String?            @unique
+    purchase           PlaybookPurchase?  @relation(fields: [purchaseId], references: [id])
+    targetOrgId        String
+    targetOrg          Organization       @relation("PlaybookInstaller", fields: [targetOrgId], references: [id])
+    targetWorkspaceId  String
+    targetWorkspace    Workspace          @relation(fields: [targetWorkspaceId], references: [id])
+    installedByUserId  String
+    versionInstalled   Int
+    status             InstallationStatus @default(INSTALLING)
+    createdAgentIds    String[]
+    createdSkillIds    String[]
+    createdDocumentIds String[]
+    createdWorkflowIds String[]
+    createdNetworkIds  String[]
+    customizations     Json?
+    testResults        Json?
+    integrationStatus  Json?
+    createdAt          DateTime           @default(now())
+    updatedAt          DateTime           @updatedAt
+
+    @@unique([playbookId, targetOrgId])
+    @@index([playbookId])
+    @@index([targetOrgId])
+    @@map("playbook_installation")
+}
+
+model PlaybookReview {
+    id             String       @id @default(cuid())
+    playbookId     String
+    playbook       Playbook     @relation(fields: [playbookId], references: [id], onDelete: Cascade)
+    reviewerOrgId  String
+    reviewerOrg    Organization @relation("PlaybookReviewer", fields: [reviewerOrgId], references: [id])
+    reviewerUserId String
+    rating         Int
+    title          String?
+    body           String?      @db.Text
+    createdAt      DateTime     @default(now())
+    updatedAt      DateTime     @updatedAt
+
+    @@unique([playbookId, reviewerOrgId])
+    @@index([playbookId])
+    @@map("playbook_review")
 }

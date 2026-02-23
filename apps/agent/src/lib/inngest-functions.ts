@@ -8442,6 +8442,105 @@ export const securityMonitorFunction = inngest.createFunction(
     }
 );
 
+// ─── Playbook Marketplace Functions ────────────────────────────────────────────
+
+export const playbookDeployFunction = inngest.createFunction(
+    {
+        id: "playbook-deploy",
+        retries: 1
+    },
+    { event: "playbook/deploy" },
+    async ({ event }) => {
+        const {
+            installationId,
+            playbookId,
+            versionNumber,
+            targetOrgId,
+            targetWorkspaceId,
+            userId
+        } = event.data;
+
+        const { prisma } = await import("@repo/database");
+        const { deployPlaybook } = await import("@repo/agentc2");
+
+        try {
+            await deployPlaybook({
+                playbookId,
+                versionNumber,
+                targetOrgId,
+                targetWorkspaceId,
+                userId,
+                purchaseId: event.data.purchaseId
+            });
+
+            return { success: true, installationId };
+        } catch (error) {
+            console.error("[playbook/deploy] Failed:", error);
+            await prisma.playbookInstallation.update({
+                where: { id: installationId },
+                data: {
+                    status: "FAILED",
+                    testResults: {
+                        error: error instanceof Error ? error.message : "Unknown deployment error"
+                    }
+                }
+            });
+            throw error;
+        }
+    }
+);
+
+export const playbookTrustScoreRecalculationFunction = inngest.createFunction(
+    {
+        id: "playbook-trust-score-recalculate",
+        retries: 2
+    },
+    { cron: "0 3 * * *" }, // Daily at 3 AM UTC
+    async () => {
+        const { prisma } = await import("@repo/database");
+
+        const publishedPlaybooks = await prisma.playbook.findMany({
+            where: { status: "PUBLISHED" },
+            select: { id: true }
+        });
+
+        let updated = 0;
+        for (const pb of publishedPlaybooks) {
+            const installations = await prisma.playbookInstallation.findMany({
+                where: { playbookId: pb.id, status: "ACTIVE" },
+                select: { createdAgentIds: true }
+            });
+
+            const allAgentIds = installations.flatMap((i) => i.createdAgentIds);
+            if (allAgentIds.length === 0) continue;
+
+            const reputations = await prisma.agentReputation.findMany({
+                where: { agentId: { in: allAgentIds } },
+                select: { trustScore: true, totalRuns: true }
+            });
+
+            if (reputations.length === 0) continue;
+
+            const totalWeight = reputations.reduce((sum, r) => sum + (r.totalRuns ?? 1), 0);
+            const weightedSum = reputations.reduce(
+                (sum, r) => sum + (r.trustScore ?? 0) * (r.totalRuns ?? 1),
+                0
+            );
+            const trustScore = totalWeight > 0 ? weightedSum / totalWeight : null;
+
+            if (trustScore !== null) {
+                await prisma.playbook.update({
+                    where: { id: pb.id },
+                    data: { trustScore }
+                });
+                updated++;
+            }
+        }
+
+        return { updated, total: publishedPlaybooks.length };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -8511,5 +8610,8 @@ export const inngestFunctions = [
     dataRetentionCleanupFunction,
     consentExpiryCheckFunction,
     // Security monitoring
-    securityMonitorFunction
+    securityMonitorFunction,
+    // Playbook Marketplace
+    playbookDeployFunction,
+    playbookTrustScoreRecalculationFunction
 ];

@@ -34,9 +34,16 @@ export default defineConfig({
             name: "setup",
             testMatch: /.*\.setup\.ts/
         },
+        // Public marketplace tests (no auth required)
+        {
+            name: "marketplace",
+            testMatch: /marketplace\/.*\.spec\.ts/,
+            use: { ...devices["Desktop Chrome"] }
+        },
         // Main tests that depend on authentication
         {
             name: "chromium",
+            testIgnore: /marketplace\/.*/,
             use: {
                 ...devices["Desktop Chrome"],
                 storageState: ".auth/user.json"

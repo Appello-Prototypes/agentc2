@@ -125,6 +125,44 @@ export const navigationItems: NavigationItem[] = [
             }
         ]
     },
+    {
+        label: "Marketplace",
+        icon: icons["ai-network"],
+        href: "/marketplace",
+        app: "agent",
+        keywords: ["marketplace", "playbooks", "templates", "browse", "install", "deploy"],
+        children: [
+            {
+                label: "Browse",
+                href: "/marketplace",
+                keywords: ["browse", "search", "discover", "playbooks"]
+            },
+            {
+                label: "Installed",
+                href: "/marketplace/installed",
+                keywords: ["installed", "deployed", "my playbooks"]
+            }
+        ]
+    },
+    {
+        label: "Playbooks",
+        icon: icons.folder,
+        href: "/playbooks",
+        app: "agent",
+        keywords: ["playbooks", "publish", "package", "builder", "sell"],
+        children: [
+            {
+                label: "My Playbooks",
+                href: "/playbooks",
+                keywords: ["published", "my", "manage"]
+            },
+            {
+                label: "New Playbook",
+                href: "/playbooks/new",
+                keywords: ["create", "new", "package"]
+            }
+        ]
+    },
     // Secondary navigation - Demos (accessible via command palette)
     {
         label: "Demos",

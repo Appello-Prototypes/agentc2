@@ -463,6 +463,33 @@ export {
 // Tenant lifecycle (org deletion cleanup)
 export { cleanupOrgVectors } from "./tenant-lifecycle";
 
+// Playbook Marketplace
+export {
+    packagePlaybook,
+    deployPlaybook,
+    uninstallPlaybook,
+    sanitizeManifest,
+    detectHardcodedUrls,
+    validateManifest,
+    isValidManifest,
+    playbookManifestSchema,
+    mapIntegrations
+} from "./playbooks";
+export type {
+    PlaybookManifest,
+    PackagePlaybookOptions,
+    DeployPlaybookOptions,
+    AgentSnapshot,
+    SkillSnapshot,
+    DocumentSnapshot as PlaybookDocumentSnapshot,
+    WorkflowSnapshot,
+    NetworkSnapshot,
+    GuardrailSnapshot,
+    TestCaseSnapshot,
+    ScorecardSnapshot,
+    IntegrationMapping
+} from "./playbooks";
+
 // Re-export useful types from @mastra/core
 export type { Agent } from "@mastra/core/agent";
 export type { Mastra } from "@mastra/core/mastra";

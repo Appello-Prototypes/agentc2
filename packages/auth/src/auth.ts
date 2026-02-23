@@ -197,10 +197,7 @@ export const auth = betterAuth({
                             }
                         }
                     } catch (error) {
-                        console.error(
-                            "[Auth Hook] Callback post-processing failed:",
-                            error
-                        );
+                        console.error("[Auth Hook] Callback post-processing failed:", error);
                     }
                 }
             }

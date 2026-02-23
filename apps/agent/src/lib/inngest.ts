@@ -387,5 +387,17 @@ export const inngest = new Inngest({
                 newHistoryId: string;
             };
         };
+        // Playbook Marketplace Events
+        "playbook/deploy": {
+            data: {
+                installationId: string;
+                playbookId: string;
+                versionNumber: number;
+                targetOrgId: string;
+                targetWorkspaceId: string;
+                userId: string;
+                purchaseId?: string;
+            };
+        };
     }>()
 });
