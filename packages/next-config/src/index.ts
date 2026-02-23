@@ -50,7 +50,7 @@ export const securityHeaders = [
             // unsafe-eval only needed in development for hot reload
             isDevelopment
                 ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'"
-                : "script-src 'self' 'unsafe-inline'",
+                : "script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com",
             "style-src 'self' 'unsafe-inline'",
             "img-src 'self' data: https:",
             "font-src 'self' data:",
@@ -60,7 +60,7 @@ export const securityHeaders = [
             // Also allow ElevenLabs API for voice features and production domain for cross-app auth
             isDevelopment
                 ? "connect-src 'self' http://localhost:3000 http://localhost:3001 ws://localhost:3000 ws://localhost:3001 https://catalyst.localhost https://api.elevenlabs.io wss://api.elevenlabs.io https://agentc2.ai"
-                : "connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://agentc2.ai",
+                : "connect-src 'self' https://api.elevenlabs.io wss://api.elevenlabs.io https://agentc2.ai https://cloudflareinsights.com",
             "frame-ancestors 'none'"
         ].join("; ")
     }
