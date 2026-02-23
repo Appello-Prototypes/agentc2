@@ -255,7 +255,7 @@ export default function KnowledgePage() {
                 </div>
 
                 {/* Tabs */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <Tabs defaultValue="documents" value={activeTab} onValueChange={setActiveTab}>
                     <TabsList>
                         <TabsTrigger value="documents" className="gap-1.5">
                             <FileTextIcon className="size-3.5" />

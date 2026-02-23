@@ -1488,7 +1488,7 @@ export function ObservabilityDashboard() {
         <div className="space-y-6">
             {/* Controls */}
             <div className="flex items-center gap-3">
-                <Select value={timeRange} onValueChange={setTimeRange}>
+                <Select value={timeRange} onValueChange={(v) => v && setTimeRange(v)}>
                     <SelectTrigger className="w-[140px]">
                         <SelectValue />
                     </SelectTrigger>
@@ -1501,7 +1501,7 @@ export function ObservabilityDashboard() {
                         <SelectItem value="all">All time</SelectItem>
                     </SelectContent>
                 </Select>
-                <Select value={runTypeFilter} onValueChange={setRunTypeFilter}>
+                <Select value={runTypeFilter} onValueChange={(v) => v && setRunTypeFilter(v)}>
                     <SelectTrigger className="w-[120px]">
                         <SelectValue />
                     </SelectTrigger>

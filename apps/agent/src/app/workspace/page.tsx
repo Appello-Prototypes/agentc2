@@ -1107,8 +1107,10 @@ export default function UnifiedChatPage() {
             for (const msg of messages) {
                 for (const part of msg.parts || []) {
                     if (part.type === "tool-invocation") {
-                        const callId = part.toolInvocation?.toolCallId;
-                        const hasResult = "result" in (part.toolInvocation || {});
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        const inv = (part as any).toolInvocation || part;
+                        const callId: string | undefined = inv.toolCallId;
+                        const hasResult = "result" in inv;
                         if (callId && !hasResult && !next.has(callId)) {
                             next.set(callId, Date.now());
                             updated = true;
