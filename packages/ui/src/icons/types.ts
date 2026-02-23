@@ -49,7 +49,8 @@ export type IconName =
     | "add"
     | "menu"
     | "paint-board"
-    | "task-list";
+    | "task-list"
+    | "help-circle";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

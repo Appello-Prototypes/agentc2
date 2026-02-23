@@ -32,9 +32,11 @@ export function UserMenu({
                 if (onSettings) {
                     onSettings();
                 } else {
-                    // Default fallback: navigate to settings
                     window.location.href = "/settings";
                 }
+                break;
+            case "support":
+                window.location.href = "/support";
                 break;
             case "signout":
                 onSignOut();

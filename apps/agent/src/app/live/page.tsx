@@ -1,7 +1,23 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import React, { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
+import { useTheme } from "next-themes";
+import {
+    Area,
+    AreaChart,
+    Bar,
+    BarChart,
+    CartesianGrid,
+    Legend,
+    Line,
+    LineChart,
+    ResponsiveContainer,
+    Tooltip,
+    XAxis,
+    YAxis
+} from "recharts";
 import {
     Badge,
     Button,
@@ -201,7 +217,7 @@ const formatModelLabel = sharedFormatModelLabel;
 const getStatusBadgeVariant = sharedGetStatusBadgeVariant;
 const getSourceBadgeColor = sharedGetSourceBadgeColor;
 
-export default function LiveDashboardPage() {
+export function LiveRunsContent() {
     const router = useRouter();
     const [loading, setLoading] = useState(true);
     const [filtersLoading, setFiltersLoading] = useState(false);
@@ -390,33 +406,10 @@ export default function LiveDashboardPage() {
         }
     }, [runs, selectedRun]);
 
-    const handleAgentClick = (agentSlug: string) => {
-        router.push(`/agents/${agentSlug}/overview`);
-    };
-
     const handleRunClick = (run: Run) => {
         setSelectedRun(run);
         fetchRunDetail(run);
     };
-
-    const handleRunSelectById = useCallback(
-        (runId: string) => {
-            const run = runs.find((item) => item.id === runId);
-            if (run) {
-                setSelectedRun(run);
-                fetchRunDetail(run);
-            }
-        },
-        [runs, fetchRunDetail]
-    );
-
-    const slowRunIds = useMemo(() => {
-        return new Set(metrics?.topRuns.slowest.map((run) => run.id) || []);
-    }, [metrics]);
-
-    const expensiveRunIds = useMemo(() => {
-        return new Set(metrics?.topRuns.mostExpensive.map((run) => run.id) || []);
-    }, [metrics]);
 
     const sortedRuns = useMemo(() => {
         const sorted = [...runs];
@@ -492,18 +485,6 @@ export default function LiveDashboardPage() {
         return new Map((filters?.agents || []).map((agent) => [agent.id, agent.name]));
     }, [filters]);
 
-    const perAgentSorted = useMemo(() => {
-        return [...(metrics?.perAgent || [])].sort((a, b) => b.totalRuns - a.totalRuns);
-    }, [metrics]);
-
-    const perVersionSorted = useMemo(() => {
-        return [...(metrics?.perVersion || [])].sort((a, b) => b.totalRuns - a.totalRuns);
-    }, [metrics]);
-
-    const modelUsageSorted = useMemo(() => {
-        return [...(metrics?.modelUsage || [])].sort((a, b) => b.runs - a.runs);
-    }, [metrics]);
-
     const sourceOptions = useMemo(() => {
         const sources = (filters?.sources || [])
             .map((source) => source.source)
@@ -529,10 +510,7 @@ export default function LiveDashboardPage() {
                         ))}
                     </div>
                     <Skeleton className="h-16 w-full" />
-                    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                        <Skeleton className="h-[500px]" />
-                        <Skeleton className="h-[500px]" />
-                    </div>
+                    <Skeleton className="h-[500px] w-full" />
                 </div>
             </div>
         );
@@ -1003,554 +981,966 @@ export default function LiveDashboardPage() {
                     </div>
                 )}
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                    <Card>
-                        <CardHeader>
-                            <div className="flex items-start justify-between gap-4">
-                                <div>
-                                    <CardTitle>Runs</CardTitle>
-                                    <CardDescription>
-                                        {runs.length} shown
-                                        {runCounts
-                                            ? ` of ${runCounts.total.toLocaleString()} matching runs`
-                                            : ""}
-                                    </CardDescription>
-                                </div>
-                                {runsLoading && (
-                                    <p className="text-muted-foreground text-xs">Refreshing...</p>
-                                )}
+                <Card>
+                    <CardHeader>
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <CardTitle>Runs</CardTitle>
+                                <CardDescription>
+                                    {runs.length} shown
+                                    {runCounts
+                                        ? ` of ${runCounts.total.toLocaleString()} matching runs`
+                                        : ""}
+                                </CardDescription>
                             </div>
-                        </CardHeader>
-                        <CardContent>
-                            {runsLoading ? (
-                                <div className="space-y-3">
-                                    {Array.from({ length: 6 }).map((_, i) => (
-                                        <Skeleton key={i} className="h-14 w-full" />
-                                    ))}
-                                </div>
-                            ) : runs.length === 0 ? (
-                                <div className="py-12 text-center">
-                                    <p className="text-muted-foreground text-lg">
-                                        No runs match the current filters
-                                    </p>
-                                    <p className="text-muted-foreground mt-2 text-sm">
-                                        Adjust filters or broaden the time range to see more runs
-                                    </p>
-                                </div>
-                            ) : (
-                                <div className="overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Agent</TableHead>
-                                                <TableHead>Version</TableHead>
-                                                <TableHead>Model</TableHead>
-                                                <TableHead>Status</TableHead>
-                                                <TableHead>Source</TableHead>
-                                                <TableHead>Input</TableHead>
-                                                <TableHead className="text-right">
-                                                    Duration
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Tool Calls
-                                                </TableHead>
-                                                <TableHead className="text-right">Tools</TableHead>
-                                                <TableHead className="text-right">Tokens</TableHead>
-                                                <TableHead className="text-right">Cost</TableHead>
-                                                <TableHead className="text-right">Time</TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {groupedRuns.map((group) => (
-                                                <Fragment key={group.label}>
-                                                    {groupBy !== "none" && (
-                                                        <TableRow>
-                                                            <TableCell
-                                                                colSpan={12}
-                                                                className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
-                                                            >
-                                                                {group.label} ({group.runs.length})
+                            {runsLoading && (
+                                <p className="text-muted-foreground text-xs">Refreshing...</p>
+                            )}
+                        </div>
+                    </CardHeader>
+                    <CardContent>
+                        {runsLoading ? (
+                            <div className="space-y-3">
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <Skeleton key={i} className="h-14 w-full" />
+                                ))}
+                            </div>
+                        ) : runs.length === 0 ? (
+                            <div className="py-12 text-center">
+                                <p className="text-muted-foreground text-lg">
+                                    No runs match the current filters
+                                </p>
+                                <p className="text-muted-foreground mt-2 text-sm">
+                                    Adjust filters or broaden the time range to see more runs
+                                </p>
+                            </div>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead>Version</TableHead>
+                                            <TableHead>Model</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Source</TableHead>
+                                            <TableHead>Input</TableHead>
+                                            <TableHead className="text-right">Duration</TableHead>
+                                            <TableHead className="text-right">Tool Calls</TableHead>
+                                            <TableHead className="text-right">Tools</TableHead>
+                                            <TableHead className="text-right">Tokens</TableHead>
+                                            <TableHead className="text-right">Cost</TableHead>
+                                            <TableHead className="text-right">Time</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {groupedRuns.map((group) => (
+                                            <Fragment key={group.label}>
+                                                {groupBy !== "none" && (
+                                                    <TableRow>
+                                                        <TableCell
+                                                            colSpan={12}
+                                                            className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
+                                                        >
+                                                            {group.label} ({group.runs.length})
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                                {group.runs.map((run) => {
+                                                    const isSelected = selectedRun?.id === run.id;
+                                                    return (
+                                                        <TableRow
+                                                            key={run.id}
+                                                            className={`cursor-pointer ${
+                                                                isSelected ? "bg-muted/50" : ""
+                                                            }`}
+                                                            onClick={() => handleRunClick(run)}
+                                                        >
+                                                            <TableCell>
+                                                                <div>
+                                                                    <p className="font-medium">
+                                                                        {run.agentName}
+                                                                    </p>
+                                                                    <p className="text-muted-foreground text-xs">
+                                                                        {run.id}
+                                                                    </p>
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {run.versionNumber
+                                                                    ? `v${run.versionNumber}`
+                                                                    : "-"}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {formatModelLabel(
+                                                                    run.modelName,
+                                                                    run.modelProvider
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <Badge
+                                                                        variant={getStatusBadgeVariant(
+                                                                            run.status
+                                                                        )}
+                                                                    >
+                                                                        {run.status}
+                                                                    </Badge>
+                                                                    {run.failureReason ===
+                                                                        "BUDGET_EXCEEDED" && (
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                                        >
+                                                                            Budget
+                                                                        </Badge>
+                                                                    )}
+                                                                </div>
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                {run.source ? (
+                                                                    <Badge
+                                                                        className={getSourceBadgeColor(
+                                                                            run.source
+                                                                        )}
+                                                                    >
+                                                                        {run.source}
+                                                                    </Badge>
+                                                                ) : (
+                                                                    "-"
+                                                                )}
+                                                            </TableCell>
+                                                            <TableCell>
+                                                                <p className="max-w-xs truncate">
+                                                                    {run.inputText}
+                                                                </p>
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.durationMs
+                                                                    ? formatLatency(run.durationMs)
+                                                                    : "-"}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.toolCallCount}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {run.uniqueToolCount}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {formatTokens(run.totalTokens)}
+                                                            </TableCell>
+                                                            <TableCell className="text-right">
+                                                                {formatCost(run.costUsd)}
+                                                            </TableCell>
+                                                            <TableCell className="text-muted-foreground text-right">
+                                                                <span
+                                                                    title={new Date(
+                                                                        run.startedAt
+                                                                    ).toLocaleString()}
+                                                                >
+                                                                    {formatRelativeTime(
+                                                                        run.startedAt
+                                                                    )}
+                                                                </span>
                                                             </TableCell>
                                                         </TableRow>
-                                                    )}
-                                                    {group.runs.map((run) => {
-                                                        const isSelected =
-                                                            selectedRun?.id === run.id;
-                                                        const isSlow = slowRunIds.has(run.id);
-                                                        const isExpensive = expensiveRunIds.has(
-                                                            run.id
-                                                        );
-                                                        return (
-                                                            <TableRow
-                                                                key={run.id}
-                                                                className={`cursor-pointer ${
-                                                                    isSelected ? "bg-muted/50" : ""
-                                                                } ${
-                                                                    isSlow
-                                                                        ? "border-l-4 border-yellow-400"
-                                                                        : ""
-                                                                } ${
-                                                                    isExpensive
-                                                                        ? "border-l-4 border-purple-400"
-                                                                        : ""
-                                                                }`}
-                                                                onClick={() => handleRunClick(run)}
-                                                            >
-                                                                <TableCell>
-                                                                    <div>
-                                                                        <p className="font-medium">
-                                                                            {run.agentName}
-                                                                        </p>
-                                                                        <p className="text-muted-foreground text-xs">
-                                                                            {run.id}
-                                                                        </p>
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {run.versionNumber
-                                                                        ? `v${run.versionNumber}`
-                                                                        : "-"}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {formatModelLabel(
-                                                                        run.modelName,
-                                                                        run.modelProvider
-                                                                    )}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <Badge
-                                                                            variant={getStatusBadgeVariant(
-                                                                                run.status
-                                                                            )}
-                                                                        >
-                                                                            {run.status}
-                                                                        </Badge>
-                                                                        {run.failureReason ===
-                                                                            "BUDGET_EXCEEDED" && (
-                                                                            <Badge
-                                                                                variant="outline"
-                                                                                className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                                                            >
-                                                                                Budget
-                                                                            </Badge>
-                                                                        )}
-                                                                    </div>
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    {run.source ? (
-                                                                        <Badge
-                                                                            className={getSourceBadgeColor(
-                                                                                run.source
-                                                                            )}
-                                                                        >
-                                                                            {run.source}
-                                                                        </Badge>
-                                                                    ) : (
-                                                                        "-"
-                                                                    )}
-                                                                </TableCell>
-                                                                <TableCell>
-                                                                    <p className="max-w-xs truncate">
-                                                                        {run.inputText}
-                                                                    </p>
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {run.durationMs
-                                                                        ? formatLatency(
-                                                                              run.durationMs
-                                                                          )
-                                                                        : "-"}
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {run.toolCallCount}
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {run.uniqueToolCount}
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {formatTokens(run.totalTokens)}
-                                                                </TableCell>
-                                                                <TableCell className="text-right">
-                                                                    {formatCost(run.costUsd)}
-                                                                </TableCell>
-                                                                <TableCell className="text-muted-foreground text-right">
-                                                                    <span
-                                                                        title={new Date(
-                                                                            run.startedAt
-                                                                        ).toLocaleString()}
-                                                                    >
-                                                                        {formatRelativeTime(
-                                                                            run.startedAt
-                                                                        )}
-                                                                    </span>
-                                                                </TableCell>
-                                                            </TableRow>
-                                                        );
-                                                    })}
-                                                </Fragment>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card className="flex flex-col">
-                        <CardHeader className="space-y-3">
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <CardTitle className="text-lg">
-                                        {selectedRun ? selectedRun.agentName : "Run Detail"}
-                                    </CardTitle>
-                                    <CardDescription>
-                                        {selectedRun
-                                            ? `Run ID: ${selectedRun.id}`
-                                            : "Select a run to inspect trace, tools, and context."}
-                                    </CardDescription>
-                                </div>
-                                {selectedRun && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                            router.push(
-                                                `/agents/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
-                                            )
-                                        }
-                                    >
-                                        Open in Agents
-                                    </Button>
-                                )}
+                                                    );
+                                                })}
+                                            </Fragment>
+                                        ))}
+                                    </TableBody>
+                                </Table>
                             </div>
-                            {selectedRun && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <Badge variant={getStatusBadgeVariant(selectedRun.status)}>
-                                        {selectedRun.status}
-                                    </Badge>
-                                    {selectedRun.source && (
-                                        <Badge className={getSourceBadgeColor(selectedRun.source)}>
-                                            {selectedRun.source}
-                                        </Badge>
-                                    )}
-                                    {selectedRun.versionNumber && (
-                                        <Badge variant="outline">
-                                            v{selectedRun.versionNumber}
-                                        </Badge>
-                                    )}
-                                    <Badge variant="outline">{selectedRun.runType}</Badge>
-                                    <Badge variant="outline">
-                                        {formatModelLabel(
-                                            selectedRun.modelName,
-                                            selectedRun.modelProvider
-                                        )}
-                                    </Badge>
-                                </div>
-                            )}
-                            {selectedRun && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Duration</p>
-                                        <p className="text-base font-semibold">
-                                            {selectedRun.durationMs
-                                                ? formatLatency(selectedRun.durationMs)
-                                                : "-"}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Tokens</p>
-                                        <p className="text-base font-semibold">
-                                            {formatTokens(selectedRun.totalTokens)}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Cost</p>
-                                        <p className="text-base font-semibold">
-                                            {formatCost(selectedRun.costUsd)}
-                                        </p>
-                                    </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Tool Calls</p>
-                                        <p className="text-base font-semibold">
-                                            {selectedRun.toolCallCount}
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </CardHeader>
-                        <CardContent className="flex-1 overflow-hidden">
-                            {!selectedRun ? (
-                                <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 py-12 text-center">
-                                    <HugeiconsIcon icon={icons.activity!} className="size-10" />
-                                    <p className="text-sm">
-                                        Select a run to view its trace, tools, and latency
-                                        breakdown.
-                                    </p>
-                                </div>
-                            ) : (
-                                <RunDetailPanel
-                                    runDetail={runDetail}
-                                    loading={runDetailLoading}
-                                    inputText={selectedRun.inputText}
-                                    outputText={selectedRun.outputText}
-                                    status={selectedRun.status}
-                                    promptTokens={selectedRun.promptTokens}
-                                    completionTokens={selectedRun.completionTokens}
-                                    totalTokens={selectedRun.totalTokens}
-                                    sessionId={selectedRun.sessionId}
-                                    threadId={selectedRun.threadId}
-                                />
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
+                        )}
+                    </CardContent>
+                </Card>
 
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Slowest Runs</CardTitle>
-                            <CardDescription>Highest latency in current window</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {(metrics?.topRuns.slowest || []).length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No slow runs recorded.
-                                </p>
-                            ) : (
-                                metrics?.topRuns.slowest.map((run) => (
-                                    <div
-                                        key={run.id}
-                                        className="flex items-start justify-between gap-3"
-                                    >
-                                        <div>
-                                            <button
-                                                className="text-left text-sm font-medium hover:underline"
-                                                onClick={() => handleRunSelectById(run.id)}
-                                            >
-                                                {run.agentName}
-                                            </button>
-                                            <p className="text-muted-foreground text-xs">
-                                                {run.id}
-                                            </p>
-                                        </div>
-                                        <div className="text-right text-sm">
-                                            <p className="font-semibold">
-                                                {run.durationMs
-                                                    ? formatLatency(run.durationMs)
-                                                    : "-"}
-                                            </p>
-                                            <p className="text-muted-foreground text-xs">
-                                                {formatModelLabel(run.modelName, run.modelProvider)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Most Expensive</CardTitle>
-                            <CardDescription>Highest cost runs in window</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {(metrics?.topRuns.mostExpensive || []).length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No expensive runs recorded.
-                                </p>
-                            ) : (
-                                metrics?.topRuns.mostExpensive.map((run) => (
-                                    <div
-                                        key={run.id}
-                                        className="flex items-start justify-between gap-3"
-                                    >
-                                        <div>
-                                            <button
-                                                className="text-left text-sm font-medium hover:underline"
-                                                onClick={() => handleRunSelectById(run.id)}
-                                            >
-                                                {run.agentName}
-                                            </button>
-                                            <p className="text-muted-foreground text-xs">
-                                                {run.id}
-                                            </p>
-                                        </div>
-                                        <div className="text-right text-sm">
-                                            <p className="font-semibold">
-                                                {formatCost(run.costUsd)}
-                                            </p>
-                                            <p className="text-muted-foreground text-xs">
-                                                {formatTokens(run.totalTokens)}
-                                            </p>
-                                        </div>
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Model Usage</CardTitle>
-                            <CardDescription>Runs by model in window</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-3">
-                            {modelUsageSorted.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No model usage data available.
-                                </p>
-                            ) : (
-                                modelUsageSorted.slice(0, 6).map((model) => (
-                                    <div
-                                        key={`${model.modelProvider}-${model.modelName}`}
-                                        className="flex items-center justify-between text-sm"
-                                    >
-                                        <span className="font-medium">
-                                            {formatModelLabel(model.modelName, model.modelProvider)}
-                                        </span>
-                                        <span className="text-muted-foreground">{model.runs}</span>
-                                    </div>
-                                ))
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-                <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Agent Performance</CardTitle>
-                            <CardDescription>Avg latency, tools, and failures</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {perAgentSorted.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No agent performance data available.
-                                </p>
-                            ) : (
-                                <div className="overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Agent</TableHead>
-                                                <TableHead className="text-right">Runs</TableHead>
-                                                <TableHead className="text-right">
-                                                    Success
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Avg Latency
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Avg Tools
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Avg Cost
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {perAgentSorted.map((agent) => (
-                                                <TableRow
-                                                    key={agent.agentId}
-                                                    className="cursor-pointer"
+                {selectedRun &&
+                    createPortal(
+                        <>
+                            <div
+                                className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                                onClick={() => setSelectedRun(null)}
+                            />
+                            <div className="bg-background fixed inset-x-0 bottom-0 z-50 h-[95vh] shadow-2xl transition-transform duration-300">
+                                <div className="mx-6 flex h-full flex-col rounded-t-2xl border-x border-t">
+                                    <div className="flex shrink-0 flex-col gap-4 border-b px-6 py-4">
+                                        <div className="flex items-start justify-between gap-4">
+                                            <div className="min-w-0 flex-1">
+                                                <h2 className="text-xl font-semibold">
+                                                    {selectedRun.agentName}
+                                                </h2>
+                                                <p className="text-muted-foreground truncate font-mono text-xs">
+                                                    {selectedRun.id}
+                                                </p>
+                                            </div>
+                                            <div className="flex shrink-0 items-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
                                                     onClick={() =>
-                                                        handleAgentClick(agent.agentSlug)
+                                                        router.push(
+                                                            `/agents/${selectedRun.agentSlug}/runs?runId=${selectedRun.id}`
+                                                        )
                                                     }
                                                 >
-                                                    <TableCell className="font-medium">
-                                                        {agent.agentName}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {agent.totalRuns}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {agent.successRate}%
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {formatLatency(agent.avgLatencyMs)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {agent.avgToolCalls.toFixed(2)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {formatCost(agent.avgCostUsd)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                                                    Open in Agents
+                                                </Button>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => setSelectedRun(null)}
+                                                >
+                                                    <HugeiconsIcon
+                                                        icon={icons.cancel!}
+                                                        className="size-4"
+                                                    />
+                                                </Button>
+                                            </div>
+                                        </div>
 
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="text-base">Version Comparison</CardTitle>
-                            <CardDescription>Success rate by agent version</CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                            {perVersionSorted.length === 0 ? (
-                                <p className="text-muted-foreground text-sm">
-                                    No version metrics available.
-                                </p>
-                            ) : (
-                                <div className="overflow-auto">
-                                    <Table>
-                                        <TableHeader>
-                                            <TableRow>
-                                                <TableHead>Version</TableHead>
-                                                <TableHead>Agent</TableHead>
-                                                <TableHead className="text-right">Runs</TableHead>
-                                                <TableHead className="text-right">
-                                                    Success
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Avg Latency
-                                                </TableHead>
-                                                <TableHead className="text-right">
-                                                    Avg Cost
-                                                </TableHead>
-                                            </TableRow>
-                                        </TableHeader>
-                                        <TableBody>
-                                            {perVersionSorted.map((version) => (
-                                                <TableRow key={version.versionId || "unknown"}>
-                                                    <TableCell>
-                                                        {version.versionNumber
-                                                            ? `v${version.versionNumber}`
-                                                            : "-"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {version.agentId
-                                                            ? agentNameById.get(version.agentId) ||
-                                                              "Unknown"
-                                                            : "Unknown"}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {version.totalRuns}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {version.successRate}%
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {formatLatency(version.avgLatencyMs)}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        {formatCost(version.avgCostUsd)}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))}
-                                        </TableBody>
-                                    </Table>
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            <Badge
+                                                variant={getStatusBadgeVariant(selectedRun.status)}
+                                            >
+                                                {selectedRun.status}
+                                            </Badge>
+                                            {selectedRun.source && (
+                                                <Badge
+                                                    className={getSourceBadgeColor(
+                                                        selectedRun.source
+                                                    )}
+                                                >
+                                                    {selectedRun.source}
+                                                </Badge>
+                                            )}
+                                            {selectedRun.versionNumber && (
+                                                <Badge variant="outline">
+                                                    v{selectedRun.versionNumber}
+                                                </Badge>
+                                            )}
+                                            <Badge variant="outline">{selectedRun.runType}</Badge>
+                                            <Badge variant="outline">
+                                                {formatModelLabel(
+                                                    selectedRun.modelName,
+                                                    selectedRun.modelProvider
+                                                )}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="grid grid-cols-4 gap-3">
+                                            <div className="bg-muted/50 rounded-lg p-3">
+                                                <p className="text-muted-foreground text-xs">
+                                                    Duration
+                                                </p>
+                                                <p className="text-base font-semibold">
+                                                    {selectedRun.durationMs
+                                                        ? formatLatency(selectedRun.durationMs)
+                                                        : "-"}
+                                                </p>
+                                            </div>
+                                            <div className="bg-muted/50 rounded-lg p-3">
+                                                <p className="text-muted-foreground text-xs">
+                                                    Tokens
+                                                </p>
+                                                <p className="text-base font-semibold">
+                                                    {formatTokens(selectedRun.totalTokens)}
+                                                </p>
+                                            </div>
+                                            <div className="bg-muted/50 rounded-lg p-3">
+                                                <p className="text-muted-foreground text-xs">
+                                                    Cost
+                                                </p>
+                                                <p className="text-base font-semibold">
+                                                    {formatCost(selectedRun.costUsd)}
+                                                </p>
+                                            </div>
+                                            <div className="bg-muted/50 rounded-lg p-3">
+                                                <p className="text-muted-foreground text-xs">
+                                                    Tool Calls
+                                                </p>
+                                                <p className="text-base font-semibold">
+                                                    {selectedRun.toolCallCount}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                                        <RunDetailPanel
+                                            runDetail={runDetail}
+                                            loading={runDetailLoading}
+                                            inputText={selectedRun.inputText}
+                                            outputText={selectedRun.outputText}
+                                            status={selectedRun.status}
+                                            promptTokens={selectedRun.promptTokens}
+                                            completionTokens={selectedRun.completionTokens}
+                                            totalTokens={selectedRun.totalTokens}
+                                            sessionId={selectedRun.sessionId}
+                                            threadId={selectedRun.threadId}
+                                            agentSlug={selectedRun.agentSlug}
+                                            runId={selectedRun.id}
+                                        />
+                                    </div>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
+                            </div>
+                        </>,
+                        document.body
+                    )}
             </div>
         </div>
     );
+}
+
+interface TimeseriesBucket {
+    time: string;
+    runs: number;
+    completed: number;
+    failed: number;
+    avgLatencyMs: number;
+    totalTokens: number;
+    totalCost: number;
+}
+
+interface CumulativeCostPoint {
+    time: string;
+    cost: number;
+}
+
+interface AgentBreakdownRow {
+    agentId: string;
+    name: string;
+    runs: number;
+    cost: number;
+    tokens: number;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function ChartTooltip({ active, payload, label, isDark }: any) {
+    if (!active || !payload?.length) return null;
+    return (
+        <div
+            className="bg-popover text-popover-foreground rounded-lg border px-3 py-2 text-xs shadow-lg"
+            style={{
+                backgroundColor: isDark ? "#27272a" : "#ffffff",
+                border: `1px solid ${isDark ? "#3f3f46" : "#e4e4e7"}`
+            }}
+        >
+            <p style={{ color: isDark ? "#a1a1aa" : "#71717a" }} className="mb-1">
+                {label}
+            </p>
+            {payload.map((p: { name: string; value: number; color: string }) => (
+                <p key={p.name} style={{ color: p.color || (isDark ? "#e4e4e7" : "#18181b") }}>
+                    {p.name}:{" "}
+                    {typeof p.value === "number" && p.name.includes("Cost")
+                        ? `$${p.value.toFixed(4)}`
+                        : typeof p.value === "number"
+                          ? p.value.toLocaleString()
+                          : p.value}
+                </p>
+            ))}
+        </div>
+    );
+}
+
+function formatChartTime(iso: string, range: string): string {
+    const d = new Date(iso);
+    if (range === "1h" || range === "6h") {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    if (range === "24h") {
+        return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+export function ObservabilityDashboard() {
+    const router = useRouter();
+    const { resolvedTheme } = useTheme();
+    const [loading, setLoading] = useState(true);
+    const [metrics, setMetrics] = useState<LiveMetrics | null>(null);
+    const [filters, setFilters] = useState<LiveFilters | null>(null);
+    const [timeseries, setTimeseries] = useState<TimeseriesBucket[]>([]);
+    const [cumulativeCost, setCumulativeCost] = useState<CumulativeCostPoint[]>([]);
+    const [agentBreakdown, setAgentBreakdown] = useState<AgentBreakdownRow[]>([]);
+    const [timeRange, setTimeRange] = useState("24h");
+    const [runTypeFilter, setRunTypeFilter] = useState("PROD");
+
+    const { from: rangeFrom, to: rangeTo } = useMemo(() => {
+        return getDateRange(timeRange);
+    }, [timeRange]);
+
+    const bucketCount = useMemo(() => {
+        switch (timeRange) {
+            case "1h":
+                return 12;
+            case "6h":
+                return 18;
+            case "24h":
+                return 24;
+            case "7d":
+                return 28;
+            case "30d":
+                return 30;
+            default:
+                return 30;
+        }
+    }, [timeRange]);
+
+    const fetchData = useCallback(async () => {
+        const params = new URLSearchParams();
+        params.set("runType", runTypeFilter);
+        if (rangeFrom) params.set("from", rangeFrom.toISOString());
+        if (rangeTo) params.set("to", rangeTo.toISOString());
+
+        const tsParams = new URLSearchParams(params);
+        tsParams.set("buckets", String(bucketCount));
+
+        try {
+            const [metricsRes, filtersRes, tsRes] = await Promise.all([
+                fetch(`${getApiBase()}/api/live/metrics?${params.toString()}`),
+                fetch(`${getApiBase()}/api/live/filters?${params.toString()}`),
+                fetch(`${getApiBase()}/api/live/metrics/timeseries?${tsParams.toString()}`)
+            ]);
+            const metricsData = await metricsRes.json();
+            const filtersData = await filtersRes.json();
+            const tsData = await tsRes.json();
+            if (metricsData.success) setMetrics(metricsData);
+            if (filtersData.success) setFilters(filtersData.filters);
+            if (tsData.success) {
+                setTimeseries(tsData.timeseries || []);
+                setCumulativeCost(tsData.cumulativeCost || []);
+                setAgentBreakdown(tsData.agentBreakdown || []);
+            }
+        } catch (error) {
+            console.error("Failed to fetch dashboard data:", error);
+        }
+    }, [runTypeFilter, rangeFrom, rangeTo, bucketCount]);
+
+    useEffect(() => {
+        let cancelled = false;
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- standard data-fetching pattern; setState is called asynchronously after fetch completes
+        fetchData().finally(() => {
+            if (!cancelled) setLoading(false);
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [fetchData]);
+
+    const agentNameById = useMemo(() => {
+        return new Map((filters?.agents || []).map((a) => [a.id, a.name]));
+    }, [filters]);
+
+    const perAgentSorted = useMemo(() => {
+        return [...(metrics?.perAgent || [])].sort((a, b) => b.totalRuns - a.totalRuns);
+    }, [metrics]);
+
+    const perVersionSorted = useMemo(() => {
+        return [...(metrics?.perVersion || [])].sort((a, b) => b.totalRuns - a.totalRuns);
+    }, [metrics]);
+
+    const modelUsageSorted = useMemo(() => {
+        return [...(metrics?.modelUsage || [])].sort((a, b) => b.runs - a.runs);
+    }, [metrics]);
+
+    const chartData = useMemo(() => {
+        return timeseries.map((b) => ({
+            ...b,
+            label: formatChartTime(b.time, timeRange),
+            successRate: b.runs > 0 ? Math.round((b.completed / b.runs) * 100) : 0
+        }));
+    }, [timeseries, timeRange]);
+
+    const cumCostData = useMemo(() => {
+        return cumulativeCost.map((b) => ({
+            ...b,
+            label: formatChartTime(b.time, timeRange)
+        }));
+    }, [cumulativeCost, timeRange]);
+
+    const isDark = resolvedTheme === "dark";
+    const tickStyle = { fontSize: 10, fill: isDark ? "#a1a1aa" : "#71717a" };
+    const axisStroke = isDark ? "#3f3f46" : "#d4d4d8";
+    const gridStroke = isDark ? "#27272a" : "#e4e4e7";
+    const legendStyle: React.CSSProperties = {
+        fontSize: 11,
+        color: isDark ? "#d4d4d8" : "#3f3f46"
+    };
+
+    if (loading) {
+        return (
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4 md:grid-cols-4 xl:grid-cols-6">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton key={i} className="h-24" />
+                    ))}
+                </div>
+                <Skeleton className="h-64 w-full" />
+                <Skeleton className="h-64 w-full" />
+            </div>
+        );
+    }
+
+    const summary = metrics?.summary;
+
+    return (
+        <div className="space-y-6">
+            {/* Controls */}
+            <div className="flex items-center gap-3">
+                <Select value={timeRange} onValueChange={setTimeRange}>
+                    <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="1h">Last 1 hour</SelectItem>
+                        <SelectItem value="6h">Last 6 hours</SelectItem>
+                        <SelectItem value="24h">Last 24 hours</SelectItem>
+                        <SelectItem value="7d">Last 7 days</SelectItem>
+                        <SelectItem value="30d">Last 30 days</SelectItem>
+                        <SelectItem value="all">All time</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Select value={runTypeFilter} onValueChange={setRunTypeFilter}>
+                    <SelectTrigger className="w-[120px]">
+                        <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="PROD">Prod</SelectItem>
+                        <SelectItem value="DEV">Dev</SelectItem>
+                        <SelectItem value="all">All</SelectItem>
+                    </SelectContent>
+                </Select>
+                <Button variant="outline" size="sm" onClick={() => fetchData()}>
+                    <HugeiconsIcon icon={icons.refresh!} className="mr-2 size-4" />
+                    Refresh
+                </Button>
+            </div>
+
+            {/* KPI Summary Cards */}
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Runs</CardDescription>
+                        <CardTitle className="text-2xl">{summary?.totalRuns ?? 0}</CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Success Rate</CardDescription>
+                        <CardTitle className="text-2xl">{summary?.successRate ?? 0}%</CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Failed</CardDescription>
+                        <CardTitle className="text-2xl text-red-500">
+                            {summary?.failedRuns ?? 0}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Avg Latency</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {formatLatency(summary?.avgLatencyMs ?? 0)}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Tokens</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {formatTokens(summary?.totalTokens ?? 0)}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+                <Card>
+                    <CardHeader className="pb-2">
+                        <CardDescription>Total Cost</CardDescription>
+                        <CardTitle className="text-2xl">
+                            {formatCost(summary?.totalCostUsd ?? 0)}
+                        </CardTitle>
+                    </CardHeader>
+                </Card>
+            </div>
+
+            {/* Row 1: Run Volume + Success Rate */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Run Volume</CardTitle>
+                        <CardDescription>Completed vs failed runs over time</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
+                                <YAxis tick={tickStyle} stroke={axisStroke} allowDecimals={false} />
+                                <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="completed"
+                                    name="Completed"
+                                    stackId="1"
+                                    stroke="#22c55e"
+                                    fill="#22c55e"
+                                    fillOpacity={0.3}
+                                />
+                                <Area
+                                    type="monotone"
+                                    dataKey="failed"
+                                    name="Failed"
+                                    stackId="1"
+                                    stroke="#ef4444"
+                                    fill="#ef4444"
+                                    fillOpacity={0.3}
+                                />
+                                <Legend iconType="circle" wrapperStyle={legendStyle} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Latency Trend</CardTitle>
+                        <CardDescription>Average response time per bucket</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
+                                <YAxis
+                                    tick={tickStyle}
+                                    stroke={axisStroke}
+                                    tickFormatter={(v) => `${(v / 1000).toFixed(1)}s`}
+                                />
+                                <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                <Line
+                                    type="monotone"
+                                    dataKey="avgLatencyMs"
+                                    name="Avg Latency (ms)"
+                                    stroke="#f59e0b"
+                                    strokeWidth={2}
+                                    dot={false}
+                                />
+                                <Legend iconType="circle" wrapperStyle={legendStyle} />
+                            </LineChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Row 2: Cost + Tokens */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Cumulative Cost</CardTitle>
+                        <CardDescription>Running total spend over time</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <AreaChart data={cumCostData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
+                                <YAxis
+                                    tick={tickStyle}
+                                    stroke={axisStroke}
+                                    tickFormatter={(v) => `$${v.toFixed(2)}`}
+                                />
+                                <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                <Area
+                                    type="monotone"
+                                    dataKey="cost"
+                                    name="Cumulative Cost"
+                                    stroke="#8b5cf6"
+                                    fill="#8b5cf6"
+                                    fillOpacity={0.15}
+                                    strokeWidth={2}
+                                />
+                                <Legend iconType="circle" wrapperStyle={legendStyle} />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Token Usage</CardTitle>
+                        <CardDescription>Tokens consumed per time bucket</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <ResponsiveContainer width="100%" height={240}>
+                            <BarChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
+                                <YAxis
+                                    tick={tickStyle}
+                                    stroke={axisStroke}
+                                    tickFormatter={(v) =>
+                                        v >= 1000 ? `${(v / 1000).toFixed(0)}k` : String(v)
+                                    }
+                                />
+                                <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                <Bar
+                                    dataKey="totalTokens"
+                                    name="Tokens"
+                                    fill="#3b82f6"
+                                    radius={[4, 4, 0, 0]}
+                                />
+                                <Legend iconType="circle" wrapperStyle={legendStyle} />
+                            </BarChart>
+                        </ResponsiveContainer>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Row 3: Agent Breakdown + Model Usage + Slowest/Expensive */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Agent Breakdown</CardTitle>
+                        <CardDescription>Runs and cost by agent</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {agentBreakdown.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No agent data.</p>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={240}>
+                                <BarChart data={agentBreakdown.slice(0, 8)} layout="vertical">
+                                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                    <XAxis
+                                        type="number"
+                                        tick={tickStyle}
+                                        stroke={axisStroke}
+                                        allowDecimals={false}
+                                    />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="name"
+                                        tick={tickStyle}
+                                        stroke={axisStroke}
+                                        width={100}
+                                    />
+                                    <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                    <Bar
+                                        dataKey="runs"
+                                        name="Runs"
+                                        fill="#6366f1"
+                                        radius={[0, 4, 4, 0]}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Model Usage</CardTitle>
+                        <CardDescription>Runs by model in window</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                        {modelUsageSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No model usage data.</p>
+                        ) : (
+                            modelUsageSorted.slice(0, 8).map((model) => {
+                                const maxRuns = modelUsageSorted[0].runs;
+                                const pct = maxRuns > 0 ? (model.runs / maxRuns) * 100 : 0;
+                                return (
+                                    <div
+                                        key={`${model.modelProvider}-${model.modelName}`}
+                                        className="space-y-1"
+                                    >
+                                        <div className="flex items-center justify-between text-sm">
+                                            <span className="font-medium">
+                                                {formatModelLabel(
+                                                    model.modelName,
+                                                    model.modelProvider
+                                                )}
+                                            </span>
+                                            <span className="text-muted-foreground">
+                                                {model.runs}
+                                            </span>
+                                        </div>
+                                        <div className="bg-muted h-2 overflow-hidden rounded-full">
+                                            <div
+                                                className="h-full rounded-full bg-blue-500"
+                                                style={{ width: `${pct}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">P50 / P95 Latency</CardTitle>
+                        <CardDescription>Response time percentiles</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col items-center justify-center gap-6 py-6">
+                            <div className="text-center">
+                                <p className="text-muted-foreground text-xs tracking-wide uppercase">
+                                    P50
+                                </p>
+                                <p className="text-3xl font-bold">
+                                    {formatLatency(metrics?.latency.p50 ?? 0)}
+                                </p>
+                            </div>
+                            <div className="bg-border h-px w-16" />
+                            <div className="text-center">
+                                <p className="text-muted-foreground text-xs tracking-wide uppercase">
+                                    P95
+                                </p>
+                                <p className="text-3xl font-bold text-amber-500">
+                                    {formatLatency(metrics?.latency.p95 ?? 0)}
+                                </p>
+                            </div>
+                            <p className="text-muted-foreground text-xs">
+                                {metrics?.latency.sampleSize ?? 0} samples
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+
+            {/* Row 4: Agent Performance + Version Comparison tables */}
+            <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Agent Performance</CardTitle>
+                        <CardDescription>Avg latency, tools, and failures</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {perAgentSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">
+                                No agent performance data.
+                            </p>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="text-right">Runs</TableHead>
+                                            <TableHead className="text-right">Success</TableHead>
+                                            <TableHead className="text-right">
+                                                Avg Latency
+                                            </TableHead>
+                                            <TableHead className="text-right">Avg Tools</TableHead>
+                                            <TableHead className="text-right">Avg Cost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {perAgentSorted.map((agent) => (
+                                            <TableRow
+                                                key={agent.agentId}
+                                                className="cursor-pointer"
+                                                onClick={() =>
+                                                    router.push(
+                                                        `/agents/${agent.agentSlug}/overview`
+                                                    )
+                                                }
+                                            >
+                                                <TableCell className="font-medium">
+                                                    {agent.agentName}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.totalRuns}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.successRate}%
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatLatency(agent.avgLatencyMs)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {agent.avgToolCalls.toFixed(2)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatCost(agent.avgCostUsd)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="text-base">Version Comparison</CardTitle>
+                        <CardDescription>Success rate by agent version</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                        {perVersionSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No version metrics.</p>
+                        ) : (
+                            <div className="overflow-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Version</TableHead>
+                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="text-right">Runs</TableHead>
+                                            <TableHead className="text-right">Success</TableHead>
+                                            <TableHead className="text-right">
+                                                Avg Latency
+                                            </TableHead>
+                                            <TableHead className="text-right">Avg Cost</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {perVersionSorted.map((version) => (
+                                            <TableRow key={version.versionId || "unknown"}>
+                                                <TableCell>
+                                                    {version.versionNumber
+                                                        ? `v${version.versionNumber}`
+                                                        : "-"}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {version.agentId
+                                                        ? agentNameById.get(version.agentId) ||
+                                                          "Unknown"
+                                                        : "Unknown"}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {version.totalRuns}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {version.successRate}%
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatLatency(version.avgLatencyMs)}
+                                                </TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatCost(version.avgCostUsd)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+        </div>
+    );
+}
+
+export default function LiveDashboardPage() {
+    if (typeof window !== "undefined") {
+        window.location.replace("/observe");
+    }
+    return null;
 }

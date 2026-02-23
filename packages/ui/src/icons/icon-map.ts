@@ -30,6 +30,7 @@ import {
     InformationCircleIcon,
     LockIcon,
     Logout03Icon,
+    HelpCircleIcon,
     MailSend01Icon,
     Menu02Icon,
     PaintBoardIcon,
@@ -101,5 +102,6 @@ export const iconMap: Record<IconName, IconComponent> = {
     add: Add01Icon,
     menu: Menu02Icon,
     "paint-board": PaintBoardIcon,
-    "task-list": Task01Icon
+    "task-list": Task01Icon,
+    "help-circle": HelpCircleIcon
 };

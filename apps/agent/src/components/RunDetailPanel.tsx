@@ -5,7 +5,7 @@
  * Shows Overview, Trace, Tools, Errors, and Latency for a given RunDetail.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Badge,
     HugeiconsIcon,
@@ -23,6 +23,7 @@ import {
     TabsTrigger,
     icons
 } from "@repo/ui";
+import { getApiBase } from "@/lib/utils";
 import type { RunDetail } from "./run-detail-utils";
 import {
     formatLatency,
@@ -30,6 +31,114 @@ import {
     formatModelLabel,
     resolveToolLabel
 } from "./run-detail-utils";
+
+// ─── SSE Types ──────────────────────────────────────────────────────────────
+
+interface StreamTraceStep {
+    index: number;
+    type: string;
+    content: unknown;
+    durationMs?: number;
+}
+
+interface StreamToolCall {
+    id: string;
+    toolKey: string;
+    status: "started" | "completed" | "failed";
+    inputJson?: unknown;
+    outputJson?: unknown;
+    error?: string;
+    durationMs?: number;
+}
+
+// ─── Live stream hook ───────────────────────────────────────────────────────
+
+function useRunStream(
+    agentSlug: string | undefined,
+    runId: string | undefined,
+    status: string | undefined
+) {
+    const [liveSteps, setLiveSteps] = useState<StreamTraceStep[]>([]);
+    const [liveToolCalls, setLiveToolCalls] = useState<StreamToolCall[]>([]);
+    const [isStreaming, setIsStreaming] = useState(false);
+    const [liveStatus, setLiveStatus] = useState<string | undefined>(undefined);
+    const eventSourceRef = useRef<EventSource | null>(null);
+
+    const isRunning = status?.toUpperCase() === "RUNNING" || status?.toUpperCase() === "QUEUED";
+
+    const disconnect = useCallback(() => {
+        if (eventSourceRef.current) {
+            eventSourceRef.current.close();
+            eventSourceRef.current = null;
+        }
+        setIsStreaming(false);
+    }, []);
+
+    useEffect(() => {
+        if (!isRunning || !agentSlug || !runId) {
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: reset streaming state when run stops
+            disconnect();
+            return;
+        }
+
+        const url = `${getApiBase()}/api/agents/${agentSlug}/runs/${runId}/stream`;
+        const es = new EventSource(url);
+        eventSourceRef.current = es;
+        setIsStreaming(true);
+        setLiveSteps([]);
+        setLiveToolCalls([]);
+        setLiveStatus(undefined);
+
+        es.addEventListener("trace_step", (e) => {
+            try {
+                const step = JSON.parse(e.data) as StreamTraceStep;
+                setLiveSteps((prev) => [...prev, step]);
+            } catch {
+                /* ignore parse errors */
+            }
+        });
+
+        es.addEventListener("tool_call", (e) => {
+            try {
+                const tc = JSON.parse(e.data) as StreamToolCall;
+                setLiveToolCalls((prev) => {
+                    const idx = prev.findIndex((t) => t.id === tc.id);
+                    if (idx >= 0) {
+                        const next = [...prev];
+                        next[idx] = tc;
+                        return next;
+                    }
+                    return [...prev, tc];
+                });
+            } catch {
+                /* ignore parse errors */
+            }
+        });
+
+        es.addEventListener("status_change", (e) => {
+            try {
+                const data = JSON.parse(e.data) as { status: string };
+                setLiveStatus(data.status);
+            } catch {
+                /* ignore parse errors */
+            }
+        });
+
+        es.addEventListener("complete", () => {
+            disconnect();
+        });
+
+        es.onerror = () => {
+            disconnect();
+        };
+
+        return () => {
+            disconnect();
+        };
+    }, [isRunning, agentSlug, runId, disconnect]);
+
+    return { liveSteps, liveToolCalls, isStreaming, liveStatus };
+}
 
 export interface RunDetailPanelProps {
     /** Full run detail data (null when no run loaded) */
@@ -52,6 +161,10 @@ export interface RunDetailPanelProps {
     /** Instance info if run was from a multi-instance agent */
     instanceName?: string | null;
     instanceSlug?: string | null;
+    /** Agent slug for live stream (enables SSE when status=RUNNING) */
+    agentSlug?: string;
+    /** Run ID for live stream */
+    runId?: string;
 }
 
 export default function RunDetailPanel({
@@ -66,9 +179,13 @@ export default function RunDetailPanel({
     sessionId,
     threadId,
     instanceName,
-    instanceSlug
+    instanceSlug,
+    agentSlug,
+    runId
 }: RunDetailPanelProps) {
     const [detailTab, setDetailTab] = useState("overview");
+
+    const { liveSteps, liveToolCalls, isStreaming } = useRunStream(agentSlug, runId, status);
 
     const feedbackList = useMemo(() => {
         const feedback = runDetail?.feedback;
@@ -111,6 +228,17 @@ export default function RunDetailPanel({
             className="flex h-full flex-col"
         >
             <TabsList className="flex w-full flex-nowrap justify-start gap-2 overflow-x-auto">
+                {isStreaming && (
+                    <div className="flex items-center gap-1.5 pr-2" title="Live streaming">
+                        <span className="relative flex size-2">
+                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                        </span>
+                        <span className="text-[10px] font-medium text-green-600 dark:text-green-400">
+                            LIVE
+                        </span>
+                    </div>
+                )}
                 <TabsTrigger value="overview" className="shrink-0 gap-2">
                     <HugeiconsIcon icon={icons.file!} className="size-4" />
                     Overview
@@ -342,6 +470,45 @@ export default function RunDetailPanel({
 
                         {/* ─── Trace Tab ─── */}
                         <TabsContent value="trace" className="mt-0 space-y-4">
+                            {/* Live streaming steps */}
+                            {liveSteps.length > 0 && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="relative flex size-2">
+                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                        </span>
+                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                                            Live trace
+                                        </span>
+                                    </div>
+                                    {liveSteps.map((step, idx) => (
+                                        <div
+                                            key={`live-${idx}`}
+                                            className="rounded-lg border border-green-200 bg-green-50/50 p-4 dark:border-green-900/30 dark:bg-green-950/10"
+                                        >
+                                            <div className="mb-2 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="flex size-7 items-center justify-center rounded-full bg-green-100 text-sm font-medium text-green-700 dark:bg-green-900/30 dark:text-green-300">
+                                                        {step.index + 1}
+                                                    </span>
+                                                    <Badge variant="outline">{step.type}</Badge>
+                                                </div>
+                                                <span className="text-muted-foreground text-sm">
+                                                    {step.durationMs
+                                                        ? formatLatency(step.durationMs)
+                                                        : "..."}
+                                                </span>
+                                            </div>
+                                            <pre className="bg-background max-h-48 overflow-auto rounded border p-3 text-xs whitespace-pre-wrap">
+                                                {typeof step.content === "string"
+                                                    ? step.content
+                                                    : JSON.stringify(step.content, null, 2)}
+                                            </pre>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             {(() => {
                                 const steps = runDetail?.trace?.steps ?? [];
                                 const stepsJson = runDetail?.trace?.stepsJson as unknown[] | null;
@@ -349,7 +516,6 @@ export default function RunDetailPanel({
                                 const hasStepsJson =
                                     Array.isArray(stepsJson) && stepsJson.length > 0;
 
-                                // Fallback: aggregate stepsJson from turns when trace-level steps are empty
                                 const turnSteps: unknown[] = [];
                                 if (!hasSteps && !hasStepsJson && Array.isArray(runDetail?.turns)) {
                                     for (const turn of runDetail.turns) {
@@ -476,6 +642,77 @@ export default function RunDetailPanel({
 
                         {/* ─── Tools Tab ─── */}
                         <TabsContent value="tools" className="mt-0 space-y-4">
+                            {/* Live streaming tool calls */}
+                            {liveToolCalls.length > 0 && (
+                                <div className="space-y-3">
+                                    <div className="flex items-center gap-2">
+                                        <span className="relative flex size-2">
+                                            <span className="absolute inline-flex size-full animate-ping rounded-full bg-green-400 opacity-75" />
+                                            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+                                        </span>
+                                        <span className="text-xs font-medium text-green-600 dark:text-green-400">
+                                            Live tool calls
+                                        </span>
+                                    </div>
+                                    {liveToolCalls.map((tc, idx) => (
+                                        <div
+                                            key={tc.id}
+                                            className={`rounded-lg border p-4 ${
+                                                tc.status === "started"
+                                                    ? "animate-pulse border-blue-200 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-950/10"
+                                                    : tc.status === "failed"
+                                                      ? "border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-950/10"
+                                                      : "border-green-200 bg-green-50/50 dark:border-green-900/30 dark:bg-green-950/10"
+                                            }`}
+                                        >
+                                            <div className="mb-3 flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <span className="flex size-7 items-center justify-center rounded-full bg-blue-100 text-sm font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                                                        {idx + 1}
+                                                    </span>
+                                                    <div>
+                                                        <span className="font-semibold">
+                                                            {tc.toolKey}
+                                                        </span>
+                                                        <div className="text-xs">
+                                                            {tc.status === "started" && (
+                                                                <span className="text-blue-600">
+                                                                    Running...
+                                                                </span>
+                                                            )}
+                                                            {tc.status === "completed" && (
+                                                                <span className="text-green-600">
+                                                                    Completed
+                                                                </span>
+                                                            )}
+                                                            {tc.status === "failed" && (
+                                                                <span className="text-red-600">
+                                                                    Failed
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <span className="text-muted-foreground text-sm">
+                                                    {tc.durationMs
+                                                        ? formatLatency(tc.durationMs)
+                                                        : "..."}
+                                                </span>
+                                            </div>
+                                            {tc.inputJson != null && (
+                                                <pre className="bg-background max-h-32 overflow-auto rounded border p-3 text-xs">
+                                                    {JSON.stringify(tc.inputJson, null, 2)}
+                                                </pre>
+                                            )}
+                                            {tc.error ? (
+                                                <div className="mt-2 rounded border border-red-200 bg-red-50 p-3 text-xs text-red-600 dark:border-red-900/30 dark:bg-red-900/10">
+                                                    {String(tc.error)}
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                             {runDetail?.trace?.toolCalls && runDetail.trace.toolCalls.length > 0 ? (
                                 <div className="space-y-4">
                                     {runDetail.trace.toolCalls.map((toolCall, idx) => (

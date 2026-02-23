@@ -21,7 +21,10 @@ setup("authenticate", async ({ page }) => {
     }
 
     // Navigate to the login page
-    await page.goto("/");
+    await page.goto("/login");
+
+    // Wait for the sign-in form to render (client component)
+    await page.waitForSelector("#email", { timeout: 15000 });
 
     // Fill in the login form
     await page.fill("#email", email);
@@ -30,8 +33,8 @@ setup("authenticate", async ({ page }) => {
     // Submit the form
     await page.click('button[type="submit"]');
 
-    // Wait for successful login - should redirect to dashboard
-    await page.waitForURL("**/dashboard", { timeout: 30000 });
+    // Wait for successful login - should redirect to workspace or dashboard
+    await page.waitForURL(/\/(workspace|dashboard|onboarding)/, { timeout: 30000 });
 
     // Verify we're logged in by checking for dashboard content
     await expect(page.locator("body")).toBeVisible();

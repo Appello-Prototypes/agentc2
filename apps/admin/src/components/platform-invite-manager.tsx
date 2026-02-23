@@ -66,7 +66,7 @@ export function PlatformInviteManager({
                 }
             }
 
-            const res = await fetch("/api/platform-invites", {
+            const res = await fetch("/admin/api/platform-invites", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
@@ -98,7 +98,7 @@ export function PlatformInviteManager({
         setRevoking(invite.id);
 
         try {
-            const res = await fetch(`/api/platform-invites/${invite.id}`, {
+            const res = await fetch(`/admin/api/platform-invites/${invite.id}`, {
                 method: "PATCH",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ isActive: false })

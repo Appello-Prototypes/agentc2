@@ -141,6 +141,8 @@ The `.env` file contains ALL integrations. Here is the complete breakdown:
 
 ### Database (PostgreSQL via Supabase)
 
+> **Architecture note:** AgentC2 is a **persistent Next.js server**, NOT serverless or edge. Always use the **direct Supabase connection** (`db.[ref].supabase.co:5432`). Never use the transaction-mode pooler (`pooler.supabase.com:6543`) — that is for serverless/edge runtimes only. Supabase Network Restrictions must allowlist all connecting IPs (production Droplet IPs + local dev IPs).
+
 ```bash
 DATABASE_URL="postgresql://..."           # Prisma connection string
 NEXT_PUBLIC_SUPABASE_URL="https://..."    # Supabase project URL

@@ -21,74 +21,92 @@ export type NavigationItem = {
  * Used by: TopBar and CommandPalette
  */
 export const navigationItems: NavigationItem[] = [
-    // Primary navigation - AgentWorkplace
+    // Primary navigation
+    {
+        label: "Workspace",
+        icon: icons.home,
+        href: "/workspace",
+        app: "agent",
+        keywords: ["workspace", "chat", "assistant", "conversation", "ai", "home"]
+    },
+    {
+        label: "Campaigns",
+        icon: icons["play-circle"],
+        href: "/campaigns",
+        app: "agent",
+        keywords: ["campaigns", "missions", "autopilot", "autonomous", "long-running"]
+    },
+    // Build group
     {
         label: "Agents",
         icon: icons.dashboard,
         href: "/agents",
         app: "agent",
-        keywords: ["agents", "manage", "monitor", "configure", "analytics", "home"]
+        keywords: ["agents", "manage", "monitor", "configure", "analytics", "build"]
     },
     {
         label: "Workflows",
         icon: icons["git-branch"],
         href: "/workflows",
         app: "agent",
-        keywords: ["workflows", "builder", "automation", "steps", "runs", "traces"]
+        keywords: ["workflows", "builder", "automation", "steps", "runs", "traces", "build"]
     },
     {
         label: "Networks",
         icon: icons["ai-network"],
         href: "/networks",
         app: "agent",
-        keywords: ["networks", "routing", "multi-agent", "orchestration", "topology"]
+        keywords: ["networks", "routing", "multi-agent", "orchestration", "topology", "build"]
     },
     {
-        label: "Monitoring",
-        icon: icons.activity,
-        href: "/live",
+        label: "Skills",
+        icon: icons["task-list"],
+        href: "/skills",
         app: "agent",
-        keywords: ["monitoring", "live", "production", "runs", "real-time"]
+        keywords: ["skills", "instructions", "tools", "documents", "build"]
     },
+    // Schedule
     {
-        label: "BIM",
-        icon: icons.folder,
-        href: "/bim",
+        label: "Schedule",
+        icon: icons.calendar,
+        href: "/schedule",
         app: "agent",
         keywords: [
-            "bim",
-            "building",
-            "model",
-            "ifc",
-            "navisworks",
-            "revit",
-            "takeoff",
-            "clash",
-            "construction"
-        ],
-        children: [
-            {
-                label: "Models",
-                href: "/bim",
-                keywords: ["models", "list", "versions", "upload"]
-            },
-            {
-                label: "Takeoffs",
-                href: "/bim/takeoffs",
-                keywords: ["takeoff", "quantities", "materials", "bom"]
-            },
-            {
-                label: "Clash Detection",
-                href: "/bim/clashes",
-                keywords: ["clash", "collision", "interference", "conflicts"]
-            },
-            {
-                label: "Version Diffs",
-                href: "/bim/diffs",
-                keywords: ["diff", "compare", "changes", "versions"]
-            }
+            "schedule",
+            "automations",
+            "triggers",
+            "cron",
+            "webhooks",
+            "calendar",
+            "registry"
         ]
     },
+    // Observe
+    {
+        label: "Observe",
+        icon: icons.activity,
+        href: "/observe",
+        app: "agent",
+        keywords: [
+            "observe",
+            "monitoring",
+            "live",
+            "runs",
+            "traces",
+            "activity",
+            "triggers",
+            "real-time"
+        ]
+    },
+    // Knowledge
+    {
+        label: "Knowledge",
+        icon: icons.folder,
+        href: "/knowledge",
+        app: "agent",
+        keywords: ["knowledge", "rag", "documents", "vectors", "search"]
+    },
+    // Integrations
     {
         label: "Integrations",
         icon: icons["ai-network"],
@@ -125,9 +143,10 @@ export const navigationItems: NavigationItem[] = [
             }
         ]
     },
+    // Marketplace (not in main nav but searchable via command palette)
     {
         label: "Marketplace",
-        icon: icons["ai-network"],
+        icon: icons["shopping-cart"],
         href: "/marketplace",
         app: "agent",
         keywords: ["marketplace", "playbooks", "templates", "browse", "install", "deploy"],
@@ -223,12 +242,53 @@ export const navigationItems: NavigationItem[] = [
             }
         ]
     },
+    // BIM (feature-flagged, accessible via command palette)
     {
-        label: "Chat",
-        icon: icons.messages,
-        href: "/chat",
+        label: "BIM",
+        icon: icons.building,
+        href: "/bim",
         app: "agent",
-        keywords: ["chat", "assistant", "conversation", "ai"]
+        keywords: [
+            "bim",
+            "building",
+            "model",
+            "ifc",
+            "navisworks",
+            "revit",
+            "takeoff",
+            "clash",
+            "construction"
+        ],
+        children: [
+            {
+                label: "Models",
+                href: "/bim",
+                keywords: ["models", "list", "versions", "upload"]
+            },
+            {
+                label: "Takeoffs",
+                href: "/bim/takeoffs",
+                keywords: ["takeoff", "quantities", "materials", "bom"]
+            },
+            {
+                label: "Clash Detection",
+                href: "/bim/clashes",
+                keywords: ["clash", "collision", "interference", "conflicts"]
+            },
+            {
+                label: "Version Diffs",
+                href: "/bim/diffs",
+                keywords: ["diff", "compare", "changes", "versions"]
+            }
+        ]
+    },
+    // Utility (accessible via command palette and user menu)
+    {
+        label: "Support",
+        icon: icons["help-circle"],
+        href: "/support",
+        app: "agent",
+        keywords: ["support", "help", "ticket", "contact"]
     },
     {
         label: "Settings",

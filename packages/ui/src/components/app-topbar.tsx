@@ -2,6 +2,12 @@
 
 import { useState } from "react";
 import { Button } from "./button";
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem
+} from "./dropdown-menu";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "./sheet";
 import { UserMenu } from "./user-menu";
 import { useIsMobile } from "../hooks/use-mobile";
@@ -18,6 +24,7 @@ type Session = {
 type NavItem = {
     label: string;
     href: string;
+    children?: { label: string; href: string }[];
 };
 
 type AppTopBarProps = {
@@ -28,6 +35,7 @@ type AppTopBarProps = {
     onSignOut: () => void;
     onSettings?: () => void;
     onSearchClick?: () => void;
+    onHelp?: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
 };
@@ -40,6 +48,7 @@ export function AppTopBar({
     onSignOut,
     onSettings,
     onSearchClick,
+    onHelp,
     isActive = () => false,
     renderNavLink
 }: AppTopBarProps) {
@@ -68,8 +77,57 @@ export function AppTopBar({
 
                 {/* Center Navigation Links -- hidden on mobile */}
                 <nav className="hidden flex-1 items-center gap-6 md:flex">
-                    {navItems.map((item) =>
-                        renderNavLink ? (
+                    {navItems.map((item) => {
+                        if (item.children && item.children.length > 0) {
+                            const groupActive = item.children.some((c) => isActive(c.href));
+                            return (
+                                <DropdownMenu key={item.href}>
+                                    <DropdownMenuTrigger
+                                        render={
+                                            <button
+                                                type="button"
+                                                className={`hover:text-primary flex items-center gap-1 text-sm font-medium transition-colors ${
+                                                    groupActive
+                                                        ? "text-foreground"
+                                                        : "text-muted-foreground"
+                                                }`}
+                                            >
+                                                {item.label}
+                                                <HugeiconsIcon
+                                                    icon={icons["chevron-down"]!}
+                                                    className="size-3.5"
+                                                />
+                                            </button>
+                                        }
+                                    />
+                                    <DropdownMenuContent
+                                        align="start"
+                                        sideOffset={8}
+                                        className="w-44"
+                                    >
+                                        {item.children.map((child) => (
+                                            <DropdownMenuItem
+                                                key={child.href}
+                                                onClick={() => {
+                                                    window.location.href = child.href;
+                                                }}
+                                            >
+                                                <span
+                                                    className={
+                                                        isActive(child.href)
+                                                            ? "text-foreground font-medium"
+                                                            : ""
+                                                    }
+                                                >
+                                                    {child.label}
+                                                </span>
+                                            </DropdownMenuItem>
+                                        ))}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            );
+                        }
+                        return renderNavLink ? (
                             <div key={item.href}>{renderNavLink(item, isActive(item.href))}</div>
                         ) : (
                             <a
@@ -83,8 +141,8 @@ export function AppTopBar({
                             >
                                 {item.label}
                             </a>
-                        )
-                    )}
+                        );
+                    })}
                 </nav>
 
                 {/* Spacer on mobile to push right actions */}
@@ -96,10 +154,17 @@ export function AppTopBar({
                         <HugeiconsIcon icon={icons.search!} className="size-5" />
                         <span className="sr-only">Search</span>
                     </Button>
-                    <Button variant="ghost" size="icon" className="hidden size-9 md:inline-flex">
-                        <HugeiconsIcon icon={icons.messages!} className="size-5" />
-                        <span className="sr-only">Messages</span>
-                    </Button>
+                    {onHelp && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="hidden size-9 md:inline-flex"
+                            onClick={onHelp}
+                        >
+                            <HugeiconsIcon icon={icons["help-circle"]!} className="size-5" />
+                            <span className="sr-only">Help & Support</span>
+                        </Button>
+                    )}
 
                     {/* User Avatar Dropdown */}
                     {session?.user && (
@@ -146,6 +211,32 @@ export function AppTopBar({
                         </SheetHeader>
                         <nav className="flex flex-col gap-1 px-2 py-2">
                             {navItems.map((item) => {
+                                if (item.children && item.children.length > 0) {
+                                    return (
+                                        <div key={item.href}>
+                                            <span className="text-muted-foreground px-3 py-1.5 text-xs font-medium">
+                                                {item.label}
+                                            </span>
+                                            {item.children.map((child) => {
+                                                const childActive = isActive(child.href);
+                                                return (
+                                                    <a
+                                                        key={child.href}
+                                                        href={child.href}
+                                                        onClick={() => setMobileMenuOpen(false)}
+                                                        className={`rounded-lg px-3 py-2.5 pl-6 text-sm font-medium transition-colors ${
+                                                            childActive
+                                                                ? "bg-accent text-foreground"
+                                                                : "text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+                                                        }`}
+                                                    >
+                                                        {child.label}
+                                                    </a>
+                                                );
+                                            })}
+                                        </div>
+                                    );
+                                }
                                 const active = isActive(item.href);
                                 return renderNavLink ? (
                                     <div key={item.href} onClick={() => setMobileMenuOpen(false)}>

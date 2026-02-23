@@ -47,10 +47,9 @@ Set these up in order — later items may depend on earlier ones.
 ### Verify / Harden
 
 1. Go to [app.supabase.com](https://app.supabase.com) → your project
-2. **Settings → Database → Connection Pooling**: Ensure PgBouncer is ON, mode = `transaction`
-3. **Settings → Database → SSL Enforcement**: Enable "Enforce SSL on incoming connections"
-4. **Settings → Database → Network Restrictions**: Add your DigitalOcean Droplet IPs so only your servers can connect (Settings → Database → Network Restrictions → Add IPs)
-5. **Backups → Point-in-Time Recovery**: Confirm PITR is enabled (requires Pro plan, $25/mo)
+2. **Settings → Database → SSL Enforcement**: Enable "Enforce SSL on incoming connections"
+3. **Settings → Database → Network Restrictions**: Add your DigitalOcean Droplet IPs AND your local dev IP so only your servers can connect. Use the direct connection on port 5432 — AgentC2 is a persistent server, not serverless, so the transaction-mode pooler (port 6543) is not needed and should not be used.
+4. **Backups → Point-in-Time Recovery**: Confirm PITR is enabled (requires Pro plan, $25/mo)
 
 ### Env Vars (already set)
 

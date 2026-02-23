@@ -279,6 +279,7 @@ export interface ToolInvocationCardProps extends ComponentProps<"div"> {
     result?: unknown;
     error?: string;
     startTime?: number;
+    displayLabel?: string;
 }
 
 export const ToolInvocationCard = memo(
@@ -289,11 +290,12 @@ export const ToolInvocationCard = memo(
         result,
         error,
         startTime,
+        displayLabel,
         className,
         ...props
     }: ToolInvocationCardProps) => {
         const [expanded, setExpanded] = useState(false);
-        const displayName = humanizeToolName(toolName);
+        const displayName = displayLabel ?? humanizeToolName(toolName);
         const Icon = getToolIcon(toolName);
         const isRunning = !hasResult && !error;
         const hasError = !!error;

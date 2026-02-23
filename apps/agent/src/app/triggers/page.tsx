@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
@@ -130,7 +131,7 @@ function getSuccessRateColor(rate: number): string {
 // Types for Automation Registry
 // ═══════════════════════════════════════════════════════════════════════════════
 
-interface Automation {
+export interface Automation {
     id: string;
     sourceType: "schedule" | "trigger" | "implicit";
     type: string;
@@ -210,7 +211,7 @@ interface AutomationRunEnriched {
 /** Number of columns in the parent automation table. */
 const PARENT_COL_COUNT = 9;
 
-function AutomationRegistryTab() {
+export function AutomationRegistryTab() {
     const router = useRouter();
     const apiBase = getApiBase();
 
@@ -1385,7 +1386,7 @@ function getSourceBadgeColor(source: string | null): string {
     }
 }
 
-function ActivityLogTab() {
+export function ActivityLogTab() {
     const router = useRouter();
 
     const [loading, setLoading] = useState(true);
@@ -1746,225 +1747,276 @@ function ActivityLogTab() {
                 </CardContent>
             </Card>
 
-            {/* Event table + detail panel */}
-            <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                <Card>
-                    <CardHeader>
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <CardTitle>Trigger Events</CardTitle>
-                                <CardDescription>
-                                    {events.length} shown
-                                    {metrics ? ` of ${metrics.summary.total} total events` : ""}
-                                </CardDescription>
-                            </div>
-                            {eventsLoading && (
-                                <p className="text-muted-foreground text-xs">Refreshing...</p>
-                            )}
+            {/* Full-width event table */}
+            <Card>
+                <CardHeader>
+                    <div className="flex items-start justify-between gap-4">
+                        <div>
+                            <CardTitle>Trigger Events</CardTitle>
+                            <CardDescription>
+                                {events.length} shown
+                                {metrics ? ` of ${metrics.summary.total} total events` : ""}
+                            </CardDescription>
                         </div>
-                    </CardHeader>
-                    <CardContent>
-                        {eventsLoading && events.length === 0 ? (
-                            <div className="space-y-3">
-                                {Array.from({ length: 6 }).map((_, i) => (
-                                    <Skeleton key={i} className="h-14 w-full" />
-                                ))}
-                            </div>
-                        ) : events.length === 0 ? (
-                            <div className="py-12 text-center">
-                                <p className="text-muted-foreground text-lg">
-                                    No trigger events match the current filters
-                                </p>
-                            </div>
-                        ) : (
-                            <div className="overflow-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Trigger</TableHead>
-                                            <TableHead>Source</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Target</TableHead>
-                                            <TableHead>Run</TableHead>
-                                            <TableHead className="text-right">Time</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {events.map((eventRow) => {
-                                            const isSelected = selectedEvent?.id === eventRow.id;
-                                            return (
-                                                <TableRow
-                                                    key={eventRow.id}
-                                                    className={`cursor-pointer ${isSelected ? "bg-muted/50" : ""}`}
-                                                    onClick={() => setSelectedEvent(eventRow)}
-                                                >
-                                                    <TableCell>
-                                                        <div>
-                                                            <p className="font-medium">
-                                                                {eventRow.trigger?.name ||
-                                                                    eventRow.eventName ||
-                                                                    "Unknown trigger"}
-                                                            </p>
-                                                            <p className="text-muted-foreground text-xs">
-                                                                {eventRow.eventName || "—"}
-                                                            </p>
-                                                        </div>
-                                                    </TableCell>
-                                                    <TableCell>
+                        {eventsLoading && (
+                            <p className="text-muted-foreground text-xs">Refreshing...</p>
+                        )}
+                    </div>
+                </CardHeader>
+                <CardContent>
+                    {eventsLoading && events.length === 0 ? (
+                        <div className="space-y-3">
+                            {Array.from({ length: 6 }).map((_, i) => (
+                                <Skeleton key={i} className="h-14 w-full" />
+                            ))}
+                        </div>
+                    ) : events.length === 0 ? (
+                        <div className="py-12 text-center">
+                            <p className="text-muted-foreground text-lg">
+                                No trigger events match the current filters
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Trigger</TableHead>
+                                        <TableHead>Source</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Target</TableHead>
+                                        <TableHead>Run</TableHead>
+                                        <TableHead className="text-right">Time</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {events.map((eventRow) => {
+                                        const isSelected = selectedEvent?.id === eventRow.id;
+                                        return (
+                                            <TableRow
+                                                key={eventRow.id}
+                                                className={`cursor-pointer ${isSelected ? "bg-muted/50" : ""}`}
+                                                onClick={() => setSelectedEvent(eventRow)}
+                                            >
+                                                <TableCell>
+                                                    <div>
+                                                        <p className="font-medium">
+                                                            {eventRow.trigger?.name ||
+                                                                eventRow.eventName ||
+                                                                "Unknown trigger"}
+                                                        </p>
+                                                        <p className="text-muted-foreground text-xs">
+                                                            {eventRow.eventName || "—"}
+                                                        </p>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        className={getSourceBadgeColor(
+                                                            eventRow.sourceType
+                                                        )}
+                                                    >
+                                                        {formatStatusLabel(eventRow.sourceType)}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {eventRow.run ||
+                                                    eventRow.workflowRun ||
+                                                    eventRow.networkRun ? (
                                                         <Badge
-                                                            className={getSourceBadgeColor(
-                                                                eventRow.sourceType
+                                                            variant={getRunStatusBadgeVariant(
+                                                                (eventRow.run ||
+                                                                    eventRow.workflowRun ||
+                                                                    eventRow.networkRun)!.status
                                                             )}
                                                         >
-                                                            {formatStatusLabel(eventRow.sourceType)}
+                                                            {formatStatusLabel(
+                                                                (eventRow.run ||
+                                                                    eventRow.workflowRun ||
+                                                                    eventRow.networkRun)!.status
+                                                            )}
                                                         </Badge>
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {eventRow.run ||
-                                                        eventRow.workflowRun ||
-                                                        eventRow.networkRun ? (
-                                                            <Badge
-                                                                variant={getRunStatusBadgeVariant(
-                                                                    (eventRow.run ||
-                                                                        eventRow.workflowRun ||
-                                                                        eventRow.networkRun)!.status
-                                                                )}
-                                                            >
-                                                                {formatStatusLabel(
-                                                                    (eventRow.run ||
-                                                                        eventRow.workflowRun ||
-                                                                        eventRow.networkRun)!.status
-                                                                )}
-                                                            </Badge>
-                                                        ) : (
-                                                            <Badge
-                                                                variant={getEventStatusBadgeVariant(
-                                                                    eventRow.status
-                                                                )}
-                                                            >
-                                                                {formatStatusLabel(eventRow.status)}
-                                                            </Badge>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {eventRow.agent ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    router.push(
-                                                                        `/agents/${eventRow.agent!.slug}/overview`
-                                                                    );
-                                                                }}
-                                                                className="hover:text-primary text-sm font-medium"
-                                                            >
-                                                                {eventRow.agent.name}
-                                                            </button>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">
-                                                                —
-                                                            </span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell className="text-xs">
-                                                        {(
-                                                            eventRow.run?.id ||
-                                                            eventRow.workflowRun?.id ||
-                                                            eventRow.networkRun?.id ||
-                                                            ""
-                                                        ).slice(0, 8) || "—"}
-                                                    </TableCell>
-                                                    <TableCell className="text-muted-foreground text-right">
-                                                        <span
-                                                            title={new Date(
-                                                                eventRow.createdAt
-                                                            ).toLocaleString()}
+                                                    ) : (
+                                                        <Badge
+                                                            variant={getEventStatusBadgeVariant(
+                                                                eventRow.status
+                                                            )}
                                                         >
-                                                            {formatRelativeTime(eventRow.createdAt)}
+                                                            {formatStatusLabel(eventRow.status)}
+                                                        </Badge>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    {eventRow.agent ? (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                router.push(
+                                                                    `/agents/${eventRow.agent!.slug}/overview`
+                                                                );
+                                                            }}
+                                                            className="hover:text-primary text-sm font-medium"
+                                                        >
+                                                            {eventRow.agent.name}
+                                                        </button>
+                                                    ) : (
+                                                        <span className="text-muted-foreground">
+                                                            —
                                                         </span>
-                                                    </TableCell>
-                                                </TableRow>
-                                            );
-                                        })}
-                                    </TableBody>
-                                </Table>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell className="text-xs">
+                                                    {(
+                                                        eventRow.run?.id ||
+                                                        eventRow.workflowRun?.id ||
+                                                        eventRow.networkRun?.id ||
+                                                        ""
+                                                    ).slice(0, 8) || "—"}
+                                                </TableCell>
+                                                <TableCell className="text-muted-foreground text-right">
+                                                    <span
+                                                        title={new Date(
+                                                            eventRow.createdAt
+                                                        ).toLocaleString()}
+                                                    >
+                                                        {formatRelativeTime(eventRow.createdAt)}
+                                                    </span>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
+                </CardContent>
+            </Card>
 
-                {/* Detail panel */}
-                <div className="flex flex-col gap-4">
-                    {/* Trigger event info card */}
-                    <Card>
-                        <CardHeader className="space-y-3">
-                            <CardTitle className="text-lg">
-                                {selectedEvent
-                                    ? selectedEvent.trigger?.name ||
-                                      selectedEvent.eventName ||
-                                      "Event Detail"
-                                    : "Event Detail"}
-                            </CardTitle>
-                            <CardDescription>
-                                {selectedEvent
-                                    ? `ID: ${selectedEvent.id}`
-                                    : "Select an event to inspect."}
-                            </CardDescription>
-                            {selectedEvent && (
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Received</p>
-                                        <p className="text-base font-semibold">
-                                            {formatRelativeTime(selectedEvent.createdAt)}
-                                        </p>
+            {/* Slide-up detail panel */}
+            {selectedEvent &&
+                createPortal(
+                    <>
+                        <div
+                            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                            onClick={() => setSelectedEvent(null)}
+                        />
+                        <div className="bg-background fixed inset-x-0 bottom-0 z-50 h-[95vh] shadow-2xl transition-transform duration-300">
+                            <div className="mx-6 flex h-full flex-col rounded-t-2xl border-x border-t">
+                                <div className="flex shrink-0 flex-col gap-4 border-b px-6 py-4">
+                                    <div className="flex items-start justify-between gap-4">
+                                        <div className="min-w-0 flex-1">
+                                            <h2 className="text-xl font-semibold">
+                                                {selectedEvent.trigger?.name ||
+                                                    selectedEvent.eventName ||
+                                                    "Event Detail"}
+                                            </h2>
+                                            <p className="text-muted-foreground truncate font-mono text-xs">
+                                                {selectedEvent.id}
+                                            </p>
+                                        </div>
+                                        <div className="flex shrink-0 items-center gap-2">
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setSelectedEvent(null)}
+                                            >
+                                                <HugeiconsIcon
+                                                    icon={icons.cancel!}
+                                                    className="size-4"
+                                                />
+                                            </Button>
+                                        </div>
                                     </div>
-                                    <div className="bg-muted/50 rounded-lg p-3">
-                                        <p className="text-muted-foreground text-xs">Duration</p>
-                                        <p className="text-base font-semibold">
-                                            {formatLatency(
-                                                selectedEvent.run?.durationMs ||
-                                                    selectedEvent.workflowRun?.durationMs ||
-                                                    selectedEvent.networkRun?.durationMs
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <Badge
+                                            className={getSourceBadgeColor(
+                                                selectedEvent.sourceType
                                             )}
-                                        </p>
+                                        >
+                                            {formatStatusLabel(selectedEvent.sourceType)}
+                                        </Badge>
+                                        {selectedEvent.run ||
+                                        selectedEvent.workflowRun ||
+                                        selectedEvent.networkRun ? (
+                                            <Badge
+                                                variant={getRunStatusBadgeVariant(
+                                                    (selectedEvent.run ||
+                                                        selectedEvent.workflowRun ||
+                                                        selectedEvent.networkRun)!.status
+                                                )}
+                                            >
+                                                {formatStatusLabel(
+                                                    (selectedEvent.run ||
+                                                        selectedEvent.workflowRun ||
+                                                        selectedEvent.networkRun)!.status
+                                                )}
+                                            </Badge>
+                                        ) : (
+                                            <Badge
+                                                variant={getEventStatusBadgeVariant(
+                                                    selectedEvent.status
+                                                )}
+                                            >
+                                                {formatStatusLabel(selectedEvent.status)}
+                                            </Badge>
+                                        )}
+                                        {selectedEvent.agent && (
+                                            <Badge variant="outline">
+                                                {selectedEvent.agent.name}
+                                            </Badge>
+                                        )}
+                                    </div>
+
+                                    <div className="grid grid-cols-4 gap-3">
+                                        <div className="bg-muted/50 rounded-lg p-3">
+                                            <p className="text-muted-foreground text-xs">
+                                                Received
+                                            </p>
+                                            <p className="text-base font-semibold">
+                                                {formatRelativeTime(selectedEvent.createdAt)}
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted/50 rounded-lg p-3">
+                                            <p className="text-muted-foreground text-xs">
+                                                Duration
+                                            </p>
+                                            <p className="text-base font-semibold">
+                                                {formatLatency(
+                                                    selectedEvent.run?.durationMs ||
+                                                        selectedEvent.workflowRun?.durationMs ||
+                                                        selectedEvent.networkRun?.durationMs
+                                                )}
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted/50 rounded-lg p-3">
+                                            <p className="text-muted-foreground text-xs">Event</p>
+                                            <p className="truncate text-base font-semibold">
+                                                {selectedEvent.eventName || "—"}
+                                            </p>
+                                        </div>
+                                        <div className="bg-muted/50 rounded-lg p-3">
+                                            <p className="text-muted-foreground text-xs">Target</p>
+                                            <p className="truncate text-base font-semibold">
+                                                {selectedEvent.agent?.name ||
+                                                    selectedEvent.workflow?.name ||
+                                                    "—"}
+                                            </p>
+                                        </div>
                                     </div>
                                 </div>
-                            )}
-                        </CardHeader>
-                        <CardContent>
-                            {!selectedEvent ? (
-                                <div className="text-muted-foreground flex flex-col items-center justify-center gap-3 py-12 text-center">
-                                    <HugeiconsIcon icon={icons.activity!} className="size-10" />
-                                    <p className="text-sm">
-                                        Select an event to view its payload and run details.
-                                    </p>
-                                </div>
-                            ) : detailLoading ? (
-                                <div className="space-y-4">
-                                    <Skeleton className="h-16 w-full" />
-                                    <Skeleton className="h-16 w-full" />
-                                </div>
-                            ) : (
-                                <Tabs
-                                    defaultValue="overview"
-                                    value={detailTab}
-                                    onValueChange={(v) => setDetailTab(v ?? "overview")}
-                                >
-                                    <TabsList className="flex w-full flex-nowrap justify-start gap-2 overflow-x-auto">
-                                        <TabsTrigger value="overview" className="shrink-0">
-                                            Overview
-                                        </TabsTrigger>
-                                        <TabsTrigger value="payload" className="shrink-0">
-                                            Payload
-                                        </TabsTrigger>
-                                    </TabsList>
-                                    <div className="mt-4">
-                                        <TabsContent
-                                            value="overview"
-                                            className="mt-0 space-y-3 text-sm"
-                                        >
+
+                                <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+                                    {detailLoading ? (
+                                        <div className="space-y-4">
+                                            <Skeleton className="h-16 w-full" />
+                                            <Skeleton className="h-16 w-full" />
+                                        </div>
+                                    ) : (
+                                        <div className="space-y-6">
                                             {eventDetail && (
-                                                <>
+                                                <div className="space-y-3 text-sm">
                                                     <div className="flex items-center justify-between">
                                                         <span className="text-muted-foreground">
                                                             Source
@@ -2017,59 +2069,57 @@ function ActivityLogTab() {
                                                             </div>
                                                         </>
                                                     )}
-                                                </>
+                                                </div>
                                             )}
-                                        </TabsContent>
-                                        <TabsContent value="payload" className="mt-0 space-y-4">
+
                                             {eventDetail && (
-                                                <pre className="bg-muted/20 max-h-64 overflow-auto rounded-lg border p-3 text-xs">
-                                                    {JSON.stringify(
-                                                        eventDetail.payloadJson ||
-                                                            eventDetail.payloadPreview ||
-                                                            {},
-                                                        null,
-                                                        2
-                                                    )}
-                                                </pre>
+                                                <div className="space-y-2">
+                                                    <h3 className="text-sm font-semibold">
+                                                        Payload
+                                                    </h3>
+                                                    <pre className="bg-muted/20 max-h-64 overflow-auto rounded-lg border p-3 text-xs">
+                                                        {JSON.stringify(
+                                                            eventDetail.payloadJson ||
+                                                                eventDetail.payloadPreview ||
+                                                                {},
+                                                            null,
+                                                            2
+                                                        )}
+                                                    </pre>
+                                                </div>
                                             )}
-                                        </TabsContent>
-                                    </div>
-                                </Tabs>
-                            )}
-                        </CardContent>
-                    </Card>
 
-                    {/* Run detail card - shown when event has an associated run */}
-                    {selectedEvent && eventDetail?.run && (
-                        <Card className="flex flex-col">
-                            <CardHeader className="space-y-2 pb-3">
-                                <CardTitle className="text-base">Run Detail</CardTitle>
-                                <CardDescription>Run ID: {eventDetail.run.id}</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1 overflow-hidden">
-                                <RunDetailPanel
-                                    runDetail={runDetail}
-                                    loading={runDetailLoading}
-                                    inputText={eventDetail.run.inputText}
-                                    outputText={eventDetail.run.outputText}
-                                    status={eventDetail.run.status}
-                                />
-                            </CardContent>
-                        </Card>
-                    )}
+                                            {eventDetail?.run && (
+                                                <div className="space-y-2">
+                                                    <h3 className="text-sm font-semibold">
+                                                        Run Detail
+                                                        <span className="text-muted-foreground ml-2 font-mono text-xs font-normal">
+                                                            {eventDetail.run.id}
+                                                        </span>
+                                                    </h3>
+                                                    <RunDetailPanel
+                                                        runDetail={runDetail}
+                                                        loading={runDetailLoading}
+                                                        inputText={eventDetail.run.inputText}
+                                                        outputText={eventDetail.run.outputText}
+                                                        status={eventDetail.run.status}
+                                                    />
+                                                </div>
+                                            )}
 
-                    {/* No run state */}
-                    {selectedEvent && !detailLoading && !eventDetail?.run && eventDetail && (
-                        <Card>
-                            <CardContent className="py-8">
-                                <p className="text-muted-foreground text-center text-sm">
-                                    No run associated with this event.
-                                </p>
-                            </CardContent>
-                        </Card>
-                    )}
-                </div>
-            </div>
+                                            {!detailLoading && !eventDetail?.run && eventDetail && (
+                                                <p className="text-muted-foreground text-center text-sm">
+                                                    No run associated with this event.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </>,
+                    document.body
+                )}
         </div>
     );
 }
@@ -2078,43 +2128,9 @@ function ActivityLogTab() {
 // Main Page - Tabs wrapping both views
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function AutomationsPageClient() {
-    const searchParams = useSearchParams();
-    const initialTab = searchParams.get("tab") || "automations";
-
-    return (
-        <div className="h-full overflow-y-auto">
-            <div className="container mx-auto space-y-6 py-6">
-                <div>
-                    <h1 className="text-3xl font-bold">Automations</h1>
-                    <p className="text-muted-foreground">
-                        Manage scheduled jobs, event triggers, and monitor all execution activity.
-                    </p>
-                </div>
-
-                <Tabs defaultValue={initialTab} className="space-y-6">
-                    <TabsList>
-                        <TabsTrigger value="automations">Automations</TabsTrigger>
-                        <TabsTrigger value="activity">Activity Log</TabsTrigger>
-                    </TabsList>
-
-                    <TabsContent value="automations" className="mt-0">
-                        <AutomationRegistryTab />
-                    </TabsContent>
-
-                    <TabsContent value="activity" className="mt-0">
-                        <ActivityLogTab />
-                    </TabsContent>
-                </Tabs>
-            </div>
-        </div>
-    );
-}
-
 export default function AutomationsPage() {
-    return (
-        <Suspense fallback={<div className="text-muted-foreground p-6 text-sm">Loading...</div>}>
-            <AutomationsPageClient />
-        </Suspense>
-    );
+    if (typeof window !== "undefined") {
+        window.location.replace("/schedule");
+    }
+    return null;
 }

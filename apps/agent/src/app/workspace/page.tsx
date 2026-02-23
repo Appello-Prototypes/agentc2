@@ -10,7 +10,8 @@ import {
     saveConversation,
     loadConversation,
     generateTitle,
-    generateTitleAsync
+    generateTitleAsync,
+    type ConversationMeta
 } from "@/lib/conversation-store";
 import {
     Badge,
@@ -735,6 +736,7 @@ export default function UnifiedChatPage() {
     const titleGenFiredRef = useRef<boolean>(false);
     const pendingMessageRef = useRef<string | null>(null);
     const hasMessagesRef = useRef(false);
+    const [toolStartTimes, setToolStartTimes] = useState<Map<string, number>>(new Map());
     const [titleVersion, setTitleVersion] = useState(0);
 
     const displayModelName = modelOverride?.name || agentDefaultModel || "";
@@ -960,22 +962,56 @@ export default function UnifiedChatPage() {
         titleGenFiredRef.current = false;
     }, [selectedAgentSlug, setMessages, currentRunId]);
 
+    // Holds data for a conversation that was clicked in the sidebar.
+    // Consumed by the effect below once useChat has re-initialised for the new threadId.
+    const pendingLoadRef = useRef<{
+        meta: ConversationMeta;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        messages: any[];
+    } | null>(null);
+
     const handleLoadConversation = useCallback(
         (convId: string) => {
             const { meta, messages: loaded } = loadConversation(convId);
-            if (meta) {
-                setThreadId(meta.id);
-                setSelectedAgentSlug(meta.agentSlug);
-                setAgentName(meta.agentName);
-                conversationTitleRef.current = meta.title;
-                conversationCreatedRef.current = meta.createdAt;
-                titleGenFiredRef.current = true; // already has a title
-                setMessages(loaded);
-                setQuestionAnswers({});
+            if (!meta) return;
+
+            // Finalize any active run before switching conversations
+            if (currentRunId && selectedAgentSlug) {
+                fetch(`${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ runId: currentRunId })
+                }).catch((e) => console.warn("[Chat] Failed to finalize run on load:", e));
             }
+
+            // Store the data to load. The effect below applies setMessages() AFTER
+            // useChat has re-initialised for the new threadId, so the messages land
+            // in the correct per-id store instead of the old one.
+            pendingLoadRef.current = { meta, messages: loaded };
+
+            setThreadId(meta.id);
+            setSelectedAgentSlug(meta.agentSlug);
+            setModelOverride(null);
+            setCurrentRunId(null);
         },
-        [setMessages]
+        [currentRunId, selectedAgentSlug]
     );
+
+    // Apply the pending conversation load after useChat has re-initialised for
+    // the new threadId (i.e. the next effect cycle, not within the same render).
+    useEffect(() => {
+        if (!pendingLoadRef.current) return;
+        const pending = pendingLoadRef.current;
+        if (threadId !== pending.meta.id) return;
+        pendingLoadRef.current = null;
+
+        setMessages(pending.messages);
+        setAgentName(pending.meta.agentName);
+        conversationTitleRef.current = pending.meta.title;
+        conversationCreatedRef.current = pending.meta.createdAt;
+        titleGenFiredRef.current = true;
+        setQuestionAnswers({});
+    }, [threadId, setMessages]);
 
     const handleSuggestionSelect = useCallback(
         (prompt: string, agentSlug?: string) => {
@@ -1062,6 +1098,27 @@ export default function UnifiedChatPage() {
         agentDefaultModel,
         isStreaming
     ]);
+
+    useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- tracking tool invocation start times from streamed messages
+        setToolStartTimes((prev) => {
+            let updated = false;
+            const next = new Map(prev);
+            for (const msg of messages) {
+                for (const part of msg.parts || []) {
+                    if (part.type === "tool-invocation") {
+                        const callId = part.toolInvocation?.toolCallId;
+                        const hasResult = "result" in (part.toolInvocation || {});
+                        if (callId && !hasResult && !next.has(callId)) {
+                            next.set(callId, Date.now());
+                            updated = true;
+                        }
+                    }
+                }
+            }
+            return updated ? next : prev;
+        });
+    }, [messages]);
 
     // Compute dynamic placeholder based on active input mode
     const textareaPlaceholder = inputMode
@@ -1209,6 +1266,8 @@ export default function UnifiedChatPage() {
             const hasResult = "result" in (part.toolInvocation || {});
             const callId = part.toolInvocation?.toolCallId || `tool-${index}`;
 
+            const startTime = toolStartTimes.get(callId);
+
             if (toolName === "ask_questions") {
                 const toolInput = part.toolInvocation?.input || part.toolInvocation?.args || {};
                 const saved = questionAnswers[callId];
@@ -1237,6 +1296,14 @@ export default function UnifiedChatPage() {
                     ? part.toolInvocation?.errorText || "Tool execution failed"
                     : undefined;
 
+            // Human-readable label for network-execute and workflow-execute tools
+            const displayLabel =
+                toolName === "network-execute" && toolInput?.networkSlug
+                    ? `Running ${String(toolInput.networkSlug)} network`
+                    : toolName === "workflow-execute" && toolInput?.workflowSlug
+                      ? `Running ${String(toolInput.workflowSlug)} workflow`
+                      : undefined;
+
             if (hasResult && !toolError && isDiffResult(toolResult)) {
                 return (
                     <CodeDiffCard key={callId} result={String(toolResult)} toolName={toolName} />
@@ -1251,6 +1318,8 @@ export default function UnifiedChatPage() {
                     input={toolInput}
                     result={toolResult}
                     error={toolError}
+                    startTime={startTime}
+                    displayLabel={displayLabel}
                 />
             );
         }

@@ -1,26 +1,27 @@
 # Database Scaling Configuration
 
-## Connection Pooling (PgBouncer)
+## Connection Configuration
 
-Supabase includes built-in PgBouncer. To enable transaction-mode pooling for Prisma:
+AgentC2 runs as a **persistent Next.js server** (not serverless/edge). Use the **direct Supabase connection** on port 5432 — do NOT use the transaction-mode pooler (port 6543). The pooler is for serverless/edge runtimes only and disables prepared statements.
 
 ### Connection String Format
 
 ```bash
-# Direct connection (for migrations, schema changes)
-DATABASE_URL="postgresql://postgres.[project]:[password]@aws-0-us-east-1.pooler.supabase.com:5432/postgres"
-
-# Pooled connection (for application queries — use this in production)
-DATABASE_URL="postgresql://postgres.[project]:[password]@aws-0-us-east-1.pooler.supabase.com:6543/postgres?pgbouncer=true"
+# Direct connection — use this for all environments (local + production)
+DATABASE_URL="postgresql://postgres:[password]@db.[project-ref].supabase.co:5432/postgres?connection_limit=10&pool_timeout=20"
 ```
+
+> **Important:** Supabase's Network Restrictions must allowlist all IPs that need to connect:
+>
+> - Local dev: your current public IP (check with `curl https://api.ipify.org`)
+> - Production: your DigitalOcean Droplet IPs
 
 ### Prisma Configuration
 
 ```prisma
 datasource db {
-    provider  = "postgresql"
-    url       = env("DATABASE_URL")
-    directUrl = env("DIRECT_URL") // Non-pooled for migrations
+    provider = "postgresql"
+    url      = env("DATABASE_URL")
 }
 ```
 

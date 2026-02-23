@@ -2,10 +2,10 @@ import { icons, type IconComponent } from "../icons";
 
 export type UserMenuItem = {
     label: string;
-    action: "settings" | "signout";
+    action: "settings" | "support" | "signout";
     variant?: "default" | "destructive";
-    icon?: IconComponent; // Optional icon for command palette
-    keywords?: string[]; // Optional keywords for command palette search
+    icon?: IconComponent;
+    keywords?: string[];
 };
 
 /**
@@ -18,6 +18,12 @@ export const userMenuItems: UserMenuItem[] = [
         action: "settings",
         icon: icons.settings,
         keywords: ["settings", "preferences", "config", "options"]
+    },
+    {
+        label: "Support",
+        action: "support",
+        icon: icons["help-circle"],
+        keywords: ["support", "help", "ticket", "contact"]
     },
     {
         label: "Sign out",

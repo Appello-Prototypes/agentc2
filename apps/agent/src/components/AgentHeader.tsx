@@ -5,21 +5,24 @@ import Link from "next/link";
 import { useSession, signOut } from "@repo/auth/client";
 import { usePathname, useRouter } from "next/navigation";
 import { AgentBrand } from "@/components/AgentBrand";
-import { ConnectionPowerBar } from "@/components/ConnectionPowerBar";
 
 const navItems = [
     { label: "Workspace", href: "/workspace" },
     { label: "Campaigns", href: "/campaigns" },
-    { label: "Agents", href: "/agents" },
-    { label: "Workflows", href: "/workflows" },
-    { label: "Networks", href: "/networks" },
-    { label: "Activity", href: "/activity" },
-    { label: "Live Runs", href: "/live" },
-    { label: "Automations", href: "/triggers" },
+    {
+        label: "Build",
+        href: "/agents",
+        children: [
+            { label: "Agents", href: "/agents" },
+            { label: "Workflows", href: "/workflows" },
+            { label: "Networks", href: "/networks" },
+            { label: "Skills", href: "/skills" }
+        ]
+    },
+    { label: "Schedule", href: "/schedule" },
+    { label: "Observe", href: "/observe" },
     { label: "Knowledge", href: "/knowledge" },
-    { label: "Skills", href: "/skills" },
-    { label: "Integrations", href: "/mcp" },
-    { label: "Support", href: "/support" }
+    { label: "Integrations", href: "/mcp" }
 ];
 
 export function AgentHeader() {
@@ -53,35 +56,31 @@ export function AgentHeader() {
         return pathname?.startsWith(href);
     };
 
-    const showPowerBar = process.env.NEXT_PUBLIC_FEATURE_NEW_ONBOARDING === "true";
+    const handleHelp = () => {
+        router.push("/support");
+    };
 
     return (
-        <>
-            <AppTopBar
-                title=""
-                logo={<AgentBrand />}
-                session={session}
-                navItems={navItems}
-                onSignOut={handleSignOut}
-                onSettings={handleSettings}
-                onSearchClick={toggleCommand}
-                isActive={isActive}
-                renderNavLink={(item, active) => (
-                    <Link
-                        href={item.href}
-                        className={`hover:text-primary text-sm font-medium transition-colors ${
-                            active ? "text-foreground" : "text-muted-foreground"
-                        }`}
-                    >
-                        {item.label}
-                    </Link>
-                )}
-            />
-            {showPowerBar && (
-                <div className="border-border bg-background/95 border-b px-4 py-1">
-                    <ConnectionPowerBar compact />
-                </div>
+        <AppTopBar
+            title=""
+            logo={<AgentBrand />}
+            session={session}
+            navItems={navItems}
+            onSignOut={handleSignOut}
+            onSettings={handleSettings}
+            onSearchClick={toggleCommand}
+            onHelp={handleHelp}
+            isActive={isActive}
+            renderNavLink={(item, active) => (
+                <Link
+                    href={item.href}
+                    className={`hover:text-primary text-sm font-medium transition-colors ${
+                        active ? "text-foreground" : "text-muted-foreground"
+                    }`}
+                >
+                    {item.label}
+                </Link>
             )}
-        </>
+        />
     );
 }
