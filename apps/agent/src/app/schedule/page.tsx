@@ -1016,8 +1016,119 @@ function CalendarView({
                 </Card>
             )}
 
-            {/* Week / Month View — grid */}
-            {viewMode !== "day" && (
+            {/* Week View — Google Calendar-style time grid */}
+            {viewMode === "week" && (
+                <Card>
+                    <CardContent className="p-0">
+                        <div className="max-h-[600px] overflow-y-auto">
+                            {/* Sticky day headers */}
+                            <div className="bg-background sticky top-0 z-10 flex border-b">
+                                <div className="w-16 shrink-0 border-r" />
+                                {days.map((day) => {
+                                    const key = day.toISOString().slice(0, 10);
+                                    const isToday = key === today;
+                                    return (
+                                        <div
+                                            key={key}
+                                            className={`flex flex-1 flex-col items-center border-r py-2 last:border-r-0 ${isToday ? "bg-primary/5" : ""}`}
+                                        >
+                                            <span className="text-muted-foreground text-[10px] font-medium uppercase">
+                                                {DAY_NAMES[day.getDay()]}
+                                            </span>
+                                            <span
+                                                className={`mt-0.5 flex size-6 items-center justify-center rounded-full text-sm font-semibold ${
+                                                    isToday
+                                                        ? "bg-primary text-primary-foreground"
+                                                        : "text-foreground"
+                                                }`}
+                                            >
+                                                {day.getDate()}
+                                            </span>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            {/* Hour rows */}
+                            {HOURS.map((hour) => {
+                                return (
+                                    <div
+                                        key={hour}
+                                        className="flex min-h-[52px] border-b last:border-b-0"
+                                    >
+                                        {/* Hour label */}
+                                        <div className="text-muted-foreground w-16 shrink-0 border-r px-2 py-1 text-right text-xs">
+                                            {hour === 0
+                                                ? "12 AM"
+                                                : hour < 12
+                                                  ? `${hour} AM`
+                                                  : hour === 12
+                                                    ? "12 PM"
+                                                    : `${hour - 12} PM`}
+                                        </div>
+
+                                        {/* Day columns */}
+                                        {days.map((day) => {
+                                            const key = day.toISOString().slice(0, 10);
+                                            const isToday = key === today;
+                                            const isCurrentHour =
+                                                isToday && new Date().getHours() === hour;
+                                            const dayEventsAll = eventsByDay.get(key) || [];
+                                            const hourEvents = dayEventsAll.filter(
+                                                (e) => e.date.getHours() === hour
+                                            );
+
+                                            return (
+                                                <div
+                                                    key={key}
+                                                    className={`flex flex-1 flex-col gap-0.5 border-r p-0.5 last:border-r-0 ${
+                                                        isCurrentHour
+                                                            ? "bg-primary/5"
+                                                            : isToday
+                                                              ? "bg-primary/2"
+                                                              : ""
+                                                    }`}
+                                                >
+                                                    {hourEvents.map((evt, i) => (
+                                                        <button
+                                                            key={`${evt.automation.id}-${i}`}
+                                                            onClick={() =>
+                                                                onEditAutomation(evt.automation)
+                                                            }
+                                                            className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-[9px] text-white transition-opacity hover:opacity-80 ${
+                                                                evt.automation.agent
+                                                                    ? getAgentColor(
+                                                                          evt.automation.agent.id,
+                                                                          allAgentIds
+                                                                      )
+                                                                    : "bg-gray-500"
+                                                            }`}
+                                                            title={`${evt.automation.name} — ${evt.automation.agent?.name || "Unknown agent"} at ${evt.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
+                                                        >
+                                                            <span className="shrink-0 tabular-nums">
+                                                                {evt.date.toLocaleTimeString([], {
+                                                                    hour: "2-digit",
+                                                                    minute: "2-digit"
+                                                                })}
+                                                            </span>
+                                                            <span className="truncate">
+                                                                {evt.automation.name}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {/* Month View — grid */}
+            {viewMode === "month" && (
                 <Card>
                     <CardContent className="p-0">
                         {/* Day headers */}
@@ -1027,27 +1138,24 @@ function CalendarView({
                                     key={name}
                                     className="text-muted-foreground border-r px-2 py-2 text-center text-xs font-medium last:border-r-0"
                                 >
-                                    {viewMode === "week"
-                                        ? DAY_NAMES_FULL[DAY_NAMES.indexOf(name)]
-                                        : name}
+                                    {name}
                                 </div>
                             ))}
                         </div>
 
                         {/* Day cells */}
                         <div className="grid grid-cols-7">
-                            {viewMode === "month" &&
-                                Array.from({ length: days[0]?.getDay() || 0 }).map((_, i) => (
-                                    <div
-                                        key={`pad-${i}`}
-                                        className="bg-muted/30 min-h-[100px] border-r border-b last:border-r-0"
-                                    />
-                                ))}
+                            {Array.from({ length: days[0]?.getDay() || 0 }).map((_, i) => (
+                                <div
+                                    key={`pad-${i}`}
+                                    className="bg-muted/30 min-h-[100px] border-r border-b last:border-r-0"
+                                />
+                            ))}
                             {days.map((day) => {
                                 const key = day.toISOString().slice(0, 10);
                                 const dayEvents = eventsByDay.get(key) || [];
                                 const isToday = key === today;
-                                const maxVisible = viewMode === "week" ? 6 : 4;
+                                const maxVisible = 4;
 
                                 return (
                                     <div
