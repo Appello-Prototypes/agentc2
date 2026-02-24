@@ -1081,7 +1081,7 @@ function CalendarView({
                                             return (
                                                 <div
                                                     key={key}
-                                                    className={`flex flex-1 flex-col gap-0.5 border-r p-0.5 last:border-r-0 ${
+                                                    className={`flex min-w-0 flex-1 flex-col gap-0.5 overflow-hidden border-r p-0.5 last:border-r-0 ${
                                                         isCurrentHour
                                                             ? "bg-primary/5"
                                                             : isToday
@@ -1095,7 +1095,7 @@ function CalendarView({
                                                             onClick={() =>
                                                                 onEditAutomation(evt.automation)
                                                             }
-                                                            className={`flex w-full items-center gap-1 truncate rounded px-1 py-0.5 text-[9px] text-white transition-opacity hover:opacity-80 ${
+                                                            className={`flex w-full min-w-0 items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[9px] text-white transition-opacity hover:opacity-80 ${
                                                                 evt.automation.agent
                                                                     ? getAgentColor(
                                                                           evt.automation.agent.id,
