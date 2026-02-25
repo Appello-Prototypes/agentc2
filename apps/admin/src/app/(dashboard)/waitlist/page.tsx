@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
-import { Search, ClipboardList } from "lucide-react";
+import { Search } from "lucide-react";
 import { PlatformInviteManager } from "@/components/platform-invite-manager";
+import { WaitlistTable } from "@/components/waitlist-table";
 
 export const dynamic = "force-dynamic";
 
@@ -57,7 +58,6 @@ export default async function WaitlistPage({
     const totalAll = statusCounts.reduce((sum, s) => sum + s._count._all, 0);
     const countByStatus = Object.fromEntries(statusCounts.map((s) => [s.status, s._count._all]));
 
-    // Serialize dates for the client component
     const serializedInvites = platformInvites.map((i) => ({
         ...i,
         expiresAt: i.expiresAt?.toISOString() ?? null,
@@ -65,10 +65,20 @@ export default async function WaitlistPage({
         updatedAt: i.updatedAt.toISOString()
     }));
 
-    // Build pagination URL
+    const serializedEntries = entries.map((e) => ({
+        ...e,
+        createdAt: e.createdAt.toISOString(),
+        updatedAt: e.updatedAt.toISOString()
+    }));
+
     const buildUrl = (overrides: Record<string, string | number>) => {
         const p = new URLSearchParams();
-        const merged = { search, status: statusFilter, page: String(page), ...overrides };
+        const merged = {
+            search,
+            status: statusFilter,
+            page: String(page),
+            ...overrides
+        };
         for (const [k, v] of Object.entries(merged)) {
             if (v) p.set(k, String(v));
         }
@@ -132,61 +142,8 @@ export default async function WaitlistPage({
                 />
             </form>
 
-            {/* Table */}
-            <div className="bg-card border-border overflow-hidden rounded-lg border">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-border border-b">
-                            <th className="px-4 py-3 text-left font-medium">Email</th>
-                            <th className="px-4 py-3 text-left font-medium">Name</th>
-                            <th className="px-4 py-3 text-left font-medium">Source</th>
-                            <th className="px-4 py-3 text-left font-medium">Status</th>
-                            <th className="px-4 py-3 text-left font-medium">Signed up</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {entries.map((entry) => (
-                            <tr
-                                key={entry.id}
-                                className="border-border hover:bg-accent/50 border-b transition-colors last:border-0"
-                            >
-                                <td className="px-4 py-3 font-medium">{entry.email}</td>
-                                <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {entry.name || "—"}
-                                </td>
-                                <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {entry.source || "—"}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span
-                                        className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[entry.status] || "bg-secondary text-secondary-foreground"}`}
-                                    >
-                                        {entry.status}
-                                    </span>
-                                </td>
-                                <td className="text-muted-foreground px-4 py-3 text-xs">
-                                    {entry.createdAt.toLocaleDateString()}{" "}
-                                    {entry.createdAt.toLocaleTimeString([], {
-                                        hour: "2-digit",
-                                        minute: "2-digit"
-                                    })}
-                                </td>
-                            </tr>
-                        ))}
-                        {entries.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={5}
-                                    className="text-muted-foreground px-4 py-8 text-center"
-                                >
-                                    <ClipboardList className="mx-auto mb-2 h-8 w-8 opacity-50" />
-                                    No waitlist entries found
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            {/* Table with checkboxes and bulk actions */}
+            <WaitlistTable entries={serializedEntries} statusStyles={STATUS_STYLES} />
 
             {/* Pagination */}
             {totalPages > 1 && (

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
+import { adminAudit, getRequestContext } from "@/lib/admin-audit";
 
 export async function GET(request: NextRequest) {
     try {
@@ -71,6 +72,103 @@ export async function GET(request: NextRequest) {
             return NextResponse.json({ error: error.message }, { status: error.status });
         }
         console.error("[Admin Tickets] Error:", error);
+        return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    }
+}
+
+export async function POST(request: NextRequest) {
+    try {
+        const admin = await requireAdminAction(request, "ticket:create");
+        const body = await request.json();
+
+        const {
+            title,
+            description,
+            type,
+            priority,
+            organizationId,
+            submittedById,
+            assignedToId,
+            tags
+        } = body;
+
+        if (!title || typeof title !== "string" || !title.trim()) {
+            return NextResponse.json({ error: "title is required" }, { status: 400 });
+        }
+        if (!description || typeof description !== "string" || !description.trim()) {
+            return NextResponse.json({ error: "description is required" }, { status: 400 });
+        }
+        if (!type || !["BUG", "FEATURE_REQUEST", "IMPROVEMENT", "QUESTION"].includes(type)) {
+            return NextResponse.json({ error: "valid type is required" }, { status: 400 });
+        }
+        if (!organizationId) {
+            return NextResponse.json({ error: "organizationId is required" }, { status: 400 });
+        }
+        if (!submittedById) {
+            return NextResponse.json({ error: "submittedById is required" }, { status: 400 });
+        }
+
+        const org = await prisma.organization.findUnique({ where: { id: organizationId } });
+        if (!org) {
+            return NextResponse.json({ error: "Organization not found" }, { status: 404 });
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: submittedById } });
+        if (!user) {
+            return NextResponse.json({ error: "User not found" }, { status: 404 });
+        }
+
+        const data: Prisma.SupportTicketCreateInput = {
+            title: title.trim(),
+            description: description.trim(),
+            type,
+            priority:
+                priority && ["CRITICAL", "HIGH", "MEDIUM", "LOW"].includes(priority)
+                    ? priority
+                    : "MEDIUM",
+            organization: { connect: { id: organizationId } },
+            submittedBy: { connect: { id: submittedById } },
+            tags: Array.isArray(tags)
+                ? tags.filter((t: unknown) => typeof t === "string" && t.trim())
+                : []
+        };
+
+        if (assignedToId) {
+            data.assignedTo = { connect: { id: assignedToId } };
+        }
+
+        const ticket = await prisma.supportTicket.create({
+            data,
+            include: {
+                organization: { select: { name: true, slug: true } },
+                submittedBy: { select: { name: true, email: true } },
+                assignedTo: { select: { name: true, email: true } }
+            }
+        });
+
+        const { ipAddress, userAgent } = getRequestContext(request);
+        await adminAudit.log({
+            adminUserId: admin.adminUserId,
+            action: "TICKET_CREATE",
+            entityType: "SupportTicket",
+            entityId: ticket.id,
+            afterJson: {
+                title: ticket.title,
+                type: ticket.type,
+                priority: ticket.priority,
+                organizationId: ticket.organizationId,
+                submittedById: (ticket as { submittedById: string }).submittedById
+            },
+            ipAddress,
+            userAgent
+        });
+
+        return NextResponse.json({ ticket }, { status: 201 });
+    } catch (error) {
+        if (error instanceof AdminAuthError) {
+            return NextResponse.json({ error: error.message }, { status: error.status });
+        }
+        console.error("[Admin Ticket Create] Error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

@@ -51,8 +51,12 @@ export type AdminAuditAction =
     // Platform invites
     | "PLATFORM_INVITE_CREATE"
     | "PLATFORM_INVITE_REVOKE"
+    // Waitlist
+    | "WAITLIST_BULK_APPROVE"
     // Support tickets
+    | "TICKET_CREATE"
     | "TICKET_UPDATE"
+    | "TICKET_DELETE"
     // Admin users
     | "ADMIN_USER_CREATE"
     | "ADMIN_USER_UPDATE"

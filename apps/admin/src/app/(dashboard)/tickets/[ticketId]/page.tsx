@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { TicketTriagePanel } from "./triage-panel";
 import { TicketCommentForm } from "./comment-form";
+import { EditableTitle, EditableDescription, EditableType } from "./edit-fields";
+import { DeleteTicketButton } from "./delete-button";
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +49,27 @@ export default async function TicketDetailPage({
 
             {/* Header */}
             <div className="flex items-start justify-between">
-                <div>
+                <div className="flex-1">
                     <div className="flex items-center gap-3">
-                        <h1 className="text-2xl font-bold">
-                            #{ticket.ticketNumber}: {ticket.title}
-                        </h1>
-                        <TypeBadge type={ticket.type} />
+                        <span className="text-muted-foreground text-2xl font-bold">
+                            #{ticket.ticketNumber}:
+                        </span>
+                        <EditableTitle
+                            ticket={{
+                                id: ticket.id,
+                                title: ticket.title,
+                                description: ticket.description,
+                                type: ticket.type
+                            }}
+                        />
+                        <EditableType
+                            ticket={{
+                                id: ticket.id,
+                                title: ticket.title,
+                                description: ticket.description,
+                                type: ticket.type
+                            }}
+                        />
                     </div>
                     <p className="text-muted-foreground mt-1 text-sm">
                         Submitted by {ticket.submittedBy.name} ({ticket.submittedBy.email}) from{" "}
@@ -76,21 +93,14 @@ export default async function TicketDetailPage({
                         <h2 className="mb-3 text-sm font-semibold tracking-wide uppercase">
                             Description
                         </h2>
-                        <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap">
-                            {ticket.description}
-                        </div>
-                        {ticket.tags.length > 0 && (
-                            <div className="mt-4 flex flex-wrap gap-1">
-                                {ticket.tags.map((tag) => (
-                                    <span
-                                        key={tag}
-                                        className="bg-secondary text-secondary-foreground rounded-full px-2 py-0.5 text-xs"
-                                    >
-                                        {tag}
-                                    </span>
-                                ))}
-                            </div>
-                        )}
+                        <EditableDescription
+                            ticket={{
+                                id: ticket.id,
+                                title: ticket.title,
+                                description: ticket.description,
+                                type: ticket.type
+                            }}
+                        />
                     </div>
 
                     {/* Comment Thread */}
@@ -153,7 +163,7 @@ export default async function TicketDetailPage({
                     </div>
                 </div>
 
-                {/* Right column: Triage Panel */}
+                {/* Right column: Triage Panel + Actions */}
                 <div className="space-y-4">
                     <TicketTriagePanel
                         ticket={{
@@ -173,28 +183,9 @@ export default async function TicketDetailPage({
                         }}
                         adminUsers={adminUsers}
                     />
+                    <DeleteTicketButton ticketId={ticket.id} ticketNumber={ticket.ticketNumber} />
                 </div>
             </div>
         </div>
-    );
-}
-
-function TypeBadge({ type }: { type: string }) {
-    const colors: Record<string, string> = {
-        BUG: "bg-red-500/10 text-red-500",
-        FEATURE_REQUEST: "bg-purple-500/10 text-purple-500",
-        IMPROVEMENT: "bg-blue-500/10 text-blue-500",
-        QUESTION: "bg-gray-500/10 text-gray-500"
-    };
-    const label = type
-        .replace(/_/g, " ")
-        .toLowerCase()
-        .replace(/\b\w/g, (c) => c.toUpperCase());
-    return (
-        <span
-            className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${colors[type] || "bg-gray-500/10 text-gray-500"}`}
-        >
-            {label}
-        </span>
     );
 }

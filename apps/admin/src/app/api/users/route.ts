@@ -12,12 +12,21 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(url.searchParams.get("limit") || "25"), 100);
         const skip = (page - 1) * limit;
 
+        const orgId = url.searchParams.get("orgId") || "";
+
         const where: Prisma.UserWhereInput = {};
         if (search) {
             where.OR = [
                 { name: { contains: search, mode: "insensitive" } },
                 { email: { contains: search, mode: "insensitive" } }
             ];
+        }
+        if (orgId) {
+            const memberships = await prisma.membership.findMany({
+                where: { organizationId: orgId },
+                select: { userId: true }
+            });
+            where.id = { in: memberships.map((m) => m.userId) };
         }
 
         const [users, total] = await Promise.all([

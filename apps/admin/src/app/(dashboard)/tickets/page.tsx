@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
-import { Search, TicketIcon } from "lucide-react";
+import { Search, TicketIcon, Plus } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +86,16 @@ export default async function TicketsPage({
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <h1 className="text-2xl font-bold">Support Tickets</h1>
-                <span className="text-muted-foreground text-sm">{total} total</span>
+                <div className="flex items-center gap-3">
+                    <span className="text-muted-foreground text-sm">{total} total</span>
+                    <Link
+                        href="/tickets/new"
+                        className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-colors"
+                    >
+                        <Plus className="h-4 w-4" />
+                        New Ticket
+                    </Link>
+                </div>
             </div>
 
             {/* KPI Cards */}

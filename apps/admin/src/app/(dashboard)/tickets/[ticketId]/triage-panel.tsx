@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { X, Plus } from "lucide-react";
 
 interface TriageTicket {
     id: string;
@@ -166,6 +167,12 @@ export function TicketTriagePanel({
             .toLowerCase()
             .replace(/\b\w/g, (c) => c.toUpperCase());
     }
+
+    const [tags, setTags] = useState(ticket.tags);
+
+    useEffect(() => {
+        setTags(ticket.tags);
+    }, [ticket.tags]);
 
     return (
         <div className="bg-card border-border rounded-lg border">
@@ -386,20 +393,104 @@ export function TicketTriagePanel({
                 </div>
 
                 {/* Tags */}
-                {ticket.tags.length > 0 && (
-                    <div className="border-border space-y-2 border-t pt-4">
-                        <p className="text-muted-foreground text-xs font-medium">Tags</p>
-                        <div className="flex flex-wrap gap-1">
-                            {ticket.tags.map((tag) => (
-                                <span
-                                    key={tag}
-                                    className="bg-secondary text-secondary-foreground rounded-full px-2 py-0.5 text-xs"
-                                >
-                                    {tag}
-                                </span>
-                            ))}
-                        </div>
+                <TagManager
+                    tags={tags}
+                    saving={saving}
+                    onUpdate={async (newTags) => {
+                        setTags(newTags);
+                        await handleUpdate({ tags: newTags });
+                    }}
+                />
+            </div>
+        </div>
+    );
+}
+
+function TagManager({
+    tags,
+    saving,
+    onUpdate
+}: {
+    tags: string[];
+    saving: boolean;
+    onUpdate: (tags: string[]) => void;
+}) {
+    const [adding, setAdding] = useState(false);
+    const [newTag, setNewTag] = useState("");
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    function handleAdd() {
+        const tag = newTag.trim().toLowerCase();
+        if (!tag || tags.includes(tag)) {
+            setNewTag("");
+            return;
+        }
+        onUpdate([...tags, tag]);
+        setNewTag("");
+        setAdding(false);
+    }
+
+    function handleRemove(tag: string) {
+        onUpdate(tags.filter((t) => t !== tag));
+    }
+
+    return (
+        <div className="border-border space-y-2 border-t pt-4">
+            <p className="text-muted-foreground text-xs font-medium">Tags</p>
+            <div className="flex flex-wrap gap-1">
+                {tags.map((tag) => (
+                    <span
+                        key={tag}
+                        className="bg-secondary text-secondary-foreground group inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs"
+                    >
+                        {tag}
+                        <button
+                            onClick={() => handleRemove(tag)}
+                            disabled={saving}
+                            className="rounded-full p-0.5 opacity-50 transition-opacity hover:opacity-100"
+                        >
+                            <X className="h-3 w-3" />
+                        </button>
+                    </span>
+                ))}
+                {adding ? (
+                    <div className="flex items-center gap-1">
+                        <input
+                            ref={inputRef}
+                            type="text"
+                            value={newTag}
+                            onChange={(e) => setNewTag(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    handleAdd();
+                                }
+                                if (e.key === "Escape") {
+                                    setAdding(false);
+                                    setNewTag("");
+                                }
+                            }}
+                            autoFocus
+                            placeholder="tag..."
+                            className="border-input bg-background w-20 rounded-md border px-2 py-0.5 text-xs"
+                        />
+                        <button
+                            onClick={handleAdd}
+                            disabled={saving || !newTag.trim()}
+                            className="rounded-full p-0.5 text-green-500 hover:bg-green-500/10 disabled:opacity-50"
+                        >
+                            <Plus className="h-3.5 w-3.5" />
+                        </button>
                     </div>
+                ) : (
+                    <button
+                        onClick={() => setAdding(true)}
+                        disabled={saving}
+                        className="text-muted-foreground hover:text-foreground inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 text-xs transition-colors hover:bg-gray-500/10 disabled:opacity-50"
+                    >
+                        <Plus className="h-3 w-3" />
+                        Add tag
+                    </button>
                 )}
             </div>
         </div>

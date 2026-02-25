@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma, Prisma } from "@repo/database";
 import { Search, Building2 } from "lucide-react";
+import { TenantCreateForm } from "@/components/tenant-create-form";
 
 export const dynamic = "force-dynamic";
 
@@ -51,8 +52,11 @@ export default async function TenantsPage({
     return (
         <div className="space-y-6">
             <div className="flex items-center justify-between">
-                <h1 className="text-2xl font-bold">Tenants</h1>
-                <span className="text-muted-foreground text-sm">{total} total</span>
+                <div className="flex items-center gap-3">
+                    <h1 className="text-2xl font-bold">Tenants</h1>
+                    <span className="text-muted-foreground text-sm">{total} total</span>
+                </div>
+                <TenantCreateForm />
             </div>
 
             {/* Filters */}

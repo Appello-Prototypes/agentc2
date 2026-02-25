@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { TenantEditForm } from "@/components/tenant-edit-form";
+import { TenantDeleteButton } from "@/components/tenant-delete-button";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +44,22 @@ export default async function TenantOverviewPage({
 
             {/* Details */}
             <div className="bg-card border-border rounded-lg border p-4">
-                <h2 className="mb-3 text-sm font-semibold">Details</h2>
+                <div className="mb-3 flex items-center justify-between">
+                    <h2 className="text-sm font-semibold">Details</h2>
+                    <TenantEditForm
+                        tenant={{
+                            id: org.id,
+                            name: org.name,
+                            slug: org.slug,
+                            description: org.description,
+                            timezone: org.timezone,
+                            maxAgents: org.maxAgents,
+                            maxWorkspaces: org.maxWorkspaces,
+                            maxRunsPerMonth: org.maxRunsPerMonth,
+                            maxSeats: org.maxSeats
+                        }}
+                    />
+                </div>
                 <dl className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
                     <dt className="text-muted-foreground">ID</dt>
                     <dd className="font-mono text-xs">{org.id}</dd>
@@ -50,8 +67,14 @@ export default async function TenantOverviewPage({
                     <dt className="text-muted-foreground">Slug</dt>
                     <dd>{org.slug}</dd>
 
+                    <dt className="text-muted-foreground">Description</dt>
+                    <dd>{org.description || "—"}</dd>
+
                     <dt className="text-muted-foreground">Status</dt>
                     <dd>{org.status}</dd>
+
+                    <dt className="text-muted-foreground">Timezone</dt>
+                    <dd>{org.timezone || "—"}</dd>
 
                     <dt className="text-muted-foreground">Created</dt>
                     <dd>{org.createdAt.toISOString()}</dd>
@@ -64,6 +87,9 @@ export default async function TenantOverviewPage({
 
                     <dt className="text-muted-foreground">Max Agents</dt>
                     <dd>{org.maxAgents ?? "Unlimited"}</dd>
+
+                    <dt className="text-muted-foreground">Max Workspaces</dt>
+                    <dd>{org.maxWorkspaces ?? "Unlimited"}</dd>
 
                     <dt className="text-muted-foreground">Max Seats</dt>
                     <dd>{org.maxSeats ?? "Unlimited"}</dd>
@@ -83,6 +109,20 @@ export default async function TenantOverviewPage({
                         </>
                     )}
                 </dl>
+            </div>
+
+            {/* Danger zone */}
+            <div className="bg-card border-border rounded-lg border p-4">
+                <h2 className="mb-3 text-sm font-semibold">Danger Zone</h2>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <p className="text-sm font-medium">Delete this tenant</p>
+                        <p className="text-muted-foreground text-xs">
+                            Deactivates the tenant and marks it for deletion after 30 days
+                        </p>
+                    </div>
+                    <TenantDeleteButton orgId={org.id} orgName={org.name} status={org.status} />
+                </div>
             </div>
         </div>
     );
