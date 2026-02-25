@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma, type Prisma } from "@repo/database";
 import { buildNetworkTopologyFromPrimitives, isNetworkTopologyEmpty } from "@repo/agentc2/networks";
 import {
@@ -93,6 +94,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.maxSteps !== undefined) updateData.maxSteps = body.maxSteps;
         if (body.isPublished !== undefined) updateData.isPublished = body.isPublished;
         if (body.isActive !== undefined) updateData.isActive = body.isActive;
+        if (body.visibility !== undefined) {
+            updateData.visibility = body.visibility;
+            if (body.visibility === "PUBLIC" && !existing.publicToken) {
+                updateData.publicToken = randomUUID();
+            }
+        }
+        if (body.metadata !== undefined) updateData.metadata = body.metadata;
 
         const nextPrimitives = Array.isArray(body.primitives)
             ? body.primitives
@@ -125,6 +133,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             sc("maxSteps", existing.maxSteps, body.maxSteps),
             sc("isPublished", existing.isPublished, body.isPublished),
             sc("isActive", existing.isActive, body.isActive),
+            sc("visibility", existing.visibility, body.visibility),
             jc("memoryConfig", existing.memoryConfig, body.memoryConfig)
         ];
         for (const c of checks) {

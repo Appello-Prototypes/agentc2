@@ -37,6 +37,7 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 id: s.id,
                 name: s.name,
                 description: s.description,
+                task: s.task,
                 cronExpr: s.cronExpr,
                 timezone: s.timezone,
                 inputJson: s.inputJson,
@@ -45,7 +46,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 nextRunAt: s.nextRunAt,
                 runCount: s.runCount,
                 createdAt: s.createdAt,
-                updatedAt: s.updatedAt
+                updatedAt: s.updatedAt,
+                color: s.color
             })),
             total: schedules.length
         });
@@ -74,13 +76,15 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const {
             name,
             description,
+            task,
             cronExpr,
             timezone,
             input,
             context,
             maxSteps,
             environment,
-            isActive
+            isActive,
+            color
         } = body;
 
         if (!name || !cronExpr) {
@@ -134,11 +138,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 workspaceId: agent.workspaceId,
                 name,
                 description,
+                task: task || null,
                 cronExpr,
                 timezone: resolvedTimezone,
                 inputJson: inputJson ? JSON.parse(JSON.stringify(inputJson)) : null,
                 isActive: isActive !== false,
-                nextRunAt
+                nextRunAt,
+                color: color || null
             }
         });
 
@@ -148,11 +154,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 id: schedule.id,
                 name: schedule.name,
                 description: schedule.description,
+                task: schedule.task,
                 cronExpr: schedule.cronExpr,
                 timezone: schedule.timezone,
                 isActive: schedule.isActive,
                 nextRunAt: schedule.nextRunAt,
-                createdAt: schedule.createdAt
+                createdAt: schedule.createdAt,
+                color: schedule.color
             }
         });
     } catch (error) {

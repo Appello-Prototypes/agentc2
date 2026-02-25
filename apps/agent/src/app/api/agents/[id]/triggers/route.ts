@@ -62,7 +62,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 lastTriggeredAt: t.lastTriggeredAt,
                 triggerCount: t.triggerCount,
                 createdAt: t.createdAt,
-                updatedAt: t.updatedAt
+                updatedAt: t.updatedAt,
+                color: t.color
             })),
             total: triggers.length
         });
@@ -93,7 +94,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         const { id } = await params;
         const body = await request.json();
 
-        const { name, description, triggerType, eventName, filter, inputMapping, isActive } = body;
+        const { name, description, triggerType, eventName, filter, inputMapping, isActive, color } =
+            body;
 
         if (!name || !triggerType) {
             return NextResponse.json(
@@ -201,7 +203,8 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                 inputMapping: mergedInputMapping
                     ? JSON.parse(JSON.stringify(mergedInputMapping))
                     : null,
-                isActive: isActive !== false
+                isActive: isActive !== false,
+                color: color || null
             }
         });
 

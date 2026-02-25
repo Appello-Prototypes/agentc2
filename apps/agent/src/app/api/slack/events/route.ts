@@ -7,7 +7,7 @@ import { startRun, extractTokenUsage, extractToolCalls } from "@/lib/run-recorde
 import { calculateCost } from "@/lib/cost-calculator";
 import { resolveIdentity } from "@/lib/identity";
 import { handleSlackApprovalReaction } from "@/lib/approvals";
-import { createTriggerEventRecord } from "@/lib/trigger-events";
+import { createTriggerEventRecord, ensureSlackTrigger } from "@/lib/trigger-events";
 import { inngest } from "@/lib/inngest";
 import {
     resolveSlackInstallation,
@@ -1208,6 +1208,22 @@ async function processMessage(
         });
     }
 
+    // Ensure a real AgentTrigger record exists for this Slack listener
+    let slackTriggerId: string | null = null;
+    try {
+        const slackTrigger = await ensureSlackTrigger(agentId, record?.name || slug, workspaceId);
+        slackTriggerId = slackTrigger.id;
+
+        if (!slackTrigger.isActive || slackTrigger.isArchived) {
+            console.log(
+                `[Slack] Trigger for agent "${slug}" is ${slackTrigger.isArchived ? "archived" : "paused"}, skipping`
+            );
+            return { text: "", identity };
+        }
+    } catch (e) {
+        console.warn("[Slack] Failed to ensure Slack trigger:", e);
+    }
+
     // Start recording the run (include instance ID for auditing)
     const run = await startRun({
         agentId,
@@ -1217,6 +1233,7 @@ async function processMessage(
         userId,
         threadId: memoryThread,
         sessionId: channelId,
+        triggerId: slackTriggerId ?? undefined,
         instanceId: instanceBinding?.instanceId ?? undefined,
         ...(instanceBinding
             ? {
@@ -1231,6 +1248,7 @@ async function processMessage(
     // Record trigger event for unified triggers dashboard
     try {
         await createTriggerEventRecord({
+            triggerId: slackTriggerId,
             agentId,
             workspaceId: record?.workspaceId || null,
             runId: run.runId,

@@ -1898,10 +1898,10 @@ export function ActivityLogTab() {
                 createPortal(
                     <>
                         <div
-                            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                            className="fixed inset-0 z-[60] bg-black/60"
                             onClick={() => setSelectedEvent(null)}
                         />
-                        <div className="bg-background fixed inset-x-0 bottom-0 z-50 h-[95vh] shadow-2xl transition-transform duration-300">
+                        <div className="bg-background fixed inset-x-0 bottom-0 z-[70] h-[95vh] shadow-2xl transition-transform duration-300">
                             <div className="mx-6 flex h-full flex-col rounded-t-2xl border-x border-t">
                                 <div className="flex shrink-0 flex-col gap-4 border-b px-6 py-4">
                                     <div className="flex items-start justify-between gap-4">

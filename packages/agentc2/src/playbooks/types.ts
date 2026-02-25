@@ -126,6 +126,19 @@ export interface ScorecardSnapshot {
     evaluateTurns: boolean;
 }
 
+export interface CampaignTemplateSnapshot {
+    slug: string;
+    name: string;
+    intent: string;
+    endState: string;
+    description: string | null;
+    constraints: string[];
+    restraints: string[];
+    requireApproval: boolean;
+    maxCostUsd: number | null;
+    timeoutMinutes: number | null;
+}
+
 export interface PlaybookManifest {
     version: string;
     agents: AgentSnapshot[];
@@ -133,6 +146,7 @@ export interface PlaybookManifest {
     documents: DocumentSnapshot[];
     workflows: WorkflowSnapshot[];
     networks: NetworkSnapshot[];
+    campaignTemplates: CampaignTemplateSnapshot[];
     guardrails: GuardrailSnapshot[];
     testCases: TestCaseSnapshot[];
     scorecards: ScorecardSnapshot[];
@@ -177,4 +191,5 @@ export interface DeployPlaybookOptions {
     targetWorkspaceId: string;
     userId: string;
     purchaseId?: string;
+    cleanSlugs?: boolean;
 }

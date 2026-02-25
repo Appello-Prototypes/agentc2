@@ -129,6 +129,19 @@ const agentSnapshotSchema = z.object({
     scorecard: scorecardSnapshotSchema.nullable()
 });
 
+const campaignTemplateSnapshotSchema = z.object({
+    slug: z.string(),
+    name: z.string(),
+    intent: z.string(),
+    endState: z.string(),
+    description: z.string().nullable(),
+    constraints: z.array(z.string()),
+    restraints: z.array(z.string()),
+    requireApproval: z.boolean(),
+    maxCostUsd: z.number().nullable(),
+    timeoutMinutes: z.number().nullable()
+});
+
 export const playbookManifestSchema = z.object({
     version: z.string(),
     agents: z.array(agentSnapshotSchema),
@@ -136,6 +149,7 @@ export const playbookManifestSchema = z.object({
     documents: z.array(documentSnapshotSchema),
     workflows: z.array(workflowSnapshotSchema),
     networks: z.array(networkSnapshotSchema),
+    campaignTemplates: z.array(campaignTemplateSnapshotSchema).default([]),
     guardrails: z.array(guardrailSnapshotSchema),
     testCases: z.array(testCaseSnapshotSchema),
     scorecards: z.array(scorecardSnapshotSchema),

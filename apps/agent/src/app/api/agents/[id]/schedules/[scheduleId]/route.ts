@@ -18,13 +18,15 @@ export async function PATCH(
         const {
             name,
             description,
+            task,
             cronExpr,
             timezone,
             input,
             context,
             maxSteps,
             environment,
-            isActive
+            isActive,
+            color
         } = body;
 
         const agent = await prisma.agent.findFirst({
@@ -54,9 +56,11 @@ export async function PATCH(
         const updateData: Record<string, unknown> = {};
         if (name !== undefined) updateData.name = name;
         if (description !== undefined) updateData.description = description;
+        if (task !== undefined) updateData.task = task || null;
         if (cronExpr !== undefined) updateData.cronExpr = cronExpr;
         if (timezone !== undefined) updateData.timezone = timezone;
         if (isActive !== undefined) updateData.isActive = isActive !== false;
+        if (color !== undefined) updateData.color = color || null;
 
         if (
             input !== undefined ||
@@ -114,11 +118,13 @@ export async function PATCH(
                 id: updated.id,
                 name: updated.name,
                 description: updated.description,
+                task: updated.task,
                 cronExpr: updated.cronExpr,
                 timezone: updated.timezone,
                 isActive: updated.isActive,
                 nextRunAt: updated.nextRunAt,
-                updatedAt: updated.updatedAt
+                updatedAt: updated.updatedAt,
+                color: updated.color
             }
         });
     } catch (error) {

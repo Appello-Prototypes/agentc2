@@ -10,6 +10,8 @@ const STORAGE_KEY = "cowork-conversations";
 const META_KEY = "cowork-conversation-meta";
 const MAX_CONVERSATIONS = 50;
 
+export type ConversationStatus = "idle" | "running" | "completed";
+
 export interface ConversationMeta {
     id: string; // Same as threadId
     title: string; // Auto-generated from first user message
@@ -19,6 +21,8 @@ export interface ConversationMeta {
     messageCount: number;
     createdAt: string; // ISO
     updatedAt: string; // ISO
+    status?: ConversationStatus;
+    runId?: string;
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -112,6 +116,38 @@ export function updateConversationTitle(id: string, title: string): void {
         const meta = metas.find((m) => m.id === id);
         if (meta) {
             meta.title = title;
+            localStorage.setItem(META_KEY, JSON.stringify(metas));
+        }
+    } catch {
+        // ignore
+    }
+}
+
+/**
+ * Update a conversation's status without changing updatedAt
+ */
+export function updateConversationStatus(id: string, status: ConversationStatus): void {
+    try {
+        const metas = listConversations();
+        const meta = metas.find((m) => m.id === id);
+        if (meta) {
+            meta.status = status;
+            localStorage.setItem(META_KEY, JSON.stringify(metas));
+        }
+    } catch {
+        // ignore
+    }
+}
+
+/**
+ * Update a conversation's runId without changing updatedAt
+ */
+export function updateConversationRunId(id: string, runId: string | null): void {
+    try {
+        const metas = listConversations();
+        const meta = metas.find((m) => m.id === id);
+        if (meta) {
+            meta.runId = runId ?? undefined;
             localStorage.setItem(META_KEY, JSON.stringify(metas));
         }
     } catch {

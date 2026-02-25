@@ -9,6 +9,12 @@ import { storage } from "../storage";
 import { vector } from "../vector";
 import { getToolsByNamesAsync } from "../tools/registry";
 import { executeWorkflowDefinition, type WorkflowDefinition } from "../workflows/builder";
+import { createSession, type SessionInfo } from "../sessions";
+import {
+    sessionInvokePeerTool,
+    sessionReadScratchpadTool,
+    sessionWriteScratchpadTool
+} from "../tools/session-tools";
 
 /**
  * Build memory for a network. Returns undefined when memory is disabled
@@ -216,6 +222,38 @@ export async function buildNetworkAgent(networkId: string) {
     const model = `${network.modelProvider}/${network.modelName}`;
     const memory = buildNetworkMemory(network.memoryConfig as Record<string, unknown> | null);
 
+    // Mesh mode: create a shared session and inject session tools
+    let meshSession: SessionInfo | undefined;
+    if (network.meshEnabled && Object.keys(agents).length >= 2) {
+        try {
+            const agentSlugs = Object.keys(agents);
+            meshSession = await createSession({
+                workspaceId: network.workspaceId || undefined,
+                organizationId: organizationId || undefined,
+                initiatorType: "network",
+                initiatorId: network.id,
+                agentSlugs,
+                name: `${network.name} mesh session`,
+                description: `Auto-created mesh session for network "${network.slug}"`
+            });
+
+            // Inject session tools into the routing agent's tool set
+            tools["session-invoke-peer"] = sessionInvokePeerTool;
+            tools["session-read-scratchpad"] = sessionReadScratchpadTool;
+            tools["session-write-scratchpad"] = sessionWriteScratchpadTool;
+
+            console.log(
+                `[NetworkRuntime] Mesh session created for network "${network.slug}": ` +
+                    `sessionId=${meshSession.id}, agents=[${agentSlugs.join(", ")}]`
+            );
+        } catch (error) {
+            console.warn(
+                `[NetworkRuntime] Failed to create mesh session for network "${network.slug}":`,
+                error instanceof Error ? error.message : error
+            );
+        }
+    }
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const agentArgs: any = {
         id: network.id,
@@ -235,5 +273,5 @@ export async function buildNetworkAgent(networkId: string) {
 
     const routingAgent = new Agent(agentArgs);
 
-    return { network, agent: routingAgent };
+    return { network, agent: routingAgent, meshSession };
 }

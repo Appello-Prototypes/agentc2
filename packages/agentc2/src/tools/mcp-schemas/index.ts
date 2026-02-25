@@ -31,6 +31,7 @@ import { orgGuardrailToolDefinitions, orgGuardrailToolRoutes } from "./org-guard
 import { platformDocsToolDefinitions, platformDocsToolRoutes } from "./platform-docs";
 import { instanceToolDefinitions, instanceToolRoutes } from "./instances";
 import { searchToolDefinitions, searchToolRoutes } from "./search";
+import { sessionOpsToolDefinitions, sessionOpsToolRoutes } from "./session-ops";
 import type { McpToolDefinition, McpToolRoute } from "./types";
 
 export type { McpToolDefinition, McpToolRoute } from "./types";
@@ -69,7 +70,8 @@ export const mcpToolDefinitions: McpToolDefinition[] = [
     ...orgGuardrailToolDefinitions,
     ...platformDocsToolDefinitions,
     ...instanceToolDefinitions,
-    ...searchToolDefinitions
+    ...searchToolDefinitions,
+    ...sessionOpsToolDefinitions
 ];
 
 export const mcpToolRoutes: McpToolRoute[] = [
@@ -105,5 +107,6 @@ export const mcpToolRoutes: McpToolRoute[] = [
     ...orgGuardrailToolRoutes,
     ...platformDocsToolRoutes,
     ...instanceToolRoutes,
-    ...searchToolRoutes
+    ...searchToolRoutes,
+    ...sessionOpsToolRoutes
 ];

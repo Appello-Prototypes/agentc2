@@ -363,6 +363,49 @@ export async function POST(request: NextRequest) {
                 workspaceId: workspaceId || undefined
             });
 
+            // Auto-join default community boards
+            try {
+                const defaultBoards = await prisma.communityBoard.findMany({
+                    where: { isDefault: true },
+                    select: { id: true }
+                });
+                if (defaultBoards.length > 0) {
+                    await prisma.communityMember.createMany({
+                        data: defaultBoards.map((b) => ({
+                            boardId: b.id,
+                            memberType: "agent",
+                            agentId: agent.id
+                        })),
+                        skipDuplicates: true
+                    });
+                    await prisma.communityBoard.updateMany({
+                        where: { id: { in: defaultBoards.map((b) => b.id) } },
+                        data: { memberCount: { increment: 1 } }
+                    });
+                }
+            } catch (joinErr) {
+                console.warn("[Agents Create] Community auto-join failed:", joinErr);
+            }
+
+            // Auto-assign Community Participation skill
+            try {
+                const communitySkill = await prisma.skill.findFirst({
+                    where: { slug: "community-participation", type: "SYSTEM" },
+                    select: { id: true }
+                });
+                if (communitySkill) {
+                    await prisma.agentSkill.create({
+                        data: {
+                            agentId: agent.id,
+                            skillId: communitySkill.id,
+                            pinned: true
+                        }
+                    });
+                }
+            } catch (skillErr) {
+                console.warn("[Agents Create] Community skill auto-assign failed:", skillErr);
+            }
+
             return NextResponse.json({
                 success: true,
                 agent: agentWithTools,

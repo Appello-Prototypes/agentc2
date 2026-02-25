@@ -15,7 +15,7 @@ import {
     Skeleton,
     Textarea
 } from "@repo/ui";
-import { PencilIcon, Trash2Icon, CheckIcon, XIcon } from "lucide-react";
+import { PencilIcon, Trash2Icon, CheckIcon, XIcon, CopyIcon, InfoIcon } from "lucide-react";
 
 interface SkillFull {
     id: string;
@@ -49,6 +49,7 @@ export default function SkillOverviewPage() {
     const [skill, setSkill] = useState<SkillFull | null>(null);
     const [loading, setLoading] = useState(true);
     const [deleting, setDeleting] = useState(false);
+    const [forking, setForking] = useState(false);
 
     // Inline editing state
     const [editingField, setEditingField] = useState<string | null>(null);
@@ -92,6 +93,33 @@ export default function SkillOverviewPage() {
             console.error("Failed to delete:", err);
         } finally {
             setDeleting(false);
+        }
+    };
+
+    const handleFork = async () => {
+        if (!skill) return;
+        const customName = prompt("Name for your custom copy:", `${skill.name} (Custom)`);
+        if (customName === null) return;
+        setForking(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/skills/${skill.id}/fork`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: customName || `${skill.name} (Custom)`
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                const forkedSlug = data.skill?.slug || data.slug;
+                if (forkedSlug) {
+                    router.push(`/skills/${forkedSlug}`);
+                }
+            }
+        } catch (err) {
+            console.error("Failed to fork skill:", err);
+        } finally {
+            setForking(false);
         }
     };
 
@@ -149,12 +177,14 @@ export default function SkillOverviewPage() {
     }
     if (!skill) return <p className="text-muted-foreground">Skill not found.</p>;
 
+    const isSystem = skill.type === "SYSTEM";
+
     return (
         <div className="space-y-6">
-            {/* Header with Name (editable) */}
+            {/* Header with Name */}
             <div className="flex items-start justify-between">
                 <div className="flex-1">
-                    {editingField === "name" ? (
+                    {!isSystem && editingField === "name" ? (
                         <div className="flex items-center gap-2">
                             <Input
                                 value={editValue}
@@ -181,36 +211,70 @@ export default function SkillOverviewPage() {
                     ) : (
                         <div className="group flex items-center gap-2">
                             <h1 className="text-xl font-bold">{skill.name}</h1>
-                            <Button
-                                size="sm"
-                                variant="ghost"
-                                className="opacity-100 md:opacity-0 md:group-hover:opacity-100"
-                                onClick={() => startEditing("name", skill.name)}
-                            >
-                                <PencilIcon className="h-3.5 w-3.5" />
-                            </Button>
+                            {isSystem && (
+                                <Badge variant="default" className="text-[10px]">
+                                    SYSTEM
+                                </Badge>
+                            )}
+                            {!isSystem && (
+                                <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    className="opacity-100 md:opacity-0 md:group-hover:opacity-100"
+                                    onClick={() => startEditing("name", skill.name)}
+                                >
+                                    <PencilIcon className="h-3.5 w-3.5" />
+                                </Button>
+                            )}
                         </div>
                     )}
                     <p className="text-muted-foreground font-mono text-xs">{skill.slug}</p>
                 </div>
-                <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleDelete}
-                    disabled={deleting}
-                    className="text-destructive"
-                >
-                    <Trash2Icon className="mr-1.5 h-3.5 w-3.5" />
-                    Delete
-                </Button>
+                <div className="flex items-center gap-2">
+                    {isSystem && (
+                        <Button variant="outline" size="sm" onClick={handleFork} disabled={forking}>
+                            <CopyIcon className="mr-1.5 h-3.5 w-3.5" />
+                            {forking ? "Forking..." : "Fork to Customize"}
+                        </Button>
+                    )}
+                    {!isSystem && (
+                        <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={handleDelete}
+                            disabled={deleting}
+                            className="text-destructive"
+                        >
+                            <Trash2Icon className="mr-1.5 h-3.5 w-3.5" />
+                            Delete
+                        </Button>
+                    )}
+                </div>
             </div>
+
+            {/* SYSTEM skill info banner */}
+            {isSystem && (
+                <div className="bg-muted/50 flex items-start gap-3 rounded-lg border p-3">
+                    <InfoIcon className="text-muted-foreground mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="text-sm">
+                        <p>
+                            This is a platform skill managed by AgentC2. It receives automatic
+                            updates. To customize, fork it into your workspace.
+                        </p>
+                        <p className="text-muted-foreground mt-1 text-xs">
+                            Version {skill.version} &middot; Last updated{" "}
+                            {new Date(skill.updatedAt).toLocaleDateString()}
+                        </p>
+                    </div>
+                </div>
+            )}
 
             {/* Description (editable) */}
             <Card>
                 <CardHeader className="pb-2">
                     <div className="flex items-center justify-between">
                         <CardTitle className="text-sm">Description</CardTitle>
-                        {editingField !== "description" && (
+                        {!isSystem && editingField !== "description" && (
                             <Button
                                 size="sm"
                                 variant="ghost"
@@ -222,7 +286,7 @@ export default function SkillOverviewPage() {
                     </div>
                 </CardHeader>
                 <CardContent>
-                    {editingField === "description" ? (
+                    {!isSystem && editingField === "description" ? (
                         <div className="space-y-2">
                             <Textarea
                                 value={editValue}
@@ -299,10 +363,10 @@ export default function SkillOverviewPage() {
                         </Badge>
                     </div>
 
-                    {/* Category (editable) */}
+                    {/* Category */}
                     <div className="flex items-center gap-2">
                         <span className="text-muted-foreground text-xs font-medium">Category:</span>
-                        {editingField === "category" ? (
+                        {!isSystem && editingField === "category" ? (
                             <div className="flex items-center gap-1">
                                 <Input
                                     value={editValue}
@@ -337,24 +401,28 @@ export default function SkillOverviewPage() {
                                 <Badge variant="outline" className="text-xs">
                                     {skill.category || "none"}
                                 </Badge>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
-                                    onClick={() => startEditing("category", skill.category || "")}
-                                >
-                                    <PencilIcon className="h-3 w-3" />
-                                </Button>
+                                {!isSystem && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
+                                        onClick={() =>
+                                            startEditing("category", skill.category || "")
+                                        }
+                                    >
+                                        <PencilIcon className="h-3 w-3" />
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>
 
-                    {/* Tags (editable) */}
+                    {/* Tags */}
                     <div className="flex items-start gap-2">
                         <span className="text-muted-foreground mt-0.5 text-xs font-medium">
                             Tags:
                         </span>
-                        {editingField === "tags" ? (
+                        {!isSystem && editingField === "tags" ? (
                             <div className="flex flex-1 items-center gap-1">
                                 <Input
                                     value={editTags}
@@ -404,14 +472,16 @@ export default function SkillOverviewPage() {
                                         </span>
                                     )}
                                 </div>
-                                <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
-                                    onClick={() => startEditing("tags", skill.tags.join(", "))}
-                                >
-                                    <PencilIcon className="h-3 w-3" />
-                                </Button>
+                                {!isSystem && (
+                                    <Button
+                                        size="sm"
+                                        variant="ghost"
+                                        className="h-8 w-8 p-0 opacity-100 md:h-6 md:w-6 md:opacity-0 md:group-hover:opacity-100"
+                                        onClick={() => startEditing("tags", skill.tags.join(", "))}
+                                    >
+                                        <PencilIcon className="h-3 w-3" />
+                                    </Button>
+                                )}
                             </div>
                         )}
                     </div>

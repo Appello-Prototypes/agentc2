@@ -1,0 +1,681 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=1920, initial-scale=1.0" />
+        <title>AI in ICI Construction – Slide</title>
+        <link
+            href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+
+            body {
+                font-family: "Inter", sans-serif;
+                background: #ffffff;
+                color: #1e293b;
+                width: 1920px;
+                height: 1080px;
+                overflow: hidden;
+            }
+
+            .slide {
+                width: 1920px;
+                height: 1080px;
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                grid-template-rows: auto 1fr auto;
+                padding: 48px 56px 36px;
+                gap: 0;
+            }
+
+            /* HEADER – spans full width */
+            .header {
+                grid-column: 1 / -1;
+                display: flex;
+                align-items: flex-start;
+                justify-content: space-between;
+                margin-bottom: 28px;
+            }
+
+            .header-left {
+                flex: 1;
+            }
+
+            .tag {
+                display: inline-block;
+                background: #eff6ff;
+                color: #2563eb;
+                font-size: 11px;
+                font-weight: 700;
+                letter-spacing: 1.8px;
+                text-transform: uppercase;
+                padding: 5px 14px;
+                border-radius: 6px;
+                margin-bottom: 10px;
+            }
+
+            .header h1 {
+                font-size: 38px;
+                font-weight: 800;
+                line-height: 1.15;
+                color: #0f172a;
+            }
+
+            .header h1 .blue {
+                color: #2563eb;
+            }
+
+            .header-right {
+                display: flex;
+                gap: 20px;
+                flex-shrink: 0;
+                margin-left: 40px;
+                margin-top: 8px;
+            }
+
+            .hero-stat {
+                text-align: center;
+                padding: 14px 22px;
+                border-radius: 14px;
+                min-width: 150px;
+            }
+
+            .hero-stat.office-bg {
+                background: #eff6ff;
+                border: 1.5px solid #bfdbfe;
+            }
+
+            .hero-stat.field-bg {
+                background: #fefce8;
+                border: 1.5px solid #fde68a;
+            }
+
+            .hero-stat.mult-bg {
+                background: #f0fdf4;
+                border: 1.5px solid #bbf7d0;
+            }
+
+            .hero-stat .num {
+                font-size: 36px;
+                font-weight: 800;
+                line-height: 1;
+            }
+
+            .hero-stat .num.blue {
+                color: #2563eb;
+            }
+            .hero-stat .num.amber {
+                color: #d97706;
+            }
+            .hero-stat .num.green {
+                color: #16a34a;
+            }
+
+            .hero-stat .desc {
+                font-size: 11px;
+                color: #64748b;
+                margin-top: 4px;
+                line-height: 1.35;
+            }
+
+            /* LEFT COLUMN – comparison bars */
+            .left-col {
+                padding-right: 32px;
+                display: flex;
+                flex-direction: column;
+            }
+
+            .col-title {
+                font-size: 15px;
+                font-weight: 700;
+                color: #0f172a;
+                margin-bottom: 14px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+
+            .col-title .icon {
+                font-size: 16px;
+            }
+
+            .col-title .avg {
+                margin-left: auto;
+                font-size: 13px;
+                font-weight: 700;
+                color: #64748b;
+            }
+
+            .bars-group {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                gap: 2px;
+            }
+
+            .bar-section-label {
+                font-size: 10px;
+                font-weight: 700;
+                letter-spacing: 1.2px;
+                text-transform: uppercase;
+                color: #94a3b8;
+                margin-bottom: 6px;
+                margin-top: 4px;
+            }
+
+            .bar-row {
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                height: 28px;
+            }
+
+            .bar-name {
+                font-size: 12px;
+                font-weight: 500;
+                color: #475569;
+                width: 220px;
+                flex-shrink: 0;
+                text-align: right;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+
+            .bar-track {
+                flex: 1;
+                height: 14px;
+                background: #f1f5f9;
+                border-radius: 4px;
+                overflow: hidden;
+                position: relative;
+            }
+
+            .bar-fill {
+                height: 100%;
+                border-radius: 4px;
+            }
+
+            .bar-fill.blue {
+                background: linear-gradient(90deg, #3b82f6, #2563eb);
+            }
+            .bar-fill.amber {
+                background: linear-gradient(90deg, #fbbf24, #d97706);
+            }
+
+            .bar-pct {
+                font-size: 12px;
+                font-weight: 700;
+                width: 42px;
+                flex-shrink: 0;
+            }
+
+            .bar-pct.blue {
+                color: #2563eb;
+            }
+            .bar-pct.amber {
+                color: #d97706;
+            }
+
+            .divider-line {
+                width: 100%;
+                height: 1px;
+                background: #e2e8f0;
+                margin: 8px 0;
+            }
+
+            /* RIGHT COLUMN */
+            .right-col {
+                padding-left: 32px;
+                border-left: 1.5px solid #e2e8f0;
+                display: flex;
+                flex-direction: column;
+                gap: 0;
+            }
+
+            .right-header {
+                display: flex;
+                align-items: baseline;
+                justify-content: space-between;
+                margin-bottom: 12px;
+            }
+
+            .right-header h2 {
+                font-size: 15px;
+                font-weight: 700;
+                color: #0f172a;
+            }
+
+            .right-header .count-badge {
+                font-size: 11px;
+                font-weight: 600;
+                color: #2563eb;
+                background: #eff6ff;
+                padding: 3px 10px;
+                border-radius: 6px;
+            }
+
+            /* Quadrant cards */
+            .quadrant-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                flex: 1;
+            }
+
+            .quadrant {
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                padding: 12px 14px;
+                display: flex;
+                flex-direction: column;
+                position: relative;
+                overflow: hidden;
+            }
+
+            .quadrant::before {
+                content: "";
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 2.5px;
+            }
+
+            .quadrant.q-blue::before {
+                background: #2563eb;
+            }
+            .quadrant.q-indigo::before {
+                background: #6366f1;
+            }
+            .quadrant.q-emerald::before {
+                background: #059669;
+            }
+            .quadrant.q-violet::before {
+                background: #7c3aed;
+            }
+
+            .q-head {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                margin-bottom: 8px;
+            }
+
+            .q-head h4 {
+                font-size: 12.5px;
+                font-weight: 700;
+                color: #0f172a;
+            }
+
+            .q-head .q-pct {
+                font-size: 11px;
+                font-weight: 700;
+                padding: 2px 7px;
+                border-radius: 4px;
+            }
+
+            .q-blue .q-pct {
+                color: #2563eb;
+                background: #eff6ff;
+            }
+            .q-indigo .q-pct {
+                color: #4f46e5;
+                background: #eef2ff;
+            }
+            .q-emerald .q-pct {
+                color: #059669;
+                background: #ecfdf5;
+            }
+            .q-violet .q-pct {
+                color: #7c3aed;
+                background: #f5f3ff;
+            }
+
+            .q-workflows {
+                list-style: none;
+                display: flex;
+                flex-direction: column;
+                gap: 4px;
+                flex: 1;
+            }
+
+            .q-workflows li {
+                font-size: 11px;
+                color: #334155;
+                line-height: 1.35;
+                display: flex;
+                align-items: flex-start;
+                gap: 5px;
+            }
+
+            .q-workflows li .wf-num {
+                font-size: 9px;
+                font-weight: 700;
+                color: #94a3b8;
+                background: #f1f5f9;
+                border-radius: 3px;
+                padding: 1px 4px;
+                flex-shrink: 0;
+                margin-top: 1px;
+            }
+
+            .q-workflows li .wf-name {
+                font-weight: 600;
+                color: #0f172a;
+            }
+
+            /* Bottom CTA */
+            .bottom-cta {
+                background: linear-gradient(135deg, #eff6ff, #f0fdf4);
+                border: 1.5px solid #bfdbfe;
+                border-radius: 10px;
+                padding: 12px 18px;
+                display: flex;
+                align-items: center;
+                gap: 14px;
+                margin-top: 10px;
+            }
+
+            .bottom-cta .cta-icon {
+                font-size: 24px;
+                flex-shrink: 0;
+            }
+
+            .bottom-cta h3 {
+                font-size: 14px;
+                font-weight: 800;
+                color: #0f172a;
+                margin-bottom: 2px;
+            }
+
+            .bottom-cta h3 .green {
+                color: #16a34a;
+            }
+
+            .bottom-cta p {
+                font-size: 10.5px;
+                color: #64748b;
+                line-height: 1.4;
+            }
+
+            /* FOOTER */
+            .footer {
+                grid-column: 1 / -1;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-top: 12px;
+                padding-top: 10px;
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .footer p {
+                font-size: 9px;
+                color: #94a3b8;
+            }
+
+            .footer a {
+                color: #94a3b8;
+                text-decoration: underline;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="slide">
+            <!-- HEADER -->
+            <div class="header">
+                <div class="header-left">
+                    <div class="tag">ICI Construction &bull; AI Automation</div>
+                    <h1>
+                        AI Is Coming for the <span class="blue">Back Office</span>,<br />Not the Job
+                        Site
+                    </h1>
+                </div>
+                <div class="header-right">
+                    <div class="hero-stat office-bg">
+                        <div class="num blue">75.5%</div>
+                        <div class="desc">Office &amp; Admin<br />tasks exposed</div>
+                    </div>
+                    <div class="hero-stat field-bg">
+                        <div class="num amber">8.9%</div>
+                        <div class="desc">Construction<br />tasks exposed</div>
+                    </div>
+                    <div class="hero-stat mult-bg">
+                        <div class="num green">8.5&times;</div>
+                        <div class="desc">More potential in<br />overhead vs. field</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- LEFT: COMPARISON BARS -->
+            <div class="left-col">
+                <div class="col-title">
+                    <span>Exposure to AI Automation by Role</span>
+                    <span class="avg" style="font-size: 11px; color: #94a3b8"
+                        >% of tasks AI can augment</span
+                    >
+                </div>
+
+                <div class="bars-group">
+                    <div class="bar-section-label">🏢 Office &amp; Overhead — where costs live</div>
+
+                    <div class="bar-row">
+                        <div class="bar-name">Office &amp; Admin Support</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 75.5%"></div>
+                        </div>
+                        <div class="bar-pct blue">75.5%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Business &amp; Financial Ops</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 68.4%"></div>
+                        </div>
+                        <div class="bar-pct blue">68.4%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Computer &amp; Mathematical</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 62.6%"></div>
+                        </div>
+                        <div class="bar-pct blue">62.6%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Sales &amp; Related</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 60.1%"></div>
+                        </div>
+                        <div class="bar-pct blue">60.1%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Management</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 49.9%"></div>
+                        </div>
+                        <div class="bar-pct blue">49.9%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Legal</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 47.5%"></div>
+                        </div>
+                        <div class="bar-pct blue">47.5%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Architecture &amp; Engineering</div>
+                        <div class="bar-track">
+                            <div class="bar-fill blue" style="width: 40.7%"></div>
+                        </div>
+                        <div class="bar-pct blue">40.7%</div>
+                    </div>
+
+                    <div class="divider-line"></div>
+
+                    <div class="bar-section-label">
+                        🏗️ Field &amp; Trades — where revenue is earned
+                    </div>
+
+                    <div class="bar-row">
+                        <div class="bar-name">Transportation &amp; Moving</div>
+                        <div class="bar-track">
+                            <div class="bar-fill amber" style="width: 20%"></div>
+                        </div>
+                        <div class="bar-pct amber">20.0%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Production</div>
+                        <div class="bar-track">
+                            <div class="bar-fill amber" style="width: 14.4%"></div>
+                        </div>
+                        <div class="bar-pct amber">14.4%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Installation &amp; Repair</div>
+                        <div class="bar-track">
+                            <div class="bar-fill amber" style="width: 13.1%"></div>
+                        </div>
+                        <div class="bar-pct amber">13.1%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Construction &amp; Extraction</div>
+                        <div class="bar-track">
+                            <div class="bar-fill amber" style="width: 8.9%"></div>
+                        </div>
+                        <div class="bar-pct amber">8.9%</div>
+                    </div>
+                    <div class="bar-row">
+                        <div class="bar-name">Building &amp; Grounds Maint.</div>
+                        <div class="bar-track">
+                            <div class="bar-fill amber" style="width: 2.6%"></div>
+                        </div>
+                        <div class="bar-pct amber">2.6%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT: INSIGHTS -->
+            <div class="right-col">
+                <!-- Cost breakdown -->
+                <div class="cost-block">
+                    <h3>Typical ICI Project Cost Breakdown</h3>
+                    <div class="cost-bar">
+                        <div
+                            class="cost-seg"
+                            style="flex: 40; background: linear-gradient(135deg, #f59e0b, #d97706)"
+                        >
+                            40% <span class="seg-sm">Labour</span>
+                        </div>
+                        <div
+                            class="cost-seg"
+                            style="flex: 30; background: linear-gradient(135deg, #94a3b8, #64748b)"
+                        >
+                            30% <span class="seg-sm">Materials</span>
+                        </div>
+                        <div
+                            class="cost-seg"
+                            style="flex: 10; background: linear-gradient(135deg, #8b5cf6, #6d28d9)"
+                        >
+                            10% <span class="seg-sm">Equip</span>
+                        </div>
+                        <div
+                            class="cost-seg"
+                            style="flex: 20; background: linear-gradient(135deg, #3b82f6, #1d4ed8)"
+                        >
+                            20% <span class="seg-sm">Overhead</span>
+                        </div>
+                    </div>
+                    <div class="cost-annotation">
+                        <span class="arrow">▲</span>
+                        <span
+                            ><strong>Overhead (15–25%)</strong> is where 50–75% of tasks are
+                            AI-automatable — the single biggest lever to drive down costs.</span
+                        >
+                    </div>
+                </div>
+
+                <!-- Opportunity cards -->
+                <div style="font-size: 14px; font-weight: 700; color: #0f172a">
+                    Where AI Cuts Overhead in ICI
+                </div>
+
+                <div class="opp-grid">
+                    <div class="opp-card">
+                        <div class="opp-header">
+                            <span class="opp-icon">📊</span>
+                            <h4>Estimating &amp; Takeoffs</h4>
+                        </div>
+                        <p>
+                            AI reads drawings, generates quantities, benchmarks costs — days of work
+                            in hours.
+                        </p>
+                        <div class="opp-badge">75.5% task exposure</div>
+                    </div>
+                    <div class="opp-card">
+                        <div class="opp-header">
+                            <span class="opp-icon">📋</span>
+                            <h4>PM &amp; Scheduling</h4>
+                        </div>
+                        <p>
+                            Draft RFIs, track submittals, flag schedule risks, generate progress
+                            reports automatically.
+                        </p>
+                        <div class="opp-badge">49.9% task exposure</div>
+                    </div>
+                    <div class="opp-card">
+                        <div class="opp-header">
+                            <span class="opp-icon">💰</span>
+                            <h4>Accounting &amp; Cost Control</h4>
+                        </div>
+                        <p>
+                            Invoice processing, WIP reporting, change order tracking, cash flow —
+                            automated end-to-end.
+                        </p>
+                        <div class="opp-badge">68.4% task exposure</div>
+                    </div>
+                    <div class="opp-card">
+                        <div class="opp-header">
+                            <span class="opp-icon">📝</span>
+                            <h4>Procurement &amp; Contracts</h4>
+                        </div>
+                        <p>
+                            Review subcontracts, compare bids, flag scope gaps and risk clauses at
+                            machine speed.
+                        </p>
+                        <div class="opp-badge">47.5% task exposure</div>
+                    </div>
+                </div>
+
+                <!-- Bottom CTA -->
+                <div class="bottom-cta">
+                    <div class="cta-icon">⚡</div>
+                    <div>
+                        <h3>
+                            AI won't replace your crews. It will
+                            <span class="green">shrink your overhead</span>.
+                        </h3>
+                        <p>
+                            Contractors who adopt AI in the back office reduce overhead ratios, bid
+                            more competitively, and scale without adding headcount.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- FOOTER -->
+            <div class="footer">
+                <p>
+                    Source: PRIM based on estimates from Eloundou et al. (2024) and the Bureau of
+                    Labor Statistics.
+                </p>
+                <p style="font-weight: 600; color: #64748b">AgentC2</p>
+            </div>
+        </div>
+    </body>
+</html>

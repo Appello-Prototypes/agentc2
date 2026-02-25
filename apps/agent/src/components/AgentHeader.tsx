@@ -60,6 +60,14 @@ export function AgentHeader() {
         router.push("/support");
     };
 
+    const handleCommunity = () => {
+        router.push("/community");
+    };
+
+    const handleMarketplace = () => {
+        router.push("/marketplace");
+    };
+
     return (
         <AppTopBar
             title=""
@@ -70,6 +78,8 @@ export function AgentHeader() {
             onSettings={handleSettings}
             onSearchClick={toggleCommand}
             onHelp={handleHelp}
+            onCommunity={handleCommunity}
+            onMarketplace={handleMarketplace}
             isActive={isActive}
             renderNavLink={(item, active) => (
                 <Link

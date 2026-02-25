@@ -367,7 +367,18 @@ export function useVoiceConversation(
             }
         };
 
-        recognition.start();
+        try {
+            recognition.start();
+        } catch (err) {
+            recognitionRef.current = null;
+            const msg =
+                err instanceof DOMException && err.name === "NotAllowedError"
+                    ? "Microphone access denied. Please allow microphone permissions and try again."
+                    : `Could not start speech recognition: ${err instanceof Error ? err.message : String(err)}`;
+            setError(msg);
+            onError?.(msg);
+            updateState("idle");
+        }
     }, [updateState, startAudioMonitoring, stopAudioMonitoring, sendToAgent, onError, continuous]);
 
     // Ref so playNextAudio callback can call startListening without stale closure

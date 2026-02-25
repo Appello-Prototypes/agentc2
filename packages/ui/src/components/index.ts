@@ -8,6 +8,7 @@ export * from "./breadcrumb";
 export * from "./button";
 export * from "./button-group";
 export * from "./card";
+export * from "./checkbox";
 export * from "./collapsible";
 export * from "./combobox";
 export * from "./command";

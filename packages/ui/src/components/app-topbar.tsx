@@ -36,6 +36,8 @@ type AppTopBarProps = {
     onSettings?: () => void;
     onSearchClick?: () => void;
     onHelp?: () => void;
+    onCommunity?: () => void;
+    onMarketplace?: () => void;
     isActive?: (href: string) => boolean;
     renderNavLink?: (item: NavItem, isActive: boolean) => React.ReactNode;
 };
@@ -49,6 +51,8 @@ export function AppTopBar({
     onSettings,
     onSearchClick,
     onHelp,
+    onCommunity,
+    onMarketplace,
     isActive = () => false,
     renderNavLink
 }: AppTopBarProps) {
@@ -150,6 +154,30 @@ export function AppTopBar({
 
                 {/* Right Side Actions */}
                 <div className="flex items-center gap-2">
+                    {onCommunity && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-9"
+                            onClick={onCommunity}
+                            title="Community"
+                        >
+                            <HugeiconsIcon icon={icons["user-group"]!} className="size-5" />
+                            <span className="sr-only">Community</span>
+                        </Button>
+                    )}
+                    {onMarketplace && (
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-9"
+                            onClick={onMarketplace}
+                            title="Marketplace"
+                        >
+                            <HugeiconsIcon icon={icons.store!} className="size-5" />
+                            <span className="sr-only">Marketplace</span>
+                        </Button>
+                    )}
                     <Button variant="ghost" size="icon" className="size-9" onClick={onSearchClick}>
                         <HugeiconsIcon icon={icons.search!} className="size-5" />
                         <span className="sr-only">Search</span>

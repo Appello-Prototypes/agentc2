@@ -5950,7 +5950,7 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         }
 
         const inputJson = schedule.inputJson as Record<string, unknown> | null;
-        const inputValue = inputJson?.input ?? `Scheduled run: ${schedule.name}`;
+        const inputValue = schedule.task || inputJson?.input || `Scheduled run: ${schedule.name}`;
         const rawInput =
             typeof inputValue === "string" ? inputValue : JSON.stringify(inputValue ?? {});
         const scheduleTimezone = schedule.timezone || "UTC";
@@ -8541,6 +8541,151 @@ export const playbookTrustScoreRecalculationFunction = inngest.createFunction(
     }
 );
 
+// ─── Community Heartbeat ─────────────────────────────────────────────────────
+
+const communityHeartbeatFunction = inngest.createFunction(
+    { id: "community-heartbeat", retries: 2 },
+    { cron: "0 9 * * *" },
+    async ({ step }) => {
+        const boards = await step.run("get-boards", async () => {
+            return prisma.communityBoard.findMany({
+                where: { isDefault: true },
+                select: { id: true, slug: true, name: true, culturePrompt: true }
+            });
+        });
+
+        if (boards.length === 0) return { skipped: true, reason: "no boards" };
+
+        for (const board of boards) {
+            const agentMembers = await step.run(`get-agents-${board.id}`, async () => {
+                return prisma.communityMember.findMany({
+                    where: { boardId: board.id, memberType: "agent" },
+                    select: { agentId: true }
+                });
+            });
+
+            for (const member of agentMembers) {
+                if (!member.agentId) continue;
+                await step.sendEvent(`heartbeat-${member.agentId}`, {
+                    name: "community/heartbeat.agent",
+                    data: { boardId: board.id, agentId: member.agentId }
+                });
+            }
+        }
+
+        return { boardsProcessed: boards.length };
+    }
+);
+
+const agentCommunityHeartbeatFunction = inngest.createFunction(
+    { id: "community-heartbeat-agent", retries: 1, concurrency: { limit: 5 } },
+    { event: "community/heartbeat.agent" },
+    async ({ event, step }) => {
+        const { boardId, agentId } = event.data;
+
+        const context = await step.run("build-context", async () => {
+            const [board, recentPosts] = await Promise.all([
+                prisma.communityBoard.findUnique({
+                    where: { id: boardId },
+                    select: {
+                        id: true,
+                        slug: true,
+                        name: true,
+                        culturePrompt: true
+                    }
+                }),
+                prisma.communityPost.findMany({
+                    where: { boardId },
+                    orderBy: { createdAt: "desc" },
+                    take: 10,
+                    select: {
+                        id: true,
+                        title: true,
+                        voteScore: true,
+                        commentCount: true,
+                        authorType: true,
+                        createdAt: true
+                    }
+                })
+            ]);
+            return { board, recentPosts };
+        });
+
+        if (!context.board) return { skipped: true, reason: "board not found" };
+
+        const agentRecord = await step.run("get-agent", async () => {
+            return prisma.agent.findUnique({
+                where: { id: agentId },
+                select: { id: true, slug: true, name: true, isActive: true }
+            });
+        });
+
+        if (!agentRecord?.isActive) return { skipped: true, reason: "agent inactive" };
+
+        const result = await step.run("participate", async () => {
+            const { agentResolver } = await import("@repo/agentc2");
+            const {
+                communityBrowsePostsTool,
+                communityCreatePostTool,
+                communityReadPostTool,
+                communityCommentTool,
+                communityVoteTool
+            } = await import("@repo/agentc2/tools/community-tools");
+
+            const { agent } = await agentResolver.resolve({ id: agentId });
+
+            const cultureSection = context.board!.culturePrompt
+                ? `\n\nCulture guidelines for this board:\n${context.board!.culturePrompt}`
+                : "";
+
+            const recentPostsSummary = context.recentPosts
+                .map(
+                    (p, i) =>
+                        `${i + 1}. "${p.title}" (score: ${p.voteScore}, ${p.commentCount} comments, by ${p.authorType})`
+                )
+                .join("\n");
+
+            const prompt = `You are participating in "${context.board!.name}", a community board where agents and humans come together.${cultureSection}
+
+Here is what's been happening recently:
+${recentPostsSummary || "No posts yet — you could be the first!"}
+
+Your agent ID is "${agentId}". You may:
+- Create a new post if you have something interesting to share
+- Comment on an existing post if you have a relevant perspective
+- Vote on posts/comments you find valuable
+- Or do nothing if nothing catches your attention
+
+Be authentic. Be yourself. Don't force participation.`;
+
+            const generateOpts = {
+                maxSteps: 5,
+                toolChoice: "auto" as const,
+                tools: {
+                    communityBrowsePostsTool,
+                    communityCreatePostTool,
+                    communityReadPostTool,
+                    communityCommentTool,
+                    communityVoteTool
+                }
+            };
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const response = await agent.generate(prompt, generateOpts as any);
+
+            return { text: response.text?.slice(0, 500) };
+        });
+
+        await step.run("update-activity", async () => {
+            await prisma.communityMember.updateMany({
+                where: { boardId, agentId },
+                data: { lastActiveAt: new Date() }
+            });
+        });
+
+        return { agentId, boardId, result };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -8613,5 +8758,8 @@ export const inngestFunctions = [
     securityMonitorFunction,
     // Playbook Marketplace
     playbookDeployFunction,
-    playbookTrustScoreRecalculationFunction
+    playbookTrustScoreRecalculationFunction,
+    // Community Heartbeat
+    communityHeartbeatFunction,
+    agentCommunityHeartbeatFunction
 ];

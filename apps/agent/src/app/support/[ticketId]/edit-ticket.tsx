@@ -2,7 +2,16 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Pencil, X } from "lucide-react";
+import { Pencil } from "lucide-react";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+    DialogClose
+} from "@repo/ui";
 
 const TICKET_TYPES = [
     { value: "BUG", label: "Bug Report" },
@@ -34,6 +43,14 @@ export function EditTicketButton({
     const [tags, setTags] = useState(currentTags.join(", "));
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState("");
+
+    function resetForm() {
+        setTitle(currentTitle);
+        setDescription(currentDescription);
+        setType(currentType);
+        setTags(currentTags.join(", "));
+        setError("");
+    }
 
     async function handleSave(e: React.FormEvent) {
         e.preventDefault();
@@ -70,8 +87,14 @@ export function EditTicketButton({
         }
     }
 
-    if (!open) {
-        return (
+    return (
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                setOpen(nextOpen);
+                if (!nextOpen) resetForm();
+            }}
+        >
             <button
                 onClick={() => setOpen(true)}
                 className="text-muted-foreground hover:text-foreground flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm transition-colors"
@@ -79,109 +102,95 @@ export function EditTicketButton({
                 <Pencil className="h-3.5 w-3.5" />
                 Edit
             </button>
-        );
-    }
 
-    return (
-        <div className="bg-card border-border rounded-lg border p-6">
-            <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-sm font-semibold tracking-wide uppercase">Edit Ticket</h2>
-                <button
-                    onClick={() => {
-                        setOpen(false);
-                        setTitle(currentTitle);
-                        setDescription(currentDescription);
-                        setType(currentType);
-                        setTags(currentTags.join(", "));
-                        setError("");
-                    }}
-                    className="text-muted-foreground hover:text-foreground"
-                >
-                    <X className="h-4 w-4" />
-                </button>
-            </div>
+            <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Edit Ticket</DialogTitle>
+                    <DialogDescription>Update the ticket details below.</DialogDescription>
+                </DialogHeader>
 
-            <form onSubmit={handleSave} className="space-y-4">
-                <div className="space-y-1.5">
-                    <label htmlFor="edit-type" className="text-sm font-medium">
-                        Type
-                    </label>
-                    <select
-                        id="edit-type"
-                        value={type}
-                        onChange={(e) => setType(e.target.value)}
-                        className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-                    >
-                        {TICKET_TYPES.map((t) => (
-                            <option key={t.value} value={t.value}>
-                                {t.label}
-                            </option>
-                        ))}
-                    </select>
-                </div>
+                <form onSubmit={handleSave} className="space-y-4">
+                    <div className="space-y-1.5">
+                        <label htmlFor="edit-type" className="text-sm font-medium">
+                            Type
+                        </label>
+                        <select
+                            id="edit-type"
+                            value={type}
+                            onChange={(e) => setType(e.target.value)}
+                            className="border-input bg-background ring-offset-background focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                        >
+                            {TICKET_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
 
-                <div className="space-y-1.5">
-                    <label htmlFor="edit-title" className="text-sm font-medium">
-                        Title
-                    </label>
-                    <input
-                        id="edit-title"
-                        value={title}
-                        onChange={(e) => setTitle(e.target.value)}
-                        required
-                        className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-                    />
-                </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="edit-title" className="text-sm font-medium">
+                            Title
+                        </label>
+                        <input
+                            id="edit-title"
+                            value={title}
+                            onChange={(e) => setTitle(e.target.value)}
+                            required
+                            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                        />
+                    </div>
 
-                <div className="space-y-1.5">
-                    <label htmlFor="edit-description" className="text-sm font-medium">
-                        Description
-                    </label>
-                    <textarea
-                        id="edit-description"
-                        value={description}
-                        onChange={(e) => setDescription(e.target.value)}
-                        required
-                        rows={5}
-                        className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-none rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-                    />
-                </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="edit-description" className="text-sm font-medium">
+                            Description
+                        </label>
+                        <textarea
+                            id="edit-description"
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            required
+                            rows={5}
+                            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring w-full resize-none rounded-md border px-3 py-2 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                        />
+                    </div>
 
-                <div className="space-y-1.5">
-                    <label htmlFor="edit-tags" className="text-sm font-medium">
-                        Tags
-                    </label>
-                    <input
-                        id="edit-tags"
-                        value={tags}
-                        onChange={(e) => setTags(e.target.value)}
-                        placeholder="comma-separated tags"
-                        className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
-                    />
-                </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="edit-tags" className="text-sm font-medium">
+                            Tags
+                        </label>
+                        <input
+                            id="edit-tags"
+                            value={tags}
+                            onChange={(e) => setTags(e.target.value)}
+                            placeholder="comma-separated tags"
+                            className="border-input bg-background ring-offset-background placeholder:text-muted-foreground focus-visible:ring-ring flex h-9 w-full rounded-md border px-3 py-1 text-sm focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:outline-none"
+                        />
+                    </div>
 
-                {error && <p className="text-sm text-red-500">{error}</p>}
+                    {error && <p className="text-sm text-red-500">{error}</p>}
 
-                <div className="flex justify-end gap-2">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setOpen(false);
-                            setError("");
-                        }}
-                        className="text-muted-foreground hover:text-foreground rounded-md px-3 py-1.5 text-sm transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        disabled={saving || !title.trim() || !description.trim()}
-                        className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50"
-                    >
-                        {saving ? "Saving..." : "Save Changes"}
-                    </button>
-                </div>
-            </form>
-        </div>
+                    <DialogFooter>
+                        <DialogClose
+                            render={
+                                <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground rounded-md px-3 py-1.5 text-sm transition-colors"
+                                />
+                            }
+                        >
+                            Cancel
+                        </DialogClose>
+                        <button
+                            type="submit"
+                            disabled={saving || !title.trim() || !description.trim()}
+                            className="bg-primary text-primary-foreground hover:bg-primary/90 rounded-md px-4 py-1.5 text-sm font-medium transition-colors disabled:opacity-50"
+                        >
+                            {saving ? "Saving..." : "Save Changes"}
+                        </button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
     );
 }

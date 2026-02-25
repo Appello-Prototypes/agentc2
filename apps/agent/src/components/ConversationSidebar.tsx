@@ -8,7 +8,9 @@ import {
     TrashIcon,
     PencilIcon,
     PanelLeftCloseIcon,
-    PanelLeftIcon
+    PanelLeftIcon,
+    LoaderIcon,
+    CheckIcon
 } from "lucide-react";
 import {
     Button,
@@ -223,9 +225,15 @@ export function ConversationSidebar({
                                 ) : (
                                     <button
                                         onClick={() => handleSelect(conv.id)}
-                                        className="flex-1 truncate text-left text-xs"
+                                        className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-xs"
                                     >
-                                        {conv.title}
+                                        {conv.status === "running" && (
+                                            <LoaderIcon className="text-primary size-3 shrink-0 animate-spin" />
+                                        )}
+                                        {conv.status === "completed" && (
+                                            <CheckIcon className="size-3 shrink-0 text-emerald-500" />
+                                        )}
+                                        <span className="truncate">{conv.title}</span>
                                     </button>
                                 )}
                                 <DropdownMenu>

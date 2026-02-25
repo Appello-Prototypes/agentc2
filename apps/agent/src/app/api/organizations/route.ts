@@ -147,6 +147,14 @@ export async function POST(request: NextRequest) {
             metadata: { name, slug: orgSlug }
         });
 
+        // Auto-deploy starter kit
+        try {
+            const { deployStarterKit } = await import("@repo/agentc2");
+            await deployStarterKit(organization.id, defaultWorkspace.id, authResult.context.userId);
+        } catch (error) {
+            console.warn("[Organizations] Starter kit deployment failed:", error);
+        }
+
         return NextResponse.json({
             success: true,
             organization: {

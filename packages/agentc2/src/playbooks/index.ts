@@ -3,6 +3,7 @@ export { deployPlaybook, uninstallPlaybook } from "./deployer";
 export { sanitizeManifest, detectHardcodedUrls } from "./sanitizer";
 export { validateManifest, isValidManifest, playbookManifestSchema } from "./manifest";
 export { mapIntegrations } from "./integration-mapper";
+export { deployStarterKit } from "./starter-kit";
 export type {
     PlaybookManifest,
     PackagePlaybookOptions,
@@ -12,6 +13,7 @@ export type {
     DocumentSnapshot,
     WorkflowSnapshot,
     NetworkSnapshot,
+    CampaignTemplateSnapshot,
     GuardrailSnapshot,
     TestCaseSnapshot,
     ScorecardSnapshot,

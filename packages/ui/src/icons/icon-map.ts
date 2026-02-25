@@ -34,6 +34,7 @@ import {
     MailSend01Icon,
     Menu02Icon,
     PaintBoardIcon,
+    Store01Icon,
     Task01Icon,
     MessageMultiple01Icon,
     MoreHorizontalIcon,
@@ -49,7 +50,9 @@ import {
     Tick02Icon,
     TriangleIcon,
     UserGroupIcon,
-    UserIcon
+    UserIcon,
+    Share01Icon,
+    CodeIcon
 } from "@hugeicons/core-free-icons";
 
 import type { IconComponent, IconName } from "./types";
@@ -103,5 +106,8 @@ export const iconMap: Record<IconName, IconComponent> = {
     menu: Menu02Icon,
     "paint-board": PaintBoardIcon,
     "task-list": Task01Icon,
-    "help-circle": HelpCircleIcon
+    "help-circle": HelpCircleIcon,
+    store: Store01Icon,
+    share: Share01Icon,
+    code: CodeIcon
 };

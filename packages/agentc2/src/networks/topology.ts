@@ -46,7 +46,8 @@ export const isNetworkTopologyEmpty = (topology: unknown): boolean => {
 };
 
 export const buildNetworkTopologyFromPrimitives = (
-    primitives: NetworkPrimitiveInput[]
+    primitives: NetworkPrimitiveInput[],
+    options?: { meshEnabled?: boolean }
 ): NetworkTopology => {
     const nodes: Array<Record<string, unknown>> = [];
     const edges: Array<Record<string, unknown>> = [];
@@ -66,6 +67,9 @@ export const buildNetworkTopologyFromPrimitives = (
             type: "router"
         }
     });
+
+    const nodeIds: string[] = [];
+    const agentNodeIds: string[] = [];
 
     primitives.forEach((primitive, index) => {
         const ref = resolvePrimitiveRef(primitive, index);
@@ -87,6 +91,11 @@ export const buildNetworkTopologyFromPrimitives = (
             }
         });
 
+        nodeIds.push(nodeId);
+        if (primitive.primitiveType === "agent") {
+            agentNodeIds.push(nodeId);
+        }
+
         edges.push({
             id: `edge-${routerId}-${nodeId}`,
             source: routerId,
@@ -95,6 +104,21 @@ export const buildNetworkTopologyFromPrimitives = (
             data: { label: "" }
         });
     });
+
+    // Mesh mode: add peer-to-peer edges between all agent primitives
+    if (options?.meshEnabled && agentNodeIds.length >= 2) {
+        for (let i = 0; i < agentNodeIds.length; i++) {
+            for (let j = i + 1; j < agentNodeIds.length; j++) {
+                edges.push({
+                    id: `edge-mesh-${agentNodeIds[i]}-${agentNodeIds[j]}`,
+                    source: agentNodeIds[i],
+                    target: agentNodeIds[j],
+                    type: "mesh",
+                    data: { label: "peer" }
+                });
+            }
+        }
+    }
 
     return { nodes, edges };
 };

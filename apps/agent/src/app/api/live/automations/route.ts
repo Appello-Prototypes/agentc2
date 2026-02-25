@@ -142,7 +142,9 @@ export async function GET(request: NextRequest) {
                 agent: s.agent,
                 config: {
                     cronExpr: s.cronExpr,
-                    timezone: s.timezone
+                    timezone: s.timezone,
+                    color: s.color,
+                    task: s.task
                 },
                 stats: {
                     totalRuns: total,
@@ -186,7 +188,8 @@ export async function GET(request: NextRequest) {
                 agent: t.agent,
                 config: {
                     eventName: t.eventName,
-                    webhookPath: t.webhookPath
+                    webhookPath: t.webhookPath,
+                    color: t.color
                 },
                 stats: {
                     totalRuns: total,
@@ -210,146 +213,22 @@ export async function GET(request: NextRequest) {
             };
         });
 
-        // Build synthetic Slack listener entries from TriggerEvent data
-        const slackGroups = await prisma.triggerEvent.groupBy({
-            by: ["agentId"],
-            where: {
-                sourceType: "slack",
-                agentId: { not: null },
-                AND: [
-                    {
-                        OR: [{ workspaceId: workspaceContext.workspaceId }, { workspaceId: null }]
-                    }
-                ]
-            },
-            _count: { _all: true },
-            _max: { createdAt: true }
-        });
-
-        const slackAgentIds = slackGroups.map((g) => g.agentId).filter(Boolean) as string[];
-
-        const slackAgents =
-            slackAgentIds.length > 0
-                ? await prisma.agent.findMany({
-                      where: { id: { in: slackAgentIds } },
-                      select: { id: true, slug: true, name: true }
-                  })
-                : [];
-
-        const slackAgentMap = new Map(slackAgents.map((a) => [a.id, a]));
-
-        // Fetch success/failure for Slack runs (via TriggerEvent -> run status)
-        const slackRunStats =
-            slackAgentIds.length > 0
-                ? await prisma.triggerEvent.findMany({
-                      where: {
-                          sourceType: "slack",
-                          agentId: { in: slackAgentIds },
-                          runId: { not: null }
-                      },
-                      select: {
-                          agentId: true,
-                          run: {
-                              select: {
-                                  status: true,
-                                  durationMs: true
-                              }
-                          }
-                      }
-                  })
-                : [];
-
-        // Aggregate Slack run stats per agent
-        const slackStatsPerAgent = new Map<
-            string,
-            {
-                total: number;
-                success: number;
-                failed: number;
-                durationSum: number;
-                durationCount: number;
-            }
-        >();
-        for (const sr of slackRunStats) {
-            if (!sr.agentId) continue;
-            const existing = slackStatsPerAgent.get(sr.agentId) ?? {
-                total: 0,
-                success: 0,
-                failed: 0,
-                durationSum: 0,
-                durationCount: 0
-            };
-            existing.total++;
-            if (sr.run?.status === "COMPLETED") existing.success++;
-            if (sr.run?.status === "FAILED") existing.failed++;
-            if (sr.run?.durationMs) {
-                existing.durationSum += sr.run.durationMs;
-                existing.durationCount++;
-            }
-            slackStatsPerAgent.set(sr.agentId, existing);
-        }
-
-        const slackAutomations = slackGroups
-            .map((g) => {
-                if (!g.agentId) return null;
-                const agent = slackAgentMap.get(g.agentId);
-                if (!agent) return null;
-
-                const ss = slackStatsPerAgent.get(g.agentId);
-                const total = ss?.total ?? g._count._all;
-                const success = ss?.success ?? 0;
-                const failed = ss?.failed ?? 0;
-                const avgMs =
-                    ss && ss.durationCount > 0
-                        ? Math.round(ss.durationSum / ss.durationCount)
-                        : null;
-
-                return {
-                    id: `implicit:slack:${g.agentId}`,
-                    sourceType: "implicit" as const,
-                    type: "slack_listener" as const,
-                    name: `Slack Messages → ${agent.name}`,
-                    description: "Incoming Slack messages routed to this agent",
-                    isActive: true,
-                    isArchived: false,
-                    archivedAt: null,
-                    agent,
-                    config: {
-                        eventName: "slack.message"
-                    },
-                    stats: {
-                        totalRuns: total,
-                        successRuns: success,
-                        failedRuns: failed,
-                        successRate: total > 0 ? Math.round((success / total) * 100) : 0,
-                        avgDurationMs: avgMs,
-                        lastRunAt: g._max.createdAt,
-                        nextRunAt: null
-                    },
-                    lastRun: null,
-                    createdAt: g._max.createdAt
-                };
-            })
-            .filter(Boolean);
-
-        // Combine all automations
-        const automations = [...scheduleAutomations, ...triggerAutomations, ...slackAutomations];
+        // Combine all automations (Slack listeners are now real AgentTrigger records
+        // with triggerType "slack_listener", so they appear in triggerAutomations)
+        const automations = [...scheduleAutomations, ...triggerAutomations];
 
         // Summary metrics
         const summary = {
             total: automations.length,
-            active: automations.filter((a) => a!.isActive).length,
-            archived: automations.filter((a) => a!.isArchived).length,
+            active: automations.filter((a) => a.isActive).length,
+            archived: automations.filter((a) => a.isArchived).length,
             schedules: scheduleAutomations.length,
             triggers: triggerAutomations.length,
-            implicit: slackAutomations.length,
+            implicit: 0,
             overallSuccessRate: (() => {
-                const totalRuns = automations.reduce(
-                    (acc, a) => acc + (a!.stats.totalRuns || 0),
-                    0
-                );
+                const totalRuns = automations.reduce((acc, a) => acc + (a.stats.totalRuns || 0), 0);
                 const successRuns = automations.reduce(
-                    (acc, a) => acc + (a!.stats.successRuns || 0),
+                    (acc, a) => acc + (a.stats.successRuns || 0),
                     0
                 );
                 return totalRuns > 0 ? Math.round((successRuns / totalRuns) * 100) : 0;

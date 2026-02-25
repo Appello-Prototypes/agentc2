@@ -319,16 +319,6 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
             );
         }
 
-        if (parsed.sourceType === "implicit") {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: "Implicit automations (e.g. Slack listener) cannot be toggled from here"
-                },
-                { status: 400 }
-            );
-        }
-
         const updateData: Record<string, unknown> = {};
 
         if (typeof isArchived === "boolean") {

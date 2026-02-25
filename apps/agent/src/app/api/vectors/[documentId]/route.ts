@@ -52,6 +52,8 @@ export async function GET(
         const totalChunks = Number(countResult[0]?.cnt || 0);
 
         // Fetch chunks with metadata and vector preview
+        // pgvector's text representation uses [] brackets, but PostgreSQL
+        // array literals require {} — convert before casting to float8[].
         const chunks = await prisma.$queryRawUnsafe<
             Array<{
                 vector_id: string;
@@ -63,8 +65,8 @@ export async function GET(
             `SELECT 
                 vector_id,
                 metadata,
-                (embedding::text::float8[])[1:10] as vector_preview,
-                array_length(embedding::text::float8[], 1) as vector_dims
+                ((replace(replace(embedding::text, '[', '{'), ']', '}'))::float8[])[1:10] as vector_preview,
+                array_length((replace(replace(embedding::text, '[', '{'), ']', '}'))::float8[], 1) as vector_dims
             FROM rag_documents
             WHERE metadata->>'documentId' = $1
             ORDER BY (metadata->>'chunkIndex')::int ASC NULLS LAST

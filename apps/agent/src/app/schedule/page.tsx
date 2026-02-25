@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import {
     AlertDialog,
@@ -18,6 +18,7 @@ import {
     CardDescription,
     CardHeader,
     CardTitle,
+    Checkbox,
     Dialog,
     DialogContent,
     DialogDescription,
@@ -61,6 +62,7 @@ import {
     ArrowReloadHorizontalIcon
 } from "@hugeicons/core-free-icons";
 import { getApiBase } from "@/lib/utils";
+import { SidekickSidebar } from "@/components/SidekickSidebar";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Types
@@ -74,7 +76,7 @@ interface AgentOption {
 
 interface Automation {
     id: string;
-    sourceType: "schedule" | "trigger" | "implicit";
+    sourceType: "schedule" | "trigger";
     type: string;
     name: string;
     description: string | null;
@@ -87,6 +89,8 @@ interface Automation {
         timezone?: string;
         eventName?: string | null;
         webhookPath?: string | null;
+        color?: string | null;
+        task?: string | null;
     };
     stats: {
         totalRuns: number;
@@ -113,7 +117,6 @@ interface AutomationSummary {
     archived: number;
     schedules: number;
     triggers: number;
-    implicit: number;
     overallSuccessRate: number;
 }
 
@@ -122,11 +125,20 @@ interface FormState {
     agentId: string;
     name: string;
     description: string;
+    task: string;
     cronExpr: string;
     timezone: string;
     triggerType: string;
     eventName: string;
     isActive: boolean;
+    // Wizard fields
+    frequency: Frequency;
+    hour: number;
+    minute: number;
+    ampm: "AM" | "PM";
+    daysOfWeek: number[];
+    dayOfMonth: number;
+    color: string;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -213,6 +225,13 @@ function getAgentColor(agentId: string, allIds: string[]): string {
     return AGENT_COLORS[index % AGENT_COLORS.length]!;
 }
 
+function getEventColor(automation: Automation, allAgentIds: string[]): string {
+    const customColor = getColorClass(automation.config.color);
+    if (customColor) return customColor;
+    if (automation.agent) return getAgentColor(automation.agent.id, allAgentIds);
+    return "bg-gray-400";
+}
+
 function parseAutomationId(
     compositeId: string
 ): { sourceType: "schedule" | "trigger"; rawId: string } | null {
@@ -251,6 +270,157 @@ const COMMON_TIMEZONES = [
     "Australia/Melbourne",
     "Pacific/Auckland"
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Schedule Helpers — human-friendly cron conversion
+// ═══════════════════════════════════════════════════════════════════════════════
+
+type Frequency = "daily" | "weekdays" | "weekly" | "monthly";
+
+interface ScheduleConfig {
+    frequency: Frequency;
+    hour: number;
+    minute: number;
+    ampm: "AM" | "PM";
+    daysOfWeek: number[];
+    dayOfMonth: number;
+}
+
+const AUTOMATION_COLORS: { name: string; class: string }[] = [
+    { name: "blue", class: "bg-blue-500" },
+    { name: "emerald", class: "bg-emerald-500" },
+    { name: "purple", class: "bg-purple-500" },
+    { name: "amber", class: "bg-amber-500" },
+    { name: "rose", class: "bg-rose-500" },
+    { name: "cyan", class: "bg-cyan-500" },
+    { name: "indigo", class: "bg-indigo-500" },
+    { name: "orange", class: "bg-orange-500" }
+];
+
+function getColorClass(name: string | null | undefined): string | null {
+    if (!name) return null;
+    const found = AUTOMATION_COLORS.find((c) => c.name === name);
+    return found?.class ?? null;
+}
+
+function to24Hour(hour: number, ampm: "AM" | "PM"): number {
+    if (ampm === "AM") return hour === 12 ? 0 : hour;
+    return hour === 12 ? 12 : hour + 12;
+}
+
+function buildCronFromSchedule(config: ScheduleConfig): string {
+    const h = to24Hour(config.hour, config.ampm);
+    const m = config.minute;
+
+    switch (config.frequency) {
+        case "daily":
+            return `${m} ${h} * * *`;
+        case "weekdays":
+            return `${m} ${h} * * 1-5`;
+        case "weekly": {
+            const days = config.daysOfWeek.length > 0 ? config.daysOfWeek.join(",") : "1";
+            return `${m} ${h} * * ${days}`;
+        }
+        case "monthly":
+            return `${m} ${h} ${config.dayOfMonth} * *`;
+        default:
+            return `${m} ${h} * * *`;
+    }
+}
+
+function parseCronToSchedule(cron: string): ScheduleConfig | null {
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length < 5) return null;
+
+    const [minutePart, hourPart, domPart, , dowPart] = parts;
+    const minute = parseInt(minutePart!, 10);
+    const hour24 = parseInt(hourPart!, 10);
+    if (isNaN(minute) || isNaN(hour24)) return null;
+
+    const ampm: "AM" | "PM" = hour24 >= 12 ? "PM" : "AM";
+    const hour = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+
+    if (domPart !== "*") {
+        const dom = parseInt(domPart!, 10);
+        return {
+            frequency: "monthly",
+            hour,
+            minute,
+            ampm,
+            daysOfWeek: [],
+            dayOfMonth: isNaN(dom) ? 1 : dom
+        };
+    }
+
+    if (dowPart === "*") {
+        return { frequency: "daily", hour, minute, ampm, daysOfWeek: [], dayOfMonth: 1 };
+    }
+
+    if (dowPart === "1-5") {
+        return { frequency: "weekdays", hour, minute, ampm, daysOfWeek: [], dayOfMonth: 1 };
+    }
+
+    const dowValues = dowPart!
+        .split(",")
+        .map((v) => parseInt(v, 10))
+        .filter((v) => !isNaN(v));
+    return { frequency: "weekly", hour, minute, ampm, daysOfWeek: dowValues, dayOfMonth: 1 };
+}
+
+function describeScheduleFromCron(cron: string): string {
+    const parts = cron.trim().split(/\s+/);
+    if (parts.length < 5) return cron;
+
+    const [minutePart, hourPart, domPart, , dowPart] = parts;
+    const minute = minutePart === "*" ? 0 : parseInt(minutePart!, 10);
+    const hour = hourPart === "*" ? -1 : parseInt(hourPart!, 10);
+
+    const formatTime = (h: number, m: number) => {
+        if (h < 0) return "every hour";
+        const ampm = h >= 12 ? "PM" : "AM";
+        const displayHour = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${displayHour}:${String(m).padStart(2, "0")} ${ampm}`;
+    };
+
+    const timeStr = formatTime(hour, minute);
+    const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    if (domPart !== "*") {
+        const day = parseInt(domPart!, 10);
+        const suffix =
+            day === 1 || day === 21 || day === 31
+                ? "st"
+                : day === 2 || day === 22
+                  ? "nd"
+                  : day === 3 || day === 23
+                    ? "rd"
+                    : "th";
+        return `Monthly on the ${day}${suffix} at ${timeStr}`;
+    }
+
+    if (dowPart === "*") return `Daily at ${timeStr}`;
+    if (dowPart === "1-5") return `Weekdays at ${timeStr}`;
+
+    const dowValues = dowPart!
+        .split(",")
+        .map((v) => parseInt(v, 10))
+        .filter((v) => !isNaN(v));
+    if (dowValues.length === 1) return `Every ${dayNames[dowValues[0]!]} at ${timeStr}`;
+    return `Every ${dowValues.map((d) => dayNames[d]!).join(", ")} at ${timeStr}`;
+}
+
+function generateSuggestedName(config: ScheduleConfig, agentName: string): string {
+    const timeStr = `${config.hour}${config.ampm.toLowerCase()}`;
+    const freqLabel =
+        config.frequency === "daily"
+            ? "Daily"
+            : config.frequency === "weekdays"
+              ? "Weekday"
+              : config.frequency === "weekly"
+                ? "Weekly"
+                : "Monthly";
+    return `${freqLabel} ${timeStr} — ${agentName}`;
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Cron → occurrences expansion
@@ -296,10 +466,13 @@ function expandCronForRange(cronExpr: string, from: Date, to: Date): Date[] {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// Create/Edit Dialog
+// AutomationWizard — Human-friendly create/edit (replaces CreateEditDialog)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-function CreateEditDialog({
+const WIZARD_DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const WIZARD_MINUTES = [0, 15, 30, 45];
+
+function AutomationWizard({
     open,
     onOpenChange,
     mode,
@@ -321,36 +494,60 @@ function CreateEditDialog({
         agentId: "",
         name: "",
         description: "",
+        task: "",
         cronExpr: "0 9 * * 1-5",
-        timezone: "UTC",
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
         triggerType: "event",
         eventName: "",
-        isActive: true
+        isActive: true,
+        frequency: "weekdays",
+        hour: 9,
+        minute: 0,
+        ampm: "AM",
+        daysOfWeek: [],
+        dayOfMonth: 1,
+        color: ""
     };
 
+    const [step, setStep] = useState(0);
     const [form, setForm] = useState<FormState>(defaultForm);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!open) return;
+        setStep(0);
+        setError(null);
         if (mode === "edit" && automation) {
             const parsed = parseAutomationId(automation.id);
+            const isScheduleType = parsed?.sourceType !== "trigger";
+            const schedConfig =
+                isScheduleType && automation.config.cronExpr
+                    ? parseCronToSchedule(automation.config.cronExpr)
+                    : null;
+
             setForm({
-                automationType: parsed?.sourceType === "trigger" ? "trigger" : "schedule",
+                automationType: isScheduleType ? "schedule" : "trigger",
                 agentId: automation.agent?.id || "",
                 name: automation.name,
                 description: automation.description || "",
+                task: automation.config.task || "",
                 cronExpr: automation.config.cronExpr || "0 9 * * 1-5",
                 timezone: automation.config.timezone || "UTC",
                 triggerType: automation.type === "scheduled" ? "event" : automation.type,
                 eventName: automation.config.eventName || "",
-                isActive: automation.isActive
+                isActive: automation.isActive,
+                frequency: schedConfig?.frequency || "weekdays",
+                hour: schedConfig?.hour || 9,
+                minute: schedConfig?.minute || 0,
+                ampm: schedConfig?.ampm || "AM",
+                daysOfWeek: schedConfig?.daysOfWeek || [],
+                dayOfMonth: schedConfig?.dayOfMonth || 1,
+                color: automation.config.color || ""
             });
         } else {
             setForm(defaultForm);
         }
-        setError(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open, mode, automation]);
 
@@ -358,37 +555,93 @@ function CreateEditDialog({
         setForm((prev) => ({ ...prev, [key]: value }));
     };
 
+    const isSchedule = form.automationType === "schedule";
+
+    const previewCron = useMemo(() => {
+        if (!isSchedule) return null;
+        return buildCronFromSchedule({
+            frequency: form.frequency,
+            hour: form.hour,
+            minute: form.minute,
+            ampm: form.ampm,
+            daysOfWeek: form.daysOfWeek,
+            dayOfMonth: form.dayOfMonth
+        });
+    }, [
+        isSchedule,
+        form.frequency,
+        form.hour,
+        form.minute,
+        form.ampm,
+        form.daysOfWeek,
+        form.dayOfMonth
+    ]);
+
+    const previewDescription = useMemo(() => {
+        if (!previewCron) return "";
+        return describeScheduleFromCron(previewCron);
+    }, [previewCron]);
+
+    const suggestedName = useMemo(() => {
+        const agent = agents.find((a) => a.id === form.agentId);
+        if (!agent || !isSchedule) return "";
+        return generateSuggestedName(
+            {
+                frequency: form.frequency,
+                hour: form.hour,
+                minute: form.minute,
+                ampm: form.ampm,
+                daysOfWeek: form.daysOfWeek,
+                dayOfMonth: form.dayOfMonth
+            },
+            agent.name
+        );
+    }, [
+        agents,
+        form.agentId,
+        form.frequency,
+        form.hour,
+        form.minute,
+        form.ampm,
+        form.daysOfWeek,
+        form.dayOfMonth,
+        isSchedule
+    ]);
+
+    const canProceedStep0 = form.agentId !== "" || mode === "edit";
+    const canProceedStep1 = true;
+
     const handleSave = async () => {
         setError(null);
+        if (!form.name.trim()) {
+            if (suggestedName) setField("name", suggestedName);
+            else {
+                setError("Name is required.");
+                return;
+            }
+        }
         setSaving(true);
         try {
+            const finalName = form.name.trim() || suggestedName;
             if (mode === "create") {
                 if (!form.agentId) {
                     setError("Please select an agent.");
                     setSaving(false);
                     return;
                 }
-                if (!form.name.trim()) {
-                    setError("Name is required.");
-                    setSaving(false);
-                    return;
-                }
-
-                if (form.automationType === "schedule") {
-                    if (!form.cronExpr.trim()) {
-                        setError("Cron expression is required.");
-                        setSaving(false);
-                        return;
-                    }
+                if (isSchedule) {
+                    const cronExpr = previewCron || form.cronExpr.trim();
                     const res = await fetch(`${apiBase}/api/agents/${form.agentId}/schedules`, {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            name: form.name.trim(),
+                            name: finalName,
                             description: form.description.trim() || undefined,
-                            cronExpr: form.cronExpr.trim(),
+                            task: form.task.trim() || undefined,
+                            cronExpr,
                             timezone: form.timezone,
-                            isActive: form.isActive
+                            isActive: form.isActive,
+                            color: form.color || undefined
                         })
                     });
                     const data = await res.json();
@@ -404,7 +657,7 @@ function CreateEditDialog({
                         return;
                     }
                     if (form.triggerType === "event" && !form.eventName.trim()) {
-                        setError("Event name is required for event triggers.");
+                        setError("Event name is required.");
                         setSaving(false);
                         return;
                     }
@@ -412,12 +665,13 @@ function CreateEditDialog({
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({
-                            name: form.name.trim(),
+                            name: finalName,
                             description: form.description.trim() || undefined,
                             triggerType: form.triggerType,
                             eventName:
                                 form.triggerType === "event" ? form.eventName.trim() : undefined,
-                            isActive: form.isActive
+                            isActive: form.isActive,
+                            color: form.color || undefined
                         })
                     });
                     const data = await res.json();
@@ -428,11 +682,6 @@ function CreateEditDialog({
                     }
                 }
             } else if (mode === "edit" && automation) {
-                if (!form.name.trim()) {
-                    setError("Name is required.");
-                    setSaving(false);
-                    return;
-                }
                 const parsed = parseAutomationId(automation.id);
                 if (!parsed || !automation.agent) {
                     setError("Cannot edit this automation.");
@@ -441,17 +690,20 @@ function CreateEditDialog({
                 }
 
                 if (parsed.sourceType === "schedule") {
+                    const cronExpr = previewCron || form.cronExpr.trim();
                     const res = await fetch(
                         `${apiBase}/api/agents/${automation.agent.id}/schedules/${parsed.rawId}`,
                         {
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                                name: form.name.trim(),
+                                name: finalName,
                                 description: form.description.trim() || undefined,
-                                cronExpr: form.cronExpr.trim(),
+                                task: form.task.trim() || undefined,
+                                cronExpr,
                                 timezone: form.timezone,
-                                isActive: form.isActive
+                                isActive: form.isActive,
+                                color: form.color || undefined
                             })
                         }
                     );
@@ -468,10 +720,11 @@ function CreateEditDialog({
                             method: "PATCH",
                             headers: { "Content-Type": "application/json" },
                             body: JSON.stringify({
-                                name: form.name.trim(),
+                                name: finalName,
                                 description: form.description.trim() || undefined,
                                 eventName: form.eventName.trim() || undefined,
-                                isActive: form.isActive
+                                isActive: form.isActive,
+                                color: form.color || undefined
                             })
                         }
                     );
@@ -492,8 +745,7 @@ function CreateEditDialog({
         }
     };
 
-    const isSchedule = form.automationType === "schedule";
-    const isEditingTrigger = mode === "edit" && automation?.sourceType === "trigger";
+    const stepLabels = ["Type & Agent", "When & Color", "Name & Review"];
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -502,199 +754,525 @@ function CreateEditDialog({
                     <DialogTitle>
                         {mode === "create" ? "New Automation" : "Edit Automation"}
                     </DialogTitle>
-                    <DialogDescription>
-                        {mode === "create"
-                            ? "Create a new schedule or trigger for an agent."
-                            : "Update the automation configuration."}
-                    </DialogDescription>
+                    <DialogDescription>{stepLabels[step]}</DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-2">
-                    {/* Type selector — only for create */}
-                    {mode === "create" && (
-                        <div className="space-y-1.5">
-                            <Label>Type</Label>
-                            <div className="flex gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => setField("automationType", "schedule")}
-                                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                                        isSchedule
-                                            ? "border-primary bg-primary/10 text-primary"
-                                            : "border-border hover:bg-muted"
-                                    }`}
-                                >
-                                    Schedule
-                                    <span className="text-muted-foreground block text-[11px] font-normal">
-                                        Cron-based recurring
-                                    </span>
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => setField("automationType", "trigger")}
-                                    className={`flex-1 rounded-lg border px-3 py-2 text-sm font-medium transition-colors ${
-                                        !isSchedule
-                                            ? "border-primary bg-primary/10 text-primary"
-                                            : "border-border hover:bg-muted"
-                                    }`}
-                                >
-                                    Trigger
-                                    <span className="text-muted-foreground block text-[11px] font-normal">
-                                        Event or webhook
-                                    </span>
-                                </button>
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Agent selector — only for create */}
-                    {mode === "create" && (
-                        <div className="space-y-1.5">
-                            <Label>Agent</Label>
-                            <Select
-                                value={form.agentId}
-                                onValueChange={(v) => v && setField("agentId", v)}
+                {/* Step indicator */}
+                <div className="flex items-center justify-center gap-2 py-1">
+                    {stepLabels.map((_, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (i < step) setStep(i);
+                                }}
+                                className={`flex size-7 items-center justify-center rounded-full text-xs font-medium transition-colors ${
+                                    i === step
+                                        ? "bg-primary text-primary-foreground"
+                                        : i < step
+                                          ? "bg-primary/20 text-primary cursor-pointer"
+                                          : "bg-muted text-muted-foreground"
+                                }`}
                             >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Select an agent..." />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {agents.map((a) => (
-                                        <SelectItem key={a.id} value={a.id}>
-                                            {a.name}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
+                                {i + 1}
+                            </button>
+                            {i < stepLabels.length - 1 && (
+                                <div
+                                    className={`h-px w-8 ${i < step ? "bg-primary/40" : "bg-border"}`}
+                                />
+                            )}
                         </div>
-                    )}
+                    ))}
+                </div>
 
-                    {/* Name */}
-                    <div className="space-y-1.5">
-                        <Label>Name</Label>
-                        <Input
-                            value={form.name}
-                            onChange={(e) => setField("name", e.target.value)}
-                            placeholder="e.g. Daily Morning Report"
-                        />
-                    </div>
-
-                    {/* Description */}
-                    <div className="space-y-1.5">
-                        <Label>
-                            Description{" "}
-                            <span className="text-muted-foreground font-normal">(optional)</span>
-                        </Label>
-                        <Textarea
-                            value={form.description}
-                            onChange={(e) => setField("description", e.target.value)}
-                            placeholder="What does this automation do?"
-                            rows={2}
-                        />
-                    </div>
-
-                    {/* Schedule-specific fields */}
-                    {(isSchedule ||
-                        (!isEditingTrigger &&
-                            mode === "edit" &&
-                            automation?.sourceType !== "trigger")) &&
-                        !isEditingTrigger && (
-                            <>
-                                <div className="space-y-1.5">
-                                    <Label>Cron Expression</Label>
-                                    <Input
-                                        value={form.cronExpr}
-                                        onChange={(e) => setField("cronExpr", e.target.value)}
-                                        placeholder="0 9 * * 1-5"
-                                        className="font-mono"
-                                    />
-                                    <p className="text-muted-foreground text-[11px]">
-                                        Format: minute hour day month weekday — e.g.{" "}
-                                        <code className="bg-muted rounded px-1">0 9 * * 1-5</code> =
-                                        9am Mon–Fri
-                                    </p>
+                <div className="min-h-[260px] space-y-4 py-2">
+                    {/* ── Step 0: Type + Agent ── */}
+                    {step === 0 && (
+                        <>
+                            <div className="space-y-1.5">
+                                <Label>Type</Label>
+                                <div className="flex gap-2">
+                                    {mode === "create" ? (
+                                        <>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setField("automationType", "schedule")
+                                                }
+                                                className={`flex-1 rounded-lg border px-3 py-3 text-left text-sm font-medium transition-colors ${
+                                                    isSchedule
+                                                        ? "border-primary bg-primary/10 text-primary"
+                                                        : "border-border hover:bg-muted"
+                                                }`}
+                                            >
+                                                Schedule
+                                                <span className="text-muted-foreground block text-[11px] font-normal">
+                                                    Runs on a recurring schedule
+                                                </span>
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    setField("automationType", "trigger")
+                                                }
+                                                className={`flex-1 rounded-lg border px-3 py-3 text-left text-sm font-medium transition-colors ${
+                                                    !isSchedule
+                                                        ? "border-primary bg-primary/10 text-primary"
+                                                        : "border-border hover:bg-muted"
+                                                }`}
+                                            >
+                                                Trigger
+                                                <span className="text-muted-foreground block text-[11px] font-normal">
+                                                    Runs when an event fires
+                                                </span>
+                                            </button>
+                                        </>
+                                    ) : (
+                                        <Badge variant="secondary" className="text-xs">
+                                            {isSchedule ? "Schedule" : "Trigger"}
+                                        </Badge>
+                                    )}
                                 </div>
-                                <div className="space-y-1.5">
-                                    <Label>Timezone</Label>
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label>Agent</Label>
+                                {mode === "create" ? (
                                     <Select
-                                        value={form.timezone}
-                                        onValueChange={(v) => v && setField("timezone", v)}
+                                        value={form.agentId}
+                                        onValueChange={(v) => v && setField("agentId", v)}
                                     >
                                         <SelectTrigger className="w-full">
-                                            <SelectValue />
+                                            <SelectValue placeholder="Select an agent..." />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {COMMON_TIMEZONES.map((tz) => (
-                                                <SelectItem key={tz} value={tz}>
-                                                    {tz}
+                                            {agents.map((a) => (
+                                                <SelectItem key={a.id} value={a.id}>
+                                                    {a.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
                                     </Select>
-                                </div>
-                            </>
-                        )}
-
-                    {/* Trigger-specific fields */}
-                    {(!isSchedule || isEditingTrigger) && (
-                        <>
-                            {mode === "create" && (
-                                <div className="space-y-1.5">
-                                    <Label>Trigger Type</Label>
-                                    <Select
-                                        value={form.triggerType}
-                                        onValueChange={(v) => v && setField("triggerType", v)}
-                                    >
-                                        <SelectTrigger className="w-full">
-                                            <SelectValue />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="event">Event</SelectItem>
-                                            <SelectItem value="webhook">Webhook</SelectItem>
-                                            <SelectItem value="api">API</SelectItem>
-                                            <SelectItem value="manual">Manual</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                </div>
-                            )}
-                            {(form.triggerType === "event" || automation?.config.eventName) && (
-                                <div className="space-y-1.5">
-                                    <Label>Event Name</Label>
-                                    <Input
-                                        value={form.eventName}
-                                        onChange={(e) => setField("eventName", e.target.value)}
-                                        placeholder="e.g. lead.created"
-                                        className="font-mono"
-                                    />
-                                </div>
-                            )}
+                                ) : (
+                                    <p className="text-sm">{automation?.agent?.name || "—"}</p>
+                                )}
+                            </div>
                         </>
                     )}
 
-                    {/* Active toggle */}
-                    <div className="flex items-center justify-between rounded-lg border p-3">
-                        <div>
-                            <p className="text-sm font-medium">Active</p>
-                            <p className="text-muted-foreground text-xs">
-                                Enable this automation immediately
-                            </p>
-                        </div>
-                        <Switch
-                            checked={form.isActive}
-                            onCheckedChange={(checked) => setField("isActive", checked)}
-                        />
-                    </div>
+                    {/* ── Step 1: When + Color ── */}
+                    {step === 1 && (
+                        <>
+                            {isSchedule ? (
+                                <>
+                                    {/* Frequency pills */}
+                                    <div className="space-y-1.5">
+                                        <Label>Frequency</Label>
+                                        <div className="flex flex-wrap gap-2">
+                                            {(
+                                                [
+                                                    "daily",
+                                                    "weekdays",
+                                                    "weekly",
+                                                    "monthly"
+                                                ] as Frequency[]
+                                            ).map((f) => (
+                                                <button
+                                                    key={f}
+                                                    type="button"
+                                                    onClick={() => setField("frequency", f)}
+                                                    className={`rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                                                        form.frequency === f
+                                                            ? "border-primary bg-primary/10 text-primary"
+                                                            : "border-border hover:bg-muted"
+                                                    }`}
+                                                >
+                                                    {f}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    </div>
 
-                    {error && <p className="text-sm text-red-500">{error}</p>}
+                                    {/* Day chips for weekly */}
+                                    {form.frequency === "weekly" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Days</Label>
+                                            <div className="flex gap-1.5">
+                                                {WIZARD_DAY_NAMES.map((day, idx) => (
+                                                    <button
+                                                        key={day}
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const current = form.daysOfWeek;
+                                                            setField(
+                                                                "daysOfWeek",
+                                                                current.includes(idx)
+                                                                    ? current.filter(
+                                                                          (d) => d !== idx
+                                                                      )
+                                                                    : [...current, idx].sort()
+                                                            );
+                                                        }}
+                                                        className={`flex size-8 items-center justify-center rounded-full text-[11px] font-medium transition-colors ${
+                                                            form.daysOfWeek.includes(idx)
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "bg-muted hover:bg-muted/80"
+                                                        }`}
+                                                    >
+                                                        {day.charAt(0)}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Day of month for monthly */}
+                                    {form.frequency === "monthly" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Day of Month</Label>
+                                            <Select
+                                                value={String(form.dayOfMonth)}
+                                                onValueChange={(v) =>
+                                                    v != null &&
+                                                    setField("dayOfMonth", parseInt(v, 10))
+                                                }
+                                            >
+                                                <SelectTrigger className="w-24">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Array.from(
+                                                        { length: 28 },
+                                                        (_, i) => i + 1
+                                                    ).map((d) => (
+                                                        <SelectItem key={d} value={String(d)}>
+                                                            {d}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+
+                                    {/* Time picker: Hour / Minute / AM|PM */}
+                                    <div className="space-y-1.5">
+                                        <Label>Time</Label>
+                                        <div className="flex items-center gap-2">
+                                            <Select
+                                                value={String(form.hour)}
+                                                onValueChange={(v) =>
+                                                    v != null && setField("hour", parseInt(v, 10))
+                                                }
+                                            >
+                                                <SelectTrigger className="w-[72px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {Array.from(
+                                                        { length: 12 },
+                                                        (_, i) => i + 1
+                                                    ).map((h) => (
+                                                        <SelectItem key={h} value={String(h)}>
+                                                            {h}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="text-muted-foreground">:</span>
+                                            <Select
+                                                value={String(form.minute)}
+                                                onValueChange={(v) =>
+                                                    v != null && setField("minute", parseInt(v, 10))
+                                                }
+                                            >
+                                                <SelectTrigger className="w-[72px]">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {WIZARD_MINUTES.map((m) => (
+                                                        <SelectItem key={m} value={String(m)}>
+                                                            {String(m).padStart(2, "0")}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <div className="flex overflow-hidden rounded-lg border">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setField("ampm", "AM")}
+                                                    className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                                        form.ampm === "AM"
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "hover:bg-muted"
+                                                    }`}
+                                                >
+                                                    AM
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setField("ampm", "PM")}
+                                                    className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                                        form.ampm === "PM"
+                                                            ? "bg-primary text-primary-foreground"
+                                                            : "hover:bg-muted"
+                                                    }`}
+                                                >
+                                                    PM
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* Timezone */}
+                                    <div className="space-y-1.5">
+                                        <Label>Timezone</Label>
+                                        <Select
+                                            value={form.timezone}
+                                            onValueChange={(v) => v && setField("timezone", v)}
+                                        >
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {COMMON_TIMEZONES.map((tz) => (
+                                                    <SelectItem key={tz} value={tz}>
+                                                        {tz.replace(/_/g, " ")}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    {/* Live preview */}
+                                    {previewDescription && (
+                                        <div className="bg-muted/50 rounded-lg border px-3 py-2">
+                                            <p className="text-foreground text-sm font-medium">
+                                                {previewDescription}
+                                            </p>
+                                            {form.timezone !== "UTC" && (
+                                                <p className="text-muted-foreground text-xs">
+                                                    {form.timezone.replace(/_/g, " ")}
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+                                </>
+                            ) : (
+                                <>
+                                    {/* Trigger-specific: type + event name */}
+                                    {mode === "create" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Trigger Type</Label>
+                                            <Select
+                                                value={form.triggerType}
+                                                onValueChange={(v) =>
+                                                    v && setField("triggerType", v)
+                                                }
+                                            >
+                                                <SelectTrigger className="w-full">
+                                                    <SelectValue />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="event">Event</SelectItem>
+                                                    <SelectItem value="webhook">Webhook</SelectItem>
+                                                    <SelectItem value="api">API</SelectItem>
+                                                    <SelectItem value="manual">Manual</SelectItem>
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+                                    )}
+                                    {(form.triggerType === "event" ||
+                                        automation?.config.eventName) && (
+                                        <div className="space-y-1.5">
+                                            <Label>Event Name</Label>
+                                            <Input
+                                                value={form.eventName}
+                                                onChange={(e) =>
+                                                    setField("eventName", e.target.value)
+                                                }
+                                                placeholder="e.g. lead.created"
+                                                className="font-mono"
+                                            />
+                                        </div>
+                                    )}
+                                </>
+                            )}
+
+                            {/* Color picker */}
+                            <div className="space-y-1.5">
+                                <Label>Color</Label>
+                                <div className="flex flex-wrap gap-2">
+                                    {AUTOMATION_COLORS.map((c) => (
+                                        <button
+                                            key={c.name}
+                                            type="button"
+                                            onClick={() =>
+                                                setField(
+                                                    "color",
+                                                    form.color === c.name ? "" : c.name
+                                                )
+                                            }
+                                            className={`flex size-7 items-center justify-center rounded-full transition-all ${c.class} ${
+                                                form.color === c.name
+                                                    ? "ring-primary ring-2 ring-offset-2"
+                                                    : "opacity-60 hover:opacity-100"
+                                            }`}
+                                        >
+                                            {form.color === c.name && (
+                                                <svg
+                                                    className="size-3.5 text-white"
+                                                    fill="none"
+                                                    viewBox="0 0 24 24"
+                                                    stroke="currentColor"
+                                                    strokeWidth={3}
+                                                >
+                                                    <path
+                                                        strokeLinecap="round"
+                                                        strokeLinejoin="round"
+                                                        d="M5 13l4 4L19 7"
+                                                    />
+                                                </svg>
+                                            )}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    {/* ── Step 2: Name + Review ── */}
+                    {step === 2 && (
+                        <>
+                            <div className="space-y-1.5">
+                                <Label>Name</Label>
+                                <Input
+                                    value={form.name}
+                                    onChange={(e) => setField("name", e.target.value)}
+                                    placeholder={suggestedName || "e.g. Daily Morning Report"}
+                                />
+                                {suggestedName && !form.name && (
+                                    <p className="text-muted-foreground text-[11px]">
+                                        Will use: {suggestedName}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <Label>
+                                    Description{" "}
+                                    <span className="text-muted-foreground font-normal">
+                                        (optional)
+                                    </span>
+                                </Label>
+                                <Textarea
+                                    value={form.description}
+                                    onChange={(e) => setField("description", e.target.value)}
+                                    placeholder="What does this automation do?"
+                                    rows={2}
+                                />
+                            </div>
+
+                            {isSchedule && (
+                                <div className="space-y-1.5">
+                                    <Label>
+                                        Task{" "}
+                                        <span className="text-muted-foreground font-normal">
+                                            (optional)
+                                        </span>
+                                    </Label>
+                                    <Textarea
+                                        value={form.task}
+                                        onChange={(e) => setField("task", e.target.value)}
+                                        placeholder="What should the agent do? e.g. Review your backlog and complete pending items"
+                                        rows={3}
+                                    />
+                                    <p className="text-muted-foreground text-[11px]">
+                                        The instruction sent to the agent when this schedule fires.
+                                        Supports templates: {"{{date}}"}, {"{{dayOfWeek}}"},{" "}
+                                        {"{{time}}"}
+                                    </p>
+                                </div>
+                            )}
+
+                            <div className="flex items-center justify-between rounded-lg border p-3">
+                                <div>
+                                    <p className="text-sm font-medium">Active</p>
+                                    <p className="text-muted-foreground text-xs">
+                                        Enable immediately
+                                    </p>
+                                </div>
+                                <Switch
+                                    checked={form.isActive}
+                                    onCheckedChange={(checked) => setField("isActive", checked)}
+                                />
+                            </div>
+
+                            {/* Summary card */}
+                            <div className="bg-muted/40 space-y-2 rounded-lg border p-3">
+                                <div className="flex items-center gap-2">
+                                    {form.color && (
+                                        <div
+                                            className={`size-3 rounded-full ${getColorClass(form.color) || ""}`}
+                                        />
+                                    )}
+                                    <p className="text-sm font-medium">
+                                        {form.name || suggestedName || "Untitled"}
+                                    </p>
+                                </div>
+                                <p className="text-muted-foreground text-xs">
+                                    {agents.find((a) => a.id === form.agentId)?.name ||
+                                        automation?.agent?.name ||
+                                        "—"}{" "}
+                                    ·{" "}
+                                    {isSchedule
+                                        ? previewDescription || "—"
+                                        : `Trigger: ${form.triggerType}`}
+                                    {form.timezone !== "UTC" && isSchedule
+                                        ? ` · ${form.timezone.replace(/_/g, " ")}`
+                                        : ""}
+                                </p>
+                                {form.task.trim() && (
+                                    <p className="text-muted-foreground text-xs italic">
+                                        Task: {form.task.trim()}
+                                    </p>
+                                )}
+                            </div>
+
+                            {error && <p className="text-sm text-red-500">{error}</p>}
+                        </>
+                    )}
                 </div>
 
-                <DialogFooter>
-                    <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-                        Cancel
-                    </Button>
-                    <Button onClick={handleSave} disabled={saving}>
-                        {saving ? "Saving…" : mode === "create" ? "Create" : "Save Changes"}
-                    </Button>
+                <DialogFooter className="gap-2">
+                    {step > 0 ? (
+                        <Button
+                            variant="outline"
+                            onClick={() => setStep(step - 1)}
+                            disabled={saving}
+                        >
+                            Back
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={saving}
+                        >
+                            Cancel
+                        </Button>
+                    )}
+                    {step < 2 ? (
+                        <Button
+                            onClick={() => setStep(step + 1)}
+                            disabled={step === 0 && !canProceedStep0}
+                        >
+                            Next
+                        </Button>
+                    ) : (
+                        <Button onClick={handleSave} disabled={saving}>
+                            {saving ? "Saving…" : mode === "create" ? "Create" : "Save Changes"}
+                        </Button>
+                    )}
                 </DialogFooter>
             </DialogContent>
         </Dialog>
@@ -796,6 +1374,10 @@ const MONTH_NAMES = [
     "December"
 ];
 
+function toLocalDateKey(d: Date): string {
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 interface CalendarEvent {
     date: Date;
     automation: Automation;
@@ -810,6 +1392,24 @@ function CalendarView({
 }) {
     const [viewMode, setViewMode] = useState<"day" | "week" | "month">("week");
     const [baseDate, setBaseDate] = useState(() => new Date());
+    const [now, setNow] = useState(() => new Date());
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        const timer = setInterval(() => setNow(new Date()), 60000);
+        return () => clearInterval(timer);
+    }, []);
+
+    useEffect(() => {
+        if (viewMode === "month") return;
+        requestAnimationFrame(() => {
+            const container = scrollRef.current;
+            if (!container) return;
+            const currentRow = container.querySelector("[data-current-hour]") as HTMLElement | null;
+            if (!currentRow) return;
+            container.scrollTop = Math.max(0, currentRow.offsetTop - container.clientHeight / 2);
+        });
+    }, [viewMode]);
 
     const { rangeStart, rangeEnd, days } = useMemo(() => {
         const start = new Date(baseDate);
@@ -865,7 +1465,7 @@ function CalendarView({
     const eventsByDay = useMemo(() => {
         const map = new Map<string, CalendarEvent[]>();
         for (const event of events) {
-            const key = event.date.toISOString().slice(0, 10);
+            const key = toLocalDateKey(event.date);
             const existing = map.get(key) || [];
             existing.push(event);
             map.set(key, existing);
@@ -891,7 +1491,7 @@ function CalendarView({
 
     const goToday = () => setBaseDate(new Date());
 
-    const today = new Date().toISOString().slice(0, 10);
+    const today = toLocalDateKey(new Date());
     const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     const DAY_NAMES_FULL = [
         "Sunday",
@@ -957,21 +1557,34 @@ function CalendarView({
             {viewMode === "day" && (
                 <Card>
                     <CardContent className="p-0">
-                        <div className="max-h-[600px] overflow-y-auto">
+                        <div ref={scrollRef} className="max-h-[600px] overflow-y-auto">
                             {HOURS.map((hour) => {
-                                const dayKey = baseDate.toISOString().slice(0, 10);
+                                const dayKey = toLocalDateKey(baseDate);
                                 const dayEventsAll = eventsByDay.get(dayKey) || [];
                                 const hourEvents = dayEventsAll.filter(
                                     (e) => e.date.getHours() === hour
                                 );
-                                const isCurrentHour =
-                                    dayKey === today && new Date().getHours() === hour;
+                                const isCurrentHour = dayKey === today && now.getHours() === hour;
 
                                 return (
                                     <div
                                         key={hour}
-                                        className={`flex min-h-[52px] border-b last:border-b-0 ${isCurrentHour ? "bg-primary/5" : ""}`}
+                                        className={`relative flex min-h-[52px] border-b last:border-b-0 ${isCurrentHour ? "bg-primary/5" : ""}`}
+                                        {...(isCurrentHour ? { "data-current-hour": "true" } : {})}
                                     >
+                                        {isCurrentHour && (
+                                            <div
+                                                className="pointer-events-none absolute right-0 left-0 z-20 flex items-center"
+                                                style={{
+                                                    top: `${(now.getMinutes() / 60) * 100}%`
+                                                }}
+                                            >
+                                                <div className="flex w-16 shrink-0 justify-end pr-0.5">
+                                                    <div className="size-2 rounded-full bg-red-500" />
+                                                </div>
+                                                <div className="flex-1 border-t-2 border-dashed border-red-500" />
+                                            </div>
+                                        )}
                                         <div className="text-muted-foreground w-16 shrink-0 border-r px-2 py-1 text-right text-xs">
                                             {hour === 0
                                                 ? "12 AM"
@@ -986,14 +1599,10 @@ function CalendarView({
                                                 <button
                                                     key={`${evt.automation.id}-${i}`}
                                                     onClick={() => onEditAutomation(evt.automation)}
-                                                    className={`flex items-center gap-1.5 truncate rounded px-2 py-1 text-[11px] text-white transition-opacity hover:opacity-80 ${
-                                                        evt.automation.agent
-                                                            ? getAgentColor(
-                                                                  evt.automation.agent.id,
-                                                                  allAgentIds
-                                                              )
-                                                            : "bg-gray-500"
-                                                    }`}
+                                                    className={`flex items-center gap-1.5 truncate rounded px-2 py-1 text-[11px] text-white transition-opacity hover:opacity-80 ${getEventColor(
+                                                        evt.automation,
+                                                        allAgentIds
+                                                    )}`}
                                                     title={`${evt.automation.name} — ${evt.automation.agent?.name}`}
                                                 >
                                                     <span className="font-medium">
@@ -1020,12 +1629,12 @@ function CalendarView({
             {viewMode === "week" && (
                 <Card>
                     <CardContent className="p-0">
-                        <div className="max-h-[600px] overflow-y-auto">
+                        <div ref={scrollRef} className="max-h-[600px] overflow-y-auto">
                             {/* Sticky day headers */}
                             <div className="bg-background sticky top-0 z-10 flex border-b">
                                 <div className="w-16 shrink-0 border-r" />
                                 {days.map((day) => {
-                                    const key = day.toISOString().slice(0, 10);
+                                    const key = toLocalDateKey(day);
                                     const isToday = key === today;
                                     return (
                                         <div
@@ -1051,11 +1660,28 @@ function CalendarView({
 
                             {/* Hour rows */}
                             {HOURS.map((hour) => {
+                                const isNowRow =
+                                    days.some((d) => toLocalDateKey(d) === today) &&
+                                    now.getHours() === hour;
                                 return (
                                     <div
                                         key={hour}
-                                        className="flex min-h-[52px] border-b last:border-b-0"
+                                        className="relative flex min-h-[52px] border-b last:border-b-0"
+                                        {...(isNowRow ? { "data-current-hour": "true" } : {})}
                                     >
+                                        {isNowRow && (
+                                            <div
+                                                className="pointer-events-none absolute right-0 left-0 z-20 flex items-center"
+                                                style={{
+                                                    top: `${(now.getMinutes() / 60) * 100}%`
+                                                }}
+                                            >
+                                                <div className="flex w-16 shrink-0 justify-end pr-0.5">
+                                                    <div className="size-2 rounded-full bg-red-500" />
+                                                </div>
+                                                <div className="flex-1 border-t-2 border-dashed border-red-500" />
+                                            </div>
+                                        )}
                                         {/* Hour label */}
                                         <div className="text-muted-foreground w-16 shrink-0 border-r px-2 py-1 text-right text-xs">
                                             {hour === 0
@@ -1069,10 +1695,10 @@ function CalendarView({
 
                                         {/* Day columns */}
                                         {days.map((day) => {
-                                            const key = day.toISOString().slice(0, 10);
+                                            const key = toLocalDateKey(day);
                                             const isToday = key === today;
                                             const isCurrentHour =
-                                                isToday && new Date().getHours() === hour;
+                                                isToday && now.getHours() === hour;
                                             const dayEventsAll = eventsByDay.get(key) || [];
                                             const hourEvents = dayEventsAll.filter(
                                                 (e) => e.date.getHours() === hour
@@ -1095,14 +1721,10 @@ function CalendarView({
                                                             onClick={() =>
                                                                 onEditAutomation(evt.automation)
                                                             }
-                                                            className={`flex w-full min-w-0 items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[9px] text-white transition-opacity hover:opacity-80 ${
-                                                                evt.automation.agent
-                                                                    ? getAgentColor(
-                                                                          evt.automation.agent.id,
-                                                                          allAgentIds
-                                                                      )
-                                                                    : "bg-gray-500"
-                                                            }`}
+                                                            className={`flex w-full min-w-0 items-center gap-1 overflow-hidden rounded px-1 py-0.5 text-[9px] text-white transition-opacity hover:opacity-80 ${getEventColor(
+                                                                evt.automation,
+                                                                allAgentIds
+                                                            )}`}
                                                             title={`${evt.automation.name} — ${evt.automation.agent?.name || "Unknown agent"} at ${evt.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
                                                         >
                                                             <span className="shrink-0 tabular-nums">
@@ -1152,7 +1774,7 @@ function CalendarView({
                                 />
                             ))}
                             {days.map((day) => {
-                                const key = day.toISOString().slice(0, 10);
+                                const key = toLocalDateKey(day);
                                 const dayEvents = eventsByDay.get(key) || [];
                                 const isToday = key === today;
                                 const maxVisible = 4;
@@ -1180,14 +1802,10 @@ function CalendarView({
                                                 <button
                                                     key={`${evt.automation.id}-${i}`}
                                                     onClick={() => onEditAutomation(evt.automation)}
-                                                    className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] text-white transition-opacity hover:opacity-80 ${
-                                                        evt.automation.agent
-                                                            ? getAgentColor(
-                                                                  evt.automation.agent.id,
-                                                                  allAgentIds
-                                                              )
-                                                            : "bg-gray-500"
-                                                    }`}
+                                                    className={`flex w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-[10px] text-white transition-opacity hover:opacity-80 ${getEventColor(
+                                                        evt.automation,
+                                                        allAgentIds
+                                                    )}`}
                                                     title={`${evt.automation.name} — ${evt.automation.agent?.name || "Unknown agent"} at ${evt.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`}
                                                 >
                                                     <span className="shrink-0 tabular-nums">
@@ -1253,7 +1871,11 @@ function ListView({
     onDelete,
     showArchived,
     onShowArchivedChange,
-    onNew
+    onNew,
+    selectedIds,
+    onSelectedIdsChange,
+    onBulkArchive,
+    bulkArchiving
 }: {
     automations: Automation[];
     summary: AutomationSummary | null;
@@ -1268,7 +1890,16 @@ function ListView({
     showArchived: boolean;
     onShowArchivedChange: (v: boolean) => void;
     onNew: () => void;
+    selectedIds: Set<string>;
+    onSelectedIdsChange: (ids: Set<string>) => void;
+    onBulkArchive: () => void;
+    bulkArchiving: boolean;
 }) {
+    const selectableAutomations = useMemo(
+        () => automations.filter((a) => !a.isArchived),
+        [automations]
+    );
+
     if (loading) {
         return (
             <div className="space-y-4">
@@ -1317,9 +1948,7 @@ function ListView({
                 <Card>
                     <CardHeader className="pb-2">
                         <CardDescription>Event Triggers</CardDescription>
-                        <CardTitle className="text-2xl">
-                            {(summary?.triggers ?? 0) + (summary?.implicit ?? 0)}
-                        </CardTitle>
+                        <CardTitle className="text-2xl">{summary?.triggers ?? 0}</CardTitle>
                     </CardHeader>
                 </Card>
                 <Card>
@@ -1348,10 +1977,25 @@ function ListView({
                     <Switch checked={showArchived} onCheckedChange={onShowArchivedChange} />
                     <span className="text-muted-foreground text-sm">Show archived</span>
                 </div>
-                <Button size="sm" onClick={onNew}>
-                    <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
-                    New Automation
-                </Button>
+                <div className="flex items-center gap-2">
+                    {selectedIds.size > 0 && (
+                        <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={onBulkArchive}
+                            disabled={bulkArchiving}
+                        >
+                            <HugeiconsIcon icon={Archive01Icon} className="mr-1.5 size-4" />
+                            {bulkArchiving
+                                ? "Archiving..."
+                                : `Archive ${selectedIds.size} selected`}
+                        </Button>
+                    )}
+                    <Button size="sm" onClick={onNew}>
+                        <HugeiconsIcon icon={Add01Icon} className="mr-1.5 size-4" />
+                        New Automation
+                    </Button>
+                </div>
             </div>
 
             {/* Table */}
@@ -1360,6 +2004,25 @@ function ListView({
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-[40px] pl-4">
+                                    <Checkbox
+                                        checked={
+                                            selectableAutomations.length > 0 &&
+                                            selectableAutomations.every((a) =>
+                                                selectedIds.has(a.id)
+                                            )
+                                        }
+                                        onCheckedChange={(checked) => {
+                                            if (checked) {
+                                                onSelectedIdsChange(
+                                                    new Set(selectableAutomations.map((a) => a.id))
+                                                );
+                                            } else {
+                                                onSelectedIdsChange(new Set());
+                                            }
+                                        }}
+                                    />
+                                </TableHead>
                                 <TableHead className="w-[80px]">Type</TableHead>
                                 <TableHead>Name</TableHead>
                                 <TableHead>Agent</TableHead>
@@ -1376,7 +2039,7 @@ function ListView({
                             {automations.length === 0 ? (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={10}
+                                        colSpan={11}
                                         className="text-muted-foreground py-8 text-center"
                                     >
                                         No automations found.{" "}
@@ -1394,6 +2057,22 @@ function ListView({
                                         key={auto.id}
                                         className={auto.isArchived ? "opacity-50" : ""}
                                     >
+                                        <TableCell className="pl-4">
+                                            {!auto.isArchived && (
+                                                <Checkbox
+                                                    checked={selectedIds.has(auto.id)}
+                                                    onCheckedChange={(checked) => {
+                                                        const next = new Set(selectedIds);
+                                                        if (checked) {
+                                                            next.add(auto.id);
+                                                        } else {
+                                                            next.delete(auto.id);
+                                                        }
+                                                        onSelectedIdsChange(next);
+                                                    }}
+                                                />
+                                            )}
+                                        </TableCell>
                                         <TableCell>
                                             <Badge
                                                 variant="secondary"
@@ -1418,27 +2097,29 @@ function ListView({
                                             </span>
                                         </TableCell>
                                         <TableCell>
-                                            {auto.sourceType !== "implicit" ? (
-                                                <Switch
-                                                    checked={auto.isActive}
-                                                    disabled={
-                                                        toggling === auto.id || auto.isArchived
-                                                    }
-                                                    onCheckedChange={() => onToggle(auto)}
-                                                />
-                                            ) : (
-                                                <Badge variant="outline" className="text-[10px]">
-                                                    Auto
-                                                </Badge>
-                                            )}
+                                            <Switch
+                                                checked={auto.isActive}
+                                                disabled={toggling === auto.id || auto.isArchived}
+                                                onCheckedChange={() => onToggle(auto)}
+                                            />
                                         </TableCell>
                                         <TableCell>
-                                            <span className="text-muted-foreground font-mono text-xs">
-                                                {auto.config.cronExpr ||
-                                                    auto.config.eventName ||
-                                                    auto.config.webhookPath ||
-                                                    "—"}
-                                            </span>
+                                            <div className="flex items-center gap-1.5">
+                                                {auto.config.color && (
+                                                    <div
+                                                        className={`size-2.5 shrink-0 rounded-full ${getColorClass(auto.config.color) || "bg-gray-400"}`}
+                                                    />
+                                                )}
+                                                <span className="text-muted-foreground text-xs">
+                                                    {auto.config.cronExpr
+                                                        ? describeScheduleFromCron(
+                                                              auto.config.cronExpr
+                                                          )
+                                                        : auto.config.eventName ||
+                                                          auto.config.webhookPath ||
+                                                          "—"}
+                                                </span>
+                                            </div>
                                         </TableCell>
                                         <TableCell className="text-right tabular-nums">
                                             {auto.stats.totalRuns}
@@ -1465,55 +2146,46 @@ function ListView({
                                             </span>
                                         </TableCell>
                                         <TableCell>
-                                            {auto.sourceType !== "implicit" && (
-                                                <DropdownMenu>
-                                                    <DropdownMenuTrigger className="hover:bg-accent flex size-7 items-center justify-center rounded">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger className="hover:bg-accent flex size-7 items-center justify-center rounded">
+                                                    <HugeiconsIcon
+                                                        icon={MoreHorizontalIcon}
+                                                        className="size-4"
+                                                    />
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="end" className="w-44">
+                                                    <DropdownMenuItem onClick={() => onEdit(auto)}>
                                                         <HugeiconsIcon
-                                                            icon={MoreHorizontalIcon}
-                                                            className="size-4"
+                                                            icon={PencilEdit02Icon}
+                                                            className="mr-2 size-3.5"
                                                         />
-                                                    </DropdownMenuTrigger>
-                                                    <DropdownMenuContent
-                                                        align="end"
-                                                        className="w-44"
+                                                        Edit
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuItem
+                                                        onClick={() =>
+                                                            onArchive(auto, !auto.isArchived)
+                                                        }
+                                                        disabled={archiving === auto.id}
                                                     >
-                                                        <DropdownMenuItem
-                                                            onClick={() => onEdit(auto)}
-                                                        >
-                                                            <HugeiconsIcon
-                                                                icon={PencilEdit02Icon}
-                                                                className="mr-2 size-3.5"
-                                                            />
-                                                            Edit
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuItem
-                                                            onClick={() =>
-                                                                onArchive(auto, !auto.isArchived)
-                                                            }
-                                                            disabled={archiving === auto.id}
-                                                        >
-                                                            <HugeiconsIcon
-                                                                icon={Archive01Icon}
-                                                                className="mr-2 size-3.5"
-                                                            />
-                                                            {auto.isArchived
-                                                                ? "Unarchive"
-                                                                : "Archive"}
-                                                        </DropdownMenuItem>
-                                                        <DropdownMenuSeparator />
-                                                        <DropdownMenuItem
-                                                            onClick={() => onDelete(auto)}
-                                                            className="text-destructive focus:text-destructive"
-                                                        >
-                                                            <HugeiconsIcon
-                                                                icon={Delete02Icon}
-                                                                className="mr-2 size-3.5"
-                                                            />
-                                                            Delete
-                                                        </DropdownMenuItem>
-                                                    </DropdownMenuContent>
-                                                </DropdownMenu>
-                                            )}
+                                                        <HugeiconsIcon
+                                                            icon={Archive01Icon}
+                                                            className="mr-2 size-3.5"
+                                                        />
+                                                        {auto.isArchived ? "Unarchive" : "Archive"}
+                                                    </DropdownMenuItem>
+                                                    <DropdownMenuSeparator />
+                                                    <DropdownMenuItem
+                                                        onClick={() => onDelete(auto)}
+                                                        className="text-destructive focus:text-destructive"
+                                                    >
+                                                        <HugeiconsIcon
+                                                            icon={Delete02Icon}
+                                                            className="mr-2 size-3.5"
+                                                        />
+                                                        Delete
+                                                    </DropdownMenuItem>
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
                                         </TableCell>
                                     </TableRow>
                                 ))
@@ -1542,6 +2214,8 @@ function SchedulePageClient() {
     const [toggling, setToggling] = useState<string | null>(null);
     const [archiving, setArchiving] = useState<string | null>(null);
     const [showArchived, setShowArchived] = useState(false);
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [bulkArchiving, setBulkArchiving] = useState(false);
 
     // CRUD state
     const [agents, setAgents] = useState<AgentOption[]>([]);
@@ -1605,7 +2279,6 @@ function SchedulePageClient() {
 
     const toggleAutomation = useCallback(
         async (automation: Automation) => {
-            if (automation.sourceType === "implicit") return;
             setToggling(automation.id);
             try {
                 const res = await fetch(
@@ -1635,7 +2308,6 @@ function SchedulePageClient() {
 
     const archiveAutomation = useCallback(
         async (automation: Automation, archive: boolean) => {
-            if (automation.sourceType === "implicit") return;
             setArchiving(automation.id);
             try {
                 const res = await fetch(
@@ -1673,6 +2345,45 @@ function SchedulePageClient() {
         },
         [apiBase, showArchived]
     );
+
+    const bulkArchive = useCallback(async () => {
+        if (selectedIds.size === 0) return;
+        setBulkArchiving(true);
+        try {
+            const archivable = automations.filter((a) => selectedIds.has(a.id));
+            await Promise.all(
+                archivable.map((a) =>
+                    fetch(`${apiBase}/api/live/automations/${encodeURIComponent(a.id)}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ isArchived: true })
+                    })
+                )
+            );
+            const archivedSet = new Set(archivable.map((a) => a.id));
+            if (!showArchived) {
+                setAutomations((prev) => prev.filter((a) => !archivedSet.has(a.id)));
+            } else {
+                setAutomations((prev) =>
+                    prev.map((a) =>
+                        archivedSet.has(a.id)
+                            ? {
+                                  ...a,
+                                  isArchived: true,
+                                  archivedAt: new Date().toISOString(),
+                                  isActive: false
+                              }
+                            : a
+                    )
+                );
+            }
+            setSelectedIds(new Set());
+        } catch {
+            /* silently handle */
+        } finally {
+            setBulkArchiving(false);
+        }
+    }, [apiBase, automations, selectedIds, showArchived]);
 
     const handleEdit = (automation: Automation) => {
         setSelectedAutomation(automation);
@@ -1749,6 +2460,10 @@ function SchedulePageClient() {
                             showArchived={showArchived}
                             onShowArchivedChange={setShowArchived}
                             onNew={handleNew}
+                            selectedIds={selectedIds}
+                            onSelectedIdsChange={setSelectedIds}
+                            onBulkArchive={bulkArchive}
+                            bulkArchiving={bulkArchiving}
                         />
                     </TabsContent>
 
@@ -1762,8 +2477,8 @@ function SchedulePageClient() {
                 </Tabs>
             </div>
 
-            {/* Create Dialog */}
-            <CreateEditDialog
+            {/* Create Wizard */}
+            <AutomationWizard
                 open={createDialogOpen}
                 onOpenChange={setCreateDialogOpen}
                 mode="create"
@@ -1773,8 +2488,8 @@ function SchedulePageClient() {
                 onSuccess={handleCrudSuccess}
             />
 
-            {/* Edit Dialog */}
-            <CreateEditDialog
+            {/* Edit Wizard */}
+            <AutomationWizard
                 open={editDialogOpen}
                 onOpenChange={setEditDialogOpen}
                 mode="edit"
@@ -1782,6 +2497,17 @@ function SchedulePageClient() {
                 agents={agents}
                 apiBase={apiBase}
                 onSuccess={handleCrudSuccess}
+            />
+
+            {/* Sidekick Sidebar */}
+            <SidekickSidebar
+                pageContext={{
+                    page: "schedule",
+                    summary: summary
+                        ? `${summary.total} automations, ${summary.active} active`
+                        : undefined
+                }}
+                onAction={handleCrudSuccess}
             />
 
             {/* Delete Confirm Dialog */}

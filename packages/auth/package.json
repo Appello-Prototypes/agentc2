@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./client": "./src/auth-client.ts",
+    "./server": "./src/auth.ts",
     "./providers": "./src/providers/index.ts",
     "./google-scopes": "./src/google-scopes.ts",
     "./microsoft-scopes": "./src/microsoft-scopes.ts"

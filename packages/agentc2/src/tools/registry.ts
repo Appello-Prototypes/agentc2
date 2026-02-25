@@ -104,6 +104,21 @@ import {
     playbookListInstalledTool,
     playbookDeployTool
 } from "./playbook";
+import {
+    communityListBoardsTool,
+    communityJoinBoardTool,
+    communityBrowsePostsTool,
+    communityCreatePostTool,
+    communityReadPostTool,
+    communityCommentTool,
+    communityVoteTool
+} from "./community-tools";
+import {
+    sessionCreateTool,
+    sessionInvokePeerTool,
+    sessionReadScratchpadTool,
+    sessionWriteScratchpadTool
+} from "./session-tools";
 import { agentRunCancelTool, agentRunRerunTool, agentRunTraceTool } from "./run-management-tools";
 import {
     agentLearningSessionsTool,
@@ -289,6 +304,15 @@ import {
     scheduleDeleteTool
 } from "./schedule-tools";
 import {
+    sidekickListAgentsTool,
+    sidekickListAutomationsTool,
+    sidekickCreateScheduleTool,
+    sidekickEditScheduleTool,
+    sidekickToggleScheduleTool,
+    sidekickDeleteScheduleTool,
+    sidekickDescribeScheduleTool
+} from "./sidekick-schedule-tools";
+import {
     workflowGenerateTool,
     workflowValidateTool,
     workflowDesignerChatTool
@@ -410,6 +434,12 @@ export const toolCategoryMap: Record<string, string> = {
     "backlog-update-task": "Backlog",
     "backlog-complete-task": "Backlog",
 
+    // Agent Sessions (Mesh Communication)
+    "session-create": "Agent Sessions",
+    "session-invoke-peer": "Agent Sessions",
+    "session-read-scratchpad": "Agent Sessions",
+    "session-write-scratchpad": "Agent Sessions",
+
     // Agent Management
     "agent-create": "Agent Management",
     "agent-read": "Agent Management",
@@ -503,6 +533,13 @@ export const toolCategoryMap: Record<string, string> = {
     "schedule-list": "Triggers",
     "schedule-update": "Triggers",
     "schedule-delete": "Triggers",
+    "sidekick-list-agents": "Sidekick",
+    "sidekick-list-automations": "Sidekick",
+    "sidekick-create-schedule": "Sidekick",
+    "sidekick-edit-schedule": "Sidekick",
+    "sidekick-toggle-schedule": "Sidekick",
+    "sidekick-delete-schedule": "Sidekick",
+    "sidekick-describe-schedule": "Sidekick",
 
     // RAG & Knowledge
     "rag-query": "RAG & Knowledge",
@@ -646,7 +683,16 @@ export const toolCategoryMap: Record<string, string> = {
     "playbook-search": "Marketplace",
     "playbook-detail": "Marketplace",
     "playbook-list-installed": "Marketplace",
-    "playbook-deploy": "Marketplace"
+    "playbook-deploy": "Marketplace",
+
+    // Community
+    "community-list-boards": "Community",
+    "community-join-board": "Community",
+    "community-browse-posts": "Community",
+    "community-create-post": "Community",
+    "community-read-post": "Community",
+    "community-comment": "Community",
+    "community-vote": "Community"
 };
 
 /**
@@ -660,6 +706,7 @@ export const toolCategoryOrder: string[] = [
     "Code Execution",
     "Remote Compute",
     "Backlog",
+    "Agent Sessions",
     "Agent Management",
     "Agent Quality & Runs",
     "Learning & Simulations",
@@ -866,6 +913,15 @@ export const toolRegistry: Record<string, any> = {
     "schedule-list": scheduleListTool,
     "schedule-update": scheduleUpdateTool,
     "schedule-delete": scheduleDeleteTool,
+
+    // Sidekick schedule tools (human-friendly)
+    "sidekick-list-agents": sidekickListAgentsTool,
+    "sidekick-list-automations": sidekickListAutomationsTool,
+    "sidekick-create-schedule": sidekickCreateScheduleTool,
+    "sidekick-edit-schedule": sidekickEditScheduleTool,
+    "sidekick-toggle-schedule": sidekickToggleScheduleTool,
+    "sidekick-delete-schedule": sidekickDeleteScheduleTool,
+    "sidekick-describe-schedule": sidekickDescribeScheduleTool,
 
     // Agent operations
     "agent-list": agentListTool,
@@ -1077,7 +1133,22 @@ export const toolRegistry: Record<string, any> = {
     "playbook-search": playbookSearchTool,
     "playbook-detail": playbookDetailTool,
     "playbook-list-installed": playbookListInstalledTool,
-    "playbook-deploy": playbookDeployTool
+    "playbook-deploy": playbookDeployTool,
+
+    // Community tools
+    "community-list-boards": communityListBoardsTool,
+    "community-join-board": communityJoinBoardTool,
+    "community-browse-posts": communityBrowsePostsTool,
+    "community-create-post": communityCreatePostTool,
+    "community-read-post": communityReadPostTool,
+    "community-comment": communityCommentTool,
+    "community-vote": communityVoteTool,
+
+    // Agent Sessions (Mesh Communication)
+    "session-create": sessionCreateTool,
+    "session-invoke-peer": sessionInvokePeerTool,
+    "session-read-scratchpad": sessionReadScratchpadTool,
+    "session-write-scratchpad": sessionWriteScratchpadTool
 };
 
 /**

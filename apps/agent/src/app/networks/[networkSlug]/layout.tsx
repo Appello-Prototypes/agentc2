@@ -7,6 +7,7 @@ import { Badge, Button, HugeiconsIcon, cn, icons } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
+import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
 
 interface NetworkDetail {
     id: string;
@@ -18,6 +19,8 @@ interface NetworkDetail {
     isActive: boolean;
     runCount: number;
     primitiveCount: number;
+    visibility: string;
+    publicToken: string | null;
 }
 
 const navItems: { id: string; label: string; icon: IconName; path: string }[] = [
@@ -39,6 +42,7 @@ export default function NetworkLayout({ children }: { children: React.ReactNode 
 
     const [network, setNetwork] = useState<NetworkDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [shareOpen, setShareOpen] = useState(false);
 
     useEffect(() => {
         const fetchNetwork = async () => {
@@ -105,14 +109,29 @@ export default function NetworkLayout({ children }: { children: React.ReactNode 
                                 <span>Primitives {network.primitiveCount}</span>
                                 <span>{network.isPublished ? "Published" : "Draft"}</span>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="mt-3 w-full"
-                                onClick={() => router.push("/networks")}
-                            >
-                                All networks
-                            </Button>
+                            <div className="mt-3 flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => router.push("/networks")}
+                                >
+                                    All networks
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5"
+                                    onClick={() => setShareOpen(true)}
+                                >
+                                    <HugeiconsIcon
+                                        icon={icons.share!}
+                                        className="size-3.5"
+                                        strokeWidth={1.5}
+                                    />
+                                    Share
+                                </Button>
+                            </div>
                         </div>
 
                         <nav className="flex-1 overflow-y-auto p-2">
@@ -138,6 +157,24 @@ export default function NetworkLayout({ children }: { children: React.ReactNode 
                                 );
                             })}
                         </nav>
+
+                        <ShareEmbedDialog
+                            open={shareOpen}
+                            onOpenChange={setShareOpen}
+                            entityType="network"
+                            entity={{
+                                id: network.id,
+                                slug: network.slug,
+                                name: network.name,
+                                visibility: network.visibility ?? "PRIVATE",
+                                publicToken: network.publicToken ?? null
+                            }}
+                            onVisibilityChange={(visibility, publicToken) => {
+                                setNetwork((prev) =>
+                                    prev ? { ...prev, visibility, publicToken } : prev
+                                );
+                            }}
+                        />
                     </>
                 )
             }

@@ -18,6 +18,7 @@ import {
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
+import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
 
 interface Agent {
     id: string;
@@ -29,6 +30,8 @@ interface Agent {
     isActive: boolean;
     type: "SYSTEM" | "USER" | "DEMO";
     deploymentMode?: string;
+    visibility: string;
+    publicToken: string | null;
 }
 
 interface AgentListItem {
@@ -82,6 +85,7 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
     const [agent, setAgent] = useState<Agent | null>(null);
     const [allAgents, setAllAgents] = useState<AgentListItem[]>([]);
     const [loading, setLoading] = useState(true);
+    const [shareOpen, setShareOpen] = useState(false);
 
     const activeTab = pathname.split("/").pop() || "overview";
 
@@ -242,14 +246,29 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
 
                         {/* Footer */}
                         <div className="space-y-2 border-t p-4">
-                            <Button
-                                variant="default"
-                                size="sm"
-                                className="w-full"
-                                onClick={() => router.push(`/?agent=${agentSlug}`)}
-                            >
-                                Try it
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => router.push(`/?agent=${agentSlug}`)}
+                                >
+                                    Try it
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5"
+                                    onClick={() => setShareOpen(true)}
+                                >
+                                    <HugeiconsIcon
+                                        icon={icons.share!}
+                                        className="size-3.5"
+                                        strokeWidth={1.5}
+                                    />
+                                    Share
+                                </Button>
+                            </div>
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -259,6 +278,24 @@ export default function AgentDetailLayout({ children }: { children: React.ReactN
                                 ← Back to Agents
                             </Button>
                         </div>
+
+                        <ShareEmbedDialog
+                            open={shareOpen}
+                            onOpenChange={setShareOpen}
+                            entityType="agent"
+                            entity={{
+                                id: agent.id,
+                                slug: agent.slug,
+                                name: agent.name,
+                                visibility: agent.visibility ?? "PRIVATE",
+                                publicToken: agent.publicToken ?? null
+                            }}
+                            onVisibilityChange={(visibility, publicToken) => {
+                                setAgent((prev) =>
+                                    prev ? { ...prev, visibility, publicToken } : prev
+                                );
+                            }}
+                        />
                     </>
                 )
             }

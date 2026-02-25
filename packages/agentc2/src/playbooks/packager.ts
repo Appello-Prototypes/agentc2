@@ -390,6 +390,7 @@ export async function packagePlaybook(opts: PackagePlaybookOptions) {
         documents: allDocumentSnapshots,
         workflows: allWorkflowSnapshots,
         networks: allNetworkSnapshots,
+        campaignTemplates: [],
         guardrails: allGuardrails,
         testCases: allTestCases,
         scorecards: allScorecards,

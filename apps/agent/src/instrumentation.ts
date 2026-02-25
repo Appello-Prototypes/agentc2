@@ -12,6 +12,8 @@ export async function register() {
         const { syncGmailFromAccount } = await import("@/lib/gmail-sync");
         const { syncMicrosoftFromAccount } = await import("@/lib/microsoft-sync");
         const { provisionOrgKeyPair } = await import("@repo/agentc2/crypto");
+        const { deployStarterKit } = await import("@repo/agentc2");
+        const { prisma } = await import("@repo/database");
         const { createAuditLog } = await import("@/lib/audit-log");
 
         onAuthEvent(async (event) => {
@@ -64,8 +66,22 @@ export async function register() {
             }
         });
 
+        onPostBootstrap(async (userId, organizationId) => {
+            try {
+                const workspace = await prisma.workspace.findFirst({
+                    where: { organizationId, isDefault: true }
+                });
+                if (workspace) {
+                    await deployStarterKit(organizationId, workspace.id, userId);
+                    console.log("[PostBootstrap] Starter kit deployed for org:", organizationId);
+                }
+            } catch (error) {
+                console.warn("[PostBootstrap] Starter kit deployment failed:", error);
+            }
+        });
+
         console.log(
-            "[Instrumentation] Post-bootstrap hooks registered (Gmail, Microsoft, KeyPair)"
+            "[Instrumentation] Post-bootstrap hooks registered (Gmail, Microsoft, KeyPair, StarterKit)"
         );
 
         // Verify Docker availability for sandboxed code execution

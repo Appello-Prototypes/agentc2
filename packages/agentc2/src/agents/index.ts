@@ -1,4 +1,5 @@
 export { assistantAgent } from "./assistant";
+export { sidekickAgent } from "./sidekick";
 export { structuredAgent, schemas } from "./structured";
 export { visionAgent, visionAnalysisSchema } from "./vision";
 export { researchAgent, researchTools } from "./research";

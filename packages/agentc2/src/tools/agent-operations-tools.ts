@@ -191,7 +191,7 @@ const MAX_INVOCATION_DEPTH = 5;
 export const agentInvokeDynamicTool = createTool({
     id: "agent-invoke-dynamic",
     description:
-        "Dynamically invoke any agent by slug and get back its response. No pre-configuration required. Use agent-discover first to find available agents, then call this tool to delegate a sub-task. The target agent runs with full tool access and returns its response text.",
+        "Dynamically invoke any agent by slug and get back its response. No pre-configuration required. Use agent-discover first to find available agents, then call this tool to delegate a sub-task. The target agent runs with full tool access and returns its response text. Optionally pass a sessionId to invoke within a collaborative session (shared memory and communication policies apply).",
     inputSchema: z.object({
         agentSlug: z.string().describe("The slug of the agent to invoke (e.g. 'research-agent')"),
         message: z.string().describe("The message or task to send to the target agent"),
@@ -203,6 +203,12 @@ export const agentInvokeDynamicTool = createTool({
             .number()
             .optional()
             .describe("Override the maximum number of tool-use steps (default uses agent config)"),
+        sessionId: z
+            .string()
+            .optional()
+            .describe(
+                "Optional session ID for collaborative mesh invocation. When set, shared memory and communication policies are enforced."
+            ),
         _invocationDepth: z
             .number()
             .optional()
@@ -223,7 +229,7 @@ export const agentInvokeDynamicTool = createTool({
             .optional(),
         error: z.string().optional()
     }),
-    execute: async ({ agentSlug, message, context, maxSteps, _invocationDepth }) => {
+    execute: async ({ agentSlug, message, context, maxSteps, sessionId, _invocationDepth }) => {
         const depth = _invocationDepth ?? 0;
 
         if (depth >= MAX_INVOCATION_DEPTH) {
@@ -234,8 +240,73 @@ export const agentInvokeDynamicTool = createTool({
             };
         }
 
+        // Session-aware invocation: evaluate policies and pass shared memory
+        let sessionContext: Record<string, unknown> = {};
+        if (sessionId) {
+            try {
+                const { getSession, recordPeerCall, recordParticipantInvocation } =
+                    await import("../sessions");
+                const { evaluateCommunicationPolicy } = await import("../governance");
+
+                const session = await getSession(sessionId);
+                if (!session) {
+                    return { success: false, agentSlug, error: `Session "${sessionId}" not found` };
+                }
+                if (session.status !== "active") {
+                    return {
+                        success: false,
+                        agentSlug,
+                        error: `Session is ${session.status}, not active`
+                    };
+                }
+
+                const sourceAgent = (context?._sourceAgent as string) || "unknown";
+                const policyDecision = await evaluateCommunicationPolicy({
+                    fromAgentSlug: sourceAgent,
+                    toAgentSlug: agentSlug,
+                    sessionId,
+                    currentDepth: depth,
+                    currentPeerCalls: session.peerCallCount
+                });
+
+                if (!policyDecision.allowed) {
+                    return {
+                        success: false,
+                        agentSlug,
+                        error: `Communication denied: ${policyDecision.reason}`
+                    };
+                }
+
+                const budget = await recordPeerCall(sessionId);
+                if (!budget.allowed) {
+                    return {
+                        success: false,
+                        agentSlug,
+                        error: `Session peer call limit (${budget.limit}) exceeded`
+                    };
+                }
+
+                sessionContext = {
+                    _sessionId: sessionId,
+                    threadId: session.memoryThreadId,
+                    resource: { userId: session.memoryResourceId },
+                    _recordParticipant: true
+                };
+
+                // Post-invoke hook to track participant stats
+                const originalRecordFn = recordParticipantInvocation;
+                sessionContext._afterInvoke = async (usage?: { totalTokens?: number }) => {
+                    await originalRecordFn(sessionId, agentSlug, usage?.totalTokens);
+                };
+            } catch (error) {
+                console.warn(
+                    `[AgentInvoke] Session context setup failed for ${sessionId}:`,
+                    error instanceof Error ? error.message : error
+                );
+            }
+        }
+
         try {
-            // Verify target agent exists and is active before invocation
             const agentInfo = await callInternalApi(`/api/agents/${agentSlug}`, {
                 query: { detail: "minimal" }
             });
@@ -254,6 +325,7 @@ export const agentInvokeDynamicTool = createTool({
                     input: message,
                     context: {
                         ...(context || {}),
+                        ...sessionContext,
                         _invocationDepth: depth + 1,
                         _sourceAgent: context?._sourceAgent || "unknown"
                     },
@@ -264,8 +336,17 @@ export const agentInvokeDynamicTool = createTool({
             const durationMs = Date.now() - startMs;
 
             console.log(
-                `[AgentInvoke] ${agentSlug} invoked at depth ${depth}, duration=${durationMs}ms, run=${result.run_id}`
+                `[AgentInvoke] ${agentSlug} invoked at depth ${depth}, duration=${durationMs}ms, run=${result.run_id}${sessionId ? `, session=${sessionId}` : ""}`
             );
+
+            // Track participant invocation if in a session
+            if (sessionId && typeof sessionContext._afterInvoke === "function") {
+                await (
+                    sessionContext._afterInvoke as (usage?: {
+                        totalTokens?: number;
+                    }) => Promise<void>
+                )(result.usage);
+            }
 
             return {
                 success: true,

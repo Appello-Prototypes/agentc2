@@ -199,3 +199,21 @@ export const extendedTools = {
     bimHandoverTool,
     askQuestionsTool
 };
+
+export {
+    communityListBoardsTool,
+    communityJoinBoardTool,
+    communityBrowsePostsTool,
+    communityCreatePostTool,
+    communityReadPostTool,
+    communityCommentTool,
+    communityVoteTool
+} from "./community-tools";
+
+// Agent Sessions (Mesh Communication)
+export {
+    sessionCreateTool,
+    sessionInvokePeerTool,
+    sessionReadScratchpadTool,
+    sessionWriteScratchpadTool
+} from "./session-tools";

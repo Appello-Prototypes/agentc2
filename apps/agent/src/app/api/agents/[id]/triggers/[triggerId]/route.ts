@@ -15,7 +15,8 @@ export async function PATCH(
         const { id, triggerId } = await params;
         const body = await request.json();
 
-        const { name, description, eventName, filter, inputMapping, isActive, triggerType } = body;
+        const { name, description, eventName, filter, inputMapping, isActive, triggerType, color } =
+            body;
 
         const agent = await prisma.agent.findFirst({
             where: {
@@ -101,6 +102,7 @@ export async function PATCH(
                 : null;
         }
         if (isActive !== undefined) updateData.isActive = isActive !== false;
+        if (color !== undefined) updateData.color = color || null;
 
         const updated = await prisma.agentTrigger.update({
             where: { id: trigger.id },

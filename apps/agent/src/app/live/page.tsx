@@ -1159,10 +1159,10 @@ export function LiveRunsContent() {
                     createPortal(
                         <>
                             <div
-                                className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+                                className="fixed inset-0 z-[60] bg-black/60"
                                 onClick={() => setSelectedRun(null)}
                             />
-                            <div className="bg-background fixed inset-x-0 bottom-0 z-50 h-[95vh] shadow-2xl transition-transform duration-300">
+                            <div className="bg-background fixed inset-x-0 bottom-0 z-[70] h-[95vh] shadow-2xl transition-transform duration-300">
                                 <div className="mx-6 flex h-full flex-col rounded-t-2xl border-x border-t">
                                     <div className="flex shrink-0 flex-col gap-4 border-b px-6 py-4">
                                         <div className="flex items-start justify-between gap-4">
@@ -1302,11 +1302,6 @@ interface TimeseriesBucket {
     totalCost: number;
 }
 
-interface CumulativeCostPoint {
-    time: string;
-    cost: number;
-}
-
 interface AgentBreakdownRow {
     agentId: string;
     name: string;
@@ -1351,6 +1346,9 @@ function formatChartTime(iso: string, range: string): string {
     if (range === "24h") {
         return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     }
+    if (range === "7d") {
+        return d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" });
+    }
     return d.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
@@ -1361,9 +1359,8 @@ export function ObservabilityDashboard() {
     const [metrics, setMetrics] = useState<LiveMetrics | null>(null);
     const [filters, setFilters] = useState<LiveFilters | null>(null);
     const [timeseries, setTimeseries] = useState<TimeseriesBucket[]>([]);
-    const [cumulativeCost, setCumulativeCost] = useState<CumulativeCostPoint[]>([]);
     const [agentBreakdown, setAgentBreakdown] = useState<AgentBreakdownRow[]>([]);
-    const [timeRange, setTimeRange] = useState("24h");
+    const [timeRange, setTimeRange] = useState("30d");
     const [runTypeFilter, setRunTypeFilter] = useState("PROD");
 
     const { from: rangeFrom, to: rangeTo } = useMemo(() => {
@@ -1379,7 +1376,7 @@ export function ObservabilityDashboard() {
             case "24h":
                 return 24;
             case "7d":
-                return 28;
+                return 7;
             case "30d":
                 return 30;
             default:
@@ -1409,7 +1406,6 @@ export function ObservabilityDashboard() {
             if (filtersData.success) setFilters(filtersData.filters);
             if (tsData.success) {
                 setTimeseries(tsData.timeseries || []);
-                setCumulativeCost(tsData.cumulativeCost || []);
                 setAgentBreakdown(tsData.agentBreakdown || []);
             }
         } catch (error) {
@@ -1451,13 +1447,6 @@ export function ObservabilityDashboard() {
             successRate: b.runs > 0 ? Math.round((b.completed / b.runs) * 100) : 0
         }));
     }, [timeseries, timeRange]);
-
-    const cumCostData = useMemo(() => {
-        return cumulativeCost.map((b) => ({
-            ...b,
-            label: formatChartTime(b.time, timeRange)
-        }));
-    }, [cumulativeCost, timeRange]);
 
     const isDark = resolvedTheme === "dark";
     const tickStyle = { fontSize: 10, fill: isDark ? "#a1a1aa" : "#71717a" };
@@ -1574,31 +1563,29 @@ export function ObservabilityDashboard() {
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={240}>
-                            <AreaChart data={chartData}>
+                            <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
                                 <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
                                 <YAxis tick={tickStyle} stroke={axisStroke} allowDecimals={false} />
                                 <Tooltip content={<ChartTooltip isDark={isDark} />} />
-                                <Area
+                                <Line
                                     type="monotone"
                                     dataKey="completed"
                                     name="Completed"
-                                    stackId="1"
                                     stroke="#22c55e"
-                                    fill="#22c55e"
-                                    fillOpacity={0.3}
+                                    strokeWidth={2}
+                                    dot={false}
                                 />
-                                <Area
+                                <Line
                                     type="monotone"
                                     dataKey="failed"
                                     name="Failed"
-                                    stackId="1"
                                     stroke="#ef4444"
-                                    fill="#ef4444"
-                                    fillOpacity={0.3}
+                                    strokeWidth={2}
+                                    dot={false}
                                 />
                                 <Legend iconType="circle" wrapperStyle={legendStyle} />
-                            </AreaChart>
+                            </LineChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
@@ -1638,12 +1625,12 @@ export function ObservabilityDashboard() {
             <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">Cumulative Cost</CardTitle>
-                        <CardDescription>Running total spend over time</CardDescription>
+                        <CardTitle className="text-base">Cost per Period</CardTitle>
+                        <CardDescription>Spend per time bucket</CardDescription>
                     </CardHeader>
                     <CardContent>
                         <ResponsiveContainer width="100%" height={240}>
-                            <AreaChart data={cumCostData}>
+                            <LineChart data={chartData}>
                                 <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
                                 <XAxis dataKey="label" tick={tickStyle} stroke={axisStroke} />
                                 <YAxis
@@ -1652,17 +1639,16 @@ export function ObservabilityDashboard() {
                                     tickFormatter={(v) => `$${v.toFixed(2)}`}
                                 />
                                 <Tooltip content={<ChartTooltip isDark={isDark} />} />
-                                <Area
+                                <Line
                                     type="monotone"
-                                    dataKey="cost"
-                                    name="Cumulative Cost"
+                                    dataKey="totalCost"
+                                    name="Cost"
                                     stroke="#8b5cf6"
-                                    fill="#8b5cf6"
-                                    fillOpacity={0.15}
                                     strokeWidth={2}
+                                    dot={false}
                                 />
                                 <Legend iconType="circle" wrapperStyle={legendStyle} />
-                            </AreaChart>
+                            </LineChart>
                         </ResponsiveContainer>
                     </CardContent>
                 </Card>
@@ -1781,32 +1767,47 @@ export function ObservabilityDashboard() {
 
                 <Card>
                     <CardHeader>
-                        <CardTitle className="text-base">P50 / P95 Latency</CardTitle>
-                        <CardDescription>Response time percentiles</CardDescription>
+                        <CardTitle className="text-base">Latency by Agent</CardTitle>
+                        <CardDescription>Average response time per agent</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="flex flex-col items-center justify-center gap-6 py-6">
-                            <div className="text-center">
-                                <p className="text-muted-foreground text-xs tracking-wide uppercase">
-                                    P50
-                                </p>
-                                <p className="text-3xl font-bold">
-                                    {formatLatency(metrics?.latency.p50 ?? 0)}
-                                </p>
-                            </div>
-                            <div className="bg-border h-px w-16" />
-                            <div className="text-center">
-                                <p className="text-muted-foreground text-xs tracking-wide uppercase">
-                                    P95
-                                </p>
-                                <p className="text-3xl font-bold text-amber-500">
-                                    {formatLatency(metrics?.latency.p95 ?? 0)}
-                                </p>
-                            </div>
-                            <p className="text-muted-foreground text-xs">
-                                {metrics?.latency.sampleSize ?? 0} samples
-                            </p>
-                        </div>
+                        {perAgentSorted.length === 0 ? (
+                            <p className="text-muted-foreground text-sm">No agent data.</p>
+                        ) : (
+                            <ResponsiveContainer width="100%" height={240}>
+                                <BarChart
+                                    data={perAgentSorted.slice(0, 8).map((a) => ({
+                                        name: a.agentName,
+                                        avgLatencyMs: Math.round(a.avgLatencyMs)
+                                    }))}
+                                    layout="vertical"
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" stroke={gridStroke} />
+                                    <XAxis
+                                        type="number"
+                                        tick={tickStyle}
+                                        stroke={axisStroke}
+                                        tickFormatter={(v) =>
+                                            v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${v}ms`
+                                        }
+                                    />
+                                    <YAxis
+                                        type="category"
+                                        dataKey="name"
+                                        tick={tickStyle}
+                                        stroke={axisStroke}
+                                        width={100}
+                                    />
+                                    <Tooltip content={<ChartTooltip isDark={isDark} />} />
+                                    <Bar
+                                        dataKey="avgLatencyMs"
+                                        name="Avg Latency (ms)"
+                                        fill="#f59e0b"
+                                        radius={[0, 4, 4, 0]}
+                                    />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        )}
                     </CardContent>
                 </Card>
             </div>

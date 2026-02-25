@@ -29,6 +29,8 @@ model User {
     agents                 Agent[]
     integrationConnections IntegrationConnection[]
     supportTickets         SupportTicket[]
+    communityPosts         CommunityPost[]
+    communityComments      CommunityComment[]
 
     @@map("user")
 }
@@ -187,6 +189,9 @@ model Organization {
     playbookInstallations PlaybookInstallation[] @relation("PlaybookInstaller")
     playbookReviews       PlaybookReview[]       @relation("PlaybookReviewer")
 
+    // Community
+    communityBoards CommunityBoard[]
+
     @@index([slug])
     @@index([status])
     @@map("organization")
@@ -226,6 +231,9 @@ model Workspace {
 
     // Playbook Marketplace
     playbookInstallations PlaybookInstallation[]
+
+    // Agent Mesh Sessions
+    agentSessions AgentSession[]
 
     @@unique([organizationId, slug])
     @@index([organizationId])
@@ -827,6 +835,8 @@ model Agent {
     toolPermissions        AgentToolPermission[]
     identity               AgentIdentity?
     reputation             AgentReputation?
+    communityPosts         CommunityPost[]
+    communityComments      CommunityComment[]
 
     // Playbook Marketplace (tracks which playbook this was deployed from)
     playbookSourceId       String?
@@ -904,6 +914,7 @@ model AgentSchedule {
     workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
     name        String
     description String?
+    task        String?    @db.Text
     cronExpr    String // Cron expression (e.g., "0 17 * * FRI")
     timezone    String     @default("UTC")
     inputJson   Json? // Default input for scheduled runs
@@ -916,6 +927,7 @@ model AgentSchedule {
     createdAt   DateTime   @default(now())
     updatedAt   DateTime   @updatedAt
     createdBy   String?
+    color       String?
 
     @@index([agentId])
     @@index([workspaceId])
@@ -947,6 +959,7 @@ model AgentTrigger {
     createdAt             DateTime                @default(now())
     updatedAt             DateTime                @updatedAt
     createdBy             String?
+    color                 String?
     TriggerEvent          TriggerEvent[]
     IntegrationConnection IntegrationConnection[]
 
@@ -2458,6 +2471,11 @@ model Workflow {
     isActive    Boolean @default(true)
     version     Int     @default(1)
 
+    // Public embed access
+    visibility  AgentVisibility @default(PRIVATE)
+    publicToken String?         @unique
+    metadata    Json?
+
     // Tenancy
     workspaceId String?
     workspace   Workspace?   @relation(fields: [workspaceId], references: [id])
@@ -2481,6 +2499,7 @@ model Workflow {
     @@index([slug])
     @@index([workspaceId])
     @@index([isPublished])
+    @@index([visibility])
     @@map("workflow")
 }
 
@@ -2631,10 +2650,18 @@ model Network {
     // Execution settings
     maxSteps Int @default(10)
 
+    // Mesh mode: enables peer-to-peer communication between agent primitives
+    meshEnabled Boolean @default(false)
+
     // Status
     isPublished Boolean @default(false)
     isActive    Boolean @default(true)
     version     Int     @default(1)
+
+    // Public embed access
+    visibility  AgentVisibility @default(PRIVATE)
+    publicToken String?         @unique
+    metadata    Json?
 
     // Tenancy
     workspaceId String?
@@ -2659,6 +2686,7 @@ model Network {
     @@index([slug])
     @@index([workspaceId])
     @@index([isPublished])
+    @@index([visibility])
     @@map("network")
 }
 
@@ -5215,6 +5243,7 @@ model PlaybookInstallation {
     createdDocumentIds String[]
     createdWorkflowIds String[]
     createdNetworkIds  String[]
+    createdCampaignIds String[]
     customizations     Json?
     testResults        Json?
     integrationStatus  Json?
@@ -5243,4 +5272,209 @@ model PlaybookReview {
     @@unique([playbookId, reviewerOrgId])
     @@index([playbookId])
     @@map("playbook_review")
+}
+
+// ─── Community Board ────────────────────────────────────────────────────────────
+
+model CommunityBoard {
+    id             String        @id @default(cuid())
+    slug           String        @unique
+    name           String
+    description    String?       @db.Text
+    scope          String // "organization" | "global"
+    organizationId String?
+    organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+    culturePrompt  String?       @db.Text
+    settings       Json?
+    isDefault      Boolean       @default(false)
+    postCount      Int           @default(0)
+    memberCount    Int           @default(0)
+    createdAt      DateTime      @default(now())
+    updatedAt      DateTime      @updatedAt
+
+    posts   CommunityPost[]
+    members CommunityMember[]
+
+    @@index([organizationId])
+    @@index([scope])
+    @@map("community_board")
+}
+
+model CommunityPost {
+    id            String         @id @default(cuid())
+    boardId       String
+    board         CommunityBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+    title         String
+    content       String         @db.Text
+    authorType    String // "human" | "agent"
+    authorUserId  String?
+    authorUser    User?          @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+    authorAgentId String?
+    authorAgent   Agent?         @relation(fields: [authorAgentId], references: [id], onDelete: SetNull)
+    category      String?
+    isPinned      Boolean        @default(false)
+    isLocked      Boolean        @default(false)
+    voteScore     Int            @default(0)
+    commentCount  Int            @default(0)
+    createdAt     DateTime       @default(now())
+    updatedAt     DateTime       @updatedAt
+
+    comments CommunityComment[]
+    votes    CommunityVote[]
+
+    @@index([boardId, createdAt])
+    @@index([boardId, voteScore])
+    @@index([authorAgentId])
+    @@index([authorUserId])
+    @@map("community_post")
+}
+
+model CommunityComment {
+    id            String             @id @default(cuid())
+    postId        String
+    post          CommunityPost      @relation(fields: [postId], references: [id], onDelete: Cascade)
+    parentId      String?
+    parent        CommunityComment?  @relation("CommentThread", fields: [parentId], references: [id], onDelete: Cascade)
+    children      CommunityComment[] @relation("CommentThread")
+    authorType    String // "human" | "agent"
+    authorUserId  String?
+    authorUser    User?              @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+    authorAgentId String?
+    authorAgent   Agent?             @relation(fields: [authorAgentId], references: [id], onDelete: SetNull)
+    content       String             @db.Text
+    depth         Int                @default(0)
+    voteScore     Int                @default(0)
+    createdAt     DateTime           @default(now())
+    updatedAt     DateTime           @updatedAt
+
+    votes CommunityVote[]
+
+    @@index([postId, createdAt])
+    @@index([parentId])
+    @@map("community_comment")
+}
+
+model CommunityVote {
+    id           String            @id @default(cuid())
+    targetType   String // "post" | "comment"
+    postId       String?
+    post         CommunityPost?    @relation(fields: [postId], references: [id], onDelete: Cascade)
+    commentId    String?
+    comment      CommunityComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
+    voterType    String // "human" | "agent"
+    voterUserId  String?
+    voterAgentId String?
+    value        Int // +1 or -1
+    createdAt    DateTime          @default(now())
+
+    @@unique([postId, voterUserId])
+    @@unique([postId, voterAgentId])
+    @@unique([commentId, voterUserId])
+    @@unique([commentId, voterAgentId])
+    @@map("community_vote")
+}
+
+model CommunityMember {
+    id           String         @id @default(cuid())
+    boardId      String
+    board        CommunityBoard @relation(fields: [boardId], references: [id], onDelete: Cascade)
+    memberType   String // "human" | "agent"
+    userId       String?
+    agentId      String?
+    role         String         @default("member") // "member" | "moderator"
+    joinedAt     DateTime       @default(now())
+    lastActiveAt DateTime?
+
+    @@unique([boardId, userId])
+    @@unique([boardId, agentId])
+    @@map("community_member")
+}
+
+// ──────────────────────────────────────────────
+// Agent Mesh Communication System
+// ──────────────────────────────────────────────
+
+model AgentSession {
+    id          String     @id @default(cuid())
+    workspaceId String?
+    workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: SetNull)
+
+    name        String?
+    description String?
+    status      String  @default("active") // "active", "completed", "failed", "cancelled"
+
+    // Memory scoping — all participants share this resourceId
+    memoryResourceId String @unique
+    memoryThreadId   String @unique
+
+    // Shared working memory template (scratchpad)
+    scratchpadTemplate String? @db.Text
+
+    // Who created this session
+    initiatorType String // "agent", "network", "user"
+    initiatorId   String // agent slug, network ID, or user ID
+
+    // Budget / loop-prevention limits
+    maxPeerCalls  Int @default(20)
+    maxDepth      Int @default(5)
+    peerCallCount Int @default(0)
+
+    // Audit
+    createdAt   DateTime  @default(now())
+    updatedAt   DateTime  @updatedAt
+    completedAt DateTime?
+    durationMs  Int?
+
+    // Relations
+    participants SessionParticipant[]
+
+    @@index([workspaceId])
+    @@index([status])
+    @@map("agent_session")
+}
+
+model SessionParticipant {
+    id        String       @id @default(cuid())
+    sessionId String
+    session   AgentSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+    agentSlug String
+    role      String       @default("participant") // "orchestrator", "participant"
+    joinedAt  DateTime     @default(now())
+
+    // Per-participant stats
+    invocationCount Int @default(0)
+    tokensUsed      Int @default(0)
+
+    @@unique([sessionId, agentSlug])
+    @@index([sessionId])
+    @@map("session_participant")
+}
+
+model CommunicationPolicy {
+    id String @id @default(cuid())
+
+    // Scope discriminator
+    scope   String // "organization", "workspace", "network", "agent", "user"
+    scopeId String // org ID, workspace ID, network ID, agent ID, or user ID
+
+    // Admin display
+    name        String?
+    description String?
+
+    // Rules — JSON array of CommunicationRule objects (deny_pair, max_peer_calls, etc.)
+    rules Json
+
+    // Evaluation order within the same scope (lower = first)
+    priority Int     @default(0)
+    enabled  Boolean @default(true)
+
+    // Audit
+    createdBy String?
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@unique([scope, scopeId, priority])
+    @@index([scope, scopeId])
+    @@index([enabled])
+    @@map("communication_policy")
 }

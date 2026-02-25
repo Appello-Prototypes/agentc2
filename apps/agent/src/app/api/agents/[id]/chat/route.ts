@@ -207,9 +207,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (authResult.response) {
             return authResult.response;
         }
-        const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
-        if (accessResult.response) {
-            return accessResult.response;
+        // System agents (e.g. sidekick) are code-defined and not in the database,
+        // so skip the DB-level access check for them.
+        const SYSTEM_AGENT_SLUGS = new Set(["sidekick"]);
+        if (!SYSTEM_AGENT_SLUGS.has(id)) {
+            const accessResult = await requireAgentAccess(authResult.context.organizationId, id);
+            if (accessResult.response) {
+                return accessResult.response;
+            }
         }
 
         const rate = await checkRateLimit(
@@ -237,8 +242,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             messages,
             modelOverride,
             thinkingOverride,
-            runId: existingRunId,
-            interactionMode
+            runId: existingRunId
         } = body;
 
         // Determine source based on mode parameter in requestContext

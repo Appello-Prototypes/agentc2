@@ -34,6 +34,33 @@ https://catalyst.localhost {
         }
     }
 
+    # SEO files — route to frontend app (sitemap.xml, robots.txt)
+    @seo_files {
+        path /sitemap.xml /robots.txt
+    }
+
+    handle @seo_files {
+        reverse_proxy localhost:3000
+    }
+
+    # Public legal pages — route to frontend app (no auth required)
+    @public_legal {
+        path /terms /privacy /security /about /trust-center /subprocessors /ai-transparency
+    }
+
+    handle @public_legal {
+        reverse_proxy localhost:3000
+    }
+
+    # Public docs and blog pages — route to frontend app (no auth required)
+    @public_content {
+        path /docs /docs/* /blog /blog/*
+    }
+
+    handle @public_content {
+        reverse_proxy localhost:3000
+    }
+
     # Frontend static assets (namespaced via assetPrefix: '/_home')
     @frontend_assets {
         path /_home/*

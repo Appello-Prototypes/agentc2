@@ -9,6 +9,7 @@ import {
 import { storage } from "./storage";
 import {
     assistantAgent,
+    sidekickAgent,
     structuredAgent,
     visionAgent,
     researchAgent,
@@ -82,6 +83,7 @@ function getObservability(): Observability {
 function buildAgents(): Record<string, Agent> {
     const agents: Record<string, Agent> = {
         assistant: assistantAgent,
+        sidekick: sidekickAgent,
         structured: structuredAgent,
         vision: visionAgent,
         research: researchAgent,

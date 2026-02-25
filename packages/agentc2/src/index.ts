@@ -9,6 +9,7 @@ export { vector } from "./vector";
 // Agents
 export {
     assistantAgent,
+    sidekickAgent,
     structuredAgent,
     schemas,
     visionAgent,
@@ -460,6 +461,27 @@ export {
     extractOrgFromScopedId
 } from "./tenant-scope";
 
+// Agent Sessions (Mesh Communication)
+export {
+    createSession,
+    getSession,
+    readScratchpad,
+    writeScratchpad,
+    recordPeerCall,
+    recordParticipantInvocation,
+    completeSession,
+    type CreateSessionOptions,
+    type SessionInfo
+} from "./sessions";
+
+// Communication Policy (Governance)
+export {
+    evaluateCommunicationPolicy,
+    type CommunicationRule,
+    type PolicyEvaluationContext,
+    type PolicyDecision
+} from "./governance";
+
 // Tenant lifecycle (org deletion cleanup)
 export { cleanupOrgVectors } from "./tenant-lifecycle";
 
@@ -473,7 +495,8 @@ export {
     validateManifest,
     isValidManifest,
     playbookManifestSchema,
-    mapIntegrations
+    mapIntegrations,
+    deployStarterKit
 } from "./playbooks";
 export type {
     PlaybookManifest,
@@ -484,6 +507,7 @@ export type {
     DocumentSnapshot as PlaybookDocumentSnapshot,
     WorkflowSnapshot,
     NetworkSnapshot,
+    CampaignTemplateSnapshot,
     GuardrailSnapshot,
     TestCaseSnapshot,
     ScorecardSnapshot,

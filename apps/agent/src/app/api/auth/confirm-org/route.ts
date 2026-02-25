@@ -129,6 +129,20 @@ export async function POST(request: NextRequest) {
             );
         }
 
+        // Auto-deploy starter kit for the new org
+        if (result.organization?.id && result.workspace?.id) {
+            try {
+                const { deployStarterKit } = await import("@repo/agentc2");
+                await deployStarterKit(
+                    result.organization.id,
+                    result.workspace.id,
+                    session.user.id
+                );
+            } catch (error) {
+                console.warn("[Confirm Org] Starter kit deployment failed:", error);
+            }
+        }
+
         // Auto-create a Starter (free) subscription for the new org
         if (result.organization?.id) {
             try {

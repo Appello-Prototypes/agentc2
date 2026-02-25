@@ -1,19 +1,36 @@
 "use client";
 
 import { useState, useEffect, use } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getApiBase } from "@/lib/utils";
-import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@repo/ui";
 import {
-    ArrowLeftIcon,
+    Badge,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    Tabs,
+    TabsList,
+    TabsTrigger,
+    TabsContent,
+    MessageResponse
+} from "@repo/ui";
+import {
     StarIcon,
     DownloadIcon,
     ShieldCheckIcon,
     PackageIcon,
-    LayersIcon,
-    RocketIcon
+    MessageSquareIcon
 } from "lucide-react";
+
+import { PlaybookHero } from "@/components/marketplace/PlaybookHero";
+import { AgentProfileCard } from "@/components/marketplace/AgentProfileCard";
+import { NetworkTopologyPreview } from "@/components/marketplace/NetworkTopologyPreview";
+import { WorkflowStepFlow } from "@/components/marketplace/WorkflowStepFlow";
+import { CampaignCard } from "@/components/marketplace/CampaignCard";
+import { PlaybookSandbox } from "@/components/marketplace/PlaybookSandbox";
+
+// ── Types ────────────────────────────────────────────────────────────────
 
 interface PlaybookDetail {
     id: string;
@@ -39,6 +56,7 @@ interface PlaybookDetail {
         id: string;
         componentType: string;
         sourceSlug: string;
+        configSnapshot: unknown;
         isEntryPoint: boolean;
     }>;
     versions: Array<{
@@ -57,10 +75,63 @@ interface PlaybookDetail {
     }>;
 }
 
+interface ManifestData {
+    entryPoint?: { type: string; slug: string };
+    agents?: Array<{
+        slug: string;
+        name: string;
+        description: string | null;
+        instructions: string;
+        modelProvider: string;
+        modelName: string;
+        temperature: number | null;
+        memoryEnabled: boolean;
+        memoryConfig: unknown;
+        maxSteps: number | null;
+        scorers: string[];
+        tools: Array<{ toolId: string; config: unknown }>;
+        skills: string[];
+        metadata: unknown;
+    }>;
+    networks?: Array<{
+        slug: string;
+        name: string;
+        description: string | null;
+        primitives: Array<{
+            primitiveType: string;
+            agentSlug: string | null;
+            workflowSlug: string | null;
+            toolId: string | null;
+            description: string | null;
+        }>;
+    }>;
+    workflows?: Array<{
+        slug: string;
+        name: string;
+        description: string | null;
+        definitionJson: unknown;
+        inputSchemaJson: unknown;
+        maxSteps: number;
+    }>;
+    campaignTemplates?: Array<{
+        slug: string;
+        name: string;
+        intent: string;
+        endState: string;
+        description: string | null;
+        constraints: string[];
+        restraints: string[];
+        requireApproval: boolean;
+    }>;
+}
+
+// ── Page ─────────────────────────────────────────────────────────────────
+
 export default function MarketplaceDetailPage(props: { params: Promise<{ slug: string }> }) {
     const { slug } = use(props.params);
     const router = useRouter();
     const [playbook, setPlaybook] = useState<PlaybookDetail | null>(null);
+    const [manifest, setManifest] = useState<ManifestData | null>(null);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -69,6 +140,7 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                 const res = await fetch(`${getApiBase()}/api/playbooks/${slug}`);
                 const data = await res.json();
                 setPlaybook(data.playbook);
+                setManifest(data.manifest ?? null);
             } catch (error) {
                 console.error("Failed to fetch playbook:", error);
             } finally {
@@ -94,14 +166,6 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
         );
     }
 
-    function formatPrice() {
-        if (!playbook) return "Free";
-        if (playbook.pricingModel === "FREE") return "Free";
-        if (playbook.pricingModel === "ONE_TIME") return `$${playbook.priceUsd}`;
-        if (playbook.pricingModel === "SUBSCRIPTION") return `$${playbook.monthlyPriceUsd}/mo`;
-        return `$${playbook.priceUsd}/use`;
-    }
-
     const componentsByType = playbook.components.reduce(
         (acc, comp) => {
             acc[comp.componentType] = (acc[comp.componentType] ?? 0) + 1;
@@ -110,179 +174,178 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
         {} as Record<string, number>
     );
 
-    return (
-        <div className="mx-auto max-w-5xl px-6 py-8">
-            <button
-                onClick={() => router.push("/marketplace")}
-                className="text-muted-foreground hover:text-foreground mb-6 flex items-center gap-2 text-sm"
-            >
-                <ArrowLeftIcon className="h-4 w-4" />
-                Back to Marketplace
-            </button>
+    const entryPointSlug = manifest?.entryPoint?.slug;
 
-            <div className="grid gap-8 lg:grid-cols-3">
-                <div className="space-y-6 lg:col-span-2">
-                    <div>
-                        <div className="mb-2 flex items-center gap-2 text-sm text-zinc-500">
-                            <span>by {playbook.publisherOrg.name}</span>
-                            <span>·</span>
-                            <span>{playbook.category}</span>
-                        </div>
-                        <h1 className="text-3xl font-bold">{playbook.name}</h1>
-                        {playbook.tagline && (
-                            <p className="text-muted-foreground mt-2 text-lg">{playbook.tagline}</p>
+    const agents = manifest?.agents ?? [];
+    const networks = manifest?.networks ?? [];
+    const workflows = manifest?.workflows ?? [];
+    const campaigns = manifest?.campaignTemplates ?? [];
+
+    const hasComponents =
+        agents.length > 0 || networks.length > 0 || workflows.length > 0 || campaigns.length > 0;
+
+    return (
+        <div className="mx-auto max-w-6xl px-6 py-8">
+            {/* Hero */}
+            <PlaybookHero
+                slug={slug}
+                name={playbook.name}
+                tagline={playbook.tagline}
+                category={playbook.category}
+                publisherOrgName={playbook.publisherOrg.name}
+                pricingModel={playbook.pricingModel}
+                priceUsd={playbook.priceUsd}
+                monthlyPriceUsd={playbook.monthlyPriceUsd}
+                installCount={playbook.installCount}
+                averageRating={playbook.averageRating}
+                reviewCount={playbook.reviewCount}
+                trustScore={playbook.trustScore}
+                componentsByType={componentsByType}
+                onBack={() => router.push("/marketplace")}
+            />
+
+            {/* Tabbed Content */}
+            <div className="mt-8 grid gap-8 lg:grid-cols-[1fr_300px]">
+                <div>
+                    <Tabs defaultValue="overview">
+                        <TabsList>
+                            <TabsTrigger value="overview">Overview</TabsTrigger>
+                            <TabsTrigger value="components">
+                                Components ({playbook.components.length})
+                            </TabsTrigger>
+                            {playbook.reviews.length > 0 && (
+                                <TabsTrigger value="reviews">
+                                    Reviews ({playbook.reviewCount})
+                                </TabsTrigger>
+                            )}
+                            <TabsTrigger value="sandbox">
+                                <MessageSquareIcon className="mr-1.5 h-3.5 w-3.5" />
+                                Try It
+                            </TabsTrigger>
+                        </TabsList>
+
+                        {/* Overview Tab */}
+                        <TabsContent value="overview">
+                            <Card className="border-zinc-800 bg-zinc-900/50">
+                                <CardContent className="pt-6">
+                                    {playbook.longDescription ? (
+                                        <div className="prose prose-sm prose-invert max-w-none">
+                                            <MessageResponse>
+                                                {playbook.longDescription}
+                                            </MessageResponse>
+                                        </div>
+                                    ) : (
+                                        <div className="whitespace-pre-wrap">
+                                            {playbook.description}
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </TabsContent>
+
+                        {/* Components Tab */}
+                        <TabsContent value="components">
+                            {hasComponents ? (
+                                <div className="space-y-4">
+                                    {agents.map((agent) => (
+                                        <AgentProfileCard
+                                            key={agent.slug}
+                                            snapshot={agent}
+                                            isEntryPoint={agent.slug === entryPointSlug}
+                                        />
+                                    ))}
+
+                                    {networks.map((network) => (
+                                        <NetworkTopologyPreview
+                                            key={network.slug}
+                                            network={network}
+                                        />
+                                    ))}
+
+                                    {workflows.map((workflow) => (
+                                        <WorkflowStepFlow key={workflow.slug} workflow={workflow} />
+                                    ))}
+
+                                    {campaigns.map((campaign) => (
+                                        <CampaignCard key={campaign.slug} campaign={campaign} />
+                                    ))}
+                                </div>
+                            ) : (
+                                <Card className="border-zinc-800 bg-zinc-900/50">
+                                    <CardContent className="py-12 text-center">
+                                        <PackageIcon className="text-muted-foreground mx-auto mb-3 h-10 w-10" />
+                                        <p className="text-muted-foreground text-sm">
+                                            Component details are not available for this playbook
+                                            version.
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            )}
+                        </TabsContent>
+
+                        {/* Reviews Tab */}
+                        {playbook.reviews.length > 0 && (
+                            <TabsContent value="reviews">
+                                <Card className="border-zinc-800 bg-zinc-900/50">
+                                    <CardHeader>
+                                        <CardTitle>Reviews</CardTitle>
+                                    </CardHeader>
+                                    <CardContent className="space-y-4">
+                                        {playbook.reviews.map((review) => (
+                                            <div
+                                                key={review.id}
+                                                className="border-b border-zinc-800 pb-4 last:border-0"
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <div className="flex">
+                                                        {Array.from({ length: 5 }).map((_, i) => (
+                                                            <StarIcon
+                                                                key={i}
+                                                                className={`h-3.5 w-3.5 ${
+                                                                    i < review.rating
+                                                                        ? "fill-yellow-400 text-yellow-400"
+                                                                        : "text-zinc-600"
+                                                                }`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {review.reviewerOrg.name}
+                                                    </span>
+                                                    <span className="text-muted-foreground text-xs">
+                                                        {new Date(
+                                                            review.createdAt
+                                                        ).toLocaleDateString()}
+                                                    </span>
+                                                </div>
+                                                {review.title && (
+                                                    <p className="mt-1 text-sm font-medium">
+                                                        {review.title}
+                                                    </p>
+                                                )}
+                                                {review.body && (
+                                                    <p className="text-muted-foreground mt-1 text-sm">
+                                                        {review.body}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </CardContent>
+                                </Card>
+                            </TabsContent>
                         )}
 
-                        <div className="mt-4 flex items-center gap-4">
-                            <span className="text-muted-foreground flex items-center gap-1 text-sm">
-                                <DownloadIcon className="h-4 w-4" />
-                                {playbook.installCount} installs
-                            </span>
-                            {playbook.averageRating && (
-                                <span className="flex items-center gap-1 text-sm">
-                                    <StarIcon className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                    {playbook.averageRating.toFixed(1)} ({playbook.reviewCount}{" "}
-                                    reviews)
-                                </span>
-                            )}
-                            {playbook.trustScore && (
-                                <span className="flex items-center gap-1 text-sm text-green-400">
-                                    <ShieldCheckIcon className="h-4 w-4" />
-                                    Trust Score: {Math.round(playbook.trustScore)}
-                                </span>
-                            )}
-                        </div>
-                    </div>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Description</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap">
-                                {playbook.longDescription ?? playbook.description}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <LayersIcon className="h-5 w-5" />
-                                Components ({playbook.components.length})
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="mb-4 flex flex-wrap gap-3">
-                                {Object.entries(componentsByType).map(([type, count]) => (
-                                    <div
-                                        key={type}
-                                        className="flex items-center gap-2 rounded-md border px-3 py-1.5"
-                                    >
-                                        <PackageIcon className="text-muted-foreground h-3.5 w-3.5" />
-                                        <span className="text-sm">
-                                            {count} {type.toLowerCase()}
-                                            {count !== 1 ? "s" : ""}
-                                        </span>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="space-y-2">
-                                {playbook.components.map((comp) => (
-                                    <div
-                                        key={comp.id}
-                                        className="flex items-center justify-between rounded border px-3 py-2"
-                                    >
-                                        <div className="flex items-center gap-2">
-                                            <span className="text-sm">{comp.sourceSlug}</span>
-                                            <Badge variant="outline" className="text-xs">
-                                                {comp.componentType}
-                                            </Badge>
-                                        </div>
-                                        {comp.isEntryPoint && (
-                                            <Badge className="bg-blue-500/10 text-xs text-blue-400">
-                                                Entry Point
-                                            </Badge>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    {playbook.reviews.length > 0 && (
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Reviews</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {playbook.reviews.map((review) => (
-                                    <div key={review.id} className="border-b pb-4 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                            <div className="flex">
-                                                {Array.from({ length: 5 }).map((_, i) => (
-                                                    <StarIcon
-                                                        key={i}
-                                                        className={`h-3.5 w-3.5 ${
-                                                            i < review.rating
-                                                                ? "fill-yellow-400 text-yellow-400"
-                                                                : "text-zinc-600"
-                                                        }`}
-                                                    />
-                                                ))}
-                                            </div>
-                                            <span className="text-muted-foreground text-xs">
-                                                {review.reviewerOrg.name}
-                                            </span>
-                                            <span className="text-muted-foreground text-xs">
-                                                {new Date(review.createdAt).toLocaleDateString()}
-                                            </span>
-                                        </div>
-                                        {review.title && (
-                                            <p className="mt-1 text-sm font-medium">
-                                                {review.title}
-                                            </p>
-                                        )}
-                                        {review.body && (
-                                            <p className="text-muted-foreground mt-1 text-sm">
-                                                {review.body}
-                                            </p>
-                                        )}
-                                    </div>
-                                ))}
-                            </CardContent>
-                        </Card>
-                    )}
+                        {/* Sandbox Tab */}
+                        <TabsContent value="sandbox">
+                            <PlaybookSandbox playbookSlug={slug} playbookName={playbook.name} />
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
+                {/* Sidebar */}
                 <div className="space-y-4">
-                    <Card>
-                        <CardContent className="pt-6">
-                            <div className="mb-4 text-center">
-                                <p className="text-2xl font-bold">{formatPrice()}</p>
-                                {playbook.pricingModel !== "FREE" && (
-                                    <p className="text-muted-foreground mt-1 text-xs">
-                                        {playbook.pricingModel === "SUBSCRIPTION"
-                                            ? "per month"
-                                            : playbook.pricingModel === "PER_USE"
-                                              ? "per use"
-                                              : "one-time"}
-                                    </p>
-                                )}
-                            </div>
-                            <Link href={`/marketplace/${slug}/deploy`}>
-                                <Button className="w-full" size="lg">
-                                    <RocketIcon className="mr-2 h-4 w-4" />
-                                    {playbook.pricingModel === "FREE"
-                                        ? "Deploy Free"
-                                        : "Purchase & Deploy"}
-                                </Button>
-                            </Link>
-                        </CardContent>
-                    </Card>
-
                     {playbook.requiredIntegrations.length > 0 && (
-                        <Card>
+                        <Card className="border-zinc-800 bg-zinc-900/50">
                             <CardHeader>
                                 <CardTitle className="text-sm">Required Integrations</CardTitle>
                             </CardHeader>
@@ -303,7 +366,7 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                     )}
 
                     {playbook.versions.length > 0 && (
-                        <Card>
+                        <Card className="border-zinc-800 bg-zinc-900/50">
                             <CardHeader>
                                 <CardTitle className="text-sm">Version History</CardTitle>
                             </CardHeader>
@@ -314,6 +377,11 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                                         <span className="text-muted-foreground ml-2 text-xs">
                                             {new Date(v.createdAt).toLocaleDateString()}
                                         </span>
+                                        {v.changelog && (
+                                            <p className="text-muted-foreground mt-0.5 text-xs">
+                                                {v.changelog}
+                                            </p>
+                                        )}
                                     </div>
                                 ))}
                             </CardContent>
@@ -321,7 +389,7 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                     )}
 
                     {playbook.tags.length > 0 && (
-                        <Card>
+                        <Card className="border-zinc-800 bg-zinc-900/50">
                             <CardHeader>
                                 <CardTitle className="text-sm">Tags</CardTitle>
                             </CardHeader>
@@ -336,6 +404,46 @@ export default function MarketplaceDetailPage(props: { params: Promise<{ slug: s
                             </CardContent>
                         </Card>
                     )}
+
+                    <Card className="border-zinc-800 bg-zinc-900/50">
+                        <CardContent className="pt-6">
+                            <div className="space-y-3 text-sm">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Publisher</span>
+                                    <span>{playbook.publisherOrg.name}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Version</span>
+                                    <span>v{playbook.version}</span>
+                                </div>
+                                <div className="flex items-center justify-between">
+                                    <span className="text-muted-foreground">Installs</span>
+                                    <span className="flex items-center gap-1">
+                                        <DownloadIcon className="h-3.5 w-3.5" />
+                                        {playbook.installCount}
+                                    </span>
+                                </div>
+                                {playbook.averageRating != null && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Rating</span>
+                                        <span className="flex items-center gap-1">
+                                            <StarIcon className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
+                                            {playbook.averageRating.toFixed(1)}
+                                        </span>
+                                    </div>
+                                )}
+                                {playbook.trustScore != null && playbook.trustScore > 0 && (
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-muted-foreground">Trust Score</span>
+                                        <span className="flex items-center gap-1 text-green-400">
+                                            <ShieldCheckIcon className="h-3.5 w-3.5" />
+                                            {Math.round(playbook.trustScore)}
+                                        </span>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
                 </div>
             </div>
         </div>

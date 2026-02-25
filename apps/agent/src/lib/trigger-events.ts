@@ -59,6 +59,32 @@ export function buildTriggerPayloadSnapshot(payload: unknown): {
     };
 }
 
+export async function ensureSlackTrigger(
+    agentId: string,
+    agentName: string,
+    workspaceId: string | null
+): Promise<{ id: string; isActive: boolean; isArchived: boolean }> {
+    const existing = await prisma.agentTrigger.findFirst({
+        where: { agentId, triggerType: "slack_listener" },
+        select: { id: true, isActive: true, isArchived: true }
+    });
+    if (existing) return existing;
+
+    const trigger = await prisma.agentTrigger.create({
+        data: {
+            agentId,
+            workspaceId,
+            name: `Slack Messages → ${agentName}`,
+            description: "Incoming Slack messages routed to this agent",
+            triggerType: "slack_listener",
+            eventName: "slack.message",
+            isActive: true
+        },
+        select: { id: true, isActive: true, isArchived: true }
+    });
+    return trigger;
+}
+
 export async function createTriggerEventRecord(options: {
     triggerId?: string | null;
     agentId?: string | null;

@@ -11,18 +11,15 @@ import {
     loadConversation,
     generateTitle,
     generateTitleAsync,
+    updateConversationStatus,
+    updateConversationRunId,
     type ConversationMeta
 } from "@/lib/conversation-store";
 import {
-    Badge,
     Button,
     Conversation,
     ConversationContent,
     ConversationScrollButton,
-    DropdownMenu,
-    DropdownMenuTrigger,
-    DropdownMenuContent,
-    DropdownMenuItem,
     Message,
     MessageContent,
     MessageActions,
@@ -85,9 +82,6 @@ import {
     XIcon,
     MicIcon,
     FileIcon,
-    MessageCircleIcon,
-    ZapIcon,
-    ClipboardListIcon,
     CheckIcon,
     AlertTriangleIcon,
     ArrowUpCircleIcon,
@@ -95,11 +89,15 @@ import {
     PhoneOffIcon
 } from "lucide-react";
 import { AgentSelector, getDefaultAgentSlug, type AgentInfo } from "@/components/AgentSelector";
-import { ModelSelector, type ModelOverride } from "@/components/ModelSelector";
 import { TaskSuggestions } from "@/components/TaskSuggestions";
 import { InteractiveQuestions } from "@/components/InteractiveQuestions";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { useVoiceConversation, type VoiceState } from "@/hooks/useVoiceConversation";
+import {
+    useRealtimeVoice,
+    type RealtimeState,
+    type ConnectionQuality
+} from "@/hooks/useRealtimeVoice";
 
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
@@ -289,8 +287,6 @@ function getGreeting(name?: string | null): string {
 
 type InputMode = "knowledge-search" | "fetch-url" | null;
 
-type InteractionMode = "ask" | "agent" | "plan";
-
 const INPUT_MODE_CONFIG: Record<
     NonNullable<InputMode>,
     { label: string; icon: typeof SearchIcon; placeholder: string; prefix: string }
@@ -306,27 +302,6 @@ const INPUT_MODE_CONFIG: Record<
         icon: GlobeIcon,
         placeholder: "Enter a URL to fetch...",
         prefix: "Fetch and summarize the content from this URL: "
-    }
-};
-
-const INTERACTION_MODE_CONFIG: Record<
-    InteractionMode,
-    { icon: typeof MessageCircleIcon; label: string; description: string }
-> = {
-    ask: {
-        icon: MessageCircleIcon,
-        label: "Ask",
-        description: "Ask questions without making changes"
-    },
-    agent: {
-        icon: ZapIcon,
-        label: "Agent",
-        description: "Full agent with tools and actions"
-    },
-    plan: {
-        icon: ClipboardListIcon,
-        label: "Plan",
-        description: "Create a plan before executing"
     }
 };
 
@@ -538,14 +513,167 @@ const VOICE_STATE_LABELS: Record<VoiceState, string> = {
     speaking: "Speaking..."
 };
 
+const REALTIME_STATE_LABELS: Record<RealtimeState, string> = {
+    idle: "Tap to connect",
+    connecting: "Connecting...",
+    connected: "Listening...",
+    reconnecting: "Reconnecting...",
+    error: "Connection error"
+};
+
+const QUALITY_COLORS: Record<ConnectionQuality, string> = {
+    good: "bg-green-400",
+    fair: "bg-yellow-400",
+    poor: "bg-red-400",
+    unknown: "bg-white/40"
+};
+
+function formatDuration(seconds: number): string {
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
 function VoiceConversationOverlay({
+    agentSlug,
+    onClose,
+    onSidebarRefresh
+}: {
+    agentSlug: string;
+    onClose: () => void;
+    onSidebarRefresh?: () => void;
+}) {
+    const {
+        state,
+        connect,
+        disconnect,
+        userTranscript,
+        agentTranscript,
+        error,
+        sessionDuration,
+        connectionQuality,
+        activeToolCall
+    } = useRealtimeVoice({
+        agentSlug,
+        onError: (msg) => console.error("[RealtimeVoice]", msg)
+    });
+
+    // Auto-connect on mount
+    useEffect(() => {
+        connect();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    const handleClose = useCallback(() => {
+        disconnect();
+        onSidebarRefresh?.();
+        onClose();
+    }, [disconnect, onClose, onSidebarRefresh]);
+
+    const displayTranscript = agentTranscript || userTranscript;
+    const isActive = state === "connected" || state === "reconnecting";
+
+    return (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-black/80 backdrop-blur-sm">
+            {/* Top bar: duration + quality */}
+            {isActive && (
+                <div className="absolute top-4 left-4 flex items-center gap-3">
+                    <span className="font-mono text-sm text-white/60">
+                        {formatDuration(sessionDuration)}
+                    </span>
+                    <span
+                        className={`size-2 rounded-full ${QUALITY_COLORS[connectionQuality]}`}
+                        title={`Connection: ${connectionQuality}`}
+                    />
+                </div>
+            )}
+
+            <button
+                onClick={handleClose}
+                className="absolute top-4 right-4 rounded-full p-2 text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+                aria-label="Close voice conversation"
+            >
+                <PhoneOffIcon className="size-6" />
+            </button>
+
+            <div className="flex flex-col items-center gap-8">
+                {/* Pulsing orb */}
+                <div className="relative flex size-32 items-center justify-center rounded-full">
+                    <div
+                        className={[
+                            "absolute inset-0 rounded-full transition-all duration-500",
+                            state === "connected"
+                                ? "animate-pulse bg-blue-500/30"
+                                : state === "reconnecting"
+                                  ? "animate-pulse bg-yellow-500/20"
+                                  : state === "connecting"
+                                    ? "animate-pulse bg-white/10"
+                                    : state === "error"
+                                      ? "bg-red-500/20"
+                                      : "bg-white/10"
+                        ].join(" ")}
+                    />
+                    <div
+                        className={[
+                            "relative flex size-24 items-center justify-center rounded-full transition-colors duration-300",
+                            state === "connected"
+                                ? "bg-blue-500"
+                                : state === "reconnecting"
+                                  ? "bg-yellow-500"
+                                  : state === "connecting"
+                                    ? "bg-white/20"
+                                    : state === "error"
+                                      ? "bg-red-500"
+                                      : "bg-white/20"
+                        ].join(" ")}
+                    >
+                        {state === "connecting" || state === "reconnecting" ? (
+                            <LoaderIcon className="size-10 animate-spin text-white" />
+                        ) : (
+                            <MicIcon className="size-10 text-white" />
+                        )}
+                    </div>
+                </div>
+
+                <div className="text-center">
+                    <p className="text-lg font-medium text-white">{REALTIME_STATE_LABELS[state]}</p>
+                    {activeToolCall && (
+                        <p className="mt-1 text-sm text-blue-300">Using tool: {activeToolCall}</p>
+                    )}
+                    {displayTranscript && (
+                        <p className="mt-2 max-w-md text-sm text-white/60">{displayTranscript}</p>
+                    )}
+                    {error && <p className="mt-2 max-w-sm text-sm text-red-400">{error}</p>}
+                    {state === "error" && (
+                        <button
+                            onClick={() => connect()}
+                            className="mt-3 rounded-full bg-white/10 px-4 py-1.5 text-sm text-white transition-colors hover:bg-white/20"
+                        >
+                            Try again
+                        </button>
+                    )}
+                </div>
+
+                <button
+                    onClick={handleClose}
+                    className="rounded-full bg-white/10 px-6 py-2 text-sm text-white transition-colors hover:bg-white/20"
+                >
+                    End conversation
+                </button>
+            </div>
+        </div>
+    );
+}
+
+/** @deprecated Kept as fallback -- uses browser SpeechRecognition + SSE TTS */
+function LegacyVoiceConversationOverlay({
     agentSlug,
     onClose
 }: {
     agentSlug: string;
     onClose: () => void;
 }) {
-    const { state, currentTranscript, error, toggleVoice, stopAll, audioLevel } =
+    const { state, currentTranscript, error, isSupported, toggleVoice, stopAll, audioLevel } =
         useVoiceConversation({
             agentSlug,
             continuous: true,
@@ -565,7 +693,6 @@ function VoiceConversationOverlay({
             </button>
 
             <div className="flex flex-col items-center gap-8">
-                {/* Pulsing orb */}
                 <button
                     onClick={toggleVoice}
                     className="relative flex size-32 items-center justify-center rounded-full transition-transform"
@@ -601,7 +728,11 @@ function VoiceConversationOverlay({
                 </button>
 
                 <div className="text-center">
-                    <p className="text-lg font-medium text-white">{VOICE_STATE_LABELS[state]}</p>
+                    <p className="text-lg font-medium text-white">
+                        {!isSupported
+                            ? "Speech recognition not supported in this browser"
+                            : VOICE_STATE_LABELS[state]}
+                    </p>
                     {currentTranscript && (
                         <p className="mt-2 max-w-md text-sm text-white/60">{currentTranscript}</p>
                     )}
@@ -698,16 +829,6 @@ function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) =>
     );
 }
 
-const MODEL_DISPLAY_MAP: Record<string, string> = {
-    "gpt-4o": "GPT-4o",
-    "gpt-4o-mini": "GPT-4o Mini",
-    "o3-mini": "o3-mini",
-    "claude-opus-4-6": "Claude Opus 4.6",
-    "claude-sonnet-4-20250514": "Claude Sonnet 4",
-    "claude-sonnet-4-5-20250514": "Claude Sonnet 4.5",
-    "claude-haiku-3-5-20241022": "Claude Haiku 3.5"
-};
-
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function UnifiedChatPage() {
@@ -717,30 +838,25 @@ export default function UnifiedChatPage() {
     const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>(
         searchParams.get("agent") || getDefaultAgentSlug()
     );
-    const [modelOverride, setModelOverride] = useState<ModelOverride | null>(null);
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
     const [currentRunId, setCurrentRunId] = useState<string | null>(null);
-    const [agentDefaultModel, setAgentDefaultModel] = useState<string | undefined>(undefined);
-    const [agentRoutingMode, setAgentRoutingMode] = useState<"locked" | "auto" | null>(null);
     const [agentName, setAgentName] = useState<string>("");
     const [showSuggestions, setShowSuggestions] = useState(true);
     const [questionAnswers, setQuestionAnswers] = useState<Record<string, Record<string, string>>>(
         {}
     );
     const [inputMode, setInputMode] = useState<InputMode>(null);
-    const [interactionMode, setInteractionMode] = useState<InteractionMode>("agent");
     const [voiceConversationActive, setVoiceConversationActive] = useState(false);
 
     const conversationTitleRef = useRef<string>("");
     const conversationCreatedRef = useRef<string>(new Date().toISOString());
+    const conversationUpdatedRef = useRef<string | null>(null);
+    const isLoadingRef = useRef<boolean>(false);
     const titleGenFiredRef = useRef<boolean>(false);
     const pendingMessageRef = useRef<string | null>(null);
     const hasMessagesRef = useRef(false);
     const [toolStartTimes, setToolStartTimes] = useState<Map<string, number>>(new Map());
     const [titleVersion, setTitleVersion] = useState(0);
-
-    const displayModelName = modelOverride?.name || agentDefaultModel || "";
-    const modelDisplayText = MODEL_DISPLAY_MAP[displayModelName] || displayModelName;
 
     // Transport
     const transport = useMemo(() => {
@@ -751,20 +867,11 @@ export default function UnifiedChatPage() {
             requestContext: { userId: session?.user?.id || "chat-user", mode: "live" }
         };
         if (currentRunId) bodyExtra.runId = currentRunId;
-        bodyExtra.interactionMode = interactionMode;
-        if (modelOverride) bodyExtra.modelOverride = modelOverride;
         return new DefaultChatTransport({
             api: `${getApiBase()}/api/agents/${selectedAgentSlug}/chat`,
             body: bodyExtra
         });
-    }, [
-        selectedAgentSlug,
-        threadId,
-        modelOverride,
-        currentRunId,
-        interactionMode,
-        session?.user?.id
-    ]);
+    }, [selectedAgentSlug, threadId, currentRunId, session?.user?.id]);
 
     const { messages, setMessages, sendMessage, status, stop } = useChat({
         transport,
@@ -847,11 +954,12 @@ export default function UnifiedChatPage() {
                 if (part.type === "data-run-metadata" && part.data?.runId) {
                     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional: sync stream-derived metadata into state
                     setCurrentRunId(part.data.runId);
+                    updateConversationRunId(threadId, part.data.runId);
                     return;
                 }
             }
         }
-    }, [messages, currentRunId]);
+    }, [messages, currentRunId, threadId]);
 
     // Finalize the current conversation run on page unload
     useEffect(() => {
@@ -868,16 +976,10 @@ export default function UnifiedChatPage() {
     // Handlers
     const handleAgentChange = useCallback(
         (newSlug: string, agent: AgentInfo) => {
-            // Always sync agent metadata (model, name, routing) regardless of
-            // whether the slug changed. This ensures initial load and re-selections
-            // correctly populate the header bar and model selector.
-            setAgentDefaultModel(agent.modelName);
-            setAgentRoutingMode(agent.routingConfig?.mode || null);
             setAgentName(agent.name);
 
             if (newSlug !== selectedAgentSlug) {
                 setSelectedAgentSlug(newSlug);
-                setModelOverride(null);
 
                 // CRITICAL: Finalize the current conversation run before switching agents.
                 // Without this, subsequent messages would try to add turns to the OLD agent's run.
@@ -959,6 +1061,8 @@ export default function UnifiedChatPage() {
         setQuestionAnswers({});
         conversationTitleRef.current = "";
         conversationCreatedRef.current = new Date().toISOString();
+        conversationUpdatedRef.current = null;
+        isLoadingRef.current = false;
         titleGenFiredRef.current = false;
     }, [selectedAgentSlug, setMessages, currentRunId]);
 
@@ -970,32 +1074,23 @@ export default function UnifiedChatPage() {
         messages: any[];
     } | null>(null);
 
-    const handleLoadConversation = useCallback(
-        (convId: string) => {
-            const { meta, messages: loaded } = loadConversation(convId);
-            if (!meta) return;
+    const handleLoadConversation = useCallback((convId: string) => {
+        const { meta, messages: loaded } = loadConversation(convId);
+        if (!meta) return;
 
-            // Finalize any active run before switching conversations
-            if (currentRunId && selectedAgentSlug) {
-                fetch(`${getApiBase()}/api/agents/${selectedAgentSlug}/chat/finalize`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ runId: currentRunId })
-                }).catch((e) => console.warn("[Chat] Failed to finalize run on load:", e));
-            }
+        // Mark as loading so auto-save preserves the original updatedAt
+        isLoadingRef.current = true;
+        conversationUpdatedRef.current = meta.updatedAt;
 
-            // Store the data to load. The effect below applies setMessages() AFTER
-            // useChat has re-initialised for the new threadId, so the messages land
-            // in the correct per-id store instead of the old one.
-            pendingLoadRef.current = { meta, messages: loaded };
+        // Store the data to load. The effect below applies setMessages() AFTER
+        // useChat has re-initialised for the new threadId, so the messages land
+        // in the correct per-id store instead of the old one.
+        pendingLoadRef.current = { meta, messages: loaded };
 
-            setThreadId(meta.id);
-            setSelectedAgentSlug(meta.agentSlug);
-            setModelOverride(null);
-            setCurrentRunId(null);
-        },
-        [currentRunId, selectedAgentSlug]
-    );
+        setThreadId(meta.id);
+        setSelectedAgentSlug(meta.agentSlug);
+        setCurrentRunId(meta.runId ?? null);
+    }, []);
 
     // Apply the pending conversation load after useChat has re-initialised for
     // the new threadId (i.e. the next effect cycle, not within the same render).
@@ -1055,16 +1150,27 @@ export default function UnifiedChatPage() {
                     );
                 }
             }
+
+            // Preserve the original updatedAt when loading a conversation;
+            // only stamp a new timestamp when actual new activity occurs.
+            let updatedAt: string;
+            if (isLoadingRef.current && conversationUpdatedRef.current) {
+                updatedAt = conversationUpdatedRef.current;
+                isLoadingRef.current = false;
+            } else {
+                updatedAt = new Date().toISOString();
+            }
+
             saveConversation(
                 {
                     id: threadId,
                     title: conversationTitleRef.current || "New conversation",
                     agentSlug: selectedAgentSlug,
                     agentName: agentName || selectedAgentSlug,
-                    modelName: modelOverride?.name || agentDefaultModel,
                     messageCount: messages.length,
                     createdAt: conversationCreatedRef.current,
-                    updatedAt: new Date().toISOString()
+                    updatedAt,
+                    runId: currentRunId ?? undefined
                 },
                 messages
             );
@@ -1089,15 +1195,24 @@ export default function UnifiedChatPage() {
             }
         }, 500);
         return () => clearTimeout(timer);
-    }, [
-        messages,
-        threadId,
-        selectedAgentSlug,
-        agentName,
-        modelOverride,
-        agentDefaultModel,
-        isStreaming
-    ]);
+    }, [messages, threadId, selectedAgentSlug, agentName, isStreaming, currentRunId]);
+
+    // Track conversation status (running / completed) and refresh sidebar
+    const prevStreamingRef = useRef(false);
+    useEffect(() => {
+        const wasActive = prevStreamingRef.current;
+        const isActive = isStreaming || isSubmitted;
+        prevStreamingRef.current = isActive;
+
+        if (isActive && !wasActive && messages.length > 0) {
+            updateConversationStatus(threadId, "running");
+            // eslint-disable-next-line react-hooks/set-state-in-effect -- refreshing sidebar title after status transition
+            setTitleVersion((v) => v + 1);
+        } else if (!isActive && wasActive && messages.length > 0) {
+            updateConversationStatus(threadId, "completed");
+            setTitleVersion((v) => v + 1);
+        }
+    }, [isStreaming, isSubmitted, threadId, messages.length]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- tracking tool invocation start times from streamed messages
@@ -1127,10 +1242,6 @@ export default function UnifiedChatPage() {
         ? INPUT_MODE_CONFIG[inputMode].placeholder
         : "How can I help you today?";
 
-    // ── Mode dropdown config ────────────────────────────────────────────
-    const activeModeConfig = INTERACTION_MODE_CONFIG[interactionMode];
-    const ActiveModeIcon = activeModeConfig.icon;
-
     // ── Shared input component ───────────────────────────────────────────
     const chatInput = (
         <PromptInput
@@ -1144,58 +1255,12 @@ export default function UnifiedChatPage() {
             <PromptInputBody>
                 <PromptInputTextarea
                     placeholder={textareaPlaceholder}
-                    className="min-h-[48px] text-[15px]"
+                    className="min-h-[48px] px-3 pt-3 text-[15px]"
                 />
             </PromptInputBody>
-            <PromptInputFooter className="flex-wrap">
-                <PromptInputTools className="min-w-0 flex-wrap">
+            <PromptInputFooter className="flex-wrap gap-2 px-3 pb-3">
+                <PromptInputTools className="min-w-0 flex-wrap gap-1.5">
                     <ChatInputActions setInputMode={setInputMode} />
-                    {/* Mode Selector Dropdown: Ask / Agent / Plan */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger
-                            render={
-                                <button
-                                    type="button"
-                                    className="bg-muted/50 hover:bg-muted inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors"
-                                >
-                                    <ActiveModeIcon className="size-3.5" />
-                                    {activeModeConfig.label}
-                                    <ChevronDownIcon className="text-muted-foreground size-3" />
-                                </button>
-                            }
-                        />
-                        <DropdownMenuContent align="start" className="w-56">
-                            {(
-                                Object.entries(INTERACTION_MODE_CONFIG) as [
-                                    InteractionMode,
-                                    (typeof INTERACTION_MODE_CONFIG)[InteractionMode]
-                                ][]
-                            ).map(([mode, config]) => {
-                                const ModeIcon = config.icon;
-                                return (
-                                    <DropdownMenuItem
-                                        key={mode}
-                                        onClick={() => setInteractionMode(mode)}
-                                    >
-                                        <div className="flex w-full items-center gap-2.5">
-                                            <ModeIcon className="text-muted-foreground size-4 shrink-0" />
-                                            <div className="flex min-w-0 flex-1 flex-col">
-                                                <span className="text-sm font-medium">
-                                                    {config.label}
-                                                </span>
-                                                <span className="text-muted-foreground text-xs">
-                                                    {config.description}
-                                                </span>
-                                            </div>
-                                            {interactionMode === mode && (
-                                                <CheckIcon className="text-primary size-4 shrink-0" />
-                                            )}
-                                        </div>
-                                    </DropdownMenuItem>
-                                );
-                            })}
-                        </DropdownMenuContent>
-                    </DropdownMenu>
                     <VoiceInputButton />
                     <PromptInputButton
                         onClick={() => setVoiceConversationActive(true)}
@@ -1209,20 +1274,6 @@ export default function UnifiedChatPage() {
                         onChange={handleAgentChange}
                         disabled={isBusy}
                     />
-                    <ModelSelector
-                        value={modelOverride?.name || null}
-                        agentDefault={agentDefaultModel}
-                        onChange={setModelOverride}
-                        disabled={isBusy}
-                    />
-                    {agentRoutingMode === "auto" && !modelOverride && (
-                        <span
-                            className="bg-primary/10 text-primary inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium"
-                            title="Model routing is enabled — the model will be selected automatically based on input complexity"
-                        >
-                            Auto
-                        </span>
-                    )}
                 </PromptInputTools>
                 <PromptInputSubmit
                     className="shrink-0"
@@ -1429,6 +1480,7 @@ export default function UnifiedChatPage() {
         <VoiceConversationOverlay
             agentSlug={selectedAgentSlug}
             onClose={() => setVoiceConversationActive(false)}
+            onSidebarRefresh={() => setTitleVersion((v) => v + 1)}
         />
     );
 
@@ -1522,11 +1574,6 @@ export default function UnifiedChatPage() {
                         <span className="text-sm font-medium">
                             {agentName || selectedAgentSlug}
                         </span>
-                        {modelDisplayText && (
-                            <Badge variant="outline" className="text-muted-foreground text-xs">
-                                {modelDisplayText}
-                            </Badge>
-                        )}
                     </div>
                     <Button
                         variant="ghost"

@@ -50,7 +50,10 @@ export type IconName =
     | "menu"
     | "paint-board"
     | "task-list"
-    | "help-circle";
+    | "help-circle"
+    | "store"
+    | "share"
+    | "code";
 
 /**
  * Icon component type - a reference to an icon component, not JSX.

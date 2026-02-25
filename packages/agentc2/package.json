@@ -16,6 +16,7 @@
     "./tools/outlook-calendar": "./src/tools/outlook-calendar.ts",
     "./tools/dropbox": "./src/tools/dropbox.ts",
     "./tools/remote-compute-helpers": "./src/tools/remote-compute-helpers.ts",
+    "./tools/community-tools": "./src/tools/community-tools.ts",
     "./mcp": "./src/mcp/index.ts",
     "./scorers": "./src/scorers/index.ts",
     "./scorers/registry": "./src/scorers/registry.ts",

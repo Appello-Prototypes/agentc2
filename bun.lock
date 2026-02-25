@@ -115,6 +115,7 @@
         "ws": "^8.19.0",
         "zod": "^3.25.0",
         "zod-openapi": "^5.4.6",
+        "zod-to-json-schema": "^3.25.1",
       },
       "devDependencies": {
         "@repo/next-config": "workspace:*",

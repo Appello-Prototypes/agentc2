@@ -62,19 +62,56 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         const existingAgentSlugs = new Set(existingAgents.map((a) => a.slug));
         const suffix = installation.id.slice(-6);
 
+        const resolveSlug = (baseSlug: string, existingSlugs: Set<string>): string => {
+            if (opts.cleanSlugs) {
+                return generateUniqueSlug(baseSlug, existingSlugs);
+            }
+            return `${baseSlug}-${suffix}`;
+        };
+
         const agentSlugMap = new Map<string, string>();
         const createdAgentIds: string[] = [];
         const createdSkillIds: string[] = [];
         const createdDocumentIds: string[] = [];
         const createdWorkflowIds: string[] = [];
         const createdNetworkIds: string[] = [];
+        const createdCampaignIds: string[] = [];
+
+        // Preload existing slugs for clean slug mode.
+        // Document, Workflow, Network, Campaign have globally unique slugs,
+        // so we must query all existing slugs (not just the target workspace).
+        // Skills use @@unique([workspaceId, slug]) so per-workspace is fine.
+        const existingDocSlugs = new Set<string>();
+        const existingSkillSlugs = new Set<string>();
+        const existingWfSlugs = new Set<string>();
+        const existingNetSlugs = new Set<string>();
+        const existingCampaignSlugs = new Set<string>();
+        if (opts.cleanSlugs) {
+            const [docs, skills, wfs, nets, campaigns] = await Promise.all([
+                prisma.document.findMany({ select: { slug: true } }),
+                prisma.skill.findMany({
+                    where: { workspaceId: opts.targetWorkspaceId },
+                    select: { slug: true }
+                }),
+                prisma.workflow.findMany({ select: { slug: true } }),
+                prisma.network.findMany({ select: { slug: true } }),
+                prisma.campaign.findMany({ select: { slug: true } })
+            ]);
+            docs.forEach((d) => existingDocSlugs.add(d.slug));
+            skills.forEach((s) => existingSkillSlugs.add(s.slug));
+            wfs.forEach((w) => existingWfSlugs.add(w.slug));
+            nets.forEach((n) => existingNetSlugs.add(n.slug));
+            campaigns.forEach((c) => existingCampaignSlugs.add(c.slug));
+        }
 
         // 1. Create documents
         const docSlugToId = new Map<string, string>();
         for (const docSnapshot of manifest.documents) {
+            const docSlug = resolveSlug(docSnapshot.slug, existingDocSlugs);
+            existingDocSlugs.add(docSlug);
             const doc = await prisma.document.create({
                 data: {
-                    slug: `${docSnapshot.slug}-${suffix}`,
+                    slug: docSlug,
                     name: docSnapshot.name,
                     description: docSnapshot.description,
                     content: docSnapshot.content,
@@ -94,10 +131,12 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         // 2. Create skills
         const skillSlugToId = new Map<string, string>();
         for (const skillSnapshot of manifest.skills) {
+            const skillSlug = resolveSlug(skillSnapshot.slug, existingSkillSlugs);
+            existingSkillSlugs.add(skillSlug);
             const meta = (skillSnapshot.metadata as Record<string, unknown>) ?? {};
             const skill = await prisma.skill.create({
                 data: {
-                    slug: `${skillSnapshot.slug}-${suffix}`,
+                    slug: skillSlug,
                     name: skillSnapshot.name,
                     description: skillSnapshot.description,
                     instructions: skillSnapshot.instructions,
@@ -235,9 +274,11 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
         // 4. Create workflows
         const workflowSlugToId = new Map<string, string>();
         for (const wfSnapshot of manifest.workflows) {
+            const wfSlug = resolveSlug(wfSnapshot.slug, existingWfSlugs);
+            existingWfSlugs.add(wfSlug);
             const wf = await prisma.workflow.create({
                 data: {
-                    slug: `${wfSnapshot.slug}-${suffix}`,
+                    slug: wfSlug,
                     name: wfSnapshot.name,
                     description: wfSnapshot.description,
                     definitionJson: wfSnapshot.definitionJson as Prisma.InputJsonValue,
@@ -256,9 +297,11 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
 
         // 5. Create networks
         for (const netSnapshot of manifest.networks) {
+            const netSlug = resolveSlug(netSnapshot.slug, existingNetSlugs);
+            existingNetSlugs.add(netSlug);
             const network = await prisma.network.create({
                 data: {
-                    slug: `${netSnapshot.slug}-${suffix}`,
+                    slug: netSlug,
                     name: netSnapshot.name,
                     description: netSnapshot.description,
                     instructions: netSnapshot.instructions,
@@ -301,6 +344,33 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
             }
         }
 
+        // 6. Create campaigns from templates
+        for (const campTemplate of manifest.campaignTemplates) {
+            const campSlug = opts.cleanSlugs
+                ? generateUniqueSlug(campTemplate.slug, existingCampaignSlugs)
+                : `${campTemplate.slug}-${suffix}`;
+            existingCampaignSlugs.add(campSlug);
+
+            const campaign = await prisma.campaign.create({
+                data: {
+                    slug: campSlug,
+                    name: campTemplate.name,
+                    status: "PLANNING",
+                    tenantId: opts.targetOrgId,
+                    createdBy: opts.userId,
+                    intent: campTemplate.intent,
+                    endState: campTemplate.endState,
+                    description: campTemplate.description,
+                    constraints: campTemplate.constraints,
+                    restraints: campTemplate.restraints,
+                    requireApproval: campTemplate.requireApproval,
+                    maxCostUsd: campTemplate.maxCostUsd,
+                    timeoutMinutes: campTemplate.timeoutMinutes
+                }
+            });
+            createdCampaignIds.push(campaign.id);
+        }
+
         await prisma.playbookInstallation.update({
             where: { id: installation.id },
             data: {
@@ -309,7 +379,8 @@ export async function deployPlaybook(opts: DeployPlaybookOptions) {
                 createdSkillIds,
                 createdDocumentIds,
                 createdWorkflowIds,
-                createdNetworkIds
+                createdNetworkIds,
+                createdCampaignIds
             }
         });
 
@@ -368,6 +439,15 @@ export async function uninstallPlaybook(installationId: string) {
     if (installation.createdDocumentIds.length > 0) {
         await prisma.document.deleteMany({
             where: { id: { in: installation.createdDocumentIds } }
+        });
+    }
+
+    if (installation.createdCampaignIds.length > 0) {
+        await prisma.campaignLog.deleteMany({
+            where: { campaignId: { in: installation.createdCampaignIds } }
+        });
+        await prisma.campaign.deleteMany({
+            where: { id: { in: installation.createdCampaignIds } }
         });
     }
 

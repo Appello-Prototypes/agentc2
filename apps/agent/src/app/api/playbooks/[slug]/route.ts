@@ -36,6 +36,7 @@ export async function GET(_request: NextRequest, { params }: Params) {
                         id: true,
                         version: true,
                         changelog: true,
+                        manifest: true,
                         createdAt: true
                     }
                 },
@@ -60,7 +61,9 @@ export async function GET(_request: NextRequest, { params }: Params) {
             return NextResponse.json({ error: "Playbook not found" }, { status: 404 });
         }
 
-        return NextResponse.json({ playbook });
+        const latestManifest = playbook.versions[0]?.manifest ?? null;
+
+        return NextResponse.json({ playbook, manifest: latestManifest });
     } catch (error) {
         console.error("[playbooks] Detail error:", error);
         return NextResponse.json(

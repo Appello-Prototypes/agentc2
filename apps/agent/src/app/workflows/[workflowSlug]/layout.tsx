@@ -7,6 +7,7 @@ import { Badge, Button, HugeiconsIcon, cn, icons } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
 import { DetailPageShell } from "@/components/DetailPageShell";
+import { ShareEmbedDialog } from "@/components/ShareEmbedDialog";
 
 interface WorkflowDetail {
     id: string;
@@ -17,6 +18,8 @@ interface WorkflowDetail {
     isPublished: boolean;
     isActive: boolean;
     runCount: number;
+    visibility: string;
+    publicToken: string | null;
 }
 
 const navItems: { id: string; label: string; icon: IconName; path: string }[] = [
@@ -37,6 +40,7 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
 
     const [workflow, setWorkflow] = useState<WorkflowDetail | null>(null);
     const [loading, setLoading] = useState(true);
+    const [shareOpen, setShareOpen] = useState(false);
 
     useEffect(() => {
         const fetchWorkflow = async () => {
@@ -102,14 +106,29 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
                                 <span>Runs {workflow.runCount}</span>
                                 <span>{workflow.isPublished ? "Published" : "Draft"}</span>
                             </div>
-                            <Button
-                                variant="outline"
-                                size="sm"
-                                className="mt-3 w-full"
-                                onClick={() => router.push("/workflows")}
-                            >
-                                All workflows
-                            </Button>
+                            <div className="mt-3 flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex-1"
+                                    onClick={() => router.push("/workflows")}
+                                >
+                                    All workflows
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="gap-1.5"
+                                    onClick={() => setShareOpen(true)}
+                                >
+                                    <HugeiconsIcon
+                                        icon={icons.share!}
+                                        className="size-3.5"
+                                        strokeWidth={1.5}
+                                    />
+                                    Share
+                                </Button>
+                            </div>
                         </div>
 
                         <nav className="flex-1 overflow-y-auto p-2">
@@ -135,6 +154,24 @@ export default function WorkflowLayout({ children }: { children: React.ReactNode
                                 );
                             })}
                         </nav>
+
+                        <ShareEmbedDialog
+                            open={shareOpen}
+                            onOpenChange={setShareOpen}
+                            entityType="workflow"
+                            entity={{
+                                id: workflow.id,
+                                slug: workflow.slug,
+                                name: workflow.name,
+                                visibility: workflow.visibility ?? "PRIVATE",
+                                publicToken: workflow.publicToken ?? null
+                            }}
+                            onVisibilityChange={(visibility, publicToken) => {
+                                setWorkflow((prev) =>
+                                    prev ? { ...prev, visibility, publicToken } : prev
+                                );
+                            }}
+                        />
                     </>
                 )
             }

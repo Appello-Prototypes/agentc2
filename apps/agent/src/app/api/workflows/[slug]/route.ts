@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { randomUUID } from "crypto";
 import { prisma } from "@repo/database";
 import {
     createChangeLog,
@@ -75,6 +76,13 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
         if (body.retryConfig !== undefined) updateData.retryConfig = body.retryConfig;
         if (body.isPublished !== undefined) updateData.isPublished = body.isPublished;
         if (body.isActive !== undefined) updateData.isActive = body.isActive;
+        if (body.visibility !== undefined) {
+            updateData.visibility = body.visibility;
+            if (body.visibility === "PUBLIC" && !existing.publicToken) {
+                updateData.publicToken = randomUUID();
+            }
+        }
+        if (body.metadata !== undefined) updateData.metadata = body.metadata;
 
         // Detect all field-level changes for changelog
         const fieldChanges: FieldChange[] = [];
@@ -87,6 +95,7 @@ export async function PUT(request: NextRequest, { params }: { params: Promise<{ 
             sc("timeout", existing.timeout, body.timeout),
             sc("isPublished", existing.isPublished, body.isPublished),
             sc("isActive", existing.isActive, body.isActive),
+            sc("visibility", existing.visibility, body.visibility),
             jc("definitionJson", existing.definitionJson, body.definitionJson),
             jc("inputSchemaJson", existing.inputSchemaJson, body.inputSchemaJson),
             jc("outputSchemaJson", existing.outputSchemaJson, body.outputSchemaJson),

@@ -399,5 +399,12 @@ export const inngest = new Inngest({
                 purchaseId?: string;
             };
         };
+        // Community Heartbeat Events
+        "community/heartbeat.agent": {
+            data: {
+                boardId: string;
+                agentId: string;
+            };
+        };
     }>()
 });
