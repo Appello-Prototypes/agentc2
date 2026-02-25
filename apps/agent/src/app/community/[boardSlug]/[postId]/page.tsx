@@ -2,9 +2,39 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Button, Badge, Skeleton, Avatar, AvatarFallback, AvatarImage, Textarea } from "@repo/ui";
+import { useParams, useRouter } from "next/navigation";
+import { useSession } from "@repo/auth/client";
+import {
+    Button,
+    Badge,
+    Skeleton,
+    Avatar,
+    AvatarFallback,
+    AvatarImage,
+    Textarea,
+    Input,
+    Label,
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogFooter,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle
+} from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { MarkdownContent } from "@/components/MarkdownContent";
 import {
     ChevronUpIcon,
     ChevronDownIcon,
@@ -12,9 +42,13 @@ import {
     MessageSquareIcon,
     PinIcon,
     LockIcon,
+    LockOpenIcon,
     BotIcon,
     ReplyIcon,
-    XIcon
+    XIcon,
+    MoreHorizontalIcon,
+    PencilIcon,
+    Trash2Icon
 } from "lucide-react";
 
 type AuthorUser = { id: string; name: string; image: string | null };
@@ -64,6 +98,8 @@ type Post = {
 
 export default function PostDetailPage() {
     const params = useParams();
+    const router = useRouter();
+    const { data: session } = useSession();
     const boardSlug = params.boardSlug as string;
     const postId = params.postId as string;
     const [post, setPost] = useState<Post | null>(null);
@@ -71,6 +107,14 @@ export default function PostDetailPage() {
     const [commentText, setCommentText] = useState("");
     const [replyTo, setReplyTo] = useState<string | null>(null);
     const [submitting, setSubmitting] = useState(false);
+
+    const [editPostOpen, setEditPostOpen] = useState(false);
+    const [editPostData, setEditPostData] = useState({ title: "", content: "", category: "" });
+    const [savingPost, setSavingPost] = useState(false);
+    const [deletePostOpen, setDeletePostOpen] = useState(false);
+    const [deletingPost, setDeletingPost] = useState(false);
+
+    const currentUserId = session?.user?.id;
 
     const fetchPost = useCallback(async () => {
         try {
@@ -157,6 +201,138 @@ export default function PostDetailPage() {
             setSubmitting(false);
         }
     };
+
+    const handleEditPost = () => {
+        if (!post) return;
+        setEditPostData({
+            title: post.title,
+            content: post.content,
+            category: post.category || ""
+        });
+        setEditPostOpen(true);
+    };
+
+    const handleSavePost = async () => {
+        if (!post || !editPostData.title.trim() || !editPostData.content.trim()) return;
+        setSavingPost(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${post.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    title: editPostData.title,
+                    content: editPostData.content,
+                    category: editPostData.category || undefined
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPost(data.post);
+                setEditPostOpen(false);
+            }
+        } catch (err) {
+            console.error("Failed to update post:", err);
+        } finally {
+            setSavingPost(false);
+        }
+    };
+
+    const handleDeletePost = async () => {
+        if (!post) return;
+        setDeletingPost(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${post.id}`, {
+                method: "DELETE"
+            });
+            const data = await res.json();
+            if (data.success) {
+                router.push(`/community/${boardSlug}`);
+            }
+        } catch (err) {
+            console.error("Failed to delete post:", err);
+        } finally {
+            setDeletingPost(false);
+            setDeletePostOpen(false);
+        }
+    };
+
+    const handleTogglePin = async () => {
+        if (!post) return;
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${post.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isPinned: !post.isPinned })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPost({ ...post, isPinned: !post.isPinned });
+            }
+        } catch (err) {
+            console.error("Toggle pin failed:", err);
+        }
+    };
+
+    const handleToggleLock = async () => {
+        if (!post) return;
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${post.id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isLocked: !post.isLocked })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPost({ ...post, isLocked: !post.isLocked });
+            }
+        } catch (err) {
+            console.error("Toggle lock failed:", err);
+        }
+    };
+
+    const handleEditComment = async (commentId: string, content: string) => {
+        if (!post) return;
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${post.id}/comments`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ commentId, content })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPost({
+                    ...post,
+                    comments: post.comments.map((c) => (c.id === commentId ? { ...c, content } : c))
+                });
+            }
+        } catch (err) {
+            console.error("Failed to edit comment:", err);
+        }
+    };
+
+    const handleDeleteComment = async (commentId: string) => {
+        if (!post) return;
+        try {
+            const res = await fetch(
+                `${getApiBase()}/api/community/posts/${post.id}/comments?commentId=${commentId}`,
+                { method: "DELETE" }
+            );
+            const data = await res.json();
+            if (data.success) {
+                setPost({
+                    ...post,
+                    comments: post.comments.filter(
+                        (c) => c.id !== commentId && c.parentId !== commentId
+                    ),
+                    commentCount: post.commentCount - (data.deletedCount || 1)
+                });
+            }
+        } catch (err) {
+            console.error("Failed to delete comment:", err);
+        }
+    };
+
+    const isOwnPost = post?.authorType === "human" && post?.authorUser?.id === currentUserId;
 
     if (loading) {
         return (
@@ -255,28 +431,71 @@ export default function PostDetailPage() {
 
                         {/* Post Content */}
                         <div className="min-w-0 flex-1">
-                            {/* Badges */}
-                            {(post.isPinned || post.isLocked || post.category) && (
-                                <div className="mb-3 flex items-center gap-2">
-                                    {post.isPinned && (
-                                        <Badge className="border-amber-500/30 bg-amber-500/10 text-xs text-amber-400 hover:bg-amber-500/10">
-                                            <PinIcon className="mr-1 h-2.5 w-2.5" />
-                                            Pinned
-                                        </Badge>
-                                    )}
-                                    {post.isLocked && (
-                                        <Badge className="border-red-500/30 bg-red-500/10 text-xs text-red-400 hover:bg-red-500/10">
-                                            <LockIcon className="mr-1 h-2.5 w-2.5" />
-                                            Locked
-                                        </Badge>
-                                    )}
-                                    {post.category && (
-                                        <span className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-[11px] text-zinc-500">
-                                            {post.category}
-                                        </span>
+                            {/* Header with badges and actions */}
+                            <div className="flex items-start justify-between">
+                                <div>
+                                    {(post.isPinned || post.isLocked || post.category) && (
+                                        <div className="mb-3 flex items-center gap-2">
+                                            {post.isPinned && (
+                                                <Badge className="border-amber-500/30 bg-amber-500/10 text-xs text-amber-400 hover:bg-amber-500/10">
+                                                    <PinIcon className="mr-1 h-2.5 w-2.5" />
+                                                    Pinned
+                                                </Badge>
+                                            )}
+                                            {post.isLocked && (
+                                                <Badge className="border-red-500/30 bg-red-500/10 text-xs text-red-400 hover:bg-red-500/10">
+                                                    <LockIcon className="mr-1 h-2.5 w-2.5" />
+                                                    Locked
+                                                </Badge>
+                                            )}
+                                            {post.category && (
+                                                <span className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-[11px] text-zinc-500">
+                                                    {post.category}
+                                                </span>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
-                            )}
+                                <DropdownMenu>
+                                    <DropdownMenuTrigger
+                                        render={
+                                            <button className="rounded-md p-1.5 text-zinc-500 transition-colors hover:bg-zinc-800 hover:text-zinc-300">
+                                                <MoreHorizontalIcon className="h-4 w-4" />
+                                            </button>
+                                        }
+                                    />
+                                    <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={handleTogglePin}>
+                                            <PinIcon className="mr-2 h-3.5 w-3.5" />
+                                            {post.isPinned ? "Unpin" : "Pin"}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={handleToggleLock}>
+                                            {post.isLocked ? (
+                                                <LockOpenIcon className="mr-2 h-3.5 w-3.5" />
+                                            ) : (
+                                                <LockIcon className="mr-2 h-3.5 w-3.5" />
+                                            )}
+                                            {post.isLocked ? "Unlock" : "Lock"}
+                                        </DropdownMenuItem>
+                                        {isOwnPost && (
+                                            <>
+                                                <DropdownMenuSeparator />
+                                                <DropdownMenuItem onClick={handleEditPost}>
+                                                    <PencilIcon className="mr-2 h-3.5 w-3.5" />
+                                                    Edit Post
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem
+                                                    onClick={() => setDeletePostOpen(true)}
+                                                    className="text-red-400 focus:text-red-400"
+                                                >
+                                                    <Trash2Icon className="mr-2 h-3.5 w-3.5" />
+                                                    Delete Post
+                                                </DropdownMenuItem>
+                                            </>
+                                        )}
+                                    </DropdownMenuContent>
+                                </DropdownMenu>
+                            </div>
 
                             <h1 className="mb-3 text-xl font-bold text-zinc-100">{post.title}</h1>
 
@@ -302,9 +521,10 @@ export default function PostDetailPage() {
                             </div>
 
                             {/* Post Body */}
-                            <div className="prose prose-sm prose-invert max-w-none whitespace-pre-wrap text-zinc-300">
-                                {post.content}
-                            </div>
+                            <MarkdownContent
+                                content={post.content}
+                                className="max-w-none text-sm leading-relaxed text-zinc-300"
+                            />
 
                             {/* Footer */}
                             <div className="mt-4 flex items-center gap-3 border-t border-zinc-800/60 pt-3 text-xs text-zinc-500">
@@ -317,6 +537,85 @@ export default function PostDetailPage() {
                         </div>
                     </div>
                 </div>
+
+                {/* Edit Post Dialog */}
+                <Dialog open={editPostOpen} onOpenChange={setEditPostOpen}>
+                    <DialogContent className="sm:max-w-lg">
+                        <DialogHeader>
+                            <DialogTitle>Edit Post</DialogTitle>
+                        </DialogHeader>
+                        <div className="space-y-4 py-2">
+                            <div className="space-y-2">
+                                <Label>Title</Label>
+                                <Input
+                                    value={editPostData.title}
+                                    onChange={(e) =>
+                                        setEditPostData((p) => ({ ...p, title: e.target.value }))
+                                    }
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Content</Label>
+                                <Textarea
+                                    value={editPostData.content}
+                                    onChange={(e) =>
+                                        setEditPostData((p) => ({ ...p, content: e.target.value }))
+                                    }
+                                    rows={6}
+                                    className="max-h-64 resize-none overflow-y-auto"
+                                />
+                            </div>
+                            <div className="space-y-2">
+                                <Label>Category (optional)</Label>
+                                <Input
+                                    value={editPostData.category}
+                                    onChange={(e) =>
+                                        setEditPostData((p) => ({ ...p, category: e.target.value }))
+                                    }
+                                    placeholder="e.g. discussion, question, insight"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter>
+                            <Button variant="outline" onClick={() => setEditPostOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                onClick={handleSavePost}
+                                disabled={
+                                    savingPost ||
+                                    !editPostData.title.trim() ||
+                                    !editPostData.content.trim()
+                                }
+                            >
+                                {savingPost ? "Saving..." : "Save Changes"}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Delete Post Confirmation */}
+                <AlertDialog open={deletePostOpen} onOpenChange={setDeletePostOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Post</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This will permanently delete this post and all its comments. This
+                                action cannot be undone.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={handleDeletePost}
+                                className="bg-red-600 text-white hover:bg-red-700"
+                                disabled={deletingPost}
+                            >
+                                {deletingPost ? "Deleting..." : "Delete Post"}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 {/* Comment Input */}
                 {!post.isLocked && (
@@ -362,6 +661,9 @@ export default function PostDetailPage() {
                                 childrenMap={commentsByParent}
                                 onVote={handleVote}
                                 onReply={(id) => setReplyTo(id)}
+                                onEdit={handleEditComment}
+                                onDelete={handleDeleteComment}
+                                currentUserId={currentUserId}
                             />
                         ))}
                     </div>
@@ -375,26 +677,52 @@ function CommentThread({
     comment,
     childrenMap,
     onVote,
-    onReply
+    onReply,
+    onEdit,
+    onDelete,
+    currentUserId
 }: {
     comment: Comment;
     childrenMap: Map<string, Comment[]>;
     onVote: (targetType: "post" | "comment", targetId: string, value: number) => void;
     onReply: (commentId: string) => void;
+    onEdit: (commentId: string, content: string) => Promise<void>;
+    onDelete: (commentId: string) => Promise<void>;
+    currentUserId?: string;
 }) {
+    const [editing, setEditing] = useState(false);
+    const [editText, setEditText] = useState(comment.content);
+    const [saving, setSaving] = useState(false);
+    const [deleteOpen, setDeleteOpen] = useState(false);
+
     const children = childrenMap.get(comment.id) || [];
     const authorName =
         comment.authorType === "agent"
             ? comment.authorAgent?.name || "Agent"
             : comment.authorUser?.name || "Anonymous";
 
+    const isOwnComment = comment.authorType === "human" && comment.authorUser?.id === currentUserId;
+
     const maxNestingDisplay = 6;
     const indentPx = Math.min(comment.depth, maxNestingDisplay) * 24;
+
+    const handleSaveEdit = async () => {
+        if (!editText.trim()) return;
+        setSaving(true);
+        await onEdit(comment.id, editText);
+        setSaving(false);
+        setEditing(false);
+    };
+
+    const handleConfirmDelete = async () => {
+        await onDelete(comment.id);
+        setDeleteOpen(false);
+    };
 
     return (
         <div style={{ paddingLeft: `${indentPx}px` }}>
             <div
-                className={`rounded-lg border-l-2 py-3 pr-3 pl-4 transition-colors ${
+                className={`group/comment rounded-lg border-l-2 py-3 pr-3 pl-4 transition-colors ${
                     comment.authorType === "agent"
                         ? "border-violet-500/30 bg-violet-500/3"
                         : "border-zinc-800"
@@ -418,12 +746,67 @@ function CommentThread({
                         </Badge>
                     )}
                     <span className="text-xs text-zinc-600">{getTimeAgo(comment.createdAt)}</span>
+                    <div className="ml-auto">
+                        {isOwnComment && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger
+                                    render={
+                                        <button className="rounded p-0.5 text-zinc-600 opacity-0 transition-all group-hover/comment:opacity-100 hover:text-zinc-300">
+                                            <MoreHorizontalIcon className="h-3.5 w-3.5" />
+                                        </button>
+                                    }
+                                />
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem
+                                        onClick={() => {
+                                            setEditText(comment.content);
+                                            setEditing(true);
+                                        }}
+                                    >
+                                        <PencilIcon className="mr-2 h-3.5 w-3.5" />
+                                        Edit
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                        onClick={() => setDeleteOpen(true)}
+                                        className="text-red-400 focus:text-red-400"
+                                    >
+                                        <Trash2Icon className="mr-2 h-3.5 w-3.5" />
+                                        Delete
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
+                    </div>
                 </div>
 
                 {/* Content */}
-                <p className="mb-2 text-sm leading-relaxed whitespace-pre-wrap text-zinc-400">
-                    {comment.content}
-                </p>
+                {editing ? (
+                    <div className="mb-2 space-y-2">
+                        <Textarea
+                            value={editText}
+                            onChange={(e) => setEditText(e.target.value)}
+                            rows={3}
+                            className="border-zinc-700 bg-zinc-950/50 text-sm"
+                        />
+                        <div className="flex gap-2">
+                            <Button
+                                size="sm"
+                                onClick={handleSaveEdit}
+                                disabled={saving || !editText.trim()}
+                            >
+                                {saving ? "Saving..." : "Save"}
+                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => setEditing(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </div>
+                ) : (
+                    <MarkdownContent
+                        content={comment.content}
+                        className="mb-2 text-sm leading-relaxed text-zinc-400"
+                    />
+                )}
 
                 {/* Actions */}
                 <div className="flex items-center gap-3">
@@ -455,6 +838,28 @@ function CommentThread({
                     </button>
                 </div>
             </div>
+
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Comment</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete this comment and all replies. This action
+                            cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleConfirmDelete}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {children.map((child) => (
                 <CommentThread
                     key={child.id}
@@ -462,6 +867,9 @@ function CommentThread({
                     childrenMap={childrenMap}
                     onVote={onVote}
                     onReply={onReply}
+                    onEdit={onEdit}
+                    onDelete={onDelete}
+                    currentUserId={currentUserId}
                 />
             ))}
         </div>

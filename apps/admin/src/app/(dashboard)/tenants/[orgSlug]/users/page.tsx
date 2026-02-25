@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@repo/database";
+import { TenantUsersManager } from "@/components/tenant-users-manager";
 
 export const dynamic = "force-dynamic";
 
@@ -21,50 +22,25 @@ export default async function TenantUsersPage({
         orderBy: { createdAt: "desc" }
     });
 
-    // Membership has no user relation — look up users by their IDs
     const userIds = memberships.map((m) => m.userId);
     const users = await prisma.user.findMany({
         where: { id: { in: userIds } },
-        select: { id: true, name: true, email: true }
+        select: { id: true, name: true, email: true, status: true }
     });
     const userMap = new Map(users.map((u) => [u.id, u]));
 
-    return (
-        <div className="space-y-4">
-            <h2 className="text-lg font-semibold">Members ({memberships.length})</h2>
-            <div className="bg-card border-border overflow-hidden rounded-lg border">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="border-border border-b">
-                            <th className="px-4 py-2 text-left font-medium">Name</th>
-                            <th className="px-4 py-2 text-left font-medium">Email</th>
-                            <th className="px-4 py-2 text-left font-medium">Role</th>
-                            <th className="px-4 py-2 text-left font-medium">Joined</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {memberships.map((m) => {
-                            const user = userMap.get(m.userId);
-                            return (
-                                <tr key={m.id} className="border-border border-b last:border-0">
-                                    <td className="px-4 py-2">{user?.name || "Unknown"}</td>
-                                    <td className="text-muted-foreground px-4 py-2 text-xs">
-                                        {user?.email || m.userId}
-                                    </td>
-                                    <td className="px-4 py-2">
-                                        <span className="bg-secondary text-secondary-foreground rounded-full px-2 py-0.5 text-xs">
-                                            {m.role}
-                                        </span>
-                                    </td>
-                                    <td className="text-muted-foreground px-4 py-2 text-xs">
-                                        {m.createdAt.toLocaleDateString()}
-                                    </td>
-                                </tr>
-                            );
-                        })}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    );
+    const members = memberships.map((m) => {
+        const user = userMap.get(m.userId);
+        return {
+            id: m.id,
+            userId: m.userId,
+            role: m.role,
+            createdAt: m.createdAt.toISOString(),
+            userName: user?.name || "Unknown",
+            userEmail: user?.email || m.userId,
+            userStatus: user?.status || "unknown"
+        };
+    });
+
+    return <TenantUsersManager orgId={org.id} initialMembers={members} />;
 }

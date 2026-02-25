@@ -2,29 +2,19 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
 import { requireAdminAction, AdminAuthError } from "@repo/admin-auth";
 import { adminAudit, getRequestContext } from "@/lib/admin-audit";
-import { buildInviteEmailHtml } from "@/lib/invite-email";
 import { Resend } from "resend";
-import { randomBytes } from "crypto";
+import { buildInviteEmailHtml } from "@/lib/invite-email";
 
 const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const SIGNUP_BASE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://agentc2.ai";
 const FROM_EMAIL = process.env.RESEND_FROM_EMAIL || "AgentC2 <noreply@agentc2.ai>";
 
-function generateCode(): string {
-    return randomBytes(6).toString("hex").toUpperCase();
-}
-
 /**
- * POST /api/waitlist/approve
+ * POST /api/waitlist/resend
  *
- * Bulk approve waitlist entries and send invite emails.
+ * Resend invite emails to already-invited waitlist entries.
  * Body: { ids: string[] }
- *
- * Flow:
- * 1. Create a shared platform invite code for the batch
- * 2. Send each person an email with their signup link
- * 3. Update each waitlist entry status to "invited"
  */
 export async function POST(request: NextRequest) {
     try {
@@ -39,41 +29,46 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        // Fetch the waitlist entries
         const entries = await prisma.waitlist.findMany({
-            where: { id: { in: ids }, status: "pending" }
+            where: { id: { in: ids }, status: "invited" }
         });
 
         if (entries.length === 0) {
             return NextResponse.json(
-                { error: "No pending entries found for the given IDs" },
+                {
+                    error: "No invited entries found for the given IDs"
+                },
                 { status: 404 }
             );
         }
 
-        // Create a platform invite code for this batch
-        let code = generateCode();
-        let attempts = 0;
-        while ((await prisma.platformInvite.findUnique({ where: { code } })) && attempts < 10) {
-            code = generateCode();
-            attempts++;
+        // Look up invite codes for these entries
+        const inviteIds = entries.map((e) => e.inviteId).filter((id): id is string => !!id);
+        const inviteMap: Record<string, string> = {};
+        if (inviteIds.length > 0) {
+            const invites = await prisma.platformInvite.findMany({
+                where: { id: { in: inviteIds } },
+                select: { id: true, code: true }
+            });
+            for (const inv of invites) {
+                inviteMap[inv.id] = inv.code;
+            }
         }
 
-        const invite = await prisma.platformInvite.create({
-            data: {
-                code,
-                label: `Waitlist batch — ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })} (${entries.length} invites)`,
-                maxUses: entries.length,
-                createdBy: admin.adminUserId
-            }
-        });
-
-        const signupUrl = `${SIGNUP_BASE_URL}/signup?invite=${invite.code}`;
-
-        // Send emails and track results
         const results: { email: string; sent: boolean; error?: string }[] = [];
 
         for (const entry of entries) {
+            const inviteCode = entry.inviteId ? inviteMap[entry.inviteId] : null;
+
+            if (!inviteCode) {
+                results.push({
+                    email: entry.email,
+                    sent: false,
+                    error: "No invite code found for this entry"
+                });
+                continue;
+            }
+
             if (!resend) {
                 results.push({
                     email: entry.email,
@@ -83,41 +78,36 @@ export async function POST(request: NextRequest) {
                 continue;
             }
 
+            const signupUrl = `${SIGNUP_BASE_URL}/signup?invite=${inviteCode}`;
+
             try {
                 await resend.emails.send({
                     from: FROM_EMAIL,
                     to: entry.email,
-                    subject: "You're in! Your AgentC2 invite is ready",
-                    html: buildInviteEmailHtml(entry.name, signupUrl, invite.code)
+                    subject: "Reminder: Your AgentC2 invite is waiting",
+                    html: buildInviteEmailHtml(entry.name, signupUrl, inviteCode)
                 });
                 results.push({ email: entry.email, sent: true });
             } catch (err) {
                 const message = err instanceof Error ? err.message : "Unknown error";
-                console.error(`[Waitlist] Failed to send email to ${entry.email}:`, message);
-                results.push({ email: entry.email, sent: false, error: message });
+                console.error(`[Waitlist Resend] Failed to send email to ${entry.email}:`, message);
+                results.push({
+                    email: entry.email,
+                    sent: false,
+                    error: message
+                });
             }
         }
 
-        // Update waitlist entries to "invited" (even if email failed, they have an invite code)
-        await prisma.waitlist.updateMany({
-            where: { id: { in: entries.map((e) => e.id) } },
-            data: {
-                status: "invited",
-                inviteId: invite.id
-            }
-        });
-
-        // Audit log
         const { ipAddress, userAgent } = getRequestContext(request);
         await adminAudit.log({
             adminUserId: admin.adminUserId,
-            action: "WAITLIST_BULK_APPROVE",
+            action: "WAITLIST_RESEND_INVITE",
             entityType: "Waitlist",
-            entityId: invite.id,
+            entityId: entries.map((e) => e.id).join(","),
             afterJson: {
-                inviteCode: invite.code,
-                count: entries.length,
-                emails: entries.map((e) => e.email)
+                emails: entries.map((e) => e.email),
+                results
             },
             ipAddress,
             userAgent
@@ -128,18 +118,16 @@ export async function POST(request: NextRequest) {
 
         return NextResponse.json({
             success: true,
-            approved: entries.length,
+            resent: entries.length,
             emailsSent: sentCount,
             emailsFailed: failedCount,
-            inviteCode: invite.code,
-            signupUrl,
             results
         });
     } catch (error) {
         if (error instanceof AdminAuthError) {
             return NextResponse.json({ error: error.message }, { status: error.status });
         }
-        console.error("[Waitlist Approve] Error:", error);
+        console.error("[Waitlist Resend] Error:", error);
         return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
 }

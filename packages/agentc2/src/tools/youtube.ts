@@ -8,6 +8,24 @@ import { ingestDocument } from "../rag/pipeline";
 
 const INLINE_THRESHOLD = 20_000; // chars – roughly ~15 min of speech
 const SUPADATA_BASE = "https://api.supadata.ai/v1/transcript";
+const MIN_CALL_INTERVAL_MS = 1_100; // 1.1s — stay under free-tier 1 req/sec
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1_500;
+
+// ---------------------------------------------------------------------------
+// Supadata rate-limit throttle (free plan: 1 req/sec)
+// ---------------------------------------------------------------------------
+
+let lastSupadataCall = 0;
+
+async function throttleSupadata(): Promise<void> {
+    const now = Date.now();
+    const elapsed = now - lastSupadataCall;
+    if (elapsed < MIN_CALL_INTERVAL_MS) {
+        await new Promise((r) => setTimeout(r, MIN_CALL_INTERVAL_MS - elapsed));
+    }
+    lastSupadataCall = Date.now();
+}
 
 // ---------------------------------------------------------------------------
 // URL Helpers
@@ -66,27 +84,43 @@ async function fetchTranscript(
     }
 
     const encodedUrl = encodeURIComponent(videoUrl);
-    const response = await fetch(`${SUPADATA_BASE}?url=${encodedUrl}&text=true&mode=auto`, {
-        headers: { "x-api-key": apiKey }
-    });
 
-    // Async job for long videos (>20 min) — poll for result
-    if (response.status === 202) {
-        const { jobId } = await response.json();
-        return await pollTranscriptJob(apiKey, jobId);
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+        await throttleSupadata();
+
+        const response = await fetch(`${SUPADATA_BASE}?url=${encodedUrl}&text=true&mode=auto`, {
+            headers: { "x-api-key": apiKey }
+        });
+
+        // Async job for long videos (>20 min) — poll for result
+        if (response.status === 202) {
+            const { jobId } = await response.json();
+            return await pollTranscriptJob(apiKey, jobId);
+        }
+
+        // Rate-limited — back off and retry
+        if (response.status === 429 && attempt < MAX_RETRIES) {
+            console.warn(
+                `[YouTube] Supadata rate limit hit (attempt ${attempt + 1}/${MAX_RETRIES}), retrying in ${RETRY_DELAY_MS}ms…`
+            );
+            await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+            continue;
+        }
+
+        if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            const msg = (errData as Record<string, string>).message || `HTTP ${response.status}`;
+            throw new Error(`Supadata transcript fetch failed: ${msg}`);
+        }
+
+        const data = await response.json();
+        return {
+            content: (data.content as string) || "",
+            lang: (data.lang as string) || "en"
+        };
     }
 
-    if (!response.ok) {
-        const errData = await response.json().catch(() => ({}));
-        const msg = (errData as Record<string, string>).message || `HTTP ${response.status}`;
-        throw new Error(`Supadata transcript fetch failed: ${msg}`);
-    }
-
-    const data = await response.json();
-    return {
-        content: (data.content as string) || "",
-        lang: (data.lang as string) || "en"
-    };
+    throw new Error("Supadata transcript fetch failed: max retries exceeded");
 }
 
 /**

@@ -53,10 +53,16 @@ export type AdminAuditAction =
     | "PLATFORM_INVITE_REVOKE"
     // Waitlist
     | "WAITLIST_BULK_APPROVE"
+    | "WAITLIST_RESEND_INVITE"
+    | "WAITLIST_DELETE"
     // Support tickets
     | "TICKET_CREATE"
     | "TICKET_UPDATE"
     | "TICKET_DELETE"
+    // Tenant member management
+    | "TENANT_MEMBER_ADD"
+    | "TENANT_MEMBER_UPDATE"
+    | "TENANT_MEMBER_REMOVE"
     // Admin users
     | "ADMIN_USER_CREATE"
     | "ADMIN_USER_UPDATE"

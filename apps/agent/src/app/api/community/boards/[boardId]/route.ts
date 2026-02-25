@@ -86,3 +86,49 @@ export async function PUT(request: NextRequest, context: RouteContext) {
         );
     }
 }
+
+export async function DELETE(request: NextRequest, context: RouteContext) {
+    try {
+        const auth = await requireAuth(request);
+        if (auth.response) return auth.response;
+        const { organizationId } = auth.context;
+        const { boardId } = await context.params;
+
+        const board = await prisma.communityBoard.findFirst({
+            where: {
+                id: boardId,
+                OR: [{ scope: "global" }, { organizationId }]
+            }
+        });
+
+        if (!board) {
+            return NextResponse.json({ success: false, error: "Board not found" }, { status: 404 });
+        }
+
+        const postIds = await prisma.communityPost.findMany({
+            where: { boardId: board.id },
+            select: { id: true }
+        });
+        const ids = postIds.map((p) => p.id);
+
+        await prisma.$transaction([
+            prisma.communityVote.deleteMany({
+                where: {
+                    OR: [{ postId: { in: ids } }, { comment: { postId: { in: ids } } }]
+                }
+            }),
+            prisma.communityComment.deleteMany({ where: { postId: { in: ids } } }),
+            prisma.communityPost.deleteMany({ where: { boardId: board.id } }),
+            prisma.communityMember.deleteMany({ where: { boardId: board.id } }),
+            prisma.communityBoard.delete({ where: { id: board.id } })
+        ]);
+
+        return NextResponse.json({ success: true });
+    } catch (error) {
+        console.error("[community/boards/[boardId]] DELETE error:", error);
+        return NextResponse.json(
+            { success: false, error: "Internal server error" },
+            { status: 500 }
+        );
+    }
+}

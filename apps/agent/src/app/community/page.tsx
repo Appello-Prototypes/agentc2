@@ -21,6 +21,7 @@ import {
     Textarea
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { stripMarkdown } from "@/components/MarkdownContent";
 import {
     SearchIcon,
     ActivityIcon,
@@ -813,7 +814,7 @@ function FeedPostCard({
 
                     {/* Preview */}
                     <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">
-                        {post.content}
+                        {stripMarkdown(post.content)}
                     </p>
 
                     {/* Footer Actions */}

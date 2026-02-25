@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { useSession } from "@repo/auth/client";
 import {
     Button,
@@ -19,9 +19,23 @@ import {
     DialogTitle,
     DialogTrigger,
     DialogFooter,
-    Label
+    Label,
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle
 } from "@repo/ui";
 import { getApiBase } from "@/lib/utils";
+import { stripMarkdown } from "@/components/MarkdownContent";
 import {
     MessageSquareIcon,
     UsersIcon,
@@ -37,7 +51,12 @@ import {
     LockIcon,
     MessageCircleIcon,
     ArrowLeftIcon,
-    ActivityIcon
+    ActivityIcon,
+    MoreHorizontalIcon,
+    PencilIcon,
+    Trash2Icon,
+    SettingsIcon,
+    LockOpenIcon
 } from "lucide-react";
 
 type AuthorUser = { id: string; name: string; image: string | null };
@@ -90,6 +109,8 @@ const SORT_OPTIONS = [
 
 export default function BoardFeedPage() {
     const params = useParams();
+    const router = useRouter();
+    const { data: session } = useSession();
     const boardSlug = params.boardSlug as string;
     const [board, setBoard] = useState<Board | null>(null);
     const [posts, setPosts] = useState<Post[]>([]);
@@ -99,6 +120,16 @@ export default function BoardFeedPage() {
     const [nextCursor, setNextCursor] = useState<string | null>(null);
     const [loadingMore, setLoadingMore] = useState(false);
     const [stats, setStats] = useState<BoardStats | null>(null);
+
+    const [editBoardOpen, setEditBoardOpen] = useState(false);
+    const [editBoardData, setEditBoardData] = useState({
+        name: "",
+        description: "",
+        culturePrompt: ""
+    });
+    const [savingBoard, setSavingBoard] = useState(false);
+    const [deleteBoardOpen, setDeleteBoardOpen] = useState(false);
+    const [deletingBoard, setDeletingBoard] = useState(false);
 
     const fetchBoard = useCallback(async () => {
         try {
@@ -199,11 +230,126 @@ export default function BoardFeedPage() {
         setPosts((prev) => [post, ...prev]);
     };
 
+    const handleTogglePin = async (postId: string, currentlyPinned: boolean) => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${postId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isPinned: !currentlyPinned })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts((prev) =>
+                    prev.map((p) => (p.id === postId ? { ...p, isPinned: !currentlyPinned } : p))
+                );
+            }
+        } catch (err) {
+            console.error("Toggle pin failed:", err);
+        }
+    };
+
+    const handleToggleLock = async (postId: string, currentlyLocked: boolean) => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${postId}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ isLocked: !currentlyLocked })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts((prev) =>
+                    prev.map((p) => (p.id === postId ? { ...p, isLocked: !currentlyLocked } : p))
+                );
+            }
+        } catch (err) {
+            console.error("Toggle lock failed:", err);
+        }
+    };
+
+    const handleDeletePost = async (postId: string) => {
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/posts/${postId}`, {
+                method: "DELETE"
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPosts((prev) => prev.filter((p) => p.id !== postId));
+            }
+        } catch (err) {
+            console.error("Delete post failed:", err);
+        }
+    };
+
+    const handleEditBoard = () => {
+        if (!board) return;
+        setEditBoardData({
+            name: board.name,
+            description: board.description || "",
+            culturePrompt: board.culturePrompt || ""
+        });
+        setEditBoardOpen(true);
+    };
+
+    const handleSaveBoard = async () => {
+        if (!board || !editBoardData.name.trim()) return;
+        setSavingBoard(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/boards/${board.id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: editBoardData.name,
+                    description: editBoardData.description || null,
+                    culturePrompt: editBoardData.culturePrompt || null
+                })
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBoard((prev) =>
+                    prev
+                        ? {
+                              ...prev,
+                              name: data.board.name,
+                              description: data.board.description,
+                              culturePrompt: data.board.culturePrompt
+                          }
+                        : null
+                );
+                setEditBoardOpen(false);
+            }
+        } catch (err) {
+            console.error("Failed to update board:", err);
+        } finally {
+            setSavingBoard(false);
+        }
+    };
+
+    const handleDeleteBoard = async () => {
+        if (!board) return;
+        setDeletingBoard(true);
+        try {
+            const res = await fetch(`${getApiBase()}/api/community/boards/${board.id}`, {
+                method: "DELETE"
+            });
+            const data = await res.json();
+            if (data.success) {
+                router.push("/community");
+            }
+        } catch (err) {
+            console.error("Failed to delete board:", err);
+        } finally {
+            setDeletingBoard(false);
+            setDeleteBoardOpen(false);
+        }
+    };
+
     const loadMore = () => {
         if (!nextCursor || loadingMore) return;
         setLoadingMore(true);
         fetchPosts(nextCursor);
     };
+
+    const currentUserId = session?.user?.id;
 
     return (
         <div className="min-h-screen">
@@ -248,12 +394,121 @@ export default function BoardFeedPage() {
                                 </p>
                             )}
                         </div>
-                        {board && (
-                            <CreatePostDialog boardId={board.id} onCreated={handlePostCreated} />
-                        )}
+                        <div className="flex items-center gap-2">
+                            {board && (
+                                <>
+                                    <CreatePostDialog
+                                        boardId={board.id}
+                                        onCreated={handlePostCreated}
+                                    />
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger
+                                            render={
+                                                <Button variant="outline" size="icon">
+                                                    <SettingsIcon className="h-4 w-4" />
+                                                </Button>
+                                            }
+                                        />
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={handleEditBoard}>
+                                                <PencilIcon className="mr-2 h-3.5 w-3.5" />
+                                                Edit Board
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                                onClick={() => setDeleteBoardOpen(true)}
+                                                className="text-red-400 focus:text-red-400"
+                                            >
+                                                <Trash2Icon className="mr-2 h-3.5 w-3.5" />
+                                                Delete Board
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </>
+                            )}
+                        </div>
                     </div>
                 </div>
             </div>
+
+            {/* Edit Board Dialog */}
+            <Dialog open={editBoardOpen} onOpenChange={setEditBoardOpen}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Edit Board</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                        <div className="space-y-2">
+                            <Label>Name</Label>
+                            <Input
+                                value={editBoardData.name}
+                                onChange={(e) =>
+                                    setEditBoardData((p) => ({ ...p, name: e.target.value }))
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Description</Label>
+                            <Textarea
+                                value={editBoardData.description}
+                                onChange={(e) =>
+                                    setEditBoardData((p) => ({ ...p, description: e.target.value }))
+                                }
+                            />
+                        </div>
+                        <div className="space-y-2">
+                            <Label>Culture Prompt (for agents)</Label>
+                            <Textarea
+                                value={editBoardData.culturePrompt}
+                                onChange={(e) =>
+                                    setEditBoardData((p) => ({
+                                        ...p,
+                                        culturePrompt: e.target.value
+                                    }))
+                                }
+                                rows={3}
+                            />
+                            <p className="text-xs text-zinc-500">
+                                This prompt shapes agent participation during their daily heartbeat.
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setEditBoardOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSaveBoard}
+                            disabled={savingBoard || !editBoardData.name.trim()}
+                        >
+                            {savingBoard ? "Saving..." : "Save Changes"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Board Confirmation */}
+            <AlertDialog open={deleteBoardOpen} onOpenChange={setDeleteBoardOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Board</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete the board &quot;{board?.name}&quot; and all
+                            its posts, comments, and votes. This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleDeleteBoard}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                            disabled={deletingBoard}
+                        >
+                            {deletingBoard ? "Deleting..." : "Delete Board"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Main Content */}
             <div className="mx-auto max-w-7xl px-6 py-6">
@@ -347,6 +602,10 @@ export default function BoardFeedPage() {
                                         post={post}
                                         boardSlug={boardSlug}
                                         onVote={handleVote}
+                                        onTogglePin={handleTogglePin}
+                                        onToggleLock={handleToggleLock}
+                                        onDelete={handleDeletePost}
+                                        currentUserId={currentUserId}
                                     />
                                 ))}
                                 {nextCursor && (
@@ -485,12 +744,21 @@ export default function BoardFeedPage() {
 function PostCard({
     post,
     boardSlug,
-    onVote
+    onVote,
+    onTogglePin,
+    onToggleLock,
+    onDelete,
+    currentUserId
 }: {
     post: Post;
     boardSlug: string;
     onVote: (postId: string, value: number) => void;
+    onTogglePin: (postId: string, currentlyPinned: boolean) => void;
+    onToggleLock: (postId: string, currentlyLocked: boolean) => void;
+    onDelete: (postId: string) => void;
+    currentUserId?: string;
 }) {
+    const [deleteOpen, setDeleteOpen] = useState(false);
     const authorName =
         post.authorType === "agent"
             ? post.authorAgent?.name || "Agent"
@@ -498,6 +766,7 @@ function PostCard({
 
     const authorInitial = authorName[0]?.toUpperCase() || "?";
     const timeAgo = getTimeAgo(post.createdAt);
+    const isOwnPost = post.authorType === "human" && post.authorUser?.id === currentUserId;
 
     return (
         <div
@@ -539,33 +808,74 @@ function PostCard({
 
                 {/* Content */}
                 <div className="min-w-0 flex-1">
-                    <Link href={`/community/${boardSlug}/${post.id}`} className="block">
-                        <div className="mb-1.5 flex items-center gap-2">
-                            {post.isPinned && (
-                                <Badge className="border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] text-amber-400 hover:bg-amber-500/10">
-                                    <PinIcon className="mr-0.5 h-2.5 w-2.5" />
-                                    Pinned
-                                </Badge>
-                            )}
-                            {post.isLocked && (
-                                <Badge className="border-red-500/30 bg-red-500/10 px-1.5 text-[10px] text-red-400 hover:bg-red-500/10">
-                                    <LockIcon className="mr-0.5 h-2.5 w-2.5" />
-                                    Locked
-                                </Badge>
-                            )}
-                            {post.category && (
-                                <span className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-[11px] text-zinc-500">
-                                    {post.category}
-                                </span>
-                            )}
-                        </div>
-                        <h3 className="text-sm font-semibold text-zinc-100 transition-colors group-hover:text-white">
-                            {post.title}
-                        </h3>
-                    </Link>
+                    <div className="flex items-start justify-between">
+                        <Link href={`/community/${boardSlug}/${post.id}`} className="block flex-1">
+                            <div className="mb-1.5 flex items-center gap-2">
+                                {post.isPinned && (
+                                    <Badge className="border-amber-500/30 bg-amber-500/10 px-1.5 text-[10px] text-amber-400 hover:bg-amber-500/10">
+                                        <PinIcon className="mr-0.5 h-2.5 w-2.5" />
+                                        Pinned
+                                    </Badge>
+                                )}
+                                {post.isLocked && (
+                                    <Badge className="border-red-500/30 bg-red-500/10 px-1.5 text-[10px] text-red-400 hover:bg-red-500/10">
+                                        <LockIcon className="mr-0.5 h-2.5 w-2.5" />
+                                        Locked
+                                    </Badge>
+                                )}
+                                {post.category && (
+                                    <span className="rounded-md bg-zinc-800/80 px-2 py-0.5 text-[11px] text-zinc-500">
+                                        {post.category}
+                                    </span>
+                                )}
+                            </div>
+                            <h3 className="text-sm font-semibold text-zinc-100 transition-colors group-hover:text-white">
+                                {post.title}
+                            </h3>
+                        </Link>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger
+                                render={
+                                    <button className="rounded-md p-1 text-zinc-600 opacity-0 transition-all group-hover:opacity-100 hover:bg-zinc-800 hover:text-zinc-300">
+                                        <MoreHorizontalIcon className="h-4 w-4" />
+                                    </button>
+                                }
+                            />
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onClick={() => onTogglePin(post.id, post.isPinned)}
+                                >
+                                    <PinIcon className="mr-2 h-3.5 w-3.5" />
+                                    {post.isPinned ? "Unpin" : "Pin"}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                    onClick={() => onToggleLock(post.id, post.isLocked)}
+                                >
+                                    {post.isLocked ? (
+                                        <LockOpenIcon className="mr-2 h-3.5 w-3.5" />
+                                    ) : (
+                                        <LockIcon className="mr-2 h-3.5 w-3.5" />
+                                    )}
+                                    {post.isLocked ? "Unlock" : "Lock"}
+                                </DropdownMenuItem>
+                                {isOwnPost && (
+                                    <>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                            onClick={() => setDeleteOpen(true)}
+                                            className="text-red-400 focus:text-red-400"
+                                        >
+                                            <Trash2Icon className="mr-2 h-3.5 w-3.5" />
+                                            Delete
+                                        </DropdownMenuItem>
+                                    </>
+                                )}
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
 
                     <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-zinc-500">
-                        {post.content}
+                        {stripMarkdown(post.content)}
                     </p>
 
                     {/* Footer */}
@@ -594,6 +904,27 @@ function PostCard({
                     </div>
                 </div>
             </div>
+
+            <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Post</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will permanently delete this post and all its comments. This action
+                            cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => onDelete(post.id)}
+                            className="bg-red-600 text-white hover:bg-red-700"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </div>
     );
 }

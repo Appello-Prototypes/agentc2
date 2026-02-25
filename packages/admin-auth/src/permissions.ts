@@ -48,6 +48,7 @@ export type AdminAction =
     | "platform-invite:create"
     // Waitlist management
     | "waitlist:approve"
+    | "waitlist:delete"
     // Support tickets
     | "ticket:list"
     | "ticket:read"
@@ -115,6 +116,7 @@ const ACTION_MIN_ROLE: Record<AdminAction, AdminRole> = {
 
     // Waitlist management
     "waitlist:approve": "platform_admin",
+    "waitlist:delete": "platform_admin",
 
     // Support tickets
     "ticket:list": "viewer",

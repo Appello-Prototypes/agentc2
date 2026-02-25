@@ -65,10 +65,36 @@ export default async function WaitlistPage({
         updatedAt: i.updatedAt.toISOString()
     }));
 
+    // Build a map of inviteId -> invite code for entries that have been approved
+    const inviteIds = entries.map((e) => e.inviteId).filter((id): id is string => !!id);
+    const inviteCodeMap: Record<string, string> = {};
+    if (inviteIds.length > 0) {
+        const invites = await prisma.platformInvite.findMany({
+            where: { id: { in: inviteIds } },
+            select: { id: true, code: true }
+        });
+        for (const inv of invites) {
+            inviteCodeMap[inv.id] = inv.code;
+        }
+    }
+
+    // Check which waitlist emails have actually signed up as platform users
+    const waitlistEmails = entries.map((e) => e.email);
+    const registeredUsers = await prisma.user.findMany({
+        where: { email: { in: waitlistEmails } },
+        select: { email: true, createdAt: true }
+    });
+    const registeredEmailMap: Record<string, string> = {};
+    for (const u of registeredUsers) {
+        registeredEmailMap[u.email] = u.createdAt.toISOString();
+    }
+
     const serializedEntries = entries.map((e) => ({
         ...e,
         createdAt: e.createdAt.toISOString(),
-        updatedAt: e.updatedAt.toISOString()
+        updatedAt: e.updatedAt.toISOString(),
+        inviteCode: e.inviteId ? inviteCodeMap[e.inviteId] || null : null,
+        registeredAt: registeredEmailMap[e.email] || null
     }));
 
     const buildUrl = (overrides: Record<string, string | number>) => {
@@ -143,7 +169,11 @@ export default async function WaitlistPage({
             </form>
 
             {/* Table with checkboxes and bulk actions */}
-            <WaitlistTable entries={serializedEntries} statusStyles={STATUS_STYLES} />
+            <WaitlistTable
+                entries={serializedEntries}
+                statusStyles={STATUS_STYLES}
+                signupBaseUrl={SIGNUP_BASE_URL}
+            />
 
             {/* Pagination */}
             {totalPages > 1 && (
