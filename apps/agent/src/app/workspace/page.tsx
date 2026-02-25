@@ -1023,7 +1023,7 @@ export default function UnifiedChatPage() {
 
     const handleSend = useCallback(
         (message: PromptInputMessage) => {
-            if (!message.text.trim() || !selectedAgentSlug) return;
+            if (!message.text.trim() || !selectedAgentSlug || isBusy) return;
 
             // Apply input mode prefix (knowledge search, fetch URL)
             let text = message.text;
@@ -1043,7 +1043,7 @@ export default function UnifiedChatPage() {
                 setInputMode(null);
             }
         },
-        [sendMessage, selectedAgentSlug, inputMode]
+        [sendMessage, selectedAgentSlug, inputMode, isBusy]
     );
 
     const handleNewConversation = useCallback(() => {
@@ -1279,7 +1279,7 @@ export default function UnifiedChatPage() {
                     className="shrink-0"
                     status={submitStatus}
                     onStop={stop}
-                    disabled={!selectedAgentSlug}
+                    disabled={!selectedAgentSlug || isBusy}
                 />
             </PromptInputFooter>
         </PromptInput>

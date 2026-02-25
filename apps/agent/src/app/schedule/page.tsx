@@ -62,6 +62,7 @@ import {
     ArrowReloadHorizontalIcon
 } from "@hugeicons/core-free-icons";
 import { getApiBase } from "@/lib/utils";
+import { useTimezone } from "@/components/TimezoneProvider";
 import { SidekickSidebar } from "@/components/SidekickSidebar";
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,6 +139,8 @@ interface FormState {
     ampm: "AM" | "PM";
     daysOfWeek: number[];
     dayOfMonth: number;
+    intervalValue: number;
+    intervalUnit: IntervalUnit;
     color: string;
 }
 
@@ -275,7 +278,8 @@ const COMMON_TIMEZONES = [
 // Schedule Helpers — human-friendly cron conversion
 // ═══════════════════════════════════════════════════════════════════════════════
 
-type Frequency = "daily" | "weekdays" | "weekly" | "monthly";
+type Frequency = "interval" | "daily" | "weekdays" | "weekly" | "monthly";
+type IntervalUnit = "minutes" | "hours";
 
 interface ScheduleConfig {
     frequency: Frequency;
@@ -284,6 +288,8 @@ interface ScheduleConfig {
     ampm: "AM" | "PM";
     daysOfWeek: number[];
     dayOfMonth: number;
+    intervalValue?: number;
+    intervalUnit?: IntervalUnit;
 }
 
 const AUTOMATION_COLORS: { name: string; class: string }[] = [
@@ -309,6 +315,13 @@ function to24Hour(hour: number, ampm: "AM" | "PM"): number {
 }
 
 function buildCronFromSchedule(config: ScheduleConfig): string {
+    if (config.frequency === "interval") {
+        const val = config.intervalValue || 15;
+        const unit = config.intervalUnit || "minutes";
+        if (unit === "hours") return `0 */${val} * * *`;
+        return `*/${val} * * * *`;
+    }
+
     const h = to24Hour(config.hour, config.ampm);
     const m = config.minute;
 
@@ -333,6 +346,36 @@ function parseCronToSchedule(cron: string): ScheduleConfig | null {
     if (parts.length < 5) return null;
 
     const [minutePart, hourPart, domPart, , dowPart] = parts;
+
+    // Detect interval patterns: */N in minute or hour field
+    const minuteStep = minutePart?.match(/^\*\/(\d+)$/);
+    const hourStep = hourPart?.match(/^\*\/(\d+)$/);
+
+    if (minuteStep) {
+        return {
+            frequency: "interval",
+            hour: 9,
+            minute: 0,
+            ampm: "AM",
+            daysOfWeek: [],
+            dayOfMonth: 1,
+            intervalValue: parseInt(minuteStep[1]!, 10),
+            intervalUnit: "minutes"
+        };
+    }
+    if (hourStep) {
+        return {
+            frequency: "interval",
+            hour: 9,
+            minute: 0,
+            ampm: "AM",
+            daysOfWeek: [],
+            dayOfMonth: 1,
+            intervalValue: parseInt(hourStep[1]!, 10),
+            intervalUnit: "hours"
+        };
+    }
+
     const minute = parseInt(minutePart!, 10);
     const hour24 = parseInt(hourPart!, 10);
     if (isNaN(minute) || isNaN(hour24)) return null;
@@ -372,6 +415,20 @@ function describeScheduleFromCron(cron: string): string {
     if (parts.length < 5) return cron;
 
     const [minutePart, hourPart, domPart, , dowPart] = parts;
+
+    // Detect interval patterns
+    const minuteStep = minutePart?.match(/^\*\/(\d+)$/);
+    const hourStep = hourPart?.match(/^\*\/(\d+)$/);
+
+    if (minuteStep) {
+        const val = parseInt(minuteStep[1]!, 10);
+        return val === 1 ? "Every minute" : `Every ${val} minutes`;
+    }
+    if (hourStep) {
+        const val = parseInt(hourStep[1]!, 10);
+        return val === 1 ? "Every hour" : `Every ${val} hours`;
+    }
+
     const minute = minutePart === "*" ? 0 : parseInt(minutePart!, 10);
     const hour = hourPart === "*" ? -1 : parseInt(hourPart!, 10);
 
@@ -410,6 +467,14 @@ function describeScheduleFromCron(cron: string): string {
 }
 
 function generateSuggestedName(config: ScheduleConfig, agentName: string): string {
+    if (config.frequency === "interval") {
+        const val = config.intervalValue || 15;
+        const unit = config.intervalUnit || "minutes";
+        const label =
+            val === 1 ? (unit === "minutes" ? "Every minute" : "Hourly") : `Every ${val} ${unit}`;
+        return `${label} — ${agentName}`;
+    }
+
     const timeStr = `${config.hour}${config.ampm.toLowerCase()}`;
     const freqLabel =
         config.frequency === "daily"
@@ -431,6 +496,37 @@ function expandCronForRange(cronExpr: string, from: Date, to: Date): Date[] {
     if (parts.length < 5) return [];
 
     const [minutePart, hourPart, domPart, , dowPart] = parts;
+
+    // Handle interval patterns: */N minutes or */N hours
+    const minuteStep = minutePart?.match(/^\*\/(\d+)$/);
+    const hourStep = hourPart?.match(/^\*\/(\d+)$/);
+
+    if (minuteStep || hourStep) {
+        const stepMs = minuteStep
+            ? parseInt(minuteStep[1]!, 10) * 60 * 1000
+            : parseInt(hourStep![1]!, 10) * 60 * 60 * 1000;
+        const occurrences: Date[] = [];
+        const maxOccurrences = 500;
+        const current = new Date(from);
+        // Align to nearest interval boundary
+        if (minuteStep) {
+            const stepMin = parseInt(minuteStep[1]!, 10);
+            const mins = current.getMinutes();
+            const nextMin = Math.ceil(mins / stepMin) * stepMin;
+            current.setMinutes(nextMin, 0, 0);
+        } else {
+            const stepHour = parseInt(hourStep![1]!, 10);
+            const hrs = current.getHours();
+            const nextHr = Math.ceil(hrs / stepHour) * stepHour;
+            current.setHours(nextHr, 0, 0, 0);
+        }
+        while (current <= to && occurrences.length < maxOccurrences) {
+            occurrences.push(new Date(current));
+            current.setTime(current.getTime() + stepMs);
+        }
+        return occurrences;
+    }
+
     const minute = minutePart === "*" ? 0 : parseInt(minutePart!, 10);
     const hour = hourPart === "*" ? 0 : parseInt(hourPart!, 10);
 
@@ -489,6 +585,8 @@ function AutomationWizard({
     apiBase: string;
     onSuccess: () => void;
 }) {
+    const resolvedTimezone = useTimezone();
+
     const defaultForm: FormState = {
         automationType: "schedule",
         agentId: "",
@@ -496,7 +594,7 @@ function AutomationWizard({
         description: "",
         task: "",
         cronExpr: "0 9 * * 1-5",
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
+        timezone: resolvedTimezone,
         triggerType: "event",
         eventName: "",
         isActive: true,
@@ -506,6 +604,8 @@ function AutomationWizard({
         ampm: "AM",
         daysOfWeek: [],
         dayOfMonth: 1,
+        intervalValue: 15,
+        intervalUnit: "minutes" as const,
         color: ""
     };
 
@@ -513,6 +613,13 @@ function AutomationWizard({
     const [form, setForm] = useState<FormState>(defaultForm);
     const [saving, setSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    const totalSteps = mode === "edit" ? 2 : 3;
+    const visibleStepLabels =
+        mode === "edit"
+            ? ["When & Color", "Name & Review"]
+            : ["Type & Agent", "When & Color", "Name & Review"];
+    const contentStep = mode === "edit" ? step + 1 : step;
 
     useEffect(() => {
         if (!open) return;
@@ -533,7 +640,7 @@ function AutomationWizard({
                 description: automation.description || "",
                 task: automation.config.task || "",
                 cronExpr: automation.config.cronExpr || "0 9 * * 1-5",
-                timezone: automation.config.timezone || "UTC",
+                timezone: automation.config.timezone || resolvedTimezone,
                 triggerType: automation.type === "scheduled" ? "event" : automation.type,
                 eventName: automation.config.eventName || "",
                 isActive: automation.isActive,
@@ -543,6 +650,8 @@ function AutomationWizard({
                 ampm: schedConfig?.ampm || "AM",
                 daysOfWeek: schedConfig?.daysOfWeek || [],
                 dayOfMonth: schedConfig?.dayOfMonth || 1,
+                intervalValue: schedConfig?.intervalValue || 15,
+                intervalUnit: schedConfig?.intervalUnit || "minutes",
                 color: automation.config.color || ""
             });
         } else {
@@ -565,7 +674,9 @@ function AutomationWizard({
             minute: form.minute,
             ampm: form.ampm,
             daysOfWeek: form.daysOfWeek,
-            dayOfMonth: form.dayOfMonth
+            dayOfMonth: form.dayOfMonth,
+            intervalValue: form.intervalValue,
+            intervalUnit: form.intervalUnit
         });
     }, [
         isSchedule,
@@ -574,7 +685,9 @@ function AutomationWizard({
         form.minute,
         form.ampm,
         form.daysOfWeek,
-        form.dayOfMonth
+        form.dayOfMonth,
+        form.intervalValue,
+        form.intervalUnit
     ]);
 
     const previewDescription = useMemo(() => {
@@ -592,7 +705,9 @@ function AutomationWizard({
                 minute: form.minute,
                 ampm: form.ampm,
                 daysOfWeek: form.daysOfWeek,
-                dayOfMonth: form.dayOfMonth
+                dayOfMonth: form.dayOfMonth,
+                intervalValue: form.intervalValue,
+                intervalUnit: form.intervalUnit
             },
             agent.name
         );
@@ -605,6 +720,8 @@ function AutomationWizard({
         form.ampm,
         form.daysOfWeek,
         form.dayOfMonth,
+        form.intervalValue,
+        form.intervalUnit,
         isSchedule
     ]);
 
@@ -745,8 +862,6 @@ function AutomationWizard({
         }
     };
 
-    const stepLabels = ["Type & Agent", "When & Color", "Name & Review"];
-
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-lg">
@@ -754,12 +869,23 @@ function AutomationWizard({
                     <DialogTitle>
                         {mode === "create" ? "New Automation" : "Edit Automation"}
                     </DialogTitle>
-                    <DialogDescription>{stepLabels[step]}</DialogDescription>
+                    <DialogDescription>{visibleStepLabels[step]}</DialogDescription>
                 </DialogHeader>
+
+                {mode === "edit" && automation && (
+                    <div className="bg-muted/50 flex items-center gap-3 rounded-lg border px-3 py-2">
+                        <Badge variant="secondary" className="text-xs">
+                            {isSchedule ? "Schedule" : "Trigger"}
+                        </Badge>
+                        <span className="text-muted-foreground text-sm">
+                            {automation.agent?.name || "—"}
+                        </span>
+                    </div>
+                )}
 
                 {/* Step indicator */}
                 <div className="flex items-center justify-center gap-2 py-1">
-                    {stepLabels.map((_, i) => (
+                    {visibleStepLabels.map((_, i) => (
                         <div key={i} className="flex items-center gap-2">
                             <button
                                 type="button"
@@ -776,7 +902,7 @@ function AutomationWizard({
                             >
                                 {i + 1}
                             </button>
-                            {i < stepLabels.length - 1 && (
+                            {i < visibleStepLabels.length - 1 && (
                                 <div
                                     className={`h-px w-8 ${i < step ? "bg-primary/40" : "bg-border"}`}
                                 />
@@ -786,8 +912,8 @@ function AutomationWizard({
                 </div>
 
                 <div className="min-h-[260px] space-y-4 py-2">
-                    {/* ── Step 0: Type + Agent ── */}
-                    {step === 0 && (
+                    {/* ── Step 0: Type + Agent (create only) ── */}
+                    {contentStep === 0 && (
                         <>
                             <div className="space-y-1.5">
                                 <Label>Type</Label>
@@ -861,7 +987,7 @@ function AutomationWizard({
                     )}
 
                     {/* ── Step 1: When + Color ── */}
-                    {step === 1 && (
+                    {contentStep === 1 && (
                         <>
                             {isSchedule ? (
                                 <>
@@ -871,6 +997,7 @@ function AutomationWizard({
                                         <div className="flex flex-wrap gap-2">
                                             {(
                                                 [
+                                                    "interval",
                                                     "daily",
                                                     "weekdays",
                                                     "weekly",
@@ -892,6 +1019,76 @@ function AutomationWizard({
                                             ))}
                                         </div>
                                     </div>
+
+                                    {/* Interval config */}
+                                    {form.frequency === "interval" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Run every</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={String(form.intervalValue)}
+                                                    onValueChange={(v) =>
+                                                        v != null &&
+                                                        setField("intervalValue", parseInt(v, 10))
+                                                    }
+                                                >
+                                                    <SelectTrigger className="w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {(form.intervalUnit === "minutes"
+                                                            ? [1, 2, 3, 5, 10, 15, 20, 30]
+                                                            : [1, 2, 3, 4, 6, 8, 12]
+                                                        ).map((v) => (
+                                                            <SelectItem key={v} value={String(v)}>
+                                                                {v}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="flex overflow-hidden rounded-lg border">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setField("intervalUnit", "minutes");
+                                                            if (
+                                                                ![
+                                                                    1, 2, 3, 5, 10, 15, 20, 30
+                                                                ].includes(form.intervalValue)
+                                                            )
+                                                                setField("intervalValue", 15);
+                                                        }}
+                                                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                                                            form.intervalUnit === "minutes"
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "hover:bg-muted"
+                                                        }`}
+                                                    >
+                                                        Minutes
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setField("intervalUnit", "hours");
+                                                            if (
+                                                                ![1, 2, 3, 4, 6, 8, 12].includes(
+                                                                    form.intervalValue
+                                                                )
+                                                            )
+                                                                setField("intervalValue", 1);
+                                                        }}
+                                                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                                                            form.intervalUnit === "hours"
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "hover:bg-muted"
+                                                        }`}
+                                                    >
+                                                        Hours
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {/* Day chips for weekly */}
                                     {form.frequency === "weekly" && (
@@ -954,74 +1151,78 @@ function AutomationWizard({
                                         </div>
                                     )}
 
-                                    {/* Time picker: Hour / Minute / AM|PM */}
-                                    <div className="space-y-1.5">
-                                        <Label>Time</Label>
-                                        <div className="flex items-center gap-2">
-                                            <Select
-                                                value={String(form.hour)}
-                                                onValueChange={(v) =>
-                                                    v != null && setField("hour", parseInt(v, 10))
-                                                }
-                                            >
-                                                <SelectTrigger className="w-[72px]">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {Array.from(
-                                                        { length: 12 },
-                                                        (_, i) => i + 1
-                                                    ).map((h) => (
-                                                        <SelectItem key={h} value={String(h)}>
-                                                            {h}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <span className="text-muted-foreground">:</span>
-                                            <Select
-                                                value={String(form.minute)}
-                                                onValueChange={(v) =>
-                                                    v != null && setField("minute", parseInt(v, 10))
-                                                }
-                                            >
-                                                <SelectTrigger className="w-[72px]">
-                                                    <SelectValue />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {WIZARD_MINUTES.map((m) => (
-                                                        <SelectItem key={m} value={String(m)}>
-                                                            {String(m).padStart(2, "0")}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
-                                            <div className="flex overflow-hidden rounded-lg border">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setField("ampm", "AM")}
-                                                    className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                                                        form.ampm === "AM"
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "hover:bg-muted"
-                                                    }`}
+                                    {/* Time picker: Hour / Minute / AM|PM (hidden for interval) */}
+                                    {form.frequency !== "interval" && (
+                                        <div className="space-y-1.5">
+                                            <Label>Time</Label>
+                                            <div className="flex items-center gap-2">
+                                                <Select
+                                                    value={String(form.hour)}
+                                                    onValueChange={(v) =>
+                                                        v != null &&
+                                                        setField("hour", parseInt(v, 10))
+                                                    }
                                                 >
-                                                    AM
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setField("ampm", "PM")}
-                                                    className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
-                                                        form.ampm === "PM"
-                                                            ? "bg-primary text-primary-foreground"
-                                                            : "hover:bg-muted"
-                                                    }`}
+                                                    <SelectTrigger className="w-[72px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {Array.from(
+                                                            { length: 12 },
+                                                            (_, i) => i + 1
+                                                        ).map((h) => (
+                                                            <SelectItem key={h} value={String(h)}>
+                                                                {h}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <span className="text-muted-foreground">:</span>
+                                                <Select
+                                                    value={String(form.minute)}
+                                                    onValueChange={(v) =>
+                                                        v != null &&
+                                                        setField("minute", parseInt(v, 10))
+                                                    }
                                                 >
-                                                    PM
-                                                </button>
+                                                    <SelectTrigger className="w-[72px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {WIZARD_MINUTES.map((m) => (
+                                                            <SelectItem key={m} value={String(m)}>
+                                                                {String(m).padStart(2, "0")}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                <div className="flex overflow-hidden rounded-lg border">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setField("ampm", "AM")}
+                                                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                                            form.ampm === "AM"
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "hover:bg-muted"
+                                                        }`}
+                                                    >
+                                                        AM
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setField("ampm", "PM")}
+                                                        className={`px-2.5 py-1.5 text-xs font-medium transition-colors ${
+                                                            form.ampm === "PM"
+                                                                ? "bg-primary text-primary-foreground"
+                                                                : "hover:bg-muted"
+                                                        }`}
+                                                    >
+                                                        PM
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
-                                    </div>
+                                    )}
 
                                     {/* Timezone */}
                                     <div className="space-y-1.5">
@@ -1141,7 +1342,7 @@ function AutomationWizard({
                     )}
 
                     {/* ── Step 2: Name + Review ── */}
-                    {step === 2 && (
+                    {contentStep === 2 && (
                         <>
                             <div className="space-y-1.5">
                                 <Label>Name</Label>
@@ -1261,10 +1462,10 @@ function AutomationWizard({
                             Cancel
                         </Button>
                     )}
-                    {step < 2 ? (
+                    {step < totalSteps - 1 ? (
                         <Button
                             onClick={() => setStep(step + 1)}
-                            disabled={step === 0 && !canProceedStep0}
+                            disabled={contentStep === 0 && !canProceedStep0}
                         >
                             Next
                         </Button>

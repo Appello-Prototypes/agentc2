@@ -499,7 +499,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                         }
                     };
 
-                    const IDLE_TIMEOUT_MS = 3_000;
+                    const IDLE_TIMEOUT_MS = 10_000;
                     let generationDone = false;
 
                     async function drainTextWithIdleTimeout(

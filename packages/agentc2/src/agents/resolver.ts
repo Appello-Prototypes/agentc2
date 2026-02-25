@@ -186,6 +186,7 @@ interface MemoryConfig {
         enabled?: boolean;
         template?: string;
     };
+    maxWorkingMemoryChars?: number;
 }
 
 /**
@@ -1170,10 +1171,15 @@ export class AgentResolver {
         }
     }
 
+    private static readonly DEFAULT_MAX_WORKING_MEMORY_CHARS = 4_000;
+    private static readonly CONSOLIDATION_TARGET_CHARS = 2_000;
+
     /**
      * Build a Memory instance from configuration
      *
      * When semanticRecall is enabled, includes vector store and embedder.
+     * When maxWorkingMemoryChars is set, proxies updateWorkingMemory to
+     * auto-consolidate oversized memory via a fast model.
      */
     private buildMemory(config: MemoryConfig | null): Memory {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -1210,7 +1216,79 @@ export class AgentResolver {
             memoryConfig.embedder = new ModelRouterEmbeddingModel("openai/text-embedding-3-small");
         }
 
-        return new Memory(memoryConfig);
+        const mem = new Memory(memoryConfig);
+
+        const maxChars =
+            config?.maxWorkingMemoryChars ?? AgentResolver.DEFAULT_MAX_WORKING_MEMORY_CHARS;
+
+        if (maxChars > 0) {
+            const originalUpdate = mem.updateWorkingMemory.bind(mem);
+            const targetChars = AgentResolver.CONSOLIDATION_TARGET_CHARS;
+
+            mem.updateWorkingMemory = async (args: {
+                threadId: string;
+                resourceId?: string;
+                workingMemory: string;
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                memoryConfig?: any;
+            }): Promise<void> => {
+                let { workingMemory } = args;
+
+                if (workingMemory.length > maxChars) {
+                    console.warn(
+                        `[AgentResolver] Working memory exceeds ${maxChars} chars (${workingMemory.length}). ` +
+                            `Consolidating to ~${targetChars} chars for thread ${args.threadId}`
+                    );
+                    try {
+                        workingMemory = await AgentResolver.consolidateWorkingMemory(
+                            workingMemory,
+                            targetChars
+                        );
+                    } catch (err) {
+                        console.error(
+                            "[AgentResolver] Working memory consolidation failed, truncating:",
+                            err
+                        );
+                        workingMemory = workingMemory.slice(0, maxChars);
+                    }
+                }
+
+                return originalUpdate({ ...args, workingMemory });
+            };
+        }
+
+        return mem;
+    }
+
+    /**
+     * Consolidate oversized working memory using a fast model.
+     * Preserves factual user data and active projects while removing
+     * redundant event logs and stale entries.
+     */
+    private static async consolidateWorkingMemory(
+        memory: string,
+        targetChars: number
+    ): Promise<string> {
+        const { generateText } = await import("ai");
+        const { openai } = await import("@ai-sdk/openai");
+
+        const result = await generateText({
+            model: openai("gpt-4o-mini"),
+            system: [
+                "You are a working-memory compactor. Given an agent's working memory that has grown too large, ",
+                "produce a consolidated version that fits within the target character limit.",
+                "\n\nRules:",
+                "\n- Preserve ALL factual information about the user (name, role, preferences)",
+                "\n- Preserve active projects and their current status (keep only the 3-5 most recent)",
+                "\n- Remove redundant greeting logs and duplicate event entries",
+                "\n- Remove stale or completed items",
+                "\n- Keep the same structured format (XML tags or sections) as the original",
+                "\n- Output ONLY the consolidated memory, no commentary"
+            ].join(""),
+            prompt: `Target: ${targetChars} characters maximum.\n\nCurrent working memory (${memory.length} chars):\n\n${memory}`
+        });
+
+        return result.text;
     }
 
     /**

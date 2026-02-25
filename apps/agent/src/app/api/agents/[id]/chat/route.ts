@@ -760,9 +760,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                     };
 
                     // Idle timeout: Mastra holds fullStream open 10-20s after
-                    // generation completes. We detect a step-finish/finish event
-                    // and then break after IDLE_TIMEOUT_MS of silence.
-                    const IDLE_TIMEOUT_MS = 3_000;
+                    // generation completes. We break after IDLE_TIMEOUT_MS of
+                    // silence ONLY after the final "finish" event (not intermediate
+                    // "step-finish" events which fire after each tool-call step).
+                    const IDLE_TIMEOUT_MS = 10_000;
 
                     if (fullStream) {
                         // Unified single-stream: fullStream contains both text-delta
@@ -813,9 +814,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                         delta: text
                                     });
                                 }
-                            } else if (c.type === "step-finish" || c.type === "finish") {
+                                finishSeen = false;
+                            } else if (c.type === "finish") {
                                 finishSeen = true;
                             } else {
+                                if (c.type === "tool-call" || c.type === "tool-result") {
+                                    finishSeen = false;
+                                }
                                 handleToolChunk(c);
                             }
                         }
@@ -924,7 +929,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                 timestamp: new Date().toISOString()
                             });
 
-                            // Complete the run
+                            // Complete or fail the run
                             if (capturedRun) {
                                 const actualModelProvider = routingDecision
                                     ? routingDecision.model.provider
@@ -933,23 +938,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
                                     ? routingDecision.model.name
                                     : modelOverride?.name || record?.modelName || "unknown";
 
-                                await capturedRun.complete({
-                                    output: capturedFullOutput,
-                                    modelProvider: actualModelProvider,
-                                    modelName: actualModelName,
-                                    promptTokens,
-                                    completionTokens,
-                                    costUsd,
-                                    steps: capturedExecutionSteps,
-                                    ...(routingDecision
-                                        ? {
-                                              routingTier: routingDecision.tier,
-                                              routingReason: routingDecision.reason
-                                          }
-                                        : {})
-                                });
+                                if (
+                                    !capturedFullOutput &&
+                                    capturedToolCalls.length === 0 &&
+                                    promptTokens === 0 &&
+                                    completionTokens === 0
+                                ) {
+                                    console.warn(
+                                        `[Agent Chat] Empty output with zero tokens for run ${capturedRun.runId}. Marking as FAILED.`
+                                    );
+                                    await capturedRun.fail(
+                                        "Empty response: agent produced no output, no tool calls, and zero tokens"
+                                    );
+                                } else {
+                                    await capturedRun.complete({
+                                        output: capturedFullOutput,
+                                        modelProvider: actualModelProvider,
+                                        modelName: actualModelName,
+                                        promptTokens,
+                                        completionTokens,
+                                        costUsd,
+                                        steps: capturedExecutionSteps,
+                                        ...(routingDecision
+                                            ? {
+                                                  routingTier: routingDecision.tier,
+                                                  routingReason: routingDecision.reason
+                                              }
+                                            : {})
+                                    });
 
-                                console.log(`[Agent Chat] Completed run ${capturedRun.runId}`);
+                                    console.log(`[Agent Chat] Completed run ${capturedRun.runId}`);
+                                }
                             }
 
                             // Run evaluations

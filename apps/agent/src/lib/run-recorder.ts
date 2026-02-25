@@ -963,11 +963,53 @@ function buildTurnMethods(
 } {
     const recordedToolCalls: ToolCallData[] = [];
 
+    const failTurnImpl = async (error: Error | string): Promise<void> => {
+        const durationMs = Date.now() - startTime;
+        const errorMessage = error instanceof Error ? error.message : error;
+
+        await prisma.$transaction(async (tx) => {
+            await tx.agentRunTurn.update({
+                where: { id: turnId },
+                data: {
+                    outputText: `Error: ${errorMessage}`,
+                    durationMs,
+                    completedAt: new Date()
+                }
+            });
+
+            await tx.agentRun.update({
+                where: { id: runId },
+                data: {
+                    outputText: `Error: ${errorMessage}`
+                }
+            });
+        });
+
+        console.error(`[RunRecorder] Turn ${turnIndex} of run ${runId} failed: ${errorMessage}`);
+    };
+
     return {
         async completeTurn(completeOptions: CompleteRunOptions): Promise<void> {
             const durationMs = Date.now() - startTime;
             const totalTokens =
                 (completeOptions.promptTokens || 0) + (completeOptions.completionTokens || 0);
+
+            if (!completeOptions.output && totalTokens === 0 && recordedToolCalls.length === 0) {
+                console.warn(
+                    `[RunRecorder] Empty completion detected for run ${runId} turn ${turnIndex}: ` +
+                        `no output, no tokens, no tool calls. Marking as FAILED.`
+                );
+                return failTurnImpl(
+                    "Empty response: agent produced no output, no tool calls, and zero tokens"
+                );
+            }
+
+            if (!completeOptions.output && totalTokens > 0) {
+                console.warn(
+                    `[RunRecorder] Partial capture: ${totalTokens} tokens generated but output ` +
+                        `empty for run ${runId} turn ${turnIndex}`
+                );
+            }
 
             // Build steps for this turn
             const steps = completeOptions.steps ? [...completeOptions.steps] : [];
@@ -1128,31 +1170,7 @@ function buildTurnMethods(
         },
 
         async failTurn(error: Error | string): Promise<void> {
-            const durationMs = Date.now() - startTime;
-            const errorMessage = error instanceof Error ? error.message : error;
-
-            await prisma.$transaction(async (tx) => {
-                await tx.agentRunTurn.update({
-                    where: { id: turnId },
-                    data: {
-                        outputText: `Error: ${errorMessage}`,
-                        durationMs,
-                        completedAt: new Date()
-                    }
-                });
-
-                // Update the run's outputText to reflect the error
-                await tx.agentRun.update({
-                    where: { id: runId },
-                    data: {
-                        outputText: `Error: ${errorMessage}`
-                    }
-                });
-            });
-
-            console.error(
-                `[RunRecorder] Turn ${turnIndex} of run ${runId} failed: ${errorMessage}`
-            );
+            return failTurnImpl(error);
         },
 
         async addToolCall(toolCall: ToolCallData): Promise<void> {
