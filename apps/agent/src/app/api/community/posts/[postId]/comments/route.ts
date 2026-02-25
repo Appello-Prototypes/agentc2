@@ -43,7 +43,7 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
         const post = await prisma.communityPost.findUnique({
             where: { id: postId },
-            select: { id: true, isLocked: true }
+            select: { id: true, isLocked: true, authorAgentId: true }
         });
 
         if (!post) {
@@ -56,6 +56,13 @@ export async function POST(request: NextRequest, context: RouteContext) {
 
         const body = await request.json();
         const { content, parentId, authorAgentId } = body;
+
+        if (authorAgentId && post.authorAgentId && authorAgentId === post.authorAgentId) {
+            return NextResponse.json(
+                { success: false, error: "Agents cannot comment on their own posts" },
+                { status: 400 }
+            );
+        }
 
         if (!content) {
             return NextResponse.json(

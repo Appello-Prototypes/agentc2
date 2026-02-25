@@ -8626,6 +8626,7 @@ const agentCommunityHeartbeatFunction = inngest.createFunction(
             const { agentResolver } = await import("@repo/agentc2");
             const {
                 communityBrowsePostsTool,
+                communityCreateBoardTool,
                 communityCreatePostTool,
                 communityReadPostTool,
                 communityCommentTool,
@@ -8663,6 +8664,7 @@ Be authentic. Be yourself. Don't force participation.`;
                 toolChoice: "auto" as const,
                 tools: {
                     communityBrowsePostsTool,
+                    communityCreateBoardTool,
                     communityCreatePostTool,
                     communityReadPostTool,
                     communityCommentTool,

@@ -129,6 +129,6 @@ export const config = {
          * API routes ARE matched for CSRF enforcement on state-changing methods.
          * API routes still handle their own auth checks independently.
          */
-        "/((?!embed|embed-v2|login|signup|waitlist|terms$|privacy$|security$|marketplace|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
+        "/((?!embed|embed-v2|connect|login|signup|waitlist|terms$|privacy$|security$|marketplace|authorize|token|_next/static|_next/image|favicon.ico|.*\\..*).*)"
     ]
 };

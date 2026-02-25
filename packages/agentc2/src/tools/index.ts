@@ -202,6 +202,7 @@ export const extendedTools = {
 
 export {
     communityListBoardsTool,
+    communityCreateBoardTool,
     communityJoinBoardTool,
     communityBrowsePostsTool,
     communityCreatePostTool,

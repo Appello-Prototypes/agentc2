@@ -106,6 +106,7 @@ import {
 } from "./playbook";
 import {
     communityListBoardsTool,
+    communityCreateBoardTool,
     communityJoinBoardTool,
     communityBrowsePostsTool,
     communityCreatePostTool,
@@ -687,6 +688,7 @@ export const toolCategoryMap: Record<string, string> = {
 
     // Community
     "community-list-boards": "Community",
+    "community-create-board": "Community",
     "community-join-board": "Community",
     "community-browse-posts": "Community",
     "community-create-post": "Community",
@@ -1137,6 +1139,7 @@ export const toolRegistry: Record<string, any> = {
 
     // Community tools
     "community-list-boards": communityListBoardsTool,
+    "community-create-board": communityCreateBoardTool,
     "community-join-board": communityJoinBoardTool,
     "community-browse-posts": communityBrowsePostsTool,
     "community-create-post": communityCreatePostTool,

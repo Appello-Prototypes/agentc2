@@ -17,6 +17,11 @@ import {
     type ToolCallData
 } from "@/lib/run-recorder";
 import { calculateCost } from "@/lib/cost-calculator";
+import {
+    verifyEmbedIdentity,
+    buildPartnerResourceId,
+    buildPartnerThreadId
+} from "@/lib/embed-identity";
 
 // ── Rate Limiter ────────────────────────────────────────────────────────
 // Simple in-memory IP-based rate limiter.
@@ -221,7 +226,10 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
         // ── Parse request body ──────────────────────────────────────────
         const body = await request.json();
-        const { threadId, messages } = body;
+        const { threadId, messages, identityToken: bodyIdentityToken } = body;
+
+        // Identity token can come from X-Embed-Identity header or request body
+        const identityToken = request.headers.get("x-embed-identity") || bodyIdentityToken || null;
 
         // Resolve org for tenant-scoped memory isolation
         let publicOrgId = "";
@@ -233,15 +241,41 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
             publicOrgId = ws?.organizationId || "";
         }
 
-        const ipHash = createHash("sha256").update(ip).digest("hex").slice(0, 12);
-        const userThreadId = threadId
-            ? publicOrgId
-                ? `${publicOrgId}:${threadId}`
-                : threadId
-            : publicOrgId
-              ? `${publicOrgId}:embed-${id}-${Date.now()}`
-              : `embed-${id}-${Date.now()}`;
-        const resourceId = publicOrgId ? `${publicOrgId}:public-${ipHash}` : `public-${ipHash}`;
+        // ── Identity-aware threading ─────────────────────────────────────
+        // If a verified identity token is present, use partner user identity
+        // for deterministic memory threading (conversations persist across sessions).
+        // Otherwise fall back to anonymous IP-based isolation.
+        const identity =
+            identityToken && publicOrgId
+                ? await verifyEmbedIdentity(identityToken, publicOrgId)
+                : null;
+
+        let userThreadId: string;
+        let resourceId: string;
+
+        if (identity) {
+            resourceId = buildPartnerResourceId(
+                identity.organizationId,
+                identity.partnerSlug,
+                identity.externalUserId
+            );
+            userThreadId = buildPartnerThreadId(
+                identity.organizationId,
+                identity.partnerSlug,
+                identity.externalUserId,
+                threadId
+            );
+        } else {
+            const ipHash = createHash("sha256").update(ip).digest("hex").slice(0, 12);
+            userThreadId = threadId
+                ? publicOrgId
+                    ? `${publicOrgId}:${threadId}`
+                    : threadId
+                : publicOrgId
+                  ? `${publicOrgId}:embed-${id}-${Date.now()}`
+                  : `embed-${id}-${Date.now()}`;
+            resourceId = publicOrgId ? `${publicOrgId}:public-${ipHash}` : `public-${ipHash}`;
+        }
 
         // Extract last user message (text only -- no file uploads for public)
         const lastUserMsg = messages?.filter((m: { role: string }) => m.role === "user").pop() as
@@ -270,7 +304,7 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         // ── Resolve agent ───────────────────────────────────────────────
-        const runSource: RunSource = "embed";
+        const runSource: RunSource = identity ? "embed-partner" : "embed";
         const { agent, record, activeSkills, toolOriginMap } = await agentResolver.resolve({
             slug: id,
             requestContext: {},

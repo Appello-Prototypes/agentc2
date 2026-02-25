@@ -1,5 +1,11 @@
 import { prisma } from "@repo/database";
 import { NextRequest, NextResponse } from "next/server";
+import {
+    verifyEmbedIdentity,
+    getUserIntegrationStatus,
+    type VerifiedEmbedIdentity,
+    type UserIntegrationStatus
+} from "@/lib/embed-identity";
 
 /**
  * Default embed configuration applied when publicEmbed metadata is not set.
@@ -15,6 +21,7 @@ const DEFAULT_EMBED_CONFIG = {
     showVoiceInput: false,
     showConversationSidebar: false,
     showSignupCTA: false,
+    showAuthButtons: true,
     signupProviders: ["google"] as string[],
     poweredByBadge: true,
     maxMessagesPerSession: 50
@@ -23,18 +30,21 @@ const DEFAULT_EMBED_CONFIG = {
 export type EmbedConfig = typeof DEFAULT_EMBED_CONFIG;
 
 /**
- * GET /api/agents/[id]/embed?token=abc123
+ * GET /api/agents/[id]/embed?token=abc123&identity=signedPayload
  *
  * Returns the embed configuration for a public agent.
  * Requires a valid publicToken query param.
  *
- * Optional: ?format=embed-code returns an HTML snippet instead.
+ * Optional params:
+ *   - identity: HMAC-signed identity token from an embed partner
+ *   - format=embed-code: returns an HTML snippet instead of config
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const { searchParams } = new URL(request.url);
         const token = searchParams.get("token");
+        const identityToken = searchParams.get("identity");
         const format = searchParams.get("format");
 
         if (!token) {
@@ -57,7 +67,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
                 slug: true,
                 name: true,
                 metadata: true,
-                publicToken: true
+                publicToken: true,
+                workspaceId: true
             }
         });
 
@@ -81,6 +92,25 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             ...storedConfig
         };
 
+        // ── Identity verification (optional) ─────────────────────────────
+        let identity: VerifiedEmbedIdentity | null = null;
+
+        if (identityToken && agent.workspaceId) {
+            const ws = await prisma.workspace.findUnique({
+                where: { id: agent.workspaceId },
+                select: { organizationId: true }
+            });
+
+            if (ws?.organizationId) {
+                identity = await verifyEmbedIdentity(identityToken, ws.organizationId);
+
+                if (identity) {
+                    // When identity is verified, hide auth buttons by default
+                    config.showAuthButtons = false;
+                }
+            }
+        }
+
         // If embed-code format requested, return HTML snippet
         if (format === "embed-code") {
             const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "https://agentc2.ai";
@@ -99,11 +129,32 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
             });
         }
 
-        // Standard config response
+        // Fetch integration status for identified users
+        let integrations: UserIntegrationStatus | undefined;
+        if (identity?.mappedUserId) {
+            integrations = await getUserIntegrationStatus(
+                identity.mappedUserId,
+                identity.organizationId
+            );
+        }
+
+        // Standard config response (with optional identity context)
         return NextResponse.json({
             slug: agent.slug,
             name: agent.name,
-            config
+            config,
+            ...(identity && {
+                identity: {
+                    name: identity.name,
+                    email: identity.email,
+                    externalUserId: identity.externalUserId,
+                    partnerName: identity.partnerName,
+                    partnerUserId: identity.partnerUserId,
+                    userId: identity.mappedUserId,
+                    organizationId: identity.organizationId
+                }
+            }),
+            ...(integrations && { integrations })
         });
     } catch (error) {
         console.error("[Embed Config] Error:", error);

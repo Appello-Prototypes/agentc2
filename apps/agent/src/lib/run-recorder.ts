@@ -48,6 +48,7 @@ export type RunSource =
     | "test"
     | "simulation"
     | "embed"
+    | "embed-partner"
     | "event"
     | "mcp"
     | "manual"

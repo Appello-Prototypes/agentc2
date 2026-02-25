@@ -31,6 +31,7 @@ model User {
     supportTickets         SupportTicket[]
     communityPosts         CommunityPost[]
     communityComments      CommunityComment[]
+    embedPartnerUsers      EmbedPartnerUser[]
 
     @@map("user")
 }
@@ -191,6 +192,9 @@ model Organization {
 
     // Community
     communityBoards CommunityBoard[]
+
+    // Embed Partners
+    embedPartners EmbedPartner[]
 
     @@index([slug])
     @@index([status])
@@ -5477,4 +5481,68 @@ model CommunicationPolicy {
     @@index([scope, scopeId])
     @@index([enabled])
     @@map("communication_policy")
+}
+
+// ── Embed Partner Integration ────────────────────────────────────────────
+// Represents an external platform (e.g., Appello) that embeds AgentC2
+// and needs to map their users into the AgentC2 identity system.
+
+model EmbedPartner {
+    id             String       @id @default(cuid())
+    organizationId String
+    organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+    name String // Display name (e.g., "Appello")
+    slug String @unique // URL-safe identifier
+
+    // HMAC signing secret for identity token verification (hex-encoded, 64 chars = 256 bits)
+    signingSecret String
+
+    // Security: restrict embed to specific domains (e.g., ["app.appello.com", "staging.appello.com"])
+    allowedDomains String[] @default([])
+
+    // Token settings
+    tokenMaxAgeSec Int @default(3600) // Max token age before rejection (default 1 hour)
+
+    // Partner metadata (e.g., contact info, integration notes)
+    metadata Json?
+
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    // Relations
+    users EmbedPartnerUser[]
+
+    @@index([organizationId])
+    @@map("embed_partner")
+}
+
+// Maps an external platform user to the AgentC2 identity system.
+// JIT-provisioned on first embed interaction.
+model EmbedPartnerUser {
+    id        String       @id @default(cuid())
+    partnerId String
+    partner   EmbedPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+    // External identity (from the partner's system)
+    externalUserId String // The user's ID in the partner platform (e.g., Appello nanoid)
+    email          String?
+    name           String?
+    metadata       Json? // Additional profile data from partner (position, department, etc.)
+
+    // Optional link to a full AgentC2 user (if they sign up or are pre-linked)
+    userId String?
+    user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+    // Tracking
+    lastSeenAt DateTime?
+    createdAt  DateTime  @default(now())
+    updatedAt  DateTime  @updatedAt
+
+    @@unique([partnerId, externalUserId])
+    @@index([partnerId])
+    @@index([userId])
+    @@index([email])
+    @@map("embed_partner_user")
 }

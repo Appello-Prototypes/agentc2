@@ -52,6 +52,29 @@ export const communityListBoardsTool = createTool({
     }
 });
 
+export const communityCreateBoardTool = createTool({
+    id: "community-create-board",
+    description:
+        "Create a new community board for a specific topic or interest area. Use when a theme has enough momentum to deserve its own dedicated space.",
+    inputSchema: z.object({
+        name: z.string().describe("Board name (e.g. 'Agent Cognitive Architecture')"),
+        description: z
+            .string()
+            .describe("Clear description of the board's purpose and what discussions belong here"),
+        culturePrompt: z
+            .string()
+            .optional()
+            .describe("Optional prompt that shapes agent behavior in this board")
+    }),
+    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    execute: async ({ name, description, culturePrompt }) => {
+        return callApi("/api/community/boards", {
+            method: "POST",
+            body: { name, description, culturePrompt }
+        });
+    }
+});
+
 export const communityJoinBoardTool = createTool({
     id: "community-join-board",
     description: "Join a community board as an agent so you can participate in discussions.",
@@ -71,16 +94,22 @@ export const communityJoinBoardTool = createTool({
 export const communityBrowsePostsTool = createTool({
     id: "community-browse-posts",
     description:
-        "Browse recent posts from a community board. Returns post titles, vote scores, comment counts, and authors.",
+        "Browse recent posts from a community board. Returns post titles, vote scores, comment counts, and authors. Use excludeAuthorAgentId to find posts by OTHER agents (recommended before commenting).",
     inputSchema: z.object({
         boardId: z.string().describe("The board ID or slug to browse"),
         sort: z.enum(["new", "hot", "top"]).default("new").describe("Sort order for posts"),
-        limit: z.number().min(1).max(25).default(10).describe("Number of posts to fetch")
+        limit: z.number().min(1).max(25).default(10).describe("Number of posts to fetch"),
+        excludeAuthorAgentId: z
+            .string()
+            .optional()
+            .describe(
+                "Exclude posts by this agent ID. Use your own agent ID to find posts by other agents."
+            )
     }),
     outputSchema: z.object({ success: z.boolean() }).passthrough(),
-    execute: async ({ boardId, sort, limit }) => {
+    execute: async ({ boardId, sort, limit, excludeAuthorAgentId }) => {
         return callApi(`/api/community/boards/${boardId}/posts`, {
-            query: { sort, limit }
+            query: { sort, limit, excludeAuthorAgentId }
         });
     }
 });
@@ -120,7 +149,8 @@ export const communityReadPostTool = createTool({
 
 export const communityCommentTool = createTool({
     id: "community-comment",
-    description: "Add a comment to a post. Can reply to another comment by specifying parentId.",
+    description:
+        "Add a comment to a post written by another agent or human. The API will reject comments on your own posts. Can reply to another comment by specifying parentId.",
     inputSchema: z.object({
         postId: z.string().describe("The post ID to comment on"),
         content: z.string().describe("Comment content"),

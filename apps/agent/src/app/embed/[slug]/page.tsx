@@ -45,15 +45,34 @@ interface EmbedConfig {
     showVoiceInput: boolean;
     showConversationSidebar: boolean;
     showSignupCTA: boolean;
+    showAuthButtons: boolean;
     signupProviders: string[];
     poweredByBadge: boolean;
     maxMessagesPerSession: number;
+}
+
+interface EmbedIdentity {
+    name?: string;
+    email?: string;
+    externalUserId: string;
+    partnerName: string;
+    partnerUserId: string;
+    userId?: string;
+    organizationId?: string;
+}
+
+interface EmbedIntegrations {
+    gmail: boolean;
+    microsoft: boolean;
+    dropbox: boolean;
 }
 
 interface EmbedData {
     slug: string;
     name: string;
     config: EmbedConfig;
+    identity?: EmbedIdentity;
+    integrations?: EmbedIntegrations;
 }
 
 // ── Inline sub-components ────────────────────────────────────────────────
@@ -109,6 +128,53 @@ function IntegrationPills() {
                     {name}
                 </span>
             ))}
+        </div>
+    );
+}
+
+function ConnectPrompts({
+    integrations,
+    identityToken,
+    orgId
+}: {
+    integrations: EmbedIntegrations;
+    identityToken: string;
+    orgId?: string;
+}) {
+    if (!orgId) return null;
+
+    const missing: { key: string; label: string; provider: string }[] = [];
+    if (!integrations.gmail)
+        missing.push({ key: "gmail", label: "Gmail & Calendar", provider: "gmail" });
+    if (!integrations.microsoft)
+        missing.push({ key: "microsoft", label: "Outlook & Calendar", provider: "microsoft" });
+
+    if (missing.length === 0) return null;
+
+    const handleConnect = (provider: string) => {
+        const url = new URL("/api/partner/connect/start", window.location.origin);
+        url.searchParams.set("provider", provider);
+        url.searchParams.set("identity", identityToken);
+        url.searchParams.set("orgId", orgId);
+        window.open(url.toString(), "_blank", "noopener,noreferrer");
+    };
+
+    return (
+        <div className="border-border/40 mx-4 my-2 rounded-xl border p-3 sm:mx-6">
+            <p className="text-foreground/70 mb-2 text-xs font-medium">
+                Connect your accounts to unlock email and calendar tools
+            </p>
+            <div className="flex flex-wrap gap-2">
+                {missing.map(({ key, label, provider }) => (
+                    <button
+                        key={key}
+                        onClick={() => handleConnect(provider)}
+                        className="border-border/60 text-foreground/80 hover:bg-accent hover:text-foreground inline-flex items-center rounded-full border px-3 py-1.5 text-xs transition-colors"
+                    >
+                        Connect {label}
+                    </button>
+                ))}
+            </div>
         </div>
     );
 }
@@ -191,12 +257,14 @@ function EmbedChat({
     token,
     slug,
     isInternal,
+    identityToken,
     onChatActive
 }: {
     embedData: EmbedData;
     token: string;
     slug: string;
     isInternal: boolean;
+    identityToken: string | null;
     onChatActive?: () => void;
 }) {
     const [showSuggestions, setShowSuggestions] = useState(true);
@@ -207,15 +275,18 @@ function EmbedChat({
         () => `embed-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
     );
 
-    // Transport for public chat API
+    // Transport for public chat API (includes identity token when available)
     const transport = useMemo(
         () =>
             new DefaultChatTransport({
                 api: `/api/agents/${slug}/chat/public`,
-                body: { threadId },
-                headers: { Authorization: `Bearer ${token}` }
+                body: { threadId, ...(identityToken && { identityToken }) },
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    ...(identityToken && { "X-Embed-Identity": identityToken })
+                }
             }),
-        [slug, token, threadId]
+        [slug, token, threadId, identityToken]
     );
 
     const { messages, sendMessage, status, stop } = useChat({ transport });
@@ -515,20 +586,21 @@ function EmbedChat({
 
 function EmbedNavBar({
     isInternal,
-    chatActive
+    chatActive,
+    showAuthButtons,
+    identity
 }: {
     agentName?: string;
     isInternal: boolean;
     chatActive: boolean;
+    showAuthButtons: boolean;
+    identity?: EmbedIdentity;
 }) {
-    // Build absolute login/signup URLs so OAuth state cookies stay on the correct origin.
-    // Using target="_top" breaks out of all iframe nesting for a clean full-page navigation.
     const loginHref = isInternal ? `${window.location.origin}/login` : "https://agentc2.ai/login";
     const signupHref = isInternal
         ? `${window.location.origin}/signup`
         : "https://agentc2.ai/signup";
 
-    // Compact header when chat is active — just logo + "Connect your tools" CTA
     if (chatActive) {
         return (
             <nav className="flex items-center justify-between border-b px-4 py-2 sm:px-6">
@@ -536,14 +608,18 @@ function EmbedNavBar({
                     <span className="text-sm font-semibold">Agent</span>
                     <AgentC2Logo size={20} />
                 </div>
-                <a
-                    href={signupHref}
-                    target="_top"
-                    rel="noopener noreferrer"
-                    className="text-muted-foreground hover:text-foreground text-xs transition-colors"
-                >
-                    Connect your tools &rarr;
-                </a>
+                {identity?.name ? (
+                    <span className="text-muted-foreground text-xs">{identity.name}</span>
+                ) : showAuthButtons ? (
+                    <a
+                        href={signupHref}
+                        target="_top"
+                        rel="noopener noreferrer"
+                        className="text-muted-foreground hover:text-foreground text-xs transition-colors"
+                    >
+                        Connect your tools &rarr;
+                    </a>
+                ) : null}
             </nav>
         );
     }
@@ -554,24 +630,28 @@ function EmbedNavBar({
                 <span className="text-foreground text-base font-semibold">Agent</span>
                 <AgentC2Logo size={26} />
             </div>
-            <div className="flex items-center gap-2">
-                <a
-                    href={loginHref}
-                    target="_top"
-                    rel="noopener noreferrer"
-                    className="text-foreground/70 hover:text-foreground inline-flex min-h-[36px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
-                >
-                    Log in
-                </a>
-                <a
-                    href={signupHref}
-                    target="_top"
-                    rel="noopener noreferrer"
-                    className="inline-flex min-h-[36px] items-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
-                >
-                    Sign up
-                </a>
-            </div>
+            {identity?.name ? (
+                <span className="text-foreground/70 text-sm">{identity.name}</span>
+            ) : showAuthButtons ? (
+                <div className="flex items-center gap-2">
+                    <a
+                        href={loginHref}
+                        target="_top"
+                        rel="noopener noreferrer"
+                        className="text-foreground/70 hover:text-foreground inline-flex min-h-[36px] items-center rounded-full px-4 py-1.5 text-sm font-medium transition-colors"
+                    >
+                        Log in
+                    </a>
+                    <a
+                        href={signupHref}
+                        target="_top"
+                        rel="noopener noreferrer"
+                        className="inline-flex min-h-[36px] items-center rounded-full bg-white px-4 py-1.5 text-sm font-medium text-black transition-colors hover:bg-white/90"
+                    >
+                        Sign up
+                    </a>
+                </div>
+            ) : null}
         </nav>
     );
 }
@@ -581,6 +661,7 @@ function EmbedNavBar({
 function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
     const searchParams = useSearchParams();
     const token = searchParams.get("token");
+    const identityToken = searchParams.get("identity");
     const isInternal = searchParams.get("internal") === "true";
 
     const [slug, setSlug] = useState<string>("");
@@ -599,11 +680,15 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
         params.then((p) => setSlug(p.slug));
     }, [params]);
 
-    // Fetch embed config
+    // Fetch embed config (includes identity verification when identity param is present)
     useEffect(() => {
         if (!slug || !token) return;
 
-        fetch(`/api/agents/${slug}/embed?token=${token}`)
+        const url = new URL(`/api/agents/${slug}/embed`, window.location.origin);
+        url.searchParams.set("token", token);
+        if (identityToken) url.searchParams.set("identity", identityToken);
+
+        fetch(url.toString())
             .then((res) => {
                 if (!res.ok) throw new Error("Invalid token or agent not available");
                 return res.json();
@@ -616,7 +701,7 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
                 setError(err instanceof Error ? err.message : "Failed to load agent");
                 setLoading(false);
             });
-    }, [slug, token]);
+    }, [slug, token, identityToken]);
 
     // ── Loading / Error states ───────────────────────────────────────────
 
@@ -650,6 +735,13 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
 
     // ── Main layout ─────────────────────────────────────────────────────
 
+    const showConnectPrompts =
+        !chatActive &&
+        identityToken &&
+        embedData.identity?.userId &&
+        embedData.integrations &&
+        (!embedData.integrations.gmail || !embedData.integrations.microsoft);
+
     return (
         <div className="cowork-bg flex h-dvh flex-col">
             {/* Top nav — transforms to compact header when chat is active */}
@@ -657,7 +749,18 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
                 agentName={embedData.name}
                 isInternal={isInternal}
                 chatActive={chatActive}
+                showAuthButtons={embedData.config.showAuthButtons ?? true}
+                identity={embedData.identity}
             />
+
+            {/* Integration connect prompts (shown before first message for identified users) */}
+            {showConnectPrompts && embedData.integrations && identityToken && (
+                <ConnectPrompts
+                    integrations={embedData.integrations}
+                    identityToken={identityToken}
+                    orgId={embedData.identity?.organizationId}
+                />
+            )}
 
             {/* Chat area fills remaining space */}
             <div className="min-h-0 flex-1">
@@ -666,6 +769,7 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
                     token={token}
                     slug={slug}
                     isInternal={isInternal}
+                    identityToken={identityToken}
                     onChatActive={() => setChatActive(true)}
                 />
             </div>

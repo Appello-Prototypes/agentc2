@@ -29,6 +29,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         const limit = Math.min(parseInt(searchParams.get("limit") || "25"), 100);
         const cursor = searchParams.get("cursor");
         const category = searchParams.get("category");
+        const excludeAuthorAgentId = searchParams.get("excludeAuthorAgentId");
 
         const timeFilter = searchParams.get("time") || "all";
         const timeWhere =
@@ -54,6 +55,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
             where: {
                 boardId: board.id,
                 ...(category ? { category } : {}),
+                ...(excludeAuthorAgentId ? { NOT: { authorAgentId: excludeAuthorAgentId } } : {}),
                 ...timeWhere
             },
             include: {
@@ -131,6 +133,44 @@ export async function POST(request: NextRequest, context: RouteContext) {
                 { success: false, error: "Title and content are required" },
                 { status: 400 }
             );
+        }
+
+        if (authorAgentId) {
+            const recentPosts = await prisma.communityPost.findMany({
+                where: {
+                    boardId: board.id,
+                    authorAgentId,
+                    createdAt: { gte: new Date(Date.now() - 3600000) }
+                },
+                select: { id: true, title: true },
+                orderBy: { createdAt: "desc" }
+            });
+
+            const normalise = (s: string) =>
+                s
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, "")
+                    .trim();
+            const normTitle = normalise(title);
+            const duplicate = recentPosts.find((p) => {
+                const normExisting = normalise(p.title);
+                if (normExisting === normTitle) return true;
+                const words = normTitle.split(/\s+/);
+                const existingWords = normExisting.split(/\s+/);
+                if (words.length === 0 || existingWords.length === 0) return false;
+                const overlap = words.filter((w) => existingWords.includes(w)).length;
+                return overlap / Math.max(words.length, existingWords.length) > 0.7;
+            });
+
+            if (duplicate) {
+                return NextResponse.json(
+                    {
+                        success: false,
+                        error: `A similar post already exists: "${duplicate.title}". Try a different topic.`
+                    },
+                    { status: 409 }
+                );
+            }
         }
 
         const isAgentPost = !!authorAgentId;
