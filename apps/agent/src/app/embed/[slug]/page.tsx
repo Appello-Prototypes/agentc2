@@ -179,6 +179,125 @@ function ConnectPrompts({
     );
 }
 
+// ── Partner onboarding (full-screen connect-your-tools landing) ──────
+
+const CONNECT_TOOLS = [
+    {
+        provider: "gmail",
+        label: "Gmail & Google Calendar",
+        description: "Email triage, calendar scheduling, and meeting prep",
+        icon: (
+            <svg className="size-5" viewBox="0 0 24 24">
+                <path
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"
+                    fill="#4285F4"
+                />
+                <path
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                    fill="#34A853"
+                />
+                <path
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                    fill="#FBBC05"
+                />
+                <path
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                    fill="#EA4335"
+                />
+            </svg>
+        )
+    },
+    {
+        provider: "microsoft",
+        label: "Outlook & Microsoft Calendar",
+        description: "Email management, calendar events, and scheduling",
+        icon: (
+            <svg className="size-5" viewBox="0 0 23 23">
+                <path fill="#f35325" d="M1 1h10v10H1z" />
+                <path fill="#81bc06" d="M12 1h10v10H12z" />
+                <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                <path fill="#ffba08" d="M12 12h10v10H12z" />
+            </svg>
+        )
+    }
+];
+
+function PartnerOnboarding({
+    identity,
+    integrations,
+    identityToken,
+    onSkip
+}: {
+    identity: EmbedIdentity;
+    integrations: EmbedIntegrations;
+    identityToken: string;
+    onSkip: () => void;
+}) {
+    const orgId = identity.organizationId;
+
+    const handleConnect = (provider: string) => {
+        if (!orgId) return;
+        const url = new URL("/api/partner/connect/start", window.location.origin);
+        url.searchParams.set("provider", provider);
+        url.searchParams.set("identity", identityToken);
+        url.searchParams.set("orgId", orgId);
+        window.open(url.toString(), "_blank", "noopener,noreferrer");
+    };
+
+    const missing = CONNECT_TOOLS.filter((t) => {
+        if (t.provider === "gmail" && integrations.gmail) return false;
+        if (t.provider === "microsoft" && integrations.microsoft) return false;
+        return true;
+    });
+
+    const firstName = identity.name?.split(" ")[0] || "there";
+
+    return (
+        <div className="flex h-full flex-col items-center justify-center px-4">
+            <div className="w-full max-w-md text-center">
+                <div className="mx-auto mb-4 flex items-center justify-center gap-[2px]">
+                    <span className="text-foreground text-xl font-semibold">Agent</span>
+                    <AgentC2Logo size={26} />
+                </div>
+
+                <h1 className="text-foreground mb-2 text-xl font-semibold tracking-tight sm:text-2xl">
+                    Hey {firstName}, connect your tools
+                </h1>
+                <p className="text-muted-foreground mx-auto mb-8 max-w-sm text-sm">
+                    Link your email and calendar so your AI agent can help manage your inbox,
+                    schedule meetings, and keep you organized.
+                </p>
+
+                <div className="mx-auto max-w-sm space-y-3">
+                    {missing.map((tool) => (
+                        <button
+                            key={tool.provider}
+                            onClick={() => handleConnect(tool.provider)}
+                            className="border-border/60 hover:border-border hover:bg-accent/50 flex w-full items-center gap-4 rounded-xl border p-4 text-left transition-colors"
+                        >
+                            <div className="bg-accent/60 flex size-10 shrink-0 items-center justify-center rounded-lg">
+                                {tool.icon}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                                <p className="text-foreground text-sm font-medium">{tool.label}</p>
+                                <p className="text-muted-foreground text-xs">{tool.description}</p>
+                            </div>
+                            <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+                        </button>
+                    ))}
+                </div>
+
+                <button
+                    onClick={onSkip}
+                    className="text-muted-foreground hover:text-foreground mt-6 text-sm transition-colors"
+                >
+                    Skip for now — go to chat
+                </button>
+            </div>
+        </div>
+    );
+}
+
 /** Inline Google signup card rendered when the agent outputs [SIGNUP_CTA]. */
 function SignupCTACard({ isInternal }: { isInternal: boolean }) {
     const signupHref = isInternal
@@ -442,13 +561,16 @@ function EmbedChat({
 
     // ── Landing state (no messages yet) ──────────────────────────────────
 
+    const isIdentified = !!embedData.identity;
+    const identityFirstName = embedData.identity?.name?.split(" ")[0];
+
     if (!hasMessages) {
         return (
             <div className="flex h-full flex-col">
                 {/* Scrollable greeting area */}
                 <div className="flex flex-1 flex-col items-center justify-end overflow-y-auto">
                     <div className="w-full max-w-[680px] px-4 pb-4 sm:px-6">
-                        {/* Greeting */}
+                        {/* Greeting — personalised for identified users, generic for anonymous */}
                         <div className="mb-6 text-center sm:mb-8">
                             <div className="mx-auto mb-3 flex items-center justify-center gap-[2px]">
                                 <span className="text-foreground text-2xl font-semibold">
@@ -456,18 +578,35 @@ function EmbedChat({
                                 </span>
                                 <AgentC2Logo size={32} />
                             </div>
-                            <h1 className="text-foreground/90 mb-2 text-xl font-semibold tracking-tight sm:text-3xl">
-                                Build and deploy agents that connect to your tools at scale.
-                            </h1>
-                            <p className="text-muted-foreground mx-auto max-w-md text-sm sm:text-base">
-                                Your command and control center for the agentic world. Connect your
-                                email, calendar, and CRM — then let agents do the rest.
-                            </p>
+                            {isIdentified ? (
+                                <>
+                                    <h1 className="text-foreground/90 mb-2 text-xl font-semibold tracking-tight sm:text-3xl">
+                                        {identityFirstName
+                                            ? `Hey ${identityFirstName}, how can I help?`
+                                            : "How can I help?"}
+                                    </h1>
+                                    <p className="text-muted-foreground mx-auto max-w-md text-sm sm:text-base">
+                                        {safeConfig.greeting ||
+                                            `I'm ${embedData.name}. Ask me anything or try one of the suggestions below.`}
+                                    </p>
+                                </>
+                            ) : (
+                                <>
+                                    <h1 className="text-foreground/90 mb-2 text-xl font-semibold tracking-tight sm:text-3xl">
+                                        Build and deploy agents that connect to your tools at scale.
+                                    </h1>
+                                    <p className="text-muted-foreground mx-auto max-w-md text-sm sm:text-base">
+                                        Your command and control center for the agentic world.
+                                        Connect your email, calendar, and CRM — then let agents do
+                                        the rest.
+                                    </p>
 
-                            {/* Integration pills */}
-                            <div className="mt-4">
-                                <IntegrationPills />
-                            </div>
+                                    {/* Integration pills — only for anonymous visitors */}
+                                    <div className="mt-4">
+                                        <IntegrationPills />
+                                    </div>
+                                </>
+                            )}
                         </div>
 
                         {/* Suggestion chips */}
@@ -669,6 +808,7 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
     const [chatActive, setChatActive] = useState(false);
+    const [onboardingDismissed, setOnboardingDismissed] = useState(false);
 
     // Force dark mode on embed pages (no ThemeProvider in this layout)
     useEffect(() => {
@@ -735,12 +875,47 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
 
     // ── Main layout ─────────────────────────────────────────────────────
 
-    const showConnectPrompts =
-        !chatActive &&
-        identityToken &&
-        embedData.identity?.userId &&
+    const isIdentified = !!embedData.identity;
+    const hasMissingIntegrations =
         embedData.integrations &&
         (!embedData.integrations.gmail || !embedData.integrations.microsoft);
+    const showOnboarding =
+        isIdentified &&
+        !onboardingDismissed &&
+        !chatActive &&
+        hasMissingIntegrations &&
+        identityToken &&
+        embedData.identity;
+
+    if (showOnboarding && embedData.identity && embedData.integrations && identityToken) {
+        return (
+            <div className="cowork-bg flex h-dvh flex-col">
+                <EmbedNavBar
+                    agentName={embedData.name}
+                    isInternal={isInternal}
+                    chatActive={false}
+                    showAuthButtons={false}
+                    identity={embedData.identity}
+                />
+                <div className="min-h-0 flex-1">
+                    <PartnerOnboarding
+                        identity={embedData.identity}
+                        integrations={embedData.integrations}
+                        identityToken={identityToken}
+                        onSkip={() => setOnboardingDismissed(true)}
+                    />
+                </div>
+            </div>
+        );
+    }
+
+    // Show inline connect prompts as a banner once in the chat view
+    const showInlineConnect =
+        isIdentified &&
+        !chatActive &&
+        hasMissingIntegrations &&
+        identityToken &&
+        embedData.integrations;
 
     return (
         <div className="cowork-bg flex h-dvh flex-col">
@@ -753,8 +928,8 @@ function EmbedPageInner({ params }: { params: Promise<{ slug: string }> }) {
                 identity={embedData.identity}
             />
 
-            {/* Integration connect prompts (shown before first message for identified users) */}
-            {showConnectPrompts && embedData.integrations && identityToken && (
+            {/* Inline connect banner (shown after skipping onboarding, before first message) */}
+            {showInlineConnect && embedData.integrations && identityToken && (
                 <ConnectPrompts
                     integrations={embedData.integrations}
                     identityToken={identityToken}
