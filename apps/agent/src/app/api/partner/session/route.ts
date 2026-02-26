@@ -81,8 +81,12 @@ export async function POST(request: NextRequest) {
             deployment.mode === "agent" && deployment.agentSlug ? "/workspace" : "/workspace"
     });
 
-    // Better Auth session cookie
-    response.cookies.set("better-auth.session_token", sessionToken, {
+    // Better Auth session cookie — name must match what Better Auth reads.
+    // In production (HTTPS), Better Auth auto-prefixes with "__Secure-".
+    const sessionCookieName = isProduction
+        ? "__Secure-better-auth.session_token"
+        : "better-auth.session_token";
+    response.cookies.set(sessionCookieName, sessionToken, {
         httpOnly: true,
         secure: isProduction,
         sameSite: "none",
