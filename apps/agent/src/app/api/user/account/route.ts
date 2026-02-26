@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { requireUser } from "@/lib/authz/require-auth";
 
 const DELETED_SENTINEL = "[DELETED]";
 
@@ -22,15 +21,10 @@ const DELETED_SENTINEL = "[DELETED]";
  */
 export async function DELETE() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const userId = session.user.id;
+        const { userId } = authResult.context;
 
         const memberships = await prisma.membership.findMany({
             where: { userId },

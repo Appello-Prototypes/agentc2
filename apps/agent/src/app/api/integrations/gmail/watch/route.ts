@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import { getGmailClient, watchMailbox } from "@/lib/gmail";
 import { getNextRunAt } from "@/lib/schedule-utils";
 
@@ -13,21 +11,10 @@ import { getNextRunAt } from "@/lib/schedule-utils";
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { organizationId } = authResult.context;
 
         const body = await request.json();
         const { integrationId, gmailAddress } = body;

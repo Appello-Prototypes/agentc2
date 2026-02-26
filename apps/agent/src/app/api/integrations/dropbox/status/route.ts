@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
 import { decryptCredentials } from "@/lib/credential-crypto";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 
 /**
  * GET /api/integrations/dropbox/status
@@ -12,18 +10,10 @@ import { decryptCredentials } from "@/lib/credential-crypto";
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { organizationId } = authResult.context;
 
         const provider = await prisma.integrationProvider.findUnique({
             where: { key: "dropbox" }

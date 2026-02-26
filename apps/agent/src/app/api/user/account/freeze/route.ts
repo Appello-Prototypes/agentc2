@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * POST /api/user/account/freeze
@@ -12,15 +11,10 @@ import { auditLog } from "@/lib/audit-log";
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const userId = session.user.id;
+        const { userId } = authResult.context;
         const body = await request.json();
         const { freeze } = body as { freeze?: boolean };
 

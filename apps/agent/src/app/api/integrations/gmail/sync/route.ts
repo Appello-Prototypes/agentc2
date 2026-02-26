@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { google } from "googleapis";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import {
     getGmailOAuthClient,
     GMAIL_REQUIRED_SCOPES,
@@ -24,28 +22,22 @@ export async function POST(request: Request) {
         const { searchParams } = new URL(request.url);
         const silent = searchParams.get("silent") === "true";
 
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-
-        if (!session?.user) {
-            return NextResponse.json(
-                { success: false, error: "Unauthorized" },
-                { status: silent ? 200 : 401 }
-            );
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) {
+            if (silent) {
+                return NextResponse.json(
+                    { success: false, error: "Unauthorized" },
+                    { status: 200 }
+                );
+            }
+            return authResult.response;
         }
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: silent ? 200 : 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const account = await prisma.account.findFirst({
             where: {
-                userId: session.user.id,
+                userId,
                 providerId: "google"
             },
             orderBy: { updatedAt: "desc" }

@@ -9,12 +9,10 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { headers } from "next/headers";
 import { discoverAuthServer, buildMcpAuthorizationUrl } from "@repo/agentc2/integrations/mcp-oauth";
 import { generateOAuthState, getOAuthStateCookieName } from "@/lib/oauth-security";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 
 function getMcpOAuthRedirectUri(): string {
     const base = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
@@ -26,15 +24,10 @@ function getMcpOAuthRedirectUri(): string {
 export async function GET(request: NextRequest) {
     try {
         // 1. Authenticate
-        const session = await auth.api.getSession({ headers: await headers() });
-        if (!session?.user?.id) {
-            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json({ error: "No organization found" }, { status: 400 });
-        }
+        const { userId, organizationId } = authResult.context;
 
         // 2. Get provider key from query params
         const { searchParams } = new URL(request.url);
@@ -89,7 +82,7 @@ export async function GET(request: NextRequest) {
         // 7. Generate PKCE state using our existing security module
         const { state, codeChallenge, codeVerifier, cookieValue, cookieName } = generateOAuthState({
             organizationId,
-            userId: session.user.id,
+            userId,
             providerKey
         });
 

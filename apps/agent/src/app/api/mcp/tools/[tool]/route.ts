@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
 import { prisma } from "@repo/database";
-import { auth } from "@repo/auth";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 
 /**
  * GET /api/mcp/tools/[tool]
@@ -11,20 +9,10 @@ import { getUserOrganizationId } from "@/lib/organization";
  */
 export async function GET(request: NextRequest, { params }: { params: Promise<{ tool: string }> }) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { organizationId } = authResult.context;
 
         const { tool } = await params;
 

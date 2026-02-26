@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
-import { getUserOrganizationId } from "@/lib/organization";
 import { GMAIL_REQUIRED_SCOPES } from "@/lib/gmail";
 import { decryptCredentials } from "@/lib/credential-crypto";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 
 const parseScopes = (scope?: string | null) =>
     new Set(
@@ -16,26 +14,15 @@ const parseScopes = (scope?: string | null) =>
 
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const [account, provider] = await Promise.all([
             prisma.account.findFirst({
                 where: {
-                    userId: session.user.id,
+                    userId,
                     providerId: "google"
                 },
                 orderBy: { updatedAt: "desc" }

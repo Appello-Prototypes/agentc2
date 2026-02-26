@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * GET /api/user/timezone
@@ -11,16 +10,13 @@ import { prisma } from "@repo/database";
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
         const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
+            where: { id: userId },
             select: { timezone: true }
         });
 
@@ -33,7 +29,7 @@ export async function GET() {
         }
 
         const membership = await prisma.membership.findFirst({
-            where: { userId: session.user.id },
+            where: { userId },
             orderBy: { createdAt: "asc" },
             include: {
                 organization: {

@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { auditLog } from "@/lib/audit-log";
+import { requireUser } from "@/lib/authz/require-auth";
 
 const VALID_CONSENT_TYPES = [
     "PRIVACY_POLICY",
@@ -18,15 +17,10 @@ const VALID_CONSENT_TYPES = [
  */
 export async function POST(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const userId = session.user.id;
+        const { userId } = authResult.context;
         const body = await request.json();
         const { consentType, version, granted, termsAccepted, privacyConsent, marketingConsent } =
             body as {
@@ -145,15 +139,10 @@ export async function POST(request: NextRequest) {
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const userId = session.user.id;
+        const { userId } = authResult.context;
 
         const [user, records] = await Promise.all([
             prisma.user.findUnique({

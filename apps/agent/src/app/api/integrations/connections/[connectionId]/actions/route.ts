@@ -1,9 +1,7 @@
 import { NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { getMcpTools } from "@repo/agentc2/mcp";
-import { getUserOrganizationId } from "@/lib/organization";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import { resolveConnectionServerId } from "@/lib/integrations";
 
 /**
@@ -16,20 +14,10 @@ export async function GET(
     { params }: { params: Promise<{ connectionId: string }> }
 ) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const { connectionId } = await params;
         const connection = await prisma.integrationConnection.findFirst({
@@ -51,7 +39,7 @@ export async function GET(
             const serverId = resolveConnectionServerId(connection.provider.key, connection);
             const { tools } = await getMcpTools({
                 organizationId,
-                userId: session.user.id
+                userId
             });
             const actions = Object.entries(tools)
                 .filter(([name]) => name.startsWith(`${serverId}_`))

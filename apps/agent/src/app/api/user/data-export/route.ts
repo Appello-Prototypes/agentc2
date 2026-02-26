@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { auditLog } from "@/lib/audit-log";
+import { requireUser } from "@/lib/authz/require-auth";
 
 const EXPORT_RATE_LIMIT = { windowMs: 60 * 60 * 1000, max: 1 };
 
@@ -15,15 +14,10 @@ const EXPORT_RATE_LIMIT = { windowMs: 60 * 60 * 1000, max: 1 };
  */
 export async function GET(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
-
-        const userId = session.user.id;
+        const { userId } = authResult.context;
 
         const rl = await checkRateLimit(`data-export:${userId}`, EXPORT_RATE_LIMIT);
         if (!rl.allowed) {

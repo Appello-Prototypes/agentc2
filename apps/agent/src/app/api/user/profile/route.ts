@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { headers } from "next/headers";
-import { auth } from "@repo/auth";
 import { prisma } from "@repo/database";
+import { requireUser } from "@/lib/authz/require-auth";
 
 /**
  * GET /api/user/profile
@@ -10,16 +9,13 @@ import { prisma } from "@repo/database";
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
         const user = await prisma.user.findUnique({
-            where: { id: session.user.id },
+            where: { id: userId },
             select: {
                 id: true,
                 name: true,
@@ -59,13 +55,10 @@ export async function GET() {
  */
 export async function PATCH(request: NextRequest) {
     try {
-        const session = await auth.api.getSession({
-            headers: await headers()
-        });
+        const authResult = await requireUser();
+        if (authResult.response) return authResult.response;
 
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const { userId } = authResult.context;
 
         const body = await request.json();
         const { name, image, timezone } = body;
@@ -103,7 +96,7 @@ export async function PATCH(request: NextRequest) {
         }
 
         const user = await prisma.user.update({
-            where: { id: session.user.id },
+            where: { id: userId },
             data: updateData,
             select: {
                 id: true,

@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { headers, cookies } from "next/headers";
-import { auth } from "@repo/auth";
-import { getUserOrganizationId } from "@/lib/organization";
+import { cookies } from "next/headers";
+import { requireUserWithOrg } from "@/lib/authz/require-auth";
 import { generateOAuthState } from "@/lib/oauth-security";
 import {
     getDropboxClientCredentials,
@@ -16,25 +15,17 @@ import {
  */
 export async function GET() {
     try {
-        const session = await auth.api.getSession({ headers: await headers() });
-        if (!session?.user) {
-            return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
-        }
+        const authResult = await requireUserWithOrg();
+        if (authResult.response) return authResult.response;
 
-        const organizationId = await getUserOrganizationId(session.user.id);
-        if (!organizationId) {
-            return NextResponse.json(
-                { success: false, error: "Organization membership required" },
-                { status: 403 }
-            );
-        }
+        const { userId, organizationId } = authResult.context;
 
         const credentials = getDropboxClientCredentials();
         const redirectUri = getDropboxRedirectUri();
 
         const { state, codeChallenge, cookieValue, cookieName } = generateOAuthState({
             organizationId,
-            userId: session.user.id,
+            userId,
             providerKey: "dropbox"
         });
 
