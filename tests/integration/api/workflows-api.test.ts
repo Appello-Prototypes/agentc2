@@ -9,6 +9,7 @@ import {
 } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
+const authenticateRequestMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -32,10 +33,18 @@ vi.mock("@repo/database", () => ({
     }
 }));
 
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: authenticateRequestMock
+}));
+
 describe("Workflows API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
+        authenticateRequestMock.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
     });
 
     it("should list workflows with run counts", async () => {

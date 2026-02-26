@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
 
     // 3. Create a Better Auth session directly in the database
     const sessionToken = randomBytes(32).toString("base64url");
-    const expiresAt = new Date(Date.now() + 30 * 60 * 1000); // 30 minutes
+    const EMBED_SESSION_TTL = 8 * 60 * 60; // 8 hours (one workday)
+    const expiresAt = new Date(Date.now() + EMBED_SESSION_TTL * 1000);
 
     await prisma.session.create({
         data: {
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
         secure: isProduction,
         sameSite: "none",
         path: "/",
-        maxAge: 30 * 60
+        maxAge: EMBED_SESSION_TTL
     });
 
     // Embed config cookie (readable by client JS for shell switching)
@@ -95,7 +96,7 @@ export async function POST(request: NextRequest) {
         secure: isProduction,
         sameSite: "none",
         path: "/",
-        maxAge: 30 * 60
+        maxAge: EMBED_SESSION_TTL
     });
 
     return response;

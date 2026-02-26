@@ -47,7 +47,16 @@ vi.mock("fs/promises", async () => {
         writeFile: vi.fn().mockResolvedValue(undefined),
         readFile: vi.fn().mockResolvedValue("file content"),
         stat: vi.fn().mockResolvedValue({ size: 123, isFile: () => true }),
-        readdir: vi.fn().mockResolvedValue([])
+        readdir: vi.fn().mockResolvedValue([]),
+        realpath: vi.fn((path) => Promise.resolve(path)),
+        lstat: vi
+            .fn()
+            .mockResolvedValue({
+                size: 123,
+                isFile: () => true,
+                isDirectory: () => false,
+                isSymbolicLink: () => false
+            })
     };
 });
 
@@ -55,6 +64,7 @@ describe("Sandbox Tools", () => {
     beforeEach(() => {
         resetPrismaMock();
         vi.clearAllMocks();
+        process.env.SANDBOX_ALLOW_UNSANDBOXED_FALLBACK = "true";
     });
 
     describe("execute-code", () => {

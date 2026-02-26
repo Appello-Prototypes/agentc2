@@ -10,6 +10,7 @@ const buildTriggerPayloadSnapshotMock = vi.fn();
 const createTriggerEventRecordMock = vi.fn();
 const updateTriggerEventRecordMock = vi.fn();
 const inngestSendMock = vi.fn();
+const decryptStringMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock,
@@ -36,6 +37,10 @@ vi.mock("@/lib/inngest", () => ({
     }
 }));
 
+vi.mock("@/lib/credential-crypto", () => ({
+    decryptString: decryptStringMock
+}));
+
 const signPayload = (payload: string, secret: string, timestamp?: string) => {
     const signed = timestamp ? `${timestamp}.${payload}` : payload;
     return createHmac("sha256", secret).update(signed).digest("hex");
@@ -48,6 +53,7 @@ describe("Webhook execution API", () => {
         checkRateLimitMock.mockReturnValue({ allowed: true });
         buildTriggerPayloadSnapshotMock.mockReturnValue({ normalizedPayload: { test: true } });
         createTriggerEventRecordMock.mockResolvedValue({ id: "event-1" });
+        decryptStringMock.mockImplementation((s: string) => s);
     });
 
     it("returns 404 when webhook path is unknown", async () => {
@@ -148,7 +154,7 @@ describe("Webhook execution API", () => {
         );
         const result = await parseResponse(response);
         expect(result.status).toBe(401);
-        expect(updateTriggerEventRecordMock).toHaveBeenCalled();
+        expect(createTriggerEventRecordMock).not.toHaveBeenCalled();
     });
 
     it("returns 401 for expired timestamp", async () => {
@@ -180,7 +186,7 @@ describe("Webhook execution API", () => {
         );
         const result = await parseResponse(response);
         expect(result.status).toBe(401);
-        expect(updateTriggerEventRecordMock).toHaveBeenCalled();
+        expect(createTriggerEventRecordMock).not.toHaveBeenCalled();
     });
 
     it("sends inngest event on successful webhook", async () => {
