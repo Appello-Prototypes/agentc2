@@ -4,11 +4,16 @@ import type { PrismaClient } from "@prisma/client";
 import { createMockParams, createMockRequest, parseResponse } from "../../utils/api-helpers";
 
 const prismaMock = mockDeep<PrismaClient>();
+const authenticateRequestMock = vi.fn();
 const getSessionMock = vi.fn();
 const getUserOrganizationIdMock = vi.fn();
 
 vi.mock("@repo/database", () => ({
     prisma: prismaMock
+}));
+
+vi.mock("@/lib/api-auth", () => ({
+    authenticateRequest: authenticateRequestMock
 }));
 
 vi.mock("@repo/auth", () => ({
@@ -27,6 +32,10 @@ describe("Triggers API", () => {
     beforeEach(() => {
         mockReset(prismaMock);
         vi.clearAllMocks();
+        authenticateRequestMock.mockResolvedValue({
+            userId: "user-1",
+            organizationId: "org-1"
+        });
         getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
         getUserOrganizationIdMock.mockResolvedValue("org-1");
     });
@@ -67,7 +76,9 @@ describe("Triggers API", () => {
         await parseResponse(response);
         expect(prismaMock.agentTrigger.findMany).toHaveBeenCalledWith(
             expect.objectContaining({
-                where: { triggerType: "webhook" }
+                where: expect.objectContaining({
+                    triggerType: "webhook"
+                })
             })
         );
     });
