@@ -1,10 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { mockDeep, mockReset } from "vitest-mock-extended";
+import type { PrismaClient } from "@prisma/client";
 import { createMockRequest, parseResponse } from "../../utils/api-helpers";
 
+const prismaMock = mockDeep<PrismaClient>();
 const getSessionMock = vi.fn();
 const getUserOrganizationIdMock = vi.fn();
 const agentResolverMock = { resolve: vi.fn() };
 const startRunMock = vi.fn();
+
+vi.mock("@repo/database", () => ({
+    prisma: prismaMock
+}));
 
 vi.mock("@repo/auth", () => ({
     auth: {
@@ -32,6 +39,7 @@ vi.mock("@/lib/cost-calculator", () => ({
 
 describe("Webhook chat API", () => {
     beforeEach(() => {
+        mockReset(prismaMock);
         vi.clearAllMocks();
         getSessionMock.mockResolvedValue({ user: { id: "user-1" } });
         getUserOrganizationIdMock.mockResolvedValue("org-1");

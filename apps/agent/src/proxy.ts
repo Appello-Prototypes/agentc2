@@ -113,10 +113,17 @@ async function proxy(request: NextRequest) {
         });
 
         if (!session) {
-            // Redirect to login page
+            // Embed sessions: don't redirect to login — show session-expired page
+            const embedConfig = parseEmbedCookie(request);
+            if (embedConfig) {
+                const url = request.nextUrl.clone();
+                url.pathname = "/embed/session-expired";
+                return NextResponse.redirect(url);
+            }
+
+            // Normal users: redirect to login page
             const url = request.nextUrl.clone();
             url.pathname = "/login";
-            // Preserve the original URL as callback
             url.searchParams.set("callbackUrl", request.nextUrl.pathname);
             return NextResponse.redirect(url);
         }

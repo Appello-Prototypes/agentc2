@@ -90,6 +90,7 @@ describe("MCP Gateway API", () => {
                 workspace: null
             }
         ] as never);
+        prismaMock.agentInstance.findMany.mockResolvedValue([]);
 
         const request = createMockRequest("/api/mcp");
         const response = await GET(request);
