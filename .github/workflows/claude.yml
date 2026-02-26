@@ -1,0 +1,115 @@
+name: Claude Code
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  # Interactive Claude responses to @claude mentions
+  claude-interactive:
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'issue_comment' || github.event_name == 'pull_request_review_comment') &&
+      contains(github.event.comment.body, '@claude')
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Run Claude Code
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+  # Automated PR analysis and review
+  claude-pr-review:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    concurrency:
+      group: claude-review-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Fetch base branch
+        run: |
+          git fetch origin ${{ github.event.pull_request.base.ref }}
+
+      - name: Generate PR Summary
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          initial_prompt: |
+            Analyze this pull request and generate a comprehensive summary, then update the PR description.
+
+            PR Details:
+            - Title: ${{ github.event.pull_request.title }}
+            - PR Number: ${{ github.event.pull_request.number }}
+            - Branch: ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}
+            - Author: ${{ github.event.pull_request.user.login }}
+
+            Tasks:
+            1. Use git diff to analyze all changed files comparing HEAD with origin/${{ github.event.pull_request.base.ref }}
+            2. Generate a summary following this structure:
+
+            ## 🤖 Claude Code Analysis
+
+            ### Changes Overview
+            [Concise bullet points describing the main changes]
+
+            ### Key Files Modified
+            [List important files with brief descriptions of what changed in each]
+
+            ### Impact Assessment
+            - **Breaking Changes**: [Identify any breaking changes or note "None"]
+            - **Database Changes**: [List schema changes, migrations, or note "None"]
+            - **Dependencies**: [Note any new or updated dependencies or "None"]
+
+            ### Recommendations
+            [List any concerns, suggestions for improvement, or note "Looks good"]
+
+            3. Use the gh CLI or your GitHub integration tools to append this summary to the current PR description (add it after a "---" separator)
+
+      - name: Perform Code Review
+        continue-on-error: true
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          initial_prompt: |
+            Perform a comprehensive code review of this pull request.
+
+            PR Information:
+            - PR #${{ github.event.pull_request.number }}
+            - Branch: ${{ github.event.pull_request.head.ref }} → ${{ github.event.pull_request.base.ref }}
+
+            Instructions:
+            1. Review all changed files in this PR
+            2. Check for:
+               - Code quality and best practices
+               - Potential bugs or issues
+               - Security vulnerabilities
+               - Performance concerns
+               - Accessibility issues
+               - Missing tests or documentation
+            3. Post your review findings as a comment on this PR using your GitHub integration tools
