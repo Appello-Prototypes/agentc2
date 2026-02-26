@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import {
     Badge,
     Button,
@@ -8,6 +9,11 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
     Separator,
     Skeleton,
     Table,
@@ -21,6 +27,7 @@ import { getApiBase } from "@/lib/utils";
 
 interface PipelineRun {
     id: string;
+    workflowRunId: string | null;
     sourceType: string;
     sourceId: string;
     repository: string;
@@ -82,11 +89,19 @@ function formatRelativeTime(dateStr: string): string {
     return `${diffDays}d ago`;
 }
 
+function variantToWorkflowSlug(variant: string): string {
+    if (variant === "bugfix") return "sdlc-bugfix";
+    if (variant === "feature") return "sdlc-feature";
+    return "sdlc-standard";
+}
+
 export default function CodingPipelinePage() {
+    const router = useRouter();
     const [runs, setRuns] = useState<PipelineRun[]>([]);
     const [stats, setStats] = useState<PipelineStats | null>(null);
     const [loading, setLoading] = useState(true);
     const [filter, setFilter] = useState<string>("all");
+    const [riskFilter, setRiskFilter] = useState<string>("all");
 
     const fetchRuns = useCallback(async () => {
         try {
@@ -113,11 +128,23 @@ export default function CodingPipelinePage() {
         return () => clearInterval(interval);
     }, [fetchRuns]);
 
-    const activeRuns = runs.filter((r) =>
+    const filteredRuns = runs.filter((r) => {
+        if (riskFilter !== "all" && r.riskLevel !== riskFilter) return false;
+        return true;
+    });
+
+    const activeRuns = filteredRuns.filter((r) =>
         ["running", "awaiting_plan_approval", "coding", "verifying", "awaiting_pr_review"].includes(
             r.status
         )
     );
+
+    const navigateToRun = (run: PipelineRun) => {
+        if (run.workflowRunId) {
+            const wfSlug = variantToWorkflowSlug(run.variant);
+            router.push(`/workflows/${wfSlug}/runs/${run.workflowRunId}`);
+        }
+    };
 
     return (
         <div className="mx-auto max-w-7xl space-y-6 p-6">
@@ -204,7 +231,8 @@ export default function CodingPipelinePage() {
                         {activeRuns.map((run) => (
                             <div
                                 key={run.id}
-                                className="bg-muted/50 flex items-center justify-between rounded-lg p-3"
+                                className="bg-muted/50 hover:bg-muted flex cursor-pointer items-center justify-between rounded-lg p-3 transition-colors"
+                                onClick={() => navigateToRun(run)}
                             >
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center gap-2">
@@ -241,19 +269,37 @@ export default function CodingPipelinePage() {
 
             <Separator />
 
-            {/* Filter */}
-            <div className="flex items-center gap-2">
-                <span className="text-muted-foreground text-sm">Filter:</span>
-                {["all", "running", "merged", "deployed", "failed"].map((f) => (
-                    <Button
-                        key={f}
-                        variant={filter === f ? "default" : "outline"}
-                        size="sm"
-                        onClick={() => setFilter(f)}
-                    >
-                        {f === "all" ? "All" : formatStatus(f)}
-                    </Button>
-                ))}
+            {/* Filters */}
+            <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">Status:</span>
+                    {["all", "running", "merged", "deployed", "failed"].map((f) => (
+                        <Button
+                            key={f}
+                            variant={filter === f ? "default" : "outline"}
+                            size="sm"
+                            onClick={() => setFilter(f)}
+                        >
+                            {f === "all" ? "All" : formatStatus(f)}
+                        </Button>
+                    ))}
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground text-sm">Risk:</span>
+                    <Select value={riskFilter} onValueChange={(v) => setRiskFilter(v ?? "all")}>
+                        <SelectTrigger className="w-32">
+                            <SelectValue placeholder="All risks" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="all">All risks</SelectItem>
+                            <SelectItem value="trivial">Trivial</SelectItem>
+                            <SelectItem value="low">Low</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="high">High</SelectItem>
+                            <SelectItem value="critical">Critical</SelectItem>
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Runs Table */}
@@ -283,7 +329,7 @@ export default function CodingPipelinePage() {
                                         ))}
                                     </TableRow>
                                 ))
-                            ) : runs.length === 0 ? (
+                            ) : filteredRuns.length === 0 ? (
                                 <TableRow>
                                     <TableCell
                                         colSpan={8}
@@ -293,8 +339,16 @@ export default function CodingPipelinePage() {
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                runs.map((run) => (
-                                    <TableRow key={run.id}>
+                                filteredRuns.map((run) => (
+                                    <TableRow
+                                        key={run.id}
+                                        className={
+                                            run.workflowRunId
+                                                ? "hover:bg-muted/50 cursor-pointer transition-colors"
+                                                : ""
+                                        }
+                                        onClick={() => navigateToRun(run)}
+                                    >
                                         <TableCell>
                                             <Badge
                                                 variant="outline"

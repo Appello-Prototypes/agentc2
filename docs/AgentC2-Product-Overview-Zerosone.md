@@ -26,15 +26,15 @@ Database-driven agents resolved at runtime with configurable models (OpenAI, Ant
 
 ### Connectors That Work
 
-| Category | Integrations |
-| --- | --- |
-| **CRM** | HubSpot |
-| **Project Management** | Jira, Linear, Asana, Notion |
-| **Communication** | Slack, Microsoft Teams, Gmail, Outlook |
-| **Productivity** | Google Calendar, Google Drive, Dropbox, Microsoft Calendar |
-| **Knowledge** | Fathom (meetings), GitHub, YouTube Transcripts |
-| **Automation** | n8n (ATLAS), Firecrawl (web scraping), Playwright (browser) |
-| **Voice & Telephony** | Twilio, ElevenLabs, JustCall |
+| Category               | Integrations                                                |
+| ---------------------- | ----------------------------------------------------------- |
+| **CRM**                | HubSpot                                                     |
+| **Project Management** | Jira, Linear, Asana, Notion                                 |
+| **Communication**      | Slack, Microsoft Teams, Gmail, Outlook                      |
+| **Productivity**       | Google Calendar, Google Drive, Dropbox, Microsoft Calendar  |
+| **Knowledge**          | Fathom (meetings), GitHub, YouTube Transcripts              |
+| **Automation**         | n8n (ATLAS), Firecrawl (web scraping), Playwright (browser) |
+| **Voice & Telephony**  | Twilio, ElevenLabs, JustCall                                |
 
 Every connector uses per-organization encrypted credentials (AES-256-GCM), automatic OAuth token refresh, and tenant-isolated MCP clients. One org's failure never affects another.
 
@@ -105,14 +105,14 @@ Backed by a two-tier evaluation system: fast heuristic pre-screening + AI audito
 
 ## Production Infrastructure
 
-| Component | Detail |
-| --- | --- |
-| **Runtime** | Bun + Next.js 16, Turborepo monorepo |
-| **Database** | PostgreSQL (Supabase), Prisma 6 ORM |
-| **Process Management** | PM2 cluster (7 processes, auto-restart, health checks) |
-| **Reverse Proxy** | Caddy with Let's Encrypt, security headers, SSE streaming |
-| **CI/CD** | GitHub Actions: type-check → lint → build → rollback safety → crash-loop detection → health verification → Slack notifications |
-| **Background Jobs** | Inngest event-driven processing |
+| Component              | Detail                                                                                                                         |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| **Runtime**            | Bun + Next.js 16, Turborepo monorepo                                                                                           |
+| **Database**           | PostgreSQL (Supabase), Prisma 6 ORM                                                                                            |
+| **Process Management** | PM2 cluster (7 processes, auto-restart, health checks)                                                                         |
+| **Reverse Proxy**      | Caddy with Let's Encrypt, security headers, SSE streaming                                                                      |
+| **CI/CD**              | GitHub Actions: type-check → lint → build → rollback safety → crash-loop detection → health verification → Slack notifications |
+| **Background Jobs**    | Inngest event-driven processing                                                                                                |
 
 ---
 

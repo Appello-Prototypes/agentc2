@@ -336,6 +336,7 @@ import {
     dispatchCodingPipelineTool,
     updatePipelineStatusTool
 } from "./coding-pipeline-tools";
+import { ticketToGithubIssueTool } from "./ticket-to-github-issue";
 import { lookupPipelineConfigTool } from "./pipeline-config-tools";
 import { mergePullRequestTool, awaitDeployTool } from "./merge-deploy-tools";
 import { runScenariosTool, calculateTrustScoreTool } from "./scenario-tools";
@@ -423,6 +424,7 @@ export const toolCategoryMap: Record<string, string> = {
     "await-deploy": "Coding Pipeline",
     "run-scenarios": "Coding Pipeline",
     "calculate-trust-score": "Coding Pipeline",
+    "ticket-to-github-issue": "Coding Pipeline",
 
     // Remote Compute
     "provision-compute": "Remote Compute",
@@ -848,6 +850,7 @@ export const toolRegistry: Record<string, any> = {
     "await-deploy": awaitDeployTool,
     "run-scenarios": runScenariosTool,
     "calculate-trust-score": calculateTrustScoreTool,
+    "ticket-to-github-issue": ticketToGithubIssueTool,
 
     // Remote Compute
     "provision-compute": provisionComputeTool,

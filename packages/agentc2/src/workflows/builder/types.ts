@@ -5,9 +5,16 @@ export type WorkflowStepType =
     | "branch"
     | "parallel"
     | "foreach"
+    | "dowhile"
     | "human"
     | "transform"
     | "delay";
+
+export interface WorkflowDoWhileConfig {
+    steps: WorkflowStep[];
+    conditionExpression: string;
+    maxIterations?: number;
+}
 
 export interface WorkflowDefinition {
     steps: WorkflowStep[];

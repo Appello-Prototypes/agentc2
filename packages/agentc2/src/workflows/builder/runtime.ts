@@ -15,7 +15,8 @@ import {
     type WorkflowParallelConfig,
     type WorkflowForeachConfig,
     type WorkflowHumanConfig,
-    type WorkflowCallConfig
+    type WorkflowCallConfig,
+    type WorkflowDoWhileConfig
 } from "./types";
 
 interface ExecuteWorkflowOptions {
@@ -552,6 +553,68 @@ async function executeSteps(
                     }
 
                     results.forEach((result) => executionSteps.push(...result.steps));
+                    break;
+                }
+                case "dowhile": {
+                    const dwConfig = (step.config || {}) as unknown as WorkflowDoWhileConfig;
+                    const maxIter = dwConfig.maxIterations || 10;
+                    let iteration = 0;
+                    let iterOutput: unknown = stepInput;
+
+                    do {
+                        const iterContext: WorkflowExecutionContext = {
+                            ...context,
+                            steps: { ...context.steps },
+                            variables: {
+                                ...context.variables,
+                                _dowhileIteration: iteration
+                            }
+                        };
+
+                        const iterResult = await executeSteps(dwConfig.steps || [], iterContext, {
+                            ...options,
+                            existingSteps: options.existingSteps
+                        });
+
+                        iterResult.steps.forEach((s) => {
+                            s.iterationIndex = iteration;
+                        });
+                        executionSteps.push(...iterResult.steps);
+
+                        if (iterResult.status === "suspended") {
+                            status = "suspended";
+                            suspended = iterResult.suspended;
+                            break;
+                        }
+                        if (iterResult.status === "failed") {
+                            status = "failed";
+                            output = iterResult.output;
+                            break;
+                        }
+
+                        iterOutput = iterResult.output;
+                        iteration++;
+                        context.steps[step.id] = {
+                            ...(typeof iterOutput === "object" && iterOutput !== null
+                                ? iterOutput
+                                : { value: iterOutput }),
+                            _iteration: iteration
+                        };
+
+                        Object.assign(context.steps, iterContext.steps);
+                    } while (
+                        iteration < maxIter &&
+                        evaluateCondition(dwConfig.conditionExpression, context)
+                    );
+
+                    if (status !== "failed" && status !== "suspended") {
+                        output = {
+                            ...(typeof iterOutput === "object" && iterOutput !== null
+                                ? iterOutput
+                                : { value: iterOutput }),
+                            _totalIterations: iteration
+                        };
+                    }
                     break;
                 }
                 case "human": {
