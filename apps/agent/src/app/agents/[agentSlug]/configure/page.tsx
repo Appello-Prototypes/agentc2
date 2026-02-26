@@ -240,6 +240,7 @@ export default function ConfigurePage() {
     const [, setScorecardLoading] = useState(false);
     const [scorecardSaving, setScorecardSaving] = useState(false);
     const [scorecardGenerating, setScorecardGenerating] = useState(false);
+    const [scorecardError, setScorecardError] = useState<string | null>(null);
     const [editingCriterion, setEditingCriterion] = useState<ScorecardCriterion | null>(null);
     const [scorecardTemplates, setScorecardTemplates] = useState<
         Array<{ id: string; slug: string; name: string; description: string; category: string }>
@@ -443,6 +444,7 @@ export default function ConfigurePage() {
         if (!agent || !scorecard) return;
         try {
             setScorecardSaving(true);
+            setScorecardError(null);
             const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
@@ -454,12 +456,15 @@ export default function ConfigurePage() {
                     evaluateTurns: scorecard.evaluateTurns
                 })
             });
-            if (res.ok) {
-                const data = await res.json();
+            const data = await res.json();
+            if (res.ok && data.scorecard) {
                 setScorecard(data.scorecard);
+            } else {
+                setScorecardError(data.error || "Failed to save scorecard");
             }
         } catch (err) {
             console.error("Failed to save scorecard:", err);
+            setScorecardError(err instanceof Error ? err.message : "Failed to save scorecard");
         } finally {
             setScorecardSaving(false);
         }
@@ -470,26 +475,28 @@ export default function ConfigurePage() {
         if (!agent) return;
         try {
             setScorecardGenerating(true);
+            setScorecardError(null);
             const res = await fetch(`${getApiBase()}/api/agents/${agent.id}/scorecard/generate`, {
                 method: "POST",
                 credentials: "include"
             });
-            if (res.ok) {
-                const data = await res.json();
-                if (data.criteria) {
-                    setScorecard((prev) => ({
-                        id: prev?.id || "",
-                        criteria: data.criteria,
-                        version: (prev?.version || 0) + 1,
-                        samplingRate: prev?.samplingRate ?? 1.0,
-                        auditorModel: prev?.auditorModel ?? "gpt-4o-mini",
-                        evaluateTurns: prev?.evaluateTurns ?? false,
-                        templateId: null
-                    }));
-                }
+            const data = await res.json();
+            if (res.ok && data.criteria) {
+                setScorecard((prev) => ({
+                    id: prev?.id || "",
+                    criteria: data.criteria,
+                    version: (prev?.version || 0) + 1,
+                    samplingRate: prev?.samplingRate ?? 1.0,
+                    auditorModel: prev?.auditorModel ?? "gpt-4o-mini",
+                    evaluateTurns: prev?.evaluateTurns ?? false,
+                    templateId: null
+                }));
+            } else if (!res.ok) {
+                setScorecardError(data.error || "Failed to generate scorecard");
             }
         } catch (err) {
             console.error("Failed to generate scorecard:", err);
+            setScorecardError(err instanceof Error ? err.message : "Failed to generate scorecard");
         } finally {
             setScorecardGenerating(false);
         }
@@ -501,6 +508,7 @@ export default function ConfigurePage() {
             if (!agent) return;
             try {
                 setScorecardSaving(true);
+                setScorecardError(null);
                 const res = await fetch(
                     `${getApiBase()}/api/agents/${agent.id}/scorecard/templates`,
                     {
@@ -510,14 +518,15 @@ export default function ConfigurePage() {
                         body: JSON.stringify({ templateId })
                     }
                 );
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data.scorecard) {
-                        setScorecard(data.scorecard);
-                    }
+                const data = await res.json();
+                if (res.ok && data.scorecard) {
+                    setScorecard(data.scorecard);
+                } else {
+                    setScorecardError(data.error || "Failed to apply template");
                 }
             } catch (err) {
                 console.error("Failed to apply template:", err);
+                setScorecardError(err instanceof Error ? err.message : "Failed to apply template");
             } finally {
                 setScorecardSaving(false);
             }
@@ -3427,6 +3436,11 @@ export default function ConfigurePage() {
                                         )}
                                     </div>
                                 </div>
+                                {scorecardError && (
+                                    <div className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-300">
+                                        {scorecardError}
+                                    </div>
+                                )}
                             </CardHeader>
                         </Card>
 

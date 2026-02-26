@@ -15,6 +15,44 @@ function isStandaloneDeployment(): boolean {
     return process.env.STANDALONE_DEMO === "true" && process.env.NODE_ENV !== "production";
 }
 
+const FEATURE_PATH_MAP: Record<string, string> = {
+    "/workspace": "chat",
+    "/agents": "agents",
+    "/workflows": "workflows",
+    "/networks": "networks",
+    "/skills": "skills",
+    "/knowledge": "knowledge",
+    "/observe": "observe",
+    "/schedule": "schedule",
+    "/mcp": "integrations",
+    "/settings": "settings",
+    "/campaigns": "campaigns"
+};
+
+function pathToFeature(pathname: string): string | null {
+    for (const [path, feature] of Object.entries(FEATURE_PATH_MAP)) {
+        if (pathname === path || pathname.startsWith(path + "/")) {
+            return feature;
+        }
+    }
+    return null;
+}
+
+interface EmbedCookieConfig {
+    features?: string[];
+    mode?: string;
+}
+
+function parseEmbedCookie(request: NextRequest): EmbedCookieConfig | null {
+    const raw = request.cookies.get("agentc2-embed")?.value;
+    if (!raw) return null;
+    try {
+        return JSON.parse(decodeURIComponent(raw));
+    } catch {
+        return null;
+    }
+}
+
 /**
  * Proxy for Better Auth with Next.js 16
  * Validates sessions and protects routes
@@ -83,9 +121,23 @@ async function proxy(request: NextRequest) {
             return NextResponse.redirect(url);
         }
 
+        const embedConfig = parseEmbedCookie(request);
+        const pathname = request.nextUrl.pathname;
+
+        // Embed sessions: enforce feature gating, skip onboarding check
+        if (embedConfig) {
+            const feature = pathToFeature(pathname);
+            if (feature && embedConfig.features && !embedConfig.features.includes(feature)) {
+                const url = request.nextUrl.clone();
+                url.pathname = "/workspace";
+                return NextResponse.redirect(url);
+            }
+            return NextResponse.next();
+        }
+
+        // Normal users: check onboarding completion
         const membership = await getUserMembership(session.user.id);
         const onboardingComplete = Boolean(membership?.onboardingCompletedAt);
-        const pathname = request.nextUrl.pathname;
 
         if (!onboardingComplete && !pathname.startsWith("/onboarding")) {
             const url = request.nextUrl.clone();
@@ -114,6 +166,9 @@ export const config = {
     matcher: [
         /*
          * Match all request paths except:
+         * - embed (public embed pages, including /embed/workspace bootstrap)
+         * - embed-v2 (legacy embed pages)
+         * - connect (OAuth integration connection pages)
          * - login (public login page)
          * - signup (public signup page)
          * - terms (public Terms of Service)

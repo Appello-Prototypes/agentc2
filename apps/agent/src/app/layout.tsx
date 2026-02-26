@@ -6,6 +6,7 @@ import { getAppUrl } from "@repo/auth";
 import "@/styles/globals.css";
 import { AppProvidersWrapper } from "@/components/AppProvidersWrapper";
 import { AgentHeader } from "@/components/AgentHeader";
+import { EmbedWorkspaceShell } from "@/components/EmbedWorkspaceShell";
 import { RootLayoutShell } from "@/components/RootLayoutShell";
 
 export const viewport: Viewport = {
@@ -54,6 +55,7 @@ export default function RootLayout({
                         </Suspense>
                     }
                     bareShell={children}
+                    embedWorkspaceShell={<EmbedWorkspaceShell>{children}</EmbedWorkspaceShell>}
                 >
                     {children}
                 </RootLayoutShell>

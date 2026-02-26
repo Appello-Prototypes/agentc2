@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/live/filters
@@ -11,13 +12,20 @@ import { prisma, Prisma } from "@repo/database";
  * - from/to: Date range filter (ISO)
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const runType = searchParams.get("runType") || "PROD";
         const from = searchParams.get("from");
         const to = searchParams.get("to");
 
-        const baseWhere: Prisma.AgentRunWhereInput = {};
+        const baseWhere: Prisma.AgentRunWhereInput = {
+            agent: { workspace: { organizationId: authContext.organizationId } }
+        };
         const startedAtFilter: Prisma.DateTimeFilter = {};
 
         if (runType && runType.toLowerCase() !== "all") {

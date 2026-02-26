@@ -1483,10 +1483,17 @@ export const runEvaluationFunction = inngest.createFunction(
         // Step 5: Run Tier 2 AI Auditor (if selected)
         let tier2Result: import("@repo/agentc2").Tier2Result | null = null;
         if (runTier2) {
-            tier2Result = await step.run("tier2-auditor", async () => {
-                const { runTier2Auditor } = await import("@repo/agentc2");
-                return runTier2Auditor(context);
-            });
+            try {
+                tier2Result = await step.run("tier2-auditor", async () => {
+                    const { runTier2Auditor } = await import("@repo/agentc2");
+                    return runTier2Auditor(context);
+                });
+            } catch (err) {
+                console.error(
+                    `[Eval] Tier 2 auditor failed for run ${runId}, falling back to Tier 1:`,
+                    err
+                );
+            }
         }
 
         // Step 6: Store evaluation
@@ -5575,12 +5582,13 @@ export const asyncInvokeFunction = inngest.createFunction(
 
         // Step 3: Update run with results
         await step.run("update-run-results", async () => {
-            if (result.success && result.output) {
+            if (result.success) {
                 await prisma.agentRun.update({
                     where: { id: runId },
                     data: {
                         status: "COMPLETED",
-                        outputText: result.output,
+                        outputText:
+                            result.output || "(Agent completed successfully with no text output)",
                         durationMs: result.durationMs,
                         completedAt: new Date(),
                         modelProvider: result.modelProvider,
@@ -5596,7 +5604,8 @@ export const asyncInvokeFunction = inngest.createFunction(
                     where: { runId },
                     data: {
                         status: "COMPLETED",
-                        outputText: result.output,
+                        outputText:
+                            result.output || "(Agent completed successfully with no text output)",
                         durationMs: result.durationMs,
                         tokensJson: {
                             prompt: result.promptTokens || 0,
@@ -5938,8 +5947,12 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
                         select: {
                             id: true,
                             slug: true,
-                            isActive: true
+                            isActive: true,
+                            workspaceId: true
                         }
+                    },
+                    workspace: {
+                        select: { organizationId: true }
                     }
                 }
             });
@@ -5957,18 +5970,34 @@ export const agentScheduleTriggerFunction = inngest.createFunction(
         const input = resolveScheduleTemplates(rawInput, scheduleTimezone);
         const environment =
             typeof inputJson?.environment === "string" ? inputJson.environment : undefined;
+
+        // Derive organizationId from the schedule's workspace (or the agent's workspace as fallback)
+        let scheduleOrgId = schedule.workspace?.organizationId;
+        if (!scheduleOrgId && schedule.agent.workspaceId) {
+            const agentWorkspace = await step.run("lookup-agent-workspace", async () => {
+                return prisma.workspace.findUnique({
+                    where: { id: schedule.agent.workspaceId! },
+                    select: { organizationId: true }
+                });
+            });
+            scheduleOrgId = agentWorkspace?.organizationId;
+        }
+        const orgContext = scheduleOrgId ? { resource: { tenantId: scheduleOrgId } } : {};
+
         const context =
             inputJson?.context && typeof inputJson.context === "object"
                 ? {
                       ...(inputJson.context as Record<string, unknown>),
                       scheduleId: schedule.id,
                       scheduleName: schedule.name,
-                      ...(environment ? { environment } : {})
+                      ...(environment ? { environment } : {}),
+                      ...orgContext
                   }
                 : {
                       scheduleId: schedule.id,
                       scheduleName: schedule.name,
-                      ...(environment ? { environment } : {})
+                      ...(environment ? { environment } : {}),
+                      ...orgContext
                   };
         const maxSteps = typeof inputJson?.maxSteps === "number" ? inputJson.maxSteps : undefined;
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/live/metrics/timeseries
@@ -12,6 +13,11 @@ import { prisma, Prisma } from "@repo/database";
  *   buckets  – number of time buckets (default 24, max 120)
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const runType = searchParams.get("runType") || "PROD";
@@ -29,7 +35,8 @@ export async function GET(request: NextRequest) {
         const bucketMs = Math.max(rangeMs / bucketCount, 1);
 
         const baseWhere: Prisma.AgentRunWhereInput = {
-            startedAt: { gte: rangeFrom, lte: rangeTo }
+            startedAt: { gte: rangeFrom, lte: rangeTo },
+            agent: { workspace: { organizationId: authContext.organizationId } }
         };
         if (runType && runType.toLowerCase() !== "all") {
             baseWhere.runType = runType.toUpperCase() as Prisma.EnumRunTypeFilter;

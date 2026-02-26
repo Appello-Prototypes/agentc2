@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
 
@@ -12,6 +18,7 @@ export async function GET(request: NextRequest) {
         const endDate = to ? new Date(to) : new Date();
 
         const networks = await prisma.network.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
             orderBy: { createdAt: "desc" },
             include: {
                 _count: { select: { primitives: true } }
@@ -20,6 +27,7 @@ export async function GET(request: NextRequest) {
 
         const runs = await prisma.networkRun.findMany({
             where: {
+                network: { workspace: { organizationId: authContext.organizationId } },
                 startedAt: {
                     gte: startDate,
                     lte: endDate
@@ -165,7 +173,9 @@ export async function GET(request: NextRequest) {
                 isActive: network.isActive,
                 createdAt: network.createdAt,
                 updatedAt: network.updatedAt,
-                primitiveCount: network._count?.primitives ?? 0,
+                primitiveCount:
+                    (network as unknown as { _count?: { primitives: number } })._count
+                        ?.primitives ?? 0,
                 stats: {
                     totalRuns: stats.totalRuns,
                     completedRuns: stats.completedRuns,

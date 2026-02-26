@@ -8,12 +8,12 @@ import { ingestDocument } from "../rag/pipeline";
 
 const INLINE_THRESHOLD = 20_000; // chars – roughly ~15 min of speech
 const SUPADATA_BASE = "https://api.supadata.ai/v1/transcript";
-const MIN_CALL_INTERVAL_MS = 1_100; // 1.1s — stay under free-tier 1 req/sec
+const MIN_CALL_INTERVAL_MS = 200; // 200ms — paid tier allows higher throughput
 const MAX_RETRIES = 3;
 const RETRY_DELAY_MS = 1_500;
 
 // ---------------------------------------------------------------------------
-// Supadata rate-limit throttle (free plan: 1 req/sec)
+// Supadata rate-limit throttle (paid plan)
 // ---------------------------------------------------------------------------
 
 let lastSupadataCall = 0;
@@ -186,7 +186,11 @@ export const youtubeGetTranscriptTool = createTool({
     description:
         "Extract the full transcript and metadata from a YouTube video. Accepts any YouTube URL format or a bare video ID. For short videos the transcript is returned inline. For long videos the transcript is automatically ingested into the knowledge base and a document ID is returned for targeted RAG queries. Powered by Supadata — requires SUPADATA_API_KEY.",
     inputSchema: z.object({
-        url: z.string().describe("YouTube video URL or video ID")
+        url: z.string().describe("YouTube video URL or video ID"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID (auto-injected by platform)")
     }),
     outputSchema: z.object({
         title: z.string(),
@@ -198,7 +202,7 @@ export const youtubeGetTranscriptTool = createTool({
         ragChunkCount: z.number().optional(),
         error: z.string().optional()
     }),
-    execute: async ({ url }) => {
+    execute: async ({ url, organizationId }) => {
         const normalizedUrl = normalizeYouTubeUrl(url);
         const videoId = extractVideoId(normalizedUrl) || url;
 
@@ -242,7 +246,8 @@ export const youtubeGetTranscriptTool = createTool({
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
-            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
+            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 },
+            organizationId
         });
 
         return {
@@ -318,7 +323,11 @@ export const youtubeAnalyzeVideoTool = createTool({
         analysisType: z
             .enum(["summary", "key-points", "action-items", "full"])
             .optional()
-            .describe("Kind of analysis the agent should perform (default: full)")
+            .describe("Kind of analysis the agent should perform (default: full)"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID (auto-injected by platform)")
     }),
     outputSchema: z.object({
         title: z.string(),
@@ -330,7 +339,7 @@ export const youtubeAnalyzeVideoTool = createTool({
         analysisType: z.string(),
         error: z.string().optional()
     }),
-    execute: async ({ url, analysisType }) => {
+    execute: async ({ url, analysisType, organizationId }) => {
         const normalizedUrl = normalizeYouTubeUrl(url);
         const videoId = extractVideoId(normalizedUrl) || url;
         const type = analysisType || "full";
@@ -370,7 +379,8 @@ export const youtubeAnalyzeVideoTool = createTool({
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
-            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
+            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 },
+            organizationId
         });
 
         return {
@@ -392,7 +402,11 @@ export const youtubeIngestToKnowledgeTool = createTool({
         "Extract a YouTube video transcript and ingest the full content into the RAG knowledge base for later semantic search. Always ingests the complete transcript regardless of length. Use this to build a searchable library of expert knowledge from YouTube videos.",
     inputSchema: z.object({
         url: z.string().describe("YouTube video URL or video ID"),
-        tags: z.array(z.string()).optional().describe("Optional tags (e.g. ['AI', 'agents'])")
+        tags: z.array(z.string()).optional().describe("Optional tags (e.g. ['AI', 'agents'])"),
+        organizationId: z
+            .string()
+            .optional()
+            .describe("Organization ID (auto-injected by platform)")
     }),
     outputSchema: z.object({
         documentId: z.string(),
@@ -402,7 +416,7 @@ export const youtubeIngestToKnowledgeTool = createTool({
         message: z.string(),
         error: z.string().optional()
     }),
-    execute: async ({ url, tags }) => {
+    execute: async ({ url, tags, organizationId }) => {
         const normalizedUrl = normalizeYouTubeUrl(url);
         const videoId = extractVideoId(normalizedUrl) || url;
 
@@ -437,7 +451,8 @@ export const youtubeIngestToKnowledgeTool = createTool({
             type: "markdown",
             sourceId: `youtube:${videoId}`,
             sourceName: `${metadata.channel} - ${metadata.title}`,
-            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 }
+            chunkOptions: { strategy: "markdown", maxSize: 1024, overlap: 100 },
+            organizationId
         });
 
         return {

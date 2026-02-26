@@ -21,8 +21,9 @@ agentc2.ai {
         X-Content-Type-Options "nosniff"
         # XSS protection
         X-XSS-Protection "1; mode=block"
-        # Prevent clickjacking
-        X-Frame-Options "SAMEORIGIN"
+        # Clickjacking protection is handled per-route:
+        # - Embed routes set "frame-ancestors *" to allow iframing
+        # - Default handler sets "frame-ancestors 'self'" for normal pages
         # Referrer policy
         Referrer-Policy "strict-origin-when-cross-origin"
         # Remove server header
@@ -110,6 +111,9 @@ agentc2.ai {
 
     # All other traffic routes to agent app (primary app on port 3001)
     # Long timeouts for agent executions and SSE streams
+    # Note: No X-Frame-Options here — embed sessions redirect from /embed/workspace
+    # to /workspace after session bridging, so these pages must be iframeable.
+    # Framing protection is handled by the embed cookie + session validation.
     handle {
         reverse_proxy localhost:3001 {
             # Long timeouts for agent executions (5 minutes)

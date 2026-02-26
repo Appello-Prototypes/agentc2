@@ -98,6 +98,7 @@ import {
     type RealtimeState,
     type ConnectionQuality
 } from "@/hooks/useRealtimeVoice";
+import { useEmbedConfig } from "@/hooks/useEmbedConfig";
 
 // ─── Inline sub-components ───────────────────────────────────────────────────
 
@@ -834,9 +835,13 @@ function ChatInputActions({ setInputMode }: { setInputMode: (mode: InputMode) =>
 export default function UnifiedChatPage() {
     const searchParams = useSearchParams();
     const { data: session } = useSession();
+    const embedConfig = useEmbedConfig();
+
+    // In Mode 2 (agent), lock to the configured agent
+    const lockedAgentSlug = embedConfig?.mode === "agent" ? embedConfig.agentSlug : undefined;
 
     const [selectedAgentSlug, setSelectedAgentSlug] = useState<string>(
-        searchParams.get("agent") || getDefaultAgentSlug()
+        lockedAgentSlug || searchParams.get("agent") || getDefaultAgentSlug()
     );
     const [threadId, setThreadId] = useState<string>(() => `chat-${Date.now()}`);
     const [currentRunId, setCurrentRunId] = useState<string | null>(null);
@@ -1261,19 +1266,23 @@ export default function UnifiedChatPage() {
             <PromptInputFooter className="flex-wrap gap-2 px-3 pb-3">
                 <PromptInputTools className="min-w-0 flex-wrap gap-1.5">
                     <ChatInputActions setInputMode={setInputMode} />
-                    <VoiceInputButton />
-                    <PromptInputButton
-                        onClick={() => setVoiceConversationActive(true)}
-                        aria-label="Voice conversation"
-                        title="Start voice conversation"
-                    >
-                        <PhoneIcon className="size-4" />
-                    </PromptInputButton>
-                    <AgentSelector
-                        value={selectedAgentSlug}
-                        onChange={handleAgentChange}
-                        disabled={isBusy}
-                    />
+                    {!embedConfig && <VoiceInputButton />}
+                    {!embedConfig && (
+                        <PromptInputButton
+                            onClick={() => setVoiceConversationActive(true)}
+                            aria-label="Voice conversation"
+                            title="Start voice conversation"
+                        >
+                            <PhoneIcon className="size-4" />
+                        </PromptInputButton>
+                    )}
+                    {!lockedAgentSlug && (
+                        <AgentSelector
+                            value={selectedAgentSlug}
+                            onChange={handleAgentChange}
+                            disabled={isBusy}
+                        />
+                    )}
                 </PromptInputTools>
                 <PromptInputSubmit
                     className="shrink-0"

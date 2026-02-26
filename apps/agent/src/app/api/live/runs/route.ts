@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/live/runs
@@ -21,6 +22,11 @@ import { prisma, Prisma } from "@repo/database";
  * - offset: Pagination offset (default: 0)
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const status = searchParams.get("status");
@@ -36,7 +42,9 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
         const offset = parseInt(searchParams.get("offset") || "0", 10);
 
-        const baseWhere: Prisma.AgentRunWhereInput = {};
+        const baseWhere: Prisma.AgentRunWhereInput = {
+            agent: { workspace: { organizationId: authContext.organizationId } }
+        };
         const startedAtFilter: Prisma.DateTimeFilter = {};
 
         if (runType && runType.toLowerCase() !== "all") {

@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
 
@@ -12,6 +18,7 @@ export async function GET(request: NextRequest) {
         const endDate = to ? new Date(to) : new Date();
 
         const workflows = await prisma.workflow.findMany({
+            where: { workspace: { organizationId: authContext.organizationId } },
             orderBy: { createdAt: "desc" },
             select: {
                 id: true,
@@ -29,6 +36,7 @@ export async function GET(request: NextRequest) {
 
         const runs = await prisma.workflowRun.findMany({
             where: {
+                workflow: { workspace: { organizationId: authContext.organizationId } },
                 startedAt: {
                     gte: startDate,
                     lte: endDate

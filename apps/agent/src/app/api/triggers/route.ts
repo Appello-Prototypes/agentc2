@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/triggers?type=webhook
@@ -8,12 +9,19 @@ import { prisma } from "@repo/database";
  * Used by the webhooks page to show all webhook triggers in a flat table.
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
         const type = searchParams.get("type");
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const where: Record<string, any> = {};
+        const where: Record<string, any> = {
+            agent: { workspace: { organizationId: authContext.organizationId } }
+        };
         if (type) {
             where.triggerType = type;
         }

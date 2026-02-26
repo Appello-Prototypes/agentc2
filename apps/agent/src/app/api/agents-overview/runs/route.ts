@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/workspace/runs
@@ -7,6 +8,11 @@ import { prisma } from "@repo/database";
  * Get all runs across all agents, ordered by most recent first
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
 
@@ -49,6 +55,8 @@ export async function GET(request: NextRequest) {
         if (cursor) {
             where.id = { lt: cursor };
         }
+
+        where.agent = { ...where.agent, workspace: { organizationId: authContext.organizationId } };
 
         // Query runs with agent info, tool call counts, and step counts
         const runs = await prisma.agentRun.findMany({
@@ -95,11 +103,15 @@ export async function GET(request: NextRequest) {
         }
 
         // Get total counts
+        const orgFilter = { agent: { workspace: { organizationId: authContext.organizationId } } };
         const total = await prisma.agentRun.count({
-            where: status ? { status: status.toUpperCase() as never } : {}
+            where: status
+                ? { status: status.toUpperCase() as never, ...orgFilter }
+                : { ...orgFilter }
         });
         const statusCounts = await prisma.agentRun.groupBy({
             by: ["status"],
+            where: { ...orgFilter },
             _count: { status: true }
         });
 

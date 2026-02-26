@@ -841,6 +841,7 @@ model Agent {
     reputation             AgentReputation?
     communityPosts         CommunityPost[]
     communityComments      CommunityComment[]
+    embedDeployments       EmbedDeployment[]
 
     // Playbook Marketplace (tracks which playbook this was deployed from)
     playbookSourceId       String?
@@ -5512,7 +5513,8 @@ model EmbedPartner {
     updatedAt DateTime @updatedAt
 
     // Relations
-    users EmbedPartnerUser[]
+    users       EmbedPartnerUser[]
+    deployments EmbedDeployment[]
 
     @@index([organizationId])
     @@map("embed_partner")
@@ -5545,4 +5547,49 @@ model EmbedPartnerUser {
     @@index([userId])
     @@index([email])
     @@map("embed_partner_user")
+}
+
+// ── Embed Deployment ────────────────────────────────────────────────────
+// Represents a specific deployment of AgentC2 within a partner's platform.
+// Each partner can have multiple deployments with different modes, agents,
+// features, and branding configurations.
+
+model EmbedDeployment {
+    id        String       @id @default(cuid())
+    partnerId String
+    partner   EmbedPartner @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+    // Target agent (null for Mode 3 full-workspace — user picks agent)
+    agentId String?
+    agent   Agent?  @relation(fields: [agentId], references: [id], onDelete: SetNull)
+
+    // Unique token for this deployment (replaces agent.publicToken for embeds)
+    deploymentToken String @unique
+
+    // Human-readable label for this deployment
+    label String
+
+    // Mode: "chat-widget" (Mode 1), "agent" (Mode 2), "workspace" (Mode 3)
+    mode String @default("chat-widget")
+
+    // Enabled feature sections (e.g., ["chat", "agents", "knowledge", "settings"])
+    features String[] @default(["chat"])
+
+    // White-label branding: { appName, logoUrl, primaryColor, accentColor, showPoweredBy }
+    branding Json?
+
+    // Override agent's publicEmbed config (merged on top)
+    // e.g., greeting, suggestions, theme, maxMessages
+    embedConfig Json?
+
+    // Security: restrict iframe to specific domains
+    allowedDomains String[] @default([])
+
+    isActive  Boolean  @default(true)
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+
+    @@index([partnerId])
+    @@index([agentId])
+    @@map("embed_deployment")
 }

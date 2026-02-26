@@ -846,7 +846,10 @@ const ORG_SCOPED_TOOL_IDS = new Set([
     "document-delete",
     "document-list",
     "document-search",
-    "memory-recall"
+    "memory-recall",
+    "youtube-get-transcript",
+    "youtube-analyze-video",
+    "youtube-ingest-to-knowledge"
 ]);
 
 /**

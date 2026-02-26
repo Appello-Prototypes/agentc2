@@ -241,6 +241,11 @@ export function LiveRunsContent() {
     const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
     const [autoRefresh, setAutoRefresh] = useState(true);
 
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize] = useState(50);
+    const [totalFilteredCount, setTotalFilteredCount] = useState(0);
+    const [hasMore, setHasMore] = useState(false);
+
     const [budgetAlerts, setBudgetAlerts] = useState<BudgetAlert[]>([]);
     const [budgetBannerDismissed, setBudgetBannerDismissed] = useState(false);
     const [selectedRun, setSelectedRun] = useState<Run | null>(null);
@@ -299,6 +304,8 @@ export function LiveRunsContent() {
         try {
             const params = new URLSearchParams();
             params.set("runType", runTypeFilter);
+            params.set("limit", String(pageSize));
+            params.set("offset", String((currentPage - 1) * pageSize));
             if (statusFilter !== "all") {
                 params.set("status", statusFilter);
             }
@@ -335,6 +342,20 @@ export function LiveRunsContent() {
                 if (data.budgetAlerts?.length > 0) {
                     setBudgetAlerts(data.budgetAlerts);
                 }
+                if (data.pagination) {
+                    setHasMore(data.pagination.hasMore);
+                }
+                if (data.counts) {
+                    const statusCountMap: Record<string, number> = {
+                        all: data.counts.total,
+                        completed: data.counts.completed,
+                        failed: data.counts.failed,
+                        running: data.counts.running,
+                        queued: data.counts.queued,
+                        cancelled: data.counts.cancelled
+                    };
+                    setTotalFilteredCount(statusCountMap[statusFilter] ?? data.counts.total);
+                }
             }
         } catch (error) {
             console.error("Failed to fetch runs:", error);
@@ -351,7 +372,9 @@ export function LiveRunsContent() {
         toolUsageFilter,
         searchQuery,
         rangeFrom,
-        rangeTo
+        rangeTo,
+        currentPage,
+        pageSize
     ]);
 
     const fetchRunDetail = useCallback(async (run: Run) => {
@@ -470,6 +493,22 @@ export function LiveRunsContent() {
     }, [sortedRuns, groupBy]);
 
     const summary = metrics?.summary;
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [
+        statusFilter,
+        sourceFilter,
+        agentFilter,
+        versionFilter,
+        modelFilter,
+        toolUsageFilter,
+        runTypeFilter,
+        searchQuery,
+        timeRange
+    ]);
+
+    const totalPages = Math.max(1, Math.ceil(totalFilteredCount / pageSize));
+
     const hasActiveFilters =
         searchQuery.length > 0 ||
         statusFilter !== "all" ||
@@ -920,6 +959,7 @@ export function LiveRunsContent() {
                                         setGroupBy("none");
                                         setSortKey("startedAt");
                                         setSortDirection("desc");
+                                        setCurrentPage(1);
                                     }}
                                 >
                                     Clear Filters
@@ -987,10 +1027,13 @@ export function LiveRunsContent() {
                             <div>
                                 <CardTitle>Runs</CardTitle>
                                 <CardDescription>
-                                    {runs.length} shown
-                                    {runCounts
-                                        ? ` of ${runCounts.total.toLocaleString()} matching runs`
-                                        : ""}
+                                    Showing {((currentPage - 1) * pageSize + 1).toLocaleString()}
+                                    &ndash;
+                                    {Math.min(
+                                        currentPage * pageSize,
+                                        totalFilteredCount
+                                    ).toLocaleString()}{" "}
+                                    of {totalFilteredCount.toLocaleString()} matching runs
                                 </CardDescription>
                             </div>
                             {runsLoading && (
@@ -1015,142 +1058,191 @@ export function LiveRunsContent() {
                                 </p>
                             </div>
                         ) : (
-                            <div className="overflow-auto">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Agent</TableHead>
-                                            <TableHead>Version</TableHead>
-                                            <TableHead>Model</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Source</TableHead>
-                                            <TableHead>Input</TableHead>
-                                            <TableHead className="text-right">Duration</TableHead>
-                                            <TableHead className="text-right">Tool Calls</TableHead>
-                                            <TableHead className="text-right">Tools</TableHead>
-                                            <TableHead className="text-right">Tokens</TableHead>
-                                            <TableHead className="text-right">Cost</TableHead>
-                                            <TableHead className="text-right">Time</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {groupedRuns.map((group) => (
-                                            <Fragment key={group.label}>
-                                                {groupBy !== "none" && (
-                                                    <TableRow>
-                                                        <TableCell
-                                                            colSpan={12}
-                                                            className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
-                                                        >
-                                                            {group.label} ({group.runs.length})
-                                                        </TableCell>
-                                                    </TableRow>
-                                                )}
-                                                {group.runs.map((run) => {
-                                                    const isSelected = selectedRun?.id === run.id;
-                                                    return (
-                                                        <TableRow
-                                                            key={run.id}
-                                                            className={`cursor-pointer ${
-                                                                isSelected ? "bg-muted/50" : ""
-                                                            }`}
-                                                            onClick={() => handleRunClick(run)}
-                                                        >
-                                                            <TableCell>
-                                                                <div>
-                                                                    <p className="font-medium">
-                                                                        {run.agentName}
-                                                                    </p>
-                                                                    <p className="text-muted-foreground text-xs">
-                                                                        {run.id}
-                                                                    </p>
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {run.versionNumber
-                                                                    ? `v${run.versionNumber}`
-                                                                    : "-"}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {formatModelLabel(
-                                                                    run.modelName,
-                                                                    run.modelProvider
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <div className="flex items-center gap-1.5">
-                                                                    <Badge
-                                                                        variant={getStatusBadgeVariant(
-                                                                            run.status
-                                                                        )}
-                                                                    >
-                                                                        {run.status}
-                                                                    </Badge>
-                                                                    {run.failureReason ===
-                                                                        "BUDGET_EXCEEDED" && (
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                                                                        >
-                                                                            Budget
-                                                                        </Badge>
-                                                                    )}
-                                                                </div>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {run.source ? (
-                                                                    <Badge
-                                                                        className={getSourceBadgeColor(
-                                                                            run.source
-                                                                        )}
-                                                                    >
-                                                                        {run.source}
-                                                                    </Badge>
-                                                                ) : (
-                                                                    "-"
-                                                                )}
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <p className="max-w-xs truncate">
-                                                                    {run.inputText}
-                                                                </p>
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {run.durationMs
-                                                                    ? formatLatency(run.durationMs)
-                                                                    : "-"}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {run.toolCallCount}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {run.uniqueToolCount}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {formatTokens(run.totalTokens)}
-                                                            </TableCell>
-                                                            <TableCell className="text-right">
-                                                                {formatCost(run.costUsd)}
-                                                            </TableCell>
-                                                            <TableCell className="text-muted-foreground text-right">
-                                                                <span
-                                                                    title={new Date(
-                                                                        run.startedAt
-                                                                    ).toLocaleString()}
-                                                                >
-                                                                    {formatRelativeTime(
-                                                                        run.startedAt
-                                                                    )}
-                                                                </span>
+                            <>
+                                <div className="overflow-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Agent</TableHead>
+                                                <TableHead>Version</TableHead>
+                                                <TableHead>Model</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead>Source</TableHead>
+                                                <TableHead>Input</TableHead>
+                                                <TableHead className="text-right">
+                                                    Duration
+                                                </TableHead>
+                                                <TableHead className="text-right">
+                                                    Tool Calls
+                                                </TableHead>
+                                                <TableHead className="text-right">Tools</TableHead>
+                                                <TableHead className="text-right">Tokens</TableHead>
+                                                <TableHead className="text-right">Cost</TableHead>
+                                                <TableHead className="text-right">Time</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {groupedRuns.map((group) => (
+                                                <Fragment key={group.label}>
+                                                    {groupBy !== "none" && (
+                                                        <TableRow>
+                                                            <TableCell
+                                                                colSpan={12}
+                                                                className="text-muted-foreground bg-muted/30 text-xs font-semibold uppercase"
+                                                            >
+                                                                {group.label} ({group.runs.length})
                                                             </TableCell>
                                                         </TableRow>
-                                                    );
-                                                })}
-                                            </Fragment>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            </div>
+                                                    )}
+                                                    {group.runs.map((run) => {
+                                                        const isSelected =
+                                                            selectedRun?.id === run.id;
+                                                        return (
+                                                            <TableRow
+                                                                key={run.id}
+                                                                className={`cursor-pointer ${
+                                                                    isSelected ? "bg-muted/50" : ""
+                                                                }`}
+                                                                onClick={() => handleRunClick(run)}
+                                                            >
+                                                                <TableCell>
+                                                                    <div>
+                                                                        <p className="font-medium">
+                                                                            {run.agentName}
+                                                                        </p>
+                                                                        <p className="text-muted-foreground text-xs">
+                                                                            {run.id}
+                                                                        </p>
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {run.versionNumber
+                                                                        ? `v${run.versionNumber}`
+                                                                        : "-"}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {formatModelLabel(
+                                                                        run.modelName,
+                                                                        run.modelProvider
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <Badge
+                                                                            variant={getStatusBadgeVariant(
+                                                                                run.status
+                                                                            )}
+                                                                        >
+                                                                            {run.status}
+                                                                        </Badge>
+                                                                        {run.failureReason ===
+                                                                            "BUDGET_EXCEEDED" && (
+                                                                            <Badge
+                                                                                variant="outline"
+                                                                                className="border-amber-500/40 bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                                                                            >
+                                                                                Budget
+                                                                            </Badge>
+                                                                        )}
+                                                                    </div>
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    {run.source ? (
+                                                                        <Badge
+                                                                            className={getSourceBadgeColor(
+                                                                                run.source
+                                                                            )}
+                                                                        >
+                                                                            {run.source}
+                                                                        </Badge>
+                                                                    ) : (
+                                                                        "-"
+                                                                    )}
+                                                                </TableCell>
+                                                                <TableCell>
+                                                                    <p className="max-w-xs truncate">
+                                                                        {run.inputText}
+                                                                    </p>
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {run.durationMs
+                                                                        ? formatLatency(
+                                                                              run.durationMs
+                                                                          )
+                                                                        : "-"}
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {run.toolCallCount}
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {run.uniqueToolCount}
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {formatTokens(run.totalTokens)}
+                                                                </TableCell>
+                                                                <TableCell className="text-right">
+                                                                    {formatCost(run.costUsd)}
+                                                                </TableCell>
+                                                                <TableCell className="text-muted-foreground text-right">
+                                                                    <span
+                                                                        title={new Date(
+                                                                            run.startedAt
+                                                                        ).toLocaleString()}
+                                                                    >
+                                                                        {formatRelativeTime(
+                                                                            run.startedAt
+                                                                        )}
+                                                                    </span>
+                                                                </TableCell>
+                                                            </TableRow>
+                                                        );
+                                                    })}
+                                                </Fragment>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {totalPages > 1 && (
+                                    <div className="flex items-center justify-between border-t pt-4">
+                                        <p className="text-muted-foreground text-sm">
+                                            Page {currentPage} of {totalPages.toLocaleString()}
+                                        </p>
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={currentPage <= 1}
+                                                onClick={() =>
+                                                    setCurrentPage((p) => Math.max(1, p - 1))
+                                                }
+                                            >
+                                                <HugeiconsIcon
+                                                    icon={icons["arrow-left"]!}
+                                                    className="mr-1 size-4"
+                                                />
+                                                Previous
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                disabled={!hasMore}
+                                                onClick={() =>
+                                                    setCurrentPage((p) =>
+                                                        Math.min(totalPages, p + 1)
+                                                    )
+                                                }
+                                            >
+                                                Next
+                                                <HugeiconsIcon
+                                                    icon={icons["arrow-right"]!}
+                                                    className="ml-1 size-4"
+                                                />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
                         )}
                     </CardContent>
                 </Card>

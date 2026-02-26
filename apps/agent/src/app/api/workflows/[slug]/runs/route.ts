@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, RunStatus } from "@repo/database";
 import { parseRunEnvironmentFilter, parseRunTriggerTypeFilter } from "@/lib/run-metadata";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { slug } = await params;
         const workflow = await prisma.workflow.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                OR: [{ slug }, { id: slug }],
+                workspace: { organizationId: authContext.organizationId }
+            }
         });
 
         if (!workflow) {
@@ -26,7 +35,8 @@ export async function GET(request: NextRequest, { params }: { params: Promise<{ 
         const toParam = searchParams.get("to");
 
         const where: Prisma.WorkflowRunWhereInput = {
-            workflowId: workflow.id
+            workflowId: workflow.id,
+            workflow: { workspace: { organizationId: authContext.organizationId } }
         };
 
         if (statusFilter) {

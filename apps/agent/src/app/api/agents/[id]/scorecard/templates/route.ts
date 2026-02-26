@@ -61,17 +61,17 @@ export async function GET() {
  * POST /api/agents/[id]/scorecard/templates
  *
  * Create scorecard from a template.
- * Body: { templateSlug: string }
+ * Body: { templateId: string }
  */
 export async function POST(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
     try {
         const { id } = await params;
         const body = await request.json();
-        const { templateSlug } = body as { templateSlug: string };
+        const { templateId } = body as { templateId: string };
 
-        if (!templateSlug) {
+        if (!templateId) {
             return NextResponse.json(
-                { success: false, error: "templateSlug is required" },
+                { success: false, error: "templateId is required" },
                 { status: 400 }
             );
         }
@@ -88,14 +88,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         }
 
         const template = await prisma.scorecardTemplate.findUnique({
-            where: { slug: templateSlug }
+            where: { id: templateId }
         });
 
         if (!template) {
             return NextResponse.json(
                 {
                     success: false,
-                    error: `Template '${templateSlug}' not found`
+                    error: `Template '${templateId}' not found`
                 },
                 { status: 404 }
             );

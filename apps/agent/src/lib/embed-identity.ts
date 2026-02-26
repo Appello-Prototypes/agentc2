@@ -41,12 +41,17 @@ export interface VerifiedEmbedIdentity {
  *
  * Token format: `base64url(jsonPayload).hexSignature`
  *
+ * When `partnerId` is provided (from deployment context), the partner is
+ * looked up directly — avoiding ambiguity when an org has multiple partners.
+ * Falls back to `findFirst` for backward compatibility with Mode 1 embeds.
+ *
  * Returns the verified identity with a JIT-provisioned partner user record,
  * or null if verification fails.
  */
 export async function verifyEmbedIdentity(
     identityToken: string,
-    agentOrgId: string
+    agentOrgId: string,
+    partnerId?: string
 ): Promise<VerifiedEmbedIdentity | null> {
     // Split token into payload and signature
     const dotIndex = identityToken.lastIndexOf(".");
@@ -73,16 +78,26 @@ export async function verifyEmbedIdentity(
         return null;
     }
 
-    // Find active partner for this organization
-    const partner = await prisma.embedPartner.findFirst({
-        where: {
-            organizationId: agentOrgId,
-            isActive: true
-        }
-    });
+    // Resolve partner — prefer explicit partnerId from deployment context
+    const partner = partnerId
+        ? await prisma.embedPartner.findUnique({
+              where: { id: partnerId, isActive: true }
+          })
+        : await prisma.embedPartner.findFirst({
+              where: { organizationId: agentOrgId, isActive: true }
+          });
 
     if (!partner) {
-        console.warn(`[EmbedIdentity] No active embed partner found for org ${agentOrgId}`);
+        console.warn(
+            `[EmbedIdentity] No active embed partner found (partnerId=${partnerId || "auto"}, org=${agentOrgId})`
+        );
+        return null;
+    }
+
+    if (partner.organizationId !== agentOrgId) {
+        console.warn(
+            `[EmbedIdentity] Partner ${partner.slug} org mismatch: expected ${agentOrgId}, got ${partner.organizationId}`
+        );
         return null;
     }
 

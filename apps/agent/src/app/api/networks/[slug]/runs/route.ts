@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, Prisma, RunStatus } from "@repo/database";
 import { parseRunEnvironmentFilter, parseRunTriggerTypeFilter } from "@/lib/run-metadata";
+import { authenticateRequest } from "@/lib/api-auth";
 
 export async function GET(request: NextRequest, { params }: { params: Promise<{ slug: string }> }) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { slug } = await params;
         const network = await prisma.network.findFirst({
-            where: { OR: [{ slug }, { id: slug }] }
+            where: {
+                workspace: { organizationId: authContext.organizationId },
+                OR: [{ slug }, { id: slug }]
+            }
         });
 
         if (!network) {

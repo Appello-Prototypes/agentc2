@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@repo/database";
+import { authenticateRequest } from "@/lib/api-auth";
 
 /**
  * GET /api/workspace/stats
@@ -8,6 +9,11 @@ import { prisma } from "@repo/database";
  * Returns per-agent stats including runs, success rate, and latency
  */
 export async function GET(request: NextRequest) {
+    const authContext = await authenticateRequest(request);
+    if (!authContext) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     try {
         const { searchParams } = new URL(request.url);
 
@@ -20,7 +26,7 @@ export async function GET(request: NextRequest) {
 
         // Get all active agents
         const agents = await prisma.agent.findMany({
-            where: { isActive: true },
+            where: { isActive: true, workspace: { organizationId: authContext.organizationId } },
             select: {
                 id: true,
                 slug: true,
@@ -44,6 +50,7 @@ export async function GET(request: NextRequest) {
         // Get runs for all agents in the date range
         const runs = await prisma.agentRun.findMany({
             where: {
+                agent: { workspace: { organizationId: authContext.organizationId } },
                 startedAt: {
                     gte: startDate,
                     lte: endDate

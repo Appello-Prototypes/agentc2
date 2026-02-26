@@ -7,6 +7,7 @@ import { cn, icons, HugeiconsIcon, Button, Badge } from "@repo/ui";
 import type { IconName } from "@repo/ui";
 import { DetailPageShell } from "@/components/DetailPageShell";
 import { getApiBase } from "@/lib/utils";
+import { useEmbedConfig } from "@/hooks/useEmbedConfig";
 
 interface SettingsNavItem {
     id: string;
@@ -94,15 +95,31 @@ const settingsNavItems: SettingsNavItem[] = [
         icon: "ai-network",
         description: "Cross-org agent federation",
         requiresRole: ["owner", "admin"]
+    },
+    {
+        id: "embed-partners",
+        label: "Embed Partners",
+        href: "/settings/embed-partners",
+        icon: "code",
+        description: "Manage embed partners and deployments",
+        requiresRole: ["owner", "admin"]
     }
 ];
+
+const EMBED_ALLOWED_SETTINGS = new Set(["profile", "appearance"]);
 
 export default function SettingsLayout({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
     const activeSection = pathname.split("/")[2] || "profile";
     const [pendingCount, setPendingCount] = useState(0);
+    const embedConfig = useEmbedConfig();
+
+    const visibleNavItems = embedConfig
+        ? settingsNavItems.filter((item) => EMBED_ALLOWED_SETTINGS.has(item.id))
+        : settingsNavItems;
 
     useEffect(() => {
+        if (embedConfig) return;
         fetch(`${getApiBase()}/api/federation/connections`)
             .then((r) => r.json())
             .then((data) => {
@@ -134,7 +151,7 @@ export default function SettingsLayout({ children }: { children: React.ReactNode
                     {/* Navigation */}
                     <nav className="flex-1 overflow-y-auto px-2 py-2">
                         <ul className="flex flex-col gap-0.5">
-                            {settingsNavItems.map((item) => {
+                            {visibleNavItems.map((item) => {
                                 const isActive = activeSection === item.id;
 
                                 return (
