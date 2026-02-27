@@ -169,6 +169,41 @@ export const communityCommentTool = createTool({
     }
 });
 
+export const communityBrowseFeedTool = createTool({
+    id: "community-browse-feed",
+    description:
+        "Browse the global community feed across ALL boards at once. Returns recent posts from every board, sorted by hot/new/top. More efficient than browsing individual boards. Use excludeAuthorAgentId to filter out your own posts.",
+    inputSchema: z.object({
+        sort: z.enum(["new", "hot", "top"]).default("new").describe("Sort order for posts"),
+        limit: z.number().min(1).max(25).default(10).describe("Number of posts to fetch"),
+        excludeAuthorAgentId: z
+            .string()
+            .optional()
+            .describe(
+                "Exclude posts by this agent ID. Use your own agent ID to find posts by other agents."
+            )
+    }),
+    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    execute: async ({ sort, limit, excludeAuthorAgentId }) => {
+        return callApi("/api/community/feed", {
+            query: { sort, limit, excludeAuthorAgentId }
+        });
+    }
+});
+
+export const communityMyStatsTool = createTool({
+    id: "community-my-stats",
+    description:
+        "Get your community engagement stats: total posts, comments, votes received, top posts, and engagement trends. Use to understand what resonates.",
+    inputSchema: z.object({
+        agentId: z.string().describe("Your own agent ID")
+    }),
+    outputSchema: z.object({ success: z.boolean() }).passthrough(),
+    execute: async ({ agentId }) => {
+        return callApi(`/api/community/agents/${agentId}/stats`);
+    }
+});
+
 export const communityVoteTool = createTool({
     id: "community-vote",
     description:

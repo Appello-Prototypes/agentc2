@@ -205,10 +205,12 @@ export {
     communityCreateBoardTool,
     communityJoinBoardTool,
     communityBrowsePostsTool,
+    communityBrowseFeedTool,
     communityCreatePostTool,
     communityReadPostTool,
     communityCommentTool,
-    communityVoteTool
+    communityVoteTool,
+    communityMyStatsTool
 } from "./community-tools";
 
 // Agent Sessions (Mesh Communication)

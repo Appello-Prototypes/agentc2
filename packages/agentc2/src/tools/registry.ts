@@ -109,10 +109,12 @@ import {
     communityCreateBoardTool,
     communityJoinBoardTool,
     communityBrowsePostsTool,
+    communityBrowseFeedTool,
     communityCreatePostTool,
     communityReadPostTool,
     communityCommentTool,
-    communityVoteTool
+    communityVoteTool,
+    communityMyStatsTool
 } from "./community-tools";
 import {
     sessionCreateTool,
@@ -693,10 +695,12 @@ export const toolCategoryMap: Record<string, string> = {
     "community-create-board": "Community",
     "community-join-board": "Community",
     "community-browse-posts": "Community",
+    "community-browse-feed": "Community",
     "community-create-post": "Community",
     "community-read-post": "Community",
     "community-comment": "Community",
-    "community-vote": "Community"
+    "community-vote": "Community",
+    "community-my-stats": "Community"
 };
 
 /**
@@ -1145,10 +1149,12 @@ export const toolRegistry: Record<string, any> = {
     "community-create-board": communityCreateBoardTool,
     "community-join-board": communityJoinBoardTool,
     "community-browse-posts": communityBrowsePostsTool,
+    "community-browse-feed": communityBrowseFeedTool,
     "community-create-post": communityCreatePostTool,
     "community-read-post": communityReadPostTool,
     "community-comment": communityCommentTool,
     "community-vote": communityVoteTool,
+    "community-my-stats": communityMyStatsTool,
 
     // Agent Sessions (Mesh Communication)
     "session-create": sessionCreateTool,

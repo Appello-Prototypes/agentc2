@@ -142,10 +142,10 @@ export function AgentSelector({ value, onChange, disabled }: AgentSelectorProps)
                     const ownAgents = agents.filter(
                         (a) => a.type === "USER" && a.visibility !== "ORGANIZATION"
                     );
-                    const orgAgents = agents.filter(
-                        (a) => a.type === "USER" && a.visibility === "ORGANIZATION"
+                    const orgAgents = agents.filter((a) => a.visibility === "ORGANIZATION");
+                    const systemAgents = agents.filter(
+                        (a) => a.type === "SYSTEM" && a.visibility !== "ORGANIZATION"
                     );
-                    const systemAgents = agents.filter((a) => a.type === "SYSTEM");
                     const groups: { label: string; items: AgentInfo[] }[] = [];
 
                     if (ownAgents.length > 0) {

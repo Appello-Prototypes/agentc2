@@ -1391,25 +1391,41 @@ export class AgentResolver {
     }
 
     /**
-     * List all agents accessible by a user
+     * List all agents accessible by a user, respecting org boundaries.
      *
-     * Includes:
-     * - All SYSTEM agents (core platform agents)
-     * - All DEMO agents (examples & templates)
-     * - User's own agents
-     * - Organization-shared agents (same org via workspace)
-     * - Public agents from other users
+     * Visibility rules:
+     * - SYSTEM agents: only global (workspaceId=null) or same-org workspace
+     * - User's own agents (ownerId match)
+     * - ORGANIZATION-visible agents in the same org
+     * - PUBLIC agents
+     *
+     * Agents with metadata.chatVisible === false are excluded (background/utility agents).
      */
     async listForUser(userId?: string, organizationId?: string): Promise<AgentRecordWithTools[]> {
+        const hideChatInvisible = {
+            NOT: {
+                metadata: {
+                    path: ["chatVisible"],
+                    equals: false
+                }
+            }
+        };
+
         if (userId) {
             return prisma.agent.findMany({
                 where: {
                     isActive: true,
+                    ...hideChatInvisible,
                     OR: [
-                        { type: "SYSTEM" },
-                        { type: "DEMO" },
+                        // Global system agents (no workspace affiliation)
+                        { type: "SYSTEM", workspaceId: null },
+                        // Org-scoped system agents
+                        ...(organizationId
+                            ? [{ type: "SYSTEM" as const, workspace: { organizationId } }]
+                            : []),
+                        // User's own agents
                         { ownerId: userId },
-                        { visibility: "PUBLIC" },
+                        // Org-shared agents (USER or SYSTEM with ORGANIZATION visibility)
                         ...(organizationId
                             ? [
                                   {
@@ -1417,7 +1433,9 @@ export class AgentResolver {
                                       workspace: { organizationId }
                                   }
                               ]
-                            : [])
+                            : []),
+                        // Public agents
+                        { visibility: "PUBLIC" }
                     ]
                 },
                 include: { tools: true, workspace: { select: { organizationId: true } } },
@@ -1425,11 +1443,12 @@ export class AgentResolver {
             });
         }
 
-        // No user - only SYSTEM, DEMO, and public agents
+        // No user - only global SYSTEM agents and public agents
         return prisma.agent.findMany({
             where: {
                 isActive: true,
-                OR: [{ type: "SYSTEM" }, { type: "DEMO" }, { visibility: "PUBLIC" }]
+                ...hideChatInvisible,
+                OR: [{ type: "SYSTEM", workspaceId: null }, { visibility: "PUBLIC" }]
             },
             include: { tools: true, workspace: { select: { organizationId: true } } },
             orderBy: [{ type: "asc" }, { name: "asc" }]

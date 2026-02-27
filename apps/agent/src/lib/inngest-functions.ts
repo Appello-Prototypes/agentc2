@@ -5478,19 +5478,33 @@ export const asyncInvokeFunction = inngest.createFunction(
                     // Extract tool calls from the response
                     const rawToolCalls = extractToolCalls(response);
 
+                    const safeJsonStringify = (obj: unknown): string => {
+                        try {
+                            return JSON.stringify(obj);
+                        } catch {
+                            try {
+                                return JSON.stringify(obj, (_key, value) =>
+                                    typeof value === "bigint" ? value.toString() : value
+                                );
+                            } catch {
+                                return String(obj);
+                            }
+                        }
+                    };
+
                     // Serialize tool calls for Inngest step data (must be JSON-safe)
                     const serializedToolCalls = rawToolCalls.map((tc) => {
                         let safeOutput: unknown;
                         if (tc.output !== undefined) {
-                            try {
-                                const outputStr = JSON.stringify(tc.output);
-                                // Truncate large outputs to avoid Inngest step data limits
-                                safeOutput =
-                                    outputStr.length > 10000
-                                        ? JSON.parse(outputStr.slice(0, 10000) + "...")
-                                        : tc.output;
-                            } catch {
-                                safeOutput = String(tc.output).slice(0, 10000);
+                            const outputStr = safeJsonStringify(tc.output);
+                            if (outputStr.length > 10000) {
+                                safeOutput = outputStr.slice(0, 10000);
+                            } else {
+                                try {
+                                    safeOutput = JSON.parse(outputStr);
+                                } catch {
+                                    safeOutput = outputStr;
+                                }
                             }
                         }
                         return {
@@ -5526,7 +5540,7 @@ export const asyncInvokeFunction = inngest.createFunction(
                             const preview =
                                 typeof tc.output === "string"
                                     ? tc.output.slice(0, 500)
-                                    : JSON.stringify(tc.output ?? "").slice(0, 500);
+                                    : safeJsonStringify(tc.output ?? "").slice(0, 500);
                             executionSteps.push({
                                 step: stepCounter,
                                 type: "tool_result",
@@ -5659,16 +5673,24 @@ export const asyncInvokeFunction = inngest.createFunction(
 
                 // Record each tool call as an AgentToolCall record
                 for (const tc of result.toolCalls!) {
+                    let safeOutputJson: Prisma.InputJsonValue | undefined;
+                    if (tc.output !== undefined) {
+                        try {
+                            safeOutputJson = JSON.parse(
+                                JSON.stringify(tc.output)
+                            ) as Prisma.InputJsonValue;
+                        } catch {
+                            safeOutputJson = String(tc.output) as unknown as Prisma.InputJsonValue;
+                        }
+                    }
+
                     await prisma.agentToolCall.create({
                         data: {
                             runId,
                             traceId: trace.id,
                             toolKey: tc.toolKey,
                             inputJson: (tc.input || {}) as Prisma.InputJsonValue,
-                            outputJson:
-                                tc.output !== undefined
-                                    ? (tc.output as Prisma.InputJsonValue)
-                                    : undefined,
+                            outputJson: safeOutputJson,
                             success: tc.success,
                             error: tc.error,
                             durationMs: tc.durationMs
@@ -8717,6 +8739,203 @@ Be authentic. Be yourself. Don't force participation.`;
     }
 );
 
+/**
+ * Weekly PULSE Performance Evaluation
+ * Runs every Sunday at 11 PM ET. Ranks PULSE agents by engagement,
+ * upgrades top performers to gpt-4o, considers downgrading bottom performers
+ * back to gpt-4o-mini.
+ */
+const pulseWeeklyEvaluationFunction = inngest.createFunction(
+    {
+        id: "pulse-weekly-evaluation",
+        name: "PULSE Weekly Performance Evaluation"
+    },
+    { cron: "TZ=America/Toronto 0 23 * * 0" },
+    async ({ step }) => {
+        const agents = await step.run("load-pulse-agents", async () => {
+            return prisma.agent.findMany({
+                where: { slug: { startsWith: "pulse-" }, isActive: true },
+                select: {
+                    id: true,
+                    slug: true,
+                    name: true,
+                    modelProvider: true,
+                    modelName: true
+                }
+            });
+        });
+
+        if (agents.length === 0) return { skipped: true, reason: "no pulse agents" };
+
+        const weekAgo = new Date(Date.now() - 7 * 86400000);
+
+        const rankings = await step.run("compute-rankings", async () => {
+            const results: Array<{
+                agentId: string;
+                slug: string;
+                name: string;
+                modelName: string;
+                posts: number;
+                comments: number;
+                votesReceived: number;
+                avgRunScore: number;
+                compositeScore: number;
+            }> = [];
+
+            for (const agent of agents) {
+                const [posts, comments, votesReceived, traces] = await Promise.all([
+                    prisma.communityPost.count({
+                        where: {
+                            authorAgentId: agent.id,
+                            createdAt: { gte: weekAgo }
+                        }
+                    }),
+                    prisma.communityComment.count({
+                        where: {
+                            authorAgentId: agent.id,
+                            createdAt: { gte: weekAgo }
+                        }
+                    }),
+                    prisma.communityPost
+                        .aggregate({
+                            where: {
+                                authorAgentId: agent.id,
+                                createdAt: { gte: weekAgo }
+                            },
+                            _sum: { voteScore: true }
+                        })
+                        .then((r) => r._sum.voteScore ?? 0),
+                    prisma.agentEvaluation.findMany({
+                        where: {
+                            agentId: agent.id,
+                            run: {
+                                status: "COMPLETED",
+                                createdAt: { gte: weekAgo }
+                            }
+                        },
+                        select: { overallGrade: true }
+                    })
+                ]);
+
+                const evals = traces;
+                const avgRunScore =
+                    evals.length > 0
+                        ? evals.reduce((s, e) => s + (e.overallGrade ?? 0), 0) / evals.length
+                        : 0;
+
+                const compositeScore =
+                    posts * 3 + comments * 2 + votesReceived * 1 + avgRunScore * 10;
+
+                results.push({
+                    agentId: agent.id,
+                    slug: agent.slug,
+                    name: agent.name,
+                    modelName: agent.modelName,
+                    posts,
+                    comments,
+                    votesReceived,
+                    avgRunScore: Math.round(avgRunScore * 100) / 100,
+                    compositeScore: Math.round(compositeScore * 100) / 100
+                });
+            }
+
+            results.sort((a, b) => b.compositeScore - a.compositeScore);
+            return results;
+        });
+
+        const upgrades: string[] = [];
+        const downgrades: string[] = [];
+
+        await step.run("apply-model-changes", async () => {
+            const top3 = rankings.slice(0, 3);
+            const bottom3 = rankings.slice(-3);
+
+            for (const agent of top3) {
+                if (agent.modelName === "gpt-4o-mini" && agent.compositeScore > 5) {
+                    await prisma.agent.update({
+                        where: { id: agent.agentId },
+                        data: { modelName: "gpt-4o" }
+                    });
+                    upgrades.push(
+                        `${agent.name} (${agent.slug}): gpt-4o-mini → gpt-4o (score: ${agent.compositeScore})`
+                    );
+                }
+            }
+
+            for (const agent of bottom3) {
+                if (agent.modelName === "gpt-4o" && agent.compositeScore < 3) {
+                    await prisma.agent.update({
+                        where: { id: agent.agentId },
+                        data: { modelName: "gpt-4o-mini" }
+                    });
+                    downgrades.push(
+                        `${agent.name} (${agent.slug}): gpt-4o → gpt-4o-mini (score: ${agent.compositeScore})`
+                    );
+                }
+            }
+        });
+
+        await step.run("post-report", async () => {
+            const reportLines = [
+                "# PULSE Weekly Performance Report",
+                "",
+                `**Week ending:** ${new Date().toISOString().split("T")[0]}`,
+                "",
+                "## Rankings",
+                "",
+                ...rankings.map(
+                    (r, i) =>
+                        `${i + 1}. **${r.name}** — Score: ${r.compositeScore} (${r.posts} posts, ${r.comments} comments, ${r.votesReceived} votes, avg eval: ${r.avgRunScore})`
+                ),
+                ""
+            ];
+
+            if (upgrades.length > 0) {
+                reportLines.push(
+                    "## Model Upgrades (Reward)",
+                    "",
+                    ...upgrades.map((u) => `- ${u}`),
+                    ""
+                );
+            }
+            if (downgrades.length > 0) {
+                reportLines.push("## Model Downgrades", "", ...downgrades.map((d) => `- ${d}`), "");
+            }
+
+            const signalNoiseBoard = await prisma.communityBoard.findFirst({
+                where: { slug: "signal-noise" },
+                select: { id: true }
+            });
+
+            if (signalNoiseBoard) {
+                const authorId =
+                    agents.find((a) => a.slug === "pulse-health-monitor")?.id ?? agents[0].id;
+
+                await prisma.communityPost.create({
+                    data: {
+                        boardId: signalNoiseBoard.id,
+                        title: `PULSE Weekly Performance Report — ${new Date().toISOString().split("T")[0]}`,
+                        content: reportLines.join("\n"),
+                        authorType: "agent",
+                        authorAgentId: authorId,
+                        category: "performance-report"
+                    }
+                });
+            }
+        });
+
+        return {
+            agentCount: agents.length,
+            rankings: rankings.map((r) => ({
+                slug: r.slug,
+                score: r.compositeScore
+            })),
+            upgrades,
+            downgrades
+        };
+    }
+);
+
 export const inngestFunctions = [
     executeGoalFunction,
     retryGoalFunction,
@@ -8792,5 +9011,7 @@ export const inngestFunctions = [
     playbookTrustScoreRecalculationFunction,
     // Community Heartbeat
     communityHeartbeatFunction,
-    agentCommunityHeartbeatFunction
+    agentCommunityHeartbeatFunction,
+    // PULSE Weekly Performance Evaluation
+    pulseWeeklyEvaluationFunction
 ];

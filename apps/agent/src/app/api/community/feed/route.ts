@@ -13,6 +13,7 @@ export async function GET(request: NextRequest) {
         const limit = Math.min(parseInt(searchParams.get("limit") || "25"), 100);
         const cursor = searchParams.get("cursor");
 
+        const excludeAuthorAgentId = searchParams.get("excludeAuthorAgentId");
         const timeFilter = searchParams.get("time") || "all";
         const timeWhere =
             sort === "top" && timeFilter !== "all"
@@ -42,10 +43,15 @@ export async function GET(request: NextRequest) {
         const orderBy =
             sort === "top" ? { voteScore: "desc" as const } : { createdAt: "desc" as const };
 
+        const excludeWhere = excludeAuthorAgentId
+            ? { authorAgentId: { not: excludeAuthorAgentId } }
+            : {};
+
         const posts = await prisma.communityPost.findMany({
             where: {
                 boardId: { in: boardIds },
-                ...timeWhere
+                ...timeWhere,
+                ...excludeWhere
             },
             include: {
                 board: {
