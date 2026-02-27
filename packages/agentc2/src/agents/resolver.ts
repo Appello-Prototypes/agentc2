@@ -1402,20 +1402,12 @@ export class AgentResolver {
      * Agents with metadata.chatVisible === false are excluded (background/utility agents).
      */
     async listForUser(userId?: string, organizationId?: string): Promise<AgentRecordWithTools[]> {
-        const hideChatInvisible = {
-            NOT: {
-                metadata: {
-                    path: ["chatVisible"],
-                    equals: false
-                }
-            }
-        };
+        let agents: AgentRecordWithTools[];
 
         if (userId) {
-            return prisma.agent.findMany({
+            agents = await prisma.agent.findMany({
                 where: {
                     isActive: true,
-                    ...hideChatInvisible,
                     OR: [
                         // Global system agents (no workspace affiliation)
                         { type: "SYSTEM", workspaceId: null },
@@ -1441,17 +1433,25 @@ export class AgentResolver {
                 include: { tools: true, workspace: { select: { organizationId: true } } },
                 orderBy: [{ type: "asc" }, { name: "asc" }]
             });
+        } else {
+            // No user - only global SYSTEM agents and public agents
+            agents = await prisma.agent.findMany({
+                where: {
+                    isActive: true,
+                    OR: [{ type: "SYSTEM", workspaceId: null }, { visibility: "PUBLIC" }]
+                },
+                include: { tools: true, workspace: { select: { organizationId: true } } },
+                orderBy: [{ type: "asc" }, { name: "asc" }]
+            });
         }
 
-        // No user - only global SYSTEM agents and public agents
-        return prisma.agent.findMany({
-            where: {
-                isActive: true,
-                ...hideChatInvisible,
-                OR: [{ type: "SYSTEM", workspaceId: null }, { visibility: "PUBLIC" }]
-            },
-            include: { tools: true, workspace: { select: { organizationId: true } } },
-            orderBy: [{ type: "asc" }, { name: "asc" }]
+        // Post-filter: Prisma's NOT with JSON path returns NULL for missing keys,
+        // which SQL treats as false — incorrectly excluding agents without the key.
+        return agents.filter((a) => {
+            if (a.metadata && typeof a.metadata === "object" && !Array.isArray(a.metadata)) {
+                return (a.metadata as Record<string, unknown>).chatVisible !== false;
+            }
+            return true;
         });
     }
 
