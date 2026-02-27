@@ -2,12 +2,44 @@
  * Ticket-to-GitHub-Issue Tool
  *
  * Creates a GitHub issue from a ticket (SupportTicket, BacklogTask, or manual input).
- * Uses the org's GitHub MCP connection to create the issue and links it back to the
- * CodingPipelineRun if one exists.
+ * Resolves the GitHub PAT from the org's integration connection and calls the
+ * GitHub REST API directly (no MCP client needed).
  */
 
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
+
+async function resolveGitHubToken(organizationId?: string): Promise<string> {
+    const { prisma } = await import("@repo/database");
+    const { decryptCredentials } = await import("../crypto");
+
+    if (organizationId) {
+        const connection = await prisma.integrationConnection.findFirst({
+            where: {
+                organizationId,
+                provider: { key: "github" },
+                isActive: true
+            },
+            include: { provider: true }
+        });
+        if (connection) {
+            const creds = decryptCredentials(connection.credentials);
+            const token =
+                (creds as Record<string, string>)?.GITHUB_PERSONAL_ACCESS_TOKEN ||
+                (creds as Record<string, string>)?.GITHUB_TOKEN;
+            if (token) return token;
+        }
+    }
+
+    if (process.env.GITHUB_PERSONAL_ACCESS_TOKEN) {
+        return process.env.GITHUB_PERSONAL_ACCESS_TOKEN;
+    }
+
+    throw new Error(
+        "GitHub credentials not available. Connect GitHub in the integrations page " +
+            "or set GITHUB_PERSONAL_ACCESS_TOKEN environment variable."
+    );
+}
 
 export const ticketToGithubIssueTool = createTool({
     id: "ticket-to-github-issue",
@@ -33,7 +65,7 @@ export const ticketToGithubIssueTool = createTool({
             .string()
             .optional()
             .describe("CodingPipelineRun ID to update with the GitHub issue URL"),
-        organizationId: z.string().optional().describe("Organization ID for MCP connection lookup"),
+        organizationId: z.string().optional().describe("Organization ID for credential lookup"),
         existingIssueUrl: z
             .string()
             .optional()
@@ -74,49 +106,41 @@ export const ticketToGithubIssueTool = createTool({
             };
         }
 
-        const { executeMcpTool } = await import("../mcp/client");
-
         const [owner, repo] = repository.split("/");
         if (!owner || !repo) {
             throw new Error(`Invalid repository format "${repository}". Expected "owner/repo".`);
         }
 
+        const token = await resolveGitHubToken(organizationId);
         const footer = sourceTicketId
             ? `\n\n---\n_Created from ticket \`${sourceTicketId}\` via AgentC2 SDLC Pipeline_`
             : "";
 
-        const mcpResult = await executeMcpTool(
-            "github_create_issue",
-            { owner, repo, title, body: description + footer, labels: labels || [] },
-            { organizationId }
-        );
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues`, {
+            method: "POST",
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+                title,
+                body: description + footer,
+                labels: labels || []
+            })
+        });
 
-        if (!mcpResult.success) {
+        if (!response.ok) {
+            const errorBody = await response.text();
             throw new Error(
-                mcpResult.error ||
-                    "GitHub MCP connection not available. Connect GitHub in the integrations page."
+                `GitHub API error (${response.status}): ${errorBody}`
             );
         }
 
-        let issueNumber: number;
-        let issueUrl: string;
-
-        const rawResult = mcpResult.result;
-        const parsed = rawResult && typeof rawResult === "object" ? rawResult : {};
-        const data = (parsed as Record<string, unknown>).content
-            ? JSON.parse(
-                  (
-                      (parsed as Record<string, unknown[]>).content?.find(
-                          (c: unknown) => (c as Record<string, string>).type === "text"
-                      ) as Record<string, string>
-                  )?.text || "{}"
-              )
-            : parsed;
-
-        issueNumber = (data as Record<string, number>).number || 0;
-        issueUrl =
-            (data as Record<string, string>).html_url ||
-            `https://github.com/${repository}/issues/${issueNumber}`;
+        const data = (await response.json()) as { number: number; html_url: string };
+        const issueNumber = data.number || 0;
+        const issueUrl = data.html_url || `https://github.com/${repository}/issues/${issueNumber}`;
 
         let linked = false;
         if (pipelineRunId) {
@@ -124,13 +148,10 @@ export const ticketToGithubIssueTool = createTool({
                 const { prisma } = await import("@repo/database");
                 await prisma.codingPipelineRun.update({
                     where: { id: pipelineRunId },
-                    data: {
-                        prUrl: issueUrl
-                    }
+                    data: { prUrl: issueUrl }
                 });
                 linked = true;
             } catch {
-                // Non-critical — log but don't fail
                 console.warn(
                     `[ticket-to-github-issue] Could not link issue to pipeline run ${pipelineRunId}`
                 );
