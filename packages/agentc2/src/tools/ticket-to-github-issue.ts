@@ -20,7 +20,8 @@ async function resolveGitHubToken(organizationId?: string): Promise<string> {
                 provider: { key: "github" },
                 isActive: true
             },
-            include: { provider: true }
+            include: { provider: true },
+            orderBy: [{ isDefault: "desc" }, { updatedAt: "desc" }]
         });
         if (connection) {
             const creds = decryptCredentials(connection.credentials);
